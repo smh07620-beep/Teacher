@@ -77,7 +77,7 @@
                     <span class="learning-module-icon">📝</span><span><span class="learning-module-label block">考核任務</span><span class="learning-module-desc block">查看並完成本組考核</span></span>
                 </button>
                 <button id="pgy-assessment-hub-btn" onclick="switchLearningModule('assessment')" class="learning-module-card hidden">
-                    <span class="learning-module-icon">🧭</span><span><span class="learning-module-label block">PGY 評量</span><span class="learning-module-desc block">DOPS、EPA 與階段評量</span></span>
+                    <span class="learning-module-icon">🧭</span><span><span class="learning-module-label block">PGY 評量</span><span class="learning-module-desc block">技能、案例、品管與回饋</span></span>
                 </button>
               </div>
               <details id="v580-resource-drawer" class="v580-resource-drawer">
@@ -174,17 +174,23 @@
         <section id="panel-assessment" class="space-y-5 hidden">
             <section class="edu-card p-5 sm:p-6 bg-gradient-to-r from-white to-indigo-50/50">
                 <p class="edu-kicker">PGY ASSESSMENT CENTER</p><h2 class="text-xl sm:text-2xl font-black text-slate-900 mt-1">🧭 PGY 評量中心</h2>
-                <p class="text-xs sm:text-sm text-slate-500 mt-2">六大核心能力、DOPS、Ad-hoc、EPA 可信賴專業活動與學習評量集中紀錄。評核由臨床教師／導師填寫並留存。</p>
+                <p class="text-xs sm:text-sm text-slate-500 mt-2">依訓練內容選擇 EXAM、DOPS、MINI-CEX、CBD、CHECKLIST、QC、360、REPORT、QI、REFLECTION 或 ATTENDANCE；教師評核與學習證據集中留存。</p>
             </section>
-            <section class="grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
-                <button onclick="selectPgyAssessmentType('core6')" class="learning-module-card"><span class="learning-module-icon">6️⃣</span><span><span class="learning-module-label block">六大核心能力</span><span class="learning-module-desc block">核心能力檢核</span></span></button>
+            <section class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <button onclick="switchLearningModule('exam')" class="learning-module-card"><span class="learning-module-icon">📝</span><span><span class="learning-module-label block">EXAM</span><span class="learning-module-desc block">線上測驗</span></span></button>
                 <button onclick="selectPgyAssessmentType('dops')" class="learning-module-card"><span class="learning-module-icon">🩺</span><span><span class="learning-module-label block">DOPS</span><span class="learning-module-desc block">直接觀察操作技能</span></span></button>
-                <button onclick="selectPgyAssessmentType('adhoc')" class="learning-module-card"><span class="learning-module-icon">⚡</span><span><span class="learning-module-label block">Ad-hoc</span><span class="learning-module-desc block">即時工作場域評量</span></span></button>
-                <button onclick="selectPgyAssessmentType('epa')" class="learning-module-card"><span class="learning-module-icon">🎯</span><span><span class="learning-module-label block">EPA</span><span class="learning-module-desc block">可信賴專業活動</span></span></button>
-                <button onclick="selectPgyAssessmentType('learning')" class="learning-module-card"><span class="learning-module-icon">📋</span><span><span class="learning-module-label block">學習評量表</span><span class="learning-module-desc block">階段性學習回饋</span></span></button>
+                <button onclick="selectPgyAssessmentType('mini_cex')" class="learning-module-card"><span class="learning-module-icon">🩻</span><span><span class="learning-module-label block">MINI-CEX</span><span class="learning-module-desc block">臨床能力評估</span></span></button>
+                <button onclick="selectPgyAssessmentType('cbd')" class="learning-module-card"><span class="learning-module-icon">💬</span><span><span class="learning-module-label block">CBD</span><span class="learning-module-desc block">案例討論</span></span></button>
+                <button onclick="selectPgyAssessmentType('checklist')" class="learning-module-card"><span class="learning-module-icon">☑️</span><span><span class="learning-module-label block">CHECKLIST</span><span class="learning-module-desc block">技能查核表</span></span></button>
+                <button onclick="selectPgyAssessmentType('qc')" class="learning-module-card"><span class="learning-module-icon">📈</span><span><span class="learning-module-label block">QC</span><span class="learning-module-desc block">品管案例</span></span></button>
+                <button onclick="selectPgyAssessmentType('feedback360')" class="learning-module-card"><span class="learning-module-icon">👥</span><span><span class="learning-module-label block">360</span><span class="learning-module-desc block">360 度評量</span></span></button>
+                <button onclick="selectPgyAssessmentType('report')" class="learning-module-card"><span class="learning-module-icon">📄</span><span><span class="learning-module-label block">REPORT</span><span class="learning-module-desc block">學習報告</span></span></button>
+                <button onclick="selectPgyAssessmentType('qi')" class="learning-module-card"><span class="learning-module-icon">🧪</span><span><span class="learning-module-label block">QI</span><span class="learning-module-desc block">品質改善專案</span></span></button>
+                <button onclick="selectPgyAssessmentType('reflection')" class="learning-module-card"><span class="learning-module-icon">🪞</span><span><span class="learning-module-label block">REFLECTION</span><span class="learning-module-desc block">反思紀錄</span></span></button>
+                <button onclick="selectPgyAssessmentType('attendance')" class="learning-module-card"><span class="learning-module-icon">🎓</span><span><span class="learning-module-label block">ATTENDANCE</span><span class="learning-module-desc block">課程完成</span></span></button>
             </section>
             <section class="edu-card p-5 sm:p-6">
-                <div class="flex items-start justify-between gap-3 flex-wrap"><div><h3 id="pgy-assessment-form-title" class="font-black text-lg text-slate-900">六大核心能力檢核表</h3><p id="pgy-assessment-form-desc" class="text-xs text-slate-500 mt-1">請由評估者依實際觀察完成評核。</p></div><a id="pgy-assessment-template-link" href="#" target="_blank" class="hidden text-xs font-bold px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700">📄 開啟評量範本</a></div>
+                <div class="flex items-start justify-between gap-3 flex-wrap"><div><h3 id="pgy-assessment-form-title" class="font-black text-lg text-slate-900">DOPS 直接觀察操作技能評量</h3><p id="pgy-assessment-form-desc" class="text-xs text-slate-500 mt-1">請由評估者依實際觀察完成評核。</p></div><a id="pgy-assessment-template-link" href="#" target="_blank" class="hidden text-xs font-bold px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700">📄 開啟評量範本</a></div>
                 <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4"><input id="pgy-assess-name" class="learning-input" placeholder="受評者姓名"><input id="pgy-assess-empid" class="learning-input" placeholder="工號 / 識別碼"><input id="pgy-assess-evaluator" class="learning-input" placeholder="評估者姓名"><select id="pgy-assess-evaluator-title" class="learning-input"><option value="">評估者職稱</option><option>臨床教師</option><option>組長</option><option>資深醫檢師</option></select><input id="pgy-assess-date" type="date" class="learning-input"><input id="pgy-assess-title" class="learning-input sm:col-span-2 lg:col-span-3" placeholder="評量主題 / 操作項目（例如：門診採血、血球分類）"></div>
                 <div id="pgy-assessment-fields" class="mt-5"></div>
                 <div class="mt-4"><label class="text-xs font-bold text-slate-600">總結回饋</label><textarea id="pgy-assess-comments" rows="4" class="learning-input mt-1" placeholder="優點、需改善項目與後續學習建議"></textarea></div>
@@ -500,11 +506,11 @@
 
                 <!-- ④ PGY 評量 -->
                 <div id="admin-section-pgy" class="admin-section-panel space-y-5 hidden">
-                    <section class="bg-white border border-indigo-200 rounded-2xl p-5 shadow-sm space-y-4"><div><h4 class="font-black text-indigo-950 text-lg">🧭 PGY 評量中心設定</h4><p class="text-xs text-indigo-700 mt-1">管理六大核心能力、DOPS、Ad-hoc、EPA 與學習評量範本；每次教師評核必須完成所有評分項目才可送出，評量紀錄集中於此檢閱。</p></div>
+                    <section class="bg-white border border-indigo-200 rounded-2xl p-5 shadow-sm space-y-4"><div><h4 class="font-black text-indigo-950 text-lg">🧭 PGY 評量中心設定</h4><p class="text-xs text-indigo-700 mt-1">管理 DOPS、MINI-CEX、CBD、CHECKLIST、QC、360、REPORT、QI、REFLECTION 與 ATTENDANCE 範本；每次教師評核必須完成所有評分項目才可送出。</p></div>
                     <div id="admin-pgy-template-list" class="grid md:grid-cols-2 xl:grid-cols-3 gap-3"></div><details class="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600"><summary class="font-bold cursor-pointer">Word 套版可用佔位字</summary><div class="mt-2 leading-6"><code>{name}</code> 受評者、<code>{empId}</code> 工號、<code>{groupName}</code> 組別、<code>{evaluator}</code> 評估者、<code>{evaluatorTitle}</code> 職稱、<code>{assessmentDate}</code> 日期、<code>{title}</code> 主題、<code>{overallScore}</code> 平均分數、<code>{comments}</code> 總結回饋；評量項目可使用 <code>{#ratings}{item} / {rating} / {note}{/ratings}</code>。</div></details>
                     <div class="rounded-xl bg-indigo-50 border border-indigo-100 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p class="font-black text-indigo-900">🎯 台灣醫事檢驗學會 EPA 公版參考</p><p class="text-xs text-indigo-700 mt-1">由官方公開 PDF 匯入院內範本庫，之後不需每次依賴外部網站。</p></div><button onclick="adminImportTslmEpa()" class="bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-lg">⬇️ 匯入學會 EPA 公版</button></div>
                     </section>
-                    <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm"><div class="flex items-center justify-between"><div><h4 class="font-black text-slate-900 text-lg">📋 PGY 評量紀錄</h4><p class="text-xs text-slate-500 mt-1">六大核心能力、DOPS、Ad-hoc、EPA 與學習評量。</p></div><button onclick="renderAdminPgyAssessments()" class="text-xs border border-slate-300 px-3 py-2 rounded-lg">🔄 更新</button></div><div id="admin-pgy-records" class="mt-4 space-y-2"></div></section>
+                    <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm"><div class="flex items-center justify-between"><div><h4 class="font-black text-slate-900 text-lg">📋 PGY 評量紀錄</h4><p class="text-xs text-slate-500 mt-1">依第三階段評核代碼集中檢閱，舊資料仍可正常顯示。</p></div><button onclick="renderAdminPgyAssessments()" class="text-xs border border-slate-300 px-3 py-2 rounded-lg">🔄 更新</button></div><div id="admin-pgy-records" class="mt-4 space-y-2"></div></section>
                 </div>
 
                 <!-- ⑤ Results -->

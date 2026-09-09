@@ -19,6 +19,20 @@
   const writeLocal=(k,v)=>{try{if(v)localStorage.setItem(k,v);else localStorage.removeItem(k);}catch(_){}};
   const setText=(id,v)=>{const el=$(id);if(el)el.textContent=String(v);};
 
+  function setupPhase3AreaSwitch(){
+    const buttons=$$('[data-phase3-area]'), groups=$$('[data-phase3-group]'), all=$('#phase3-area-all');
+    if(!buttons.length||!groups.length)return;
+    const saved=readLocal('smh_home_training_area');
+    const apply=area=>{
+      const next=area==='pgy'?'pgy':'internal';writeLocal('smh_home_training_area',next);
+      buttons.forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.phase3Area===next)));
+      groups.forEach(link=>{link.href=`/system?area=${next}&group=${encodeURIComponent(link.dataset.phase3Group)}&module=materials&from=home`;});
+      if(all){all.href=next==='pgy'?'/pgy':'/internal';all.textContent=next==='pgy'?'PGY 全部 →':'院內全部 →';}
+    };
+    buttons.forEach(button=>button.addEventListener('click',()=>apply(button.dataset.phase3Area)));
+    apply(saved);
+  }
+
   async function loadAuthState(){
     try{const r=await fetch('/api/auth/me',{cache:'no-store'}),d=await r.json().catch(()=>({}));authUser=d.authenticated?d.user:null;}catch(_){authUser=null;}
     if(authUser){writeLocal(LEARNER_NAME_KEY,authUser.name||'');writeLocal(LEARNER_EMPID_KEY,authUser.empId||'');}
@@ -96,6 +110,6 @@
     }catch(err){list.innerHTML='<div class="v56-empty">教材摘要暫時無法讀取，仍可直接進入各組學習。</div>';}
   }
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-  setupProfileDialog(); loadAnnouncements();
+  setupPhase3AreaSwitch(); setupProfileDialog(); loadAnnouncements();
   (async()=>{await loadAuthState();await Promise.all([loadPersonalDashboard(),loadDashboard()]);})();
 })();
