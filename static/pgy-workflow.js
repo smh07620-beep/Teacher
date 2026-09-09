@@ -1,48 +1,520 @@
 /* Teacher 6.2 · Phase 3 PGY assignment / signature workflow UI */
-(function(){
-'use strict';
-const C=window.AppCore||{};
-const esc=C.escapeHtml||((v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-const api=C.api||async(path,opt={})=>{const r=await fetch(path,{credentials:'same-origin',...opt}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||`HTTP ${r.status}`);return d};
-const ROLE_LABEL={student:'學員',clinical_teacher:'臨床教師',group_leader:'組長',education_admin:'教學管理者',system_admin:'系統管理者',auditor:'稽核／唯讀'};
-const STATUS_LABEL={assigned:'已指派',submitted:'待教師簽核',teacher_signed:'待組長複核',group_countersigned:'待最終確認',finalized:'已完成',cancelled:'已取消'};
-const ACTION_LABEL={teacher_sign:'臨床教師簽核',group_countersign:'組長複核',finalize:'最終確認',reopen:'退回重開',cancel:'取消指派'};
-const STEP_STATUS=['assigned','submitted','teacher_signed','group_countersigned','finalized'];
-let state={user:null,assignments:[],audit:[],meta:null,group:'grpBio',candidates:null,courses:[],filter:'all',loading:false};
-const $=id=>document.getElementById(id);
-const area=()=>typeof currentTrainingArea!=='undefined'?currentTrainingArea:(new URLSearchParams(location.search).get('area')||'internal');
-const group=()=>typeof currentGroupKey!=='undefined'?currentGroupKey:(new URLSearchParams(location.search).get('group')||'grpBio');
-function role(){return state.user?.role||''}
-function toast(msg,error=false){const el=$('pgywf-status');if(!el)return;el.className=error?'pgywf-error':'pgywf-note';el.textContent=msg;setTimeout(()=>{if(el.textContent===msg)el.textContent='';},5000)}
-function fmtDate(v){if(!v)return '—';try{return new Date(v).toLocaleString('zh-TW',{hour12:false})}catch(_){return String(v)}}
-function evidenceText(e){if(!e)return '';if(Array.isArray(e))return e.map(x=>typeof x==='string'?x:JSON.stringify(x)).join('\n');if(Array.isArray(e.items))return e.items.join('\n');if(typeof e==='object')return Object.entries(e).map(([k,v])=>`${k}: ${typeof v==='string'?v:JSON.stringify(v)}`).join('\n');return String(e)}
-function evidencePayload(text){const items=String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);return items.length?{items}:{} }
-function statusIndex(s){if(s==='cancelled')return -1;return STEP_STATUS.indexOf(s)}
-function stepper(a){const idx=statusIndex(a.status);const names=['學員送出','教師簽核','組長複核','最終確認'];return `<div class="pgywf-stepper">${names.map((n,i)=>`<div class="pgywf-step ${idx>i?'done':idx===i?'active':''}">${i+1}. ${n}</div>`).join('')}</div>`}
-function canAudit(){return ['auditor','system_admin','education_admin','group_leader'].includes(role())}
-function filteredAssignments(){return state.assignments.filter(a=>state.filter==='all'||a.status===state.filter)}
-function roleHint(){return {student:'填寫學習反思與佐證後送出；送出後內容鎖定，需由教學管理者退回才能修改。',clinical_teacher:'只會看到指派給你的學員；學員送出後才能簽核。',group_leader:'只會看到自己組別；臨床教師簽核後才能複核。',education_admin:'可建立指派、完成最終確認、退回或取消；不能代替臨床教師或組長簽名。',system_admin:'系統管理者只可查看稽核紀錄，不可代替臨床教師簽核。',auditor:'唯讀查看稽核軌跡，不可修改或簽核。'}[role()]||''}
-function ensureMount(){const panel=$('panel-assessment');if(!panel||$('pgy-workflow-center'))return;const sec=document.createElement('section');sec.id='pgy-workflow-center';sec.className='pgywf-shell';sec.innerHTML=`<div class="pgywf-toolbar"><div><p class="edu-kicker">PGY ASSIGNMENT WORKFLOW</p><h3 class="font-black text-lg text-slate-900 mt-1">📌 PGY 指派與簽核待辦</h3><p id="pgywf-role-hint" class="text-xs text-slate-500 mt-1"></p></div><div class="pgywf-actions"><button id="pgywf-refresh" class="pgywf-btn">↻ 更新</button><button id="pgywf-audit-btn" class="pgywf-btn pgywf-hidden">🧾 稽核紀錄</button></div></div><div id="pgywf-status" class="mt-3"></div><div id="pgywf-admin-create" class="mt-4"></div><div id="pgywf-filterbar" class="mt-4"></div><div id="pgywf-list" class="pgywf-grid mt-3"><div class="pgywf-loading">讀取 PGY 指派中…</div></div><div id="pgywf-audit" class="pgywf-hidden mt-4"></div><dialog id="pgywf-dialog" class="pgywf-dialog"><div class="pgywf-dialog-body"><h4 id="pgywf-dialog-title" class="font-black text-slate-900"></h4><p id="pgywf-dialog-desc" class="text-xs text-slate-500 mt-1"></p><textarea id="pgywf-dialog-comment" rows="5" class="pgywf-input mt-3" placeholder="回饋或原因"></textarea><div class="pgywf-actions justify-end"><button id="pgywf-dialog-cancel" class="pgywf-btn">取消</button><button id="pgywf-dialog-ok" class="pgywf-btn primary">確認</button></div></div></dialog>`;const first=panel.children[1]||null;panel.insertBefore(sec,first);$('pgywf-refresh').addEventListener('click',()=>loadAll(true));$('pgywf-audit-btn').addEventListener('click',toggleAudit);$('pgywf-dialog-cancel').addEventListener('click',()=>$('pgywf-dialog').close())}
-function renderFilters(){const box=$('pgywf-filterbar');if(!box)return;if(!['student','clinical_teacher','group_leader','education_admin'].includes(role())){box.innerHTML='';return}const counts={};state.assignments.forEach(a=>counts[a.status]=(counts[a.status]||0)+1);const order=['all','assigned','submitted','teacher_signed','group_countersigned','finalized','cancelled'];box.innerHTML=`<div class="pgywf-stats">${order.map(s=>`<button class="pgywf-stat ${state.filter===s?'ring-2 ring-indigo-200':''}" data-pgywf-filter="${s}">${s==='all'?'全部':STATUS_LABEL[s]} ${s==='all'?state.assignments.length:(counts[s]||0)}</button>`).join('')}</div>`;box.querySelectorAll('[data-pgywf-filter]').forEach(b=>b.onclick=()=>{state.filter=b.dataset.pgywfFilter;renderFilters();renderAssignments()})}
-function actionButtons(a){const r=role(),out=[];if(r==='student'&&a.status==='assigned')out.push(`<button class="pgywf-btn primary" data-action="edit" data-id="${a.id}">✍️ 填寫／送出</button>`);if(r==='clinical_teacher'&&a.status==='submitted')out.push(`<button class="pgywf-btn success" data-action="teacher_sign" data-id="${a.id}">✅ 教師簽核</button>`);if(r==='group_leader'&&a.status==='teacher_signed')out.push(`<button class="pgywf-btn success" data-action="group_countersign" data-id="${a.id}">✅ 組長複核</button>`);if(r==='education_admin'&&a.status==='group_countersigned')out.push(`<button class="pgywf-btn success" data-action="finalize" data-id="${a.id}">🏁 最終確認</button>`);if(r==='education_admin'&&['submitted','teacher_signed','group_countersigned','finalized'].includes(a.status))out.push(`<button class="pgywf-btn warn" data-action="reopen" data-id="${a.id}">↩ 退回重開</button>`);if(r==='education_admin'&&!['finalized','cancelled'].includes(a.status))out.push(`<button class="pgywf-btn danger" data-action="cancel" data-id="${a.id}">取消</button>`);if(canAudit())out.push(`<button class="pgywf-btn" data-action="audit_one" data-id="${a.id}">稽核</button>`);return out.join('')}
-function signatureLine(sig,label){if(!sig||!Object.keys(sig).length)return '';const when=sig.signedAt||sig.confirmedAt||'';return `<div class="pgywf-meta mt-1">${label}：${esc(sig.name||sig.username||'')} · ${esc(fmtDate(when))}${sig.comment?` · ${esc(sig.comment)}`:''}</div>`}
-function card(a){const ev=evidenceText(a.evidence),due=a.dueAt?`期限 ${esc(fmtDate(a.dueAt))}`:'未設定期限';return `<article class="pgywf-card" data-status="${esc(a.status)}"><div class="flex flex-wrap items-start justify-between gap-2"><div><div class="pgywf-title">${esc(a.title||'PGY訓練指派')}</div><div class="pgywf-meta mt-1">學員：${esc(a.learnerName||a.learnerUsername)}（${esc(a.learnerEmpId||'')}） · 臨床教師：${esc(a.teacherName||a.teacherUsername)} · ${due}</div></div><span class="pgywf-badge">${esc(STATUS_LABEL[a.status]||a.status)}</span></div>${a.instructions?`<div class="pgywf-note mt-3"><b>任務說明：</b>${esc(a.instructions)}</div>`:''}${(ev||a.reflection)?`<details class="mt-3"><summary class="text-xs font-bold text-indigo-700 cursor-pointer">查看學員反思與佐證</summary>${a.reflection?`<div class="pgywf-evidence"><b>反思</b>\n${esc(a.reflection)}</div>`:''}${ev?`<div class="pgywf-evidence"><b>佐證</b>\n${esc(ev)}</div>`:''}</details>`:''}${stepper(a)}${signatureLine(a.teacherSignature,'臨床教師')}${signatureLine(a.groupSignature,'組長')}${signatureLine(a.finalConfirmation,'最終確認')}<div class="pgywf-actions">${actionButtons(a)}</div></article>`}
-function renderAssignments(){const box=$('pgywf-list');if(!box)return;if(!['student','clinical_teacher','group_leader','education_admin'].includes(role())){box.innerHTML='<div class="pgywf-note">此角色不參與臨床簽核流程；請使用「稽核紀錄」查看操作軌跡。</div>';return}const list=filteredAssignments();box.innerHTML=list.length?list.map(card).join(''):`<div class="pgywf-empty">目前沒有符合條件的 PGY 指派。</div>`;box.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>handleAction(b.dataset.action,b.dataset.id))}
-function renderCreate(){const box=$('pgywf-admin-create');if(!box)return;if(role()!=='education_admin'){box.innerHTML='';return}const groups=Object.entries(C.groups||{}).filter(([k])=>k!=='grpPgyDocs');box.innerHTML=`<details id="pgywf-create-details" class="pgywf-admin-box"><summary class="cursor-pointer font-black text-indigo-950">➕ 建立 PGY 學員／臨床教師指派</summary><div class="pgywf-form mt-3"><div class="pgywf-form-grid"><label class="text-xs font-bold">組別<select id="pgywf-create-group" class="pgywf-input mt-1">${groups.map(([k,v])=>`<option value="${k}" ${k===state.group?'selected':''}>${esc(v.name||v.label||k)}</option>`).join('')}</select></label><label class="text-xs font-bold">課程<select id="pgywf-create-course" class="pgywf-input mt-1"><option value="">未指定課程</option></select></label><label class="text-xs font-bold">學員<select id="pgywf-create-student" class="pgywf-input mt-1"><option value="">請先選組別</option></select></label><label class="text-xs font-bold">臨床教師<select id="pgywf-create-teacher" class="pgywf-input mt-1"><option value="">請先選組別</option></select></label><label class="text-xs font-bold">期限<input id="pgywf-create-due" type="datetime-local" class="pgywf-input mt-1"></label><label class="text-xs font-bold">指派標題<input id="pgywf-create-title" class="pgywf-input mt-1" placeholder="可留白，使用課程名稱"></label></div><label class="text-xs font-bold">任務說明<textarea id="pgywf-create-instructions" rows="3" class="pgywf-input mt-1" placeholder="需完成的教材、技能、案例或佐證"></textarea></label><div><button id="pgywf-create-submit" class="pgywf-btn primary">建立指派</button></div></div></details>`;$('pgywf-create-group').onchange=async e=>{state.group=e.target.value;await loadCandidatesAndCourses()};$('pgywf-create-submit').onclick=createAssignment;loadCandidatesAndCourses()}
-async function loadCandidatesAndCourses(){if(role()!=='education_admin')return;const g=$('pgywf-create-group')?.value||state.group;try{const [cand,courses]=await Promise.all([api(`/api/pgy/assignment-candidates?group=${encodeURIComponent(g)}`),api(`/api/courses?area=pgy&group=${encodeURIComponent(g)}`)]);state.candidates=cand;state.courses=Array.isArray(courses)?courses:[];const s=$('pgywf-create-student'),t=$('pgywf-create-teacher'),c=$('pgywf-create-course');if(s)s.innerHTML='<option value="">選擇學員</option>'+cand.students.map(x=>`<option value="${esc(x.username)}">${esc(x.name)}（${esc(x.empId)}）</option>`).join('');if(t)t.innerHTML='<option value="">選擇臨床教師</option>'+cand.teachers.map(x=>`<option value="${esc(x.username)}">${esc(x.name)}（${esc(x.empId)}）</option>`).join('');if(c)c.innerHTML='<option value="">未指定課程</option>'+state.courses.map(x=>`<option value="${esc(x.id)}">${esc(x.title)}</option>`).join('')}catch(e){toast(e.message,true)}}
-async function createAssignment(){const payload={area:'pgy',group:$('pgywf-create-group')?.value,courseId:$('pgywf-create-course')?.value,learnerUsername:$('pgywf-create-student')?.value,teacherUsername:$('pgywf-create-teacher')?.value,title:$('pgywf-create-title')?.value,instructions:$('pgywf-create-instructions')?.value,dueAt:$('pgywf-create-due')?.value};if(!payload.learnerUsername||!payload.teacherUsername){toast('請選擇學員與臨床教師。',true);return}try{await api('/api/pgy/assignments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});toast('✅ PGY 指派已建立。');await loadAssignments();$('pgywf-create-details').open=false}catch(e){toast(e.message,true)}}
-function showDialog(title,desc,placeholder,required,okLabel,onOk){const d=$('pgywf-dialog'),ta=$('pgywf-dialog-comment'),ok=$('pgywf-dialog-ok');$('pgywf-dialog-title').textContent=title;$('pgywf-dialog-desc').textContent=desc||'';ta.value='';ta.placeholder=placeholder||'回饋';ok.textContent=okLabel||'確認';ok.onclick=async()=>{const v=ta.value.trim();if(required&&!v){ta.focus();return}ok.disabled=true;try{await onOk(v);d.close()}finally{ok.disabled=false}};d.showModal()}
-function editStudent(a){const d=$('pgywf-dialog'),ta=$('pgywf-dialog-comment'),ok=$('pgywf-dialog-ok');$('pgywf-dialog-title').textContent='填寫 PGY 學習反思';$('pgywf-dialog-desc').textContent='先儲存內容；儲存後可直接送出給臨床教師。';ta.outerHTML=`<div id="pgywf-student-editor" class="pgywf-form mt-3"><label class="text-xs font-bold">學習反思<textarea id="pgywf-edit-reflection" rows="5" class="pgywf-input mt-1">${esc(a.reflection||'')}</textarea></label><label class="text-xs font-bold">佐證（每行一項，可貼教材、文件或紀錄連結）<textarea id="pgywf-edit-evidence" rows="4" class="pgywf-input mt-1">${esc(evidenceText(a.evidence))}</textarea></label></div>`;ok.textContent='儲存';ok.onclick=async()=>{try{await api(`/api/pgy/assignments/${encodeURIComponent(a.id)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({reflection:$('pgywf-edit-reflection').value,evidence:evidencePayload($('pgywf-edit-evidence').value)})});d.close();await loadAssignments();showDialog('送出給臨床教師？','送出後學員內容會鎖定，若要修改需由教學管理者退回。','',false,'確認送出',async()=>{await api(`/api/pgy/assignments/${encodeURIComponent(a.id)}/submit`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});toast('✅ 已送出給臨床教師。');await loadAssignments()})}catch(e){toast(e.message,true)}};d.showModal();d.addEventListener('close',restoreDialogTextarea,{once:true})}
-function restoreDialogTextarea(){const editor=$('pgywf-student-editor');if(editor)editor.outerHTML='<textarea id="pgywf-dialog-comment" rows="5" class="pgywf-input mt-3" placeholder="回饋或原因"></textarea>'}
-async function workflowCall(a,action,comment){const map={teacher_sign:'teacher-sign',group_countersign:'countersign',finalize:'finalize',reopen:'reopen',cancel:'cancel'};const body=(action==='reopen'||action==='cancel')?{reason:comment}:{comment};await api(`/api/pgy/assignments/${encodeURIComponent(a.id)}/${map[action]}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast(`✅ ${ACTION_LABEL[action]||action}完成。`);await loadAssignments()}
-function handleAction(action,id){const a=state.assignments.find(x=>x.id===id);if(!a)return;if(action==='edit'){editStudent(a);return}if(action==='audit_one'){showAudit(id);return}const required=['reopen','cancel'].includes(action);showDialog(ACTION_LABEL[action]||'確認操作',required?'此操作會寫入稽核紀錄，請填寫原因。':'可填寫回饋（選填），完成後會留下簽核時間與身分。',required?'請填寫原因':'回饋（選填）',required,ACTION_LABEL[action]||'確認',c=>workflowCall(a,action,c))}
-async function loadAssignments(){if(!['student','clinical_teacher','group_leader','education_admin'].includes(role())){state.assignments=[];renderFilters();renderAssignments();return}const params=new URLSearchParams();if(role()==='education_admin'&&state.group)params.set('group',state.group);const list=await api('/api/pgy/assignments'+(params.toString()?`?${params}`:''));state.assignments=Array.isArray(list)?list:[];renderFilters();renderAssignments()}
-async function loadAudit(assignmentId=''){if(!canAudit())return;const q=assignmentId?`?assignmentId=${encodeURIComponent(assignmentId)}`:'';const list=await api('/api/pgy/audit'+q);state.audit=Array.isArray(list)?list:[];renderAudit(assignmentId)}
-function renderAudit(assignmentId=''){const box=$('pgywf-audit');if(!box)return;box.classList.remove('pgywf-hidden');box.innerHTML=`<div class="pgywf-card"><div class="pgywf-toolbar"><div><div class="pgywf-title">🧾 ${assignmentId?'此指派':'PGY'}稽核紀錄</div><div class="pgywf-meta mt-1">建立、修改、送出、簽核、複核、最終確認、退回與取消皆會留存。</div></div><button id="pgywf-audit-close" class="pgywf-btn">收合</button></div><div class="mt-3">${state.audit.length?state.audit.map(x=>`<div class="pgywf-audit-row"><div>${esc(fmtDate(x.createdAt))}</div><div><b>${esc(x.action)}</b><br>${esc(ROLE_LABEL[x.actorRole]||x.actorRole)}</div><div>${esc(x.title||x.assignmentId)}<br><span class="text-slate-400">${esc(x.actorUsername)} · ${esc(x.fromStatus||'—')} → ${esc(x.toStatus||'—')}</span>${x.detail&&Object.keys(x.detail).length?`<div class="text-slate-500 mt-1">${esc(JSON.stringify(x.detail))}</div>`:''}</div></div>`).join(''):'<div class="pgywf-empty">目前沒有稽核紀錄。</div>'}</div></div>`;$('pgywf-audit-close').onclick=()=>box.classList.add('pgywf-hidden');box.scrollIntoView({behavior:'smooth',block:'nearest'})}
-async function toggleAudit(){const box=$('pgywf-audit');if(!box)return;if(!box.classList.contains('pgywf-hidden')){box.classList.add('pgywf-hidden');return}try{await loadAudit()}catch(e){toast(e.message,true)}}
-async function showAudit(id){try{await loadAudit(id)}catch(e){toast(e.message,true)}}
-async function loadAll(force=false){if(area()!=='pgy')return;state.loading=true;try{state.group=group();if(!state.user||force)state.user=await (C.getCurrentUser?C.getCurrentUser():api('/api/auth/me').then(x=>x.authenticated?x.user:null));$('pgywf-role-hint').textContent=`目前身分：${ROLE_LABEL[role()]||role()||'未登入'}。${roleHint()}`;$('pgywf-audit-btn').classList.toggle('pgywf-hidden',!canAudit());renderCreate();await loadAssignments();if(['system_admin','auditor'].includes(role())&&canAudit())await loadAudit()}catch(e){const box=$('pgywf-list');if(box)box.innerHTML=`<div class="pgywf-error">${esc(e.message||'PGY 指派載入失敗')}</div>`}finally{state.loading=false}}
-async function init(){if(area()!=='pgy')return;ensureMount();await loadAll(false)}
-window.PgyWorkflowUI={reload:()=>loadAll(true),showAudit};
-window.addEventListener('DOMContentLoaded',()=>setTimeout(init,30));
+(function () {
+  'use strict';
+
+  const C = window.AppCore || {};
+  const esc = C.escapeHtml || ((value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[char])));
+  const api = C.api || (async (path, options = {}) => {
+    const response = await fetch(path, { credentials: 'same-origin', ...options });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return data;
+  });
+
+  const ROLE_LABELS = {
+    student: '學員',
+    clinical_teacher: '臨床教師',
+    group_leader: '組長',
+    education_admin: '教學管理者',
+    system_admin: '系統管理者',
+    auditor: '稽核／唯讀'
+  };
+  const STATUS_LABELS = {
+    assigned: '已指派',
+    submitted: '待教師簽核',
+    teacher_signed: '待組長複核',
+    group_countersigned: '待最終確認',
+    finalized: '已完成',
+    cancelled: '已取消'
+  };
+  const STATUS_ORDER = ['assigned', 'submitted', 'teacher_signed', 'group_countersigned', 'finalized'];
+
+  const state = {
+    user: null,
+    assignments: [],
+    audit: [],
+    filter: 'all',
+    group: 'grpBio'
+  };
+
+  const byId = (id) => document.getElementById(id);
+  const role = () => state.user?.role || '';
+  const area = () => typeof currentTrainingArea !== 'undefined'
+    ? currentTrainingArea
+    : (new URLSearchParams(location.search).get('area') || 'internal');
+  const currentGroup = () => typeof currentGroupKey !== 'undefined'
+    ? currentGroupKey
+    : (new URLSearchParams(location.search).get('group') || 'grpBio');
+
+  function canUseAssignments() {
+    return ['student', 'clinical_teacher', 'group_leader', 'education_admin'].includes(role());
+  }
+
+  function canAudit() {
+    return ['group_leader', 'education_admin', 'system_admin', 'auditor'].includes(role());
+  }
+
+  function statusLabel(status) {
+    return STATUS_LABELS[status] || status || '未知';
+  }
+
+  function formatDate(value) {
+    if (!value) return '—';
+    try {
+      return new Date(value).toLocaleString('zh-TW', { hour12: false });
+    } catch (_) {
+      return String(value);
+    }
+  }
+
+  function evidenceToText(evidence) {
+    if (!evidence) return '';
+    if (Array.isArray(evidence)) return evidence.map(String).join('\n');
+    if (Array.isArray(evidence.items)) return evidence.items.map(String).join('\n');
+    if (typeof evidence === 'object') {
+      return Object.entries(evidence).map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`).join('\n');
+    }
+    return String(evidence);
+  }
+
+  function textToEvidence(text) {
+    const items = String(text || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+    return items.length ? { items } : {};
+  }
+
+  function roleHint() {
+    const hints = {
+      student: '填寫反思與佐證後送出；送出後內容鎖定，若要修改需由教學管理者退回。',
+      clinical_teacher: '只會看到指派給你的學員；學員送出後才能進行臨床教師簽核。',
+      group_leader: '只會看到自己組別；臨床教師簽核後才能複核。',
+      education_admin: '可建立指派、最終確認、退回或取消；不可代替臨床教師或組長簽名。',
+      system_admin: '可查看稽核紀錄，但不可代替臨床教師簽核。',
+      auditor: '唯讀查看稽核軌跡，不可修改或簽核。'
+    };
+    return hints[role()] || '';
+  }
+
+  function showStatus(message, isError = false) {
+    const box = byId('pgywf-status');
+    if (!box) return;
+    box.className = isError ? 'pgywf-error mt-3' : 'pgywf-note mt-3';
+    box.textContent = message;
+  }
+
+  function clearStatus() {
+    const box = byId('pgywf-status');
+    if (!box) return;
+    box.className = 'mt-3';
+    box.textContent = '';
+  }
+
+  function ensureMount() {
+    const panel = byId('panel-assessment');
+    if (!panel || byId('pgy-workflow-center')) return;
+
+    const section = document.createElement('section');
+    section.id = 'pgy-workflow-center';
+    section.className = 'pgywf-shell';
+    section.innerHTML = `
+      <div class="pgywf-toolbar">
+        <div>
+          <p class="edu-kicker">PGY ASSIGNMENT WORKFLOW</p>
+          <h3 class="font-black text-lg text-slate-900 mt-1">📌 PGY 指派與簽核待辦</h3>
+          <p id="pgywf-role-hint" class="text-xs text-slate-500 mt-1"></p>
+        </div>
+        <div class="pgywf-actions">
+          <button id="pgywf-refresh" class="pgywf-btn">↻ 更新</button>
+          <button id="pgywf-audit-btn" class="pgywf-btn pgywf-hidden">🧾 稽核紀錄</button>
+        </div>
+      </div>
+      <div id="pgywf-status" class="mt-3"></div>
+      <div id="pgywf-admin-create" class="mt-4"></div>
+      <div id="pgywf-filterbar" class="mt-4"></div>
+      <div id="pgywf-list" class="pgywf-grid mt-3"><div class="pgywf-loading">讀取 PGY 指派中…</div></div>
+      <div id="pgywf-audit" class="pgywf-hidden mt-4"></div>
+    `;
+    panel.insertBefore(section, panel.children[1] || null);
+    byId('pgywf-refresh').addEventListener('click', () => loadAll(true));
+    byId('pgywf-audit-btn').addEventListener('click', toggleAudit);
+  }
+
+  function renderFilters() {
+    const box = byId('pgywf-filterbar');
+    if (!box || !canUseAssignments()) {
+      if (box) box.innerHTML = '';
+      return;
+    }
+    const counts = {};
+    state.assignments.forEach((item) => {
+      counts[item.status] = (counts[item.status] || 0) + 1;
+    });
+    const options = ['all', 'assigned', 'submitted', 'teacher_signed', 'group_countersigned', 'finalized', 'cancelled'];
+    box.innerHTML = `<div class="pgywf-stats">${options.map((status) => {
+      const label = status === 'all' ? '全部' : statusLabel(status);
+      const count = status === 'all' ? state.assignments.length : (counts[status] || 0);
+      const active = state.filter === status ? 'ring-2 ring-indigo-200' : '';
+      return `<button class="pgywf-stat ${active}" data-pgywf-filter="${status}">${esc(label)} ${count}</button>`;
+    }).join('')}</div>`;
+    box.querySelectorAll('[data-pgywf-filter]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.filter = button.dataset.pgywfFilter;
+        renderFilters();
+        renderAssignments();
+      });
+    });
+  }
+
+  function stepper(assignment) {
+    const index = assignment.status === 'cancelled' ? -1 : STATUS_ORDER.indexOf(assignment.status);
+    const labels = ['學員送出', '教師簽核', '組長複核', '最終確認'];
+    return `<div class="pgywf-stepper">${labels.map((label, step) => {
+      const cls = index > step ? 'done' : (index === step ? 'active' : '');
+      return `<div class="pgywf-step ${cls}">${step + 1}. ${esc(label)}</div>`;
+    }).join('')}</div>`;
+  }
+
+  function signatureLine(signature, label) {
+    if (!signature || !Object.keys(signature).length) return '';
+    const time = signature.signedAt || signature.confirmedAt || '';
+    return `<div class="pgywf-meta mt-1">${esc(label)}：${esc(signature.name || signature.username || '')} · ${esc(formatDate(time))}${signature.comment ? ` · ${esc(signature.comment)}` : ''}</div>`;
+  }
+
+  function studentEditor(assignment) {
+    if (role() !== 'student' || assignment.status !== 'assigned') return '';
+    return `
+      <details class="mt-3" data-pgywf-editor="${esc(assignment.id)}">
+        <summary class="text-xs font-black text-indigo-700 cursor-pointer">✍️ 填寫學習反思與佐證</summary>
+        <div class="pgywf-form mt-3">
+          <label class="text-xs font-bold">學習反思
+            <textarea class="pgywf-input mt-1" rows="5" data-field="reflection">${esc(assignment.reflection || '')}</textarea>
+          </label>
+          <label class="text-xs font-bold">佐證（每行一項，可貼教材、文件或紀錄連結）
+            <textarea class="pgywf-input mt-1" rows="4" data-field="evidence">${esc(evidenceToText(assignment.evidence))}</textarea>
+          </label>
+          <div class="pgywf-actions">
+            <button class="pgywf-btn" data-action="save-student" data-id="${esc(assignment.id)}">💾 儲存草稿</button>
+            <button class="pgywf-btn primary" data-action="submit" data-id="${esc(assignment.id)}">📨 送出給臨床教師</button>
+          </div>
+        </div>
+      </details>`;
+  }
+
+  function actionButtons(assignment) {
+    const buttons = [];
+    if (role() === 'clinical_teacher' && assignment.status === 'submitted') {
+      buttons.push(`<button class="pgywf-btn success" data-action="teacher-sign" data-id="${esc(assignment.id)}">✅ 教師簽核</button>`);
+    }
+    if (role() === 'group_leader' && assignment.status === 'teacher_signed') {
+      buttons.push(`<button class="pgywf-btn success" data-action="countersign" data-id="${esc(assignment.id)}">✅ 組長複核</button>`);
+    }
+    if (role() === 'education_admin' && assignment.status === 'group_countersigned') {
+      buttons.push(`<button class="pgywf-btn success" data-action="finalize" data-id="${esc(assignment.id)}">🏁 最終確認</button>`);
+    }
+    if (role() === 'education_admin' && ['submitted', 'teacher_signed', 'group_countersigned', 'finalized'].includes(assignment.status)) {
+      buttons.push(`<button class="pgywf-btn warn" data-action="reopen" data-id="${esc(assignment.id)}">↩ 退回重開</button>`);
+    }
+    if (role() === 'education_admin' && !['finalized', 'cancelled'].includes(assignment.status)) {
+      buttons.push(`<button class="pgywf-btn danger" data-action="cancel" data-id="${esc(assignment.id)}">取消指派</button>`);
+    }
+    if (canAudit()) {
+      buttons.push(`<button class="pgywf-btn" data-action="audit-one" data-id="${esc(assignment.id)}">稽核</button>`);
+    }
+    return buttons.join('');
+  }
+
+  function assignmentCard(assignment) {
+    const evidence = evidenceToText(assignment.evidence);
+    return `
+      <article class="pgywf-card" data-status="${esc(assignment.status)}">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <div class="pgywf-title">${esc(assignment.title || 'PGY 訓練指派')}</div>
+            <div class="pgywf-meta mt-1">學員：${esc(assignment.learnerName || assignment.learnerUsername)}（${esc(assignment.learnerEmpId || '')}） · 臨床教師：${esc(assignment.teacherName || assignment.teacherUsername)} · ${assignment.dueAt ? `期限 ${esc(formatDate(assignment.dueAt))}` : '未設定期限'}</div>
+          </div>
+          <span class="pgywf-badge">${esc(statusLabel(assignment.status))}</span>
+        </div>
+        ${assignment.instructions ? `<div class="pgywf-note mt-3"><b>任務說明：</b>${esc(assignment.instructions)}</div>` : ''}
+        ${(assignment.reflection || evidence) ? `<details class="mt-3"><summary class="text-xs font-bold text-indigo-700 cursor-pointer">查看學員反思與佐證</summary>${assignment.reflection ? `<div class="pgywf-evidence"><b>反思</b>\n${esc(assignment.reflection)}</div>` : ''}${evidence ? `<div class="pgywf-evidence"><b>佐證</b>\n${esc(evidence)}</div>` : ''}</details>` : ''}
+        ${studentEditor(assignment)}
+        ${stepper(assignment)}
+        ${signatureLine(assignment.teacherSignature, '臨床教師')}
+        ${signatureLine(assignment.groupSignature, '組長')}
+        ${signatureLine(assignment.finalConfirmation, '最終確認')}
+        <div class="pgywf-actions">${actionButtons(assignment)}</div>
+      </article>`;
+  }
+
+  function renderAssignments() {
+    const box = byId('pgywf-list');
+    if (!box) return;
+    if (!canUseAssignments()) {
+      box.innerHTML = '<div class="pgywf-note">此角色不參與臨床簽核流程；可使用「稽核紀錄」查看操作軌跡。</div>';
+      return;
+    }
+    const list = state.assignments.filter((item) => state.filter === 'all' || item.status === state.filter);
+    box.innerHTML = list.length ? list.map(assignmentCard).join('') : '<div class="pgywf-empty">目前沒有符合條件的 PGY 指派。</div>';
+    box.querySelectorAll('[data-action]').forEach((button) => {
+      button.addEventListener('click', () => handleAction(button.dataset.action, button.dataset.id));
+    });
+  }
+
+  async function loadCandidatesAndCourses() {
+    if (role() !== 'education_admin') return;
+    const groupKey = byId('pgywf-create-group')?.value || state.group;
+    try {
+      const [candidates, courses] = await Promise.all([
+        api(`/api/pgy/assignment-candidates?group=${encodeURIComponent(groupKey)}`),
+        api(`/api/courses?area=pgy&group=${encodeURIComponent(groupKey)}`)
+      ]);
+      const studentSelect = byId('pgywf-create-student');
+      const teacherSelect = byId('pgywf-create-teacher');
+      const courseSelect = byId('pgywf-create-course');
+      if (studentSelect) studentSelect.innerHTML = '<option value="">選擇學員</option>' + (candidates.students || []).map((item) => `<option value="${esc(item.username)}">${esc(item.name)}（${esc(item.empId)}）</option>`).join('');
+      if (teacherSelect) teacherSelect.innerHTML = '<option value="">選擇臨床教師</option>' + (candidates.teachers || []).map((item) => `<option value="${esc(item.username)}">${esc(item.name)}（${esc(item.empId)}）</option>`).join('');
+      if (courseSelect) courseSelect.innerHTML = '<option value="">未指定課程</option>' + (Array.isArray(courses) ? courses : []).map((item) => `<option value="${esc(item.id)}">${esc(item.title)}</option>`).join('');
+    } catch (error) {
+      showStatus(error.message, true);
+    }
+  }
+
+  function renderCreateForm() {
+    const box = byId('pgywf-admin-create');
+    if (!box) return;
+    if (role() !== 'education_admin') {
+      box.innerHTML = '';
+      return;
+    }
+    const groups = Object.entries(C.groups || {}).filter(([key]) => key !== 'grpPgyDocs');
+    box.innerHTML = `
+      <details class="pgywf-admin-box" id="pgywf-create-details">
+        <summary class="cursor-pointer font-black text-indigo-950">➕ 建立 PGY 學員／臨床教師指派</summary>
+        <div class="pgywf-form mt-3">
+          <div class="pgywf-form-grid">
+            <label class="text-xs font-bold">組別<select id="pgywf-create-group" class="pgywf-input mt-1">${groups.map(([key, value]) => `<option value="${esc(key)}" ${key === state.group ? 'selected' : ''}>${esc(value.name || value.label || key)}</option>`).join('')}</select></label>
+            <label class="text-xs font-bold">課程<select id="pgywf-create-course" class="pgywf-input mt-1"><option value="">未指定課程</option></select></label>
+            <label class="text-xs font-bold">學員<select id="pgywf-create-student" class="pgywf-input mt-1"><option value="">選擇學員</option></select></label>
+            <label class="text-xs font-bold">臨床教師<select id="pgywf-create-teacher" class="pgywf-input mt-1"><option value="">選擇臨床教師</option></select></label>
+            <label class="text-xs font-bold">期限<input id="pgywf-create-due" type="datetime-local" class="pgywf-input mt-1"></label>
+            <label class="text-xs font-bold">指派標題<input id="pgywf-create-title" class="pgywf-input mt-1" placeholder="可留白，使用課程名稱"></label>
+          </div>
+          <label class="text-xs font-bold">任務說明<textarea id="pgywf-create-instructions" rows="3" class="pgywf-input mt-1" placeholder="需完成的教材、技能、案例或佐證"></textarea></label>
+          <div><button id="pgywf-create-submit" class="pgywf-btn primary">建立指派</button></div>
+        </div>
+      </details>`;
+    byId('pgywf-create-group').addEventListener('change', (event) => {
+      state.group = event.target.value;
+      loadCandidatesAndCourses();
+    });
+    byId('pgywf-create-submit').addEventListener('click', createAssignment);
+    loadCandidatesAndCourses();
+  }
+
+  async function createAssignment() {
+    const payload = {
+      area: 'pgy',
+      group: byId('pgywf-create-group')?.value || state.group,
+      courseId: byId('pgywf-create-course')?.value || '',
+      learnerUsername: byId('pgywf-create-student')?.value || '',
+      teacherUsername: byId('pgywf-create-teacher')?.value || '',
+      dueAt: byId('pgywf-create-due')?.value || '',
+      title: byId('pgywf-create-title')?.value || '',
+      instructions: byId('pgywf-create-instructions')?.value || ''
+    };
+    if (!payload.learnerUsername || !payload.teacherUsername) {
+      showStatus('請選擇學員與臨床教師。', true);
+      return;
+    }
+    try {
+      await api('/api/pgy/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      showStatus('✅ PGY 指派已建立。');
+      state.group = payload.group;
+      await loadAssignments();
+      const details = byId('pgywf-create-details');
+      if (details) details.open = false;
+    } catch (error) {
+      showStatus(error.message, true);
+    }
+  }
+
+  function getStudentEditor(assignmentId) {
+    const editor = document.querySelector(`[data-pgywf-editor="${CSS.escape(assignmentId)}"]`);
+    if (!editor) return null;
+    return {
+      reflection: editor.querySelector('[data-field="reflection"]')?.value || '',
+      evidence: editor.querySelector('[data-field="evidence"]')?.value || ''
+    };
+  }
+
+  async function saveStudentDraft(assignment, submitAfterSave) {
+    const editor = getStudentEditor(assignment.id);
+    if (!editor) return;
+    try {
+      await api(`/api/pgy/assignments/${encodeURIComponent(assignment.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reflection: editor.reflection,
+          evidence: textToEvidence(editor.evidence)
+        })
+      });
+      if (submitAfterSave) {
+        if (!editor.reflection.trim() && !editor.evidence.trim()) {
+          throw new Error('送出前至少需填寫反思或佐證內容。');
+        }
+        if (!window.confirm('送出後學員內容會鎖定，確認送出給臨床教師？')) return;
+        await api(`/api/pgy/assignments/${encodeURIComponent(assignment.id)}/submit`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+        });
+        showStatus('✅ 已送出給臨床教師。');
+      } else {
+        showStatus('✅ 草稿已儲存。');
+      }
+      await loadAssignments();
+    } catch (error) {
+      showStatus(error.message, true);
+    }
+  }
+
+  async function workflowAction(assignment, action) {
+    const config = {
+      'teacher-sign': { path: 'teacher-sign', prompt: '教師回饋（選填）', required: false, key: 'comment', label: '臨床教師簽核' },
+      countersign: { path: 'countersign', prompt: '組長複核意見（選填）', required: false, key: 'comment', label: '組長複核' },
+      finalize: { path: 'finalize', prompt: '最終確認意見（選填）', required: false, key: 'comment', label: '最終確認' },
+      reopen: { path: 'reopen', prompt: '請填寫退回原因', required: true, key: 'reason', label: '退回重開' },
+      cancel: { path: 'cancel', prompt: '請填寫取消原因', required: true, key: 'reason', label: '取消指派' }
+    }[action];
+    if (!config) return;
+
+    const comment = window.prompt(config.prompt, '');
+    if (comment === null) return;
+    if (config.required && !comment.trim()) {
+      showStatus('此操作必須填寫原因。', true);
+      return;
+    }
+    if (!window.confirm(`確認執行「${config.label}」？`)) return;
+
+    try {
+      await api(`/api/pgy/assignments/${encodeURIComponent(assignment.id)}/${config.path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [config.key]: comment.trim() })
+      });
+      showStatus(`✅ ${config.label}完成。`);
+      await loadAssignments();
+    } catch (error) {
+      showStatus(error.message, true);
+    }
+  }
+
+  function handleAction(action, assignmentId) {
+    const assignment = state.assignments.find((item) => item.id === assignmentId);
+    if (!assignment) return;
+    if (action === 'save-student') return saveStudentDraft(assignment, false);
+    if (action === 'submit') return saveStudentDraft(assignment, true);
+    if (action === 'audit-one') return showAudit(assignment.id);
+    return workflowAction(assignment, action);
+  }
+
+  async function loadAssignments() {
+    if (!canUseAssignments()) {
+      state.assignments = [];
+      renderFilters();
+      renderAssignments();
+      return;
+    }
+    const params = new URLSearchParams();
+    if (role() === 'education_admin' && state.group) params.set('group', state.group);
+    const result = await api(`/api/pgy/assignments${params.toString() ? `?${params}` : ''}`);
+    state.assignments = Array.isArray(result) ? result : [];
+    renderFilters();
+    renderAssignments();
+  }
+
+  async function loadAudit(assignmentId = '') {
+    if (!canAudit()) return;
+    const result = await api(`/api/pgy/audit${assignmentId ? `?assignmentId=${encodeURIComponent(assignmentId)}` : ''}`);
+    state.audit = Array.isArray(result) ? result : [];
+    renderAudit(assignmentId);
+  }
+
+  function renderAudit(assignmentId = '') {
+    const box = byId('pgywf-audit');
+    if (!box) return;
+    box.classList.remove('pgywf-hidden');
+    box.innerHTML = `
+      <div class="pgywf-card">
+        <div class="pgywf-toolbar">
+          <div><div class="pgywf-title">🧾 ${assignmentId ? '此指派' : 'PGY'}稽核紀錄</div><div class="pgywf-meta mt-1">建立、修改、送出、簽核、複核、最終確認、退回與取消皆會留存。</div></div>
+          <button id="pgywf-audit-close" class="pgywf-btn">收合</button>
+        </div>
+        <div class="mt-3">${state.audit.length ? state.audit.map((item) => `
+          <div class="pgywf-audit-row">
+            <div>${esc(formatDate(item.createdAt))}</div>
+            <div><b>${esc(item.action)}</b><br>${esc(ROLE_LABELS[item.actorRole] || item.actorRole)}</div>
+            <div>${esc(item.title || item.assignmentId)}<br><span class="text-slate-400">${esc(item.actorUsername)} · ${esc(item.fromStatus || '—')} → ${esc(item.toStatus || '—')}</span>${item.detail && Object.keys(item.detail).length ? `<div class="text-slate-500 mt-1">${esc(JSON.stringify(item.detail))}</div>` : ''}</div>
+          </div>`).join('') : '<div class="pgywf-empty">目前沒有稽核紀錄。</div>'}</div>
+      </div>`;
+    byId('pgywf-audit-close').addEventListener('click', () => box.classList.add('pgywf-hidden'));
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function showAudit(assignmentId) {
+    try {
+      await loadAudit(assignmentId);
+    } catch (error) {
+      showStatus(error.message, true);
+    }
+  }
+
+  async function toggleAudit() {
+    const box = byId('pgywf-audit');
+    if (!box) return;
+    if (!box.classList.contains('pgywf-hidden')) {
+      box.classList.add('pgywf-hidden');
+      return;
+    }
+    await showAudit('');
+  }
+
+  async function loadAll(forceAuth = false) {
+    if (area() !== 'pgy') return;
+    clearStatus();
+    state.group = currentGroup();
+    try {
+      if (!state.user || forceAuth) {
+        state.user = C.getCurrentUser
+          ? await C.getCurrentUser()
+          : await api('/api/auth/me').then((result) => result.authenticated ? result.user : null);
+      }
+      const hint = byId('pgywf-role-hint');
+      if (hint) hint.textContent = `目前身分：${ROLE_LABELS[role()] || role() || '未登入'}。${roleHint()}`;
+      const auditButton = byId('pgywf-audit-btn');
+      if (auditButton) auditButton.classList.toggle('pgywf-hidden', !canAudit());
+      renderCreateForm();
+      await loadAssignments();
+      if (['system_admin', 'auditor'].includes(role()) && canAudit()) await loadAudit();
+    } catch (error) {
+      const list = byId('pgywf-list');
+      if (list) list.innerHTML = `<div class="pgywf-error">${esc(error.message || 'PGY 指派載入失敗')}</div>`;
+    }
+  }
+
+  async function init() {
+    if (area() !== 'pgy') return;
+    ensureMount();
+    await loadAll(false);
+  }
+
+  window.PgyWorkflowUI = {
+    reload: () => loadAll(true),
+    showAudit
+  };
+
+  window.addEventListener('DOMContentLoaded', () => setTimeout(init, 30));
 })();
