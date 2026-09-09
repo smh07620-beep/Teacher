@@ -1,0 +1,23 @@
+/* V5.6.1 usability + mobile + safe-operation polish */
+.v561-flow-step{display:flex;flex-direction:column;gap:.2rem;padding:.75rem;border-radius:.9rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);min-height:88px}.v561-flow-step b{width:1.55rem;height:1.55rem;border-radius:999px;background:rgba(255,255,255,.16);display:inline-flex;align-items:center;justify-content:center}.v561-flow-step span{font-weight:800;font-size:.8rem}.v561-flow-step small{font-size:.68rem;color:#dbeafe;line-height:1.45}.v561-exam-stepper{display:flex;gap:.35rem;flex-wrap:wrap}.v561-exam-stepper span{padding:.4rem .65rem;border-radius:999px;background:white;border:1px solid #c7d2fe;color:#64748b;font-size:.68rem;font-weight:800}.v561-exam-stepper span.is-done{background:#ecfdf5;border-color:#a7f3d0;color:#047857}.v561-exam-stepper span.is-current{background:#4338ca;border-color:#4338ca;color:white}.v561-exam-stepper span+span:before{content:'→';margin-right:.45rem;color:#94a3b8}.admin-section-panel button:disabled{opacity:.45;cursor:not-allowed}.reader-context:empty{display:none}
+@media(max-width:760px){#admin-modal>div{max-height:100dvh!important;height:100dvh!important;border-radius:0!important}#admin-modal{padding:0!important}.admin-section-panel{min-width:0}.admin-section-panel table{min-width:760px}.v561-flow-step{min-height:74px;padding:.6rem}.v561-exam-stepper{display:grid;grid-template-columns:1fr 1fr}.v561-exam-stepper span+span:before{display:none}#essay-review-panel input,#essay-review-panel textarea,#pgy-assessment-panel input,#pgy-assessment-panel select,#pgy-assessment-panel textarea{font-size:16px!important}.viewer-sidebar{max-height:88px!important}.slide-thumb-card{min-width:110px}.viewer-layout{grid-template-columns:1fr!important}.viewer-sidebar{display:flex!important;overflow-x:auto!important;overflow-y:hidden!important}.viewer-sidebar #slide-viewer-thumbs{display:flex!important}.viewer-stage-light{min-height:0}}
+
+/* V5.6.1 personalized home dashboard */
+.v561-profile-trigger{cursor:pointer;outline:none}
+.v561-profile-trigger:focus-visible{box-shadow:0 0 0 3px rgba(13,148,136,.22);border-radius:14px}
+.v561-welcome{display:inline-flex;align-items:center;max-width:100%;margin:0 0 10px;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.72);border:1px solid rgba(104,177,201,.25);color:#116582;font-size:12px;font-weight:800;line-height:1.45}
+.v561-profile-dialog{width:min(440px,calc(100vw - 28px));padding:0;border:0;border-radius:22px;box-shadow:0 28px 90px rgba(15,55,82,.26);background:white;color:#17324b}
+.v561-profile-dialog::backdrop{background:rgba(16,43,63,.38);backdrop-filter:blur(3px)}
+.v561-profile-card{display:grid;gap:14px;padding:22px;margin:0}
+.v561-profile-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.v561-profile-head strong{display:block;font-size:19px;color:#0e4364}
+.v561-profile-head span{display:block;margin-top:4px;font-size:12px;color:#71899a}
+.v561-profile-head button{border:0;background:#eef6f9;color:#35677f;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer}
+.v561-profile-card label{display:grid;gap:6px;font-size:12px;font-weight:800;color:#476478}
+.v561-profile-card input{width:100%;box-sizing:border-box;border:1px solid #cedfe8;border-radius:12px;padding:11px 12px;font:inherit;font-size:16px;outline:none;background:#fff}
+.v561-profile-card input:focus{border-color:#1598a6;box-shadow:0 0 0 3px rgba(21,152,166,.12)}
+.v561-profile-status{margin:0;padding:10px 12px;border-radius:12px;background:#f4fafc;color:#5c7484;font-size:11px;line-height:1.55}
+.v561-profile-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.v561-profile-actions button{border:0;border-radius:11px;background:#087f88;color:#fff;font-weight:800;padding:10px 14px;cursor:pointer}
+.v561-profile-actions .secondary{background:#fff;color:#607789;border:1px solid #d5e2e8}
+@media (max-width:680px){.v561-welcome{border-radius:12px}.v561-profile-dialog{width:calc(100vw - 20px)}.v561-profile-card{padding:18px}.v561-profile-actions{display:grid;grid-template-columns:1fr 1fr}.v561-profile-actions button{width:100%}}

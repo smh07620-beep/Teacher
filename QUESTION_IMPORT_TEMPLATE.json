@@ -1,0 +1,33 @@
+{
+  "questions": [
+    {
+      "question": "「危急值通報」最優先的處置為何？",
+      "questionType": "choice",
+      "options": ["確認病人與檢體資訊", "直接刪除結果", "等待隔日再處理", "不需記錄"],
+      "correct": "A",
+      "tag": "危急值",
+      "explanation": "依院內 SOP 完成確認與通報"
+    },
+    {
+      "question": "下列哪些屬於檢體品質確認項目？（複選）",
+      "questionType": "multi",
+      "options": ["病人資訊", "檢體量", "採檢容器", "完全忽略溶血"],
+      "answerConfig": {"correctIndices": [0, 1, 2]},
+      "tag": "檢體處理",
+      "explanation": "多選題使用 correctIndices，0 代表 A、1 代表 B。"
+    },
+    {
+      "question": "紅血球英文縮寫為 ______。",
+      "questionType": "fill",
+      "answerConfig": {"acceptedAnswers": ["RBC", "rbc"], "caseSensitive": false},
+      "tag": "鏡檢",
+      "explanation": "填空題可設定多個可接受答案。"
+    },
+    {
+      "question": "請簡述收到溶血檢體時的處理原則。",
+      "questionType": "essay",
+      "tag": "檢體處理",
+      "explanation": "請依本科 SOP 人工評閱"
+    }
+  ]
+}

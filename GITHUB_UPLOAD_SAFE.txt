@@ -1,0 +1,6 @@
+V5.4.1 GitHub Safe 版
+
+可直接上傳 GitHub → Render。
+正式帳密 / API Key 請只放 Render Environment Variables，不要提交到 GitHub。
+
+儲存架構：MEGA (MEGAcmd) 主儲存 → 容量達網站上限時可切 Google Drive 備援；Supabase/PostgreSQL 保存結構化資料。

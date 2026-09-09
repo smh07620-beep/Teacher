@@ -1,0 +1,11 @@
+Flask>=3.0,<4.0
+PyMuPDF>=1.24,<2.0
+gunicorn>=22,<24
+psycopg[binary]>=3.2,<4.0
+boto3>=1.35,<2.0
+requests>=2.32,<3.0
+
+google-auth>=2.35,<3.0
+google-api-python-client>=2.150,<3.0
+
+Pillow>=10.4,<12.0

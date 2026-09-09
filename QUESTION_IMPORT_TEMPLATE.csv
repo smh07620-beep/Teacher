@@ -1,0 +1,5 @@
+question,questionType,optionA,optionB,optionC,optionD,correct,correctIndices,acceptedAnswers,tag,explanation,imageUrl,mediaUrl,pauseAt
+「危急值通報」最優先的處置為何？,choice,確認病人與檢體資訊,直接刪除結果,等待隔日再處理,不需記錄,A,,,危急值,依院內SOP完成確認與通報,,,
+下列哪些屬於檢體品質確認項目？,multi,病人資訊,檢體量,採檢容器,完全忽略溶血,,"A,C",,檢體處理,複選題 correctIndices 可填 A,C,,,
+紅血球英文縮寫為 ______。,fill,,,,,,,"RBC|rbc",鏡檢,填空題可用 | 分隔多個答案,,,
+請簡述收到溶血檢體時的處理原則。,essay,,,,,,,,檢體處理,請依本科SOP人工評閱,,,

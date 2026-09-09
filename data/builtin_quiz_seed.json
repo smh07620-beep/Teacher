@@ -1,0 +1,679 @@
+{
+  "version": 1,
+  "area": "internal",
+  "group": "grpBio",
+  "categories": [
+    {
+      "id": "subA1",
+      "title": "1-1 一致性與法定傳染病通報",
+      "desc": "涵蓋急生化退件標準作業、小兒檢體處理、EDTA試管汙染鑑別、極值稀釋與檢體保存、品質追溯及法定傳染病（退伍軍人菌、登革熱）通報流程。",
+      "sortOrder": 0,
+      "questions": [
+        {
+          "id": "builtin-subA1-01",
+          "tag": "行政交接",
+          "question": "1. 依據急生化退件檢體標準流程，關於退件時的系統備註與行政交接，下列何者正確？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 於 Comment 3 記載原因，並留下條碼號碼執行班次交接",
+            "(B) 於 Comment 1 記載原因，並留下條碼號碼執行班次交接",
+            "(C) 於 Comment 3 記載原因，但無需記錄條碼號碼",
+            "(D) 只需於交接班時口頭告知，無需在系統 Comment 記載"
+          ],
+          "correct": 0,
+          "explanation": "SOP 規範：急生化退件時必須於 Comment 3 記載退件原因，且交接班時必須留下完整的條碼號碼執行班次交接。",
+          "sortOrder": 0
+        },
+        {
+          "id": "builtin-subA1-02",
+          "tag": "小兒檢體",
+          "question": "2. 關於小兒檢體（A8、PNI、NBC）的溶血處理規範，下列何項敘述符合標準？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 溶血一律辦理退件重採，不予以操作",
+            "(B) 溶血不退件，若 K 達危險臨界值須通報並註明溶血價數",
+            "(C) 溶血不退件，且不論 K 值高低皆無需註明溶血價數",
+            "(D) 溶血時需直接進行 10 倍手工稀釋後上機"
+          ],
+          "correct": 1,
+          "explanation": "小兒檢體採集不易且極為珍貴，原則上溶血不辦理退件。但若 K 達到危急值，必須辦理通報並特別標註溶血價數（如 2+）供臨床評估。",
+          "sortOrder": 1
+        },
+        {
+          "id": "builtin-subA1-03",
+          "tag": "採血糖管",
+          "question": "3. 當檢體發生 EDTA 試管汙染時，常呈現何種異常檢驗結果組合？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) K 異常升高、Ca 異常降低",
+            "(B) Na 異常升高、K 異常降低",
+            "(C) Ca 異常升高、K 異常降低",
+            "(D) K 與 Ca 皆呈現異常升高"
+          ],
+          "correct": 0,
+          "explanation": "EDTA 試管含有 K2EDTA/K3EDTA，會釋放高濃度鉀離子導致 K 假性升高；同時 EDTA 會強烈螯合血清中的 Ca 離子，導致測得 Ca 假性大幅降低。",
+          "sortOrder": 2
+        },
+        {
+          "id": "builtin-subA1-04",
+          "tag": "極值處理",
+          "question": "4. 依據 GOT (AST) 稀釋與發出邏輯，當遇到極高值須進行稀釋時，下列何者符合規範？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 手工稀釋 10 倍（50ul 檢體 + 450ul 水），機器自動稀釋 3 倍，最終發出 > 7000 U/L",
+            "(B) 手工稀釋 5 倍（100ul 檢體 + 400ul 水），機器自動稀釋 2 倍，最終發出 > 5000 U/L",
+            "(C) 直接交由機器自動稀釋 30 倍，不需手工預稀釋",
+            "(D) 手工稀釋 10 倍，最終發出 > 10000 U/L"
+          ],
+          "correct": 0,
+          "explanation": "GOT 極高值標準處置：採用手工 10 倍 (50ul 檢體 + 450ul 稀釋水) 搭配機器自動 3 倍稀釋，總稀釋倍數為 30 倍，最終最高可發出 > 7000 U/L。",
+          "sortOrder": 3
+        },
+        {
+          "id": "builtin-subA1-05",
+          "tag": "極值處理",
+          "question": "5. 當 ALT 測得低值（< 5）進行 1:1 已知濃度 QC 稀釋驗證時，若已知 QC 濃度為 31，混合後測得數值為 15.9，其計算結論與報告發出方式為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 計算結果驗證無基質干擾，報告發出 < 5",
+            "(B) 計算結果顯示有干擾，報告發出 15.9",
+            "(C) 將實測值乘以 2 後發出 31.8",
+            "(D) 計算結果不合，須通知臨床重抽"
+          ],
+          "correct": 0,
+          "explanation": "理論預期混合數值為 31 / 2 = 15.5 U/L。實測 15.9 與預期值接近，證明無基質干擾，故可報告發出原低值結果 < 5 U/L。",
+          "sortOrder": 4
+        },
+        {
+          "id": "builtin-subA1-06",
+          "tag": "檢體保存",
+          "question": "6. 關於檢體保存與委外注意事項，下列何者敘述正確？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 黃頭管時效為送檢起 3 天內，綠頭管為 4 小時內",
+            "(B) 黃頭管時效為送檢起 4 小時內，綠頭管為 3 天內",
+            "(C) CSF 檢體應分裝為兩管後進行冷凍保存",
+            "(D) 冷凍尿液檢體保存時必須裝滿試管以防蒸發"
+          ],
+          "correct": 0,
+          "explanation": "黃頭管 (SST) 委外時效為送檢 3 天內，綠頭管 (Heparin) 為 4 小時內；CSF 冷凍保存前嚴禁分裝，尿液冷凍保存應維持 7 分滿。",
+          "sortOrder": 5
+        },
+        {
+          "id": "builtin-subA1-07",
+          "tag": "品質追溯",
+          "question": "7. 依據保養後檢體追溯標準（CG010-L08），故障前檢體複測的允收標準 CV% 為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 2.77% CV",
+            "(B) 5.00% CV",
+            "(C) 1.50% CV",
+            "(D) 10.0% CV"
+          ],
+          "correct": 0,
+          "explanation": "依據 CG010-L08/L09 規範，保養或維修後檢體追溯複測之允收標準為 2.77% CV，若未達標須擴大追溯 3 筆檢體並填寫不符合事件單。",
+          "sortOrder": 6
+        },
+        {
+          "id": "builtin-subA1-08",
+          "tag": "法定傳染病",
+          "question": "8. 關於退伍軍人菌尿液抗原陽性之通報與登記流程，下列何者正確？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 須口頭通報感控，並登記於「生化組委外感控通知單」",
+            "(B) 只需於 LIS 系統發出報告，不需通報感控",
+            "(C) 須傳 Line 群組，不需登記於紙本通知單",
+            "(D) 填寫登革熱 NS1 快篩登記表"
+          ],
+          "correct": 0,
+          "explanation": "退伍軍人菌尿液抗原陽性時，必須口頭通報感控單位，並確實登記於「生化組委外感控通知單」。",
+          "sortOrder": 7
+        },
+        {
+          "id": "builtin-subA1-09",
+          "tag": "法定傳染病",
+          "question": "9. 關於公費登革熱快篩結果為陽性時之處理流程，下列何者正確？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 口頭通報感控 -> 登記於生化組委外感控通知單 -> 填寫宜蘭縣登革熱 NS1 登記表 -> 傳 Line 群組 -> 留紅頭管至委外感控檢體放置處",
+            "(B) 直接將綠頭管送至委外感控冰箱即可，無需通報",
+            "(C) 口頭通報感控後直接將檢體丟棄",
+            "(D) 僅需傳 Line 群組告知感控，無需填寫紙本登記表"
+          ],
+          "correct": 0,
+          "explanation": "公費登革熱快篩陽性需完成口頭通報感控、登記委外感控單、填寫宜蘭縣 NS1 登記表、Line 群組通報，並保留紅頭檢體管於指定感控位置。",
+          "sortOrder": 8
+        },
+        {
+          "id": "builtin-subA1-10",
+          "tag": "應變處置",
+          "question": "10. 若生化組遇到停水緊急狀況，當純水電阻值低於多少時，須切換至紅色共用迴路？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) < 10 mΩ·cm",
+            "(B) < 5 mΩ·cm",
+            "(C) < 1 mΩ·cm",
+            "(D) < 0.1 mΩ·cm"
+          ],
+          "correct": 0,
+          "explanation": "停水緊急應變：事先備足 RO 水補充至倉庫儲水桶；當水質電阻值降至 < 10 mΩ·cm 時，須立即切換至紅色共用迴路。",
+          "sortOrder": 9
+        }
+      ]
+    },
+    {
+      "id": "subA2",
+      "title": "1-2 c503一般作業流程與異常訊號故障排除",
+      "desc": "涵蓋 Cobas pro c503 急診上機模式、試藥管理、校正與品管架位、日常清洗架配置、>Abs 與 >Cuvet 警報排除及燈泡與反應杯更換規範。",
+      "sortOrder": 1,
+      "questions": [
+        {
+          "id": "builtin-subA2-01",
+          "tag": "上機模式",
+          "question": "1. 關於 Cobas pro c503 急診上機模式（STAT Loading）的架子方向與位置，下列何者正確？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 位於 SSU 後方急診進樣口，將樣品架窄端朝右放入，條碼朝向閱讀器",
+            "(B) 位於 SSU 前方，將樣品架寬端朝右放入",
+            "(C) 直接放入常規進樣軌道，系統會自動辨識急診",
+            "(D) 只能在 Standby 模式下透過 SSU 俯視裝載"
+          ],
+          "correct": 0,
+          "explanation": "STAT 急診進樣部位於 SSU 後方，放置時須將樣品架窄端朝右放入傳送軌道，條碼面向閱讀器，系統會插隊優先處理。",
+          "sortOrder": 0
+        },
+        {
+          "id": "builtin-subA2-02",
+          "tag": "試藥管理",
+          "question": "2. 關於 c503 試劑狀態判定與更換時機，下列何者非立即或預先更換之指標？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 試劑狀態顯示「充足 (OK) 且未逾期」",
+            "(B) 試劑顯示空盒或被遮蔽 (Masked)",
+            "(C) 液位低於警告閾值 (通常為 10%)",
+            "(D) 預測存量低於設定之當日平均消耗量"
+          ],
+          "correct": 0,
+          "explanation": "試劑狀態顯示充足且效期正常時不需更換。空盒/遮蔽、低液位(<10%)與低於日需求量時均需預先或立即更換。",
+          "sortOrder": 1
+        },
+        {
+          "id": "builtin-subA2-03",
+          "tag": "校正品管",
+          "question": "3. 執行 Cobas c503 校正 (Calibration) 與品質管制 (QC) 時，校正液與品管液應分別置於何種顏色之專用樣品架？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 校正液：黑色樣品架；品管液：白色樣品架",
+            "(B) 校正液：白色樣品架；品管液：黑色樣品架",
+            "(C) 校正液與品管液皆使用黑色樣品架",
+            "(D) 校正液與品管液皆使用紅色急診架"
+          ],
+          "correct": 0,
+          "explanation": "c503 架位規範：所有校正液 (Calibration) 必須放置於黑色專用架；品管液 (QC) 必須放置於白色專用架。",
+          "sortOrder": 2
+        },
+        {
+          "id": "builtin-subA2-04",
+          "tag": "日常保養",
+          "question": "4. 關於 c503 日常清洗架 (Wash Rack) 之槽位液體配置，下列何者完全正確且不得混淆？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 槽位 2：600 μL ISE Cleaning Solution (SysClean)；槽位 3：600 μL Activator",
+            "(B) 槽位 2：600 μL Activator；槽位 3：600 μL SysClean",
+            "(C) 槽位 1：600 μL SysClean；槽位 2：600 μL 生理食鹽水",
+            "(D) 槽位 2：600 μL 蒸餾水；槽位 3：600 μL SysClean"
+          ],
+          "correct": 0,
+          "explanation": "Wash Rack 絕對不可混淆配置： Slot 2 放入 600 μL SysClean，Slot 3 放入 600 μL Activator，放錯會導致電極受損或校正失敗。",
+          "sortOrder": 3
+        },
+        {
+          "id": "builtin-subA2-05",
+          "tag": "警報排除",
+          "question": "5. 當 c503 數據出現警報代碼「>Abs」時，其可能的原因不包括下列何者？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 測量池燈泡完全熄滅無電流",
+            "(B) 檢體反應吸光度過高或濃度超出線性",
+            "(C) 檢體存在嚴重脂血 (Lipemia) 或濁度干擾",
+            "(D) 光學測量路徑上有異物遮蔽"
+          ],
+          "correct": 0,
+          "explanation": ">Abs 代表吸光度超過極限，主因為檢體濃度過高、嚴重脂血/濁度干擾或光路障礙；燈泡熄滅會引發光學空白或電流異常警報。",
+          "sortOrder": 4
+        },
+        {
+          "id": "builtin-subA2-06",
+          "tag": "警報排除",
+          "question": "6. 數據警報「>Cuvet」代表 ABS Cell blank abnormal，主要的原因為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 反應杯 (Cuvette) 嚴重汙染或有髒汙，影響空白光學讀值",
+            "(B) 試劑盒條碼無法讀取",
+            "(C) ISE 鉀電極效期已過期",
+            "(D) 洗衣精 (Detergent) 瓶內無液體"
+          ],
+          "correct": 0,
+          "explanation": ">Cuvet (ABS Cell blank abnormal) 說明特定反應杯在細胞空白光學測定時讀值異常，多因反應杯髒汙、刮傷或有附著物。",
+          "sortOrder": 5
+        },
+        {
+          "id": "builtin-subA2-07",
+          "tag": "警報排除",
+          "question": "7. 當系統出現「Det.S」警報時，應採取何種排除動作？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 檢查並補充特殊清洗劑 (Detergent) 存量",
+            "(B) 更換反應測量池之鹵素燈泡",
+            "(C) 重新掃描 ISE 電極條碼",
+            "(D) 執行水浴槽排氣流程"
+          ],
+          "correct": 0,
+          "explanation": "Det.S 即 Det. Short (Detergent Short)，代表特殊清洗液存量不足，需補充對應之 Detergent。",
+          "sortOrder": 6
+        },
+        {
+          "id": "builtin-subA2-08",
+          "tag": "維護保養",
+          "question": "8. 關於 c503 鹵素燈泡與反應杯的定期更換週期規範，下列何者正確？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 燈泡每三個月更換；反應杯每個月更換",
+            "(B) 燈泡每個月更換；反應杯每三個月更換",
+            "(C) 燈泡與反應杯皆為每年更換一次",
+            "(D) 燈泡每半年更換；反應杯每半年更換"
+          ],
+          "correct": 0,
+          "explanation": "定期更換規範：鹵素燈泡每 3 個月定期更換；反應塑膠杯 (Segment Cuvettes) 每 1 個月定期更換。",
+          "sortOrder": 7
+        },
+        {
+          "id": "builtin-subA2-09",
+          "tag": "維護保養",
+          "question": "9. 更換 c503 新反應杯時，鎖上螺絲的重要操作技巧為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 採取「放一個鎖一個」方式，避免反應杯歪斜破裂",
+            "(B) 先將所有反應杯放好後，一次用電動螺絲起子全力鎖緊",
+            "(C) 螺絲不需要鎖，直接壓入卡槽即可",
+            "(D) 塗抹潤滑油後再鎖緊"
+          ],
+          "correct": 0,
+          "explanation": "更換反應杯時為防止基座不平整或塑膠杯受到不均勻應力而歪斜破裂，必須嚴格遵守「放一個鎖一個」的微調原則。",
+          "sortOrder": 8
+        },
+        {
+          "id": "builtin-subA2-10",
+          "tag": "維護保養",
+          "question": "10. 更換全新的 ISE 電極後，解除 ISE 單元屏蔽 (Mask) 的標準程序為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 掃描 2D 條碼登錄 -> 執行 Daily Wash Rack 與 ISE Check -> 品管允收後系統自動解屏蔽",
+            "(B) 直接手動點擊 Unmask，不需執行洗滌或校正",
+            "(C) 關機重開後自動解除屏蔽",
+            "(D) 連續上機 10 筆病人檢體後自動解除"
+          ],
+          "correct": 0,
+          "explanation": "ISE 更換電極標準解鎖：掃描條碼登錄新批號效期 -> 執行 Daily Wash Rack 與 ISE 檢查 -> 校正與品管合格後自動解除屏蔽。",
+          "sortOrder": 9
+        }
+      ]
+    },
+    {
+      "id": "subA3",
+      "title": "1-3 Cobas b 211異常訊號故障排除與QC設定",
+      "desc": "涵蓋 Cobas b 211 管路潤濕路徑（Wetting routines）、空氣抽拉與打水處置、全新品管批號設定（Set/Range/COOX）及 LIS 網路連線故障排除。",
+      "sortOrder": 2,
+      "questions": [
+        {
+          "id": "builtin-subA3-01",
+          "tag": "故障排除",
+          "question": "1. 遇 Cobas b 211 出現 SD Wash error 或 FMS error 時，進入管路潤濕選單的正確點選路徑為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 主畫面 System -> Utilities -> Fluid actions -> Wetting routines",
+            "(B) 主畫面 QC -> Material -> Fluid actions -> Wetting routines",
+            "(C) 主畫面 Calibration -> Utilities -> Wash routines",
+            "(D) 主畫面 Info -> System -> Hardware -> Reset"
+          ],
+          "correct": 0,
+          "explanation": "b 211 故障排除路徑：System -> Utilities -> Fluid actions -> Wetting routines。",
+          "sortOrder": 0
+        },
+        {
+          "id": "builtin-subA3-02",
+          "tag": "故障排除",
+          "question": "2. 在 Wetting routines 中選取 BG 並點擊 Do 後，畫面提示出現什麼文字時，方可進行下一步手動抽拉？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) Wet sample path",
+            "(B) System Ready",
+            "(C) Calibration Ok",
+            "(D) Air bubble detected"
+          ],
+          "correct": 0,
+          "explanation": "按下 Do 後，系統會啟動閥門，當螢幕提示「Wet sample path」時，表示管路位置已切換至可手動操作路徑。",
+          "sortOrder": 1
+        },
+        {
+          "id": "builtin-subA3-03",
+          "tag": "故障排除",
+          "question": "3. 執行手動管路空氣抽拉測試時，正確的操作方式與次數為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 先用空針打空氣，再向後抽拉，反覆執行 2-3 次檢查異物",
+            "(B) 用空針全力持續注入蒸餾水 10 次",
+            "(C) 以針筒強力高壓抽拉 20 次",
+            "(D) 抽拉 1 次後立即關閉儀器電源"
+          ],
+          "correct": 0,
+          "explanation": "標準動作：先以空針注入空氣，再向後抽拉（感受阻力與觀察有無異物），重複執行 2-3 次。",
+          "sortOrder": 2
+        },
+        {
+          "id": "builtin-subA3-04",
+          "tag": "故障排除",
+          "question": "4. 若空氣抽拉後仍無法排除管路異物或阻塞，進階「打水」處理時的最重要注意事項為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 打水時請輕輕打，切勿一次強力灌入，避免管路爆裂或感測器受損",
+            "(B) 必須使用高壓水槍強力一次推入",
+            "(C) 只能使用生理食鹽水，嚴禁使用純水",
+            "(D) 打水後不需執行 Wash 與 Cali 即可直接測量病人"
+          ],
+          "correct": 0,
+          "explanation": "若進階以水清洗管路，操作時必須「輕輕推打」，強行高壓推入會損壞內部精密感應器與流路閥門。",
+          "sortOrder": 3
+        },
+        {
+          "id": "builtin-subA3-05",
+          "tag": "故障排除",
+          "question": "5. 完成管路抽拉或打水處置後，恢復儀器標準狀態的後續 Quick access 步驟為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) Quick access -> Wash -> Cali -> 觀察並帶入 QC",
+            "(B) Quick access -> Shutdown -> Restart",
+            "(C) Quick access -> Measure -> Sample",
+            "(D) 直接點選 Ready 開始上機"
+          ],
+          "correct": 0,
+          "explanation": "疏通管路後，必須順序點選 Wash（清洗流路）與 Cali（重新校正），確認校正通過並帶入 QC 允收後方可發出報告。",
+          "sortOrder": 4
+        },
+        {
+          "id": "builtin-subA3-06",
+          "tag": "QC設定",
+          "question": "6. 在 Cobas b 211 設定全新批號品管 (QC New Lot) 時，第一個必須點擊並刷入的條碼種類為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 點選 Set 刷入 Material Code (第一個條碼)",
+            "(B) 點選 Range 刷入 BG Code",
+            "(C) 直接刷入 COOX Code",
+            "(D) 刷入機器機號 Barcode"
+          ],
+          "correct": 0,
+          "explanation": "QC New Lot 設定流程：點選 Set -> 從仿單刷入第一個條碼 Material Code 建立材質基礎。",
+          "sortOrder": 5
+        },
+        {
+          "id": "builtin-subA3-07",
+          "tag": "QC設定",
+          "question": "7. 在 QC New Lot 建立過程中，點選「Range」按鈕後應刷入仿單上的哪一個條碼？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 第二個條碼 (BG Code)",
+            "(B) 第一個條碼 (Material Code)",
+            "(C) 第四個條碼 (COOX Code)",
+            "(D) 試紙盒外包裝條碼"
+          ],
+          "correct": 0,
+          "explanation": "點選 Range 後，應刷入仿單上的第二個條碼 (BG Code)，以載入血氣分析項目的靶值範圍。",
+          "sortOrder": 6
+        },
+        {
+          "id": "builtin-subA3-08",
+          "tag": "QC設定",
+          "question": "8. 設定 Cobas b 211 全新品管批號時，最後刷入的條碼為下列何者？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 第四個條碼 (COOX Code)",
+            "(B) 第一個條碼 (Material Code)",
+            "(C) 第二個條碼 (BG Code)",
+            "(D) 第三個條碼 (Auto-Cali Code)"
+          ],
+          "correct": 0,
+          "explanation": "新批號設定最後一步：刷入第四個條碼 (COOX Code) 完成全套血紅素光學測量參數的設定。",
+          "sortOrder": 7
+        },
+        {
+          "id": "builtin-subA3-09",
+          "tag": "連線處置",
+          "question": "9. 當 Cobas b 211 發生 LIS 連線傳輸異常時，硬體實體線路的優先排查重點不包括下列何者？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 檢查 IP 橋接器電源線及網線是否脫落或接觸不良",
+            "(B) 檢查網路孔 Link 指示燈是否閃爍（閃爍代表成功接上）",
+            "(C) 確認 LIS 端伺服器與通訊狀態是否正常",
+            "(D) 智慧光學測量室是否運轉"
+          ],
+          "correct": 0,
+          "explanation": "連線異常應優先檢查網絡實體層（IP 橋接器電源、網絡 Link 燈號及 LIS 伺服器通訊），與機台內部光學室無關。",
+          "sortOrder": 8
+        },
+        {
+          "id": "builtin-subA3-10",
+          "tag": "連線處置",
+          "question": "10. 若檢查發現 IP 橋接器後方的網路孔 Link 燈號完全不亮，代表何種狀況？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 實體網路線路中斷或未成功連接至網絡",
+            "(B) 網路傳輸極度順暢",
+            "(C) 機器正在進行自動校正",
+            "(D) 品管批號設定錯誤"
+          ],
+          "correct": 0,
+          "explanation": "Link 指示燈不亮代表實體物理層未建立連線（線路鬆脫、斷線或集線器故障）。",
+          "sortOrder": 9
+        }
+      ]
+    },
+    {
+      "id": "zoneB",
+      "title": "2 COVER C1人員考區（Sebia）",
+      "desc": "涵蓋 Sebia 異常訊號故障排除與特殊注意事項，及格標準為 80 分。",
+      "sortOrder": 3,
+      "questions": [
+        {
+          "id": "builtin-zoneB-01",
+          "tag": "基礎維護",
+          "question": "1. 關於 Sebia 儀器執行「Short priming (基礎管路重置/排氣)」的步驟，下列何者正確？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 進入 Settings 輸入密碼 -> 點擊 Start -> 選擇 Short priming 執行",
+            "(B) 於主畫面直接點擊 Stop 即可自動執行",
+            "(C) 拔除電源線後重開機即自動執行",
+            "(D) 進入 Maintenance -> 點擊 Deep Clean"
+          ],
+          "correct": 0,
+          "explanation": "Short priming 路徑：進入 Settings -> 輸入密碼 -> 點擊 Start -> 選取 Short priming 執行管路排氣與清洗。",
+          "sortOrder": 0
+        },
+        {
+          "id": "builtin-zoneB-02",
+          "tag": "硬體排除",
+          "question": "2. 當 Sebia 螢幕報錯「Cup loader / Distributor initialization error」（Cup 卡在轉盤）時，標準排除方式為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 將儀器斷電（關機），手動將卡住的 Cup 取出，再重新開機初始化",
+            "(B) 在通電狀態下用手硬將轉盤拉開",
+            "(C) 直接點擊 Start 繼續強制運轉",
+            "(D) 倒入稀釋水沖刷轉盤"
+          ],
+          "correct": 0,
+          "explanation": "轉盤卡死時，為保護步進馬達，必須先「斷電關機」，手動清理卡住的 Cup 後再開機進行初始化。",
+          "sortOrder": 1
+        },
+        {
+          "id": "builtin-zoneB-03",
+          "tag": "硬體排除",
+          "question": "3. 遇到「Error in rack translation to pickup or release」（Rack 卡在操作區內）時，排除方式不包括下列何者？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 按 Stop 取出後，於 Start 選擇 Short prime",
+            "(B) 斷電（關機），手動將 Rack 取出",
+            "(C) 使用鐵鎚敲擊 Rack 傳送軌道",
+            "(D) 檢查操作區內是否有異物阻礙軌道"
+          ],
+          "correct": 0,
+          "explanation": "Rack 卡住可透過軟體 Stop 後執行 Short prime，或斷電手動取出 Rack，嚴禁粗暴敲擊。",
+          "sortOrder": 2
+        },
+        {
+          "id": "builtin-zoneB-04",
+          "tag": "管路異常",
+          "question": "4. 發生「Filling error: water container not well connected」（Water 吸取不順利）時，應執行的第一線排除動作為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 更換 Filter（濾心），並將水源瓶拔起重新插好確認連線",
+            "(B) 體更換主機板 (PCB)",
+            "(C) 調整負壓廢水瓶壓力",
+            "(D) 清洗毛細管電泳槽"
+          ],
+          "correct": 0,
+          "explanation": "水容器連接錯誤或吸水不順時，應重新插拔水源瓶確認接頭密合，並更換水路 Filter (濾心)。",
+          "sortOrder": 3
+        },
+        {
+          "id": "builtin-zoneB-05",
+          "tag": "硬體排除",
+          "question": "5. 當 Cup 卡在滑軌上方（關鍵字：Cup loading error / please remove it）時，正確的手動排除技巧為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 淨空卡在滑軌上方的 Cup，使用鐵夾往下壓，使 Cup 順利往滑軌處掉落",
+            "(B) 用水槍往滑軌上方高壓噴水",
+            "(C) 用磁鐵將 Cup 吸引出來",
+            "(D) 忽視報錯繼續按 Start"
+          ],
+          "correct": 0,
+          "explanation": "Cup 卡在滑軌上方時，淨空上方後使用鐵夾輕柔往下壓，使其順應滑軌掉落即可復位。",
+          "sortOrder": 4
+        },
+        {
+          "id": "builtin-zoneB-06",
+          "tag": "進階異常",
+          "question": "6. 當 Sebia 出現「Vacuum error」（壓力異常）警報且軟體報錯時，通常需要更換何種零件？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 更換真空管及 Pressure PCB 壓力感測板",
+            "(B) 更換電源線與螢幕",
+            "(C) 更換試劑托盤轉盤",
+            "(D) 更換樣品條碼掃描槍"
+          ],
+          "correct": 0,
+          "explanation": "Vacuum error 指抽真空負壓異常，故障點通常為真空管路破裂漏氣或 Pressure PCB 壓力感應板失靈。",
+          "sortOrder": 5
+        },
+        {
+          "id": "builtin-zoneB-07",
+          "tag": "進階異常",
+          "question": "7. 出現「Buffer tank error」警報時，醫檢師應進行何種清洗作業？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 清洗 Anodic tank & Buffer tank（陽極槽與毛細管清洗槽）",
+            "(B) 清洗蒸餾水外接桶",
+            "(C) 清洗廢水排放管路",
+            "(D) 浸泡綠頭採血糖管"
+          ],
+          "correct": 0,
+          "explanation": "Buffer tank error 代表緩衝液槽液位或結晶附著，需手動清洗 Anodic tank 與 Buffer tank 移除鹽類結晶。",
+          "sortOrder": 6
+        },
+        {
+          "id": "builtin-zoneB-08",
+          "tag": "進階異常",
+          "question": "8. 報錯「Cathodic tank filling error」（陰極槽充填異常，水無法流通）時，其可能原因與排除方式為何？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 清潔 Over flow 並更換 Over flow sensor",
+            "(B) 更換鹵素燈泡",
+            "(C) 調整 ISE 電極鎖緊度",
+            "(D) 重新設定 LIS IP 位址"
+          ],
+          "correct": 0,
+          "explanation": "Cathodic tank 充水異常多為溢流口堵塞或 Sensor 故障，需清潔 Over flow 流路並更換 Over flow sensor。",
+          "sortOrder": 7
+        },
+        {
+          "id": "builtin-zoneB-09",
+          "tag": "進階異常",
+          "question": "9. 若 Sebia 儀器頻繁發生「廢水排空不良」且伴隨負壓不足，通常是什麼原因？需要如何處置？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 負壓不足，需要調整廢水瓶與真空壓力",
+            "(B) 試劑過期，需要更換新試劑",
+            "(C) 條碼讀取器鏡頭髒汙，需要用酒精擦拭",
+            "(D) 採血管蓋子未打開"
+          ],
+          "correct": 0,
+          "explanation": "廢水排空不順多因系統真空負壓不足，需檢查廢水瓶密封度並調整負壓閥。",
+          "sortOrder": 8
+        },
+        {
+          "id": "builtin-zoneB-10",
+          "tag": "工程叫修",
+          "question": "10. 當 Sebia 發生「報告無法傳送」經排查為內部硬體故障，或是手臂嚴重干涉卡死時，屬於何種層級之處置？",
+          "questionType": "choice",
+          "imageUrl": "",
+          "options": [
+            "(A) 內部主機板電磁故障或機械結構損傷，需聯繫原廠工程師叫修與更換主機板",
+            "(B) 醫檢師自行拆開主機板銲接",
+            "(C) 只要重複執行 Short prime 即可完全解決",
+            "(D) 直接將儀器報廢不需處理"
+          ],
+          "correct": 0,
+          "explanation": "報告傳送失敗（主機板電磁故障）或手臂重大機械干涉，超出日常一線排除範圍，應聯繫原廠工程師更換零組件。",
+          "sortOrder": 9
+        }
+      ]
+    }
+  ]
+}
