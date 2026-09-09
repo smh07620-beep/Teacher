@@ -50,17 +50,198 @@ def strip_answer_secrets(value: Any) -> Any:
 
 
 def sanitize_answer_config(config: Any) -> dict[str, Any]:
+    """Learner-safe answer config for an unfinished attempt."""
     if not isinstance(config, dict):
         return {}
 
     safe = strip_answer_secrets(config)
-    return safe if isinstance(safe, dict) else {}
+
+    if not isinstance(safe, dict):
+        return {}
+
+    # Teacher 6.6 M4:
+    # Review navigation is intentionally hidden until submission.
+    safe.pop("reviewSource", None)
+
+    return safe
+
+
+def normalize_review_source(value: Any) -> dict[str, Any]:
+    """Normalize safe post-exam learning navigation metadata."""
+    if not isinstance(value, Mapping):
+        return {}
+
+    material_id = text(
+        value.get("materialId"),
+        200,
+    )
+
+    material_title = text(
+        value.get("materialTitle"),
+        500,
+    )
+
+    section = text(
+        value.get("section"),
+        1000,
+    )
+
+    review_hint = text(
+        value.get("reviewHint"),
+        2000,
+    )
+
+    region_hint = text(
+        value.get("regionHint"),
+        1000,
+    )
+
+    anchor_type = text(
+        value.get("anchorType"),
+        20,
+    ).lower()
+
+    if anchor_type not in {
+        "page",
+        "time",
+        "region",
+        "section",
+    }:
+        anchor_type = ""
+
+    try:
+        page = int(
+            value.get("page") or 0
+        )
+    except (TypeError, ValueError):
+        page = 0
+
+    page = max(
+        0,
+        min(100000, page),
+    )
+
+    try:
+        time_seconds = float(
+            value.get("timeSeconds")
+            or 0
+        )
+    except (TypeError, ValueError):
+        time_seconds = 0.0
+
+    time_seconds = max(
+        0.0,
+        min(
+            86400.0,
+            time_seconds,
+        ),
+    )
+
+    if not anchor_type:
+        if page:
+            anchor_type = "page"
+        elif time_seconds:
+            anchor_type = "time"
+        elif region_hint:
+            anchor_type = "region"
+        elif section or review_hint:
+            anchor_type = "section"
+
+    result: dict[str, Any] = {}
+
+    if material_id:
+        result["materialId"] = material_id
+
+    if material_title:
+        result["materialTitle"] = material_title
+
+    if anchor_type:
+        result["anchorType"] = anchor_type
+
+    if page:
+        result["page"] = page
+
+    if time_seconds:
+        result["timeSeconds"] = time_seconds
+
+    if region_hint:
+        result["regionHint"] = region_hint
+
+    if section:
+        result["section"] = section
+
+    if review_hint:
+        result["reviewHint"] = review_hint
+
+    return result
 
 
 def sanitize_question(question: Mapping[str, Any]) -> dict[str, Any]:
-    """Return a learner-safe question with no answer/scoring secrets."""
-    safe = strip_answer_secrets(dict(question or {}))
-    return safe if isinstance(safe, dict) else {}
+    """Return an unfinished-attempt question with no review/answer secrets."""
+    safe = strip_answer_secrets(
+        dict(question or {})
+    )
+
+    if not isinstance(safe, dict):
+        return {}
+
+    answer_config = safe.get(
+        "answerConfig"
+    )
+
+    if isinstance(answer_config, dict):
+        safe["answerConfig"] = (
+            sanitize_answer_config(
+                answer_config
+            )
+        )
+
+    # Defensive support if future/imported questions use a top-level value.
+    safe.pop(
+        "reviewSource",
+        None,
+    )
+
+    return safe
+
+
+def review_question(
+    question: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Post-submission learner projection.
+
+    Teacher explanations and all answer/scoring secrets remain private.
+    Only safe learning-navigation metadata may be added after submission.
+    """
+    safe = sanitize_question(
+        question
+    )
+
+    raw_config = question.get(
+        "answerConfig"
+    )
+
+    if not isinstance(
+        raw_config,
+        Mapping,
+    ):
+        raw_config = {}
+
+    source = normalize_review_source(
+        raw_config.get(
+            "reviewSource"
+        )
+        or question.get(
+            "reviewSource"
+        )
+    )
+
+    if source:
+        safe["reviewSource"] = (
+            source
+        )
+
+    return safe
 
 
 def normalize_indices(value: Any) -> list[int]:

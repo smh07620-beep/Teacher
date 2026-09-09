@@ -45,7 +45,31 @@ async function renderDynamicExamTabs() {
         cachedQuizCategories.forEach(c=>{const key=c.courseId&&courseMap[c.courseId]?c.courseId:'__orphan__';(grouped[key]||(grouped[key]=[])).push(c);});
         const keys=[...courseOrder.filter(k=>grouped[k]?.length),...(grouped.__orphan__?['__orphan__']:[])];
         listBox.innerHTML=keys.map(k=>{const course=k==='__orphan__'?null:courseMap[k],items=grouped[k]||[];const desc=course?.desc&&course.desc.trim()!==course.title?.trim()?`<div class="text-[11px] text-slate-500 mt-1">${escapeHtml(course.desc)}</div>`:'';return `<section class="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4"><div class="flex items-start justify-between gap-3 mb-3"><div><div class="text-sm font-black text-slate-800">${course?`📘 ${escapeHtml(course.title)}`:'📁 通用考卷'}</div>${desc}</div><span class="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 rounded-full px-2.5 py-1">考卷 ${items.length} 份</span></div><div class="grid md:grid-cols-2 xl:grid-cols-3 gap-2.5">${items.map(c=>{const bank=examBankCount(c),actual=examActualCount(c),draft=hasExamDraft(c.id);return `<button type="button" onclick="switchDynamicCategory('${c.id}')" id="dyn-tab-${c.id}" class="tab-btn text-left rounded-xl border border-slate-200 bg-white hover:border-teal-300 hover:shadow-sm p-3 transition-all"><div class="flex items-start justify-between gap-2"><span class="font-black text-sm text-slate-900">📝 ${escapeHtml(c.title)}</span>${draft?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">可續答</span>':''}</div><div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500"><span>👤 ${escapeHtml(examAudienceLabel(c))}</span><span>🎯 及格 ${Number(c.passingScore||80)} 分</span><span>🧠 題庫 ${bank} 題</span><span>📋 本次 ${actual} 題</span></div><div class="mt-2 text-[11px] font-bold text-teal-700">${escapeHtml(examDrawLabel(c))} → ${draft?'繼續作答':'開始考核'}</div></button>`;}).join('')}</div></section>`;}).join('');
-        await switchDynamicCategory(cachedQuizCategories[0].id);
+        const requestedExamId=new URLSearchParams(window.location.search).get('examId')||'';
+        const requestedCategory=cachedQuizCategories.find(
+            c=>String(c.id)===String(requestedExamId)
+        );
+
+        const initialCategory=
+            requestedCategory
+            || cachedQuizCategories[0];
+
+        await switchDynamicCategory(
+            initialCategory.id
+        );
+
+        if(requestedCategory){
+            requestAnimationFrame(()=>{
+                const tab=document.getElementById(
+                    `dyn-tab-${requestedCategory.id}`
+                );
+
+                tab?.scrollIntoView({
+                    behavior:'smooth',
+                    block:'nearest'
+                });
+            });
+        }
     }catch(err){console.error(err);listBox.innerHTML='<p class="text-xs text-rose-500">❌ 讀取考卷失敗</p>';}
 }
 

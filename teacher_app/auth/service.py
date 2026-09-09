@@ -6,7 +6,11 @@ import re
 from werkzeug.security import check_password_hash
 
 from teacher_app.auth import repository
-from teacher_app.common.auth import LEGACY_ROLE_ALIASES, normalize_role
+from teacher_app.common.auth import (
+    LEGACY_ROLE_ALIASES,
+    normalize_role,
+    normalize_roles,
+)
 from teacher_app.common.errors import ApiError
 
 
@@ -14,13 +18,18 @@ def normalize_username(value):
     return re.sub(r"[^a-z0-9._-]", "", str(value or "").strip().lower())[:64]
 
 
-def public_user(base, row):
+def public_user(base, row, *, include_roles=False):
     d = dict(row)
-    return {
+
+    primary_role = normalize_role(
+        d.get("role", "student")
+    )
+
+    user = {
         "username": str(d.get("username", "")),
         "name": str(d.get("display_name", "")),
         "empId": str(d.get("emp_id", "")),
-        "role": normalize_role(d.get("role", "student")),
+        "role": primary_role,
         "legacyRole": str(d.get("role", "")) if str(d.get("role", "")) in LEGACY_ROLE_ALIASES else "",
         "preferredArea": base.normalize_area(d.get("preferred_area", base.DEFAULT_TRAINING_AREA)),
         "preferredGroup": base.normalize_group(d.get("preferred_group", base.DEFAULT_GROUP)),
@@ -30,8 +39,16 @@ def public_user(base, row):
         "lastLoginAt": str(d.get("last_login_at", "")),
     }
 
+    if include_roles:
+        user["roles"] = normalize_roles(
+            d.get("roles_json"),
+            primary=primary_role,
+        )
 
-def current_user(base, session):
+    return user
+
+
+def current_user(base, session, *, include_roles=False):
     username = normalize_username(session.get("username", ""))
     if not username:
         return None
@@ -46,7 +63,11 @@ def current_user(base, session):
     if not valid:
         session.clear()
         return None
-    return public_user(base, raw)
+    return public_user(
+        base,
+        raw,
+        include_roles=include_roles,
+    )
 
 
 def login(base, data, session):

@@ -1943,7 +1943,11 @@ def _legacy_current_user():
 
 
 def _current_user():
-    return auth_service.current_user(sys.modules[__name__], session)
+    return auth_service.current_user(
+        sys.modules[__name__],
+        session,
+        include_roles=True,
+    )
 
 
 def login_required(api=True):
@@ -1984,7 +1988,10 @@ init_user_accounts_db()
 
 # Retained pre-extraction implementation for compatibility verification.
 def _legacy_api_auth_me():
-    user = _current_user()
+    # Retained legacy path must keep the exact pre-6.6 response contract.
+    # Internal _current_user() intentionally includes roles[] for RBAC,
+    # while the legacy compatibility endpoint must not expose that field.
+    user = _legacy_current_user()
     return jsonify({"authenticated": bool(user), "user": user})
 
 
@@ -5390,6 +5397,168 @@ def api_create_quiz_question():
             try: indices.append(int(x))
             except Exception: pass
         answer_config["correctIndices"] = sorted(set(indices))
+    # Teacher 6.6 M4:
+    # Optional learning-review navigation is stored inside answer_config
+    # for backward-compatible persistence, but exam attempt projection
+    # keeps it hidden until the attempt is submitted.
+    review_source = answer_config.get("reviewSource")
+
+    if isinstance(review_source, dict):
+        clean_review_source = {}
+
+        material_id = str(
+            review_source.get(
+                "materialId",
+                "",
+            )
+            or ""
+        ).strip()[:200]
+
+        material_title = str(
+            review_source.get(
+                "materialTitle",
+                "",
+            )
+            or ""
+        ).strip()[:500]
+
+        section = str(
+            review_source.get(
+                "section",
+                "",
+            )
+            or ""
+        ).strip()[:1000]
+
+        review_hint = str(
+            review_source.get(
+                "reviewHint",
+                "",
+            )
+            or ""
+        ).strip()[:2000]
+
+
+        region_hint = str(
+            review_source.get(
+                "regionHint",
+                "",
+            )
+            or ""
+        ).strip()[:1000]
+
+        anchor_type = str(
+            review_source.get(
+                "anchorType",
+                "",
+            )
+            or ""
+        ).strip().lower()[:20]
+
+        if anchor_type not in {
+            "page",
+            "time",
+            "region",
+            "section",
+        }:
+            anchor_type = ""
+
+        try:
+            time_seconds = float(
+                review_source.get(
+                    "timeSeconds",
+                    0,
+                )
+                or 0
+            )
+        except Exception:
+            time_seconds = 0.0
+
+        time_seconds = max(
+            0.0,
+            min(
+                86400.0,
+                time_seconds,
+            ),
+        )
+
+        try:
+            page = int(
+                review_source.get(
+                    "page",
+                    0,
+                )
+                or 0
+            )
+        except Exception:
+            page = 0
+
+        page = max(
+            0,
+            min(
+                100000,
+                page,
+            ),
+        )
+
+        if material_id:
+            clean_review_source[
+                "materialId"
+            ] = material_id
+
+        if material_title:
+            clean_review_source[
+                "materialTitle"
+            ] = material_title
+
+
+        if anchor_type:
+            clean_review_source[
+                "anchorType"
+            ] = anchor_type
+
+        if page:
+            clean_review_source[
+                "page"
+            ] = page
+
+
+        if time_seconds:
+            clean_review_source[
+                "timeSeconds"
+            ] = time_seconds
+
+        if region_hint:
+            clean_review_source[
+                "regionHint"
+            ] = region_hint
+
+        if section:
+            clean_review_source[
+                "section"
+            ] = section
+
+        if review_hint:
+            clean_review_source[
+                "reviewHint"
+            ] = review_hint
+
+        if clean_review_source:
+            answer_config[
+                "reviewSource"
+            ] = clean_review_source
+        else:
+            answer_config.pop(
+                "reviewSource",
+                None,
+            )
+
+    else:
+        answer_config.pop(
+            "reviewSource",
+            None,
+        )
+
     if question_type == "fill":
         answer_config["acceptedAnswers"] = [str(x).strip() for x in answer_config.get("acceptedAnswers", []) if str(x).strip()][:20]
         answer_config["caseSensitive"] = bool(answer_config.get("caseSensitive", False))

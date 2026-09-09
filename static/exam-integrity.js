@@ -26,6 +26,9 @@ function normalizePublicQuestion(q){
         options:Array.isArray(q.options)?q.options:[],
         answerConfig:q.answerConfig&&typeof q.answerConfig==='object'
             ?q.answerConfig
+            :{},
+        reviewSource:q.reviewSource&&typeof q.reviewSource==='object'
+            ?q.reviewSource
             :{}
     };
 }

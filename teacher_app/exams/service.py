@@ -176,7 +176,7 @@ def submit_attempt(base, user: Mapping[str, Any] | None, attempt_id: str, data: 
         "status": result["status"], "correctCount": result["correctCount"], "wrongCount": result["wrongCount"],
         "essayCount": result["essayCount"], "passingScore": passing_score, "categoryStats": result["categoryStats"],
         "questions": [
-            grading.sanitize_question(question)
+            grading.review_question(question)
             for question in questions
             if isinstance(question, dict)
         ],

@@ -162,8 +162,8 @@
       return;
     }
 
-    const host=document.querySelector('main')
-      ||document.body;
+    const host=document.getElementById('admin-section-system');
+    if(!host) return;
 
     const box=document.createElement('section');
 
@@ -175,7 +175,7 @@
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="font-black text-slate-900">
-            🛡️ 6.4 資料保護與維護
+            🛡️ 資料保護與維護
           </h2>
           <p class="text-xs text-slate-500 mt-1">
             邏輯備份、保守還原、上傳檔案驗證與 AI 去識別已啟用。

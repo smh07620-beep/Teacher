@@ -6,6 +6,7 @@ Authentication and session validation live in teacher_app.auth.service.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Mapping, Optional
 
 from teacher_app.common.errors import ApiError
@@ -70,17 +71,120 @@ def normalize_role(value: Any) -> str:
     return role if role in CANONICAL_ROLES else "student"
 
 
+def normalize_roles(value: Any, primary: Any = None) -> list[str]:
+    """Normalize multi-role input while preserving the legacy primary role."""
+    raw_items = []
+
+    if isinstance(value, str):
+        stripped = value.strip()
+
+        if stripped:
+            try:
+                parsed = json.loads(stripped)
+
+                if isinstance(parsed, list):
+                    raw_items = parsed
+                else:
+                    raw_items = [
+                        item.strip()
+                        for item in stripped.split(",")
+                        if item.strip()
+                    ]
+            except Exception:
+                raw_items = [
+                    item.strip()
+                    for item in stripped.split(",")
+                    if item.strip()
+                ]
+
+    elif isinstance(value, (list, tuple, set)):
+        raw_items = list(value)
+
+    elif value:
+        raw_items = [value]
+
+    normalized = []
+
+    primary_role = normalize_role(primary) if primary is not None else ""
+
+    if primary_role:
+        normalized.append(primary_role)
+
+    for item in raw_items:
+        role = normalize_role(item)
+
+        if role not in normalized:
+            normalized.append(role)
+
+    if not normalized:
+        normalized = [
+            normalize_role(
+                primary if primary is not None else "student"
+            )
+        ]
+
+    return normalized
+
+
+def user_roles(user: Optional[Mapping[str, Any]]) -> list[str]:
+    if not user:
+        return []
+
+    primary = user.get("role", "student")
+
+    if "roles" in user:
+        source = user.get("roles")
+    else:
+        source = user.get("roles_json")
+
+    return normalize_roles(
+        source,
+        primary=primary,
+    )
+
+
+def has_role(user: Optional[Mapping[str, Any]], role: str) -> bool:
+    return normalize_role(role) in user_roles(user)
+
+
 def has_permission(user: Optional[Mapping[str, Any]], permission: str) -> bool:
-    return bool(user) and permission in ROLE_PERMISSIONS.get(normalize_role(user.get("role")), set())
+    if not user:
+        return False
+
+    return any(
+        permission in ROLE_PERMISSIONS.get(role, set())
+        for role in user_roles(user)
+    )
 
 
 def require_role(user: Optional[Mapping[str, Any]], *allowed_roles: str) -> Mapping[str, Any]:
     if not user:
-        raise ApiError("LOGIN_REQUIRED", "請先登入後再執行此操作。", status=401)
-    allowed = {normalize_role(role) for role in allowed_roles}
-    if normalize_role(user.get("role")) not in allowed:
-        expected = "、".join(ROLE_LABELS.get(role, role) for role in allowed)
-        raise ApiError("FORBIDDEN", f"權限不足：此操作限{expected}使用。", status=403)
+        raise ApiError(
+            "LOGIN_REQUIRED",
+            "請先登入後再執行此操作。",
+            status=401,
+        )
+
+    allowed = {
+        normalize_role(role)
+        for role in allowed_roles
+    }
+
+    if not any(
+        role in allowed
+        for role in user_roles(user)
+    ):
+        expected = "、".join(
+            ROLE_LABELS.get(role, role)
+            for role in allowed
+        )
+
+        raise ApiError(
+            "FORBIDDEN",
+            f"權限不足：此操作限{expected}使用。",
+            status=403,
+        )
+
     return user
 
 

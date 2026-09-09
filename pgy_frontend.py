@@ -28,11 +28,15 @@ def register_pgy_frontend(app):
             if "/pgy-workflow.css" not in html:
                 head_assets.append('<link rel="stylesheet" href="/pgy-workflow.css?v=6500">')
             if "/pgy-workflow.js" not in html:
-                body_assets.append('<script defer src="/pgy-workflow.js?v=6500"></script>')
+                body_assets.append('<script defer src="/pgy-workflow.js?v=6601"></script>')
+            if "/roles-signing-66.js" not in html:
+                body_assets.append('<script defer src="/roles-signing-66.js?v=6601"></script>')
             if "/exam-integrity.js" not in html:
-                body_assets.append('<script defer src="/exam-integrity.js?v=6500"></script>')
+                body_assets.append('<script defer src="/exam-integrity.js?v=6604"></script>')
+            if "/review-links-66.js" not in html:
+                body_assets.append('<script defer src="/review-links-66.js?v=6604"></script>')
             if "/maintenance-64.js" not in html:
-                body_assets.append('<script defer src="/maintenance-64.js?v=6500"></script>')
+                body_assets.append('<script defer src="/maintenance-64.js?v=6605"></script>')
             if head_assets and "</head>" in html:
                 html = html.replace("</head>", "\n".join(head_assets) + "\n</head>", 1)
             if body_assets and "</body>" in html:
