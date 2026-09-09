@@ -1,4 +1,4 @@
-"""Inject Phase 3 PGY workflow assets into the existing legacy system page."""
+"""Inject Teacher 6.3 workflow/security assets into the existing system page."""
 
 
 def register_pgy_frontend(app):
@@ -20,26 +20,24 @@ def register_pgy_frontend(app):
                 return response
             if path not in {"/system", "/system.html"}:
                 return response
-
-            # send_from_directory/send_file responses are commonly in direct
-            # passthrough mode. Disable it only for this HTML page so we can
-            # safely append the small Phase 3 asset tags.
             if response.direct_passthrough:
                 response.direct_passthrough = False
-
             html = response.get_data(as_text=True)
-            if "/pgy-workflow.js" in html:
-                return response
-            head_asset = '<link rel="stylesheet" href="/pgy-workflow.css?v=6200">'
-            body_asset = '<script defer src="/pgy-workflow.js?v=6200"></script>'
-            if "</head>" in html:
-                html = html.replace("</head>", head_asset + "\n</head>", 1)
-            if "</body>" in html:
-                html = html.replace("</body>", body_asset + "\n</body>", 1)
+            head_assets = []
+            body_assets = []
+            if "/pgy-workflow.css" not in html:
+                head_assets.append('<link rel="stylesheet" href="/pgy-workflow.css?v=6300">')
+            if "/pgy-workflow.js" not in html:
+                body_assets.append('<script defer src="/pgy-workflow.js?v=6300"></script>')
+            if "/exam-integrity.js" not in html:
+                body_assets.append('<script defer src="/exam-integrity.js?v=6300"></script>')
+            if head_assets and "</head>" in html:
+                html = html.replace("</head>", "\n".join(head_assets) + "\n</head>", 1)
+            if body_assets and "</body>" in html:
+                html = html.replace("</body>", "\n".join(body_assets) + "\n</body>", 1)
             response.set_data(html)
             response.content_length = len(response.get_data())
         except Exception:
-            # The legacy page must remain available even if asset injection fails.
             return response
         return response
 
