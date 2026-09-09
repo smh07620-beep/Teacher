@@ -1,3 +1,1 @@
-from flask import Blueprint
-
-bp = Blueprint("teacher_pgy", __name__)
+"""PGY assignment workflow package."""

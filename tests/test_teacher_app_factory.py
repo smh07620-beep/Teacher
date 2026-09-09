@@ -23,10 +23,11 @@ class ApplicationFactoryTests(unittest.TestCase):
         app = create_app()
         self.assertTrue(app.config["SECRET_KEY"])
         self.assertIn("teacher_auth", app.blueprints)
-        self.assertIn("teacher_pgy", app.blueprints)
+        self.assertIn("pgy", app.blueprints)
         self.assertIn("teacher_exams", app.blueprints)
         api_rules = [rule.rule for rule in app.url_map.iter_rules() if rule.rule.startswith("/api/")]
-        self.assertEqual(api_rules, [])
+        self.assertTrue(api_rules)
+        self.assertTrue(all(rule.startswith("/api/pgy/") for rule in api_rules))
 
     def test_api_error_uses_legacy_compatible_payload(self):
         app = create_app()
