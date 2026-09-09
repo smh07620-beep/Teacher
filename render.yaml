@@ -12,6 +12,22 @@ services:
         sync: false
       - key: ADMIN_KEY
         sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: PRODUCTION_REQUIRE_SECRET
+        value: "true"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_HOURS
+        value: "12"
+      - key: LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+        value: "5"
+      - key: LOGIN_RATE_LIMIT_WINDOW_SECONDS
+        value: "900"
+      - key: CSRF_ORIGIN_CHECK
+        value: "true"
+      - key: CSP_ENFORCE
+        value: "false"
       - key: MATERIAL_STORAGE_BACKEND
         value: mega
       - key: STORAGE_FAILOVER_ON_FULL
@@ -87,7 +103,7 @@ services:
       - key: AI_MAX_QUESTIONS
         value: "15"
       - key: AI_MEDIA_MAX_MB
-        value: "300"
+        value: "250"
       - key: AI_MAX_MATERIALS
         value: "4"
       - key: AI_VIDEO_FRAME_COUNT
