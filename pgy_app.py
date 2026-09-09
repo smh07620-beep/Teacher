@@ -1,7 +1,7 @@
 """Teacher 6.4 deployment entrypoint.
 
-The legacy ``app.py`` remains the primary application. Phase 3/6.3 workflow and
-exam-integrity extensions stay intact while 6.4 adds explicit migrations,
+The legacy ``app.py`` remains the primary application. Phase 3 workflow and
+modular exam-integrity adapters stay intact while 6.4 adds explicit migrations,
 logical backup/restore, upload signature validation and AI de-identification.
 """
 import app as legacy_app

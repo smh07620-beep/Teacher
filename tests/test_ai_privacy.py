@@ -1,6 +1,8 @@
 import unittest
 
-from ai_privacy import deidentify_text
+from flask import request
+
+from ai_privacy import _code_contains_marker, deidentify_text
 
 
 class AiPrivacyTests(unittest.TestCase):
@@ -17,6 +19,9 @@ class AiPrivacyTests(unittest.TestCase):
         masked, count = deidentify_text(text)
         self.assertEqual(masked, text)
         self.assertEqual(count, 0)
+
+    def test_startup_scan_skips_unbound_flask_proxies(self):
+        self.assertFalse(_code_contains_marker(request))
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ from tests.test_rbac_roles import RBAC
 
 
 class ApplicationFactoryTests(unittest.TestCase):
-    def test_create_app_registers_error_handler_and_empty_blueprints(self):
+    def test_create_app_registers_error_handler_and_modular_blueprints(self):
         app = create_app()
         self.assertTrue(app.config["SECRET_KEY"])
         self.assertIn("teacher_auth", app.blueprints)
@@ -27,7 +27,8 @@ class ApplicationFactoryTests(unittest.TestCase):
         self.assertIn("teacher_exams", app.blueprints)
         api_rules = [rule.rule for rule in app.url_map.iter_rules() if rule.rule.startswith("/api/")]
         self.assertTrue(api_rules)
-        self.assertTrue(all(rule.startswith("/api/pgy/") for rule in api_rules))
+        self.assertTrue(any(rule.startswith("/api/pgy/") for rule in api_rules))
+        self.assertIn("/api/exam-attempts", api_rules)
 
     def test_api_error_uses_legacy_compatible_payload(self):
         app = create_app()

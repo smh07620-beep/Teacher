@@ -34,8 +34,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install lightweight test dependency
-        run: python -m pip install 'Flask>=3,<4'
+      - name: Install lightweight test dependencies
+        run: python -m pip install 'Flask>=3,<4' 'requests>=2.32,<3'
       - name: Python syntax and modular package compile
         run: |
           python -m py_compile \
@@ -43,22 +43,28 @@ jobs:
             exam_integrity.py production_hardening.py schema_migrations.py \
             backup_restore.py upload_hardening.py ai_privacy.py
           python -m compileall -q teacher_app
-      - name: RBAC, workflow, exam, data-protection and 6.5 architecture tests
+      - name: RBAC, workflow, modular exam, data-protection and 6.5 architecture tests
         run: >-
           python -m unittest
           tests.test_rbac_roles tests.test_pgy_workflow tests.test_exam_integrity
           tests.test_ai_privacy tests.test_upload_hardening tests.test_backup_restore
           tests.test_schema_migrations tests.test_teacher_app_factory
-          tests.test_pgy_repository tests.test_pgy_service -v
+          tests.test_pgy_repository tests.test_pgy_service
+          tests.test_exam_repository tests.test_exam_service tests.test_exam_routes -v
       - name: Browser JavaScript syntax
         run: |
           node --check static/pgy-workflow.js
           node --check static/exam-integrity.js
           node --check static/maintenance-64.js
+      - name: Production entrypoint uses modular exam routes
+        run: >-
+          python -c "import pgy_app;
+          assert pgy_app.app.view_functions['exam_attempt_start'].__module__ == 'teacher_app.exams.routes'"
       - name: Deployment, compatibility and 6.4 runtime policy checks
         run: |
           grep -q 'pgy_app:app' run_web.sh
           grep -q 'from teacher_app.pgy import service as pgy_service' pgy_atomic.py
+          grep -q 'from teacher_app.exams.routes import register_legacy_exam_routes' exam_integrity.py
           grep -q 'SECRET_KEY' render.yaml
           grep -q 'SESSION_COOKIE_SECURE' render.yaml
           grep -q 'AI_DEIDENTIFICATION_ENABLED' render.yaml

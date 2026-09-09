@@ -33,7 +33,12 @@ def deidentify_text(text: str) -> tuple[str, int]:
 
 
 def _code_contains_marker(fn) -> bool:
-    code = getattr(fn, "__code__", None)
+    try:
+        code = getattr(fn, "__code__", None)
+    except RuntimeError:
+        # Flask LocalProxy objects (for example ``request``) cannot be
+        # dereferenced while the application is still starting.
+        return False
     if not code:
         return False
     constants = " ".join(str(x) for x in code.co_consts if isinstance(x, str))
