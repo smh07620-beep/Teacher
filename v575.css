@@ -1,0 +1,24 @@
+/* V5.7.5 navigation simplification: homepage has one direct management entry; backend uses direct workspaces. */
+body.portal-v56 .v575-home-nav{gap:8px!important;align-items:center}
+body.portal-v56 .v575-home-nav .v575-manage-direct{
+  display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px!important;
+  border:1px solid #cfe5ed;border-radius:11px;background:#eef9fb;color:#126b8d!important;
+  text-decoration:none;font-weight:900!important;white-space:nowrap;
+}
+body.portal-v56 .v575-home-nav .v575-manage-direct:hover{background:#dff3f7;color:#075c7d!important;border-color:#acd8e5}
+body.v56-system .v575-system-nav{gap:8px!important}
+body.v56-system .v575-system-nav .v575-manage-direct{background:#eef9fb!important;border:1px solid #cfe5ed!important;color:#126b8d!important;font-weight:900!important}
+
+/* All backend functions are visible at once; no three-stage category switch. */
+#admin-modal .v575-admin-direct-note{font-size:13px;line-height:1.55;color:#718795;margin:0 0 10px 2px}
+#admin-modal .v575-admin-direct{display:grid!important;grid-template-columns:repeat(8,minmax(112px,1fr));gap:8px!important;width:100%}
+#admin-modal .v575-admin-direct .admin-nav-btn{min-height:42px;white-space:normal!important;line-height:1.25!important;text-align:center}
+
+@media(max-width:1280px){#admin-modal .v575-admin-direct{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:820px){
+ body.portal-v56 .v575-home-nav{width:100%;display:grid!important;grid-template-columns:1fr 1fr;gap:6px!important}
+ body.portal-v56 .v575-home-nav>button,body.portal-v56 .v575-home-nav>a{height:38px!important;justify-content:center!important;background:#f2f8fb;border-radius:9px}
+ #admin-modal .v575-admin-direct{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #admin-modal .v575-admin-direct-note{font-size:12px}
+}
+@media(max-width:480px){#admin-modal .v575-admin-direct{grid-template-columns:1fr 1fr;gap:6px!important}}

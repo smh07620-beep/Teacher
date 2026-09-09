@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f8fa">
+<title>羅東聖母醫院｜醫學檢驗教學平台</title>
+<link rel="stylesheet" href="/design-tokens.css?v=5900"><link rel="stylesheet" href="/portal.css?v=5900"><link rel="stylesheet" href="/phase3.css?v=6000">
+</head>
+<body class="portal-v56 platform-v580">
+<div class="v56-shell">
+  <header class="v56-header">
+    <a class="v56-brand" href="/" aria-label="醫學檢驗教學平台首頁"><span class="v56-logo" aria-hidden="true"><svg viewBox="0 0 64 64" fill="none"><path d="M10 14l20-7 24 7v35l-22 8-22-8V14Z" fill="#eaf8fb" stroke="#12658d" stroke-width="2.4"/><path d="M13 17l17 5v29l-17-6V17Zm38 0-18 5v29l18-6V17Z" fill="#fff" stroke="#12658d" stroke-width="2"/><path d="M27 11h10v8h7v10h-7v8H27v-8h-7V19h7v-8Z" fill="#0ca1b1" stroke="#0f5b83" stroke-width="2"/></svg></span><span class="v56-brand-copy"><strong>醫學檢驗教學平台</strong><span>課程・教材・題庫・考核・教師評核</span></span></a>
+    <nav class="v56-nav v573-primary-nav v575-home-nav" aria-label="主要導覽"><a class="active" href="#groups">課程</a><a href="#pending-exams">考核</a><button id="v573-nav-announcement" type="button">最新公告</button><a class="v575-manage-direct" href="/system?area=internal&amp;group=grpBio&amp;admin=1&amp;workspace=course-materials&amp;from=home">教學管理</a></nav>
+    <div class="v56-header-spacer"></div>
+    <label class="v56-search" aria-label="搜尋平台內容"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-v56-search type="search" placeholder="搜尋課程、教材或考核…"></label>
+    <div class="v56-user-actions"><button id="v571-notice-trigger" class="v56-icon-button" type="button" aria-label="最新公告"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span class="v56-dot"></span></button><div id="v561-profile-trigger" class="v56-user v561-profile-trigger" role="button" tabindex="0" aria-label="登入學習帳號"><span class="v56-avatar"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><span class="v56-user-copy"><strong id="v561-header-name">登入學習帳號</strong><span id="v561-header-id">登入後讀取個人進度</span></span></div></div>
+    <button class="v56-mobile-menu" data-v56-menu type="button" aria-label="開啟選單">☰</button>
+  </header>
+  <main class="phase3-home">
+    <section class="v56-hero" aria-labelledby="hero-title">
+      <div class="v56-hero-copy"><h1 id="hero-title">專業源自學習<br>更好的檢驗，為了更好的醫療</h1><p>持續學習・精進專業・守護每一位病人</p><div class="v56-hero-actions"><a class="v56-primary" href="#groups">開始學習　→</a><a class="v56-secondary" href="/pgy">PGY 學員專區</a></div></div>
+      <div class="v56-hero-art" aria-hidden="true"><img src="/assets/v571/hero.png" alt=""></div>
+    </section>
+
+    <section class="phase3-stats" aria-label="我的學習摘要">
+      <a class="phase3-stat" href="/internal"><span class="phase3-stat-icon">▣</span><span><b>今日課程</b><strong><span id="v561-course-count">—</span><small>堂</small></strong></span><em>查看課程 →</em></a>
+      <a class="phase3-stat" href="#pending-exams"><span class="phase3-stat-icon">✓</span><span><b>待完成考核</b><strong><span id="v561-exam-pending">—</span><small>項</small></strong></span><em>前往考核 →</em></a>
+      <button id="v571-announcement-open" class="phase3-stat" type="button"><span class="phase3-stat-icon">⌁</span><span><b>最新公告</b><strong><span id="v571-announcement-count">0</span><small>則</small></strong></span><em>查看公告 →</em></button>
+      <button class="phase3-stat" type="button" onclick="document.getElementById('v561-profile-trigger').click()"><span class="phase3-stat-icon">⌁</span><span><b>學習進度</b><strong><span id="v561-progress-percent">—</span><small>%</small></strong><i><span id="v561-progress-bar" style="width:0%"></span></i></span><em>查看詳情 →</em></button>
+      <p id="v561-welcome" class="phase3-welcome">尚未登入｜登入後自動顯示你的課程、考核與學習進度</p>
+    </section>
+
+    <section id="groups" class="phase3-section">
+      <div class="phase3-heading"><div><h2>檢驗六大組別</h2><p>先選訓練類型，再依輪訓領域進入專屬課程與教材</p></div><div class="phase3-heading-actions"><div class="phase3-area-switch" role="group" aria-label="選擇訓練類型"><button type="button" data-phase3-area="internal" aria-pressed="true">院內教育訓練</button><button type="button" data-phase3-area="pgy" aria-pressed="false">PGY</button></div><a id="phase3-area-all" href="/internal">全部 →</a></div></div>
+      <div class="phase3-groups">
+        <a data-phase3-group="grpBio" href="/system?area=internal&amp;group=grpBio&amp;module=materials"><span><img src="/assets/v571/bio_art.png" alt=""></span><h3>生化組</h3><p>生化檢驗・儀器分析</p><b>→</b></a>
+        <a data-phase3-group="grpMicro" href="/system?area=internal&amp;group=grpMicro&amp;module=materials"><span><img src="/assets/v571/micro_art.png" alt=""></span><h3>鏡檢組</h3><p>形態觀察・標片判讀</p><b>→</b></a>
+        <a data-phase3-group="grpSero" href="/system?area=internal&amp;group=grpSero&amp;module=materials"><span><img src="/assets/v571/sero_art.png" alt=""></span><h3>血清組</h3><p>免疫檢驗・血清學</p><b>→</b></a>
+        <a data-phase3-group="grpBB" href="/system?area=internal&amp;group=grpBB&amp;module=materials"><span><img src="/assets/v571/bb_art.png" alt=""></span><h3>血庫組</h3><p>血液安全・輸血醫學</p><b>→</b></a>
+        <a data-phase3-group="grpBact" href="/system?area=internal&amp;group=grpBact&amp;module=materials"><span><img src="/assets/v571/bact_art.png" alt=""></span><h3>細菌組</h3><p>微生物檢驗・感染控制</p><b>→</b></a>
+        <a data-phase3-group="grpHema" href="/system?area=internal&amp;group=grpHema&amp;module=materials"><span><img src="/assets/v571/hema_art.png" alt=""></span><h3>血液組</h3><p>血球分析・血液疾病</p><b>→</b></a>
+      </div>
+    </section>
+
+    <section class="phase3-lower"><article class="v56-panel"><div class="v56-panel-head"><strong>最新教材</strong><a href="/internal">選擇組別 →</a></div><div id="v56-latest-materials" class="v56-list"><div class="v56-empty">正在載入最新教材…</div></div></article><article id="pending-exams" class="v56-panel"><div class="v56-panel-head"><strong>待完成考核</strong><a href="/pgy">查看待考 →</a></div><div id="v571-pending-exams" class="v56-assessment-list"><div class="v56-empty">登入後顯示待完成考核。</div></div></article><article class="v56-panel v56-reminder"><h3>💡 學習小提醒</h3><blockquote>「持續的學習，<br>是專業最穩固的基石。」</blockquote><p>檢驗專業・連結人與健康</p></article></section>
+  </main>
+  <footer class="v56-footer"><div class="v56-footer-brand"><span class="v56-logo" style="width:42px;height:42px"><svg viewBox="0 0 64 64" fill="none"><path d="M10 14l20-7 24 7v35l-22 8-22-8V14Z" fill="#eaf8fb" stroke="#12658d" stroke-width="2.4"/><path d="M13 17l17 5v29l-17-6V17Zm38 0-18 5v29l18-6V17Z" fill="#fff" stroke="#12658d" stroke-width="2"/><path d="M27 11h10v8h7v10h-7v8H27v-8h-7V19h7v-8Z" fill="#0ca1b1" stroke="#0f5b83" stroke-width="2"/></svg></span><span><strong>醫學檢驗教學平台</strong><span>Medical Laboratory Education Platform</span></span></div><div class="v56-footer-cell">專業 · 傳承 · 成長<br><small>Learn Today · A Healthier Tomorrow</small></div><div class="v56-footer-cell">院內教育 × PGY 培訓</div></footer>
+</div>
+<nav class="v56-bottom-nav" aria-label="行動版導覽"><a class="active" href="/">⌂<span>首頁</span></a><a href="/internal">▦<span>院內訓練</span></a><a href="/pgy">◇<span>PGY 專區</span></a><a href="/system?area=internal&amp;group=grpBio&amp;admin=1&amp;workspace=course-materials">⚙<span>管理</span></a></nav>
+<button class="v56-backtop" type="button" aria-label="回到頁首">↑</button>
+<dialog id="v571-announcement-dialog" class="v561-profile-dialog v571-announcement-dialog"><div class="v561-profile-card"><div class="v561-profile-head"><div><strong>最新公告</strong><span>平台重要通知與教學提醒</span></div><button type="button" id="v571-announcement-close" aria-label="關閉">×</button></div><div id="v571-announcement-list" class="v571-announcement-list"><p class="v561-profile-status">正在讀取公告…</p></div></div></dialog>
+<dialog id="v561-profile-dialog" class="v561-profile-dialog"><form method="dialog" class="v561-profile-card" id="v561-profile-form"><div class="v561-profile-head"><div><strong>個人學習資料</strong><span>登入帳號、姓名與工號由管理者統一維護。</span></div><button type="button" id="v561-profile-close" aria-label="關閉">×</button></div><label><span>姓名</span><input id="v561-profile-name" autocomplete="name" readonly></label><label><span>工號 / 識別碼</span><input id="v561-profile-empid" autocomplete="username" readonly></label><p id="v561-profile-status" class="v561-profile-status">登入後自動連結個人課程、考核與進度。</p><div class="v561-profile-actions"><button type="button" id="v561-profile-clear" class="secondary">登出</button><button type="button" id="v561-profile-cancel" class="secondary">取消</button><button type="submit" value="default">關閉</button></div></form></dialog>
+<script defer src="/shared-core.js?v=5900"></script><script defer src="/portal-v56.js?v=6100"></script>
+</body>
+</html>

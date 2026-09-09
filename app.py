@@ -1421,8 +1421,13 @@ def _record_to_dict(row):
 
 def require_admin():
     supplied = request.headers.get("X-Admin-Key", "")
-    if not ADMIN_KEY or supplied != ADMIN_KEY:
-        return jsonify({"error": "未授權。請提供正確的管理者金鑰 ADMIN_KEY。"}), 401
+    if ADMIN_KEY and supplied == ADMIN_KEY:
+        return None
+    user = _current_user()
+    if not user:
+        return jsonify({"error": "請先以管理者帳號登入，或提供正確的 ADMIN_KEY。", "loginRequired": True}), 401
+    if user.get("role") != "manager":
+        return jsonify({"error": "權限不足：此功能限教學管理者使用。"}), 403
     return None
 
 
@@ -1914,6 +1919,18 @@ def login_required(api=True):
             return fn(*args, **kwargs)
         return wrapped
     return decorator
+
+
+def require_roles(*allowed_roles):
+    """Return the authenticated user or an error response for RBAC checks."""
+    user = _current_user()
+    if not user:
+        return None, (jsonify({"error": "請先登入後再執行此操作。", "loginRequired": True}), 401)
+    if user.get("role") not in set(allowed_roles):
+        labels = {"learner": "學員", "teacher": "臨床教師", "manager": "教學管理者"}
+        expected = "、".join(labels.get(role, role) for role in allowed_roles)
+        return None, (jsonify({"error": f"權限不足：此操作限{expected}使用。"}), 403)
+    return user, None
 
 
 init_user_accounts_db()
@@ -6693,15 +6710,19 @@ def api_delete_pgy_assessment_template(template_type):
     return jsonify({'ok':True})
 
 @app.post('/api/pgy-assessments')
-@login_required()
 def api_create_pgy_assessment():
+    user, denied = require_roles('teacher', 'manager')
+    if denied: return denied
     data=request.get_json(silent=True) or {}
     typ=str(data.get('assessmentType','')).strip()
     if typ not in PGY_ASSESSMENT_TYPES:return jsonify({'error':'評量類型不正確'}),400
     name=str(data.get('name','')).strip()[:100]; emp=str(data.get('empId','')).strip()[:100]
-    evaluator=str(data.get('evaluatorName','')).strip()[:100]
+    # 評估者身分必須來自登入帳號，不接受前端自由冒用姓名或職稱。
+    evaluator=str(user.get('name','')).strip()[:100]
     if not name or not emp or not evaluator:return jsonify({'error':'請填寫受評者姓名、工號與評估者'}),400
     group=normalize_group(data.get('group',DEFAULT_GROUP)); details=data.get('details') or {}
+    if user.get('role') == 'teacher' and group != normalize_group(user.get('preferredGroup')):
+        return jsonify({'error':'權限不足：臨床教師只能評核自己負責組別的學員。'}),403
     if not isinstance(details, dict):
         return jsonify({'error':'評核明細格式錯誤'}),400
     ratings=details.get('ratings') or []
@@ -6724,7 +6745,8 @@ def api_create_pgy_assessment():
     score=sum(x['rating'] for x in details['ratings'])/len(details['ratings']) if details.get('ratings') else 0
     conn,kind=_db_conn()
     try:
-        vals=(rec_id,now,typ,group,name,emp,evaluator,str(data.get('evaluatorTitle',''))[:100],date,title,json.dumps(details,ensure_ascii=False),comments,score,'completed')
+        evaluator_title='教學管理者' if user.get('role') == 'manager' else '臨床教師'
+        vals=(rec_id,now,typ,group,name,emp,evaluator,evaluator_title,date,title,json.dumps(details,ensure_ascii=False),comments,score,'completed')
         if kind=='postgres': conn.execute('INSERT INTO pgy_assessments(id,created_at,assessment_type,group_key,name,emp_id,evaluator_name,evaluator_title,assessment_date,title,details,comments,overall_score,status) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s)',vals)
         else: conn.execute('INSERT INTO pgy_assessments(id,created_at,assessment_type,group_key,name,emp_id,evaluator_name,evaluator_title,assessment_date,title,details,comments,overall_score,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',vals)
     finally: conn.close()
@@ -6735,12 +6757,19 @@ def api_list_pgy_assessments():
     emp=str(request.args.get('emp_id','')).strip()
     admin=request.headers.get('X-Admin-Key','')==ADMIN_KEY and bool(ADMIN_KEY)
     user=_current_user()
-    if not admin:
-        if not user:return jsonify({'error':'請先登入後查看評量紀錄','loginRequired':True}),401
+    if not admin and not user:
+        return jsonify({'error':'請先登入後查看評量紀錄','loginRequired':True}),401
+    if not admin and user.get('role') == 'learner':
         emp=user['empId']
+    elif not admin and user.get('role') == 'teacher':
+        requested_group=normalize_group(request.args.get('group', user.get('preferredGroup')))
+        if requested_group != normalize_group(user.get('preferredGroup')):
+            return jsonify({'error':'權限不足：臨床教師只能查看自己負責組別的評量。'}),403
     conn,kind=_db_conn(); ph='%s' if kind=='postgres' else '?'
     try:
-        if emp: rows=conn.execute(f'SELECT * FROM pgy_assessments WHERE emp_id={ph} ORDER BY created_at DESC',(emp,)).fetchall()
+        if not admin and user and user.get('role') == 'teacher':
+            rows=conn.execute(f'SELECT * FROM pgy_assessments WHERE group_key={ph} ORDER BY created_at DESC',(normalize_group(user.get('preferredGroup')),)).fetchall()
+        elif emp: rows=conn.execute(f'SELECT * FROM pgy_assessments WHERE emp_id={ph} ORDER BY created_at DESC',(emp,)).fetchall()
         else: rows=conn.execute('SELECT * FROM pgy_assessments ORDER BY created_at DESC').fetchall()
         return jsonify([_assessment_row_to_dict(r) for r in rows])
     finally: conn.close()

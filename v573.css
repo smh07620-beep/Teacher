@@ -1,0 +1,75 @@
+/* V5.7.3 Home-linked navigation, identity and typography */
+:root{--v573-ink:#173f5e;--v573-blue:#0c7ca5;--v573-soft:#eef8fb;--v573-line:#dceaf1}
+
+/* Home + inner page navigation use the same visual language. */
+.v573-primary-nav{display:flex;align-items:center;gap:4px;overflow:visible!important}
+.v573-primary-nav>a,.v573-primary-nav>button,.v573-primary-nav>details>summary{border:0;background:transparent;color:#31566e;font-weight:900;cursor:pointer;white-space:nowrap;list-style:none}
+.v573-primary-nav details>summary::-webkit-details-marker{display:none}
+.v573-manage-menu{position:relative;overflow:visible}
+.v573-manage-menu>summary{display:flex;align-items:center;gap:5px}
+.v573-manage-menu>summary::after{content:'⌄';font-size:.78em;color:#7893a4}
+.v573-manage-menu[open]>summary{background:#edf7fb!important;color:#0b78a7!important;border-radius:9px}
+.v573-manage-popover{position:absolute;top:calc(100% + 8px);right:0;z-index:150;min-width:210px;padding:8px;background:#fff;border:1px solid var(--v573-line);border-radius:13px;box-shadow:0 18px 48px rgba(28,70,96,.18);display:grid;gap:3px}
+.v573-manage-popover a,.v573-manage-popover button{display:flex!important;align-items:center!important;width:100%;text-align:left!important;border:0!important;background:transparent!important;color:#31566e!important;border-radius:9px!important;padding:10px 11px!important;font-size:14px!important;font-weight:800!important;text-decoration:none;white-space:nowrap}
+.v573-manage-popover a:hover,.v573-manage-popover button:hover{background:#eef8fb!important;color:#0b78a7!important}
+
+/* Home stat cards: closer to supplied reference, while preserving live data. */
+body.portal-v56 .v56-stats{gap:12px}
+body.portal-v56 .v56-stat{min-height:118px;padding:18px 20px;grid-template-columns:58px minmax(0,1fr) auto;column-gap:14px;border-radius:12px}
+body.portal-v56 .v56-stat-icon{width:54px;height:54px;border-radius:15px}
+body.portal-v56 .v56-stat-copy>span:first-child{font-size:15px!important;line-height:1.2}
+body.portal-v56 .v56-stat-copy strong{font-size:38px!important;line-height:1;margin-top:7px!important}
+body.portal-v56 .v56-stat-copy strong small{font-size:14px!important;margin-left:3px}
+body.portal-v56 .v56-stat>a,body.portal-v56 .v571-stat-link{font-size:13px!important;font-weight:900;align-self:end;margin-bottom:4px}
+body.portal-v56 .v56-progress-bar{height:9px;margin-top:10px}
+body.portal-v56 .v56-brand-copy span{font-size:11px!important}
+
+/* System header mirrors home and removes crowded top-right actions. */
+body.v56-system .v573-system-header>div{min-height:70px;padding-top:8px!important;padding-bottom:8px!important}
+body.v56-system .v56-system-brand-copy strong{font-size:19px!important}
+body.v56-system .v56-system-brand-copy small{font-size:11px!important}
+body.v56-system .v56-system-nav{gap:5px;margin-left:22px;overflow:visible}
+body.v56-system .v56-system-nav>a,body.v56-system .v56-system-nav>button,body.v56-system .v56-system-nav>details>summary{font-size:14px!important;padding:10px 11px!important;border-radius:9px}
+body.v56-system .v56-system-actions{gap:10px}
+body.v56-system .v56-system-search{width:230px;height:38px;font-size:13px;padding:0 15px}
+.v573-system-user{min-width:125px;max-width:165px;padding:5px 10px;border-left:1px solid #e1ebf0;display:flex;flex-direction:column;line-height:1.25}
+.v573-system-user strong{font-size:12px;color:#214c67;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.v573-system-user small{font-size:10px;color:#8198a7;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Linked learner identity: inner pages never ask for name/employee id twice. */
+.v573-linked-identity{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #bfe5e7;background:linear-gradient(135deg,#effbfb,#f7fcfd);border-radius:13px;padding:12px 14px;color:#214c67}
+.v573-linked-identity>div{display:flex;flex-direction:column;gap:2px;min-width:0}.v573-linked-identity b{font-size:15px}.v573-linked-identity span{font-size:13px;color:#698797}.v573-linked-identity a{flex-shrink:0;color:#0b7da4;font-size:13px;font-weight:900;text-decoration:none}.v573-linked-identity.missing{border-color:#f4d9a5;background:#fffaf0}.v573-linked-identity.compact{min-width:270px;padding:9px 12px}
+.v573-teaching-welcome{display:grid!important;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:18px}
+.v573-teaching-welcome .teaching-status{grid-column:1/-1;margin-top:0}
+.v573-course-tools{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #dceaf1;background:#f8fbfd;border-radius:12px;padding:10px 12px;margin:10px 0 12px;color:#607d8d;font-size:14px}.v573-course-tools label{display:flex;align-items:center;gap:8px;font-weight:800}.v573-course-tools select{border:1px solid #cfdee7;background:white;border-radius:9px;padding:7px 10px;font-size:14px;color:#31566e}.v573-course-tools.v573-filter-only{justify-content:flex-end;background:transparent;border:0;padding:0;margin:2px 0 12px}
+
+/* Admin navigation is grouped instead of eight equally prominent tabs. */
+.v573-admin-groups{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}.v573-admin-groups button{border:1px solid #d9e5eb;background:#f5f8fa;color:#516b7a;border-radius:10px;padding:8px 13px;font-size:13px;font-weight:900}.v573-admin-groups button.active{background:#133f58;color:#fff;border-color:#133f58}.v573-admin-secondary{padding-top:2px}.v573-admin-secondary .admin-nav-btn.hidden{display:none!important}
+
+/* Raise typography across every inner page to the same readable scale as home. */
+body.v56-system{font-size:16px!important}
+body.v56-system main{line-height:1.65}
+body.v56-system main .text-xs,body.v56-system #admin-modal .text-xs{font-size:.875rem!important;line-height:1.55!important}
+body.v56-system main .text-sm,body.v56-system #admin-modal .text-sm{font-size:1rem!important;line-height:1.55!important}
+body.v56-system main [class~="text-[10px]"],body.v56-system #admin-modal [class~="text-[10px]"]{font-size:.78rem!important}
+body.v56-system main [class~="text-[11px]"],body.v56-system #admin-modal [class~="text-[11px]"]{font-size:.82rem!important;line-height:1.5!important}
+body.v56-system .learning-module-label{font-size:15px!important}.learning-module-desc{font-size:12.5px!important;line-height:1.4!important}
+body.v56-system .edu-kicker{font-size:.78rem!important}
+body.v56-system .learning-input{font-size:1rem!important;padding:.75rem .9rem}
+body.v56-system button,body.v56-system select,body.v56-system input,body.v56-system textarea{font-family:inherit}
+body.v56-system #admin-modal h3{font-size:20px!important}body.v56-system #admin-modal h4{font-size:18px!important}
+
+/* Portal/intermediate pages also scale up. */
+body.portal-v56 .v56-portal-card h3{font-size:18px}.v56-portal-card p{font-size:14px!important;line-height:1.6}.v56-support-item strong{font-size:15px}.v56-support-item p{font-size:13px!important;line-height:1.55}.v56-subhero p{font-size:15px!important;line-height:1.7}.v56-subhero h1{font-size:30px!important}
+
+@media(max-width:1180px){
+ body.v56-system .v56-system-nav{margin-left:10px}.v573-system-user{display:none}.v573-manage-popover{right:auto;left:0}
+ body.portal-v56 .v56-stat{grid-template-columns:52px minmax(0,1fr) auto;padding:16px}.v573-primary-nav{gap:2px}
+}
+@media(max-width:820px){
+ .v573-manage-menu{width:100%}.v573-manage-popover{position:static;box-shadow:none;margin-top:5px;min-width:0}.v573-manage-popover a,.v573-manage-popover button{justify-content:center!important}
+ body.portal-v56 .v56-stat{grid-template-columns:48px minmax(0,1fr);min-height:108px}.v573-teaching-welcome{grid-template-columns:1fr}.v573-teaching-welcome .teaching-status{grid-column:auto}.v573-linked-identity.compact{min-width:0}
+ .v573-course-tools{align-items:flex-start;flex-direction:column}.v573-admin-groups{display:grid;grid-template-columns:repeat(3,1fr)}.v573-admin-groups button{padding:8px 6px;font-size:12px}
+}
+@media(max-width:520px){
+ body.portal-v56 .v56-stat-copy strong{font-size:30px!important}.v573-admin-groups{grid-template-columns:1fr}.v573-linked-identity{align-items:flex-start;flex-direction:column}
+}
