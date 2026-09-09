@@ -62,6 +62,16 @@ services:
         value: "true"
       - key: MAX_UPLOAD_MB
         value: "250"
+      - key: UPLOAD_ZIP_MAX_FILES
+        value: "2000"
+      - key: UPLOAD_ZIP_MAX_EXPANDED_MB
+        value: "1024"
+      - key: UPLOAD_ZIP_MAX_RATIO
+        value: "200"
+      - key: BACKUP_MAX_UPLOAD_MB
+        value: "100"
+      - key: BACKUP_MAX_EXPANDED_MB
+        value: "500"
       - key: MATERIAL_SLIDE_FORMAT
         value: webp
       - key: MATERIAL_WEBP_QUALITY
@@ -90,6 +100,12 @@ services:
         value: "20"
       - key: MAX_PGY_TEMPLATE_MB
         value: "20"
+      - key: AI_EXTERNAL_PROCESSING_ENABLED
+        value: "true"
+      - key: AI_DEIDENTIFICATION_ENABLED
+        value: "true"
+      - key: AI_EXTERNAL_MEDIA_ALLOWED
+        value: "false"
       - key: AI_PROVIDER
         value: groq
       - key: GROQ_API_KEY

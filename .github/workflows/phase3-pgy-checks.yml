@@ -1,4 +1,4 @@
-name: Teacher 6.3 security checks
+name: Teacher 6.4 data protection checks
 
 on:
   push:
@@ -11,11 +11,17 @@ on:
       - 'pgy_atomic.py'
       - 'exam_integrity.py'
       - 'production_hardening.py'
+      - 'schema_migrations.py'
+      - 'backup_restore.py'
+      - 'upload_hardening.py'
+      - 'ai_privacy.py'
       - 'static/pgy-workflow.*'
       - 'static/exam-integrity.js'
-      - 'tests/test_pgy_workflow.py'
-      - 'tests/test_exam_integrity.py'
+      - 'static/maintenance-64.js'
+      - 'tests/test_*.py'
       - 'render.yaml'
+      - 'VERSION'
+      - 'DATA_PROTECTION_6_4.md'
       - '.github/workflows/phase3-pgy-checks.yml'
 
 jobs:
@@ -27,26 +33,40 @@ jobs:
         with:
           python-version: '3.12'
       - name: Python syntax
-        run: python -m py_compile pgy_app.py pgy_frontend.py pgy_workflow.py pgy_atomic.py exam_integrity.py production_hardening.py
-      - name: RBAC, workflow and exam integrity unit tests
-        run: python -m unittest tests.test_rbac_roles tests.test_pgy_workflow tests.test_exam_integrity -v
+        run: >-
+          python -m py_compile
+          pgy_app.py pgy_frontend.py pgy_workflow.py pgy_atomic.py
+          exam_integrity.py production_hardening.py schema_migrations.py
+          backup_restore.py upload_hardening.py ai_privacy.py
+      - name: RBAC, workflow, exam and data-protection unit tests
+        run: >-
+          python -m unittest
+          tests.test_rbac_roles tests.test_pgy_workflow tests.test_exam_integrity
+          tests.test_ai_privacy tests.test_upload_hardening tests.test_backup_restore
+          tests.test_schema_migrations -v
       - name: Browser JavaScript syntax
         run: |
           node --check static/pgy-workflow.js
           node --check static/exam-integrity.js
-      - name: Deployment entrypoint check
+          node --check static/maintenance-64.js
+      - name: Deployment and 6.4 policy checks
         run: |
           grep -q 'pgy_app:app' run_web.sh
           grep -q 'SECRET_KEY' render.yaml
           grep -q 'SESSION_COOKIE_SECURE' render.yaml
-      - name: Build uploadable Teacher 6.3.0 ZIP
+          grep -q 'AI_DEIDENTIFICATION_ENABLED' render.yaml
+          grep -q 'AI_EXTERNAL_MEDIA_ALLOWED' render.yaml
+          grep -q 'UPLOAD_ZIP_MAX_RATIO' render.yaml
+          grep -q 'GROQ_API_KEY' render.yaml
+          test "$(cat VERSION)" = "6.4.0"
+      - name: Build uploadable Teacher 6.4.0 ZIP
         if: github.event_name == 'push' && github.ref == 'refs/heads/codex/phase-3-pgy-architecture'
-        run: zip -qr Teacher-6.3.0-secure-exam.zip . -x '.git/*' 'Teacher-6.3.0-secure-exam.zip'
-      - name: Upload Teacher 6.3.0 ZIP
+        run: zip -qr Teacher-6.4.0-data-protection.zip . -x '.git/*' 'Teacher-6.4.0-data-protection.zip' '__pycache__/*'
+      - name: Upload Teacher 6.4.0 ZIP
         if: github.event_name == 'push' && github.ref == 'refs/heads/codex/phase-3-pgy-architecture'
         uses: actions/upload-artifact@v4
         with:
-          name: Teacher-6.3.0-secure-exam
-          path: Teacher-6.3.0-secure-exam.zip
+          name: Teacher-6.4.0-data-protection
+          path: Teacher-6.4.0-data-protection.zip
           if-no-files-found: error
           retention-days: 14
