@@ -1,4 +1,4 @@
-name: Phase 3 PGY checks
+name: Teacher 6.3 security checks
 
 on:
   push:
@@ -8,8 +8,14 @@ on:
   pull_request:
     paths:
       - 'pgy_*.py'
+      - 'pgy_atomic.py'
+      - 'exam_integrity.py'
+      - 'production_hardening.py'
       - 'static/pgy-workflow.*'
+      - 'static/exam-integrity.js'
       - 'tests/test_pgy_workflow.py'
+      - 'tests/test_exam_integrity.py'
+      - 'render.yaml'
       - '.github/workflows/phase3-pgy-checks.yml'
 
 jobs:
@@ -21,21 +27,26 @@ jobs:
         with:
           python-version: '3.12'
       - name: Python syntax
-        run: python -m py_compile pgy_app.py pgy_frontend.py pgy_workflow.py
-      - name: RBAC and workflow unit tests
-        run: python -m unittest tests.test_rbac_roles tests.test_pgy_workflow -v
+        run: python -m py_compile pgy_app.py pgy_frontend.py pgy_workflow.py pgy_atomic.py exam_integrity.py production_hardening.py
+      - name: RBAC, workflow and exam integrity unit tests
+        run: python -m unittest tests.test_rbac_roles tests.test_pgy_workflow tests.test_exam_integrity -v
       - name: Browser JavaScript syntax
-        run: node --check static/pgy-workflow.js
+        run: |
+          node --check static/pgy-workflow.js
+          node --check static/exam-integrity.js
       - name: Deployment entrypoint check
-        run: grep -q 'pgy_app:app' run_web.sh
-      - name: Build uploadable Teacher 6.2.0 ZIP
+        run: |
+          grep -q 'pgy_app:app' run_web.sh
+          grep -q 'SECRET_KEY' render.yaml
+          grep -q 'SESSION_COOKIE_SECURE' render.yaml
+      - name: Build uploadable Teacher 6.3.0 ZIP
         if: github.event_name == 'push' && github.ref == 'refs/heads/codex/phase-3-pgy-architecture'
-        run: zip -qr Teacher-6.2.0-PGY-workflow.zip . -x '.git/*' 'Teacher-6.2.0-PGY-workflow.zip'
-      - name: Upload Teacher 6.2.0 ZIP
+        run: zip -qr Teacher-6.3.0-secure-exam.zip . -x '.git/*' 'Teacher-6.3.0-secure-exam.zip'
+      - name: Upload Teacher 6.3.0 ZIP
         if: github.event_name == 'push' && github.ref == 'refs/heads/codex/phase-3-pgy-architecture'
         uses: actions/upload-artifact@v4
         with:
-          name: Teacher-6.2.0-PGY-workflow
-          path: Teacher-6.2.0-PGY-workflow.zip
+          name: Teacher-6.3.0-secure-exam
+          path: Teacher-6.3.0-secure-exam.zip
           if-no-files-found: error
           retention-days: 14
