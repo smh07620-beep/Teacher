@@ -9,11 +9,10 @@ def register_pgy_frontend(app):
     @app.after_request
     def inject_pgy_workflow_assets(response):
         try:
-            if response.status_code != 200 or response.direct_passthrough:
+            if response.status_code != 200:
                 return response
             if not str(response.content_type or "").startswith("text/html"):
                 return response
-            path = ""
             try:
                 from flask import request
                 path = request.path
@@ -21,6 +20,13 @@ def register_pgy_frontend(app):
                 return response
             if path not in {"/system", "/system.html"}:
                 return response
+
+            # send_from_directory/send_file responses are commonly in direct
+            # passthrough mode. Disable it only for this HTML page so we can
+            # safely append the small Phase 3 asset tags.
+            if response.direct_passthrough:
+                response.direct_passthrough = False
+
             html = response.get_data(as_text=True)
             if "/pgy-workflow.js" in html:
                 return response
