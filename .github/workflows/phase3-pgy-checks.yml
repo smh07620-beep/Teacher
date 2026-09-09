@@ -1,4 +1,4 @@
-name: Teacher 6.6 integration checks
+name: Teacher 6.6.0 release checks
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
           assert 'evaluation.sign' not in ROLE_PERMISSIONS['system_admin']
           assert '0066-additive-rbac-pgy-signing' in REQUIRED_MIGRATIONS
           assert '0066-additive-rbac-pgy-signing' in [version for version, _fn in __import__('schema_migrations').MIGRATIONS]
-          assert Path('VERSION').read_text(encoding='utf-8').strip() == '6.5.0'
+          assert Path('VERSION').read_text(encoding='utf-8').strip() == '6.6.0'
           assert 'pgy_app:app' in Path('run_web.sh').read_text(encoding='utf-8')
 
           response = pgy_app.app.test_client().get('/health')
@@ -62,7 +62,7 @@ jobs:
           data = response.get_json()
           assert data['ok'] is True
           assert data['status'] == 'healthy'
-          assert data['version'] == '6.5.0'
+          assert data['version'] == '6.6.0'
           assert data['database']['ok'] is True
           assert data['migrations']['ok'] is True
           assert data['migrations']['missing'] == []
@@ -78,3 +78,31 @@ jobs:
           grep -q 'GROQ_API_KEY' render.yaml
           grep -q 'register_health' pgy_app.py
           grep -q '0066-additive-rbac-pgy-signing' schema_migrations.py
+          grep -q 'Teacher 6.6.0' ARCHITECTURE_6_6.md
+      - name: Build Teacher 6.6.0 release ZIP
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/phase-3-pgy-architecture'
+        run: |
+          zip -qr Teacher-6.6.0-release.zip . \
+            -x '.git/*' \
+               'Teacher-6.6.0-release.zip' \
+               '__pycache__/*' '*/__pycache__/*' '*.pyc' \
+               '.env' '.env.*' '*/.env' '*/.env.*' \
+               '*.db' '*.sqlite' '*.sqlite3' \
+               'apply_*.py' 'fix_*.py' 'normalize_*.py' \
+               '*_failures*.txt' \
+               'work/*'
+      - name: Upload Teacher 6.6.0 release ZIP
+        id: upload_release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/phase-3-pgy-architecture'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Teacher-6.6.0-release
+          path: Teacher-6.6.0-release.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish release artifact metadata
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/phase-3-pgy-architecture'
+        run: |
+          echo "artifact-name=Teacher-6.6.0-release" >> "$GITHUB_STEP_SUMMARY"
+          echo "artifact-id=${{ steps.upload_release.outputs.artifact-id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "artifact-digest=${{ steps.upload_release.outputs.artifact-digest }}" >> "$GITHUB_STEP_SUMMARY"

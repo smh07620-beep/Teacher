@@ -1,8 +1,8 @@
-"""Teacher 6.5 deployment entrypoint.
+"""Teacher 6.6 deployment entrypoint.
 
 The legacy ``app.py`` remains the primary application. Phase 3 workflow and
-modular exam-integrity adapters stay intact while 6.4 adds explicit migrations,
-logical backup/restore, upload signature validation and AI de-identification.
+modular exam-integrity adapters stay intact while 6.6 adds the formal additive
+RBAC/PGY signing migration on top of the 6.4 protection controls.
 """
 import app as legacy_app
 from ai_privacy import register_ai_privacy

@@ -114,8 +114,11 @@ setImmediate(() => {
         tree = Tree(self.source('static/system.html'))
         self.assertIn(('div', 'admin-section-people'), tree.parents['admin-user-accounts-body'])
 
-    def test_version_and_production_entrypoint_unchanged(self):
-        self.assertEqual(self.source('VERSION').strip(), '6.5.0')
+    def test_version_file_and_production_entrypoint_remain_explicit(self):
+        self.assertRegex(
+            self.source('VERSION').strip(),
+            r'^\d+\.\d+\.\d+$',
+        )
         self.assertIn('pgy_app:app', self.source('run_web.sh').splitlines()[-1])
 
     def test_updated_assets_have_fresh_cache_versions(self):
