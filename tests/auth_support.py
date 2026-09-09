@@ -39,7 +39,7 @@ class AuthFixture(unittest.TestCase):
             require_admin=lambda: None,
         )
         names = {'init_user_accounts_db', '_normalize_username', '_user_public', '_current_user',
-                 'require_roles', 'api_auth_me', 'api_auth_login', 'api_auth_logout', 'api_user_update'}
+                 'require_roles', 'api_auth_me', 'api_auth_login', 'api_auth_logout', 'api_user_create', 'api_user_update'}
         names |= {'_legacy_' + n.lstrip('_') for n in names}
         tree = ast.parse(Path(__file__).parents[1].joinpath('app.py').read_text(encoding='utf-8'))
         selected = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]

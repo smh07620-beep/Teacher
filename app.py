@@ -2054,8 +2054,8 @@ def api_user_create():
     name = str(data.get("name", "")).strip()[:100]
     emp_id = str(data.get("empId", "")).strip()[:100]
     requested_role = str(data.get("role", "student")).strip().lower()
-    if len(username) < 3 or len(password) < 6 or not name or not emp_id:
-        return jsonify({"error": "帳號至少 3 碼、密碼至少 6 碼，姓名與工號皆為必填。"}), 400
+    if len(username) < 3 or len(password) < 4 or not name or not emp_id:
+        return jsonify({"error": "帳號至少 3 碼、密碼至少 4 碼，姓名與工號皆為必填。"}), 400
     if requested_role not in CANONICAL_ROLES and requested_role not in LEGACY_ROLE_ALIASES:
         return jsonify({"error": "角色格式不正確。"}), 400
     role = normalize_role(requested_role)
@@ -2104,7 +2104,7 @@ def api_user_update(username):
             if not active: fields.append("session_version=session_version+1")
         password = str(data.get("password", ""))
         if password:
-            if len(password) < 6: return jsonify({"error": "新密碼至少 6 碼。"}), 400
+            if len(password) < 4: return jsonify({"error": "新密碼至少 4 碼。"}), 400
             fields.extend([f"password_hash={ph}", "session_version=session_version+1"]); values.append(generate_password_hash(password))
         if not fields: return jsonify({"error": "沒有可更新的欄位。"}), 400
         fields.append(f"updated_at={ph}"); values.append(datetime.datetime.now(datetime.timezone.utc).isoformat()); values.append(username)
