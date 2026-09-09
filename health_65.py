@@ -13,6 +13,7 @@ from flask import jsonify
 REQUIRED_MIGRATIONS = (
     "0064-baseline",
     "0065-architecture",
+    "0066-additive-rbac-pgy-signing",
 )
 
 

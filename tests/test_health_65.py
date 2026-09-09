@@ -112,7 +112,7 @@ class Health65Tests(
             [],
         )
 
-    def test_missing_0065_returns_degraded_503(self):
+    def test_missing_0066_returns_degraded_503(self):
         base = HealthBase()
         self.addCleanup(base.close)
 
@@ -166,7 +166,7 @@ class Health65Tests(
         )
 
         self.assertIn(
-            "0065-architecture",
+            "0066-additive-rbac-pgy-signing",
             body["migrations"]["missing"],
         )
 

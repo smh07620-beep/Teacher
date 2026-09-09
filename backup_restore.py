@@ -19,6 +19,8 @@ from typing import Any
 
 from flask import jsonify, request, send_file
 
+from teacher_app.common.auth import normalize_roles
+
 BACKUP_FORMAT = "teacher-backup-v1"
 DEFAULT_TABLES = (
     "user_accounts", "courses", "quiz_categories", "quiz_questions",
@@ -68,6 +70,53 @@ def _existing_tables(conn, kind: str) -> set[str]:
 def _table_rows(conn, table: str) -> list[dict[str, Any]]:
     rows = conn.execute(f'SELECT * FROM "{table}"').fetchall()
     return [dict(r) for r in rows]
+
+
+def _table_columns(conn, kind: str, table: str) -> set[str]:
+    if kind == "postgres":
+        rows = conn.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = %s
+            """,
+            (table,),
+        ).fetchall()
+        return {
+            str(dict(row).get("column_name", ""))
+            for row in rows
+        }
+    rows = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
+    return {str(row[1]) for row in rows}
+
+
+def _compatible_restore_row(
+    table: str,
+    row: dict[str, Any],
+    destination_columns: set[str],
+) -> dict[str, Any]:
+    """Map old manifests into additive schemas without replacing live rows."""
+    compatible = {
+        column: value
+        for column, value in row.items()
+        if column in destination_columns
+    }
+
+    # A 6.5 backup has no roles_json.  Persist the same normalized roles that
+    # the 6.6 auth adapter exposes, but only for the newly inserted backup row.
+    if (
+        table == "user_accounts"
+        and "roles_json" in destination_columns
+        and "roles_json" not in compatible
+    ):
+        compatible["roles_json"] = json.dumps(
+            normalize_roles(None, primary=row.get("role")),
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+
+    return compatible
 
 
 def build_backup(base) -> dict[str, Any]:
@@ -148,22 +197,30 @@ def _restore(base, payload: dict[str, Any]) -> dict[str, int]:
         for table, rows in payload.get("tables", {}).items():
             if table not in DEFAULT_TABLES or table not in existing or not isinstance(rows, list):
                 continue
+            destination_columns = _table_columns(conn, kind, table)
             # Conservative restore: insert missing primary-key rows only. It never
             # truncates or overwrites live production data.
             count = 0
             for row in rows:
                 if not isinstance(row, dict) or not row:
                     continue
-                cols = list(row.keys())
+                compatible = _compatible_restore_row(
+                    table,
+                    row,
+                    destination_columns,
+                )
+                if not compatible:
+                    continue
+                cols = list(compatible.keys())
                 placeholders = ",".join([ph] * len(cols))
                 col_sql = ",".join(f'"{c}"' for c in cols)
-                values = tuple(row[c] for c in cols)
+                values = tuple(compatible[c] for c in cols)
                 try:
                     if kind == "postgres":
-                        conn.execute(f'INSERT INTO "{table}" ({col_sql}) VALUES ({placeholders}) ON CONFLICT DO NOTHING', values)
+                        result = conn.execute(f'INSERT INTO "{table}" ({col_sql}) VALUES ({placeholders}) ON CONFLICT DO NOTHING', values)
                     else:
-                        conn.execute(f'INSERT OR IGNORE INTO "{table}" ({col_sql}) VALUES ({placeholders})', values)
-                    count += 1
+                        result = conn.execute(f'INSERT OR IGNORE INTO "{table}" ({col_sql}) VALUES ({placeholders})', values)
+                    count += max(0, int(result.rowcount or 0))
                 except Exception:
                     continue
             restored[table] = count

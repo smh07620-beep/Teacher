@@ -18,10 +18,10 @@ from production_hardening import register_production_hardening
 from schema_migrations import register_schema_migrations
 from upload_hardening import register_upload_hardening
 
+app = register_pgy_workflow(legacy_app)
 app = register_schema_migrations(legacy_app)
 app = register_multi_role_66(legacy_app)
 app = register_health(legacy_app)
-app = register_pgy_workflow(legacy_app)
 app = register_pgy_atomic_workflow(legacy_app)
 app = register_pgy_signing_66(legacy_app)
 app = register_exam_integrity(legacy_app)
