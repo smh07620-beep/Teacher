@@ -1,4 +1,4 @@
-name: Teacher 6.4 data protection checks
+name: Teacher 6.5 architecture checks
 
 on:
   push:
@@ -15,11 +15,13 @@ on:
       - 'backup_restore.py'
       - 'upload_hardening.py'
       - 'ai_privacy.py'
+      - 'teacher_app/**'
       - 'static/pgy-workflow.*'
       - 'static/exam-integrity.js'
       - 'static/maintenance-64.js'
       - 'tests/test_*.py'
       - 'render.yaml'
+      - 'run_web.sh'
       - 'VERSION'
       - 'DATA_PROTECTION_6_4.md'
       - '.github/workflows/phase3-pgy-checks.yml'
@@ -34,26 +36,29 @@ jobs:
           python-version: '3.12'
       - name: Install lightweight test dependency
         run: python -m pip install 'Flask>=3,<4'
-      - name: Python syntax
-        run: >-
-          python -m py_compile
-          pgy_app.py pgy_frontend.py pgy_workflow.py pgy_atomic.py
-          exam_integrity.py production_hardening.py schema_migrations.py
-          backup_restore.py upload_hardening.py ai_privacy.py
-      - name: RBAC, workflow, exam and data-protection unit tests
+      - name: Python syntax and modular package compile
+        run: |
+          python -m py_compile \
+            pgy_app.py pgy_frontend.py pgy_workflow.py pgy_atomic.py \
+            exam_integrity.py production_hardening.py schema_migrations.py \
+            backup_restore.py upload_hardening.py ai_privacy.py
+          python -m compileall -q teacher_app
+      - name: RBAC, workflow, exam, data-protection and 6.5 architecture tests
         run: >-
           python -m unittest
           tests.test_rbac_roles tests.test_pgy_workflow tests.test_exam_integrity
           tests.test_ai_privacy tests.test_upload_hardening tests.test_backup_restore
-          tests.test_schema_migrations -v
+          tests.test_schema_migrations tests.test_teacher_app_factory
+          tests.test_pgy_repository tests.test_pgy_service -v
       - name: Browser JavaScript syntax
         run: |
           node --check static/pgy-workflow.js
           node --check static/exam-integrity.js
           node --check static/maintenance-64.js
-      - name: Deployment and 6.4 policy checks
+      - name: Deployment, compatibility and 6.4 runtime policy checks
         run: |
           grep -q 'pgy_app:app' run_web.sh
+          grep -q 'from teacher_app.pgy import service as pgy_service' pgy_atomic.py
           grep -q 'SECRET_KEY' render.yaml
           grep -q 'SESSION_COOKIE_SECURE' render.yaml
           grep -q 'AI_DEIDENTIFICATION_ENABLED' render.yaml
