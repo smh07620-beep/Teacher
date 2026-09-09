@@ -1,13 +1,12 @@
 """Canonical RBAC helpers for Teacher 6.5.
 
-Legacy ``app.py`` still owns the live session checks. This module is the
-single definition new code should import so permission checks stop scattering
-``if user["role"] == ...`` across routes.
+Both legacy adapters and modular services import this single policy.
+Authentication and session validation live in teacher_app.auth.service.
 """
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any, Mapping, Optional
 
 from teacher_app.common.errors import ApiError
 

@@ -7,6 +7,7 @@ on:
       - codex/phase-3-pgy-workflow-ui
   pull_request:
     paths:
+      - 'app.py'
       - 'pgy_*.py'
       - 'pgy_atomic.py'
       - 'exam_integrity.py'
@@ -19,7 +20,7 @@ on:
       - 'static/pgy-workflow.*'
       - 'static/exam-integrity.js'
       - 'static/maintenance-64.js'
-      - 'tests/test_*.py'
+      - 'tests/**'
       - 'render.yaml'
       - 'run_web.sh'
       - 'VERSION'
@@ -39,27 +40,23 @@ jobs:
       - name: Python syntax and modular package compile
         run: |
           python -m py_compile \
-            pgy_app.py pgy_frontend.py pgy_workflow.py pgy_atomic.py \
+            app.py pgy_app.py pgy_frontend.py pgy_workflow.py pgy_atomic.py \
             exam_integrity.py production_hardening.py schema_migrations.py \
             backup_restore.py upload_hardening.py ai_privacy.py
           python -m compileall -q teacher_app
-      - name: RBAC, workflow, modular exam, data-protection and 6.5 architecture tests
-        run: >-
-          python -m unittest
-          tests.test_rbac_roles tests.test_pgy_workflow tests.test_exam_integrity
-          tests.test_ai_privacy tests.test_upload_hardening tests.test_backup_restore
-          tests.test_schema_migrations tests.test_teacher_app_factory
-          tests.test_pgy_repository tests.test_pgy_service
-          tests.test_exam_repository tests.test_exam_service tests.test_exam_routes -v
+      - name: Auth, RBAC and all Milestone 1-4 / 6.4 regression tests
+        run: python -m unittest discover -s tests -v
       - name: Browser JavaScript syntax
         run: |
           node --check static/pgy-workflow.js
           node --check static/exam-integrity.js
           node --check static/maintenance-64.js
-      - name: Production entrypoint uses modular exam routes
+      - name: Production entrypoint uses modular exam and auth adapters
         run: >-
           python -c "import pgy_app;
-          assert pgy_app.app.view_functions['exam_attempt_start'].__module__ == 'teacher_app.exams.routes'"
+          assert pgy_app.app.view_functions['exam_attempt_start'].__module__ == 'teacher_app.exams.routes';
+          assert pgy_app.legacy_app.auth_routes.login.__module__ == 'teacher_app.auth.routes';
+          assert pgy_app.app.test_client().get('/api/auth/me').get_json() == {'authenticated': False, 'user': None}"
       - name: Deployment, compatibility and 6.4 runtime policy checks
         run: |
           grep -q 'pgy_app:app' run_web.sh

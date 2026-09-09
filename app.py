@@ -987,24 +987,30 @@ GROUPS = {
 PGY_ONLY_GROUPS = {"grpNew", "grpPgyDocs"}
 DEFAULT_GROUP = "grpBio"
 TRAINING_AREAS = {"internal": "內部教育訓練區", "pgy": "PGY訓練區"}
-LEGACY_ROLE_ALIASES = {"learner": "student", "teacher": "clinical_teacher", "manager": "education_admin"}
-CANONICAL_ROLES = {"student", "clinical_teacher", "group_leader", "education_admin", "system_admin", "auditor"}
-ROLE_PERMISSIONS = {
-    "student": {"course.view", "exam.take", "student.view_self"},
-    "clinical_teacher": {"course.view", "evaluation.submit", "evaluation.review", "evaluation.sign", "student.view_assigned"},
-    "group_leader": {"course.view", "course.edit", "exam.manage", "evaluation.review", "evaluation.countersign", "student.view_group"},
-    "education_admin": {"course.view", "course.edit", "exam.manage", "evaluation.finalize", "student.view_all", "user.manage"},
-    "system_admin": {"user.manage", "role.manage", "audit.view", "system.manage"},
-    "auditor": {"audit.view"},
-}
+# Milestone 4: one live RBAC policy for legacy and modular code.
+from teacher_app.common.auth import CANONICAL_ROLES, LEGACY_ROLE_ALIASES, ROLE_PERMISSIONS
+from teacher_app.auth import service as auth_service, routes as auth_routes
+import sys
 
-def normalize_role(value):
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_normalize_role(value):
     role = str(value or "student").strip().lower()
     role = LEGACY_ROLE_ALIASES.get(role, role)
     return role if role in CANONICAL_ROLES else "student"
 
-def has_permission(user, permission):
+
+def normalize_role(value):
+    from teacher_app.common.auth import normalize_role as canonical_normalize_role
+    return canonical_normalize_role(value)
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_has_permission(user, permission):
     return bool(user) and permission in ROLE_PERMISSIONS.get(normalize_role(user.get("role")), set())
+
+
+def has_permission(user, permission):
+    from teacher_app.common.auth import has_permission as canonical_has_permission
+    return canonical_has_permission(user, permission)
 DEFAULT_TRAINING_AREA = "internal"
 
 # 舊版生化四份考卷保留原 category 代碼，方便既有教材連結與成績紀錄相容；考卷本身已改為動態資料庫管理。
@@ -1886,11 +1892,17 @@ def init_user_accounts_db():
         conn.close()
 
 
-def _normalize_username(value):
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_normalize_username(value):
     return re.sub(r"[^a-z0-9._-]", "", str(value or "").strip().lower())[:64]
 
 
-def _user_public(row):
+def _normalize_username(value):
+    return auth_service.normalize_username(value)
+
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_user_public(row):
     d = dict(row)
     return {
         "username": str(d.get("username", "")),
@@ -1907,7 +1919,12 @@ def _user_public(row):
     }
 
 
-def _current_user():
+def _user_public(row):
+    return auth_service.public_user(sys.modules[__name__], row)
+
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_current_user():
     username = _normalize_username(session.get("username", ""))
     if not username:
         return None
@@ -1925,6 +1942,10 @@ def _current_user():
     return _user_public(row)
 
 
+def _current_user():
+    return auth_service.current_user(sys.modules[__name__], session)
+
+
 def login_required(api=True):
     def decorator(fn):
         @wraps(fn)
@@ -1940,7 +1961,8 @@ def login_required(api=True):
     return decorator
 
 
-def require_roles(*allowed_roles):
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_require_roles(*allowed_roles):
     """Return the authenticated user or an error response for RBAC checks."""
     user = _current_user()
     if not user:
@@ -1953,17 +1975,26 @@ def require_roles(*allowed_roles):
     return user, None
 
 
+def require_roles(*allowed_roles):
+    return auth_routes.require_roles(_current_user(), *allowed_roles)
+
+
 init_user_accounts_db()
 
 
-@app.get("/api/auth/me")
-def api_auth_me():
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_api_auth_me():
     user = _current_user()
     return jsonify({"authenticated": bool(user), "user": user})
 
 
-@app.post("/api/auth/login")
-def api_auth_login():
+@app.get("/api/auth/me")
+def api_auth_me():
+    return auth_routes.me(sys.modules[__name__])
+
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_api_auth_login():
     data = request.get_json(silent=True) or {}
     username = _normalize_username(data.get("username"))
     password = str(data.get("password", ""))
@@ -1985,10 +2016,20 @@ def api_auth_login():
     return jsonify({"ok": True, "user": _user_public(raw)})
 
 
-@app.post("/api/auth/logout")
-def api_auth_logout():
+@app.post("/api/auth/login")
+def api_auth_login():
+    return auth_routes.login(sys.modules[__name__])
+
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_api_auth_logout():
     session.clear()
     return jsonify({"ok": True})
+
+
+@app.post("/api/auth/logout")
+def api_auth_logout():
+    return auth_routes.logout()
 
 
 @app.get("/api/users")

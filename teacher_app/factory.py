@@ -11,8 +11,9 @@ from teacher_app.common.errors import register_error_handlers
 def register_blueprints(app: Flask) -> None:
     """Register modular blueprints.
 
-    Milestone 1 registers empty named blueprints only. They have no routes, so
-    they cannot shadow legacy APIs still defined in ``app.py``.
+    Auth, exams and PGY expose modular routes. Auth callers configure AUTH_BASE
+    with their connection and area/group normalizers. The production legacy
+    app uses explicit adapters and does not register these blueprints twice.
     """
     from teacher_app.admin.routes import bp as admin_bp
     from teacher_app.auth.routes import bp as auth_bp

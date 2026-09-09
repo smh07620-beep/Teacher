@@ -10,6 +10,8 @@ def load_rbac_namespace():
     names = {"LEGACY_ROLE_ALIASES", "CANONICAL_ROLES", "ROLE_PERMISSIONS"}
     functions = {"normalize_role", "has_permission"}
     for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module == "teacher_app.common.auth":
+            selected.append(node)
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id in names for t in node.targets):
             selected.append(node)
         elif isinstance(node, ast.FunctionDef) and node.name in functions:
