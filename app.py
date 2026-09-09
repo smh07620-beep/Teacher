@@ -987,6 +987,24 @@ GROUPS = {
 PGY_ONLY_GROUPS = {"grpNew", "grpPgyDocs"}
 DEFAULT_GROUP = "grpBio"
 TRAINING_AREAS = {"internal": "內部教育訓練區", "pgy": "PGY訓練區"}
+LEGACY_ROLE_ALIASES = {"learner": "student", "teacher": "clinical_teacher", "manager": "education_admin"}
+CANONICAL_ROLES = {"student", "clinical_teacher", "group_leader", "education_admin", "system_admin", "auditor"}
+ROLE_PERMISSIONS = {
+    "student": {"course.view", "exam.take", "student.view_self"},
+    "clinical_teacher": {"course.view", "evaluation.submit", "evaluation.review", "evaluation.sign", "student.view_assigned"},
+    "group_leader": {"course.view", "course.edit", "exam.manage", "evaluation.review", "evaluation.countersign", "student.view_group"},
+    "education_admin": {"course.view", "course.edit", "exam.manage", "evaluation.finalize", "student.view_all", "user.manage"},
+    "system_admin": {"user.manage", "role.manage", "audit.view", "system.manage"},
+    "auditor": {"audit.view"},
+}
+
+def normalize_role(value):
+    role = str(value or "student").strip().lower()
+    role = LEGACY_ROLE_ALIASES.get(role, role)
+    return role if role in CANONICAL_ROLES else "student"
+
+def has_permission(user, permission):
+    return bool(user) and permission in ROLE_PERMISSIONS.get(normalize_role(user.get("role")), set())
 DEFAULT_TRAINING_AREA = "internal"
 
 # 舊版生化四份考卷保留原 category 代碼，方便既有教材連結與成績紀錄相容；考卷本身已改為動態資料庫管理。
@@ -1426,7 +1444,7 @@ def require_admin():
     user = _current_user()
     if not user:
         return jsonify({"error": "請先以管理者帳號登入，或提供正確的 ADMIN_KEY。", "loginRequired": True}), 401
-    if user.get("role") != "manager":
+    if not (has_permission(user, "user.manage") or has_permission(user, "system.manage")):
         return jsonify({"error": "權限不足：此功能限教學管理者使用。"}), 403
     return None
 
@@ -1878,7 +1896,8 @@ def _user_public(row):
         "username": str(d.get("username", "")),
         "name": str(d.get("display_name", "")),
         "empId": str(d.get("emp_id", "")),
-        "role": str(d.get("role", "learner")),
+        "role": normalize_role(d.get("role", "student")),
+        "legacyRole": str(d.get("role", "")) if str(d.get("role", "")) in LEGACY_ROLE_ALIASES else "",
         "preferredArea": normalize_area(d.get("preferred_area", DEFAULT_TRAINING_AREA)),
         "preferredGroup": normalize_group(d.get("preferred_group", DEFAULT_GROUP)),
         "active": bool(d.get("active", True)),
@@ -1926,9 +1945,10 @@ def require_roles(*allowed_roles):
     user = _current_user()
     if not user:
         return None, (jsonify({"error": "請先登入後再執行此操作。", "loginRequired": True}), 401)
-    if user.get("role") not in set(allowed_roles):
-        labels = {"learner": "學員", "teacher": "臨床教師", "manager": "教學管理者"}
-        expected = "、".join(labels.get(role, role) for role in allowed_roles)
+    normalized_allowed = {normalize_role(role) for role in allowed_roles}
+    if normalize_role(user.get("role")) not in normalized_allowed:
+        labels = {"student": "學員", "clinical_teacher": "臨床教師", "group_leader": "組長", "education_admin": "教學管理者", "system_admin": "系統管理者", "auditor": "稽核／唯讀"}
+        expected = "、".join(labels.get(role, role) for role in normalized_allowed)
         return None, (jsonify({"error": f"權限不足：此操作限{expected}使用。"}), 403)
     return user, None
 
@@ -1992,10 +2012,12 @@ def api_user_create():
     password = str(data.get("password", ""))
     name = str(data.get("name", "")).strip()[:100]
     emp_id = str(data.get("empId", "")).strip()[:100]
-    role = str(data.get("role", "learner")).strip().lower()
+    requested_role = str(data.get("role", "student")).strip().lower()
     if len(username) < 3 or len(password) < 8 or not name or not emp_id:
         return jsonify({"error": "帳號至少 3 碼、密碼至少 8 碼，姓名與工號皆為必填。"}), 400
-    if role not in {"learner", "teacher", "manager"}: role = "learner"
+    if requested_role not in CANONICAL_ROLES and requested_role not in LEGACY_ROLE_ALIASES:
+        return jsonify({"error": "角色格式不正確。"}), 400
+    role = normalize_role(requested_role)
     area = normalize_area(data.get("preferredArea", DEFAULT_TRAINING_AREA))
     group = normalize_group(data.get("preferredGroup", DEFAULT_GROUP))
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -2027,7 +2049,9 @@ def api_user_update(username):
         for key, column in mapping.items():
             if key not in data: continue
             value = str(data.get(key, "")).strip()[:100]
-            if key == "role" and value not in {"learner", "teacher", "manager"}: return jsonify({"error": "角色格式不正確。"}), 400
+            if key == "role":
+                if value not in CANONICAL_ROLES and value not in LEGACY_ROLE_ALIASES: return jsonify({"error": "角色格式不正確。"}), 400
+                value = normalize_role(value)
             if key == "preferredArea": value = normalize_area(value)
             if key == "preferredGroup": value = normalize_group(value)
             if key in {"name", "empId"} and not value: return jsonify({"error": "姓名與工號不可空白。"}), 400
@@ -6711,7 +6735,7 @@ def api_delete_pgy_assessment_template(template_type):
 
 @app.post('/api/pgy-assessments')
 def api_create_pgy_assessment():
-    user, denied = require_roles('teacher', 'manager')
+    user, denied = require_roles('clinical_teacher')
     if denied: return denied
     data=request.get_json(silent=True) or {}
     typ=str(data.get('assessmentType','')).strip()
@@ -6721,7 +6745,7 @@ def api_create_pgy_assessment():
     evaluator=str(user.get('name','')).strip()[:100]
     if not name or not emp or not evaluator:return jsonify({'error':'請填寫受評者姓名、工號與評估者'}),400
     group=normalize_group(data.get('group',DEFAULT_GROUP)); details=data.get('details') or {}
-    if user.get('role') == 'teacher' and group != normalize_group(user.get('preferredGroup')):
+    if normalize_role(user.get('role')) == 'clinical_teacher' and group != normalize_group(user.get('preferredGroup')):
         return jsonify({'error':'權限不足：臨床教師只能評核自己負責組別的學員。'}),403
     if not isinstance(details, dict):
         return jsonify({'error':'評核明細格式錯誤'}),400
@@ -6745,7 +6769,7 @@ def api_create_pgy_assessment():
     score=sum(x['rating'] for x in details['ratings'])/len(details['ratings']) if details.get('ratings') else 0
     conn,kind=_db_conn()
     try:
-        evaluator_title='教學管理者' if user.get('role') == 'manager' else '臨床教師'
+        evaluator_title='臨床教師'
         vals=(rec_id,now,typ,group,name,emp,evaluator,evaluator_title,date,title,json.dumps(details,ensure_ascii=False),comments,score,'completed')
         if kind=='postgres': conn.execute('INSERT INTO pgy_assessments(id,created_at,assessment_type,group_key,name,emp_id,evaluator_name,evaluator_title,assessment_date,title,details,comments,overall_score,status) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s)',vals)
         else: conn.execute('INSERT INTO pgy_assessments(id,created_at,assessment_type,group_key,name,emp_id,evaluator_name,evaluator_title,assessment_date,title,details,comments,overall_score,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',vals)
@@ -6759,15 +6783,15 @@ def api_list_pgy_assessments():
     user=_current_user()
     if not admin and not user:
         return jsonify({'error':'請先登入後查看評量紀錄','loginRequired':True}),401
-    if not admin and user.get('role') == 'learner':
+    if not admin and normalize_role(user.get('role')) == 'student':
         emp=user['empId']
-    elif not admin and user.get('role') == 'teacher':
+    elif not admin and normalize_role(user.get('role')) in {'clinical_teacher', 'group_leader'}:
         requested_group=normalize_group(request.args.get('group', user.get('preferredGroup')))
         if requested_group != normalize_group(user.get('preferredGroup')):
             return jsonify({'error':'權限不足：臨床教師只能查看自己負責組別的評量。'}),403
     conn,kind=_db_conn(); ph='%s' if kind=='postgres' else '?'
     try:
-        if not admin and user and user.get('role') == 'teacher':
+        if not admin and user and normalize_role(user.get('role')) in {'clinical_teacher', 'group_leader'}:
             rows=conn.execute(f'SELECT * FROM pgy_assessments WHERE group_key={ph} ORDER BY created_at DESC',(normalize_group(user.get('preferredGroup')),)).fetchall()
         elif emp: rows=conn.execute(f'SELECT * FROM pgy_assessments WHERE emp_id={ph} ORDER BY created_at DESC',(emp,)).fetchall()
         else: rows=conn.execute('SELECT * FROM pgy_assessments ORDER BY created_at DESC').fetchall()

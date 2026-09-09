@@ -1,3 +1,4 @@
+/* V6.1.0: public home-area switch plus role-aware dashboard bootstrap. */
 (function(){
   const $=(s,r=document)=>r.querySelector(s); const $$=(s,r=document)=>[...r.querySelectorAll(s)];
   const LEARNER_NAME_KEY='smh_learner_name', LEARNER_EMPID_KEY='smh_learner_empid';
