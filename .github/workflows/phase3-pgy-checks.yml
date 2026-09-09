@@ -1,4 +1,4 @@
-name: Teacher 6.5 architecture checks
+name: Teacher 6.5 release checks
 
 on:
   push:
@@ -13,10 +13,12 @@ on:
       - 'exam_integrity.py'
       - 'production_hardening.py'
       - 'schema_migrations.py'
+      - 'health_65.py'
       - 'backup_restore.py'
       - 'upload_hardening.py'
       - 'ai_privacy.py'
       - 'teacher_app/**'
+      - 'static/shared-core.js'
       - 'static/pgy-workflow.*'
       - 'static/exam-integrity.js'
       - 'static/maintenance-64.js'
@@ -25,6 +27,7 @@ on:
       - 'run_web.sh'
       - 'VERSION'
       - 'DATA_PROTECTION_6_4.md'
+      - 'ARCHITECTURE_6_5.md'
       - '.github/workflows/phase3-pgy-checks.yml'
 
 jobs:
@@ -42,12 +45,13 @@ jobs:
           python -m py_compile \
             app.py pgy_app.py pgy_frontend.py pgy_workflow.py pgy_atomic.py \
             exam_integrity.py production_hardening.py schema_migrations.py \
-            backup_restore.py upload_hardening.py ai_privacy.py
+            backup_restore.py upload_hardening.py ai_privacy.py health_65.py
           python -m compileall -q teacher_app
-      - name: Auth, RBAC and all Milestone 1-4 / 6.4 regression tests
+      - name: All Teacher 6.5 regression and integration tests
         run: python -m unittest discover -s tests -v
       - name: Browser JavaScript syntax
         run: |
+          node --check static/shared-core.js
           node --check static/pgy-workflow.js
           node --check static/exam-integrity.js
           node --check static/maintenance-64.js
@@ -57,7 +61,29 @@ jobs:
           assert pgy_app.app.view_functions['exam_attempt_start'].__module__ == 'teacher_app.exams.routes';
           assert pgy_app.legacy_app.auth_routes.login.__module__ == 'teacher_app.auth.routes';
           assert pgy_app.app.test_client().get('/api/auth/me').get_json() == {'authenticated': False, 'user': None}"
-      - name: Deployment, compatibility and 6.4 runtime policy checks
+      - name: Teacher 6.5 health and RBAC invariants
+        run: |
+          python - <<'PY'
+          import pgy_app
+          from teacher_app.common.auth import ROLE_PERMISSIONS
+
+          assert "evaluation.sign" in ROLE_PERMISSIONS["clinical_teacher"]
+          assert "evaluation.sign" not in ROLE_PERMISSIONS["education_admin"]
+          assert "evaluation.sign" not in ROLE_PERMISSIONS["system_admin"]
+
+          response = pgy_app.app.test_client().get("/health")
+          assert response.status_code == 200, response.get_data(as_text=True)
+
+          data = response.get_json()
+          assert data["ok"] is True
+          assert data["status"] == "healthy"
+          assert data["version"] == "6.5.0"
+          assert data["database"]["ok"] is True
+          assert data["migrations"]["ok"] is True
+          assert data["migrations"]["missing"] == []
+          PY
+
+      - name: Deployment, compatibility and 6.5 runtime policy checks
         run: |
           grep -q 'pgy_app:app' run_web.sh
           grep -q 'from teacher_app.pgy import service as pgy_service' pgy_atomic.py
@@ -68,15 +94,28 @@ jobs:
           grep -q 'AI_EXTERNAL_MEDIA_ALLOWED' render.yaml
           grep -q 'UPLOAD_ZIP_MAX_RATIO' render.yaml
           grep -q 'GROQ_API_KEY' render.yaml
-          test "$(cat VERSION)" = "6.4.0"
-      - name: Build uploadable Teacher 6.4.0 ZIP
+          grep -q '0065-architecture' schema_migrations.py
+          grep -q 'register_health' pgy_app.py
+          grep -q 'Teacher 6.5' ARCHITECTURE_6_5.md
+          test "$(cat VERSION)" = "6.5.0"
+      - name: Build uploadable Teacher 6.5.0 architecture ZIP
         if: github.event_name == 'push' && github.ref == 'refs/heads/codex/phase-3-pgy-architecture'
-        run: zip -qr Teacher-6.4.0-data-protection.zip . -x '.git/*' 'Teacher-6.4.0-data-protection.zip' '__pycache__/*'
-      - name: Upload Teacher 6.4.0 ZIP
+        run: |
+          zip -qr Teacher-6.5.0-architecture.zip . \
+            -x '.git/*' \
+               'Teacher-6.5.0-architecture.zip' \
+               '__pycache__/*' '*/__pycache__/*' \
+               '.env' '.env.*' '*/.env' '*/.env.*' \
+               '*.db' '*.sqlite' '*.sqlite3' \
+               '.pytest_cache/*' '*/.pytest_cache/*' \
+               '.mypy_cache/*' '*/.mypy_cache/*' \
+               'apply_m5.py' 'apply_m6.py' 'apply_m7.py'
+
+      - name: Upload Teacher 6.5.0 architecture ZIP
         if: github.event_name == 'push' && github.ref == 'refs/heads/codex/phase-3-pgy-architecture'
         uses: actions/upload-artifact@v4
         with:
-          name: Teacher-6.4.0-data-protection
-          path: Teacher-6.4.0-data-protection.zip
+          name: Teacher-6.5.0-architecture
+          path: Teacher-6.5.0-architecture.zip
           if-no-files-found: error
           retention-days: 14

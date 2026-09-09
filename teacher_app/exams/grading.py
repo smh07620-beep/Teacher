@@ -9,20 +9,58 @@ def text(value: Any, limit: int) -> str:
     return str(value or "").strip()[:limit]
 
 
+ANSWER_SECRET_FIELDS = {
+    "correct",
+    "correctAnswer",
+    "correctAnswers",
+    "correctIndices",
+    "acceptedAnswers",
+    "answer",
+    "answers",
+    "answerKey",
+    "answerKeys",
+    "expectedAnswer",
+    "expectedAnswers",
+    "solution",
+    "solutions",
+    "explanation",
+    "scoringKey",
+    "scoringSecret",
+    "gradingKey",
+    "gradingSecret",
+}
+
+
+def strip_answer_secrets(value: Any) -> Any:
+    """Recursively remove server-only answer/scoring fields."""
+    if isinstance(value, Mapping):
+        return {
+            str(key): strip_answer_secrets(child)
+            for key, child in value.items()
+            if str(key) not in ANSWER_SECRET_FIELDS
+        }
+
+    if isinstance(value, list):
+        return [
+            strip_answer_secrets(child)
+            for child in value
+        ]
+
+    return value
+
+
 def sanitize_answer_config(config: Any) -> dict[str, Any]:
-    cfg = dict(config) if isinstance(config, dict) else {}
-    for key in ("correctIndices", "acceptedAnswers", "correct", "answer", "answers", "solution"):
-        cfg.pop(key, None)
-    return cfg
+    if not isinstance(config, dict):
+        return {}
+
+    safe = strip_answer_secrets(config)
+    return safe if isinstance(safe, dict) else {}
 
 
 def sanitize_question(question: Mapping[str, Any]) -> dict[str, Any]:
-    """Return a learner projection with no answer key or explanation."""
-    safe = dict(question or {})
-    for key in ("correct", "explanation", "correctIndices", "acceptedAnswers", "answer", "answers", "solution"):
-        safe.pop(key, None)
-    safe["answerConfig"] = sanitize_answer_config(safe.get("answerConfig"))
-    return safe
+    """Return a learner-safe question with no answer/scoring secrets."""
+    safe = strip_answer_secrets(dict(question or {}))
+    return safe if isinstance(safe, dict) else {}
 
 
 def normalize_indices(value: Any) -> list[int]:

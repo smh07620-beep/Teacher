@@ -7,9 +7,42 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[char])));
   const api = C.api || (async (path, options = {}) => {
-    const response = await fetch(path, { credentials: 'same-origin', ...options });
+    let response;
+
+    try {
+      response = await fetch(path, {
+        credentials: 'same-origin',
+        ...options
+      });
+    } catch (cause) {
+      const error = new Error('無法連線到伺服器，請檢查網路後再試。');
+      error.status = 0;
+      error.code = 'NETWORK_ERROR';
+      error.cause = cause;
+      throw error;
+    }
+
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+
+    if (!response.ok) {
+      const detail = data?.errorDetail || {};
+      const error = new Error(
+        detail.message
+        || data?.error
+        || `請求失敗（${response.status}）`
+      );
+
+      error.status = response.status;
+      error.code = detail.code || '';
+      error.data = data;
+      error.loginRequired = Boolean(
+        response.status === 401
+        || data?.loginRequired
+      );
+
+      throw error;
+    }
+
     return data;
   });
 

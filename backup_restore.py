@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import hmac
 import io
 import json
 import os
 import zipfile
+from pathlib import Path
 from typing import Any
 
 from flask import jsonify, request, send_file
@@ -27,6 +29,19 @@ DEFAULT_TABLES = (
 
 def utcnow() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def app_version() -> str:
+    try:
+        value = (
+            Path(__file__)
+            .with_name("VERSION")
+            .read_text(encoding="utf-8")
+            .strip()
+        )
+        return value or "unknown"
+    except Exception:
+        return "unknown"
 
 
 def _role(base, user) -> str:
@@ -65,7 +80,7 @@ def build_backup(base) -> dict[str, Any]:
     payload = {
         "format": BACKUP_FORMAT,
         "createdAt": utcnow(),
-        "version": "6.4.0",
+        "version": app_version(),
         "tables": tables,
     }
     body = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
@@ -99,7 +114,28 @@ def _read_backup_upload() -> dict[str, Any]:
             raise ValueError("備份解壓後大小超過限制。")
         payload = json.loads(zf.read(names[0]).decode("utf-8"))
     if payload.get("format") != BACKUP_FORMAT or not isinstance(payload.get("tables"), dict):
-        raise ValueError("不是 Teacher 6.4 備份格式。")
+        raise ValueError("不是 Teacher 備份格式。")
+
+    stored_sha = str(payload.get("sha256") or "").strip().lower()
+
+    unsigned = dict(payload)
+    unsigned.pop("sha256", None)
+
+    unsigned_raw = json.dumps(
+        unsigned,
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    ).encode("utf-8")
+
+    expected_sha = hashlib.sha256(unsigned_raw).hexdigest()
+
+    if not stored_sha or not hmac.compare_digest(
+        stored_sha,
+        expected_sha,
+    ):
+        raise ValueError("備份 SHA256 驗證失敗。")
+
     return payload
 
 

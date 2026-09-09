@@ -1,4 +1,4 @@
-"""Teacher 6.4 deployment entrypoint.
+"""Teacher 6.5 deployment entrypoint.
 
 The legacy ``app.py`` remains the primary application. Phase 3 workflow and
 modular exam-integrity adapters stay intact while 6.4 adds explicit migrations,
@@ -8,6 +8,7 @@ import app as legacy_app
 from ai_privacy import register_ai_privacy
 from backup_restore import register_backup_restore
 from exam_integrity import register_exam_integrity
+from health_65 import register_health
 from pgy_atomic import register_pgy_atomic_workflow
 from pgy_frontend import register_pgy_frontend
 from pgy_workflow import register_pgy_workflow
@@ -16,6 +17,7 @@ from schema_migrations import register_schema_migrations
 from upload_hardening import register_upload_hardening
 
 app = register_schema_migrations(legacy_app)
+app = register_health(legacy_app)
 app = register_pgy_workflow(legacy_app)
 app = register_pgy_atomic_workflow(legacy_app)
 app = register_exam_integrity(legacy_app)

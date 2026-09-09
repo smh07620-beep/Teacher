@@ -1,4 +1,4 @@
-"""Teacher 6.4 lightweight schema migration registry.
+"""Teacher 6.5 lightweight schema migration registry.
 
 This establishes a migration baseline without rewriting legacy init_db logic.
 Future migrations can be appended to MIGRATIONS and are applied exactly once.
@@ -25,6 +25,16 @@ def migration(version: str):
 @migration("0064-baseline")
 def _baseline(conn, kind: str) -> None:
     """6.4 baseline marker; legacy tables are already created by app.py."""
+    return None
+
+
+@migration("0065-architecture")
+def _architecture_65(conn, kind: str) -> None:
+    """6.5 modular-architecture marker.
+
+    M1-M7 intentionally preserve the existing production schema and
+    production entrypoint.  No destructive DDL is required for this release.
+    """
     return None
 
 

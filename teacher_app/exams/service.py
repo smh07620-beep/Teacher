@@ -175,5 +175,10 @@ def submit_attempt(base, user: Mapping[str, Any] | None, attempt_id: str, data: 
         "ok": True, "attemptId": str(attempt["id"]), "recordId": record_id, "score": result["score"],
         "status": result["status"], "correctCount": result["correctCount"], "wrongCount": result["wrongCount"],
         "essayCount": result["essayCount"], "passingScore": passing_score, "categoryStats": result["categoryStats"],
-        "questions": [dict(question) for question in questions], "submittedAt": submitted_at,
+        "questions": [
+            grading.sanitize_question(question)
+            for question in questions
+            if isinstance(question, dict)
+        ],
+        "submittedAt": submitted_at,
     }

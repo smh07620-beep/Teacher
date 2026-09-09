@@ -1,6 +1,7 @@
 /* Teacher 6.3 · server-authoritative exam attempts */
 (function(){
 'use strict';
+const C=window.AppCore||{};
 const secureAttemptMap={};
 function secureDraftKey(catId){return `v630-secure-exam:${currentTrainingArea}:${currentGroupKey}:${catId}`;}
 function readSecureDraft(catId){try{const raw=localStorage.getItem(secureDraftKey(catId));if(!raw)return null;const d=JSON.parse(raw);return d&&d.version===2&&d.attemptId&&Array.isArray(d.answers)?d:null;}catch(_){return null;}}
@@ -13,8 +14,68 @@ saveExamDraft=function(catId=currentCatKey){writeSecureDraft(catId);};
 clearExamDraft=function(catId=currentCatKey){removeSecureDraft(catId);};
 hasExamDraft=function(catId){const d=readSecureDraft(catId);return !!(d&&d.answers.some(a=>Array.isArray(a)?a.length>0:(a!==null&&a!==undefined&&String(a).trim()!=='')));};
 
-function normalizePublicQuestion(q){return {id:q.id,questionId:q.id,category:q.tag||q.category||'一般',tag:q.tag||q.category||'一般',question:q.question,questionType:q.questionType||'choice',imageUrl:q.imageUrl||'',options:q.options||[],explanation:q.explanation||'',answerConfig:q.answerConfig||{},correct:q.correct};}
-async function secureApi(path,options={}){const r=await fetch(path,{credentials:'same-origin',...options});const d=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(d.error||`HTTP ${r.status}`);e.status=r.status;e.data=d;throw e;}return d;}
+function normalizePublicQuestion(q){
+    return {
+        id:q.id,
+        questionId:q.id,
+        category:q.tag||q.category||'一般',
+        tag:q.tag||q.category||'一般',
+        question:q.question,
+        questionType:q.questionType||'choice',
+        imageUrl:q.imageUrl||'',
+        options:Array.isArray(q.options)?q.options:[],
+        answerConfig:q.answerConfig&&typeof q.answerConfig==='object'
+            ?q.answerConfig
+            :{}
+    };
+}
+
+async function secureApi(path,options={}){
+    if(typeof C.api==='function'){
+        return C.api(path,options);
+    }
+
+    let r;
+
+    try{
+        r=await fetch(path,{
+            credentials:'same-origin',
+            ...options
+        });
+    }catch(cause){
+        const e=new Error('無法連線到伺服器，請檢查網路後再試。');
+        e.status=0;
+        e.code='NETWORK_ERROR';
+        e.cause=cause;
+        throw e;
+    }
+
+    const d=await r.json().catch(()=>({}));
+
+    if(!r.ok){
+        const detail=d?.errorDetail||{};
+        const e=new Error(
+            detail.message
+            ||d?.error
+            ||`請求失敗（${r.status}）`
+        );
+        e.status=r.status;
+        e.code=detail.code||'';
+        e.data=d;
+        e.retryAfter=Number(
+            d?.retryAfter
+            ||r.headers.get('retry-after')
+            ||0
+        );
+        e.loginRequired=Boolean(
+            r.status===401
+            ||d?.loginRequired
+        );
+        throw e;
+    }
+
+    return d;
+}
 
 ensureDynamicCategoryLoaded=async function(catId){
     if(allQuizData[catId])return;

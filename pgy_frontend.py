@@ -1,4 +1,4 @@
-"""Inject Teacher 6.4 workflow/security/maintenance assets into the system page."""
+"""Inject Teacher 6.5 workflow/security/maintenance assets into the system page."""
 
 
 def register_pgy_frontend(app):
@@ -26,13 +26,13 @@ def register_pgy_frontend(app):
             head_assets = []
             body_assets = []
             if "/pgy-workflow.css" not in html:
-                head_assets.append('<link rel="stylesheet" href="/pgy-workflow.css?v=6400">')
+                head_assets.append('<link rel="stylesheet" href="/pgy-workflow.css?v=6500">')
             if "/pgy-workflow.js" not in html:
-                body_assets.append('<script defer src="/pgy-workflow.js?v=6400"></script>')
+                body_assets.append('<script defer src="/pgy-workflow.js?v=6500"></script>')
             if "/exam-integrity.js" not in html:
-                body_assets.append('<script defer src="/exam-integrity.js?v=6400"></script>')
+                body_assets.append('<script defer src="/exam-integrity.js?v=6500"></script>')
             if "/maintenance-64.js" not in html:
-                body_assets.append('<script defer src="/maintenance-64.js?v=6400"></script>')
+                body_assets.append('<script defer src="/maintenance-64.js?v=6500"></script>')
             if head_assets and "</head>" in html:
                 html = html.replace("</head>", "\n".join(head_assets) + "\n</head>", 1)
             if body_assets and "</body>" in html:
