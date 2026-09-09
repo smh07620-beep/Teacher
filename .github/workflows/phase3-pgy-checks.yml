@@ -3,6 +3,7 @@ name: Phase 3 PGY checks
 on:
   push:
     branches:
+      - codex/phase-3-pgy-architecture
       - codex/phase-3-pgy-workflow-ui
   pull_request:
     paths:
@@ -25,3 +26,5 @@ jobs:
         run: python -m unittest tests.test_rbac_roles tests.test_pgy_workflow -v
       - name: Browser JavaScript syntax
         run: node --check static/pgy-workflow.js
+      - name: Deployment entrypoint check
+        run: grep -q 'pgy_app:app' run_web.sh
