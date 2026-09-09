@@ -11,14 +11,17 @@
 六組：生化、鏡檢、血清、血庫、細菌、血液。
 
 ## 新增功能
-1. 內部教育與 PGY 分流，教材與動態題庫依 training_area 區隔。
-2. 每區皆有六組入口，每組內含教材區與考試區。
-3. 問答題 (`questionType=essay`) 顯示多行空白欄，考生可輸入自由文字；答案保存於成績明細，問答題不納入選擇題自動計分，供評核者人工閱卷。
-4. 教材支援：PPT/PPTX、PDF、Word、Excel、ODP/ODT/ODS、圖片、MP4/WebM/MOV、MP3/WAV/M4A、TXT/CSV/ZIP 等。
+1. 第三階段首頁改為醫學檢驗學習儀表板：保留主視覺、四項學習摘要、六大組別與最新教材／待完成考核。
+2. PGY 採分散式學習層級：6 大核心能力 → 訓練階段 → 訓練領域 → 學習項目 → 教材 → 測驗／技能評核 → 教師評核 → 完成狀態 → 學習證據 → 學員回饋 → 教師簽核。
+3. PGY 評核方式依正式代碼分為 EXAM、DOPS、MINI-CEX、CBD、CHECKLIST、QC、360、REPORT、QI、REFLECTION、ATTENDANCE；舊評量代碼僅保留資料相容性。
+4. 內部教育與 PGY 分流，教材與動態題庫依 training_area 區隔。
+5. 每區皆有六組入口，每組內含教材區與考試區。
+6. 問答題 (`questionType=essay`) 顯示多行空白欄，考生可輸入自由文字；答案保存於成績明細，問答題不納入選擇題自動計分，供評核者人工閱卷。
+7. 教材支援：PPT/PPTX、PDF、Word、Excel、ODP/ODT/ODS、圖片、MP4/WebM/MOV、MP3/WAV/M4A、TXT/CSV/ZIP 等。
    - PPT/PDF/Office 文件：可轉成逐頁圖片瀏覽（Office 轉檔需 LibreOffice）。
    - 圖片/影音：瀏覽器直接開啟原檔。
-5. 題庫可由公開 HTTP/HTTPS JSON 或 CSV 連結批次匯入；後端會阻擋 localhost、私有 IP、保留 IP，並限制下載大小。
-6. 原有 PostgreSQL / SQLite、Render Persistent Disk、成績後台與 Word 匯出功能保留。
+8. 題庫可由公開 HTTP/HTTPS JSON 或 CSV 連結批次匯入；後端會阻擋 localhost、私有 IP、保留 IP，並限制下載大小。
+9. 原有 PostgreSQL / SQLite、Render Persistent Disk、成績後台與 Word 匯出功能保留。
 
 ## 題庫連結格式
 CSV 可使用欄位：
