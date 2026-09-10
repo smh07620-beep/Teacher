@@ -258,6 +258,10 @@
     return `<div class="pgywf-meta mt-1">${esc(label)}：${esc(signature.name || signature.username || '')} · ${esc(formatDate(time))}${signature.comment ? ` · ${esc(signature.comment)}` : ''}</div>`;
   }
 
+  function signModeLabel(mode) {
+    return ({auto: '系統自動', single: '單層簽核', dual: '雙層簽核', legacy: '舊制（legacy）'})[mode || 'legacy'];
+  }
+
   function studentEditor(assignment) {
     if (!hasRole('student') || assignment.status !== 'assigned') return '';
     return `
@@ -332,7 +336,7 @@
             <div class="pgywf-title">${esc(assignment.title || 'PGY 訓練指派')}</div>
             <div class="pgywf-meta mt-1">學員：${esc(assignment.learnerName || assignment.learnerUsername)}（${esc(assignment.learnerEmpId || '')}） · 臨床教師：${esc(assignment.teacherName || assignment.teacherUsername)} · ${assignment.dueAt ? `期限 ${esc(formatDate(assignment.dueAt))}` : '未設定期限'}</div>
           </div>
-          <span class="pgywf-badge">${esc(statusLabel(assignment.status))}</span>
+          <span class="pgywf-badge">${esc(signModeLabel(assignment.signMode))} · ${esc(statusLabel(assignment.status))}</span>
         </div>
         ${assignment.instructions ? `<div class="pgywf-note mt-3"><b>任務說明：</b>${esc(assignment.instructions)}</div>` : ''}
         ${(assignment.reflection || evidence) ? `<details class="mt-3"><summary class="text-xs font-bold text-indigo-700 cursor-pointer">查看學員反思與佐證</summary>${assignment.reflection ? `<div class="pgywf-evidence"><b>反思</b>\n${esc(assignment.reflection)}</div>` : ''}${evidence ? `<div class="pgywf-evidence"><b>佐證</b>\n${esc(evidence)}</div>` : ''}</details>` : ''}
@@ -396,7 +400,7 @@
             <label class="text-xs font-bold">學員<select id="pgywf-create-student" class="pgywf-input mt-1"><option value="">選擇學員</option></select></label>
             <label class="text-xs font-bold">臨床教師<select id="pgywf-create-teacher" class="pgywf-input mt-1"><option value="">選擇臨床教師</option></select></label>
             <label class="text-xs font-bold">期限<input id="pgywf-create-due" type="datetime-local" class="pgywf-input mt-1"></label>
-            <label class="text-xs font-bold">簽核模式<select id="pgywf-create-sign-mode" class="pgywf-input mt-1"><option value="single">單層簽核（一般）</option><option value="dual">雙層覆核（特殊項目）</option></select></label>
+            <label class="text-xs font-bold">簽核模式<select id="pgywf-create-sign-mode" class="pgywf-input mt-1"><option value="single">單層簽核</option><option value="dual">雙層簽核</option></select></label>
             <label class="text-xs font-bold">指派標題<input id="pgywf-create-title" class="pgywf-input mt-1" placeholder="可留白，使用課程名稱"></label>
           </div>
           <label class="text-xs font-bold">任務說明<textarea id="pgywf-create-instructions" rows="3" class="pgywf-input mt-1" placeholder="需完成的教材、技能、案例或佐證"></textarea></label>

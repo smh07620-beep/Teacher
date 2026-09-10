@@ -1510,6 +1510,12 @@ async function fetchAdminRecords() {
     return adminRecords;
 }
 
+let adminResultsPage = 1;
+function adminResultDetail(index){
+    const row=adminRecords[index]; if(!row)return;
+    const el=document.getElementById(`admin-result-detail-${index}`); if(!el)return;
+    el.classList.toggle('hidden');
+}
 async function renderAdminTable() {
     updateResultsWorkspacePresentation();
     const tbody = document.getElementById('admin-table-body');
@@ -1522,10 +1528,24 @@ async function renderAdminTable() {
             return;
         }
         renderResultsAnalytics(records);
-        const visibleRecords = adminResultWorkspaceMode==='scoring' ? records.filter(r => r.reviewStatus==='pending' || (r.answersDetail||[]).some(a=>a.questionType==='essay')) : records;
+        let visibleRecords = adminResultWorkspaceMode==='scoring' ? records.filter(r => r.reviewStatus==='pending' || (r.answersDetail||[]).some(a=>a.questionType==='essay')) : records;
+        const query=(document.getElementById('admin-results-search')?.value||'').trim().toLowerCase();
+        const filter=document.getElementById('admin-results-filter')?.value||'all';
+        visibleRecords=visibleRecords.filter(r=>{
+            const text=`${r.name||''} ${r.empId||''} ${r.quizTitle||''} ${r.groupLabel||''}`.toLowerCase();
+            if(query&&!text.includes(query))return false;
+            if(filter==='pending')return r.reviewStatus==='pending';
+            if(filter==='pass')return r.status==='合格';
+            if(filter==='fail')return r.reviewStatus!=='pending'&&r.status!=='合格';
+            return true;
+        });
         if(visibleRecords.length===0){tbody.innerHTML=`<tr><td colspan="8" class="p-6 text-center text-slate-400">${adminResultWorkspaceMode==='scoring'?'目前沒有待人工評分的考核。':'目前尚無任何考核紀錄'}</td></tr>`;return;}
-        tbody.innerHTML = visibleRecords.map((r) => { const index=records.indexOf(r); return `
+        const pageSize=Math.max(20,Number(document.getElementById('admin-results-page-size')?.value||20));
+        const pages=Math.max(1,Math.ceil(visibleRecords.length/pageSize)); adminResultsPage=Math.min(Math.max(1,adminResultsPage),pages);
+        const pageRows=visibleRecords.slice((adminResultsPage-1)*pageSize,adminResultsPage*pageSize);
+        tbody.innerHTML = pageRows.map((r) => { const index=records.indexOf(r); const detail=(r.answersDetail||[]); return `
             <tr class="hover:bg-slate-50 transition-colors">
+                <td class="p-3"><button onclick="adminResultDetail(${index})" class="text-xs font-bold text-indigo-700">明細</button></td>
                 <td class="p-3 font-mono text-slate-500">${r.timestamp || ''}</td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">${escapeHtml(r.groupLabel || '1 生化組')}</span></td>
                 <td class="p-3 font-bold text-slate-800">${r.name || ''}</td>
@@ -1537,8 +1557,10 @@ async function renderAdminTable() {
                     ${(r.answersDetail||[]).some(a=>a.questionType==='essay') ? `<button onclick="openEssayReview(${index})" class="bg-rose-600 hover:bg-rose-500 text-white text-xs px-2.5 py-1 rounded shadow-sm">✍️ ${r.reviewStatus==='pending'?'批改問答題':'重新批改'}</button>` : ''}
                     <button onclick="exportRecordToWord(${index})" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded transition-colors shadow-sm">📄 匯出 Word</button>
                 </td>
-            </tr>
+            </tr><tr id="admin-result-detail-${index}" class="hidden bg-slate-50"><td colspan="9" class="p-3"><div class="text-xs text-slate-600"><b>作答明細（預設收合）</b><div class="mt-2 space-y-1">${detail.length?detail.map((a,i)=>`<div>${i+1}. ${escapeHtml(a.questionText||'')}　<span class="text-slate-500">${escapeHtml(String(a.userAnswer??'未作答'))}</span></div>`).join(''):'無逐題明細'}</div></div></td></tr>
         `; }).join('');
+        const pager=document.getElementById('admin-results-pagination');
+        if(pager)pager.innerHTML=`<span>顯示 ${(adminResultsPage-1)*pageSize+1}–${Math.min(adminResultsPage*pageSize,visibleRecords.length)}／${visibleRecords.length} 筆</span><span class="flex gap-2"><button ${adminResultsPage===1?'disabled':''} onclick="adminResultsPage--;renderAdminTable()" class="border rounded px-2 py-1 disabled:opacity-40">上一頁</button><b class="px-1 py-1">${adminResultsPage} / ${pages}</b><button ${adminResultsPage===pages?'disabled':''} onclick="adminResultsPage++;renderAdminTable()" class="border rounded px-2 py-1 disabled:opacity-40">下一頁</button></span>`;
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-rose-500">❌ ${error.message}</td></tr>`;
     }

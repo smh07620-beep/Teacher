@@ -50,13 +50,24 @@ async function renderDynamicExamTabs() {
             c=>String(c.id)===String(requestedExamId)
         );
 
-        const initialCategory=
-            requestedCategory
-            || cachedQuizCategories[0];
+        // A learner must deliberately choose an exam unless a valid, explicit
+        // examId was supplied (for example from a pending-exam notification).
+        // Never fall back to the first category: it can accidentally create an
+        // attempt for an unrelated exam.
+        const initialCategory = requestedCategory || null;
+        if (!initialCategory) {
+            currentCatKey='';
+            document.getElementById('current-quiz-title').innerHTML='<span class="text-teal-600">📝</span> 請選擇考卷';
+            document.getElementById('current-quiz-desc').innerText=requestedExamId?'找不到指定的考卷，請從清單選擇。':'請從上方清單選擇要開始的考卷。';
+            document.getElementById('quiz-questions-list').innerHTML='';
+            document.getElementById('quick-jump-grid').innerHTML='';
+            document.getElementById('stat-progress').innerText='0 / 0';
+            document.getElementById('stat-flagged').innerText='0 題';
+            document.getElementById('result-dashboard').classList.add('hidden');
+            return;
+        }
 
-        await switchDynamicCategory(
-            initialCategory.id
-        );
+        await switchDynamicCategory(initialCategory.id);
 
         if(requestedCategory){
             requestAnimationFrame(()=>{

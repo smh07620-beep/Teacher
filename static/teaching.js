@@ -528,8 +528,11 @@ function teachingNextMedia() {
         catId,
         meta
     ) {
-        window.currentCatKey =
-            catId;
+        // `currentCatKey` is the lexical state used by answer/progress/submit
+        // handlers.  Update it directly, then clear all visible attempt UI so
+        // an empty exam can never inherit the previous exam's state.
+        currentCatKey = catId;
+        blindTestMode = false;
 
         document
             .querySelectorAll(
