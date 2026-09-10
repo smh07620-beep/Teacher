@@ -265,3 +265,552 @@ function teachingNextMedia() {
     const next=teachingFindNextMaterial(teachingMediaId);
     if(next){closeMediaViewer();openMaterial(next.id);}
 }
+
+/* Teacher 6.6 M3 · sequential reader unlock */
+(function () {
+    'use strict';
+
+    if (
+        typeof teachingSavePage !== 'function'
+        || typeof teachingFindNextMaterial !== 'function'
+        || typeof teachingNextMaterial !== 'function'
+        || typeof markMaterialComplete !== 'function'
+    ) {
+        console.warn(
+            'Teacher 6.6 M3: teaching workflow not available.'
+        );
+        return;
+    }
+
+
+    function teacher66CurrentMaterialDone() {
+        const id =
+            window.slideViewerState?.materialId
+            || '';
+
+        return Boolean(
+            id
+            && window.myCompletedMaterials
+            && window.myCompletedMaterials[id]
+        );
+    }
+
+
+    function teacher66SyncReaderNext() {
+        const button =
+            document.getElementById(
+                'reader-next'
+            );
+
+        if (!button) {
+            return;
+        }
+
+        const next =
+            teachingFindNextMaterial();
+
+        const currentDone =
+            teacher66CurrentMaterialDone();
+
+        button.disabled =
+            Boolean(
+                teachingReaderBusy
+                || !next
+                || !currentDone
+            );
+
+        if (!next) {
+            button.textContent =
+                '已是最後一份教材';
+
+            button.title =
+                '本課程沒有下一份教材';
+
+            button.dataset.learningState =
+                'finished';
+
+            return;
+        }
+
+        if (!currentDone) {
+            button.textContent =
+                '完成本份後解鎖 →';
+
+            button.title =
+                '請先標記目前教材完成';
+
+            button.dataset.learningState =
+                'locked';
+
+            return;
+        }
+
+        button.textContent =
+            '下一份教材 →';
+
+        button.title =
+            `前往：${
+                next.title
+                || next.filename
+                || '下一份教材'
+            }`;
+
+        button.dataset.learningState =
+            'ready';
+    }
+
+
+    const teacher66OriginalSavePage =
+        teachingSavePage;
+
+    teachingSavePage = function () {
+        const result =
+            teacher66OriginalSavePage
+                .apply(
+                    this,
+                    arguments
+                );
+
+        teacher66SyncReaderNext();
+
+        return result;
+    };
+
+
+    const teacher66OriginalMarkComplete =
+        markMaterialComplete;
+
+    markMaterialComplete =
+        async function (materialId) {
+            const result =
+                await teacher66OriginalMarkComplete
+                    .apply(
+                        this,
+                        arguments
+                    );
+
+            if (result) {
+                /*
+                 * Completion is already stored in
+                 * myCompletedMaterials by the original
+                 * function. Refresh reader controls
+                 * immediately instead of requiring
+                 * close/reopen or page refresh.
+                 */
+                teacher66SyncReaderNext();
+
+                requestAnimationFrame(
+                    teacher66SyncReaderNext
+                );
+            }
+
+            return result;
+        };
+
+
+    const teacher66OriginalNextMaterial =
+        teachingNextMaterial;
+
+    teachingNextMaterial =
+        function () {
+            if (
+                !teacher66CurrentMaterialDone()
+            ) {
+                teacher66SyncReaderNext();
+
+                alert(
+                    '請先完成目前這份教材，再進入下一份教材。'
+                );
+
+                return;
+            }
+
+            return teacher66OriginalNextMaterial
+                .apply(
+                    this,
+                    arguments
+                );
+        };
+
+
+    /*
+     * The reader is sometimes opened before the
+     * completion data finishes repainting.
+     */
+    window.addEventListener(
+        'teacher66:material-complete',
+        teacher66SyncReaderNext
+    );
+
+    window.teacher66SyncReaderNext =
+        teacher66SyncReaderNext;
+})();
+
+/* Teacher 6.6 M3 · empty exam guard */
+(function () {
+    'use strict';
+
+    if (
+        typeof switchDynamicCategory
+        !== 'function'
+    ) {
+        console.warn(
+            'Teacher 6.6 M3: exam workflow not available.'
+        );
+
+        return;
+    }
+
+
+    function teacher66ExamMeta(catId) {
+        const key =
+            `${currentTrainingArea}:${currentGroupKey}`;
+
+        const categories =
+            (
+                window.dynamicCategoriesCache
+                && window.dynamicCategoriesCache[
+                    key
+                ]
+            )
+            || window.cachedQuizCategories
+            || [];
+
+        return (
+            categories.find(
+                item =>
+                    String(item.id)
+                    === String(catId)
+            )
+            || null
+        );
+    }
+
+
+    function teacher66ExamBankCount(meta) {
+        if (!meta) {
+            return null;
+        }
+
+        if (
+            typeof examBankCount
+            === 'function'
+        ) {
+            return Math.max(
+                0,
+                Number(
+                    examBankCount(meta)
+                    || 0
+                )
+            );
+        }
+
+        if (
+            meta.questionCount
+            === undefined
+            || meta.questionCount
+            === null
+        ) {
+            return null;
+        }
+
+        return Math.max(
+            0,
+            Number(
+                meta.questionCount
+                || 0
+            )
+        );
+    }
+
+
+    function teacher66ShowEmptyExam(
+        catId,
+        meta
+    ) {
+        // `currentCatKey` is the lexical state used by answer/progress/submit
+        // handlers.  Update it directly, then clear all visible attempt UI so
+        // an empty exam can never inherit the previous exam's state.
+        currentCatKey = catId;
+        blindTestMode = false;
+
+        document
+            .querySelectorAll(
+                '#dynamic-exam-tabs-list .tab-btn'
+            )
+            .forEach(button => {
+                const active =
+                    button.id
+                    === `dyn-tab-${catId}`;
+
+                button.classList.toggle(
+                    'ring-2',
+                    active
+                );
+
+                button.classList.toggle(
+                    'ring-teal-500',
+                    active
+                );
+
+                button.classList.toggle(
+                    'border-teal-400',
+                    active
+                );
+
+                button.classList.toggle(
+                    'bg-teal-50',
+                    active
+                );
+            });
+
+
+        const title =
+            document.getElementById(
+                'current-quiz-title'
+            );
+
+        const desc =
+            document.getElementById(
+                'current-quiz-desc'
+            );
+
+        const list =
+            document.getElementById(
+                'quiz-questions-list'
+            );
+
+        const quick =
+            document.getElementById(
+                'quick-jump-grid'
+            );
+
+        const progress =
+            document.getElementById(
+                'stat-progress'
+            );
+
+        const flagged =
+            document.getElementById(
+                'stat-flagged'
+            );
+
+        const result =
+            document.getElementById(
+                'result-dashboard'
+            );
+
+
+        if (title) {
+            title.innerHTML =
+                `<span class="text-amber-500">📝</span> ${
+                    typeof escapeHtml
+                    === 'function'
+                    ? escapeHtml(
+                        meta?.title
+                        || '考卷'
+                    )
+                    : (
+                        meta?.title
+                        || '考卷'
+                    )
+                }`;
+        }
+
+
+        if (desc) {
+            desc.textContent =
+                '此考卷尚待題庫建置，教師完成出題與發布後即可開始考核。';
+        }
+
+
+        if (list) {
+            list.innerHTML = `
+                <section
+                    class="rounded-2xl border border-amber-200 bg-amber-50/70 p-6 sm:p-8 text-center"
+                    data-empty-exam="1"
+                >
+                    <div class="text-4xl mb-3">🛠️</div>
+
+                    <h3 class="font-black text-lg text-amber-950">
+                        此考卷尚待題庫建置
+                    </h3>
+
+                    <p class="text-sm text-amber-800 mt-2">
+                        目前尚未加入可作答題目。
+                        教師完成題庫設定與發布後，
+                        這裡會自動開放考核。
+                    </p>
+
+                    <p class="text-xs text-slate-500 mt-3">
+                        目前題數：0 題
+                    </p>
+                </section>
+            `;
+        }
+
+
+        if (quick) {
+            quick.innerHTML = '';
+        }
+
+        if (progress) {
+            progress.textContent =
+                '0 / 0';
+        }
+
+        if (flagged) {
+            flagged.textContent =
+                '0 題';
+        }
+
+        if (result) {
+            result.classList.add(
+                'hidden'
+            );
+        }
+
+
+        return false;
+    }
+
+
+    const teacher66OriginalSwitchCategory =
+        switchDynamicCategory;
+
+
+    switchDynamicCategory =
+        async function (catId) {
+            const meta =
+                teacher66ExamMeta(
+                    catId
+                );
+
+            const bank =
+                teacher66ExamBankCount(
+                    meta
+                );
+
+
+            /*
+             * When metadata explicitly says zero,
+             * avoid creating an exam attempt.
+             */
+            if (bank === 0) {
+                return teacher66ShowEmptyExam(
+                    catId,
+                    meta
+                );
+            }
+
+
+            const result =
+                await teacher66OriginalSwitchCategory
+                    .apply(
+                        this,
+                        arguments
+                    );
+
+
+            /*
+             * Defensive fallback:
+             * metadata can be stale, so also verify
+             * the actually loaded question collection.
+             */
+            const loaded =
+                window.allQuizData
+                && window.allQuizData[
+                    catId
+                ];
+
+            if (
+                loaded
+                && Array.isArray(
+                    loaded.questions
+                )
+                && loaded.questions.length
+                    === 0
+            ) {
+                return teacher66ShowEmptyExam(
+                    catId,
+                    meta
+                );
+            }
+
+
+            return result;
+        };
+
+
+    /*
+     * Course overview:
+     * zero-question exams should not look like
+     * an actionable exam button.
+     */
+    if (
+        typeof buildCourseExamRow
+        === 'function'
+    ) {
+        const originalBuildCourseExamRow =
+            buildCourseExamRow;
+
+        buildCourseExamRow =
+            function (exam) {
+                const count =
+                    teacher66ExamBankCount(
+                        exam
+                    );
+
+                if (count !== 0) {
+                    return originalBuildCourseExamRow
+                        .apply(
+                            this,
+                            arguments
+                        );
+                }
+
+                const title =
+                    typeof escapeHtml
+                    === 'function'
+                    ? escapeHtml(
+                        exam?.title
+                        || '未命名考卷'
+                    )
+                    : (
+                        exam?.title
+                        || '未命名考卷'
+                    );
+
+                return `
+                    <div
+                        class="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 flex items-center justify-between gap-3"
+                        data-exam-not-ready="${String(
+                            exam?.id || ''
+                        )}"
+                    >
+                        <div>
+                            <div class="font-bold text-sm text-slate-800">
+                                📝 ${title}
+                            </div>
+
+                            <div class="text-xs text-amber-700 mt-1">
+                                尚待題庫建置・目前 0 題
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            disabled
+                            class="px-3 py-2 rounded-lg bg-slate-100 text-slate-400 text-xs font-bold cursor-not-allowed"
+                        >
+                            尚未開放
+                        </button>
+                    </div>
+                `;
+            };
+    }
+
+
+    window.teacher66ShowEmptyExam =
+        teacher66ShowEmptyExam;
+})();

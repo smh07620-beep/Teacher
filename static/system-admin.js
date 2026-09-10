@@ -296,6 +296,14 @@ async function adminCreateCourseBundle(){
 
 async function getAdminKey() {
     if (adminKey) return adminKey;
+    try {
+        const auth = await fetch('/api/auth/me', { cache: 'no-store' }).then(r => r.json());
+        if (auth.authenticated && ['education_admin','system_admin','manager'].includes(auth.user?.role)) {
+            // 後端以登入 session 驗證 manager；保留非空值以相容既有呼叫端。
+            adminKey = '__manager_session__';
+            return adminKey;
+        }
+    } catch (_) {}
     const key = prompt('請輸入成績後台管理者金鑰（ADMIN_KEY）：');
     if (!key) return null;
     adminKey = key.trim();
@@ -1459,15 +1467,15 @@ async function deleteAdminAnnouncement(id){if(!confirm('刪除此公告？這是
 async function renderAdminUserAccounts(){
     const body=document.getElementById('admin-user-accounts-body'),status=document.getElementById('admin-user-status');if(!body)return;body.innerHTML='<tr><td colspan="6" class="p-5 text-center text-slate-400">讀取帳號中…</td></tr>';
     const key=await getAdminKey();if(!key)return;
-    try{const r=await fetch('/api/users',{headers:{'X-Admin-Key':key},cache:'no-store'}),rows=await r.json().catch(()=>[]);if(!r.ok)throw new Error(rows.error||'帳號讀取失敗');const roleLabel={learner:'學員',teacher:'教師',manager:'管理者'},areaLabel={internal:'院內',pgy:'PGY'};
+    try{const r=await fetch('/api/users',{headers:{'X-Admin-Key':key},cache:'no-store'}),rows=await r.json().catch(()=>[]);if(!r.ok)throw new Error(rows.error||'帳號讀取失敗');const roleLabel={student:'學員',clinical_teacher:'臨床教師',group_leader:'組長',education_admin:'教學管理者',system_admin:'系統管理者',auditor:'稽核／唯讀',learner:'學員',teacher:'臨床教師',manager:'教學管理者'},areaLabel={internal:'院內',pgy:'PGY'};
         body.innerHTML=rows.length?rows.map(u=>`<tr class="${u.active?'':'opacity-55'}"><td class="p-3"><b>${escapeHtml(u.username)}</b><div class="text-slate-500 mt-1">${escapeHtml(u.name)}</div></td><td class="p-3 font-mono">${escapeHtml(u.empId)}</td><td class="p-3">${roleLabel[u.role]||escapeHtml(u.role)}</td><td class="p-3">${areaLabel[u.preferredArea]||''} · ${escapeHtml((GROUPS[u.preferredGroup]||GROUPS.grpBio).name)}</td><td class="p-3 text-slate-500">${escapeHtml((u.lastLoginAt||'尚未登入').slice(0,16).replace('T',' '))}</td><td class="p-3"><div class="flex flex-wrap gap-1.5"><button onclick="resetAdminUserPassword('${u.username}')" class="text-[11px] border border-slate-300 bg-white px-2.5 py-1.5 rounded-lg">重設密碼</button><button onclick="toggleAdminUserAccount('${u.username}',${u.active?'false':'true'})" class="text-[11px] ${u.active?'text-rose-600 border-rose-200':'text-emerald-700 border-emerald-200'} border bg-white px-2.5 py-1.5 rounded-lg">${u.active?'停用':'啟用'}</button></div></td></tr>`).join(''):'<tr><td colspan="6" class="p-5 text-center text-slate-400">尚未建立登入帳號。請使用上方表單建立第一個帳號。</td></tr>';if(status)status.textContent=`共 ${rows.length} 個帳號；登入預設自動記憶 30 天。`;
     }catch(e){body.innerHTML=`<tr><td colspan="6" class="p-5 text-center text-rose-600">❌ ${escapeHtml(e.message)}</td></tr>`;}
 }
 async function createAdminUserAccount(){
-    const status=document.getElementById('admin-user-status'),key=await getAdminKey();if(!key)return;const payload={username:document.getElementById('admin-user-username')?.value||'',password:document.getElementById('admin-user-password')?.value||'',name:document.getElementById('admin-user-name')?.value||'',empId:document.getElementById('admin-user-empid')?.value||'',role:document.getElementById('admin-user-role')?.value||'learner',preferredArea:document.getElementById('admin-user-area')?.value||'internal',preferredGroup:document.getElementById('admin-user-group')?.value||'grpBio'};status.textContent='⏳ 建立帳號中…';
+    const status=document.getElementById('admin-user-status'),key=await getAdminKey();if(!key)return;const payload={username:document.getElementById('admin-user-username')?.value||'',password:document.getElementById('admin-user-password')?.value||'',name:document.getElementById('admin-user-name')?.value||'',empId:document.getElementById('admin-user-empid')?.value||'',role:document.getElementById('admin-user-role')?.value||'student',preferredArea:document.getElementById('admin-user-area')?.value||'internal',preferredGroup:document.getElementById('admin-user-group')?.value||'grpBio'};status.textContent='⏳ 建立帳號中…';
     const r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify(payload)}),d=await r.json().catch(()=>({}));if(!r.ok){status.textContent='❌ '+(d.error||'建立失敗');return;}['admin-user-username','admin-user-password','admin-user-name','admin-user-empid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});status.textContent=`✅ 已建立 ${d.user.name}（${d.user.username}）`;await renderAdminUserAccounts();
 }
-async function resetAdminUserPassword(username){const password=prompt(`請輸入「${username}」的新密碼（至少 8 碼）：`);if(password===null)return;const key=await getAdminKey();if(!key)return;const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({password})}),d=await r.json().catch(()=>({}));alert(r.ok?'密碼已重設，該帳號需重新登入。':(d.error||'重設失敗'));if(r.ok)await renderAdminUserAccounts();}
+async function resetAdminUserPassword(username){const password=prompt(`請輸入「${username}」的新密碼（至少 4 碼）：`);if(password===null)return;const key=await getAdminKey();if(!key)return;const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({password})}),d=await r.json().catch(()=>({}));alert(r.ok?'密碼已重設，該帳號需重新登入。':(d.error||'重設失敗'));if(r.ok)await renderAdminUserAccounts();}
 async function toggleAdminUserAccount(username,active){const key=await getAdminKey();if(!key)return;const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({active})}),d=await r.json().catch(()=>({}));if(!r.ok){alert(d.error||'更新失敗');return;}await renderAdminUserAccounts();}
 
 async function renderAdminPeople(force=false){
@@ -1502,6 +1510,12 @@ async function fetchAdminRecords() {
     return adminRecords;
 }
 
+let adminResultsPage = 1;
+function adminResultDetail(index){
+    const row=adminRecords[index]; if(!row)return;
+    const el=document.getElementById(`admin-result-detail-${index}`); if(!el)return;
+    el.classList.toggle('hidden');
+}
 async function renderAdminTable() {
     updateResultsWorkspacePresentation();
     const tbody = document.getElementById('admin-table-body');
@@ -1514,10 +1528,24 @@ async function renderAdminTable() {
             return;
         }
         renderResultsAnalytics(records);
-        const visibleRecords = adminResultWorkspaceMode==='scoring' ? records.filter(r => r.reviewStatus==='pending' || (r.answersDetail||[]).some(a=>a.questionType==='essay')) : records;
+        let visibleRecords = adminResultWorkspaceMode==='scoring' ? records.filter(r => r.reviewStatus==='pending' || (r.answersDetail||[]).some(a=>a.questionType==='essay')) : records;
+        const query=(document.getElementById('admin-results-search')?.value||'').trim().toLowerCase();
+        const filter=document.getElementById('admin-results-filter')?.value||'all';
+        visibleRecords=visibleRecords.filter(r=>{
+            const text=`${r.name||''} ${r.empId||''} ${r.quizTitle||''} ${r.groupLabel||''}`.toLowerCase();
+            if(query&&!text.includes(query))return false;
+            if(filter==='pending')return r.reviewStatus==='pending';
+            if(filter==='pass')return r.status==='合格';
+            if(filter==='fail')return r.reviewStatus!=='pending'&&r.status!=='合格';
+            return true;
+        });
         if(visibleRecords.length===0){tbody.innerHTML=`<tr><td colspan="8" class="p-6 text-center text-slate-400">${adminResultWorkspaceMode==='scoring'?'目前沒有待人工評分的考核。':'目前尚無任何考核紀錄'}</td></tr>`;return;}
-        tbody.innerHTML = visibleRecords.map((r) => { const index=records.indexOf(r); return `
+        const pageSize=Math.max(20,Number(document.getElementById('admin-results-page-size')?.value||20));
+        const pages=Math.max(1,Math.ceil(visibleRecords.length/pageSize)); adminResultsPage=Math.min(Math.max(1,adminResultsPage),pages);
+        const pageRows=visibleRecords.slice((adminResultsPage-1)*pageSize,adminResultsPage*pageSize);
+        tbody.innerHTML = pageRows.map((r) => { const index=records.indexOf(r); const detail=(r.answersDetail||[]); return `
             <tr class="hover:bg-slate-50 transition-colors">
+                <td class="p-3"><button onclick="adminResultDetail(${index})" class="text-xs font-bold text-indigo-700">明細</button></td>
                 <td class="p-3 font-mono text-slate-500">${r.timestamp || ''}</td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">${escapeHtml(r.groupLabel || '1 生化組')}</span></td>
                 <td class="p-3 font-bold text-slate-800">${r.name || ''}</td>
@@ -1529,8 +1557,10 @@ async function renderAdminTable() {
                     ${(r.answersDetail||[]).some(a=>a.questionType==='essay') ? `<button onclick="openEssayReview(${index})" class="bg-rose-600 hover:bg-rose-500 text-white text-xs px-2.5 py-1 rounded shadow-sm">✍️ ${r.reviewStatus==='pending'?'批改問答題':'重新批改'}</button>` : ''}
                     <button onclick="exportRecordToWord(${index})" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded transition-colors shadow-sm">📄 匯出 Word</button>
                 </td>
-            </tr>
+            </tr><tr id="admin-result-detail-${index}" class="hidden bg-slate-50"><td colspan="9" class="p-3"><div class="text-xs text-slate-600"><b>作答明細（預設收合）</b><div class="mt-2 space-y-1">${detail.length?detail.map((a,i)=>`<div>${i+1}. ${escapeHtml(a.questionText||'')}　<span class="text-slate-500">${escapeHtml(String(a.userAnswer??'未作答'))}</span></div>`).join(''):'無逐題明細'}</div></div></td></tr>
         `; }).join('');
+        const pager=document.getElementById('admin-results-pagination');
+        if(pager)pager.innerHTML=`<span>顯示 ${(adminResultsPage-1)*pageSize+1}–${Math.min(adminResultsPage*pageSize,visibleRecords.length)}／${visibleRecords.length} 筆</span><span class="flex gap-2"><button ${adminResultsPage===1?'disabled':''} onclick="adminResultsPage--;renderAdminTable()" class="border rounded px-2 py-1 disabled:opacity-40">上一頁</button><b class="px-1 py-1">${adminResultsPage} / ${pages}</b><button ${adminResultsPage===pages?'disabled':''} onclick="adminResultsPage++;renderAdminTable()" class="border rounded px-2 py-1 disabled:opacity-40">下一頁</button></span>`;
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-rose-500">❌ ${error.message}</td></tr>`;
     }

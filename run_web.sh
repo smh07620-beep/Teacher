@@ -21,4 +21,6 @@ case "${MATERIAL_BACKGROUND_JOBS:-true}" in
     ;;
 esac
 
-exec gunicorn --bind 0.0.0.0:${PORT:-5000} --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-4} --timeout ${GUNICORN_TIMEOUT:-180} app:app
+# Phase 3 deployment entrypoint. pgy_app imports the existing app.py and then
+# registers PGY assignment/signature/audit routes on the same Flask instance.
+exec gunicorn --bind 0.0.0.0:${PORT:-5000} --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-4} --timeout ${GUNICORN_TIMEOUT:-180} pgy_app:app

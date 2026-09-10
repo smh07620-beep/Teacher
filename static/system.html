@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="/design-tokens.css?v=5900">
     <link rel="stylesheet" href="/portal.css?v=5900">
     <link rel="stylesheet" href="/learner.css?v=5900">
-    <link rel="stylesheet" href="/admin.css?v=5900">
+    <link rel="stylesheet" href="/admin.css?v=6605">
 </head>
 <body class="v56-system edu-shell platform-v580 bg-slate-100 text-slate-800 font-sans leading-relaxed min-h-screen flex flex-col">
 
@@ -77,7 +77,7 @@
                     <span class="learning-module-icon">📝</span><span><span class="learning-module-label block">考核任務</span><span class="learning-module-desc block">查看並完成本組考核</span></span>
                 </button>
                 <button id="pgy-assessment-hub-btn" onclick="switchLearningModule('assessment')" class="learning-module-card hidden">
-                    <span class="learning-module-icon">🧭</span><span><span class="learning-module-label block">PGY 評量</span><span class="learning-module-desc block">DOPS、EPA 與階段評量</span></span>
+                    <span class="learning-module-icon">🧭</span><span><span class="learning-module-label block">PGY 評量</span><span class="learning-module-desc block">技能、案例、品管與回饋</span></span>
                 </button>
               </div>
               <details id="v580-resource-drawer" class="v580-resource-drawer">
@@ -174,21 +174,27 @@
         <section id="panel-assessment" class="space-y-5 hidden">
             <section class="edu-card p-5 sm:p-6 bg-gradient-to-r from-white to-indigo-50/50">
                 <p class="edu-kicker">PGY ASSESSMENT CENTER</p><h2 class="text-xl sm:text-2xl font-black text-slate-900 mt-1">🧭 PGY 評量中心</h2>
-                <p class="text-xs sm:text-sm text-slate-500 mt-2">六大核心能力、DOPS、Ad-hoc、EPA 可信賴專業活動與學習評量集中紀錄。評核由臨床教師／導師填寫並留存。</p>
+                <p class="text-xs sm:text-sm text-slate-500 mt-2">依訓練內容選擇 EXAM、DOPS、MINI-CEX、CBD、CHECKLIST、QC、360、REPORT、QI、REFLECTION 或 ATTENDANCE；教師評核與學習證據集中留存。</p>
             </section>
-            <section class="grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
-                <button onclick="selectPgyAssessmentType('core6')" class="learning-module-card"><span class="learning-module-icon">6️⃣</span><span><span class="learning-module-label block">六大核心能力</span><span class="learning-module-desc block">核心能力檢核</span></span></button>
+            <section class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <button onclick="switchLearningModule('exam')" class="learning-module-card"><span class="learning-module-icon">📝</span><span><span class="learning-module-label block">EXAM</span><span class="learning-module-desc block">線上測驗</span></span></button>
                 <button onclick="selectPgyAssessmentType('dops')" class="learning-module-card"><span class="learning-module-icon">🩺</span><span><span class="learning-module-label block">DOPS</span><span class="learning-module-desc block">直接觀察操作技能</span></span></button>
-                <button onclick="selectPgyAssessmentType('adhoc')" class="learning-module-card"><span class="learning-module-icon">⚡</span><span><span class="learning-module-label block">Ad-hoc</span><span class="learning-module-desc block">即時工作場域評量</span></span></button>
-                <button onclick="selectPgyAssessmentType('epa')" class="learning-module-card"><span class="learning-module-icon">🎯</span><span><span class="learning-module-label block">EPA</span><span class="learning-module-desc block">可信賴專業活動</span></span></button>
-                <button onclick="selectPgyAssessmentType('learning')" class="learning-module-card"><span class="learning-module-icon">📋</span><span><span class="learning-module-label block">學習評量表</span><span class="learning-module-desc block">階段性學習回饋</span></span></button>
+                <button onclick="selectPgyAssessmentType('mini_cex')" class="learning-module-card"><span class="learning-module-icon">🩻</span><span><span class="learning-module-label block">MINI-CEX</span><span class="learning-module-desc block">臨床能力評估</span></span></button>
+                <button onclick="selectPgyAssessmentType('cbd')" class="learning-module-card"><span class="learning-module-icon">💬</span><span><span class="learning-module-label block">CBD</span><span class="learning-module-desc block">案例討論</span></span></button>
+                <button onclick="selectPgyAssessmentType('checklist')" class="learning-module-card"><span class="learning-module-icon">☑️</span><span><span class="learning-module-label block">CHECKLIST</span><span class="learning-module-desc block">技能查核表</span></span></button>
+                <button onclick="selectPgyAssessmentType('qc')" class="learning-module-card"><span class="learning-module-icon">📈</span><span><span class="learning-module-label block">QC</span><span class="learning-module-desc block">品管案例</span></span></button>
+                <button onclick="selectPgyAssessmentType('feedback360')" class="learning-module-card"><span class="learning-module-icon">👥</span><span><span class="learning-module-label block">360</span><span class="learning-module-desc block">360 度評量</span></span></button>
+                <button onclick="selectPgyAssessmentType('report')" class="learning-module-card"><span class="learning-module-icon">📄</span><span><span class="learning-module-label block">REPORT</span><span class="learning-module-desc block">學習報告</span></span></button>
+                <button onclick="selectPgyAssessmentType('qi')" class="learning-module-card"><span class="learning-module-icon">🧪</span><span><span class="learning-module-label block">QI</span><span class="learning-module-desc block">品質改善專案</span></span></button>
+                <button onclick="selectPgyAssessmentType('reflection')" class="learning-module-card"><span class="learning-module-icon">🪞</span><span><span class="learning-module-label block">REFLECTION</span><span class="learning-module-desc block">反思紀錄</span></span></button>
+                <button onclick="selectPgyAssessmentType('attendance')" class="learning-module-card"><span class="learning-module-icon">🎓</span><span><span class="learning-module-label block">ATTENDANCE</span><span class="learning-module-desc block">課程完成</span></span></button>
             </section>
             <section class="edu-card p-5 sm:p-6">
-                <div class="flex items-start justify-between gap-3 flex-wrap"><div><h3 id="pgy-assessment-form-title" class="font-black text-lg text-slate-900">六大核心能力檢核表</h3><p id="pgy-assessment-form-desc" class="text-xs text-slate-500 mt-1">請由評估者依實際觀察完成評核。</p></div><a id="pgy-assessment-template-link" href="#" target="_blank" class="hidden text-xs font-bold px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700">📄 開啟評量範本</a></div>
-                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4"><input id="pgy-assess-name" class="learning-input" placeholder="受評者姓名"><input id="pgy-assess-empid" class="learning-input" placeholder="工號 / 識別碼"><input id="pgy-assess-evaluator" class="learning-input" placeholder="評估者姓名"><select id="pgy-assess-evaluator-title" class="learning-input"><option value="">評估者職稱</option><option>臨床教師</option><option>組長</option><option>資深醫檢師</option></select><input id="pgy-assess-date" type="date" class="learning-input"><input id="pgy-assess-title" class="learning-input sm:col-span-2 lg:col-span-3" placeholder="評量主題 / 操作項目（例如：門診採血、血球分類）"></div>
+                <div class="flex items-start justify-between gap-3 flex-wrap"><div><h3 id="pgy-assessment-form-title" class="font-black text-lg text-slate-900">DOPS 直接觀察操作技能評量</h3><p id="pgy-assessment-form-desc" class="text-xs text-slate-500 mt-1">請由評估者依實際觀察完成評核。</p></div><a id="pgy-assessment-template-link" href="#" target="_blank" class="hidden text-xs font-bold px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700">📄 開啟評量範本</a></div>
+                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4"><input id="pgy-assess-name" class="learning-input" placeholder="受評者姓名"><input id="pgy-assess-empid" class="learning-input" placeholder="工號 / 識別碼"><input id="pgy-assess-evaluator" class="learning-input" placeholder="評估者姓名"><select id="pgy-assess-evaluator-title" class="learning-input"><option value="">評估者職稱</option><option>臨床教師</option><option>教學管理者</option><option>組長</option><option>資深醫檢師</option></select><input id="pgy-assess-date" type="date" class="learning-input"><input id="pgy-assess-title" class="learning-input sm:col-span-2 lg:col-span-3" placeholder="評量主題 / 操作項目（例如：門診採血、血球分類）"></div>
                 <div id="pgy-assessment-fields" class="mt-5"></div>
                 <div class="mt-4"><label class="text-xs font-bold text-slate-600">總結回饋</label><textarea id="pgy-assess-comments" rows="4" class="learning-input mt-1" placeholder="優點、需改善項目與後續學習建議"></textarea></div>
-                <div class="mt-4 flex flex-wrap items-center gap-2"><button onclick="submitPgyAssessment()" class="bg-indigo-700 hover:bg-indigo-600 text-white text-sm font-bold px-5 py-2.5 rounded-xl">✅ 儲存評量</button><button onclick="exportCurrentPgyAssessmentWord()" class="bg-white border border-indigo-300 hover:bg-indigo-50 text-indigo-700 text-sm font-bold px-4 py-2.5 rounded-xl">📄 套版輸出 Word</button><button onclick="loadMyPgyAssessments()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-bold px-4 py-2.5 rounded-xl">🧾 查詢我的評量紀錄</button><span id="pgy-assess-status" class="text-xs text-slate-500"></span></div>
+                <div class="mt-4 flex flex-wrap items-center gap-2"><button id="pgy-assess-submit" onclick="submitPgyAssessment()" class="bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold px-5 py-2.5 rounded-xl">✅ 儲存評量</button><button onclick="exportCurrentPgyAssessmentWord()" class="bg-white border border-indigo-300 hover:bg-indigo-50 text-indigo-700 text-sm font-bold px-4 py-2.5 rounded-xl">📄 套版輸出 Word</button><button onclick="loadMyPgyAssessments()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-bold px-4 py-2.5 rounded-xl">🧾 查詢評量紀錄</button><span id="pgy-assess-status" class="text-xs text-slate-500"></span></div>
             </section>
             <section id="pgy-assessment-history" class="edu-card p-5 hidden"><h3 class="font-black text-slate-900">🧾 PGY 評量紀錄</h3><div id="pgy-assessment-history-list" class="mt-3 divide-y divide-slate-100"></div></section>
         </section>
@@ -200,7 +206,7 @@
 
         <section class="edu-card p-5 sm:p-6 bg-gradient-to-r from-white to-teal-50/40">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div><p class="edu-kicker">ONLINE ASSESSMENT</p><h2 class="text-xl sm:text-2xl font-black text-slate-900 mt-1">📝 線上測驗與互動評量</h2><p class="text-xs sm:text-sm text-slate-500 mt-2">支援血球辨識、微生物鑑定、結晶／寄生蟲判讀、法規指引及影片互動題；題目呈現方式由導師後台設定。</p></div>
+                <div><p class="edu-kicker">ONLINE ASSESSMENT</p><h2 class="text-xl sm:text-2xl font-black text-slate-900 mt-1">📝 線上測驗與互動評量</h2><p class="text-xs sm:text-sm text-slate-500 mt-2">支援血球辨識、微生物鑑定、結晶／寄生蟲判讀、法規指引及影片互動題；題目呈現方式由導師後台設定。</p><p class="text-[11px] text-teal-700 mt-2">簽核：系統自動（自動計分考試不強迫教師簽核）；人工評核依單層簽核／雙層簽核流程，舊資料標示為舊制（legacy）。</p></div>
                 <div class="rounded-xl bg-white border border-slate-200 px-4 py-3 min-w-[220px]"><div class="flex justify-between text-xs mb-2"><span class="font-bold text-slate-600">本卷作答進度</span><span id="exam-progress-percent" class="font-black text-[#006b64]">0%</span></div><div class="edu-progress-track"><div id="exam-progress-bar" class="edu-progress-fill" style="width:0%"></div></div></div>
             </div>
         </section>
@@ -395,7 +401,7 @@
                 </div>
             </div>
 
-            <div class="p-4 sm:p-6 overflow-y-auto min-h-0">
+            <div id="admin-workspace-content" class="p-4 sm:p-6 overflow-y-auto min-h-0">
                 <!-- ① Content -->
                 <div id="admin-section-content" class="admin-section-panel space-y-5">
                     <div class="grid md:grid-cols-4 gap-3">
@@ -500,18 +506,18 @@
 
                 <!-- ④ PGY 評量 -->
                 <div id="admin-section-pgy" class="admin-section-panel space-y-5 hidden">
-                    <section class="bg-white border border-indigo-200 rounded-2xl p-5 shadow-sm space-y-4"><div><h4 class="font-black text-indigo-950 text-lg">🧭 PGY 評量中心設定</h4><p class="text-xs text-indigo-700 mt-1">管理六大核心能力、DOPS、Ad-hoc、EPA 與學習評量範本；每次教師評核必須完成所有評分項目才可送出，評量紀錄集中於此檢閱。</p></div>
+                    <section class="bg-white border border-indigo-200 rounded-2xl p-5 shadow-sm space-y-4"><div><h4 class="font-black text-indigo-950 text-lg">🧭 PGY 評量中心設定</h4><p class="text-xs text-indigo-700 mt-1">管理 DOPS、MINI-CEX、CBD、CHECKLIST、QC、360、REPORT、QI、REFLECTION 與 ATTENDANCE 範本；每次教師評核必須完成所有評分項目才可送出。</p></div>
                     <div id="admin-pgy-template-list" class="grid md:grid-cols-2 xl:grid-cols-3 gap-3"></div><details class="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600"><summary class="font-bold cursor-pointer">Word 套版可用佔位字</summary><div class="mt-2 leading-6"><code>{name}</code> 受評者、<code>{empId}</code> 工號、<code>{groupName}</code> 組別、<code>{evaluator}</code> 評估者、<code>{evaluatorTitle}</code> 職稱、<code>{assessmentDate}</code> 日期、<code>{title}</code> 主題、<code>{overallScore}</code> 平均分數、<code>{comments}</code> 總結回饋；評量項目可使用 <code>{#ratings}{item} / {rating} / {note}{/ratings}</code>。</div></details>
                     <div class="rounded-xl bg-indigo-50 border border-indigo-100 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p class="font-black text-indigo-900">🎯 台灣醫事檢驗學會 EPA 公版參考</p><p class="text-xs text-indigo-700 mt-1">由官方公開 PDF 匯入院內範本庫，之後不需每次依賴外部網站。</p></div><button onclick="adminImportTslmEpa()" class="bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-lg">⬇️ 匯入學會 EPA 公版</button></div>
                     </section>
-                    <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm"><div class="flex items-center justify-between"><div><h4 class="font-black text-slate-900 text-lg">📋 PGY 評量紀錄</h4><p class="text-xs text-slate-500 mt-1">六大核心能力、DOPS、Ad-hoc、EPA 與學習評量。</p></div><button onclick="renderAdminPgyAssessments()" class="text-xs border border-slate-300 px-3 py-2 rounded-lg">🔄 更新</button></div><div id="admin-pgy-records" class="mt-4 space-y-2"></div></section>
+                    <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm"><div class="flex items-center justify-between"><div><h4 class="font-black text-slate-900 text-lg">📋 PGY 評量紀錄</h4><p class="text-xs text-slate-500 mt-1">依第三階段評核代碼集中檢閱，舊資料仍可正常顯示。</p></div><button onclick="renderAdminPgyAssessments()" class="text-xs border border-slate-300 px-3 py-2 rounded-lg">🔄 更新</button></div><div id="admin-pgy-records" class="mt-4 space-y-2"></div></section>
                 </div>
 
                 <!-- ⑤ Results -->
                 <div id="admin-section-results" class="admin-section-panel hidden space-y-5">
                     <section id="essay-review-panel" class="hidden bg-rose-50 border border-rose-200 rounded-2xl p-5 space-y-3"><div class="flex items-start justify-between gap-3"><div><h4 class="font-black text-rose-950 text-lg">✍️ 問答題線上人工批改</h4><p id="essay-review-meta" class="text-xs text-rose-700 mt-1"></p></div><button onclick="closeEssayReview()" class="text-xs bg-white border border-rose-200 px-3 py-1.5 rounded-lg">關閉</button></div><div id="essay-review-questions" class="space-y-3"></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3"><input id="essay-reviewer-name" type="text" placeholder="批改者姓名" class="px-3 py-2 border rounded-xl text-sm"><textarea id="essay-review-comment" rows="2" placeholder="整體評語（選填）" class="px-3 py-2 border rounded-xl text-sm"></textarea></div><button onclick="submitEssayReview()" class="bg-rose-700 hover:bg-rose-600 text-white font-bold text-sm px-4 py-2 rounded-lg">✅ 儲存批改並重新計算總分</button></section>
                     <section id="admin-results-analytics" class="bg-white border border-teal-200 rounded-2xl p-5 shadow-sm space-y-4"><div><h4 class="font-black text-teal-950 text-lg">📈 考核分析摘要</h4><p class="text-xs text-teal-700 mt-1">快速查看平均分、通過率、待批改，以及答對率偏低的題目。</p></div><div id="admin-analytics-cards" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div><div><div class="font-black text-sm text-slate-800">題目答對率（由歷史作答彙整）</div><div id="admin-question-analytics" class="mt-2 space-y-2"></div></div></section>
-                    <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4"><div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"><div><h4 id="admin-results-title" class="font-black text-slate-900 text-lg">📊 歷次考核成績</h4><p id="admin-results-desc" class="text-xs text-slate-500 mt-1">可人工批改問答題、匯出 Word、匯出 CSV 或清理歷史紀錄。</p></div><div class="flex gap-2 items-start"><button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-lg">📥 匯出 CSV</button><details class="relative"><summary class="list-none cursor-pointer bg-white border border-slate-300 text-slate-500 text-xs font-bold px-3 py-2 rounded-lg">更多</summary><div class="absolute right-0 mt-2 z-20 w-64 rounded-xl border border-rose-200 bg-white shadow-xl p-3"><p class="text-[11px] text-rose-700 mb-2">危險操作移至次要位置，執行前仍會再次確認。</p><button onclick="clearAllRecords()" class="w-full bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-bold px-3 py-2 rounded-lg">🗑️ 清空全部歷史紀錄</button></div></details></div></div><div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs sm:text-sm text-slate-600"><thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200"><tr><th class="p-3">考核時間</th><th class="p-3">組別</th><th class="p-3">姓名</th><th class="p-3">工號</th><th class="p-3">考卷主題</th><th class="p-3 text-center">得分</th><th class="p-3 text-center">結果</th><th class="p-3 text-center">操作</th></tr></thead><tbody id="admin-table-body" class="divide-y divide-slate-200"></tbody></table></div></section>
+                    <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4"><div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"><div><h4 id="admin-results-title" class="font-black text-slate-900 text-lg">📊 歷次考核成績</h4><p id="admin-results-desc" class="text-xs text-slate-500 mt-1">可人工批改問答題、匯出 Word、匯出 CSV 或清理歷史紀錄。</p></div><div class="flex gap-2 items-start"><button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-lg">📥 匯出 CSV</button><details class="relative"><summary class="list-none cursor-pointer bg-white border border-slate-300 text-slate-500 text-xs font-bold px-3 py-2 rounded-lg">更多</summary><div class="absolute right-0 mt-2 z-20 w-64 rounded-xl border border-rose-200 bg-white shadow-xl p-3"><p class="text-[11px] text-rose-700 mb-2">危險操作移至次要位置，執行前仍會再次確認。</p><button onclick="clearAllRecords()" class="w-full bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-bold px-3 py-2 rounded-lg">🗑️ 清空全部歷史紀錄</button></div></details></div></div><div id="admin-results-controls" class="grid sm:grid-cols-4 gap-2"><input id="admin-results-search" oninput="adminResultsPage=1;renderAdminTable()" class="learning-input sm:col-span-2" placeholder="搜尋姓名、工號、考卷或組別"><select id="admin-results-filter" onchange="adminResultsPage=1;renderAdminTable()" class="learning-input"><option value="all">全部結果</option><option value="pending">待人工批改</option><option value="pass">合格</option><option value="fail">未合格</option></select><select id="admin-results-page-size" onchange="adminResultsPage=1;renderAdminTable()" class="learning-input"><option value="20">每頁 20 筆</option><option value="50">每頁 50 筆</option><option value="100">每頁 100 筆</option></select></div><div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs sm:text-sm text-slate-600"><thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200"><tr><th class="p-3"></th><th class="p-3">考核時間</th><th class="p-3">組別</th><th class="p-3">姓名</th><th class="p-3">工號</th><th class="p-3">考卷主題</th><th class="p-3 text-center">得分</th><th class="p-3 text-center">結果</th><th class="p-3 text-center">操作</th></tr></thead><tbody id="admin-table-body" class="divide-y divide-slate-200"></tbody></table></div><div id="admin-results-pagination" class="flex items-center justify-between text-xs text-slate-500"></div></section>
                 </div>
 
                 <!-- V5.4.0：考卷設定改為後台內嵌頁籤，不再連續 prompt/confirm -->
@@ -550,7 +556,7 @@
                                         <label class="text-[11px] text-slate-600">影片<input id="exam-quota-video" type="number" min="0" max="200" value="0" class="mt-1 w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>
                                     </div>
                                     <div id="exam-quota-total" class="mt-2 text-[11px] font-bold text-teal-700">合計 0 題</div>
-                                </div></div>
+                                </div>
                             </div>
                             <div class="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
                                 <h5 class="font-black text-emerald-950">🎯 設定、審核與發布</h5>
@@ -569,10 +575,10 @@
                         <div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-teal-950 text-lg">🔐 登入帳號設定</h4><p class="text-xs text-teal-700 mt-1">帳號密碼由管理者建立。密碼只在建立或重設時輸入，系統不顯示原密碼。</p></div><button onclick="renderAdminUserAccounts()" class="text-xs border border-teal-200 bg-white px-3 py-2 rounded-xl">🔄 更新帳號</button></div>
                         <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
                             <label class="text-xs font-bold text-slate-600">登入帳號<input id="admin-user-username" class="learning-input mt-1" autocomplete="off" placeholder="例如 lab0123"></label>
-                            <label class="text-xs font-bold text-slate-600">初始密碼<input id="admin-user-password" class="learning-input mt-1" type="password" autocomplete="new-password" placeholder="至少 8 碼"></label>
+                            <label class="text-xs font-bold text-slate-600">初始密碼<input id="admin-user-password" class="learning-input mt-1" type="password" autocomplete="new-password" placeholder="至少 4 碼"></label>
                             <label class="text-xs font-bold text-slate-600">姓名<input id="admin-user-name" class="learning-input mt-1" placeholder="顯示姓名"></label>
                             <label class="text-xs font-bold text-slate-600">工號<input id="admin-user-empid" class="learning-input mt-1" placeholder="唯一工號"></label>
-                            <label class="text-xs font-bold text-slate-600">角色<select id="admin-user-role" class="learning-input mt-1"><option value="learner">學員</option><option value="teacher">教師</option><option value="manager">管理者</option></select></label>
+                            <label class="text-xs font-bold text-slate-600">角色<select id="admin-user-role" class="learning-input mt-1"><option value="student">學員</option><option value="clinical_teacher">臨床教師</option><option value="group_leader">組長</option><option value="education_admin">教學管理者</option><option value="system_admin">系統管理者</option><option value="auditor">稽核／唯讀</option></select></label>
                             <label class="text-xs font-bold text-slate-600">預設訓練區<select id="admin-user-area" class="learning-input mt-1"><option value="internal">院內訓練</option><option value="pgy">PGY</option></select></label>
                             <label class="text-xs font-bold text-slate-600">預設組別<select id="admin-user-group" class="learning-input mt-1"><option value="grpBio">生化組</option><option value="grpMicro">鏡檢組</option><option value="grpSero">血清組</option><option value="grpBB">血庫組</option><option value="grpBact">細菌組</option><option value="grpHema">血液組</option><option value="grpNew">新人共通</option><option value="grpPgyDocs">PGY 資料</option></select></label>
                             <div class="flex items-end"><button onclick="createAdminUserAccount()" class="w-full bg-teal-700 hover:bg-teal-600 text-white text-sm font-bold px-4 py-3 rounded-xl">建立登入帳號</button></div>
@@ -689,13 +695,13 @@
 </nav>
 
 <button id="back-to-top" type="button" aria-label="回到頁首" title="回到頁首" class="fixed right-4 sm:right-6 bottom-4 sm:bottom-6 z-50 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-slate-900/90 hover:bg-teal-700 text-white shadow-xl border border-white/20 backdrop-blur flex items-center justify-center text-xl opacity-0 pointer-events-none translate-y-3 transition-all duration-200">↑</button>
-<script defer src="/shared-core.js?v=5900"></script>
+<script defer src="/shared-core.js?v=6500"></script>
 <script defer src="/system-core.js?v=5900"></script>
 <script defer src="/system-learner.js?v=5900"></script>
-<script defer src="/system-exam.js?v=5900"></script>
-<script defer src="/system-assessment.js?v=5900"></script>
-<script defer src="/system-admin.js?v=5900"></script>
+<script defer src="/system-exam.js?v=6602"></script>
+<script defer src="/system-assessment.js?v=6100"></script>
+<script defer src="/system-admin.js?v=6502"></script>
 <script defer src="/system-bootstrap.js?v=5900"></script>
-<script defer src="/teaching.js?v=5900"></script>
+<script defer src="/teaching.js?v=6603"></script>
 </body>
 </html>
