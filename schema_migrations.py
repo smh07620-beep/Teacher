@@ -188,8 +188,9 @@ def _additive_rbac_pgy_signing_66(conn, kind: str) -> None:
 @migration("0067-smart-learning-content")
 def _smart_learning_67(conn, kind: str) -> None:
     """Additive/idempotent learning metadata; no legacy row is overwritten."""
-    boolean="BOOLEAN" if kind=="postgres" else "INTEGER"
-    conn.execute(f"CREATE TABLE IF NOT EXISTS learning_progress (material_id TEXT NOT NULL, username TEXT NOT NULL, position TEXT NOT NULL DEFAULT '{{}}', progress REAL NOT NULL DEFAULT 0, completed {boolean} NOT NULL DEFAULT 0, last_viewed_at TEXT NOT NULL DEFAULT '', completed_at TEXT NOT NULL DEFAULT '', PRIMARY KEY(material_id,username))")
+    boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
+    default_false = "FALSE" if kind == "postgres" else "0"
+    conn.execute(f"CREATE TABLE IF NOT EXISTS learning_progress (material_id TEXT NOT NULL, username TEXT NOT NULL, position TEXT NOT NULL DEFAULT '{{}}', progress REAL NOT NULL DEFAULT 0, completed {boolean} NOT NULL DEFAULT {default_false}, last_viewed_at TEXT NOT NULL DEFAULT '', completed_at TEXT NOT NULL DEFAULT '', PRIMARY KEY(material_id,username))")
     conn.execute("CREATE TABLE IF NOT EXISTS material_text_index (material_id TEXT NOT NULL,page_no INTEGER NOT NULL,title TEXT NOT NULL DEFAULT '',text TEXT NOT NULL DEFAULT '',indexed_at TEXT NOT NULL DEFAULT '',PRIMARY KEY(material_id,page_no))")
     conn.execute("CREATE TABLE IF NOT EXISTS media_processing_jobs (id TEXT PRIMARY KEY,material_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',failure_reason TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS atlas_import_previews (id TEXT PRIMARY KEY,material_id TEXT NOT NULL,payload TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'preview',created_at TEXT NOT NULL)")
@@ -217,9 +218,10 @@ def _render_worker_shared_staging_67(conn, kind: str) -> None:
 def _b_free_local_worker_67(conn, kind: str) -> None:
     """Add B-Free control metadata; no data is replaced or removed."""
     boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
+    default_false = "FALSE" if kind == "postgres" else "0"
     _add_columns(conn, kind, "material_jobs", {
         "worker_last_seen": "worker_last_seen TEXT NOT NULL DEFAULT ''",
-        "cleanup_pending": f"cleanup_pending {boolean} NOT NULL DEFAULT 0",
+        "cleanup_pending": f"cleanup_pending {boolean} NOT NULL DEFAULT {default_false}",
     })
     payload = "JSONB" if kind == "postgres" else "TEXT"
     conn.execute(f"CREATE TABLE IF NOT EXISTS material_worker_heartbeats (worker_id TEXT PRIMARY KEY,last_seen TEXT NOT NULL,capabilities {payload} NOT NULL DEFAULT '{{}}',current_job_id TEXT NOT NULL DEFAULT '')")
