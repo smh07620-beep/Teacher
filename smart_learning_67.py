@@ -33,6 +33,18 @@ def extract_slide_text(path: Path):
         except Exception: pages=[]
     return [(n,t,title) for n,t,title in pages if t]
 
+def preview_docx_atlas(path: Path):
+    """Extract DOCX media in document order with surrounding text; never publishes."""
+    with zipfile.ZipFile(path) as zf:
+        doc=zf.read("word/document.xml").decode("utf-8","ignore")
+        media={Path(n).name:zf.read(n) for n in zf.namelist() if n.startswith("word/media/")}
+    text=" ".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>",doc))
+    images=[]
+    for index,name in enumerate(re.findall(r"(?:embed|link)=\"rId(\d+)\"",doc),1):
+        # Relationships may be absent/broken: expose a warning rather than corrupting order.
+        images.append({"index":index,"relationshipId":"rId"+name,"section":text[:180],"caption":"","region":{"x":0,"y":0,"width":1,"height":1}})
+    return {"images":images,"warnings":["DOCX 預覽僅處理 inline/table 圖片；浮動圖、群組、SmartArt、圖表與 OLE 保留原文件，需人工處理。"] if not images else []}
+
 
 def _now():
     return dt.datetime.now(dt.timezone.utc).isoformat()
@@ -119,6 +131,16 @@ def register_smart_learning(base):
             for page_no,text,title in rows: conn.execute(f"INSERT INTO material_text_index(material_id,page_no,title,text,indexed_at) VALUES({ph},{ph},{ph},{ph},{ph})",(material_id,page_no,title,text,_now()))
         finally:conn.close()
         return jsonify({"ok":True,"pages":len(rows),"searchable":bool(rows)})
+
+    @app.post("/api/docx-atlas-preview/<material_id>")
+    def docx_atlas_preview(material_id):
+        denied=base.require_admin()
+        if denied:return denied
+        material=base.get_material(material_id)
+        if not material:return jsonify({"error":"找不到教材"}),404
+        path=Path(base.UPLOADED_SLIDES_DIR)/str(material.get("folder") or material_id)/str(material.get("storageFilename") or material.get("filename") or "")
+        if path.suffix.lower()!=".docx" or not path.is_file():return jsonify({"error":"需要可存取的 DOCX 原始檔"}),409
+        return jsonify({"materialId":material_id,"preview":preview_docx_atlas(path),"publishRequired":True})
 
     @app.get("/api/learning-analytics")
     def learning_analytics():

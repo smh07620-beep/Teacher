@@ -16,5 +16,10 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('zipfile.ZipFile',source)
         self.assertIn('page.get_text',source)
         self.assertIn('material-search/<material_id>/index',source)
+    def test_docx_import_is_preview_first(self):
+        source=ROOT.joinpath('smart_learning_67.py').read_text(encoding='utf-8')
+        self.assertIn('preview_docx_atlas',source)
+        self.assertIn('publishRequired',source)
+        self.assertIn('SmartArt',source)
 
 if __name__=='__main__': unittest.main()
