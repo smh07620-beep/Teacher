@@ -94,8 +94,8 @@ class BooleanDefaultMigration67Tests(unittest.TestCase):
 
     def test_postgres_boolean_defaults_are_native_literals(self):
         sql = self._postgres_sql()
-        self.assertNotRegex(sql, r"(?i)BOOLEAN[^,)]*DEFAULT\\s+0\\b")
-        self.assertNotRegex(sql, r"(?i)BOOLEAN[^,)]*DEFAULT\\s+1\\b")
+        self.assertNotRegex(sql, r"(?i)BOOLEAN[^,)]*DEFAULT\s+0\b")
+        self.assertNotRegex(sql, r"(?i)BOOLEAN[^,)]*DEFAULT\s+1\b")
         self.assertIn("completed BOOLEAN NOT NULL DEFAULT FALSE", sql)
         self.assertIn("cleanup_pending BOOLEAN NOT NULL DEFAULT FALSE", sql)
         self.assertIn("is_staging BOOLEAN NOT NULL DEFAULT TRUE", sql)
