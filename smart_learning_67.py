@@ -7,9 +7,31 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
+import zipfile
 from pathlib import Path
 
 from flask import jsonify, request
+
+
+def extract_slide_text(path: Path):
+    """Return reliable native text only; scanned PDFs deliberately return no hits."""
+    suffix=path.suffix.lower(); pages=[]
+    if suffix==".pptx":
+        with zipfile.ZipFile(path) as zf:
+            names=sorted((n for n in zf.namelist() if re.fullmatch(r"ppt/slides/slide\d+\.xml",n)), key=lambda n:int(re.search(r"\d+",n).group()))
+            for number,name in enumerate(names,1):
+                xml=zf.read(name).decode("utf-8","ignore")
+                text=" ".join(re.findall(r"<a:t>(.*?)</a:t>",xml)).strip()
+                pages.append((number,text,text.split(" ")[0] if text else ""))
+    elif suffix==".pdf":
+        try:
+            import fitz
+            doc=fitz.open(path)
+            pages=[(i+1,(page.get_text("text") or "").strip(),"") for i,page in enumerate(doc)]
+            doc.close()
+        except Exception: pages=[]
+    return [(n,t,title) for n,t,title in pages if t]
 
 
 def _now():
@@ -82,6 +104,21 @@ def register_smart_learning(base):
             rows = conn.execute(f"SELECT page_no,title,text FROM material_text_index WHERE material_id={ph} AND LOWER(text) LIKE {ph} ORDER BY page_no LIMIT 50", (material_id, "%" + query.lower() + "%")).fetchall()
             return jsonify([{"page": int(_row(r).get("page_no", 0)), "title": _row(r).get("title", ""), "excerpt": _row(r).get("text", "")[:240]} for r in rows])
         finally: conn.close()
+
+    @app.post("/api/material-search/<material_id>/index")
+    def material_index(material_id):
+        denied=base.require_admin()
+        if denied:return denied
+        material=base.get_material(material_id)
+        if not material:return jsonify({"error":"找不到教材"}),404
+        path=Path(base.UPLOADED_SLIDES_DIR)/str(material.get("folder") or material_id)/str(material.get("storageFilename") or material.get("filename") or "")
+        if material.get("storageBackend")!="local" or not path.is_file(): return jsonify({"error":"此教材目前無可安全索引的本機原始檔"}),409
+        rows=extract_slide_text(path); conn,kind=base._db_conn(); ph="%s" if kind=="postgres" else "?"
+        try:
+            conn.execute(f"DELETE FROM material_text_index WHERE material_id={ph}",(material_id,))
+            for page_no,text,title in rows: conn.execute(f"INSERT INTO material_text_index(material_id,page_no,title,text,indexed_at) VALUES({ph},{ph},{ph},{ph},{ph})",(material_id,page_no,title,text,_now()))
+        finally:conn.close()
+        return jsonify({"ok":True,"pages":len(rows),"searchable":bool(rows)})
 
     @app.get("/api/learning-analytics")
     def learning_analytics():

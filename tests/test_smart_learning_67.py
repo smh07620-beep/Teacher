@@ -11,5 +11,10 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('save({page:p}',source)
     def test_adapter_keeps_legacy_app(self):
         self.assertIn('register_smart_learning',ROOT.joinpath('pgy_app.py').read_text(encoding='utf-8'))
+    def test_smart_slide_uses_native_pdf_and_pptx_text(self):
+        source=ROOT.joinpath('smart_learning_67.py').read_text(encoding='utf-8')
+        self.assertIn('zipfile.ZipFile',source)
+        self.assertIn('page.get_text',source)
+        self.assertIn('material-search/<material_id>/index',source)
 
 if __name__=='__main__': unittest.main()
