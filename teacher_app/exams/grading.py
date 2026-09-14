@@ -164,6 +164,18 @@ def normalize_review_source(value: Any) -> dict[str, Any]:
     if time_seconds:
         result["timeSeconds"] = time_seconds
 
+    # 6.7 keeps the legacy single timestamp while formalising bounded ranges.
+    for key in ("timeStart", "timeEnd"):
+        try: value_num=max(0.0,min(86400.0,float(value.get(key) or 0)))
+        except (TypeError,ValueError): value_num=0.0
+        if value_num: result[key]=value_num
+    region=value.get("region")
+    if isinstance(region,Mapping):
+        try:
+            clean={k:max(0.0,min(1.0,float(region.get(k,0)))) for k in ("x","y","width","height")}
+            if clean["width"] and clean["height"]: result["region"]=clean
+        except (TypeError,ValueError): pass
+
     if region_hint:
         result["regionHint"] = region_hint
 

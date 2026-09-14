@@ -31,5 +31,8 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('15000',source)
         self.assertIn("['pause','ended']",source)
         self.assertNotIn('.play()',source)
+    def test_review_source_20_keeps_legacy_time_seconds(self):
+        source=ROOT.joinpath('teacher_app/exams/grading.py').read_text(encoding='utf-8')
+        self.assertIn('timeSeconds',source); self.assertIn('timeStart',source); self.assertIn('"region"',source)
 
 if __name__=='__main__': unittest.main()
