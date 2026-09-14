@@ -16,6 +16,7 @@ from pgy_frontend import register_pgy_frontend
 from pgy_workflow import register_pgy_workflow
 from production_hardening import register_production_hardening
 from schema_migrations import register_schema_migrations
+from smart_learning_67 import register_smart_learning
 from upload_hardening import register_upload_hardening
 
 app = register_pgy_workflow(legacy_app)
@@ -30,6 +31,7 @@ app = register_production_hardening(legacy_app)
 app = register_upload_hardening(legacy_app)
 app = register_ai_privacy(legacy_app)
 app = register_backup_restore(legacy_app)
+app = register_smart_learning(legacy_app)
 app = register_pgy_frontend(app)
 
 
