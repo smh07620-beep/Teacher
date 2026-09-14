@@ -119,6 +119,24 @@ def _update_session(base, upload_id: str, **fields):
         conn.close()
 
 
+def _fail_upload(base, session, reason: str, *, delete_object=False, terminal=True):
+    """Terminally release a direct-upload reservation without leaking R2 data."""
+    if terminal:
+        try:
+            base.r2_client().abort_multipart_upload(Bucket=base.R2_BUCKET_NAME, Key=session["staging_key"], UploadId=session["r2_upload_id"])
+        except Exception:
+            pass
+    if delete_object:
+        try:
+            base.r2_client().delete_object(Bucket=base.R2_BUCKET_NAME, Key=session["staging_key"])
+            base.r2_record_deleted(session["staging_key"])
+        except Exception:
+            pass
+    if terminal:
+        _update_session(base, session["id"], status="failed")
+    base._r2_release_reservation(session["id"], reason)
+
+
 def _new_job_from_session(base, session):
     payload = _json_row(__import__("json").loads(session.get("payload") or "{}"))
     base.create_material_job(
@@ -142,6 +160,7 @@ def register_free_worker(base):
         body = request.get_json(silent=True) or {}
         worker_id = _worker_id(body.get("workerId"))
         if not worker_id: return jsonify({"error": "workerId 不合法。"}), 400
+        base.cleanup_r2_budget_state()
         _heartbeat(base, worker_id, body.get("capabilities"))
         job = base.claim_next_material_job(worker_id)
         if not job: return jsonify({"job": None})
@@ -257,6 +276,7 @@ def register_free_worker(base):
         metadata = {"jobid": job_id, "originalname": original, "expectedbytes": str(size), "sha256": sha, "createdat": _now()}
         r2_upload_id = ""
         try:
+            base.enforce_r2_large_upload_budget(upload_id, key, size)
             multipart = base.r2_client().create_multipart_upload(Bucket=base.R2_BUCKET_NAME, Key=key, ContentType=base._content_type_for(original), Metadata=metadata)
             r2_upload_id = str(multipart["UploadId"])
             payload = {"originalName": original, "sourceMime": base._content_type_for(original), "title": str(body.get("title") or "")[:255], "desc": str(body.get("desc") or "")[:1000], "category": str(body.get("category") or "")[:100], "group": base.normalize_group(body.get("group", base.DEFAULT_GROUP)), "area": base.normalize_area(body.get("area", base.DEFAULT_TRAINING_AREA)), "courseId": str(body.get("courseId") or "")[:100], "materialType": str(body.get("materialType") or "standard")[:40], "materialId": material_id, "sourceSha256": sha}
@@ -269,7 +289,9 @@ def register_free_worker(base):
         except Exception as exc:
             try: base.r2_client().abort_multipart_upload(Bucket=base.R2_BUCKET_NAME, Key=key, UploadId=r2_upload_id)
             except Exception: pass
-            return jsonify({"error": f"無法建立雲端直傳工作：{str(exc)[:300]}"}), 503
+            base._r2_release_reservation(upload_id, "init_failed")
+            status = 409 if isinstance(exc, ValueError) else 503
+            return jsonify({"error": f"無法建立雲端直傳工作：{str(exc)[:300]}"}), status
         urls = [{"partNumber": n, "url": base.r2_client().generate_presigned_url("upload_part", Params={"Bucket": base.R2_BUCKET_NAME, "Key": key, "UploadId": r2_upload_id, "PartNumber": n}, ExpiresIn=base.MATERIAL_WORKER_URL_TTL_SECONDS)} for n in range(1, part_count + 1)]
         return jsonify({"uploadId": upload_id, "jobId": job_id, "materialId": material_id, "partSize": part_size, "parts": urls, "expiresIn": base.MATERIAL_WORKER_URL_TTL_SECONDS}), 201
 
@@ -280,22 +302,30 @@ def register_free_worker(base):
         session = _session(base, upload_id)
         if not session or session.get("status") != "uploading": return jsonify({"error": "上傳工作不存在或已完成。"}), 404
         body = request.get_json(silent=True) or {}; parts = body.get("parts")
-        if not isinstance(parts, list) or len(parts) != int(session["expected_parts"]): return jsonify({"error": "multipart parts 不完整。"}), 400
+        if not isinstance(parts, list) or len(parts) != int(session["expected_parts"]):
+            _fail_upload(base, session, "validation_failed", terminal=False)
+            return jsonify({"error": "multipart parts 不完整。"}), 400
         normalized=[]
         for expected, part in enumerate(parts, 1):
-            if not isinstance(part, dict) or int(part.get("partNumber", 0) or 0) != expected or not str(part.get("etag") or "").strip(): return jsonify({"error": "multipart part 格式錯誤。"}), 400
+            if not isinstance(part, dict) or int(part.get("partNumber", 0) or 0) != expected or not str(part.get("etag") or "").strip():
+                _fail_upload(base, session, "validation_failed", terminal=False)
+                return jsonify({"error": "multipart part 格式錯誤。"}), 400
             normalized.append({"PartNumber": expected, "ETag": str(part["etag"])})
         try:
             base.r2_client().complete_multipart_upload(Bucket=base.R2_BUCKET_NAME, Key=session["staging_key"], UploadId=session["r2_upload_id"], MultipartUpload={"Parts": normalized})
             head = base.r2_client().head_object(Bucket=base.R2_BUCKET_NAME, Key=session["staging_key"])
             if int(head.get("ContentLength", -1)) != int(session["source_bytes"]): raise ValueError("R2 物件大小驗證失敗。")
             if str((head.get("Metadata") or {}).get("sha256", "")).lower() != str(session["source_sha256"]).lower(): raise ValueError("R2 物件 metadata 驗證失敗。")
+            base.r2_record_object(session["staging_key"], int(session["source_bytes"]), multipart_parts=len(normalized), estimated_operations=len(normalized) + 3)
             try: _new_job_from_session(base, session)
             except Exception:
                 base.r2_client().delete_object(Bucket=base.R2_BUCKET_NAME, Key=session["staging_key"])
+                base.r2_record_deleted(session["staging_key"])
                 raise
             _update_session(base, upload_id, status="completed", completed_parts=__import__("json").dumps(normalized))
+            base._r2_release_reservation(upload_id, "completed")
         except Exception as exc:
+            _fail_upload(base, session, "validation_failed", delete_object=True)
             return jsonify({"error": f"直傳完成驗證失敗：{str(exc)[:300]}"}), 400
         return jsonify({"accepted": True, "jobId": session["job_id"], "status": "queued"}), 202
 
@@ -309,6 +339,7 @@ def register_free_worker(base):
             try: base.r2_client().abort_multipart_upload(Bucket=base.R2_BUCKET_NAME, Key=session["staging_key"], UploadId=session["r2_upload_id"])
             except Exception: pass
             _update_session(base, upload_id, status="aborted")
+            base._r2_release_reservation(upload_id, "aborted")
         return jsonify({"ok": True})
 
     app.extensions["teacher_free_worker_67_registered"] = True

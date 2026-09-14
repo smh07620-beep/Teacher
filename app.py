@@ -215,6 +215,29 @@ R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
 R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "").strip()
 R2_PRESIGN_SECONDS = max(60, min(604800, int(os.environ.get("R2_PRESIGN_SECONDS", "3600"))))
 
+# Teacher's R2 values are a conservative estimate, not Cloudflare billing.
+# Keep parsing local and bounded so a malformed deployment variable cannot
+# prevent the web app from starting or accidentally disable the guard.
+def _bounded_env_number(name, default, lower, upper, cast=float):
+    try:
+        value = cast(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    try:
+        return max(lower, min(upper, value))
+    except TypeError:
+        return default
+
+
+R2_FREE_STORAGE_GB_MONTH = _bounded_env_number("R2_FREE_STORAGE_GB_MONTH", 10.0, 0.1, 10000.0)
+R2_WARNING_PERCENT = int(_bounded_env_number("R2_WARNING_PERCENT", 60, 1, 99, int))
+R2_UPLOAD_BLOCK_PERCENT = int(_bounded_env_number("R2_UPLOAD_BLOCK_PERCENT", 80, R2_WARNING_PERCENT, 99, int))
+R2_EMERGENCY_PERCENT = int(_bounded_env_number("R2_EMERGENCY_PERCENT", 90, R2_UPLOAD_BLOCK_PERCENT, 100, int))
+R2_STAGING_MAX_CURRENT_GB = _bounded_env_number("R2_STAGING_MAX_CURRENT_GB", 8.0, 0.1, 1000.0)
+R2_STAGING_FAILED_RETENTION_HOURS = int(_bounded_env_number("R2_STAGING_FAILED_RETENTION_HOURS", 24, 1, 720, int))
+R2_MULTIPART_ABANDON_HOURS = int(_bounded_env_number("R2_MULTIPART_ABANDON_HOURS", 6, 1, 168, int))
+MATERIAL_R2_LARGE_FILE_MB = int(_bounded_env_number("MATERIAL_R2_LARGE_FILE_MB", 100, 1, 4096, int))
+
 # V5.3.14：Oracle Cloud Object Storage Always Free（S3 相容 API）。
 # FREE_ONLY_MODE=true 時，網站會在接近免費容量上限前拒絕新上傳，避免意外超額。
 OCI_NAMESPACE = os.environ.get("OCI_NAMESPACE", "").strip()
@@ -347,6 +370,7 @@ def r2_put_file(local_path: Path, key: str, content_type=None, metadata=None):
     if metadata:
         extra["Metadata"] = {str(k): str(v)[:1024] for k, v in dict(metadata).items()}
     r2_client().upload_file(str(local_path), R2_BUCKET_NAME, key, ExtraArgs=extra)
+    r2_record_object(key, Path(local_path).stat().st_size)
 
 
 def r2_presigned_get(key: str, *, download_name=None, inline=True):
@@ -372,6 +396,8 @@ def r2_delete_prefix(prefix: str):
         objects = [{"Key": x["Key"]} for x in res.get("Contents", [])]
         if objects:
             client.delete_objects(Bucket=R2_BUCKET_NAME, Delete={"Objects": objects, "Quiet": True})
+            for item in objects:
+                r2_record_deleted(item["Key"])
         if not res.get("IsTruncated"):
             break
         token = res.get("NextContinuationToken")
@@ -1184,7 +1210,18 @@ def upload_material_job_staging(source: Path, job_id: str, original_name: str):
     backend = shared_staging_backend()
     if backend == "r2":
         key = f"_staging/material-jobs/{job_id}/{name}"
-        r2_put_file(source, key, metadata={"jobid": job_id, "originalname": Path(original_name).name, "expectedbytes": source.stat().st_size, "sha256": _sha256_file(source), "createdat": _utc_now_iso()})
+        reserved = False
+        if r2_large_file(source.stat().st_size):
+            enforce_r2_large_upload_budget(job_id, key, source.stat().st_size)
+            reserved = True
+        try:
+            r2_put_file(source, key, metadata={"jobid": job_id, "originalname": Path(original_name).name, "expectedbytes": source.stat().st_size, "sha256": _sha256_file(source), "createdat": _utc_now_iso()})
+        except Exception:
+            if reserved:
+                _r2_release_reservation(job_id, "staging_upload_failed")
+            raise
+        if reserved:
+            _r2_release_reservation(job_id, "staging_created")
         return "r2", key, ""
     if backend == "mega":
         try:
@@ -1257,6 +1294,7 @@ def delete_material_job_staging(job: dict):
     local_path = Path(job.get("stagingPath") or job.get("staging_path") or "")
     if backend == "r2" and key:
         r2_client().delete_object(Bucket=R2_BUCKET_NAME, Key=key)
+        r2_record_deleted(key)
     elif backend == "mega" and key:
         mega_destroy(key)
     elif backend == "gdrive" and key:
@@ -1265,9 +1303,211 @@ def delete_material_job_staging(job: dict):
         shutil.rmtree(local_path.parent, ignore_errors=True)
 
 
+_R2_GB = 1024 ** 3
+
+
+def r2_large_file(source_bytes: int) -> bool:
+    return int(source_bytes or 0) >= MATERIAL_R2_LARGE_FILE_MB * 1024 * 1024
+
+
+def _r2_parse_time(value):
+    try:
+        parsed = datetime.datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _r2_month_bounds(now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    now = now if now.tzinfo else now.replace(tzinfo=datetime.timezone.utc)
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end = (start.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
+    return start, end
+
+
+def _r2_staging_totals(conn):
+    rows = conn.execute("SELECT object_bytes FROM r2_usage_ledger WHERE is_staging=TRUE AND deleted_at='' ").fetchall()
+    staging = sum(max(0, int(dict(row).get("object_bytes") or 0)) for row in rows)
+    rows = conn.execute("SELECT reserved_bytes FROM r2_upload_reservations WHERE status='active'").fetchall()
+    reserved = sum(max(0, int(dict(row).get("reserved_bytes") or 0)) for row in rows)
+    return staging, reserved
+
+
+def _r2_estimated_gb_month(conn, now=None):
+    """Teacher-owned estimate from its ledger; never an R2 invoice value."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    start, end = _r2_month_bounds(now)
+    total = 0.0
+    for row in conn.execute("SELECT object_bytes,uploaded_at,deleted_at FROM r2_usage_ledger").fetchall():
+        item = dict(row)
+        uploaded = _r2_parse_time(item.get("uploaded_at"))
+        deleted = _r2_parse_time(item.get("deleted_at")) or now
+        if not uploaded:
+            continue
+        active_start, active_end = max(uploaded, start), min(deleted, now, end)
+        if active_end > active_start:
+            total += max(0, int(item.get("object_bytes") or 0)) / _R2_GB * ((active_end - active_start).total_seconds() / (end - start).total_seconds())
+    return total
+
+
+def _r2_budget_level(percent: float) -> str:
+    if percent >= R2_EMERGENCY_PERCENT:
+        return "emergency"
+    if percent >= R2_UPLOAD_BLOCK_PERCENT:
+        return "blocked"
+    if percent >= R2_WARNING_PERCENT:
+        return "warning"
+    return "green"
+
+
+def _r2_release_reservation(upload_id: str, reason: str):
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        conn.execute(f"UPDATE r2_upload_reservations SET status='released', released_at={ph}, release_reason={ph} WHERE upload_id={ph} AND status='active'", (_utc_now_iso(), str(reason)[:80], upload_id))
+    finally:
+        conn.close()
+
+
+def r2_record_object(object_key: str, object_bytes: int, *, multipart_parts=0, estimated_operations=1, is_staging=None):
+    """Upsert an object observation into Teacher's private usage ledger."""
+    if not object_key:
+        return
+    key = str(object_key)[:1024]
+    size = max(0, int(object_bytes or 0))
+    staging = bool(str(key).startswith("_staging/")) if is_staging is None else bool(is_staging)
+    now = _utc_now_iso(); conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        if kind == "postgres":
+            conn.execute("INSERT INTO r2_usage_ledger(id,object_key,object_bytes,uploaded_at,deleted_at,multipart_parts,estimated_operations,is_staging) VALUES(%s,%s,%s,%s,'',%s,%s,%s) ON CONFLICT(object_key) DO UPDATE SET object_bytes=EXCLUDED.object_bytes,uploaded_at=EXCLUDED.uploaded_at,deleted_at='',multipart_parts=EXCLUDED.multipart_parts,estimated_operations=r2_usage_ledger.estimated_operations + EXCLUDED.estimated_operations,is_staging=EXCLUDED.is_staging", ("r2obj-" + hashlib.sha256(key.encode()).hexdigest()[:24], key, size, now, int(multipart_parts or 0), max(1, int(estimated_operations or 1)), staging))
+        else:
+            conn.execute("INSERT INTO r2_usage_ledger(id,object_key,object_bytes,uploaded_at,deleted_at,multipart_parts,estimated_operations,is_staging) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(object_key) DO UPDATE SET object_bytes=excluded.object_bytes,uploaded_at=excluded.uploaded_at,deleted_at='',multipart_parts=excluded.multipart_parts,estimated_operations=r2_usage_ledger.estimated_operations + excluded.estimated_operations,is_staging=excluded.is_staging", ("r2obj-" + hashlib.sha256(key.encode()).hexdigest()[:24], key, size, now, "", int(multipart_parts or 0), max(1, int(estimated_operations or 1)), int(staging)))
+    finally:
+        conn.close()
+
+
+def r2_record_deleted(object_key: str):
+    if not object_key:
+        return
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        conn.execute(f"UPDATE r2_usage_ledger SET deleted_at={ph}, estimated_operations=estimated_operations+1 WHERE object_key={ph} AND deleted_at=''", (_utc_now_iso(), str(object_key)[:1024]))
+    finally:
+        conn.close()
+
+
+def reserve_r2_upload(upload_id: str, object_key: str, source_bytes: int):
+    """Atomically reserve staging capacity for a large direct upload."""
+    size = max(0, int(source_bytes or 0))
+    if size <= 0:
+        raise ValueError("上傳大小不合法。")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    expiry = (now + datetime.timedelta(hours=R2_MULTIPART_ABANDON_HOURS)).isoformat()
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        if kind == "postgres":
+            with conn.transaction():
+                conn.execute("SELECT pg_advisory_xact_lock(67002026)")
+                staging, reserved = _r2_staging_totals(conn)
+                estimate = _r2_estimated_gb_month(conn, now)
+                projected = estimate + size / _R2_GB * ((_r2_month_bounds(now)[1] - now).total_seconds() / (_r2_month_bounds(now)[1] - _r2_month_bounds(now)[0]).total_seconds())
+                if FREE_ONLY_MODE and projected / R2_FREE_STORAGE_GB_MONTH * 100 >= R2_UPLOAD_BLOCK_PERCENT:
+                    raise ValueError("R2 免費額度預估已達大型檔案上傳安全門檻。")
+                if staging + reserved + size > R2_STAGING_MAX_CURRENT_GB * _R2_GB:
+                    raise ValueError("R2 staging 已達 8GB 安全上限。")
+                conn.execute("INSERT INTO r2_upload_reservations(id,upload_id,object_key,reserved_bytes,status,created_at,expires_at,released_at,release_reason) VALUES(%s,%s,%s,%s,'active',%s,%s,'','')", ("r2res-" + hashlib.sha256(upload_id.encode()).hexdigest()[:24], upload_id, object_key, size, now.isoformat(), expiry))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                staging, reserved = _r2_staging_totals(conn)
+                estimate = _r2_estimated_gb_month(conn, now)
+                start, end = _r2_month_bounds(now)
+                projected = estimate + size / _R2_GB * ((end - now).total_seconds() / (end - start).total_seconds())
+                if FREE_ONLY_MODE and projected / R2_FREE_STORAGE_GB_MONTH * 100 >= R2_UPLOAD_BLOCK_PERCENT:
+                    raise ValueError("R2 免費額度預估已達大型檔案上傳安全門檻。")
+                if staging + reserved + size > R2_STAGING_MAX_CURRENT_GB * _R2_GB:
+                    raise ValueError("R2 staging 已達 8GB 安全上限。")
+                conn.execute("INSERT INTO r2_upload_reservations(id,upload_id,object_key,reserved_bytes,status,created_at,expires_at,released_at,release_reason) VALUES(?,?,?,?,? ,?,?,?,?)", ("r2res-" + hashlib.sha256(upload_id.encode()).hexdigest()[:24], upload_id, object_key, size, "active", now.isoformat(), expiry, "", ""))
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+    finally:
+        conn.close()
+
+
+def r2_budget_status():
+    conn, _ = _db_conn()
+    try:
+        staging, reserved = _r2_staging_totals(conn)
+        estimate = _r2_estimated_gb_month(conn)
+        percent = (estimate / R2_FREE_STORAGE_GB_MONTH * 100) if R2_FREE_STORAGE_GB_MONTH else 100.0
+        rows = conn.execute("SELECT status,COUNT(*) AS count FROM material_upload_sessions GROUP BY status").fetchall()
+        active = sum(int(dict(row).get("count") or 0) for row in rows if dict(row).get("status") == "uploading")
+        cleanup_pending = conn.execute("SELECT COUNT(*) AS count FROM material_jobs WHERE cleanup_pending=1").fetchone()
+        parts = conn.execute("SELECT COALESCE(SUM(multipart_parts),0) AS count,COALESCE(SUM(estimated_operations),0) AS operations FROM r2_usage_ledger").fetchone()
+        return {"enabled": bool(FREE_ONLY_MODE), "estimatedOnly": True, "freeStorageGbMonth": R2_FREE_STORAGE_GB_MONTH, "estimatedGbMonth": round(estimate, 6), "currentStagingBytes": staging, "reservedBytes": reserved, "usagePercent": round(percent, 2), "level": _r2_budget_level(percent), "activeUploads": active, "cleanupPending": int(dict(cleanup_pending).get("count") or 0), "multipartParts": int(dict(parts).get("count") or 0), "estimatedOperations": int(dict(parts).get("operations") or 0)}
+    finally:
+        conn.close()
+
+
+def cleanup_r2_budget_state():
+    """Abort abandoned multipart uploads and release their reservations."""
+    cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=R2_MULTIPART_ABANDON_HOURS)).isoformat()
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        rows = conn.execute(f"SELECT id,staging_key,r2_upload_id FROM material_upload_sessions WHERE status='uploading' AND updated_at < {ph}", (cutoff,)).fetchall()
+    finally:
+        conn.close()
+    expired = 0
+    for row in rows:
+        item = dict(row)
+        try:
+            r2_client().abort_multipart_upload(Bucket=R2_BUCKET_NAME, Key=item["staging_key"], UploadId=item["r2_upload_id"])
+        except Exception:
+            # It may already have been aborted remotely; make the local
+            # reservation safe to release regardless.
+            pass
+        conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+        try:
+            conn.execute(f"UPDATE material_upload_sessions SET status='expired',updated_at={ph} WHERE id={ph} AND status='uploading'", (_utc_now_iso(), item["id"]))
+        finally:
+            conn.close()
+        _r2_release_reservation(item["id"], "multipart_expired")
+        expired += 1
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        conn.execute(f"UPDATE r2_upload_reservations SET status='released',released_at={ph},release_reason='reservation_expired' WHERE status='active' AND expires_at < {ph}", (_utc_now_iso(), _utc_now_iso()))
+    finally:
+        conn.close()
+    cleanup_material_job_staging()
+    return expired
+
+
+def enforce_r2_large_upload_budget(upload_id: str, object_key: str, source_bytes: int):
+    """Reject only large uploads when FREE_ONLY_MODE reaches safe thresholds."""
+    if not r2_large_file(source_bytes):
+        return
+    cleanup_r2_budget_state()
+    status = r2_budget_status()
+    if FREE_ONLY_MODE and status["level"] == "emergency":
+        raise ValueError("R2 免費額度進入緊急保護，暫停大型檔案上傳。")
+    if FREE_ONLY_MODE and status["level"] == "blocked":
+        raise ValueError("R2 免費額度預估已達大型檔案上傳安全門檻。")
+    reserve_r2_upload(upload_id, object_key, source_bytes)
+
+
 def init_material_jobs_db():
     conn, kind = _db_conn()
     try:
+        # Kept here for direct legacy-app imports; pgy_app also runs the
+        # schema_migrations 0067 compatibility ensure on every startup.
+        boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
+        default_bool = "TRUE" if kind == "postgres" else "1"
+        conn.execute("CREATE TABLE IF NOT EXISTS r2_upload_reservations (id TEXT PRIMARY KEY,upload_id TEXT NOT NULL UNIQUE,object_key TEXT NOT NULL UNIQUE,reserved_bytes BIGINT NOT NULL,status TEXT NOT NULL DEFAULT 'active',created_at TEXT NOT NULL,expires_at TEXT NOT NULL,released_at TEXT NOT NULL DEFAULT '',release_reason TEXT NOT NULL DEFAULT '')")
+        conn.execute(f"CREATE TABLE IF NOT EXISTS r2_usage_ledger (id TEXT PRIMARY KEY,object_key TEXT NOT NULL UNIQUE,object_bytes BIGINT NOT NULL,uploaded_at TEXT NOT NULL,deleted_at TEXT NOT NULL DEFAULT '',multipart_parts INTEGER NOT NULL DEFAULT 0,estimated_operations BIGINT NOT NULL DEFAULT 0,is_staging {boolean} NOT NULL DEFAULT {default_bool})")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_r2_upload_reservations_active ON r2_upload_reservations(status, expires_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_r2_usage_ledger_active ON r2_usage_ledger(deleted_at, uploaded_at)")
         if kind == "postgres":
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS material_jobs (
@@ -1526,14 +1766,22 @@ def recover_stale_material_jobs():
 
 
 def cleanup_material_job_staging():
-    cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=MATERIAL_JOB_RETENTION_HOURS)).isoformat()
     conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
     try:
-        rows = conn.execute(f"SELECT id,staging_path,staging_backend,staging_key,status FROM material_jobs WHERE updated_at < {ph} AND status IN ('completed','cancelled','failed')", (cutoff,)).fetchall()
+        rows = conn.execute("SELECT id,staging_path,staging_backend,staging_key,status,updated_at,cleanup_pending FROM material_jobs WHERE status IN ('completed','cancelled','failed')").fetchall()
         for row in rows:
             rr = dict(row)
-            delete_material_job_staging(rr)
-            conn.execute(f"UPDATE material_jobs SET staging_path='', staging_key='', updated_at={ph} WHERE id={ph}", (_utc_now_iso(), rr["id"]))
+            retention = R2_STAGING_FAILED_RETENTION_HOURS if rr.get("status") == "failed" else MATERIAL_JOB_RETENTION_HOURS
+            updated = _r2_parse_time(rr.get("updated_at"))
+            due = bool(updated and updated <= datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=retention))
+            if not due and not bool(rr.get("cleanup_pending")):
+                continue
+            try:
+                delete_material_job_staging(rr)
+            except Exception:
+                conn.execute(f"UPDATE material_jobs SET cleanup_pending={ph}, updated_at={ph} WHERE id={ph}", (True if kind == "postgres" else 1, _utc_now_iso(), rr["id"]))
+                continue
+            conn.execute(f"UPDATE material_jobs SET staging_path='', staging_key='', cleanup_pending={ph}, updated_at={ph} WHERE id={ph}", (False if kind == "postgres" else 0, _utc_now_iso(), rr["id"]))
     finally:
         conn.close()
 
@@ -1586,6 +1834,7 @@ def material_job_operations_status():
             "oldestPendingAgeSeconds": oldest_age,
             "workers": workers,
             "staging": shared_staging_capability(),
+            "r2Budget": r2_budget_status(),
         }
     finally:
         conn.close()
@@ -3549,8 +3798,9 @@ def api_list_material_jobs():
         limit = int(request.args.get("limit", 30) or 30)
     except Exception:
         limit = 30
+    cleanup_r2_budget_state()
     ops = material_job_operations_status()
-    return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS, "workerEnabled": MATERIAL_WORKER_ENABLED, "queueBackend": "material_jobs", "staging": shared_staging_capability(), "workers": ops.get("workers", []), "pendingJobs": ops.get("pendingJobs", 0), "processingJobs": ops.get("processingJobs", 0), "retryJobs": ops.get("retryJobs", 0), "failedJobs": ops.get("failedJobs", 0)})
+    return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS, "workerEnabled": MATERIAL_WORKER_ENABLED, "queueBackend": "material_jobs", "staging": shared_staging_capability(), "workers": ops.get("workers", []), "pendingJobs": ops.get("pendingJobs", 0), "processingJobs": ops.get("processingJobs", 0), "retryJobs": ops.get("retryJobs", 0), "failedJobs": ops.get("failedJobs", 0), "r2Budget": ops.get("r2Budget", {})})
 
 
 @app.get("/api/admin/background-jobs/status")
@@ -3559,6 +3809,7 @@ def api_background_jobs_status():
     if denied:
         return denied
     from media_processing_67 import ffmpeg_capability, libreoffice_capability
+    cleanup_r2_budget_state()
     data = material_job_operations_status()
     data.update({"queueBackend": "material_jobs", "ffmpeg": ffmpeg_capability(), "libreOffice": libreoffice_capability(SOFFICE_BIN)})
     return jsonify(data)

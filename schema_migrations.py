@@ -226,6 +226,37 @@ def _b_free_local_worker_67(conn, kind: str) -> None:
     conn.execute(f"CREATE TABLE IF NOT EXISTS material_upload_sessions (id TEXT PRIMARY KEY,job_id TEXT NOT NULL UNIQUE,material_id TEXT NOT NULL,staging_key TEXT NOT NULL,original_name TEXT NOT NULL,source_sha256 TEXT NOT NULL,source_bytes BIGINT NOT NULL,r2_upload_id TEXT NOT NULL,part_size BIGINT NOT NULL,expected_parts INTEGER NOT NULL,payload {payload} NOT NULL DEFAULT '{{}}',completed_parts {payload} NOT NULL DEFAULT '[]',status TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)")
 
 
+def ensure_r2_free_budget_guard_67(base) -> None:
+    """Backfill 6.7 R2 guard tables even when the 0067 marker already exists.
+
+    This deliberately is not a new migration marker and is called at every
+    startup.  It makes a database stamped with the original 0067 release safe
+    to run the additive B-Free budget guard on SQLite and PostgreSQL.
+    """
+    conn, kind = base._db_conn()
+    try:
+        boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
+        default_bool = "TRUE" if kind == "postgres" else "1"
+        conn.execute(
+            f"CREATE TABLE IF NOT EXISTS r2_upload_reservations ("
+            "id TEXT PRIMARY KEY,upload_id TEXT NOT NULL UNIQUE,object_key TEXT NOT NULL UNIQUE,"
+            "reserved_bytes BIGINT NOT NULL,status TEXT NOT NULL DEFAULT 'active',"
+            "created_at TEXT NOT NULL,expires_at TEXT NOT NULL,released_at TEXT NOT NULL DEFAULT '',"
+            "release_reason TEXT NOT NULL DEFAULT '')"
+        )
+        conn.execute(
+            f"CREATE TABLE IF NOT EXISTS r2_usage_ledger ("
+            "id TEXT PRIMARY KEY,object_key TEXT NOT NULL UNIQUE,object_bytes BIGINT NOT NULL,"
+            "uploaded_at TEXT NOT NULL,deleted_at TEXT NOT NULL DEFAULT '',"
+            "multipart_parts INTEGER NOT NULL DEFAULT 0,estimated_operations BIGINT NOT NULL DEFAULT 0,"
+            f"is_staging {boolean} NOT NULL DEFAULT {default_bool})"
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_r2_upload_reservations_active ON r2_upload_reservations(status, expires_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_r2_usage_ledger_active ON r2_usage_ledger(deleted_at, uploaded_at)")
+    finally:
+        conn.close()
+
+
 def ensure_registry(base) -> None:
     conn, kind = base._db_conn()
     try:
@@ -271,6 +302,7 @@ def register_schema_migrations(base):
     if app.extensions.get("teacher_schema_migrations_registered"):
         return app
     applied = apply_migrations(base)
+    ensure_r2_free_budget_guard_67(base)
     app.extensions["teacher_schema_migrations_registered"] = True
     app.extensions["teacher_schema_migrations_applied"] = applied
     return app

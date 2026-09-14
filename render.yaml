@@ -96,6 +96,22 @@ services:
         value: "true"
       - key: MATERIAL_DIRECT_UPLOAD_MAX_MB
         value: "2048"
+      - key: R2_FREE_STORAGE_GB_MONTH
+        value: "10"
+      - key: R2_WARNING_PERCENT
+        value: "60"
+      - key: R2_UPLOAD_BLOCK_PERCENT
+        value: "80"
+      - key: R2_EMERGENCY_PERCENT
+        value: "90"
+      - key: R2_STAGING_MAX_CURRENT_GB
+        value: "8"
+      - key: R2_STAGING_FAILED_RETENTION_HOURS
+        value: "24"
+      - key: R2_MULTIPART_ABANDON_HOURS
+        value: "6"
+      - key: MATERIAL_R2_LARGE_FILE_MB
+        value: "100"
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID
