@@ -14,4 +14,10 @@
   const originalClose=window.closeSlideViewer;
   window.closeSlideViewer=function(){if(state.material)syncPage();return originalClose?.apply(this,arguments);};
   window.smartLearning67Complete=()=>{if(state.material)save({page:page()},100,true);};
+  window.smartLearning67BindMedia=function(media,material,threshold=80){
+    if(!media||!material)return;state.material=material;let last=0;
+    const sync=()=>{const duration=Number(media.duration||0),seconds=Math.max(0,Number(media.currentTime||0)),progress=duration?Math.min(100,seconds/duration*100):0;save({seconds},progress,progress>=threshold);};
+    media.addEventListener('timeupdate',()=>{if(Date.now()-last>15000){last=Date.now();sync();}});
+    ['pause','ended'].forEach(event=>media.addEventListener(event,sync));
+  };
 })();

@@ -26,5 +26,10 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('subprocess.run([binary',source)
         self.assertNotIn('shell=True',source)
         self.assertIn('worker_once',source)
+    def test_media_progress_is_batched_and_not_autoplay_hack(self):
+        source=ROOT.joinpath('static/smart-learning-67.js').read_text(encoding='utf-8')
+        self.assertIn('15000',source)
+        self.assertIn("['pause','ended']",source)
+        self.assertNotIn('.play()',source)
 
 if __name__=='__main__': unittest.main()
