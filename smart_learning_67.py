@@ -12,6 +12,7 @@ import zipfile
 from pathlib import Path
 
 from flask import jsonify, request
+from media_processing_67 import ffmpeg_capability
 
 
 def extract_slide_text(path: Path):
@@ -151,6 +152,12 @@ def register_smart_learning(base):
             rows = conn.execute("SELECT material_id,COUNT(*) learners,SUM(CASE WHEN completed THEN 1 ELSE 0 END) completed,AVG(progress) average_progress,MAX(last_viewed_at) last_viewed_at FROM learning_progress GROUP BY material_id").fetchall()
         finally: conn.close()
         return jsonify([{"materialId": _row(r).get("material_id"), "learners": int(_row(r).get("learners") or 0), "completed": int(_row(r).get("completed") or 0), "averageProgress": round(float(_row(r).get("average_progress") or 0), 1), "lastViewedAt": _row(r).get("last_viewed_at") or ""} for r in rows])
+
+    @app.get("/api/media-processing/capability")
+    def media_capability():
+        denied=base.require_admin()
+        if denied:return denied
+        return jsonify({"ffmpeg":ffmpeg_capability(),"workerRequired":True,"processing":"durable-background-worker"})
 
     app.extensions["teacher_smart_learning_67_registered"] = True
     return app

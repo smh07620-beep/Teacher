@@ -21,5 +21,10 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('preview_docx_atlas',source)
         self.assertIn('publishRequired',source)
         self.assertIn('SmartArt',source)
+    def test_media_pipeline_is_not_an_http_thread_transcode(self):
+        source=ROOT.joinpath('media_processing_67.py').read_text(encoding='utf-8')
+        self.assertIn('subprocess.run([binary',source)
+        self.assertNotIn('shell=True',source)
+        self.assertIn('worker_once',source)
 
 if __name__=='__main__': unittest.main()
