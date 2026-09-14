@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 
 from flask import jsonify, request
-from media_processing_67 import ffmpeg_capability
+from media_processing_67 import ffmpeg_capability, libreoffice_capability, worker_architecture
 
 
 def extract_slide_text(path: Path):
@@ -157,7 +157,10 @@ def register_smart_learning(base):
     def media_capability():
         denied=base.require_admin()
         if denied:return denied
-        return jsonify({"ffmpeg":ffmpeg_capability(),"workerRequired":True,"processing":"durable-background-worker"})
+        staging = base.shared_staging_capability()
+        data = worker_architecture(staging)
+        data.update({"ffmpeg": ffmpeg_capability(), "libreOffice": libreoffice_capability(base.SOFFICE_BIN), "staging": staging, "processing": "material_worker.py"})
+        return jsonify(data)
 
     app.extensions["teacher_smart_learning_67_registered"] = True
     return app

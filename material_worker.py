@@ -9,12 +9,14 @@ import os
 import sys
 import time
 import json
-import shutil
 import socket
 import datetime
+import tempfile
 from pathlib import Path
 
 import app as appmod
+from media_processing_67 import ffmpeg_capability, libreoffice_capability
+from upload_hardening import _magic_ok, _validate_zip_bytes, ZIP_EXT
 
 WORKER_ID = os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{socket.gethostname()}:{os.getpid()}"
 
@@ -28,15 +30,37 @@ def _retry_at(attempts: int):
     return (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=delay)).isoformat(), delay
 
 
-def _post_sync_upload(job):
+def _validate_downloaded_source(source: Path, job: dict):
+    """Repeat the upload boundary checks after a cross-service download."""
     payload = dict(job.get("payload") or {})
-    source = Path(job.get("stagingPath") or "")
-    if not source.exists() or source.stat().st_size <= 0:
-        raise RuntimeError("背景工作暫存原始檔不存在或為空白，請重新上傳教材。")
+    original = Path(payload.get("originalName") or job.get("originalName") or source.name).name
+    ext = original.lower() and Path(original).suffix.lower()
+    if ext not in appmod.ALLOWED_EXT:
+        raise RuntimeError("Shared Staging 檔案副檔名不受支援。")
+    if not source.is_file() or source.stat().st_size <= 0:
+        raise RuntimeError("Shared Staging 原始檔不存在或空白。")
+    expected_size = int(job.get("sourceBytes", 0) or 0)
+    if expected_size and source.stat().st_size != expected_size:
+        raise RuntimeError("Shared Staging 檔案大小不符，已拒絕處理。")
+    if source.stat().st_size > appmod.MAX_UPLOAD_MB * 1024 * 1024:
+        raise RuntimeError("Shared Staging 檔案超過上傳大小限制。")
+    expected_hash = str(job.get("sourceSha256") or payload.get("sourceSha256") or "").lower()
+    actual_hash = appmod._sha256_file(source)
+    if not expected_hash or actual_hash != expected_hash:
+        raise RuntimeError("Shared Staging SHA256 驗證失敗，已拒絕處理。")
+    with source.open("rb") as fh:
+        head = fh.read(8192)
+    if not _magic_ok(ext, head):
+        raise RuntimeError("Shared Staging 檔案內容與副檔名不符，已拒絕處理。")
+    if ext in ZIP_EXT:
+        _validate_zip_bytes(source.read_bytes(), ext)
+    return original
+
+
+def _post_sync_upload(job, source: Path, original: str):
+    payload = dict(job.get("payload") or {})
     if not appmod.ADMIN_KEY:
         raise RuntimeError("ADMIN_KEY 未設定，背景 Worker 無法安全呼叫教材處理流程。")
-
-    original = payload.get("originalName") or source.name
     form = {
         "title": payload.get("title", ""),
         "desc": payload.get("desc", ""),
@@ -80,6 +104,7 @@ def process_job(job):
     attempts = int(job.get("attempts", 1) or 1)
     max_attempts = int(job.get("maxAttempts", appmod.MATERIAL_JOB_MAX_ATTEMPTS) or appmod.MATERIAL_JOB_MAX_ATTEMPTS)
     log(f"claim {job_id}, attempt {attempts}/{max_attempts}")
+    appmod.sync_media_processing_metadata(job, "processing")
 
     # Idempotency: if a prior attempt committed the material but the process died
     # before updating job status, do not upload it again.
@@ -97,11 +122,20 @@ def process_job(job):
             result=existing,
             error="",
         )
+        appmod.delete_material_job_staging(job)
+        appmod._update_material_job(job_id, staging_path="", staging_key="")
+        appmod.sync_media_processing_metadata(job, "completed")
         appmod.set_upload_progress(job_id, 100, "教材建立完成", "教材已存在，背景工作狀態已自動修復。")
         return
 
     try:
-        result = _post_sync_upload(job)
+        with tempfile.TemporaryDirectory(prefix="teacher-material-worker-") as temp_dir:
+            payload = dict(job.get("payload") or {})
+            original = Path(payload.get("originalName") or job.get("originalName") or "source.bin").name
+            source = Path(temp_dir) / ("source" + Path(original).suffix.lower())
+            appmod.download_material_job_staging(job, source)
+            original = _validate_downloaded_source(source, job)
+            result = _post_sync_upload(job, source, original)
         now = appmod._utc_now_iso()
         material_id = str(result.get("id") or material_id or "")
         appmod._update_material_job(
@@ -115,10 +149,11 @@ def process_job(job):
             error="",
         )
         appmod.set_upload_progress(job_id, 100, "教材建立完成", "背景工作已完成，可在教材清單開啟。")
-        # Success no longer needs the queued upload copy.
-        staging = Path(job.get("stagingPath") or "")
-        if staging.exists() and appmod.MATERIAL_JOB_DIR in staging.parents:
-            shutil.rmtree(staging.parent, ignore_errors=True)
+        # The durable result is committed; successful jobs do not retain the
+        # Shared Staging copy.  Retry/terminal failures intentionally retain it.
+        appmod.delete_material_job_staging(job)
+        appmod._update_material_job(job_id, staging_path="", staging_key="")
+        appmod.sync_media_processing_metadata(job, "completed")
         log(f"completed {job_id} -> {material_id}")
     except Exception as exc:
         error = str(exc)[:1200]
@@ -134,6 +169,7 @@ def process_job(job):
                 worker_id="",
             )
             appmod.set_upload_progress(job_id, 8, "等待自動重試", f"{error}｜將自動重試，不需要重新上傳。")
+            appmod.sync_media_processing_metadata(job, "retry_wait", error)
             log(f"retry {job_id}: {error}")
         else:
             now = appmod._utc_now_iso()
@@ -147,6 +183,7 @@ def process_job(job):
                 worker_id="",
             )
             appmod.set_upload_progress(job_id, 0, "處理失敗", f"{error}｜原始檔暫時保留，可直接重新處理。")
+            appmod.sync_media_processing_metadata(job, "failed", error)
             log(f"failed {job_id}: {error}")
 
 
@@ -154,6 +191,27 @@ def main():
     if not appmod.MATERIAL_BACKGROUND_JOBS:
         log("MATERIAL_BACKGROUND_JOBS=false; worker disabled")
         return 0
+    if not appmod.MATERIAL_WORKER_ENABLED:
+        log("MATERIAL_WORKER_ENABLED=false; worker disabled")
+        return 0
+    if not appmod.DATABASE_URL:
+        log("DATABASE_URL is not set; using SQLite only for local development")
+    if not appmod.ADMIN_KEY:
+        log("ADMIN_KEY is required by the trusted in-process material handler")
+        return 2
+    try:
+        conn, kind = appmod._db_conn()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        log(f"database ready ({kind})")
+    except Exception as exc:
+        log(f"database unavailable: {exc}")
+        return 2
+    staging = appmod.shared_staging_capability()
+    if not staging.get("available"):
+        log("shared staging unavailable; worker will not start")
+        return 2
+    log(f"shared staging={staging.get('backend')} ffmpeg={ffmpeg_capability().get('available')} libreoffice={libreoffice_capability(appmod.SOFFICE_BIN).get('available')} adminKey=true")
     appmod.init_material_jobs_db()
     recovered = appmod.recover_stale_material_jobs()
     if recovered:

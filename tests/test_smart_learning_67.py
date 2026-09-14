@@ -23,9 +23,10 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('SmartArt',source)
     def test_media_pipeline_is_not_an_http_thread_transcode(self):
         source=ROOT.joinpath('media_processing_67.py').read_text(encoding='utf-8')
-        self.assertIn('subprocess.run([binary',source)
+        self.assertIn('subprocess.run([path',source)
         self.assertNotIn('shell=True',source)
-        self.assertIn('worker_once',source)
+        self.assertIn('material_jobs',source)
+        self.assertNotIn('def worker_once',source)
     def test_media_progress_is_batched_and_not_autoplay_hack(self):
         source=ROOT.joinpath('static/smart-learning-67.js').read_text(encoding='utf-8')
         self.assertIn('15000',source)

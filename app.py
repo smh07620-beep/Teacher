@@ -104,12 +104,11 @@ QUESTION_IMAGES_DIR = MATERIAL_STORAGE / "question_images"
 UPLOADED_SLIDES_DIR = MATERIAL_STORAGE / "slides"
 DOC_TEMPLATES_DIR = MATERIAL_STORAGE / "doc_templates"
 PGY_ASSESSMENT_TEMPLATES_DIR = MATERIAL_STORAGE / "pgy_assessment_templates"
-MATERIAL_JOB_DIR = MATERIAL_STORAGE / "job_staging"
 DATA_DIR = BASE_DIR / "data"
 META_FILE = DATA_DIR / "slides_meta.json"
 TMP_DIR = BASE_DIR / "tmp_convert"
 
-for d in (SLIDES_DIR, UPLOAD_DIR, UPLOADED_SLIDES_DIR, DOC_TEMPLATES_DIR, PGY_ASSESSMENT_TEMPLATES_DIR, MATERIAL_JOB_DIR, QUESTION_IMAGES_DIR, DATA_DIR, TMP_DIR):
+for d in (SLIDES_DIR, UPLOAD_DIR, UPLOADED_SLIDES_DIR, DOC_TEMPLATES_DIR, PGY_ASSESSMENT_TEMPLATES_DIR, QUESTION_IMAGES_DIR, DATA_DIR, TMP_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 UPLOAD_PROGRESS_DIR = TMP_DIR / "upload_progress"
@@ -174,6 +173,10 @@ MATERIAL_PREVIEW_CACHE_MB = max(64, min(2048, int(os.environ.get("MATERIAL_PREVI
 MATERIAL_PREVIEW_CACHE_TTL_SECONDS = max(300, min(86400, int(os.environ.get("MATERIAL_PREVIEW_CACHE_TTL_SECONDS", "21600"))))
 # V5.7.0：大型教材先完成 HTTP 接收，再交由資料庫佇列背景轉檔／上雲。
 MATERIAL_BACKGROUND_JOBS = os.environ.get("MATERIAL_BACKGROUND_JOBS", "true").strip().lower() not in {"0","false","no","off"}
+# Scheme B deliberately separates job creation from job consumption.  Local
+# development can still run `python -u material_worker.py` explicitly.
+MATERIAL_WORKER_ENABLED = os.environ.get("MATERIAL_WORKER_ENABLED", "true").strip().lower() in {"1","true","yes","on"}
+MATERIAL_SHARED_STAGING_BACKEND = os.environ.get("MATERIAL_SHARED_STAGING_BACKEND", "auto").strip().lower() or "auto"
 MATERIAL_JOB_MAX_ATTEMPTS = max(1, min(8, int(os.environ.get("MATERIAL_JOB_MAX_ATTEMPTS", "3"))))
 MATERIAL_JOB_STALE_SECONDS = max(300, min(21600, int(os.environ.get("MATERIAL_JOB_STALE_SECONDS", "1800"))))
 MATERIAL_JOB_RETENTION_HOURS = max(6, min(720, int(os.environ.get("MATERIAL_JOB_RETENTION_HOURS", "72"))))
@@ -1099,6 +1102,141 @@ def _material_job_priority(source_bytes: int) -> int:
     return 40
 
 
+def shared_staging_backend():
+    """Select an object store that both the Render web and worker can reach.
+
+    `local` is intentionally a development fallback only.  A production web
+    service must never hand `/var/data` paths to a different service.
+    """
+    requested = MATERIAL_SHARED_STAGING_BACKEND
+    if requested not in {"auto", "mega", "gdrive", "local"}:
+        raise RuntimeError("MATERIAL_SHARED_STAGING_BACKEND 必須是 auto、mega、gdrive 或 local。")
+    if requested == "mega":
+        if not mega_is_configured():
+            raise RuntimeError("Shared Staging 設為 MEGA，但 MEGA 尚未完成設定。")
+        return "mega"
+    if requested == "gdrive":
+        if not gdrive_is_configured():
+            raise RuntimeError("Shared Staging 設為 Google Drive，但 OAuth 尚未完成設定。")
+        return "gdrive"
+    if requested == "local":
+        return "local"
+    backend = active_material_backend()
+    return backend if backend in {"mega", "gdrive"} else "local"
+
+
+def shared_staging_capability():
+    """Configuration-only capability report; it never exposes credentials."""
+    try:
+        backend = shared_staging_backend()
+        return {
+            "available": True,
+            "backend": backend,
+            "shared": backend in {"mega", "gdrive"},
+            "namespace": "_staging/material-jobs",
+        }
+    except Exception as exc:
+        return {"available": False, "backend": "", "shared": False, "namespace": "_staging/material-jobs", "reason": str(exc)[:180]}
+
+
+def _safe_staging_name(job_id: str, original_name: str) -> str:
+    ext = Path(original_name or "source.bin").suffix.lower()
+    if ext not in ALLOWED_EXT:
+        raise ValueError("Shared Staging 檔案副檔名不受支援。")
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "", str(job_id or ""))[:80]
+    if not safe_id:
+        raise ValueError("背景工作 ID 不合法。")
+    return f"source{ext}"
+
+
+def _gdrive_staging_parent():
+    root = gdrive_find_file_in_folder(GDRIVE_FOLDER_ID, "_staging")
+    if not root:
+        root = gdrive_create_folder("_staging", GDRIVE_FOLDER_ID, {"smh_kind": "staging"})
+    jobs = gdrive_find_file_in_folder(root, "material-jobs")
+    if not jobs:
+        jobs = gdrive_create_folder("material-jobs", root, {"smh_kind": "material_job_staging"})
+    return jobs
+
+
+def upload_material_job_staging(source: Path, job_id: str, original_name: str):
+    """Upload before making the job runnable; return only backend/object key."""
+    source = Path(source)
+    if not source.is_file() or source.stat().st_size <= 0:
+        raise ValueError("Shared Staging 原始檔不存在或空白。")
+    if source.stat().st_size > MAX_UPLOAD_MB * 1024 * 1024:
+        raise ValueError("教材檔案超過上傳大小限制。")
+    name = _safe_staging_name(job_id, original_name)
+    backend = shared_staging_backend()
+    if backend == "mega":
+        try:
+            _mega_free_guard(source.stat().st_size)
+            folder = _mega_remote_join(_mega_root_id(), "_staging", "material-jobs", str(job_id))
+            return "mega", _mega_upload_file(source, folder, name), ""
+        except Exception as exc:
+            # Keep the established MEGA-primary / GDrive-on-full contract.
+            if not (_is_storage_full_error(exc) and _fallback_backend_ready() == "gdrive"):
+                raise
+            backend = "gdrive"
+    if backend == "gdrive":
+        uploaded = gdrive_upload_file(
+            source,
+            f"{job_id}-{name}",
+            _gdrive_staging_parent(),
+            {"smh_kind": "material_job_staging", "smh_job_id": str(job_id)},
+        )
+        return "gdrive", str(uploaded["id"]), ""
+    # Local is explicitly retained for a single-process local/dev install.
+    local_dir = TMP_DIR / "material-job-staging" / str(job_id)
+    local_dir.mkdir(parents=True, exist_ok=True)
+    local_path = local_dir / name
+    shutil.copy2(source, local_path)
+    return "local", "", str(local_path)
+
+
+def download_material_job_staging(job: dict, target: Path):
+    backend = str(job.get("stagingBackend") or job.get("staging_backend") or "local").lower()
+    key = str(job.get("stagingKey") or job.get("staging_key") or "")
+    local_path = str(job.get("stagingPath") or job.get("staging_path") or "")
+    target = Path(target)
+    if backend == "mega":
+        if not key: raise RuntimeError("Shared Staging 缺少 MEGA object key。")
+        return mega_download_file(key, target)
+    if backend == "gdrive":
+        if not key: raise RuntimeError("Shared Staging 缺少 Google Drive object key。")
+        return gdrive_download_to_path(key, target)
+    path = Path(local_path)
+    if not path.is_file(): raise RuntimeError("本機開發 Shared Staging 原始檔不存在。")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(path, target)
+    return target
+
+
+def material_job_staging_exists(job: dict) -> bool:
+    backend = str(job.get("stagingBackend") or job.get("staging_backend") or "local").lower()
+    key = str(job.get("stagingKey") or job.get("staging_key") or "")
+    try:
+        if backend == "mega":
+            return bool(key and _mega_run(["mega-ls", key], check=False, timeout=60).returncode == 0)
+        if backend == "gdrive":
+            return bool(key and gdrive_service().files().get(fileId=key, fields="id,trashed").execute().get("id"))
+        return Path(job.get("stagingPath") or job.get("staging_path") or "").is_file()
+    except Exception:
+        return False
+
+
+def delete_material_job_staging(job: dict):
+    backend = str(job.get("stagingBackend") or job.get("staging_backend") or "local").lower()
+    key = str(job.get("stagingKey") or job.get("staging_key") or "")
+    local_path = Path(job.get("stagingPath") or job.get("staging_path") or "")
+    if backend == "mega" and key:
+        mega_destroy(key)
+    elif backend == "gdrive" and key:
+        gdrive_delete_file(key)
+    elif backend == "local" and local_path.exists():
+        shutil.rmtree(local_path.parent, ignore_errors=True)
+
+
 def init_material_jobs_db():
     conn, kind = _db_conn()
     try:
@@ -1119,6 +1257,9 @@ def init_material_jobs_db():
                     detail TEXT NOT NULL DEFAULT '',
                     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
                     staging_path TEXT NOT NULL,
+                    staging_backend TEXT NOT NULL DEFAULT 'local',
+                    staging_key TEXT NOT NULL DEFAULT '',
+                    original_name TEXT NOT NULL DEFAULT '',
                     material_id TEXT NOT NULL DEFAULT '',
                     source_sha256 TEXT NOT NULL DEFAULT '',
                     source_bytes BIGINT NOT NULL DEFAULT 0,
@@ -1128,6 +1269,9 @@ def init_material_jobs_db():
                     cancel_requested BOOLEAN NOT NULL DEFAULT FALSE
                 )
             """)
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS staging_backend TEXT NOT NULL DEFAULT 'local'")
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS staging_key TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS original_name TEXT NOT NULL DEFAULT ''")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_material_jobs_queue ON material_jobs(status, priority DESC, created_at)")
         else:
             conn.execute("""
@@ -1146,6 +1290,9 @@ def init_material_jobs_db():
                     detail TEXT NOT NULL DEFAULT '',
                     payload TEXT NOT NULL DEFAULT '{}',
                     staging_path TEXT NOT NULL,
+                    staging_backend TEXT NOT NULL DEFAULT 'local',
+                    staging_key TEXT NOT NULL DEFAULT '',
+                    original_name TEXT NOT NULL DEFAULT '',
                     material_id TEXT NOT NULL DEFAULT '',
                     source_sha256 TEXT NOT NULL DEFAULT '',
                     source_bytes INTEGER NOT NULL DEFAULT 0,
@@ -1155,6 +1302,13 @@ def init_material_jobs_db():
                     cancel_requested INTEGER NOT NULL DEFAULT 0
                 )
             """)
+            existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(material_jobs)").fetchall()}
+            if "staging_backend" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN staging_backend TEXT NOT NULL DEFAULT 'local'")
+            if "staging_key" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN staging_key TEXT NOT NULL DEFAULT ''")
+            if "original_name" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN original_name TEXT NOT NULL DEFAULT ''")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_material_jobs_queue ON material_jobs(status, priority, created_at)")
     finally:
         conn.close()
@@ -1183,7 +1337,9 @@ def _material_job_row_to_dict(row, include_payload=False):
     r["sourceSha256"] = r.pop("source_sha256", "") or ""
     r["sourceBytes"] = int(r.pop("source_bytes", 0) or 0)
     r["workerId"] = r.pop("worker_id", "") or ""
-    r["originalName"] = str((r.get("payload") or {}).get("originalName", "") or "")
+    r["stagingBackend"] = r.pop("staging_backend", "local") or "local"
+    r["stagingKey"] = r.pop("staging_key", "") or ""
+    r["originalName"] = r.pop("original_name", "") or str((r.get("payload") or {}).get("originalName", "") or "")
     r["title"] = str((r.get("payload") or {}).get("title", "") or "")
     r["progress"] = 0.0
     progress_id = str(r.get("id") or "")
@@ -1205,25 +1361,26 @@ def _material_job_row_to_dict(row, include_payload=False):
     if not include_payload:
         r.pop("payload", None)
         r.pop("staging_path", None)
+        r.pop("staging_key", None)
     else:
         r["stagingPath"] = r.pop("staging_path", "")
     return r
 
 
-def create_material_job(*, job_id: str, payload: dict, staging_path: Path, source_sha256: str, source_bytes: int, material_id: str):
+def create_material_job(*, job_id: str, payload: dict, staging_backend: str, staging_key: str, staging_path: str = "", source_sha256: str, source_bytes: int, material_id: str, original_name: str = ""):
     now = _utc_now_iso()
     priority = _material_job_priority(source_bytes)
     conn, kind = _db_conn()
     try:
-        values = (job_id, "queued", priority, now, now, now, MATERIAL_JOB_MAX_ATTEMPTS, "等待背景處理", "教材已安全接收，可離開此頁；背景工作會繼續。", json.dumps(payload, ensure_ascii=False), str(staging_path), material_id, source_sha256, int(source_bytes or 0))
+        values = (job_id, "queued", priority, now, now, now, MATERIAL_JOB_MAX_ATTEMPTS, "等待背景處理", "教材已安全接收，可離開此頁；獨立背景 Worker 會繼續。", json.dumps(payload, ensure_ascii=False), str(staging_path or ""), staging_backend, staging_key, original_name, material_id, source_sha256, int(source_bytes or 0))
         if kind == "postgres":
             conn.execute("""INSERT INTO material_jobs
-                (id,status,priority,created_at,updated_at,available_at,max_attempts,stage,detail,payload,staging_path,material_id,source_sha256,source_bytes)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)""", values)
+                (id,status,priority,created_at,updated_at,available_at,max_attempts,stage,detail,payload,staging_path,staging_backend,staging_key,original_name,material_id,source_sha256,source_bytes)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s)""", values)
         else:
             conn.execute("""INSERT INTO material_jobs
-                (id,status,priority,created_at,updated_at,available_at,max_attempts,stage,detail,payload,staging_path,material_id,source_sha256,source_bytes)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", values)
+                (id,status,priority,created_at,updated_at,available_at,max_attempts,stage,detail,payload,staging_path,staging_backend,staging_key,original_name,material_id,source_sha256,source_bytes)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", values)
     finally:
         conn.close()
 
@@ -1248,7 +1405,7 @@ def list_material_jobs(limit=30):
 
 
 def _update_material_job(job_id: str, **fields):
-    allowed = {"status","updated_at","available_at","started_at","finished_at","attempts","stage","detail","material_id","error","result","worker_id","cancel_requested"}
+    allowed = {"status","updated_at","available_at","started_at","finished_at","attempts","stage","detail","material_id","error","result","worker_id","cancel_requested","staging_path","staging_key"}
     clean = {k:v for k,v in fields.items() if k in allowed}
     if not clean:
         return
@@ -1313,16 +1470,16 @@ def claim_next_material_job(worker_id: str):
 
 
 def recover_stale_material_jobs():
-    """Worker / Render 重啟後，把超時 processing 工作放回佇列；原始檔仍在 staging 就不必重新上傳。"""
+    """Recover stale jobs if their shared staging object is still available."""
     threshold = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=MATERIAL_JOB_STALE_SECONDS)).isoformat()
     now = _utc_now_iso()
     conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
     try:
-        rows = conn.execute(f"SELECT id,staging_path FROM material_jobs WHERE status='processing' AND updated_at < {ph}", (threshold,)).fetchall()
+        rows = conn.execute(f"SELECT id,staging_path,staging_backend,staging_key FROM material_jobs WHERE status='processing' AND updated_at < {ph}", (threshold,)).fetchall()
         recovered = 0
         for row in rows:
             rr = dict(row)
-            if Path(rr.get("staging_path") or "").exists():
+            if material_job_staging_exists(rr):
                 conn.execute(f"UPDATE material_jobs SET status='queued', available_at={ph}, updated_at={ph}, stage='重新排隊', detail='偵測到前次 Worker 中斷，已自動續接', worker_id='' WHERE id={ph}", (now, now, rr["id"]))
                 recovered += 1
             else:
@@ -1336,12 +1493,80 @@ def cleanup_material_job_staging():
     cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=MATERIAL_JOB_RETENTION_HOURS)).isoformat()
     conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
     try:
-        rows = conn.execute(f"SELECT id,staging_path,status FROM material_jobs WHERE updated_at < {ph} AND status IN ('completed','cancelled','failed')", (cutoff,)).fetchall()
+        rows = conn.execute(f"SELECT id,staging_path,staging_backend,staging_key,status FROM material_jobs WHERE updated_at < {ph} AND status IN ('completed','cancelled','failed')", (cutoff,)).fetchall()
         for row in rows:
-            rr = dict(row); path = Path(rr.get("staging_path") or "")
-            root = path.parent if path.name else path
-            if root.exists() and MATERIAL_JOB_DIR in root.parents:
-                shutil.rmtree(root, ignore_errors=True)
+            rr = dict(row)
+            delete_material_job_staging(rr)
+            conn.execute(f"UPDATE material_jobs SET staging_path='', staging_key='', updated_at={ph} WHERE id={ph}", (_utc_now_iso(), rr["id"]))
+    finally:
+        conn.close()
+
+
+def material_job_operations_status():
+    """Admin-only aggregate operational state; no paths, keys or credentials."""
+    conn, kind = _db_conn()
+    try:
+        rows = conn.execute("SELECT status, COUNT(*) AS count, MIN(created_at) AS oldest FROM material_jobs GROUP BY status").fetchall()
+        by_status = {str(dict(row).get("status") or ""): dict(row) for row in rows}
+        pending = sum(int((by_status.get(s) or {}).get("count") or 0) for s in ("queued", "retry_wait"))
+        processing = int((by_status.get("processing") or {}).get("count") or 0)
+        failed = int((by_status.get("failed") or {}).get("count") or 0)
+        oldest = min((str((by_status.get(s) or {}).get("oldest") or "") for s in ("queued", "retry_wait") if (by_status.get(s) or {}).get("oldest")), default="")
+        oldest_age = 0
+        if oldest:
+            try:
+                parsed = datetime.datetime.fromisoformat(oldest.replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+                oldest_age = max(0, int((datetime.datetime.now(datetime.timezone.utc) - parsed).total_seconds()))
+            except (TypeError, ValueError):
+                oldest_age = 0
+        return {
+            "backgroundJobsEnabled": MATERIAL_BACKGROUND_JOBS,
+            "workerEnabled": MATERIAL_WORKER_ENABLED,
+            "pendingJobs": pending,
+            "processingJobs": processing,
+            "retryJobs": int((by_status.get("retry_wait") or {}).get("count") or 0),
+            "failedJobs": failed,
+            "oldestPendingAt": oldest,
+            "oldestPendingAgeSeconds": oldest_age,
+            "staging": shared_staging_capability(),
+        }
+    finally:
+        conn.close()
+
+
+def sync_media_processing_metadata(job: dict, status: str, failure_reason: str = ""):
+    """Keep 0067 media rows as read-only metadata linked to material_jobs.
+
+    This is deliberately not a second queue: claim/retry/ownership are always
+    implemented by material_jobs.
+    """
+    payload = dict(job.get("payload") or {})
+    original = str(job.get("originalName") or payload.get("originalName") or "")
+    if Path(original).suffix.lower() not in AI_VIDEO_EXT | AI_AUDIO_EXT:
+        return
+    job_id = str(job.get("id") or "")
+    material_id = str(job.get("materialId") or payload.get("materialId") or "")
+    if not job_id or not material_id:
+        return
+    now = _utc_now_iso()
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        if kind == "postgres":
+            conn.execute(
+                "INSERT INTO media_processing_jobs(id,material_id,material_job_id,status,failure_reason,created_at,updated_at) VALUES(%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status,failure_reason=EXCLUDED.failure_reason,updated_at=EXCLUDED.updated_at",
+                (job_id, material_id, job_id, status, failure_reason[:1200], now, now),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO media_processing_jobs(id,material_id,material_job_id,status,failure_reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,failure_reason=excluded.failure_reason,updated_at=excluded.updated_at",
+                (job_id, material_id, job_id, status, failure_reason[:1200], now, now),
+            )
+    except Exception:
+        # Direct legacy app imports can run without the optional 0067 registry;
+        # queue correctness must never depend on reporting metadata.
+        pass
     finally:
         conn.close()
 
@@ -3213,7 +3438,18 @@ def api_list_material_jobs():
         limit = int(request.args.get("limit", 30) or 30)
     except Exception:
         limit = 30
-    return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS})
+    return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS, "workerEnabled": MATERIAL_WORKER_ENABLED, "queueBackend": "material_jobs", "staging": shared_staging_capability()})
+
+
+@app.get("/api/admin/background-jobs/status")
+def api_background_jobs_status():
+    denied = require_admin()
+    if denied:
+        return denied
+    from media_processing_67 import ffmpeg_capability, libreoffice_capability
+    data = material_job_operations_status()
+    data.update({"queueBackend": "material_jobs", "ffmpeg": ffmpeg_capability(), "libreOffice": libreoffice_capability(SOFFICE_BIN)})
+    return jsonify(data)
 
 
 @app.get("/api/material-jobs/<job_id>")
@@ -3245,35 +3481,48 @@ def api_enqueue_material_job():
 
     job_id = f"matjob-{uuid.uuid4().hex[:16]}"
     material_id = "upload-" + hashlib.sha256(job_id.encode("utf-8")).hexdigest()[:12]
-    job_dir = MATERIAL_JOB_DIR / job_id
-    job_dir.mkdir(parents=True, exist_ok=True)
-    staged = job_dir / f"source{ext}"
+    staging_record = None
     try:
-        file.save(str(staged))
-        source_bytes = staged.stat().st_size
-        if source_bytes <= 0:
-            raise ValueError("教材檔案為空白檔案")
-        source_sha256 = _sha256_file(staged)
-        payload = {
-            "originalName": original_name,
-            "title": request.form.get("title", "").strip()[:255],
-            "desc": request.form.get("desc", "").strip()[:1000],
-            "category": request.form.get("category", "").strip()[:100],
-            "group": normalize_group(request.form.get("group", DEFAULT_GROUP)),
-            "area": normalize_area(request.form.get("area", DEFAULT_TRAINING_AREA)),
-            "courseId": request.form.get("courseId", "").strip()[:100],
-            "materialType": request.form.get("materialType", "standard").strip().lower(),
-            "atlasCategory": request.form.get("atlasCategory", "").strip()[:120],
-            "atlasMagnification": request.form.get("atlasMagnification", "").strip()[:80],
-            "atlasInterpretation": request.form.get("atlasInterpretation", "").strip()[:1000],
-            "atlasClinical": request.form.get("atlasClinical", "").strip()[:1000],
-            "atlasDifferential": request.form.get("atlasDifferential", "").strip()[:1000],
-            "atlasNormality": request.form.get("atlasNormality", "").strip()[:40],
-            "atlasTags": request.form.get("atlasTags", "").strip()[:300],
-            "materialId": material_id,
-            "sourceSha256": source_sha256,
-        }
-        create_material_job(job_id=job_id, payload=payload, staging_path=staged, source_sha256=source_sha256, source_bytes=source_bytes, material_id=material_id)
+        # The Web process owns this temporary receiving file only until it has
+        # been copied to Shared Staging.  It is never a cross-service hand-off.
+        with tempfile.TemporaryDirectory(prefix="teacher-material-upload-") as temp_dir:
+            staged = Path(temp_dir) / f"source{ext}"
+            file.save(str(staged))
+            source_bytes = staged.stat().st_size
+            if source_bytes <= 0:
+                raise ValueError("教材檔案為空白檔案")
+            if source_bytes > MAX_UPLOAD_MB * 1024 * 1024:
+                raise ValueError("教材檔案超過上傳大小限制。")
+            source_sha256 = _sha256_file(staged)
+            payload = {
+                "originalName": original_name,
+                "sourceMime": _content_type_for(original_name),
+                "title": request.form.get("title", "").strip()[:255],
+                "desc": request.form.get("desc", "").strip()[:1000],
+                "category": request.form.get("category", "").strip()[:100],
+                "group": normalize_group(request.form.get("group", DEFAULT_GROUP)),
+                "area": normalize_area(request.form.get("area", DEFAULT_TRAINING_AREA)),
+                "courseId": request.form.get("courseId", "").strip()[:100],
+                "materialType": request.form.get("materialType", "standard").strip().lower(),
+                "atlasCategory": request.form.get("atlasCategory", "").strip()[:120],
+                "atlasMagnification": request.form.get("atlasMagnification", "").strip()[:80],
+                "atlasInterpretation": request.form.get("atlasInterpretation", "").strip()[:1000],
+                "atlasClinical": request.form.get("atlasClinical", "").strip()[:1000],
+                "atlasDifferential": request.form.get("atlasDifferential", "").strip()[:1000],
+                "atlasNormality": request.form.get("atlasNormality", "").strip()[:40],
+                "atlasTags": request.form.get("atlasTags", "").strip()[:300],
+                "materialId": material_id,
+                "sourceSha256": source_sha256,
+            }
+            staging_backend, staging_key, staging_path = upload_material_job_staging(staged, job_id, original_name)
+            staging_record = {"stagingBackend": staging_backend, "stagingKey": staging_key, "stagingPath": staging_path}
+            try:
+                create_material_job(job_id=job_id, payload=payload, staging_backend=staging_backend, staging_key=staging_key, staging_path=staging_path, source_sha256=source_sha256, source_bytes=source_bytes, material_id=material_id, original_name=original_name)
+                sync_media_processing_metadata({"id": job_id, "materialId": material_id, "originalName": original_name, "payload": payload}, "queued")
+            except Exception:
+                delete_material_job_staging(staging_record)
+                staging_record = None
+                raise
         clear_upload_progress(job_id)
         set_upload_progress(job_id, 9, "已加入背景佇列", "教材已安全接收，可離開此頁；背景 Worker 將自動轉檔、最佳化並送往雲端。")
         return jsonify({
@@ -3287,7 +3536,8 @@ def api_enqueue_material_job():
             "message": "教材已安全接收並加入背景佇列，可離開此頁。",
         }), 202
     except Exception as e:
-        shutil.rmtree(job_dir, ignore_errors=True)
+        if staging_record:
+            delete_material_job_staging(staging_record)
         return jsonify({"error": f"教材排隊失敗：{e}"}), 400
 
 
@@ -3301,8 +3551,7 @@ def api_retry_material_job(job_id):
         return jsonify({"error": "找不到此背景教材工作"}), 404
     if job.get("status") not in {"failed", "cancelled"}:
         return jsonify({"error": "只有失敗或已取消的工作可以重新處理"}), 409
-    staging = Path(job.get("stagingPath") or "")
-    if not staging.exists():
+    if not material_job_staging_exists(job):
         return jsonify({"error": "暫存原始檔已過期或不存在，請重新上傳教材。"}), 410
     now = _utc_now_iso()
     clear_upload_progress(job_id)

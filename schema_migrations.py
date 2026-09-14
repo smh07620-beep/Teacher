@@ -195,6 +195,24 @@ def _smart_learning_67(conn, kind: str) -> None:
     conn.execute("CREATE TABLE IF NOT EXISTS atlas_import_previews (id TEXT PRIMARY KEY,material_id TEXT NOT NULL,payload TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'preview',created_at TEXT NOT NULL)")
 
 
+@migration("0067-render-worker-shared-staging")
+def _render_worker_shared_staging_67(conn, kind: str) -> None:
+    """Add Scheme B metadata without re-running or overwriting the original 0067.
+
+    Existing 6.7 databases may already have recorded 0067, so this separate
+    additive marker upgrades them safely.  `material_jobs` remains the only
+    queue; media_processing_jobs is linked supporting metadata for media jobs.
+    """
+    _add_columns(conn, kind, "material_jobs", {
+        "staging_backend": "staging_backend TEXT NOT NULL DEFAULT 'local'",
+        "staging_key": "staging_key TEXT NOT NULL DEFAULT ''",
+        "original_name": "original_name TEXT NOT NULL DEFAULT ''",
+    })
+    _add_columns(conn, kind, "media_processing_jobs", {
+        "material_job_id": "material_job_id TEXT NOT NULL DEFAULT ''",
+    })
+
+
 def ensure_registry(base) -> None:
     conn, kind = base._db_conn()
     try:
