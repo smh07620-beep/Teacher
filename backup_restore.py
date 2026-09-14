@@ -25,7 +25,7 @@ BACKUP_FORMAT = "teacher-backup-v1"
 DEFAULT_TABLES = (
     "user_accounts", "courses", "quiz_categories", "quiz_questions",
     "exam_records", "materials", "pgy_assignments", "pgy_assignment_audit",
-    "exam_attempts", "schema_migrations",
+    "exam_attempts", "schema_migrations", "learning_progress", "material_text_index", "media_processing_jobs", "atlas_import_previews",
 )
 
 

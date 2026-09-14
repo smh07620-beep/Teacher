@@ -34,5 +34,9 @@ class SmartLearning67Tests(unittest.TestCase):
     def test_review_source_20_keeps_legacy_time_seconds(self):
         source=ROOT.joinpath('teacher_app/exams/grading.py').read_text(encoding='utf-8')
         self.assertIn('timeSeconds',source); self.assertIn('timeStart',source); self.assertIn('"region"',source)
+    def test_0067_is_additive_and_required(self):
+        schema=ROOT.joinpath('schema_migrations.py').read_text(encoding='utf-8')
+        self.assertIn('0067-smart-learning-content',schema)
+        self.assertIn('CREATE TABLE IF NOT EXISTS learning_progress',schema)
 
 if __name__=='__main__': unittest.main()

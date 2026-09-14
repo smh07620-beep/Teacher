@@ -183,16 +183,16 @@ def _additive_rbac_pgy_signing_66(conn, kind: str) -> None:
         },
     )
     _backfill_legacy_user_roles(conn, kind)
-    _add_columns(
-        conn,
-        kind,
-        "pgy_assignments",
-        {
-            "sign_mode": "sign_mode TEXT NOT NULL DEFAULT 'legacy'",
-            "first_signature": "first_signature TEXT NOT NULL DEFAULT '{}'",
-            "second_signature": "second_signature TEXT NOT NULL DEFAULT '{}'",
-        },
-    )
+    _add_columns(conn, kind, "pgy_assignments", {"sign_mode": "sign_mode TEXT NOT NULL DEFAULT 'legacy'", "first_signature": "first_signature TEXT NOT NULL DEFAULT '{}'", "second_signature": "second_signature TEXT NOT NULL DEFAULT '{}'"})
+
+@migration("0067-smart-learning-content")
+def _smart_learning_67(conn, kind: str) -> None:
+    """Additive/idempotent learning metadata; no legacy row is overwritten."""
+    boolean="BOOLEAN" if kind=="postgres" else "INTEGER"
+    conn.execute(f"CREATE TABLE IF NOT EXISTS learning_progress (material_id TEXT NOT NULL, username TEXT NOT NULL, position TEXT NOT NULL DEFAULT '{{}}', progress REAL NOT NULL DEFAULT 0, completed {boolean} NOT NULL DEFAULT 0, last_viewed_at TEXT NOT NULL DEFAULT '', completed_at TEXT NOT NULL DEFAULT '', PRIMARY KEY(material_id,username))")
+    conn.execute("CREATE TABLE IF NOT EXISTS material_text_index (material_id TEXT NOT NULL,page_no INTEGER NOT NULL,title TEXT NOT NULL DEFAULT '',text TEXT NOT NULL DEFAULT '',indexed_at TEXT NOT NULL DEFAULT '',PRIMARY KEY(material_id,page_no))")
+    conn.execute("CREATE TABLE IF NOT EXISTS media_processing_jobs (id TEXT PRIMARY KEY,material_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',failure_reason TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL)")
+    conn.execute("CREATE TABLE IF NOT EXISTS atlas_import_previews (id TEXT PRIMARY KEY,material_id TEXT NOT NULL,payload TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'preview',created_at TEXT NOT NULL)")
 
 
 def ensure_registry(base) -> None:

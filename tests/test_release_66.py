@@ -12,7 +12,7 @@ class Release66Tests(unittest.TestCase):
     def test_release_version_entrypoint_and_migration_contract(self):
         self.assertEqual(
             ROOT.joinpath("VERSION").read_text(encoding="utf-8").strip(),
-            "6.6.0",
+            "6.7.0",
         )
         self.assertIn(
             "pgy_app:app",
