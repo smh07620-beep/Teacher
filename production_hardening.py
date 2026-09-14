@@ -90,7 +90,11 @@ def register_production_hardening(base):
                         retry = max(1, int(blocked_until - now))
                         return jsonify({"error": f"登入失敗次數過多，請 {retry} 秒後再試。", "retryAfter": retry}), 429, {"Retry-After": str(retry)}
                     _LOGIN_FAILURES[key] = {"failures": failures, "blocked_until": 0}
-        if csrf_origin_check and request.path.startswith("/api/") and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        # A local Worker is not a browser and has no same-origin session. Its
+        # narrowly-scoped API performs independent Bearer-token authentication
+        # (including constant-time comparison) in free_worker_67.py.
+        worker_api = request.path.startswith("/api/material-worker/")
+        if csrf_origin_check and request.path.startswith("/api/") and request.method in {"POST", "PUT", "PATCH", "DELETE"} and not worker_api:
             if not _csrf_origin_ok():
                 return jsonify({"error": "安全驗證失敗：請從本站頁面重新操作。"}), 403
         return None

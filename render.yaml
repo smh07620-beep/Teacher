@@ -91,7 +91,21 @@ services:
       - key: MATERIAL_WORKER_ENABLED
         value: "false"
       - key: MATERIAL_SHARED_STAGING_BACKEND
-        value: auto
+        value: r2
+      - key: MATERIAL_DIRECT_UPLOAD_ENABLED
+        value: "true"
+      - key: MATERIAL_DIRECT_UPLOAD_MAX_MB
+        value: "2048"
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: MATERIAL_WORKER_TOKEN
+        sync: false
       - key: MATERIAL_JOB_MAX_ATTEMPTS
         value: "3"
       - key: MATERIAL_JOB_STALE_SECONDS
@@ -128,83 +142,5 @@ services:
         value: "4"
       - key: AI_VIDEO_FRAME_COUNT
         value: "3"
-      - key: MATERIAL_STORAGE
-        value: /tmp/teacher-materials
-  - type: worker
-    name: biochemical-training-material-worker
-    runtime: docker
-    plan: free
-    region: singapore
-    autoDeployTrigger: commit
-    dockerCommand: python -u material_worker.py
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: ADMIN_KEY
-        sync: false
-      - key: MATERIAL_STORAGE_BACKEND
-        value: mega
-      - key: STORAGE_FAILOVER_ON_FULL
-        value: "true"
-      - key: STORAGE_FALLBACK_BACKEND
-        value: gdrive
-      - key: GDRIVE_CLIENT_ID
-        sync: false
-      - key: GDRIVE_CLIENT_SECRET
-        sync: false
-      - key: GDRIVE_REFRESH_TOKEN
-        sync: false
-      - key: GDRIVE_FOLDER_ID
-        sync: false
-      - key: GDRIVE_TOKEN_URI
-        value: https://oauth2.googleapis.com/token
-      - key: MEGA_EMAIL
-        sync: false
-      - key: MEGA_PASSWORD
-        sync: false
-      - key: MEGA_ROOT_FOLDER
-        value: smh-teaching-materials
-      - key: MEGA_STORAGE_LIMIT_GB
-        value: "18.0"
-      - key: MEGA_SESSION_CACHE_SECONDS
-        value: "1800"
-      - key: MEGACMD_HOME
-        value: /tmp/megacmd-home
-      - key: MEGACMD_TIMEOUT_SECONDS
-        value: "300"
-      - key: FREE_ONLY_MODE
-        value: "true"
-      - key: MAX_UPLOAD_MB
-        value: "250"
-      - key: UPLOAD_ZIP_MAX_FILES
-        value: "2000"
-      - key: UPLOAD_ZIP_MAX_EXPANDED_MB
-        value: "1024"
-      - key: UPLOAD_ZIP_MAX_RATIO
-        value: "200"
-      - key: MATERIAL_SLIDE_FORMAT
-        value: webp
-      - key: MATERIAL_WEBP_QUALITY
-        value: "88"
-      - key: MATERIAL_SINGLE_PREVIEW
-        value: "true"
-      - key: MATERIAL_PREVIEW_OPTIMIZE
-        value: "true"
-      - key: MATERIAL_PDF_LINEARIZE
-        value: "true"
-      - key: MATERIAL_BACKGROUND_JOBS
-        value: "true"
-      - key: MATERIAL_WORKER_ENABLED
-        value: "true"
-      - key: MATERIAL_SHARED_STAGING_BACKEND
-        value: auto
-      - key: MATERIAL_JOB_MAX_ATTEMPTS
-        value: "3"
-      - key: MATERIAL_JOB_STALE_SECONDS
-        value: "1800"
-      - key: MATERIAL_JOB_RETENTION_HOURS
-        value: "72"
-      - key: MATERIAL_JOB_POLL_SECONDS
-        value: "2"
       - key: MATERIAL_STORAGE
         value: /tmp/teacher-materials

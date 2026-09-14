@@ -16,6 +16,7 @@ REQUIRED_MIGRATIONS = (
     "0066-additive-rbac-pgy-signing",
     "0067-smart-learning-content",
     "0067-render-worker-shared-staging",
+    "0067-b-free-local-worker",
 )
 
 

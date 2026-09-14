@@ -8,6 +8,7 @@ import app as legacy_app
 from ai_privacy import register_ai_privacy
 from backup_restore import register_backup_restore
 from exam_integrity import register_exam_integrity
+from free_worker_67 import register_free_worker
 from health_65 import register_health
 from multi_role_66 import register_multi_role_66
 from pgy_atomic import register_pgy_atomic_workflow
@@ -32,6 +33,7 @@ app = register_upload_hardening(legacy_app)
 app = register_ai_privacy(legacy_app)
 app = register_backup_restore(legacy_app)
 app = register_smart_learning(legacy_app)
+app = register_free_worker(legacy_app)
 app = register_pgy_frontend(app)
 
 

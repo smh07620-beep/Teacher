@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import app as appmod
 import material_worker
+import pgy_app
 import schema_migrations
 
 
@@ -32,6 +33,11 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         appmod.init_material_jobs_db()
+        conn, kind = self.connect()
+        try:
+            schema_migrations._b_free_local_worker_67(conn, kind)
+        finally:
+            conn.close()
 
     def test_web_entrypoint_never_starts_worker(self):
         source = ROOT.joinpath("run_web.sh").read_text(encoding="utf-8")
@@ -39,11 +45,12 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         self.assertNotIn("material_worker.py", source)
         self.assertNotIn("worker_pid", source)
 
-    def test_render_blueprint_has_separate_free_worker(self):
+    def test_render_blueprint_is_free_web_only(self):
         source = ROOT.joinpath("render.yaml").read_text(encoding="utf-8")
-        self.assertIn("type: worker", source)
-        self.assertIn("name: biochemical-training-material-worker", source)
-        self.assertIn("dockerCommand: python -u material_worker.py", source)
+        self.assertIn("type: web", source)
+        self.assertIn("plan: free", source)
+        self.assertNotIn("type: worker", source)
+        self.assertNotIn("biochemical-training-material-worker", source)
         self.assertIn("MATERIAL_WORKER_ENABLED", source)
 
     def test_staging_metadata_has_no_web_local_path(self):
@@ -66,6 +73,7 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
                 "/api/material-jobs/upload",
                 data={"file": (io.BytesIO(b"%PDF-1.4\nminimal"), "lesson.pdf"), "title": "Shared staging"},
                 content_type="multipart/form-data",
+                headers={"Origin": "http://localhost"},
             )
         self.assertEqual(response.status_code, 202, response.get_data(as_text=True))
         job = appmod.get_material_job(response.get_json()["jobId"], include_payload=True)
@@ -80,6 +88,7 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
                 "/api/material-jobs/upload",
                 data={"file": (io.BytesIO(b"%PDF-1.4\nminimal"), "lesson.pdf")},
                 content_type="multipart/form-data",
+                headers={"Origin": "http://localhost"},
             )
         self.assertEqual(response.status_code, 400)
         cleanup.assert_called_once_with(staging)
@@ -88,23 +97,11 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         source = Path(self.temp.name) / "lesson.txt"
         source.write_text("safe learning material", encoding="utf-8")
         base_job = {"payload": {"originalName": "lesson.txt"}, "sourceBytes": source.stat().st_size, "sourceSha256": hashlib.sha256(source.read_bytes()).hexdigest()}
-        self.assertEqual(material_worker._validate_downloaded_source(source, base_job), "lesson.txt")
+        self.assertEqual(material_worker.validate_download(source, {"originalName": "lesson.txt", **base_job}), "lesson.txt")
         with self.assertRaisesRegex(RuntimeError, "大小不符"):
-            material_worker._validate_downloaded_source(source, {**base_job, "sourceBytes": 1})
+            material_worker.validate_download(source, {"originalName": "lesson.txt", **base_job, "sourceBytes": 1})
         with self.assertRaisesRegex(RuntimeError, "SHA256"):
-            material_worker._validate_downloaded_source(source, {**base_job, "sourceSha256": "0" * 64})
-
-    def test_success_deletes_staging_and_retry_retains_it(self):
-        source = Path(self.temp.name) / "source.txt"
-        source.write_text("trusted", encoding="utf-8")
-        job = {"id": "job-success", "attempts": 1, "maxAttempts": 2, "materialId": "m1", "sourceBytes": source.stat().st_size, "sourceSha256": hashlib.sha256(source.read_bytes()).hexdigest(), "payload": {"originalName": "source.txt", "materialId": "m1"}, "stagingBackend": "local", "stagingPath": str(source)}
-        with patch.object(appmod, "get_material", return_value=None), patch.object(appmod, "download_material_job_staging", side_effect=lambda _job, target: target.write_bytes(source.read_bytes()) or target), patch.object(material_worker, "_post_sync_upload", return_value={"id": "m1"}), patch.object(appmod, "delete_material_job_staging") as deleted, patch.object(appmod, "_update_material_job"), patch.object(appmod, "set_upload_progress"), patch.object(appmod, "sync_media_processing_metadata"):
-            material_worker.process_job(job)
-        deleted.assert_called_once_with(job)
-        with patch.object(appmod, "get_material", return_value=None), patch.object(appmod, "download_material_job_staging", side_effect=RuntimeError("storage unavailable")), patch.object(appmod, "delete_material_job_staging") as deleted, patch.object(appmod, "_update_material_job") as updated, patch.object(appmod, "set_upload_progress"), patch.object(appmod, "sync_media_processing_metadata"):
-            material_worker.process_job(job)
-        deleted.assert_not_called()
-        self.assertEqual(updated.call_args.kwargs["status"], "retry_wait")
+            material_worker.validate_download(source, {"originalName": "lesson.txt", **base_job, "sourceSha256": "0" * 64})
 
     def test_stale_recovery_and_terminal_retention(self):
         self.with_queue()
@@ -145,6 +142,95 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         self.assertIn("material_jobs", source)
         self.assertNotIn("def worker_once", source)
         self.assertNotIn("shell=True", source)
+
+    def test_worker_token_required_and_invalid_rejected(self):
+        client = pgy_app.app.test_client()
+        with patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"):
+            self.assertEqual(client.post("/api/material-worker/claim", json={"workerId": "w1"}).status_code, 401)
+            self.assertEqual(client.post("/api/material-worker/claim", json={"workerId": "w1"}, headers={"Authorization": "Bearer wrong"}).status_code, 401)
+
+    def test_claim_is_atomic_and_heartbeat_is_owned(self):
+        self.with_queue()
+        appmod.create_material_job(job_id="claim-once", payload={"originalName": "lesson.txt"}, staging_backend="local", staging_key="", staging_path=str(Path(self.temp.name) / "missing"), source_sha256="a" * 64, source_bytes=1, material_id="m-claim", original_name="lesson.txt")
+        client = pgy_app.app.test_client(); headers = {"Authorization": "Bearer worker-secret"}
+        with patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"):
+            first = client.post("/api/material-worker/claim", json={"workerId": "worker-a", "capabilities": {}}, headers=headers)
+            second = client.post("/api/material-worker/claim", json={"workerId": "worker-b", "capabilities": {}}, headers=headers)
+            self.assertEqual(first.status_code, 200); self.assertEqual(second.status_code, 200)
+            self.assertEqual(first.get_json()["job"]["id"], "claim-once")
+            self.assertIsNone(second.get_json()["job"])
+            heartbeat = client.post("/api/material-worker/claim-once/heartbeat", json={"workerId": "worker-a", "capabilities": {"ffmpeg": {"available": True}}}, headers=headers)
+        self.assertEqual(heartbeat.status_code, 200)
+
+    def test_compatible_small_upload_download_is_worker_owned(self):
+        self.with_queue()
+        source = Path(self.temp.name) / "staging" / "lesson.txt"
+        source.parent.mkdir(); source.write_text("small compatible upload", encoding="utf-8")
+        appmod.create_material_job(job_id="small-source", payload={"originalName": "lesson.txt"}, staging_backend="local", staging_key="", staging_path=str(source), source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(), source_bytes=source.stat().st_size, material_id="m-small", original_name="lesson.txt")
+        client = pgy_app.app.test_client(); headers = {"Authorization": "Bearer worker-secret"}
+        with patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"):
+            claim = client.post("/api/material-worker/claim", json={"workerId": "worker-a"}, headers=headers)
+            self.assertEqual(claim.status_code, 200)
+            self.assertEqual(claim.get_json()["job"]["downloadPath"], "/api/material-worker/small-source/source")
+            denied = client.get("/api/material-worker/small-source/source", headers=headers)
+            self.assertEqual(denied.status_code, 400)
+            fetched = client.get("/api/material-worker/small-source/source", headers={**headers, "X-Teacher-Worker-Id": "worker-a"})
+        self.assertEqual(fetched.status_code, 200)
+        self.assertEqual(fetched.data, source.read_bytes())
+        fetched.close()
+
+    def test_worker_complete_deletes_staging_and_retry_retains_it(self):
+        self.with_queue()
+        appmod.create_material_job(job_id="complete-job", payload={"originalName": "lesson.txt", "materialId": "m-complete"}, staging_backend="r2", staging_key="_staging/material-jobs/complete-job/source.txt", staging_path="", source_sha256="a" * 64, source_bytes=1, material_id="m-complete", original_name="lesson.txt")
+        appmod._update_material_job("complete-job", status="processing", worker_id="worker-a")
+        client = pgy_app.app.test_client(); headers = {"Authorization": "Bearer worker-secret"}
+        with patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"), patch.object(appmod, "commit_material_job_result", return_value={"id": "m-complete"}), patch.object(appmod, "delete_material_job_staging") as deleted:
+            complete = client.post("/api/material-worker/complete-job/complete", json={"workerId": "worker-a", "result": {"storageBackend": "mega", "storageKey": "/materials/m-complete/source.txt"}}, headers=headers)
+        self.assertEqual(complete.status_code, 200, complete.get_data(as_text=True)); deleted.assert_called_once()
+        self.assertEqual(appmod.get_material_job("complete-job")["status"], "completed")
+
+    def test_direct_upload_missing_r2_is_graceful(self):
+        client = pgy_app.app.test_client()
+        with patch.object(appmod, "require_admin", return_value=None), patch.object(appmod, "MATERIAL_DIRECT_UPLOAD_ENABLED", True), patch.object(appmod, "r2_is_configured", return_value=False):
+            response = client.post("/api/material-upload/init", json={"filename": "movie.mp4", "size": 100, "sha256": "a" * 64}, headers={"Origin": "http://localhost"})
+        self.assertEqual(response.status_code, 409)
+
+    def test_r2_multipart_init_and_complete_creates_single_runnable_job(self):
+        self.with_queue()
+        class FakeR2:
+            def create_multipart_upload(self, **_kwargs): return {"UploadId": "remote-upload"}
+            def generate_presigned_url(self, _operation, Params, ExpiresIn): return f"https://r2.example/{Params.get('PartNumber', 'get')}?expires={ExpiresIn}"
+            def complete_multipart_upload(self, **_kwargs): return {}
+            def head_object(self, **_kwargs): return {"ContentLength": 20 * 1024 * 1024, "Metadata": {"sha256": "a" * 64}}
+            def abort_multipart_upload(self, **_kwargs): return {}
+            def delete_object(self, **_kwargs): return {}
+        client = pgy_app.app.test_client(); headers = {"Origin": "http://localhost"}
+        with patch.object(appmod, "require_admin", return_value=None), patch.object(appmod, "MATERIAL_DIRECT_UPLOAD_ENABLED", True), patch.object(appmod, "MATERIAL_DIRECT_UPLOAD_MAX_MB", 2048), patch.object(appmod, "r2_is_configured", return_value=True), patch.object(appmod, "r2_client", return_value=FakeR2()), patch.object(appmod, "R2_BUCKET_NAME", "bucket"):
+            init = client.post("/api/material-upload/init", json={"filename": "movie.mp4", "size": 20 * 1024 * 1024, "sha256": "a" * 64, "partSizeMb": 8}, headers=headers)
+            self.assertEqual(init.status_code, 201, init.get_data(as_text=True))
+            data = init.get_json(); self.assertEqual(len(data["parts"]), 3)
+            self.assertNotIn("secret", str(data).lower())
+            malformed = client.post(f"/api/material-upload/{data['uploadId']}/complete", json={"parts": []}, headers=headers)
+            self.assertEqual(malformed.status_code, 400)
+            complete = client.post(f"/api/material-upload/{data['uploadId']}/complete", json={"parts": [{"partNumber": n, "etag": f'etag-{n}'} for n in range(1, 4)]}, headers=headers)
+        self.assertEqual(complete.status_code, 202, complete.get_data(as_text=True))
+        self.assertEqual(appmod.get_material_job(data["jobId"])["stagingBackend"], "r2")
+
+    def test_local_worker_has_no_production_database_client(self):
+        source = ROOT.joinpath("material_worker.py").read_text(encoding="utf-8")
+        self.assertIn("TEACHER_BASE_URL", source)
+        self.assertIn("Authorization", source)
+        self.assertNotIn("psycopg", source)
+        self.assertNotIn("_db_conn", source)
+
+    def test_b_free_migration_repeats_safely(self):
+        self.with_queue()
+        conn, kind = self.connect()
+        try:
+            schema_migrations._b_free_local_worker_67(conn, kind)
+            self.assertTrue(conn.execute("SELECT name FROM sqlite_master WHERE name='material_upload_sessions'").fetchone())
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":

@@ -35,6 +35,6 @@ def worker_architecture(staging: dict | None = None):
     return {
         "queueBackend": "material_jobs",
         "sharedStaging": (staging or {}).get("backend", ""),
-        "workerArchitecture": "render-background-worker",
+        "workerArchitecture": "local-outbound-https-worker",
         "workerRequired": True,
     }

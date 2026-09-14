@@ -213,6 +213,19 @@ def _render_worker_shared_staging_67(conn, kind: str) -> None:
     })
 
 
+@migration("0067-b-free-local-worker")
+def _b_free_local_worker_67(conn, kind: str) -> None:
+    """Add B-Free control metadata; no data is replaced or removed."""
+    boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
+    _add_columns(conn, kind, "material_jobs", {
+        "worker_last_seen": "worker_last_seen TEXT NOT NULL DEFAULT ''",
+        "cleanup_pending": f"cleanup_pending {boolean} NOT NULL DEFAULT 0",
+    })
+    payload = "JSONB" if kind == "postgres" else "TEXT"
+    conn.execute(f"CREATE TABLE IF NOT EXISTS material_worker_heartbeats (worker_id TEXT PRIMARY KEY,last_seen TEXT NOT NULL,capabilities {payload} NOT NULL DEFAULT '{{}}',current_job_id TEXT NOT NULL DEFAULT '')")
+    conn.execute(f"CREATE TABLE IF NOT EXISTS material_upload_sessions (id TEXT PRIMARY KEY,job_id TEXT NOT NULL UNIQUE,material_id TEXT NOT NULL,staging_key TEXT NOT NULL,original_name TEXT NOT NULL,source_sha256 TEXT NOT NULL,source_bytes BIGINT NOT NULL,r2_upload_id TEXT NOT NULL,part_size BIGINT NOT NULL,expected_parts INTEGER NOT NULL,payload {payload} NOT NULL DEFAULT '{{}}',completed_parts {payload} NOT NULL DEFAULT '[]',status TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)")
+
+
 def ensure_registry(base) -> None:
     conn, kind = base._db_conn()
     try:

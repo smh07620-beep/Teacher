@@ -177,6 +177,10 @@ MATERIAL_BACKGROUND_JOBS = os.environ.get("MATERIAL_BACKGROUND_JOBS", "true").st
 # development can still run `python -u material_worker.py` explicitly.
 MATERIAL_WORKER_ENABLED = os.environ.get("MATERIAL_WORKER_ENABLED", "true").strip().lower() in {"1","true","yes","on"}
 MATERIAL_SHARED_STAGING_BACKEND = os.environ.get("MATERIAL_SHARED_STAGING_BACKEND", "auto").strip().lower() or "auto"
+MATERIAL_DIRECT_UPLOAD_ENABLED = os.environ.get("MATERIAL_DIRECT_UPLOAD_ENABLED", "false").strip().lower() in {"1","true","yes","on"}
+MATERIAL_DIRECT_UPLOAD_MAX_MB = max(1, min(4096, int(os.environ.get("MATERIAL_DIRECT_UPLOAD_MAX_MB", "2048"))))
+MATERIAL_WORKER_TOKEN = os.environ.get("MATERIAL_WORKER_TOKEN", "").strip()
+MATERIAL_WORKER_URL_TTL_SECONDS = max(60, min(3600, int(os.environ.get("MATERIAL_WORKER_URL_TTL_SECONDS", "900"))))
 MATERIAL_JOB_MAX_ATTEMPTS = max(1, min(8, int(os.environ.get("MATERIAL_JOB_MAX_ATTEMPTS", "3"))))
 MATERIAL_JOB_STALE_SECONDS = max(300, min(21600, int(os.environ.get("MATERIAL_JOB_STALE_SECONDS", "1800"))))
 MATERIAL_JOB_RETENTION_HOURS = max(6, min(720, int(os.environ.get("MATERIAL_JOB_RETENTION_HOURS", "72"))))
@@ -338,8 +342,10 @@ def _content_type_for(path_or_name):
     return mimetypes.guess_type(str(path_or_name))[0] or "application/octet-stream"
 
 
-def r2_put_file(local_path: Path, key: str, content_type=None):
+def r2_put_file(local_path: Path, key: str, content_type=None, metadata=None):
     extra = {"ContentType": content_type or _content_type_for(local_path)}
+    if metadata:
+        extra["Metadata"] = {str(k): str(v)[:1024] for k, v in dict(metadata).items()}
     r2_client().upload_file(str(local_path), R2_BUCKET_NAME, key, ExtraArgs=extra)
 
 
@@ -1109,8 +1115,12 @@ def shared_staging_backend():
     service must never hand `/var/data` paths to a different service.
     """
     requested = MATERIAL_SHARED_STAGING_BACKEND
-    if requested not in {"auto", "mega", "gdrive", "local"}:
-        raise RuntimeError("MATERIAL_SHARED_STAGING_BACKEND 必須是 auto、mega、gdrive 或 local。")
+    if requested not in {"auto", "r2", "mega", "gdrive", "local"}:
+        raise RuntimeError("MATERIAL_SHARED_STAGING_BACKEND 必須是 auto、r2、mega、gdrive 或 local。")
+    if requested == "r2":
+        if not r2_is_configured():
+            raise RuntimeError("Shared Staging 設為 R2，但 R2 尚未完成設定。")
+        return "r2"
     if requested == "mega":
         if not mega_is_configured():
             raise RuntimeError("Shared Staging 設為 MEGA，但 MEGA 尚未完成設定。")
@@ -1121,6 +1131,10 @@ def shared_staging_backend():
         return "gdrive"
     if requested == "local":
         return "local"
+    # B-Free prefers R2 because it supports browser multipart PUT and short
+    # lived worker GET URLs. Local remains a development-only fallback.
+    if r2_is_configured():
+        return "r2"
     backend = active_material_backend()
     return backend if backend in {"mega", "gdrive"} else "local"
 
@@ -1132,7 +1146,7 @@ def shared_staging_capability():
         return {
             "available": True,
             "backend": backend,
-            "shared": backend in {"mega", "gdrive"},
+            "shared": backend in {"r2", "mega", "gdrive"},
             "namespace": "_staging/material-jobs",
         }
     except Exception as exc:
@@ -1168,6 +1182,10 @@ def upload_material_job_staging(source: Path, job_id: str, original_name: str):
         raise ValueError("教材檔案超過上傳大小限制。")
     name = _safe_staging_name(job_id, original_name)
     backend = shared_staging_backend()
+    if backend == "r2":
+        key = f"_staging/material-jobs/{job_id}/{name}"
+        r2_put_file(source, key, metadata={"jobid": job_id, "originalname": Path(original_name).name, "expectedbytes": source.stat().st_size, "sha256": _sha256_file(source), "createdat": _utc_now_iso()})
+        return "r2", key, ""
     if backend == "mega":
         try:
             _mega_free_guard(source.stat().st_size)
@@ -1199,6 +1217,11 @@ def download_material_job_staging(job: dict, target: Path):
     key = str(job.get("stagingKey") or job.get("staging_key") or "")
     local_path = str(job.get("stagingPath") or job.get("staging_path") or "")
     target = Path(target)
+    if backend == "r2":
+        if not key: raise RuntimeError("Shared Staging 缺少 R2 object key。")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        r2_client().download_file(R2_BUCKET_NAME, key, str(target))
+        return target
     if backend == "mega":
         if not key: raise RuntimeError("Shared Staging 缺少 MEGA object key。")
         return mega_download_file(key, target)
@@ -1216,6 +1239,9 @@ def material_job_staging_exists(job: dict) -> bool:
     backend = str(job.get("stagingBackend") or job.get("staging_backend") or "local").lower()
     key = str(job.get("stagingKey") or job.get("staging_key") or "")
     try:
+        if backend == "r2":
+            r2_client().head_object(Bucket=R2_BUCKET_NAME, Key=key)
+            return bool(key)
         if backend == "mega":
             return bool(key and _mega_run(["mega-ls", key], check=False, timeout=60).returncode == 0)
         if backend == "gdrive":
@@ -1229,7 +1255,9 @@ def delete_material_job_staging(job: dict):
     backend = str(job.get("stagingBackend") or job.get("staging_backend") or "local").lower()
     key = str(job.get("stagingKey") or job.get("staging_key") or "")
     local_path = Path(job.get("stagingPath") or job.get("staging_path") or "")
-    if backend == "mega" and key:
+    if backend == "r2" and key:
+        r2_client().delete_object(Bucket=R2_BUCKET_NAME, Key=key)
+    elif backend == "mega" and key:
         mega_destroy(key)
     elif backend == "gdrive" and key:
         gdrive_delete_file(key)
@@ -1272,6 +1300,8 @@ def init_material_jobs_db():
             conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS staging_backend TEXT NOT NULL DEFAULT 'local'")
             conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS staging_key TEXT NOT NULL DEFAULT ''")
             conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS original_name TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS worker_last_seen TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS cleanup_pending BOOLEAN NOT NULL DEFAULT FALSE")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_material_jobs_queue ON material_jobs(status, priority DESC, created_at)")
         else:
             conn.execute("""
@@ -1293,6 +1323,8 @@ def init_material_jobs_db():
                     staging_backend TEXT NOT NULL DEFAULT 'local',
                     staging_key TEXT NOT NULL DEFAULT '',
                     original_name TEXT NOT NULL DEFAULT '',
+                    worker_last_seen TEXT NOT NULL DEFAULT '',
+                    cleanup_pending INTEGER NOT NULL DEFAULT 0,
                     material_id TEXT NOT NULL DEFAULT '',
                     source_sha256 TEXT NOT NULL DEFAULT '',
                     source_bytes INTEGER NOT NULL DEFAULT 0,
@@ -1309,6 +1341,10 @@ def init_material_jobs_db():
                 conn.execute("ALTER TABLE material_jobs ADD COLUMN staging_key TEXT NOT NULL DEFAULT ''")
             if "original_name" not in existing_cols:
                 conn.execute("ALTER TABLE material_jobs ADD COLUMN original_name TEXT NOT NULL DEFAULT ''")
+            if "worker_last_seen" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN worker_last_seen TEXT NOT NULL DEFAULT ''")
+            if "cleanup_pending" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN cleanup_pending INTEGER NOT NULL DEFAULT 0")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_material_jobs_queue ON material_jobs(status, priority, created_at)")
     finally:
         conn.close()
@@ -1405,7 +1441,7 @@ def list_material_jobs(limit=30):
 
 
 def _update_material_job(job_id: str, **fields):
-    allowed = {"status","updated_at","available_at","started_at","finished_at","attempts","stage","detail","material_id","error","result","worker_id","cancel_requested","staging_path","staging_key"}
+    allowed = {"status","updated_at","available_at","started_at","finished_at","attempts","stage","detail","material_id","error","result","worker_id","cancel_requested","staging_path","staging_key","worker_last_seen","cleanup_pending"}
     clean = {k:v for k,v in fields.items() if k in allowed}
     if not clean:
         return
@@ -1521,6 +1557,24 @@ def material_job_operations_status():
                 oldest_age = max(0, int((datetime.datetime.now(datetime.timezone.utc) - parsed).total_seconds()))
             except (TypeError, ValueError):
                 oldest_age = 0
+        workers = []
+        try:
+            heartbeat_rows = conn.execute("SELECT worker_id,last_seen,capabilities,current_job_id FROM material_worker_heartbeats ORDER BY last_seen DESC LIMIT 50").fetchall()
+            cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=120)
+            for row in heartbeat_rows:
+                item = dict(row); last_seen = str(item.get("last_seen") or "")
+                try:
+                    seen = datetime.datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+                    online = seen >= cutoff
+                except (TypeError, ValueError): online = False
+                raw_capabilities = item.get("capabilities") or {}
+                try:
+                    capabilities = json.loads(raw_capabilities) if isinstance(raw_capabilities, str) else dict(raw_capabilities)
+                except (TypeError, ValueError):
+                    capabilities = {}
+                workers.append({"workerId": str(item.get("worker_id") or ""), "lastSeen": last_seen, "currentJobId": str(item.get("current_job_id") or ""), "status": "busy" if online and item.get("current_job_id") else ("online" if online else "offline"), "ffmpeg": bool((capabilities.get("ffmpeg") or {}).get("available")), "libreOffice": bool((capabilities.get("libreOffice") or {}).get("available"))})
+        except Exception:
+            workers = []
         return {
             "backgroundJobsEnabled": MATERIAL_BACKGROUND_JOBS,
             "workerEnabled": MATERIAL_WORKER_ENABLED,
@@ -1530,6 +1584,7 @@ def material_job_operations_status():
             "failedJobs": failed,
             "oldestPendingAt": oldest,
             "oldestPendingAgeSeconds": oldest_age,
+            "workers": workers,
             "staging": shared_staging_capability(),
         }
     finally:
@@ -1569,6 +1624,62 @@ def sync_media_processing_metadata(job: dict, status: str, failure_reason: str =
         pass
     finally:
         conn.close()
+
+
+def commit_material_job_result(job: dict, result: dict):
+    """Persist a Worker-produced material after ownership was verified by Web.
+
+    The worker can upload directly to MEGA/GDrive, but it never writes the
+    production database.  This function is deliberately invoked only by the
+    token-protected Web completion route.
+    """
+    payload = dict(job.get("payload") or {})
+    material_id = str(job.get("materialId") or payload.get("materialId") or "")
+    if not material_id:
+        raise ValueError("背景工作缺少 materialId。")
+    existing = get_material(material_id)
+    if existing:
+        return existing
+    backend = str(result.get("storageBackend") or "").lower()
+    if backend not in {"mega", "gdrive", "r2", "oci", "local"}:
+        raise ValueError("Worker 回報的儲存後端不合法。")
+    storage_key = str(result.get("storageKey") or "")[:1000]
+    if backend != "local" and not storage_key:
+        raise ValueError("Worker 回報缺少正式教材儲存位置。")
+    original = Path(payload.get("originalName") or job.get("originalName") or "untitled").name
+    source_name = Path(str(result.get("storageFilename") or f"source{Path(original).suffix.lower()}")).name
+    try:
+        page_count = max(0, min(10000, int(result.get("pageCount", 0) or 0)))
+    except (TypeError, ValueError):
+        page_count = 0
+    storage_meta = result.get("storageMeta") if isinstance(result.get("storageMeta"), dict) else {}
+    entry = {
+        "id": material_id, "filename": original,
+        "title": str(payload.get("title") or original)[:255],
+        "description": str(payload.get("desc") or "管理者上傳之教育訓練補充教材")[:1000],
+        "category": str(payload.get("category") or "")[:100],
+        "group_key": normalize_group(payload.get("group", DEFAULT_GROUP)),
+        "training_area": normalize_area(payload.get("area", DEFAULT_TRAINING_AREA)),
+        "course_id": str(payload.get("courseId") or "")[:100],
+        "folder": material_id, "page_count": page_count,
+        "date_added": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "storage_filename": source_name, "storage_backend": backend,
+        "storage_key": storage_key, "slides_prefix": str(result.get("slidesPrefix") or "")[:1000],
+        "storage_meta": json.dumps(storage_meta, ensure_ascii=False),
+        "material_type": str(payload.get("materialType") or "standard")[:40],
+        "atlas_meta": json.dumps(result.get("atlasMeta") if isinstance(result.get("atlasMeta"), dict) else {}, ensure_ascii=False),
+        "active": True,
+    }
+    conn, kind = _db_conn()
+    try:
+        vals = tuple(entry[k] for k in ("id", "filename", "title", "description", "category", "group_key", "training_area", "course_id", "folder", "page_count", "date_added", "storage_filename", "storage_backend", "storage_key", "slides_prefix", "storage_meta", "material_type", "atlas_meta", "active"))
+        if kind == "postgres":
+            conn.execute("INSERT INTO materials (id,filename,title,description,category,group_key,training_area,course_id,folder,page_count,date_added,storage_filename,storage_backend,storage_key,slides_prefix,storage_meta,material_type,atlas_meta,active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(id) DO NOTHING", vals)
+        else:
+            conn.execute("INSERT OR IGNORE INTO materials (id,filename,title,description,category,group_key,training_area,course_id,folder,page_count,date_added,storage_filename,storage_backend,storage_key,slides_prefix,storage_meta,material_type,atlas_meta,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", vals)
+    finally:
+        conn.close()
+    return get_material(material_id) or entry
 
 
 def init_exam_db():
@@ -3438,7 +3549,8 @@ def api_list_material_jobs():
         limit = int(request.args.get("limit", 30) or 30)
     except Exception:
         limit = 30
-    return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS, "workerEnabled": MATERIAL_WORKER_ENABLED, "queueBackend": "material_jobs", "staging": shared_staging_capability()})
+    ops = material_job_operations_status()
+    return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS, "workerEnabled": MATERIAL_WORKER_ENABLED, "queueBackend": "material_jobs", "staging": shared_staging_capability(), "workers": ops.get("workers", []), "pendingJobs": ops.get("pendingJobs", 0), "processingJobs": ops.get("processingJobs", 0), "retryJobs": ops.get("retryJobs", 0), "failedJobs": ops.get("failedJobs", 0)})
 
 
 @app.get("/api/admin/background-jobs/status")

@@ -1,240 +1,133 @@
-# -*- coding: utf-8 -*-
-"""V5.7.0 durable material worker.
-
-The web request only receives the source file and creates a DB job. This worker
-claims jobs from material_jobs, runs the existing trusted upload/conversion path
-inside a separate process, and records completion / retry state.
-"""
-import os
-import sys
-import time
-import json
-import socket
-import datetime
-import tempfile
+"""Teacher 6.7 B-Free local material worker (outbound HTTPS only)."""
+from __future__ import annotations
+import hashlib, os, socket, subprocess, sys, tempfile, time
 from pathlib import Path
+import requests
+from upload_hardening import ZIP_EXT, _magic_ok, _validate_zip_bytes
 
-import app as appmod
-from media_processing_67 import ffmpeg_capability, libreoffice_capability
-from upload_hardening import _magic_ok, _validate_zip_bytes, ZIP_EXT
+BASE_URL=os.environ.get("TEACHER_BASE_URL", "").rstrip("/")
+TOKEN=os.environ.get("MATERIAL_WORKER_TOKEN", "")
+WORKER_ID=os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{socket.gethostname()}:{os.getpid()}"
+POLL_SECONDS=max(2,min(60,int(os.environ.get("MATERIAL_WORKER_POLL_SECONDS","5"))))
+REQUEST_TIMEOUT=max(10,min(600,int(os.environ.get("MATERIAL_WORKER_HTTP_TIMEOUT","120"))))
+ALLOWED_EXT={".pptx",".ppt",".pdf",".doc",".docx",".xls",".xlsx",".odp",".odt",".ods",".png",".jpg",".jpeg",".gif",".webp",".mp4",".webm",".mov",".m4v",".mp3",".wav",".m4a",".ogg",".txt",".csv",".srt",".vtt",".zip"}
+VIDEO_EXT={".mp4",".webm",".mov",".m4v"}; AUDIO_EXT={".mp3",".wav",".m4a",".ogg"}
 
-WORKER_ID = os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{socket.gethostname()}:{os.getpid()}"
+def log(message): print(f"[teacher-local-worker {WORKER_ID}] {message}",flush=True)
+def _bin(env,fallback):
+    value=os.environ.get(env,"").strip()
+    if value:return value
+    import shutil
+    return shutil.which(fallback) or ""
+def _works(path,args):
+    try:return bool(path) and subprocess.run([path,*args],capture_output=True,timeout=5,check=False).returncode==0
+    except (OSError,subprocess.TimeoutExpired):return False
+def capability():
+    ffmpeg,ffprobe,soffice=_bin("FFMPEG_PATH","ffmpeg"),_bin("FFPROBE_PATH","ffprobe"),_bin("SOFFICE_PATH","soffice")
+    return {"platform":sys.platform,"ffmpeg":{"available":_works(ffmpeg,["-version"])} ,"ffprobe":{"available":_works(ffprobe,["-version"])} ,"libreOffice":{"available":_works(soffice,["--version"])}}
 
+class WorkerApi:
+    def __init__(self):
+        if not BASE_URL.startswith("https://"):raise RuntimeError("TEACHER_BASE_URL 必須是 HTTPS URL。")
+        if not TOKEN:raise RuntimeError("MATERIAL_WORKER_TOKEN 尚未設定。")
+        self.headers={"Authorization":f"Bearer {TOKEN}"}
+    def post(self,path,body):
+        response=requests.post(BASE_URL+path,json=body,headers=self.headers,timeout=REQUEST_TIMEOUT)
+        if response.status_code>=300:
+            try:message=response.json().get("error","")
+            except Exception:message=response.text[:300]
+            raise RuntimeError(f"Worker API {response.status_code}: {message}")
+        return response.json()
+    def heartbeat(self,job_id=""):
+        path=f"/api/material-worker/{job_id}/heartbeat" if job_id else "/api/material-worker/heartbeat"
+        return self.post(path,{"workerId":WORKER_ID,"capabilities":capability()})
+    def download(self,job,target):
+        url=str(job.get("downloadUrl") or "")
+        headers={}
+        if not url:
+            path=str(job.get("downloadPath") or "")
+            if not path.startswith("/api/material-worker/"):
+                raise RuntimeError("Worker 工作未提供安全下載位置。")
+            url=BASE_URL+path; headers={**self.headers,"X-Teacher-Worker-Id":WORKER_ID}
+        download(url,target,headers=headers)
 
-def log(message):
-    print(f"[material-worker {WORKER_ID}] {message}", flush=True)
-
-
-def _retry_at(attempts: int):
-    delay = min(300, max(10, 15 * max(1, attempts)))
-    return (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=delay)).isoformat(), delay
-
-
-def _validate_downloaded_source(source: Path, job: dict):
-    """Repeat the upload boundary checks after a cross-service download."""
-    payload = dict(job.get("payload") or {})
-    original = Path(payload.get("originalName") or job.get("originalName") or source.name).name
-    ext = original.lower() and Path(original).suffix.lower()
-    if ext not in appmod.ALLOWED_EXT:
-        raise RuntimeError("Shared Staging 檔案副檔名不受支援。")
-    if not source.is_file() or source.stat().st_size <= 0:
-        raise RuntimeError("Shared Staging 原始檔不存在或空白。")
-    expected_size = int(job.get("sourceBytes", 0) or 0)
-    if expected_size and source.stat().st_size != expected_size:
-        raise RuntimeError("Shared Staging 檔案大小不符，已拒絕處理。")
-    if source.stat().st_size > appmod.MAX_UPLOAD_MB * 1024 * 1024:
-        raise RuntimeError("Shared Staging 檔案超過上傳大小限制。")
-    expected_hash = str(job.get("sourceSha256") or payload.get("sourceSha256") or "").lower()
-    actual_hash = appmod._sha256_file(source)
-    if not expected_hash or actual_hash != expected_hash:
-        raise RuntimeError("Shared Staging SHA256 驗證失敗，已拒絕處理。")
-    with source.open("rb") as fh:
-        head = fh.read(8192)
-    if not _magic_ok(ext, head):
-        raise RuntimeError("Shared Staging 檔案內容與副檔名不符，已拒絕處理。")
-    if ext in ZIP_EXT:
-        _validate_zip_bytes(source.read_bytes(), ext)
+def _sha256(path):
+    digest=hashlib.sha256()
+    with Path(path).open("rb") as fh:
+        for chunk in iter(lambda:fh.read(1024*1024),b""):digest.update(chunk)
+    return digest.hexdigest()
+def validate_download(source,job):
+    original=Path(str(job.get("originalName") or "")).name; ext=Path(original).suffix.lower(); source=Path(source)
+    if ext not in ALLOWED_EXT:raise RuntimeError("Worker 收到不支援的副檔名。")
+    if not source.is_file() or source.stat().st_size<=0:raise RuntimeError("Worker 下載到空白檔案。")
+    if source.stat().st_size!=int(job.get("sourceBytes",0) or 0):raise RuntimeError("Worker 下載檔案大小不符。")
+    if _sha256(source)!=str(job.get("sourceSha256") or "").lower():raise RuntimeError("Worker 下載檔案 SHA256 不符。")
+    with source.open("rb") as fh:head=fh.read(8192)
+    if not _magic_ok(ext,head):raise RuntimeError("Worker 檔案內容與副檔名不符。")
+    if ext in ZIP_EXT:_validate_zip_bytes(source.read_bytes(),ext)
     return original
+def download(url,target,headers=None):
+    if not str(url).startswith("https://"):raise RuntimeError("Worker download URL 必須是 HTTPS。")
+    with requests.get(url,stream=True,headers=headers or {},timeout=REQUEST_TIMEOUT) as response:
+        response.raise_for_status()
+        with Path(target).open("wb") as fh:
+            for chunk in response.iter_content(1024*1024):
+                if chunk:fh.write(chunk)
 
+def _transcode_if_needed(source,original,temp):
+    ext=Path(original).suffix.lower(); ffmpeg=_bin("FFMPEG_PATH","ffmpeg")
+    if ext not in VIDEO_EXT|AUDIO_EXT:return source,original,{}
+    if not ffmpeg:raise RuntimeError("FFmpeg unavailable")
+    if ext in VIDEO_EXT:
+        output=Path(temp)/"web.mp4"; command=[ffmpeg,"-y","-i",str(source),"-c:v","libx264","-preset","medium","-movflags","+faststart","-c:a","aac","-b:a","160k",str(output)]; name=Path(original).with_suffix(".mp4").name
+    else:
+        output=Path(temp)/"web.m4a"; command=[ffmpeg,"-y","-i",str(source),"-c:a","aac","-b:a","160k",str(output)]; name=Path(original).with_suffix(".m4a").name
+    try:completed=subprocess.run(command,capture_output=True,text=True,timeout=max(60,min(3600,int(os.environ.get("MATERIAL_FFMPEG_TIMEOUT_SECONDS","1800")))),check=False)
+    except subprocess.TimeoutExpired:raise RuntimeError("FFmpeg conversion timed out")
+    if completed.returncode!=0 or not output.is_file() or output.stat().st_size<=0:raise RuntimeError(f"FFmpeg conversion failed: {(completed.stderr or '')[-300:]}")
+    return output,name,{"transcoded":True,"sourceOriginalName":original}
 
-def _post_sync_upload(job, source: Path, original: str):
-    payload = dict(job.get("payload") or {})
-    if not appmod.ADMIN_KEY:
-        raise RuntimeError("ADMIN_KEY 未設定，背景 Worker 無法安全呼叫教材處理流程。")
-    form = {
-        "title": payload.get("title", ""),
-        "desc": payload.get("desc", ""),
-        "category": payload.get("category", ""),
-        "group": payload.get("group", appmod.DEFAULT_GROUP),
-        "area": payload.get("area", appmod.DEFAULT_TRAINING_AREA),
-        "courseId": payload.get("courseId", ""),
-        "materialType": payload.get("materialType", "standard"),
-        "atlasCategory": payload.get("atlasCategory", ""),
-        "atlasMagnification": payload.get("atlasMagnification", ""),
-        "atlasInterpretation": payload.get("atlasInterpretation", ""),
-        "atlasClinical": payload.get("atlasClinical", ""),
-        "atlasDifferential": payload.get("atlasDifferential", ""),
-        "atlasNormality": payload.get("atlasNormality", ""),
-        "atlasTags": payload.get("atlasTags", ""),
-        "progressId": job["id"],
-        "materialId": payload.get("materialId") or job.get("materialId", ""),
-        "sourceSha256": payload.get("sourceSha256") or job.get("sourceSha256", ""),
-    }
-    with source.open("rb") as fh:
-        form["file"] = (fh, original)
-        with appmod.app.test_client() as client:
-            response = client.post(
-                "/api/slides/upload",
-                data=form,
-                headers={"X-Admin-Key": appmod.ADMIN_KEY},
-                content_type="multipart/form-data",
-            )
-            try:
-                body = response.get_json(silent=True) or {}
-            except Exception:
-                body = {}
-            if response.status_code < 200 or response.status_code >= 300:
-                detail = "｜".join(str(body.get(k) or "").strip() for k in ("error", "stage", "detail") if body.get(k))
-                raise RuntimeError(detail or f"教材背景處理失敗 (HTTP {response.status_code})")
-            return body
+def publish_to_storage(source,original,job,temp):
+    """Use existing MEGA-primary/GDrive-fallback helpers with local env only."""
+    import app as storage
+    material_id=str(job["materialId"]); source,stored_name,media_meta=_transcode_if_needed(source,original,temp)
+    backend=storage.active_material_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
+    single=bool(backend=="mega" and storage.MATERIAL_SINGLE_PREVIEW and (ext==".pdf" or ext in storage.OFFICE_EXT))
+    if single:
+        pages=storage.build_single_preview_pdf(source,preview); key,prefix,remote=storage.upload_material_preview_to_mega(material_id,source,preview,pages); meta={"previewMode":"single_pdf","previewFilename":"preview.pdf","slideFormat":"pdf",**(remote or {}),**media_meta}
+    elif ext==".pdf" or ext in storage.OFFICE_EXT:
+        pages=storage.convert_pdf_to_images(source,slides) if ext==".pdf" else storage.convert_office_to_images(source,slides)
+        if backend=="mega":key,prefix,remote=storage.upload_material_tree_to_mega(material_id,source,slides,pages)
+        elif backend=="gdrive":key,prefix,remote=storage.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name)
+        else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
+        meta={"slideFormat":storage._slide_format(slides,pages),**(remote or {}),**media_meta}
+    elif backend=="mega":
+        folder=storage._mega_remote_join(storage._mega_root_id(),material_id); key=storage._mega_upload_file(source,folder,f"source{source.suffix.lower()}"); prefix=""; meta=media_meta
+    elif backend=="gdrive":
+        key,prefix,remote=storage.upload_material_tree_to_gdrive(material_id,source,slides,0,original_name=stored_name); meta={**(remote or {}),**media_meta}
+    else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
+    return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta}
 
-
-def process_job(job):
-    job_id = job["id"]
-    attempts = int(job.get("attempts", 1) or 1)
-    max_attempts = int(job.get("maxAttempts", appmod.MATERIAL_JOB_MAX_ATTEMPTS) or appmod.MATERIAL_JOB_MAX_ATTEMPTS)
-    log(f"claim {job_id}, attempt {attempts}/{max_attempts}")
-    appmod.sync_media_processing_metadata(job, "processing")
-
-    # Idempotency: if a prior attempt committed the material but the process died
-    # before updating job status, do not upload it again.
-    material_id = job.get("materialId") or (job.get("payload") or {}).get("materialId", "")
-    existing = appmod.get_material(material_id) if material_id else None
-    if existing:
-        now = appmod._utc_now_iso()
-        appmod._update_material_job(
-            job_id,
-            status="completed",
-            finished_at=now,
-            stage="已完成",
-            detail="偵測到教材已存在，背景工作自動續接完成狀態。",
-            material_id=material_id,
-            result=existing,
-            error="",
-        )
-        appmod.delete_material_job_staging(job)
-        appmod._update_material_job(job_id, staging_path="", staging_key="")
-        appmod.sync_media_processing_metadata(job, "completed")
-        appmod.set_upload_progress(job_id, 100, "教材建立完成", "教材已存在，背景工作狀態已自動修復。")
-        return
-
+def process_one(api,job):
+    job_id=job["id"]
     try:
-        with tempfile.TemporaryDirectory(prefix="teacher-material-worker-") as temp_dir:
-            payload = dict(job.get("payload") or {})
-            original = Path(payload.get("originalName") or job.get("originalName") or "source.bin").name
-            source = Path(temp_dir) / ("source" + Path(original).suffix.lower())
-            appmod.download_material_job_staging(job, source)
-            original = _validate_downloaded_source(source, job)
-            result = _post_sync_upload(job, source, original)
-        now = appmod._utc_now_iso()
-        material_id = str(result.get("id") or material_id or "")
-        appmod._update_material_job(
-            job_id,
-            status="completed",
-            finished_at=now,
-            stage="已完成",
-            detail="轉檔、預覽最佳化、雲端儲存與資料庫同步皆完成。",
-            material_id=material_id,
-            result=result,
-            error="",
-        )
-        appmod.set_upload_progress(job_id, 100, "教材建立完成", "背景工作已完成，可在教材清單開啟。")
-        # The durable result is committed; successful jobs do not retain the
-        # Shared Staging copy.  Retry/terminal failures intentionally retain it.
-        appmod.delete_material_job_staging(job)
-        appmod._update_material_job(job_id, staging_path="", staging_key="")
-        appmod.sync_media_processing_metadata(job, "completed")
-        log(f"completed {job_id} -> {material_id}")
+        with tempfile.TemporaryDirectory(prefix="teacher-local-worker-") as temp_name:
+            temp=Path(temp_name); source=temp/"source.bin"; api.download(job,source); original=validate_download(source,job); api.heartbeat(job_id); result=publish_to_storage(source,original,job,temp); api.post(f"/api/material-worker/{job_id}/complete",{"workerId":WORKER_ID,"result":result})
+        log(f"completed {job_id}")
     except Exception as exc:
-        error = str(exc)[:1200]
-        if attempts < max_attempts:
-            available_at, delay = _retry_at(attempts)
-            appmod._update_material_job(
-                job_id,
-                status="retry_wait",
-                available_at=available_at,
-                stage="等待自動重試",
-                detail=f"本次失敗，{delay} 秒後使用同一份原始檔重試；不需要重新上傳。",
-                error=error,
-                worker_id="",
-            )
-            appmod.set_upload_progress(job_id, 8, "等待自動重試", f"{error}｜將自動重試，不需要重新上傳。")
-            appmod.sync_media_processing_metadata(job, "retry_wait", error)
-            log(f"retry {job_id}: {error}")
-        else:
-            now = appmod._utc_now_iso()
-            appmod._update_material_job(
-                job_id,
-                status="failed",
-                finished_at=now,
-                stage="處理失敗",
-                detail="已達自動重試上限；暫存原始檔仍保留，可由後台按『重新處理』。",
-                error=error,
-                worker_id="",
-            )
-            appmod.set_upload_progress(job_id, 0, "處理失敗", f"{error}｜原始檔暫時保留，可直接重新處理。")
-            appmod.sync_media_processing_metadata(job, "failed", error)
-            log(f"failed {job_id}: {error}")
-
-
+        message=str(exc)[:1200]
+        try:api.post(f"/api/material-worker/{job_id}/retry",{"workerId":WORKER_ID,"error":message})
+        except Exception as report:log(f"failed to report {job_id}: {report}")
+        log(f"job {job_id}: {message}")
 def main():
-    if not appmod.MATERIAL_BACKGROUND_JOBS:
-        log("MATERIAL_BACKGROUND_JOBS=false; worker disabled")
-        return 0
-    if not appmod.MATERIAL_WORKER_ENABLED:
-        log("MATERIAL_WORKER_ENABLED=false; worker disabled")
-        return 0
-    if not appmod.DATABASE_URL:
-        log("DATABASE_URL is not set; using SQLite only for local development")
-    if not appmod.ADMIN_KEY:
-        log("ADMIN_KEY is required by the trusted in-process material handler")
-        return 2
-    try:
-        conn, kind = appmod._db_conn()
-        conn.execute("SELECT 1").fetchone()
-        conn.close()
-        log(f"database ready ({kind})")
-    except Exception as exc:
-        log(f"database unavailable: {exc}")
-        return 2
-    staging = appmod.shared_staging_capability()
-    if not staging.get("available"):
-        log("shared staging unavailable; worker will not start")
-        return 2
-    log(f"shared staging={staging.get('backend')} ffmpeg={ffmpeg_capability().get('available')} libreoffice={libreoffice_capability(appmod.SOFFICE_BIN).get('available')} adminKey=true")
-    appmod.init_material_jobs_db()
-    recovered = appmod.recover_stale_material_jobs()
-    if recovered:
-        log(f"recovered {recovered} stale job(s)")
-    last_cleanup = 0.0
+    try:api=WorkerApi()
+    except RuntimeError as exc:log(str(exc));return 2
+    caps=capability();log(f"startup ffmpeg={caps['ffmpeg']['available']} ffprobe={caps['ffprobe']['available']} libreoffice={caps['libreOffice']['available']}")
     while True:
         try:
-            now = time.time()
-            if now - last_cleanup > 900:
-                appmod.cleanup_material_job_staging()
-                last_cleanup = now
-            job = appmod.claim_next_material_job(WORKER_ID)
-            if not job:
-                time.sleep(appmod.MATERIAL_JOB_POLL_SECONDS)
-                continue
-            process_job(job)
-        except KeyboardInterrupt:
-            log("stopping")
-            return 0
-        except Exception as exc:
-            log(f"loop error: {exc}")
-            time.sleep(max(2, appmod.MATERIAL_JOB_POLL_SECONDS))
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+            api.heartbeat(); data=api.post("/api/material-worker/claim",{"workerId":WORKER_ID,"capabilities":caps}); job=data.get("job")
+            if job:process_one(api,job)
+            else:time.sleep(POLL_SECONDS)
+        except KeyboardInterrupt:return 0
+        except Exception as exc:log(f"API unavailable: {exc}");time.sleep(POLL_SECONDS)
+if __name__=="__main__":sys.exit(main())
