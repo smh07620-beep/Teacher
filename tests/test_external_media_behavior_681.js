@@ -8,7 +8,7 @@ function element(id = '') {
   return {
     id, dataset: {}, className: '', style: {}, readyState: 1, currentTime: 0, duration: 200,
     classList: { add() {}, remove() {} }, addEventListener(name, fn) { (listeners[name] ||= []).push(fn); },
-    emit(name) { (listeners[name] || []).forEach(fn => fn({ target: this })); },
+    emit(name) { (listeners[name] || []).forEach(fn => fn({ target: this })); }, listenerCount(name) { return (listeners[name] || []).length; },
     removeAttribute(name) { if (name === 'src') this.src = ''; }, pause() {}, insertAdjacentElement(_where, child) { this.after = child; },
   };
 }
@@ -25,10 +25,13 @@ function harness({ external = null, externalError = false } = {}) {
     cachedSlidesList: [
       { id: 'youtube-a', title: 'A', viewerMode: 'video' }, { id: 'youtube-b', title: 'B', viewerMode: 'video' },
       { id: 'youtube-x', title: 'X', viewerMode: 'video' }, { id: 'direct-x', title: 'D', viewerMode: 'video' },
+      { id: 'direct-a', title: 'Direct A', viewerMode: 'video' }, { id: 'direct-b', title: 'Direct B', viewerMode: 'video' },
+      { id: 'uploaded-video-a', title: 'Upload video A', viewerMode: 'video' }, { id: 'uploaded-video-b', title: 'Upload video B', viewerMode: 'video' },
+      { id: 'uploaded-audio-a', title: 'Upload audio A', viewerMode: 'audio' }, { id: 'uploaded-audio-b', title: 'Upload audio B', viewerMode: 'audio' },
       { id: 'fallback-x', title: 'F', viewerMode: 'video' },
     ],
     addEventListener(name, fn) { (windowListeners[name] ||= []).push(fn); },
-    openMaterial: async () => { fallback += 1; }, closeSlideViewer() {}, goToSlidePage() {},
+    openMaterial: async () => { fallback += 1; }, closeSlideViewer() {}, closeMediaViewer() {}, goToSlidePage() {},
     console: { warn() {} },
   };
   const document = {
@@ -50,7 +53,7 @@ function harness({ external = null, externalError = false } = {}) {
     window, calls, progress, posts, frame, fallback: () => fallback, jsonCalls: () => jsonCalls,
     sendYoutube(info) { (windowListeners.message || []).forEach(fn => fn({ source: frame().contentWindow, origin: 'https://www.youtube-nocookie.com', data: JSON.stringify({ info }) })); },
     sendYoutubeEvent(event) { (windowListeners.message || []).forEach(fn => fn({ source: frame().contentWindow, origin: 'https://www.youtube-nocookie.com', data: JSON.stringify(event) })); },
-    video: make('media-video'),
+    video: make('media-video'), audio: make('media-audio'),
   };
 }
 async function tick() { await Promise.resolve(); await Promise.resolve(); }
@@ -83,6 +86,37 @@ async function tick() { await Promise.resolve(); await Promise.resolve(); }
   await h.window.teacher681SeekReviewSource({ materialId: 'direct-x', timeStart: 45 });
   assert.equal(h.video.currentTime, 45, 'direct MP4 uses HTML5 seek');
 
+  const direct = { provider: 'direct', canonicalUrl: 'https://media.example.edu/lesson.mp4' };
+  h = harness({ external: direct });
+  await h.window.openMaterial('direct-a'); h.video.currentTime = 25; h.video.duration = 200; h.video.emit('timeupdate'); await tick();
+  await h.window.openMaterial('direct-b'); h.video.currentTime = 45; h.video.duration = 100; h.video.emit('timeupdate'); await tick();
+  assert.deepEqual([...h.progress.get('direct-b').watchedBuckets], [4], 'direct B does not inherit A buckets');
+  assert.equal(h.progress.get('direct-b').completed, false, 'direct HTML5 client never marks completion');
+  await h.window.openMaterial('direct-a'); h.video.currentTime = 35; h.video.duration = 200; h.video.emit('timeupdate'); await tick();
+  assert.deepEqual([...h.progress.get('direct-a').watchedBuckets], [2, 3], 'direct A restores and extends saved buckets');
+  assert.equal(h.video.listenerCount('timeupdate'), 1, 'the shared direct video element has one timeupdate listener');
+  assert.equal(h.video.listenerCount('pause'), 1, 'the shared direct video element has one pause listener');
+
+  h = harness();
+  await h.window.openMaterial('uploaded-video-a'); h.video.currentTime = 15; h.video.duration = 200; h.video.emit('timeupdate'); await tick();
+  await h.window.openMaterial('uploaded-video-b'); h.video.currentTime = 45; h.video.duration = 100; h.video.emit('timeupdate'); await tick();
+  assert.deepEqual([...h.progress.get('uploaded-video-b').watchedBuckets], [4], 'uploaded video B does not inherit A buckets');
+
+  h = harness();
+  await h.window.openMaterial('uploaded-audio-a'); h.audio.currentTime = 12; h.audio.duration = 200; h.audio.emit('timeupdate'); await tick();
+  await h.window.openMaterial('uploaded-audio-b'); h.audio.currentTime = 32; h.audio.duration = 100; h.audio.emit('timeupdate'); await tick();
+  assert.deepEqual([...h.progress.get('uploaded-audio-b').watchedBuckets], [3], 'uploaded audio B does not inherit A buckets');
+
+  h = harness({ external: direct });
+  await h.window.openMaterial('direct-a'); h.video.currentTime = 33; h.video.duration = 200;
+  await h.window.openMaterial('direct-b'); await tick();
+  assert.equal(h.progress.get('direct-a').lastPositionSeconds, 33, 'switch flushes unsaved HTML5 progress');
+
+  h = harness({ external: direct });
+  await h.window.openMaterial('direct-a'); h.video.currentTime = 51; h.video.duration = 200;
+  h.window.closeMediaViewer(); await tick();
+  assert.equal(h.progress.get('direct-a').lastPositionSeconds, 51, 'close flushes unsaved HTML5 progress');
+
   h = harness({ externalError: true });
   await h.window.openMaterial('fallback-x');
   assert.equal(h.fallback(), 1, 'metadata errors fall back to legacy reader without throwing');
@@ -90,5 +124,5 @@ async function tick() { await Promise.resolve(); await Promise.resolve(); }
   h = harness();
   await h.window.openMaterial('fallback-x');
   assert.equal(h.fallback(), 1, 'missing external metadata falls back to legacy reader without throwing');
-  process.stdout.write('external media behavior: 6 passed\n');
+  process.stdout.write('external media behavior: 10 scenarios passed\n');
 })().catch(error => { console.error(error); process.exitCode = 1; });

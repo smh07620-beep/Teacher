@@ -43,6 +43,15 @@ class ExternalAndElevation68Tests(unittest.TestCase):
         item=validate_external_url("https://www.youtube.com/shorts/dQw4w9WgXcQ")
         self.assertEqual(item,{"provider":"youtube","canonicalUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","videoId":"dQw4w9WgXcQ"})
 
+    def test_allowed_direct_video_and_vimeo_rejection(self):
+        item=validate_external_url("https://cdn.example.edu/video.webm", ["cdn.example.edu"])
+        self.assertEqual(item["provider"], "direct")
+        for url in ("https://vimeo.com/123456", "https://player.vimeo.com/video/123456"):
+            with self.assertRaisesRegex(ValueError, "YouTube"):
+                validate_external_url(url, ["cdn.example.edu"])
+        with self.assertRaises(ValueError):
+            validate_external_url("https://untrusted.example/video.mp4", ["cdn.example.edu"])
+
     def test_single_flight_never_persists_secret(self):
         legacy=Path(__file__).parents[1].joinpath("static","system-admin.js").read_text(encoding="utf-8")
         self.assertIn("window.adminElevationFlight",legacy)
