@@ -50,7 +50,7 @@ def register_external_media(base):
     if app.extensions.get("teacher_external_media_68_registered"): return app
     @app.put("/api/materials/<material_id>/external-media")
     def put_external_media(material_id):
-        denied=base.require_admin()
+        denied=(base.require_permission("material.manage") if hasattr(base,"require_permission") else base.require_admin())
         if denied: return denied
         if not base.get_material(material_id): return jsonify({"error":"找不到教材"}),404
         try: data=validate_external_url((request.get_json(silent=True) or {}).get("url"), app.config.get("DIRECT_MEDIA_ALLOWLIST", []))
@@ -68,7 +68,7 @@ def register_external_media(base):
         The URL is validated before a material exists.  The resulting record
         deliberately has no object-store key, upload job, or worker request.
         """
-        denied=base.require_admin()
+        denied=(base.require_scoped_permission("material.manage", str((request.get_json(silent=True) or {}).get("group") or base.DEFAULT_GROUP)) if hasattr(base,"require_scoped_permission") else base.require_admin())
         if denied:return denied
         body=request.get_json(silent=True) or {}
         try:data=validate_external_url(body.get("url"),app.config.get("DIRECT_MEDIA_ALLOWLIST",[]))

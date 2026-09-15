@@ -48,17 +48,7 @@ def register_admin_elevation(base):
     def elevation_logout_clear(response):
         if request.path=="/api/auth/logout": clear()
         return response
-    # Legacy routes resolve this global helper at request time.  Preserve the
-    # emergency header-key bootstrap path, but require a short-lived elevation
-    # for every authenticated management action.
-    original_require_admin=base.require_admin
-    def elevated_require_admin():
-        denied=original_require_admin()
-        if denied:return denied
-        user=base._current_user()
-        if user and (has_permission(user,"user.manage") or has_permission(user,"system.manage")) and not elevated(user):
-            return jsonify({"error":"需要管理權限驗證。","elevationRequired":True}),403
-        return None
-    base.require_admin=elevated_require_admin
+    # Elevation is break-glass compatibility only.  Normal authorization is
+    # handled by canonical role/capability checks and never wraps require_admin.
     app.extensions["teacher_admin_elevation_68_registered"]=True
     return app

@@ -52,8 +52,8 @@ class ExternalAndElevation68Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_external_url("https://untrusted.example/video.mp4", ["cdn.example.edu"])
 
-    def test_single_flight_never_persists_secret(self):
+    def test_normal_workspace_never_requests_or_persists_admin_secret(self):
         legacy=Path(__file__).parents[1].joinpath("static","system-admin.js").read_text(encoding="utf-8")
-        self.assertIn("window.adminElevationFlight",legacy)
-        self.assertIn("/api/admin/elevation",legacy)
+        self.assertNotIn("window.adminElevationFlight",legacy)
+        self.assertNotIn("/api/admin/elevation",legacy)
         self.assertNotIn("sessionStorage.setItem('admin_key'",legacy)

@@ -2,6 +2,7 @@
 
 import datetime
 import re
+import json
 
 from werkzeug.security import check_password_hash
 
@@ -44,8 +45,21 @@ def public_user(base, row, *, include_roles=False):
             d.get("roles_json"),
             primary=primary_role,
         )
+        user["professionalTitle"] = str(d.get("professional_title", "") or "")[:100]
+        user["responsibilityTags"] = _profile_tags(d.get("responsibility_tags"))
 
     return user
+
+
+def _profile_tags(value):
+    """Fail closed to presentation-only empty tags for malformed legacy data."""
+    try:
+        parsed = json.loads(value) if isinstance(value, str) else value
+    except (TypeError, ValueError, json.JSONDecodeError):
+        parsed = []
+    if not isinstance(parsed, list):
+        return []
+    return [str(tag).strip()[:50] for tag in parsed if str(tag).strip()][:12]
 
 
 def current_user(base, session, *, include_roles=False):

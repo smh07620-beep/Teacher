@@ -27,32 +27,35 @@ CANONICAL_ROLES = {
 }
 
 ROLE_PERMISSIONS = {
-    "student": {"course.view", "exam.take", "student.view_self"},
+    # Profile fields are deliberately absent from this registry.  Titles and
+    # responsibility tags are presentation data, never an authorization input.
+    "student": {"material.read", "course.view", "exam.take", "progress.self.read", "result.self.read", "student.view_self"},
     "clinical_teacher": {
-        "course.view",
-        "evaluation.submit",
-        "evaluation.review",
-        "evaluation.sign",
-        "student.view_assigned",
+        "material.read", "course.view", "course.manage", "material.manage",
+        "question.manage", "exam.manage", "result.group.read", "document.export",
+        "evaluation.submit", "evaluation.review", "evaluation.sign",
+        "teacher.assessment.sign", "student.view_assigned",
     },
     "group_leader": {
-        "course.view",
-        "course.edit",
-        "exam.manage",
-        "evaluation.review",
-        "evaluation.countersign",
-        "student.view_group",
+        "material.read", "course.view", "course.manage", "course.edit", "material.manage",
+        "question.manage", "question.review", "exam.manage", "exam.publish",
+        "result.group.read", "group.member.read", "group.content.manage",
+        "group.result.read", "document.export", "evaluation.submit", "evaluation.review",
+        "teacher.assessment.sign", "evaluation.countersign", "student.view_assigned", "student.view_group",
     },
     "education_admin": {
-        "course.view",
-        "course.edit",
-        "exam.manage",
-        "evaluation.finalize",
-        "student.view_all",
-        "user.manage",
+        "material.read", "course.view", "course.manage", "course.edit", "material.manage",
+        "question.manage", "question.review", "exam.manage", "result.group.read",
+        "document.export", "education.cross_group.manage", "evaluation.finalize", "student.view_all",
     },
-    "system_admin": {"user.manage", "role.manage", "audit.view", "system.manage"},
-    "auditor": {"audit.view"},
+    "system_admin": {
+        "material.read", "course.view", "course.manage", "course.edit", "material.manage",
+        "question.manage", "question.review", "exam.manage", "exam.publish", "result.group.read",
+        "document.export", "education.cross_group.manage", "group.member.read", "group.content.manage",
+        "group.result.read", "user.manage", "role.manage", "audit.read", "audit.view", "system.manage",
+        "storage.manage", "backup.manage", "template.manage",
+    },
+    "auditor": {"audit.read", "audit.view"},
 }
 
 ROLE_LABELS = {
@@ -194,6 +197,22 @@ def require_permission(user: Optional[Mapping[str, Any]], permission: str) -> Ma
     if not has_permission(user, permission):
         raise ApiError("FORBIDDEN", "權限不足。", status=403)
     return user
+
+
+def require_any_permission(user: Optional[Mapping[str, Any]], *permissions: str) -> Mapping[str, Any]:
+    if not user:
+        raise ApiError("LOGIN_REQUIRED", "請先登入後再執行此操作。", status=401)
+    if not any(has_permission(user, permission) for permission in permissions):
+        raise ApiError("FORBIDDEN", "權限不足。", status=403)
+    return user
+
+
+def is_system_admin(user: Optional[Mapping[str, Any]]) -> bool:
+    return has_role(user, "system_admin")
+
+
+def is_teacher_workspace_user(user: Optional[Mapping[str, Any]]) -> bool:
+    return any(has_role(user, role) for role in ("clinical_teacher", "group_leader", "education_admin", "system_admin"))
 
 
 def can_teacher_sign(user: Optional[Mapping[str, Any]]) -> bool:

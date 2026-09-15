@@ -9,8 +9,18 @@ def now():return dt.datetime.now(dt.timezone.utc).isoformat()
 def normalized(v):return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", "",str(v).lower())).strip()
 def similarity(a,b):
     x,y=set(normalized(a).split()),set(normalized(b).split());return len(x&y)/max(1,len(x|y))
-def permitted(base):
-    denied=base.require_admin();return denied
+def permitted(base, capability="question.manage", group=None):
+    if not hasattr(base, "require_scoped_permission"):
+        return base.require_admin()
+    # Question rows use the existing quiz-category assignment for scope.  An
+    # absent category is deliberately not widened for a teacher/group leader.
+    if group is None:
+        body = request.get_json(silent=True) or {}
+        category = str(request.args.get("quizCategoryId") or body.get("quizCategoryId") or "").strip()
+        if category:
+            quiz = base.get_quiz_category(category)
+            group = (quiz or {}).get("group")
+    return base.require_scoped_permission(capability, group)
 def metadata(data):
     aliases={"learning_objective":"learningObjective","source_material_id":"sourceMaterialId","review_source":"reviewSource","cognitive_level":"cognitiveLevel"}
     out={k:(data[aliases[k]] if aliases.get(k) in data else data.get(k,"")) for k in ("domain","topic","subtopic","learning_objective","source_material_id","review_source")}
@@ -102,7 +112,7 @@ def register_question_bank(base):
         return jsonify({"id":qid,"status":m["status"],"suspectedDuplicates":dup}),201
     @app.get("/api/question-bank")
     def list_bank():
-        denied=permitted(base)
+        denied=(base.require_any_permission("question.manage", "audit.read") if hasattr(base,"require_any_permission") else base.require_admin())
         if denied:return denied
         category=str(request.args.get("quizCategoryId") or "").strip()
         status=str(request.args.get("status") or "").strip()
@@ -146,7 +156,7 @@ def register_question_bank(base):
         return jsonify({"ok":bool(getattr(cur,"rowcount",0))})
     @app.post("/api/question-bank/<question_id>/review")
     def review(question_id):
-        denied=permitted(base)
+        denied=permitted(base,"question.review")
         if denied:return denied
         decision=str((request.get_json(silent=True) or {}).get("decision") or "")
         if decision not in {"accept","reject","return"}:return jsonify({"error":"decision 格式錯誤"}),400
@@ -159,7 +169,7 @@ def register_question_bank(base):
         return jsonify({"ok":bool(getattr(cur,"rowcount",0))})
     @app.post("/api/exam-blueprints")
     def blueprint():
-        denied=permitted(base)
+        denied=permitted(base,"exam.manage")
         if denied:return denied
         b=request.get_json(silent=True) or {}; count=max(1,min(500,int(b.get("questionCount",0) or 0))); quotas=b.get("quotas") or {}
         if not isinstance(quotas,dict):return jsonify({"error":"quotas 格式錯誤"}),400
@@ -169,7 +179,7 @@ def register_question_bank(base):
         return jsonify({"id":qid,"questionCount":count,"immutableSnapshotRequired":True}),201
     @app.get("/api/questions/<question_id>/analytics")
     def analytics(question_id):
-        denied=permitted(base)
+        denied=(base.require_any_permission("question.manage", "audit.read") if hasattr(base,"require_any_permission") else base.require_admin())
         if denied:return denied
         conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
         try: rows=conn.execute(f"SELECT selected_option,is_correct FROM question_attempt_analytics WHERE question_id={ph}",(question_id,)).fetchall()
@@ -184,7 +194,7 @@ def register_question_bank(base):
         return jsonify({"attemptCount":n,"sufficientData":True,"correctRate":round(sum(bool(r["is_correct"]) for r in vals)/n,3),"optionSelectionCounts":counts,"distractorDistribution":{key:value for key,value in counts.items() if str(key)!=correct}})
     @app.post("/api/exam-blueprints/<blueprint_id>/publish")
     def publish_blueprint(blueprint_id):
-        denied=permitted(base)
+        denied=permitted(base,"exam.publish")
         if denied:return denied
         conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
         try:

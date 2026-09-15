@@ -577,9 +577,11 @@
                             <label class="text-xs font-bold text-slate-600">初始密碼<input id="admin-user-password" class="learning-input mt-1" type="password" autocomplete="new-password" placeholder="至少 4 碼"></label>
                             <label class="text-xs font-bold text-slate-600">姓名<input id="admin-user-name" class="learning-input mt-1" placeholder="顯示姓名"></label>
                             <label class="text-xs font-bold text-slate-600">工號<input id="admin-user-empid" class="learning-input mt-1" placeholder="唯一工號"></label>
-                            <label class="text-xs font-bold text-slate-600">角色<select id="admin-user-role" class="learning-input mt-1"><option value="student">學員</option><option value="clinical_teacher">臨床教師</option><option value="group_leader">組長</option><option value="education_admin">教學管理者</option><option value="system_admin">系統管理者</option><option value="auditor">稽核／唯讀</option></select></label>
+                            <label class="text-xs font-bold text-slate-600">系統角色<select id="admin-user-role" class="learning-input mt-1"><option value="student">學員</option><option value="clinical_teacher">臨床教師</option><option value="group_leader">組長</option><option value="education_admin">教學管理者</option><option value="system_admin">系統管理者</option><option value="auditor">稽核／唯讀</option></select></label>
                             <label class="text-xs font-bold text-slate-600">預設訓練區<select id="admin-user-area" class="learning-input mt-1"><option value="internal">院內訓練</option><option value="pgy">PGY</option></select></label>
                             <label class="text-xs font-bold text-slate-600">預設組別<select id="admin-user-group" class="learning-input mt-1"><option value="grpBio">生化組</option><option value="grpMicro">鏡檢組</option><option value="grpSero">血清組</option><option value="grpBB">血庫組</option><option value="grpBact">細菌組</option><option value="grpHema">血液組</option><option value="grpNew">新人共通</option><option value="grpPgyDocs">PGY 資料</option></select></label>
+                            <label class="text-xs font-bold text-slate-600">主要職稱<input id="admin-user-professional-title" class="learning-input mt-1" placeholder="例如：品管醫檢師"></label>
+                            <label class="text-xs font-bold text-slate-600">額外職責標籤<input id="admin-user-responsibility-tags" class="learning-input mt-1" placeholder="以逗號分隔，例如：品管、POCT"></label>
                             <div class="flex items-end"><button onclick="createAdminUserAccount()" class="w-full bg-teal-700 hover:bg-teal-600 text-white text-sm font-bold px-4 py-3 rounded-xl">建立登入帳號</button></div>
                         </div>
                         <p id="admin-user-status" class="text-xs text-slate-500"></p>
@@ -696,7 +698,7 @@
     <button type="button" onclick="switchLearningModule('materials')"><span>▤</span>教材</button>
     <button type="button" onclick="switchLearningModule('exam')"><span>✓</span>考核</button>
     <a href="/"><span>▥</span>進度</a>
-    <button type="button" onclick="toggleAdminModal(true)"><span>⚙</span>管理</button>
+    <button id="workspace-entry" type="button" onclick="toggleAdminModal(true)"><span>👨‍🏫</span>教師工作區</button>
 </nav>
 
 <button id="back-to-top" type="button" aria-label="回到頁首" title="回到頁首" class="fixed right-4 sm:right-6 bottom-4 sm:bottom-6 z-50 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-slate-900/90 hover:bg-teal-700 text-white shadow-xl border border-white/20 backdrop-blur flex items-center justify-center text-xl opacity-0 pointer-events-none translate-y-3 transition-all duration-200">↑</button>
@@ -706,6 +708,7 @@
 <script defer src="/system-exam.js?v=6602"></script>
 <script defer src="/system-assessment.js?v=6100"></script>
 <script defer src="/system-admin.js?v=6502"></script>
+<script defer src="/rbac-ui-681.js?v=6811"></script>
 <script defer src="/assessment-681.js?v=6810"></script>
 <script defer src="/course-wizard-681.js?v=6810"></script>
 <script defer src="/external-material-681.js?v=6810"></script>

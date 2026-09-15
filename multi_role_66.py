@@ -17,6 +17,7 @@ from teacher_app.common.auth import (
     LEGACY_ROLE_ALIASES,
     normalize_role,
     normalize_roles,
+    has_permission,
 )
 
 
@@ -26,6 +27,52 @@ def _json_roles(roles):
         ensure_ascii=False,
         separators=(",", ":"),
     )
+
+
+def _profile_title(value):
+    return str(value or "").strip()[:100]
+
+
+def _profile_tags(value):
+    """Validate display tags separately from RBAC roles and capabilities."""
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValueError("額外職責標籤必須為陣列。")
+    tags = []
+    for item in value:
+        tag = str(item or "").strip()[:50]
+        if tag and tag not in tags:
+            tags.append(tag)
+    if len(tags) > 12:
+        raise ValueError("額外職責標籤最多 12 個。")
+    return json.dumps(tags, ensure_ascii=False, separators=(",", ":"))
+
+
+def _require_user_manage(base):
+    # Standalone 6.6 compatibility tests register this adapter without the
+    # 6.8.1 policy layer.  Production always has the latter and uses user.manage.
+    if not base.app.extensions.get("teacher_rbac_681_registered"):
+        return base.require_admin()
+    user = base._current_user()
+    if not user:
+        return jsonify({"error": "請先登入。", "loginRequired": True}), 401
+    if not has_permission(user, "user.manage"):
+        return jsonify({"error": "權限不足。"}), 403
+    return None
+
+
+def _profile_columns_available(base):
+    conn, kind = base._db_conn()
+    try:
+        if kind == "postgres":
+            rows = conn.execute("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='user_accounts'").fetchall()
+            columns = {str(dict(row).get("column_name", "")) for row in rows}
+        else:
+            columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(user_accounts)").fetchall()}
+        return {"professional_title", "responsibility_tags"}.issubset(columns)
+    finally:
+        conn.close()
 
 
 def _ensure_schema(base):
@@ -198,7 +245,7 @@ def register_multi_role_66(base):
     _ensure_schema(base)
 
     def users_admin():
-        denied = base.require_admin()
+        denied = _require_user_manage(base)
 
         if denied:
             return denied
@@ -230,7 +277,7 @@ def register_multi_role_66(base):
             conn.close()
 
     def user_create():
-        denied = base.require_admin()
+        denied = _require_user_manage(base)
 
         if denied:
             return denied
@@ -295,6 +342,11 @@ def register_multi_role_66(base):
                 base.DEFAULT_GROUP,
             )
         )
+        try:
+            professional_title = _profile_title(data.get("professionalTitle"))
+            responsibility_tags = _profile_tags(data.get("responsibilityTags", []))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
 
         now = datetime.datetime.now(
             datetime.timezone.utc
@@ -309,49 +361,28 @@ def register_multi_role_66(base):
         )
 
         try:
+            profile_columns = _profile_columns_available(base)
+            columns = [
+                "username", "password_hash", "display_name", "emp_id", "role", "roles_json",
+                "preferred_area", "preferred_group", "active", "session_version", "created_at",
+                "updated_at", "last_login_at",
+            ]
+            values = [
+                username, generate_password_hash(password), name, emp_id, role, _json_roles(roles), area, group,
+                True if kind == "postgres" else 1, 1, now, now, "",
+            ]
+            if profile_columns:
+                columns[6:6] = ["professional_title", "responsibility_tags"]
+                values[6:6] = [professional_title, responsibility_tags]
             conn.execute(
                 f"""
                 INSERT INTO user_accounts
-                (
-                    username,
-                    password_hash,
-                    display_name,
-                    emp_id,
-                    role,
-                    roles_json,
-                    preferred_area,
-                    preferred_group,
-                    active,
-                    session_version,
-                    created_at,
-                    updated_at,
-                    last_login_at
-                )
+                ({','.join(columns)})
                 VALUES (
-                    {','.join([ph] * 13)}
+                    {','.join([ph] * len(columns))}
                 )
                 """,
-                (
-                    username,
-                    generate_password_hash(
-                        password
-                    ),
-                    name,
-                    emp_id,
-                    role,
-                    _json_roles(roles),
-                    area,
-                    group,
-                    (
-                        True
-                        if kind == "postgres"
-                        else 1
-                    ),
-                    1,
-                    now,
-                    now,
-                    "",
-                ),
+                values,
             )
 
             created = conn.execute(
@@ -388,7 +419,7 @@ def register_multi_role_66(base):
         )
 
     def user_update(username):
-        denied = base.require_admin()
+        denied = _require_user_manage(base)
 
         if denied:
             return denied
@@ -442,6 +473,7 @@ def register_multi_role_66(base):
                     "preferred_area",
                 "preferredGroup":
                     "preferred_group",
+                "professionalTitle": "professional_title",
             }
 
             for key, column in (
@@ -488,6 +520,14 @@ def register_multi_role_66(base):
                 values.append(
                     value
                 )
+
+            if "responsibilityTags" in data:
+                try:
+                    tags = _profile_tags(data.get("responsibilityTags"))
+                except ValueError as exc:
+                    return jsonify({"error": str(exc)}), 400
+                fields.append(f"responsibility_tags={ph}")
+                values.append(tags)
 
             try:
                 (

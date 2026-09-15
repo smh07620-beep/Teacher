@@ -262,6 +262,15 @@ def _external_interactive_media_68(conn, kind: str) -> None:
     conn.execute(f"CREATE TABLE IF NOT EXISTS question_attempt_analytics (question_id TEXT NOT NULL,attempt_id TEXT NOT NULL,selected_option TEXT NOT NULL DEFAULT '',is_correct {boolean} NOT NULL DEFAULT {default_false},created_at TEXT NOT NULL,PRIMARY KEY(question_id,attempt_id))")
 
 
+@migration("0069-user-profile-titles")
+def _user_profile_titles_69(conn, kind: str) -> None:
+    """Presentation-only profile fields; role storage and password hashes stay untouched."""
+    _add_columns(conn, kind, "user_accounts", {
+        "professional_title": "professional_title TEXT NOT NULL DEFAULT ''",
+        "responsibility_tags": "responsibility_tags TEXT NOT NULL DEFAULT '[]'",
+    })
+
+
 def ensure_r2_free_budget_guard_67(base) -> None:
     """Backfill 6.7 R2 guard tables even when the 0067 marker already exists.
 

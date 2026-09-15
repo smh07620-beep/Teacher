@@ -18,6 +18,7 @@ REQUIRED_MIGRATIONS = (
     "0067-render-worker-shared-staging",
     "0067-b-free-local-worker",
     "0068-external-interactive-media",
+    "0069-user-profile-titles",
 )
 
 

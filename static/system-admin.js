@@ -295,14 +295,9 @@ async function adminCreateCourseBundle(){
 
 
 async function getAdminKey() {
-    if (adminKey) return adminKey;
-    if (window.adminElevationFlight) return window.adminElevationFlight;
-    window.adminElevationFlight=(async()=>{
-        const current=await fetch('/api/admin/elevation',{cache:'no-store'}).then(r=>r.json()).catch(()=>({}));
-        if(!current.elevated){const password=prompt('請輸入管理密碼：');if(!password)return null;const r=await fetch('/api/admin/elevation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});if(!r.ok){alert('驗證失敗');return null;}}
-        adminKey='__elevated_session__'; return adminKey;
-    })().finally(()=>{window.adminElevationFlight=null;});
-    return window.adminElevationFlight;
+    // Compatibility header only.  Server-side session RBAC authorizes every
+    // request; no ADMIN_KEY is prompted for or persisted in this browser.
+    return 'rbac-session';
 }
 
 const ADMIN_CACHE_MS = 30000;
@@ -1478,7 +1473,7 @@ async function renderAdminUserAccounts(){
     }catch(e){body.innerHTML=`<tr><td colspan="6" class="p-5 text-center text-rose-600">❌ ${escapeHtml(e.message)}</td></tr>`;}
 }
 async function createAdminUserAccount(){
-    const status=document.getElementById('admin-user-status'),key=await getAdminKey();if(!key)return;const payload={username:document.getElementById('admin-user-username')?.value||'',password:document.getElementById('admin-user-password')?.value||'',name:document.getElementById('admin-user-name')?.value||'',empId:document.getElementById('admin-user-empid')?.value||'',role:document.getElementById('admin-user-role')?.value||'student',preferredArea:document.getElementById('admin-user-area')?.value||'internal',preferredGroup:document.getElementById('admin-user-group')?.value||'grpBio'};status.textContent='⏳ 建立帳號中…';
+    const status=document.getElementById('admin-user-status'),key=await getAdminKey();if(!key)return;const payload={username:document.getElementById('admin-user-username')?.value||'',password:document.getElementById('admin-user-password')?.value||'',name:document.getElementById('admin-user-name')?.value||'',empId:document.getElementById('admin-user-empid')?.value||'',role:document.getElementById('admin-user-role')?.value||'student',preferredArea:document.getElementById('admin-user-area')?.value||'internal',preferredGroup:document.getElementById('admin-user-group')?.value||'grpBio',professionalTitle:document.getElementById('admin-user-professional-title')?.value||'',responsibilityTags:(document.getElementById('admin-user-responsibility-tags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean)};status.textContent='⏳ 建立帳號中…';
     const r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify(payload)}),d=await r.json().catch(()=>({}));if(!r.ok){status.textContent='❌ '+(d.error||'建立失敗');return;}['admin-user-username','admin-user-password','admin-user-name','admin-user-empid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});status.textContent=`✅ 已建立 ${d.user.name}（${d.user.username}）`;await renderAdminUserAccounts();
 }
 async function resetAdminUserPassword(username){const password=prompt(`請輸入「${username}」的新密碼（至少 4 碼）：`);if(password===null)return;const key=await getAdminKey();if(!key)return;const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({password})}),d=await r.json().catch(()=>({}));alert(r.ok?'密碼已重設，該帳號需重新登入。':(d.error||'重設失敗'));if(r.ok)await renderAdminUserAccounts();}

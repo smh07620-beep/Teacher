@@ -70,7 +70,7 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertTrue(response.get_json()["loginRequired"])
 
-    def test_material_mutations_still_require_elevation(self):
+    def test_material_mutations_do_not_emit_legacy_elevation_prompt(self):
         self.login()
         for response in (
             self.client.get("/api/slides/admin"),
@@ -78,7 +78,7 @@ class MaterialReadAccess68Tests(unittest.TestCase):
             self.client.delete("/api/slides/not-a-material", headers={"Origin": "http://localhost"}),
         ):
             self.assertEqual(response.status_code, 403, response.get_data(as_text=True))
-            self.assertTrue(response.get_json()["elevationRequired"])
+            self.assertFalse(response.get_json().get("elevationRequired", False))
 
 
 class MaterialNavigationFrontend68Tests(unittest.TestCase):
