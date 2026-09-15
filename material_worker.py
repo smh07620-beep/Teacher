@@ -94,9 +94,12 @@ def publish_to_storage(source,original,job,temp):
     backend=storage.active_material_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
     single=bool(backend=="mega" and storage.MATERIAL_SINGLE_PREVIEW and (ext==".pdf" or ext in storage.OFFICE_EXT))
     if single:
-        pages=storage.build_single_preview_pdf(source,preview); key,prefix,remote=storage.upload_material_preview_to_mega(material_id,source,preview,pages); meta={"previewMode":"single_pdf","previewFilename":"preview.pdf","slideFormat":"pdf",**(remote or {}),**media_meta}
+        pages=storage.build_single_preview_pdf(source,preview)
+        if pages<=0 or not preview.is_file() or preview.stat().st_size<=0: raise RuntimeError("Office/PDF preview 產生失敗，不能完成工作。")
+        key,prefix,remote=storage.upload_material_preview_to_mega(material_id,source,preview,pages); meta={"previewMode":"single_pdf","previewFilename":"preview.pdf","slideFormat":"pdf",**(remote or {}),**media_meta}
     elif ext==".pdf" or ext in storage.OFFICE_EXT:
         pages=storage.convert_pdf_to_images(source,slides) if ext==".pdf" else storage.convert_office_to_images(source,slides)
+        if pages<=0: raise RuntimeError("Office/PDF 頁面數為零，不能完成工作。")
         if backend=="mega":key,prefix,remote=storage.upload_material_tree_to_mega(material_id,source,slides,pages)
         elif backend=="gdrive":key,prefix,remote=storage.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name)
         else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
@@ -112,7 +115,11 @@ def process_one(api,job):
     job_id=job["id"]
     try:
         with tempfile.TemporaryDirectory(prefix="teacher-local-worker-") as temp_name:
-            temp=Path(temp_name); source=temp/"source.bin"; api.download(job,source); original=validate_download(source,job); api.heartbeat(job_id); result=publish_to_storage(source,original,job,temp); api.post(f"/api/material-worker/{job_id}/complete",{"workerId":WORKER_ID,"result":result})
+            temp=Path(temp_name); staged=temp/"source.bin"; api.download(job,staged); original=validate_download(staged,job)
+            # File content is staged as .bin, but processing must see the actual
+            # extension so LibreOffice and preview routing are deterministic.
+            source=temp/("source"+Path(original).suffix.lower()); staged.replace(source)
+            api.heartbeat(job_id); result=publish_to_storage(source,original,job,temp); api.post(f"/api/material-worker/{job_id}/complete",{"workerId":WORKER_ID,"result":result})
         log(f"completed {job_id}")
     except Exception as exc:
         message=str(exc)[:1200]

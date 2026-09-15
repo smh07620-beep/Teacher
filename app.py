@@ -1980,6 +1980,10 @@ def commit_material_job_result(job: dict, result: dict):
     except (TypeError, ValueError):
         page_count = 0
     storage_meta = result.get("storageMeta") if isinstance(result.get("storageMeta"), dict) else {}
+    office_ext = {".pptx", ".ppt", ".doc", ".docx", ".xls", ".xlsx", ".odp", ".odt", ".ods", ".pdf"}
+    if Path(original).suffix.lower() in office_ext:
+        if page_count <= 0 or storage_meta.get("previewMode") != "single_pdf":
+            raise ValueError("Office/PDF 必須有有效 preview.pdf 與 pageCount 才能完成。")
     entry = {
         "id": material_id, "filename": original,
         "title": str(payload.get("title") or original)[:255],
