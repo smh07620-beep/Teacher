@@ -46,6 +46,7 @@ jobs:
           node --check static/course-wizard-681.js
           node --check static/external-material-681.js
           node --check static/sensitive-elevation-69.js
+          node --check static/workspace-shell-70.js
           node tests/test_external_media_behavior_681.js
       - name: Web and worker shell contracts
         run: |
