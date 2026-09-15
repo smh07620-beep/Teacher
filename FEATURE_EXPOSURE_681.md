@@ -10,24 +10,22 @@ a supported hand-entered URL surface.
 | Office/PDF preview | Worker + preview routes | material viewer | learner view; original blocked | Office regressions | Usable |
 | Course/material bundle | courses/material APIs | course workspace wizard | elevated admin mutation | UI contract | Usable |
 | Existing material linking | course/material/category APIs | course hub + material linker | elevated admin mutation | legacy integration | Usable |
-| External YouTube/Shorts | external-media API | External Link drawer | elevated admin mutation | Shorts + drawer contract | Usable |
+| External YouTube/Shorts | external-media API | `external-material-681.js` direct-create drawer | elevated admin mutation | provider + direct-create tests | Usable |
 | Learning progress | learning-progress API | smart-learning reader | authenticated learner | progress regressions | Usable |
 | ReviewSource | exam review projection | post-submit review link | server-authoritative | exam review tests | Usable |
 | Exam workspace | legacy category/question APIs | unified assessment workspace | elevated admin mutation | UI contract | Usable |
 | Admin elevation | elevation API | common `getAdminKey()` flow | eligible admin role + TTL | acceptance test | Usable |
 | Worker/jobs/retry | worker APIs | material jobs panel | worker token / elevated admin | worker tests | Usable |
-| Question Bank 2.0 drafts | `/api/question-bank/*` | **backend-only** service seam | elevated admin | acceptance tests | Internal/backend-only |
-| Blueprint snapshots | `/api/exam-blueprints/*` | **backend-only** service seam | elevated admin | acceptance tests | Internal/backend-only |
-| Item analytics | `/api/questions/<id>/analytics` | **backend-only** reporting seam | elevated admin | acceptance tests | Internal/backend-only |
+| Question Bank 2.0 drafts | `/api/question-bank/*` | `assessment-681.js` 題庫／AI 出題／Review queue | elevated admin | question-bank integration + UI contract | Usable |
+| Blueprint snapshots | `/api/exam-blueprints/*` | `assessment-681.js` 出題藍圖 tab | elevated admin | quota + UI payload tests | Usable |
+| Item analytics | `/api/questions/<id>/analytics` | `assessment-681.js` 題目分析 tab | elevated admin | analytics contract tests | Usable |
 
 ## Deliberate internal surfaces
 
-Question Bank 2.0 draft/review, blueprint, and analytics routes are retained as
-server-side integration seams for the established assessment UI and automated
-tests. They are not advertised as end-user controls until a complete review,
-blueprint, and analytics editor is shipped together. This avoids misleading
-teachers with partial or unsafe flows.  They require elevated administrative
-access and are documented here rather than relying on hidden URLs.
+Worker orchestration, job retry, raw storage adapters, and background media
+processing remain internal or elevated implementation surfaces.  The three
+assessment APIs above are normal teacher-facing workflows through the loaded
+five-tab assessment workspace; they are no longer classified as internal-only.
 
 ## Removed dead modules
 
