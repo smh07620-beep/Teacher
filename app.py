@@ -1437,14 +1437,17 @@ def reserve_r2_upload(upload_id: str, object_key: str, source_bytes: int):
 
 
 def r2_budget_status():
-    conn, _ = _db_conn()
+    conn, kind = _db_conn()
     try:
         staging, reserved = _r2_staging_totals(conn)
         estimate = _r2_estimated_gb_month(conn)
         percent = (estimate / R2_FREE_STORAGE_GB_MONTH * 100) if R2_FREE_STORAGE_GB_MONTH else 100.0
         rows = conn.execute("SELECT status,COUNT(*) AS count FROM material_upload_sessions GROUP BY status").fetchall()
         active = sum(int(dict(row).get("count") or 0) for row in rows if dict(row).get("status") == "uploading")
-        cleanup_pending = conn.execute("SELECT COUNT(*) AS count FROM material_jobs WHERE cleanup_pending=1").fetchone()
+        cleanup_pending = conn.execute(
+            "SELECT COUNT(*) AS count FROM material_jobs WHERE cleanup_pending="
+            + ("TRUE" if kind == "postgres" else "1")
+        ).fetchone()
         parts = conn.execute("SELECT COALESCE(SUM(multipart_parts),0) AS count,COALESCE(SUM(estimated_operations),0) AS operations FROM r2_usage_ledger").fetchone()
         return {"enabled": bool(FREE_ONLY_MODE), "estimatedOnly": True, "freeStorageGbMonth": R2_FREE_STORAGE_GB_MONTH, "estimatedGbMonth": round(estimate, 6), "currentStagingBytes": staging, "reservedBytes": reserved, "usagePercent": round(percent, 2), "level": _r2_budget_level(percent), "activeUploads": active, "cleanupPending": int(dict(cleanup_pending).get("count") or 0), "multipartParts": int(dict(parts).get("count") or 0), "estimatedOperations": int(dict(parts).get("operations") or 0)}
     finally:
@@ -2310,11 +2313,11 @@ def material_row_to_dict(row):
 
 
 def list_uploaded_materials(include_inactive=False):
-    conn, _ = _db_conn()
+    conn, kind = _db_conn()
     try:
         sql = "SELECT * FROM materials"
         if not include_inactive:
-            sql += " WHERE active = " + ("TRUE" if DATABASE_URL else "1")
+            sql += " WHERE active = " + ("TRUE" if kind == "postgres" else "1")
         sql += " ORDER BY date_added DESC"
         return [material_row_to_dict(r) for r in conn.execute(sql).fetchall()]
     finally:
