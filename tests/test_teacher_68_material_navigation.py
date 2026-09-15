@@ -90,7 +90,7 @@ class MaterialReadAccess68Tests(unittest.TestCase):
             headers={"Origin": "http://localhost"},
         )
         self.assertEqual(upload.status_code, 400, upload.get_data(as_text=True))
-        self.assertIn("未收到檔案", upload.get_data(as_text=True))
+        self.assertEqual(upload.get_json().get("error"), "未收到檔案")
         self.assertFalse(upload.get_json().get("elevationRequired", False))
 
     def test_group_leader_can_upload_only_to_own_group(self):
@@ -101,7 +101,7 @@ class MaterialReadAccess68Tests(unittest.TestCase):
             headers={"Origin": "http://localhost"},
         )
         self.assertEqual(own.status_code, 400, own.get_data(as_text=True))
-        self.assertIn("未收到檔案", own.get_data(as_text=True))
+        self.assertEqual(own.get_json().get("error"), "未收到檔案")
 
         other = self.client.post(
             "/api/slides/upload",
@@ -109,7 +109,7 @@ class MaterialReadAccess68Tests(unittest.TestCase):
             headers={"Origin": "http://localhost"},
         )
         self.assertEqual(other.status_code, 403, other.get_data(as_text=True))
-        self.assertIn("授權範圍", other.get_data(as_text=True))
+        self.assertEqual(other.get_json().get("error"), "此資源不在你的授權範圍。")
 
     def test_clinical_teacher_can_upload_only_to_own_group(self):
         self.login("clinical-teacher")
