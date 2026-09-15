@@ -42,6 +42,7 @@ import io
 import tempfile
 import hashlib
 import socket
+import sys
 from functools import wraps
 from urllib.parse import quote
 from pathlib import Path
@@ -331,6 +332,8 @@ def active_material_backend():
         return "r2"
     # V5.3.16 auto：優先官方 MEGAcmd；其餘後端僅保留既有資料相容性。
     if mega_is_configured(): return "mega"
+    if MEGA_EMAIL or MEGA_PASSWORD:
+        raise RuntimeError("MEGA 已設定但官方 MEGAcmd 指令不可用或帳密不完整；不會自動改用 Google Drive。")
     if oci_is_configured(): return "oci"
     if gdrive_is_configured(): return "gdrive"
     if r2_is_configured(): return "r2"
@@ -424,24 +427,80 @@ def upload_material_tree_to_r2(material_id: str, source_path: Path, slides_dir: 
 
 
 # ----------------------------- MEGA storage (official MEGAcmd) -----------------------------
+def _megacmd_windows_dirs():
+    """Return the standard official MEGAcmd install locations on Windows."""
+    if not sys.platform.startswith("win"):
+        return []
+    return [
+        os.path.join(base, "MEGAcmd")
+        for base in (os.environ.get("ProgramFiles", ""), os.environ.get("ProgramFiles(x86)", ""))
+        if base
+    ]
+
+
+def _megacmd_path_separator():
+    return ";" if sys.platform.startswith("win") else os.pathsep
+
+
+def _megacmd_path(env):
+    """Prepend official Windows locations without changing global PATH."""
+    separator = _megacmd_path_separator()
+    current = [item for item in str(env.get("PATH", "")).split(separator) if item]
+    known = {os.path.normcase(os.path.normpath(item)) for item in current}
+    additions = []
+    for directory in _megacmd_windows_dirs():
+        normalized = os.path.normcase(os.path.normpath(directory))
+        if normalized not in known:
+            additions.append(directory)
+            known.add(normalized)
+    return separator.join([*additions, *current])
+
+
 def _megacmd_env():
     env = os.environ.copy()
     env["HOME"] = MEGACMD_HOME
+    env["PATH"] = _megacmd_path(env)
     return env
 
 
+def _megacmd_find(command):
+    """Locate an official command, including the Windows .bat/.cmd wrappers."""
+    command = str(command)
+    candidates = [command]
+    if sys.platform.startswith("win") and not os.path.splitext(command)[1]:
+        candidates.extend(f"{command}{extension}" for extension in (".bat", ".cmd", ".exe"))
+    path = _megacmd_env().get("PATH", "")
+    for candidate in candidates:
+        resolved = shutil.which(candidate, path=path)
+        if resolved:
+            return resolved
+    return ""
+
+
+def _megacmd_is_windows_batch(command):
+    return sys.platform.startswith("win") and str(command).lower().endswith((".bat", ".cmd"))
+
+
 def _mega_run(args, *, check=True, timeout=None):
-    """執行官方 mega-* 指令。不得使用 shell，避免路徑/密碼被 shell 重新解讀。"""
+    """Run an official MEGAcmd command without interpolating user input."""
     cmd = [str(x) for x in args]
+    if cmd:
+        cmd[0] = _megacmd_find(cmd[0]) or cmd[0]
+    batch_wrapper = bool(cmd and _megacmd_is_windows_batch(cmd[0]))
+    # Windows starts .bat/.cmd files through cmd.exe even when shell=False.
+    # Keep argv as a sequence so subprocess owns Windows quoting for the
+    # resolved official wrapper; normal executables keep shell disabled.
+    invocation = cmd
     try:
         cp = subprocess.run(
-            cmd,
+            invocation,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             env=_megacmd_env(),
             timeout=timeout or MEGACMD_TIMEOUT_SECONDS,
             check=False,
+            shell=batch_wrapper,
         )
     except FileNotFoundError as exc:
         raise RuntimeError("找不到官方 MEGAcmd 指令。請確認 Dockerfile 已安裝 megacmd。") from exc
@@ -485,7 +544,7 @@ def _mega_ensure_dir(remote_path: str):
 
 
 def mega_is_configured():
-    return bool(MEGA_EMAIL and MEGA_PASSWORD and shutil.which("mega-whoami") and shutil.which("mega-put"))
+    return bool(MEGA_EMAIL and MEGA_PASSWORD and _megacmd_find("mega-whoami") and _megacmd_find("mega-put"))
 
 
 def _mega_login_if_needed(force=False):
@@ -1239,7 +1298,7 @@ def upload_material_job_staging(source: Path, job_id: str, original_name: str):
             return "mega", _mega_upload_file(source, folder, name), ""
         except Exception as exc:
             # Keep the established MEGA-primary / GDrive-on-full contract.
-            if not (_is_storage_full_error(exc) and _fallback_backend_ready() == "gdrive"):
+            if not (_is_mega_capacity_full_error(exc) and _mega_gdrive_failover_ready() == "gdrive"):
                 raise
             backend = "gdrive"
     if backend == "gdrive":
@@ -3640,22 +3699,32 @@ def view_material(material_id):
     return send_file(path, as_attachment=False, download_name=entry["filename"])
 
 
-def _is_storage_full_error(exc):
+def _is_mega_capacity_full_error(exc):
     msg = str(exc or "").lower()
-    return any(x in msg for x in ("免費模式已鎖定", "超過網站硬上限", "storage full", "quota exceeded", "insufficient storage"))
+    return any(x in msg for x in (
+        "免費模式已鎖定", "超過網站硬上限", "storage full", "storage is full",
+        "quota exceeded", "over quota", "overquota", "insufficient storage",
+        "not enough storage", "out of storage", "storage quota",
+    ))
+
+
+def _is_storage_full_error(exc):
+    """Compatibility alias for the MEGA-only capacity classifier."""
+    return _is_mega_capacity_full_error(exc)
+
+
+def _mega_gdrive_failover_ready():
+    """GDrive is the sole opt-in fallback, and only for MEGA capacity events."""
+    if not STORAGE_FAILOVER_ON_FULL or STORAGE_FALLBACK_BACKEND != "gdrive":
+        return ""
+    if gdrive_is_configured():
+        return "gdrive"
+    return ""
 
 
 def _fallback_backend_ready():
-    if not STORAGE_FAILOVER_ON_FULL:
-        return ""
-    fb = STORAGE_FALLBACK_BACKEND
-    if fb == "gdrive" and gdrive_is_configured():
-        return "gdrive"
-    if fb == "r2" and r2_is_configured():
-        return "r2"
-    if fb == "oci" and oci_is_configured():
-        return "oci"
-    return ""
+    """Compatibility name retained for the storage-status response."""
+    return _mega_gdrive_failover_ready()
 
 
 
@@ -4090,7 +4159,7 @@ def api_upload_slide():
             elif backend == "r2":
                 storage_key, slides_prefix = upload_material_tree_to_r2(slide_id, saved_path, out_folder, page_count)
         except Exception as primary_error:
-            fallback = _fallback_backend_ready() if backend == "mega" and _is_storage_full_error(primary_error) else ""
+            fallback = _mega_gdrive_failover_ready() if backend == "mega" and _is_mega_capacity_full_error(primary_error) else ""
             if not fallback:
                 raise
             # 備援後端仍沿用舊逐頁介面；只有真的 failover 才額外產生頁面，正常 MEGA 路徑不付出這筆成本。
@@ -7466,7 +7535,7 @@ def _store_pgy_template(local_path: Path, template_type: str, filename: str):
     try:
         return backend,do_store(backend)
     except Exception as exc:
-        fb=_fallback_backend_ready() if _is_storage_full_error(exc) else ''
+        fb=_mega_gdrive_failover_ready() if backend == 'mega' and _is_mega_capacity_full_error(exc) else ''
         if fb: return fb,do_store(fb)
         raise
 
