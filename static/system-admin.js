@@ -296,19 +296,13 @@ async function adminCreateCourseBundle(){
 
 async function getAdminKey() {
     if (adminKey) return adminKey;
-    try {
-        const auth = await fetch('/api/auth/me', { cache: 'no-store' }).then(r => r.json());
-        if (auth.authenticated && ['education_admin','system_admin','manager'].includes(auth.user?.role)) {
-            // 後端以登入 session 驗證 manager；保留非空值以相容既有呼叫端。
-            adminKey = '__manager_session__';
-            return adminKey;
-        }
-    } catch (_) {}
-    const key = prompt('請輸入成績後台管理者金鑰（ADMIN_KEY）：');
-    if (!key) return null;
-    adminKey = key.trim();
-    sessionStorage.setItem('admin_key', adminKey);
-    return adminKey;
+    if (window.adminElevationFlight) return window.adminElevationFlight;
+    window.adminElevationFlight=(async()=>{
+        const current=await fetch('/api/admin/elevation',{cache:'no-store'}).then(r=>r.json()).catch(()=>({}));
+        if(!current.elevated){const password=prompt('請輸入管理密碼：');if(!password)return null;const r=await fetch('/api/admin/elevation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});if(!r.ok){alert('驗證失敗');return null;}}
+        adminKey='__elevated_session__'; return adminKey;
+    })().finally(()=>{window.adminElevationFlight=null;});
+    return window.adminElevationFlight;
 }
 
 const ADMIN_CACHE_MS = 30000;
@@ -1582,7 +1576,7 @@ async function renderAdminTable() {
 // 不需要每次匯出都手動選檔。
 let cachedTemplateBuffer = null;
 let adminRecords = [];
-let adminKey = sessionStorage.getItem('admin_key') || '';
+let adminKey = '';
 let pendingExportRecordIndex = null;
 let isExportingCurrentTab = false;
 

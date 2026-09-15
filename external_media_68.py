@@ -32,7 +32,8 @@ def validate_external_url(value: str, allow_hosts=()) -> dict:
     if host in {"localhost", "metadata.google.internal"} or host.endswith(".local"):
         raise ValueError("不允許內部網路位址")
     if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
-        vid = (parse_qs(p.query).get("v") or [p.path.strip("/")])[0]
+        parts=[part for part in p.path.split("/") if part]
+        vid = (parse_qs(p.query).get("v") or ([parts[1]] if len(parts)>=2 and parts[0]=="shorts" else [p.path.strip("/")]))[0]
         if not re.fullmatch(r"[A-Za-z0-9_-]{11}", vid or ""): raise ValueError("YouTube video id 無效")
         return {"provider":"youtube", "canonicalUrl":f"https://www.youtube.com/watch?v={vid}", "videoId":vid}
     if host in {"vimeo.com", "www.vimeo.com", "player.vimeo.com"}:

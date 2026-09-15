@@ -62,6 +62,21 @@ def _row(row):
     return dict(row) if row else {}
 
 
+def media_completion(duration, watched_buckets, threshold=.9):
+    """Server-authoritative ten-second bucket coverage for video/audio."""
+    duration=max(0.0, float(duration or 0)); threshold=max(0.0,min(1.0,float(threshold)))
+    if duration <= 0: return False
+    buckets={max(0,int(item)) for item in watched_buckets}
+    # A final partial bucket counts only for its real duration, not ten seconds.
+    covered=sum(min(10.0,max(0.0,duration-(bucket*10))) for bucket in buckets)
+    return covered >= duration * threshold
+
+
+def resolved_completion(duration, watched_buckets, client_completed, is_media, threshold=.9):
+    """Ignore client completion flags for media, retain legacy document flow."""
+    return media_completion(duration, watched_buckets, threshold) if is_media else bool(client_completed)
+
+
 def register_smart_learning(base):
     app = base.app
     if app.extensions.get("teacher_smart_learning_67_registered"):
@@ -102,8 +117,11 @@ def register_smart_learning(base):
         if not isinstance(buckets,list): return jsonify({"error":"watchedBuckets 格式錯誤"}),400
         buckets=sorted({max(0,min(99999,int(x))) for x in buckets})[:10000]
         threshold=.9; covered=len(buckets)*10
-        media_completed=duration>0 and covered>=duration*threshold
-        completed = bool(body.get("completed", False)) or media_completed; now = _now()
+        media_request=duration>0 or "watchedBuckets" in body or "lastPositionSeconds" in body
+        # Only legacy/non-media flows retain their old client completion signal.
+        # For media, client completed=true is intentionally ignored.
+        media_completed=media_completion(duration,buckets,threshold)
+        completed = resolved_completion(duration,buckets,body.get("completed",False),media_request,threshold); now = _now()
         conn, kind = base._db_conn(); ph = "%s" if kind == "postgres" else "?"
         values = (material_id, user["username"], json.dumps(position, ensure_ascii=False), progress, completed if kind == "postgres" else int(completed), now, now if completed else "")
         try:

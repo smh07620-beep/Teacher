@@ -22,21 +22,41 @@ def metadata(data):
 def _decode(value, fallback):
     try:return json.loads(value) if isinstance(value,str) else value
     except Exception:return fallback
-def _draw(rows, count, quotas):
-    """Draw server-side, meeting each requested metadata quota where possible."""
-    selected=[]; used=set()
+def _draw(rows, count, quotas, excluded=()):
+    """Find one *single* exact-sized set satisfying all quota dimensions.
+
+    Unlike sequential draws, every selected question contributes to topic,
+    difficulty and cognitive quotas simultaneously.  Exhaustive backtracking
+    is bounded by the requested exam size and refuses an unsatisfiable plan.
+    """
+    rows=[row for row in rows if row["id"] not in set(excluded)]
+    if count < 1 or len(rows) < count: raise ValueError("已審核題目不足以建立 blueprint")
+    requirements=[]
     for field in ("topic","difficulty","cognitive_level"):
         requested=quotas.get(field,{})
-        if not isinstance(requested,dict):continue
+        if not isinstance(requested,dict): raise ValueError("quota 格式錯誤")
         for value, amount in requested.items():
-            candidates=[r for r in rows if str(r.get(field) or "")==str(value) and r["id"] not in used]
-            random.shuffle(candidates)
-            take=max(0,int(amount or 0))
-            if len(candidates)<take:raise ValueError(f"{field} quota 無足夠已審核題目：{value}")
-            for row in candidates[:take]:selected.append(row);used.add(row["id"])
-    remainder=[r for r in rows if r["id"] not in used];random.shuffle(remainder)
-    if len(selected)+len(remainder)<count:raise ValueError("已審核題目不足以建立 blueprint")
-    return selected+remainder[:count-len(selected)]
+            amount=int(amount or 0)
+            if amount<0 or amount>count: raise ValueError("quota 數量無效")
+            if amount: requirements.append((field,str(value),amount))
+    random.shuffle(rows)
+    suffix=[[0]*len(requirements) for _ in range(len(rows)+1)]
+    for i in range(len(rows)-1,-1,-1):
+        suffix[i]=suffix[i+1].copy()
+        for j,(field,value,_amount) in enumerate(requirements):
+            suffix[i][j]+=str(rows[i].get(field) or "")==value
+    def search(index, picked, counts):
+        if len(picked)==count:
+            return picked if all(counts[j]>=need for j,(_f,_v,need) in enumerate(requirements)) else None
+        if len(rows)-index < count-len(picked): return None
+        if any(counts[j]+suffix[index][j]<need for j,(_f,_v,need) in enumerate(requirements)): return None
+        row=rows[index]; next_counts=counts.copy()
+        for j,(field,value,_need) in enumerate(requirements): next_counts[j]+=str(row.get(field) or "")==value
+        result=search(index+1,picked+[row],next_counts)
+        return result if result is not None else search(index+1,picked,counts)
+    result=search(0,[],[0]*len(requirements))
+    if result is None: raise ValueError("無法同時滿足 topic、difficulty 與 cognitive quota")
+    return result
 def register_question_bank(base):
     app=base.app
     if app.extensions.get("teacher_question_bank_68_registered"):return app
@@ -103,7 +123,11 @@ def register_question_bank(base):
             bp=conn.execute(f"SELECT * FROM exam_blueprints WHERE id={ph}",(blueprint_id,)).fetchone()
             if not bp:return jsonify({"error":"找不到 blueprint"}),404
             bp=dict(bp); rows=[dict(r) for r in conn.execute(f"SELECT * FROM quiz_questions WHERE quiz_category_id={ph} AND status IN ('reviewed','published') AND active={ 'TRUE' if kind=='postgres' else '1'}",(bp["quiz_category_id"],)).fetchall()]
-            try:chosen=_draw(rows,int(bp["question_count"]),_decode(bp["quotas"],{}))
+            recent=set()
+            if int(bp.get("exclude_recent") or 0)>0:
+                history=conn.execute(f"SELECT questions FROM exam_blueprint_snapshots WHERE quiz_category_id={ph} ORDER BY created_at DESC LIMIT {int(bp['exclude_recent'])}",(bp["quiz_category_id"],)).fetchall()
+                recent={str(q.get("id")) for item in history for q in _decode(dict(item).get("questions"),[]) if isinstance(q,dict)}
+            try:chosen=_draw(rows,int(bp["question_count"]),_decode(bp["quotas"],{}),recent)
             except ValueError as exc:return jsonify({"error":str(exc)}),409
             # Stored snapshot includes answer material only on the server; learners
             # continue to receive the established sanitized attempt projection.
