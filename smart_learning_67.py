@@ -76,10 +76,14 @@ def register_smart_learning(base):
             row = conn.execute(f"SELECT * FROM learning_progress WHERE material_id={ph} AND username={ph}", (material_id, user["username"])).fetchone()
             data = _row(row)
         finally: conn.close()
-        if not data: return jsonify({"materialId": material_id, "position": {}, "progress": 0, "completed": False})
+        if not data: return jsonify({"materialId": material_id, "position": {}, "progress": 0, "completed": False, "lastPositionSeconds": 0, "duration": 0, "watchedBuckets": [], "completionThreshold": .9})
         try: data["position"] = json.loads(data.get("position", "{}"))
         except Exception: data["position"] = {}
         data["materialId"] = data.pop("material_id"); data.pop("username", None)
+        try: data["watchedBuckets"] = json.loads(data.pop("watched_buckets", "[]"))
+        except Exception: data["watchedBuckets"] = []
+        data["lastPositionSeconds"] = data.pop("last_position_seconds", 0)
+        data["completionThreshold"] = data.pop("completion_threshold", .9)
         return jsonify(data)
 
     @app.put("/api/learning-progress/<material_id>")
@@ -91,7 +95,15 @@ def register_smart_learning(base):
         if not isinstance(position, dict): return jsonify({"error": "position 格式錯誤"}), 400
         try: progress = max(0, min(100, float(body.get("progress", 0))))
         except (TypeError, ValueError): return jsonify({"error": "progress 格式錯誤"}), 400
-        completed = bool(body.get("completed", False)); now = _now()
+        # Bucket coverage makes a seek-to-end insufficient for completion.
+        try: duration=max(0.0,float(body.get("duration",0) or 0)); last=max(0.0,min(duration,float(body.get("lastPositionSeconds",0) or 0)))
+        except (TypeError,ValueError): return jsonify({"error":"media progress 格式錯誤"}),400
+        buckets=body.get("watchedBuckets",[])
+        if not isinstance(buckets,list): return jsonify({"error":"watchedBuckets 格式錯誤"}),400
+        buckets=sorted({max(0,min(99999,int(x))) for x in buckets})[:10000]
+        threshold=.9; covered=len(buckets)*10
+        media_completed=duration>0 and covered>=duration*threshold
+        completed = bool(body.get("completed", False)) or media_completed; now = _now()
         conn, kind = base._db_conn(); ph = "%s" if kind == "postgres" else "?"
         values = (material_id, user["username"], json.dumps(position, ensure_ascii=False), progress, completed if kind == "postgres" else int(completed), now, now if completed else "")
         try:
@@ -100,10 +112,16 @@ def register_smart_learning(base):
             else:
                 conn.execute("INSERT INTO learning_progress(material_id,username,position,progress,completed,last_viewed_at,completed_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(material_id,username) DO UPDATE SET position=excluded.position,progress=excluded.progress,completed=MAX(learning_progress.completed,excluded.completed),last_viewed_at=excluded.last_viewed_at,completed_at=CASE WHEN excluded.completed=1 THEN excluded.last_viewed_at ELSE learning_progress.completed_at END", values)
         finally: conn.close()
+        # Additive 6.8 fields are updated separately so an un-upgraded test DB
+        # still receives the established 6.7 behavior.
+        conn,kind=base._db_conn(); ph="%s" if kind=="postgres" else "?"
+        try:
+            conn.execute(f"UPDATE learning_progress SET last_position_seconds={ph},duration={ph},watched_buckets={ph},completion_threshold={ph},updated_at={ph} WHERE material_id={ph} AND username={ph}", (last,duration,json.dumps(buckets),threshold,now,material_id,user["username"]))
+        finally: conn.close()
         # Preserve 6.6 sequential unlock: only a real completion writes its old marker.
         if completed:
             client = app.test_client()  # no request/session forwarding; legacy marker remains UI-owned
-        return jsonify({"ok": True, "materialId": material_id, "position": position, "progress": progress, "completed": completed, "lastViewedAt": now})
+        return jsonify({"ok": True, "materialId": material_id, "position": position, "progress": progress, "completed": completed, "lastPositionSeconds":last,"duration":duration,"watchedBuckets":buckets,"lastViewedAt": now})
 
     @app.get("/api/material-search")
     def material_search():
