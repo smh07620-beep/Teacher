@@ -3,6 +3,7 @@ name: Teacher release checks
 on:
   push:
     branches:
+      - main
       - codex/phase-3-pgy-architecture
   pull_request:
 
