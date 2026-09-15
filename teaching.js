@@ -175,6 +175,7 @@ function teachingCloseEditor() {
 }
 async function teachingEditCourse(id) {
     teachingEnsureDialog();
+    const key = await getAdminKey(); if (!key) return;
     const dialog = document.getElementById('teaching-dialog');
     if (dialog.open) return;
     teachingEditorBusy = true; teachingEditor = null;
@@ -183,7 +184,7 @@ async function teachingEditCourse(id) {
     const status = document.getElementById('plan-status'); status.classList.remove('error'); status.textContent = '載入課程安排中…';
     dialog.showModal();
     try {
-        const res = await fetch(`/api/courses/${encodeURIComponent(id)}/plan`,{credentials:'same-origin'});
+        const res = await fetch(`/api/courses/${encodeURIComponent(id)}/plan`,{headers:{'X-Admin-Key':key}});
         const data = await res.json(); if (!res.ok) throw Error(data.error || '讀取失敗');
         const c = data.course;
         teachingEditor = {course:c, materials:teachingOrderedMaterials(c,data.materials), dirty:false};
@@ -207,9 +208,10 @@ async function teachingSaveCourse() {
     const payload = {title:get('title').trim(),desc:get('desc'),learningObjectives:get('objectives'),estimatedMinutes:Number(get('minutes')),sortOrder:Number(get('order')),startDate:get('start'),endDate:get('end'),active:document.getElementById('plan-active').checked,materialOrder:teachingEditor.materials.map(m=>m.id)};
     const status = document.getElementById('plan-status'); status.classList.remove('error');
     if (payload.startDate && payload.endDate && payload.startDate > payload.endDate) {status.classList.add('error');status.textContent='完成日期不可早於開始日期。';return;}
+    const key = await getAdminKey(); if (!key) return;
     teachingEditorBusy = true; document.getElementById('teaching-fields').disabled = true; document.getElementById('plan-save').disabled = true; status.textContent = '正在儲存…';
     try {
-        const res = await fetch(`/api/courses/${encodeURIComponent(teachingEditor.course.id)}/plan`,{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(payload)});
+        const res = await fetch(`/api/courses/${encodeURIComponent(teachingEditor.course.id)}/plan`,{method:'PUT',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify(payload)});
         const data = await res.json(); if (!res.ok) throw Error(data.error || '儲存失敗');
         teachingEditor.course = data; teachingEditor.dirty = false;
         adminCoursesCache.clear();
