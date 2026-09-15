@@ -228,6 +228,39 @@ def _b_free_local_worker_67(conn, kind: str) -> None:
     conn.execute(f"CREATE TABLE IF NOT EXISTS material_upload_sessions (id TEXT PRIMARY KEY,job_id TEXT NOT NULL UNIQUE,material_id TEXT NOT NULL,staging_key TEXT NOT NULL,original_name TEXT NOT NULL,source_sha256 TEXT NOT NULL,source_bytes BIGINT NOT NULL,r2_upload_id TEXT NOT NULL,part_size BIGINT NOT NULL,expected_parts INTEGER NOT NULL,payload {payload} NOT NULL DEFAULT '{{}}',completed_parts {payload} NOT NULL DEFAULT '[]',status TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)")
 
 
+@migration("0068-external-interactive-media")
+def _external_interactive_media_68(conn, kind: str) -> None:
+    """6.8 additive media, elevation and question-bank schema.
+
+    This intentionally extends the established learning_progress and
+    quiz_questions tables rather than creating competing stores.
+    """
+    boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
+    default_false = "FALSE" if kind == "postgres" else "0"
+    payload = "JSONB" if kind == "postgres" else "TEXT"
+    _add_columns(conn, kind, "learning_progress", {
+        "last_position_seconds": "last_position_seconds REAL NOT NULL DEFAULT 0",
+        "duration": "duration REAL NOT NULL DEFAULT 0",
+        "watched_buckets": "watched_buckets TEXT NOT NULL DEFAULT '[]'",
+        "completion_threshold": "completion_threshold REAL NOT NULL DEFAULT 0.9",
+        "updated_at": "updated_at TEXT NOT NULL DEFAULT ''",
+    })
+    _add_columns(conn, kind, "quiz_questions", {
+        "domain": "domain TEXT NOT NULL DEFAULT ''", "topic": "topic TEXT NOT NULL DEFAULT ''",
+        "subtopic": "subtopic TEXT NOT NULL DEFAULT ''", "learning_objective": "learning_objective TEXT NOT NULL DEFAULT ''",
+        "cognitive_level": "cognitive_level TEXT NOT NULL DEFAULT 'understand'", "tags": "tags TEXT NOT NULL DEFAULT '[]'",
+        "source_material_id": "source_material_id TEXT NOT NULL DEFAULT ''", "review_source": "review_source TEXT NOT NULL DEFAULT '{}'",
+        "status": "status TEXT NOT NULL DEFAULT 'published'", "origin": "origin TEXT NOT NULL DEFAULT 'manual'",
+        "version": "version INTEGER NOT NULL DEFAULT 1", "reviewed_by": "reviewed_by TEXT NOT NULL DEFAULT ''",
+        "reviewed_at": "reviewed_at TEXT NOT NULL DEFAULT ''", "updated_at": "updated_at TEXT NOT NULL DEFAULT ''",
+        "normalized_hash": "normalized_hash TEXT NOT NULL DEFAULT ''",
+    })
+    conn.execute(f"CREATE TABLE IF NOT EXISTS external_media (id TEXT PRIMARY KEY,material_id TEXT NOT NULL,provider TEXT NOT NULL,canonical_url TEXT NOT NULL,video_id TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(material_id))")
+    conn.execute(f"CREATE TABLE IF NOT EXISTS admin_elevations (username TEXT PRIMARY KEY,elevated_at TEXT NOT NULL,expires_at TEXT NOT NULL,session_version INTEGER NOT NULL DEFAULT 0)")
+    conn.execute(f"CREATE TABLE IF NOT EXISTS exam_blueprints (id TEXT PRIMARY KEY,quiz_category_id TEXT NOT NULL,question_count INTEGER NOT NULL,quotas {payload} NOT NULL DEFAULT '{{}}',exclude_recent INTEGER NOT NULL DEFAULT 0,created_by TEXT NOT NULL,created_at TEXT NOT NULL)")
+    conn.execute(f"CREATE TABLE IF NOT EXISTS question_attempt_analytics (question_id TEXT NOT NULL,attempt_id TEXT NOT NULL,selected_option TEXT NOT NULL DEFAULT '',is_correct {boolean} NOT NULL DEFAULT {default_false},created_at TEXT NOT NULL,PRIMARY KEY(question_id,attempt_id))")
+
+
 def ensure_r2_free_budget_guard_67(base) -> None:
     """Backfill 6.7 R2 guard tables even when the 0067 marker already exists.
 
