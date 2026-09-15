@@ -44,6 +44,7 @@ jobs:
           node --check static/assessment-681.js
           node --check static/course-wizard-681.js
           node --check static/external-material-681.js
+          node tests/test_external_media_behavior_681.js
       - name: Web and worker shell contracts
         run: |
           bash -n run_web.sh
