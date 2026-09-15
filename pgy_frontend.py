@@ -1,4 +1,4 @@
-"""Inject Teacher 6.5 workflow/security/maintenance assets into the system page."""
+"""Inject Teacher workflow/security/maintenance/workspace assets into the system page."""
 
 
 def register_pgy_frontend(app):
@@ -37,6 +37,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/review-links-66.js?v=6604"></script>')
             if "/maintenance-64.js" not in html:
                 body_assets.append('<script defer src="/maintenance-64.js?v=6605"></script>')
+            if "/workspace-shell-70.js" not in html:
+                body_assets.append('<script defer src="/workspace-shell-70.js?v=7001"></script>')
             if head_assets and "</head>" in html:
                 html = html.replace("</head>", "\n".join(head_assets) + "\n</head>", 1)
             if body_assets and "</body>" in html:
