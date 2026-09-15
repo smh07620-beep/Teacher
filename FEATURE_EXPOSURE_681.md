@@ -8,13 +8,13 @@ a supported hand-entered URL surface.
 | Feature | Backend | UI / caller | RBAC | Tests | Status |
 |---|---|---|---|---|---|
 | Office/PDF preview | Worker + preview routes | material viewer | learner view; original blocked | Office regressions | Usable |
-| Course/material bundle | courses/material APIs | course workspace wizard | elevated admin mutation | UI contract | Usable |
-| Existing material linking | course/material/category APIs | course hub + material linker | elevated admin mutation | legacy integration | Usable |
-| External YouTube/Shorts | external-media API | `external-material-681.js` direct-create drawer | elevated admin mutation | provider + direct-create tests | Usable |
+| Course/material bundle | courses/material APIs | course workspace wizard | session RBAC mutation | UI contract | Usable |
+| Existing material linking | course/material/category APIs | course hub + material linker | session RBAC mutation | legacy integration | Usable |
+| External YouTube/Shorts | external-media API | `external-material-681.js` direct-create drawer | session RBAC mutation | provider + direct-create tests | Usable |
 | Learning progress | learning-progress API | smart-learning reader | authenticated learner | progress regressions | Usable |
 | ReviewSource | exam review projection | post-submit review link | server-authoritative | exam review tests | Usable |
-| Exam workspace | legacy category/question APIs | unified assessment workspace | elevated admin mutation | UI contract | Usable |
-| Admin elevation | elevation API | common `getAdminKey()` flow | eligible admin role + TTL | acceptance test | Usable |
+| Exam workspace | legacy category/question APIs | unified assessment workspace | session RBAC mutation | UI contract | Usable |
+| Sensitive elevation | elevation API | automatic retry only for account/storage/backup/destructive system actions | privileged role + 15 min TTL | elevation boundary tests | Usable |
 | Worker/jobs/retry | worker APIs | material jobs panel | worker token / elevated admin | worker tests | Usable |
 | Question Bank 2.0 drafts | `/api/question-bank/*` | `assessment-681.js` 題庫／AI 出題／Review queue | elevated admin | question-bank integration + UI contract | Usable |
 | Blueprint snapshots | `/api/exam-blueprints/*` | `assessment-681.js` 出題藍圖 tab | elevated admin | quota + UI payload tests | Usable |

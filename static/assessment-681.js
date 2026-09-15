@@ -3,12 +3,17 @@
   'use strict';
   const esc = value => (window.escapeHtml ? window.escapeHtml(String(value ?? '')) : String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
   const state = {tab: 'exams', categories: [], items: [], materials: [], selectedExam: '', editing: null, blueprint: null};
+  const loginRedirect = () => {
+    const next = encodeURIComponent(location.pathname + location.search);
+    location.href = `/login?next=${next}`;
+  };
   const api = async (url, options = {}) => {
-    const key = await window.getAdminKey();
-    if (!key) throw new Error('需要管理者驗證');
-    const headers = {'X-Admin-Key': key, ...(options.body ? {'Content-Type':'application/json'} : {}), ...(options.headers || {})};
-    const response = await fetch(url, {...options, headers});
+    const headers = {...(options.headers || {})};
+    if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    const response = await fetch(url, {...options, headers, credentials:'same-origin'});
     const body = await response.json().catch(() => ({}));
+    if (response.status === 401) { loginRedirect(); throw new Error('登入已逾時，請重新登入。'); }
+    if (response.status === 403) throw new Error(body.error || '此帳號沒有這項操作權限。');
     if (!response.ok) throw new Error(body.error || '操作失敗');
     return body;
   };

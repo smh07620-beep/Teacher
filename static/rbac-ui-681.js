@@ -232,7 +232,7 @@
       if (!force && Array.isArray(adminMaterialsCache.data) && (now - adminMaterialsCache.at) < ADMIN_CACHE_MS) {
         return adminMaterialsCache.data;
       }
-      const res = await fetch('/api/slides/admin', {headers: {'X-Admin-Key': 'rbac-session'}, cache: 'no-store'});
+      const res = await fetch('/api/slides/admin', {credentials:'same-origin', cache: 'no-store'});
       const data = await res.json().catch(() => []);
       if (res.status === 401) {
         invalidateAdminMaterialsCache();
