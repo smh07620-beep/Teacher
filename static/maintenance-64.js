@@ -65,9 +65,23 @@
     }
   }
 
-  function downloadBackup(){
-    // File downloads intentionally remain normal browser navigation.
-    // The server still performs authentication and authorization.
+  async function ensureSensitive(){
+    if(typeof window.ensureSensitiveElevation69!=='function'){
+      alert('敏感操作驗證服務尚未載入，請重新整理頁面後再試。');
+      return false;
+    }
+    try{
+      return await window.ensureSensitiveElevation69();
+    }catch(error){
+      alert(message(error,'敏感操作驗證失敗。'));
+      return false;
+    }
+  }
+
+  async function downloadBackup(){
+    // Browser navigation cannot consume the fetch retry bridge, so elevate
+    // explicitly before starting the attachment download.
+    if(!(await ensureSensitive())) return;
     window.location.href='/api/maintenance/backup';
   }
 
@@ -86,6 +100,8 @@
     )){
       return;
     }
+
+    if(!(await ensureSensitive())) return;
 
     const button=document.getElementById(
       'teacher64-restore'
@@ -202,7 +218,7 @@
         </button>
 
         <span class="text-[11px] text-slate-500">
-          只補入缺少資料，不覆蓋現有紀錄。
+          只補入缺少資料，不覆蓋現有紀錄；敏感操作會要求 15 分鐘有效的再次驗證。
         </span>
       </div>
     `;
