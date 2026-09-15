@@ -37,6 +37,7 @@ class RoleBasedWorkspace69Tests(unittest.TestCase):
         self.assertIn("select.disabled = true", self.source)
         self.assertIn("user.preferredGroup", self.source)
         self.assertIn("education.cross_group.manage", self.source)
+        self.assertIn("目前管理範圍：${group}", self.source)
 
     def test_system_only_navigation_stays_hidden_from_teachers(self):
         self.assertIn("'admin-nav-word': WORKSPACE_RULES.word", self.source)
@@ -56,6 +57,37 @@ class RoleBasedWorkspace69Tests(unittest.TestCase):
         self.assertIn("if (!has('exam.publish'))", self.source)
         self.assertIn("if (!has('question.review'))", self.source)
         self.assertIn("MutationObserver", self.source)
+
+    def test_workspace_entry_is_split_by_canonical_role(self):
+        for marker in (
+            "entryLabel: '系統管理'",
+            "entryLabel: '教學管理'",
+            "entryLabel: '教師工作區'",
+            "entryLabel: '稽核檢視'",
+            "heading: '組別教學工作區'",
+            "heading: '教學管理工作區'",
+            "heading: '系統管理工作區'",
+        ):
+            self.assertIn(marker, self.source)
+        self.assertIn("entry.dataset.workspaceSurface = surface.key", self.source)
+        self.assertIn("modal.dataset.workspaceSurface = surface.key", self.source)
+
+    def test_workspace_groups_are_relabelled_for_the_active_surface(self):
+        self.assertIn("label.textContent = surface.teachingLabel", self.source)
+        self.assertIn("label.textContent = surface.evaluationLabel", self.source)
+        self.assertIn("label.textContent = surface.platformLabel", self.source)
+        self.assertIn("renderWorkspaceBanner()", self.source)
+        self.assertIn("跨組教學內容", self.source)
+        self.assertIn("組內課程與評量", self.source)
+        self.assertIn("課程、教材與評量", self.source)
+
+    def test_profile_titles_remain_presentation_only(self):
+        self.assertIn("const title = user.professionalTitle || roleSummary();", self.source)
+        permission_block = self.source[self.source.index('const ROLE_PERMISSIONS'):self.source.index('const ROLE_LABELS')]
+        self.assertNotIn('professionalTitle', permission_block)
+        self.assertNotIn('responsibilityTags', permission_block)
+        self.assertNotIn('professional_title', permission_block)
+        self.assertNotIn('responsibility_tags', permission_block)
 
 
 if __name__ == '__main__':
