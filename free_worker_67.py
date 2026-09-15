@@ -67,9 +67,29 @@ def _worker_owned(base, job_id: str, worker_id: str):
     return job, None
 
 
-def _heartbeat(base, worker_id: str, capabilities=None, current_job_id=""):
+def _worker_metadata(body):
+    """Whitelist bounded, non-secret worker build metadata for heartbeat JSON."""
+    body = body if isinstance(body, dict) else {}
+    version = re.sub(r"[^0-9A-Za-z._-]", "", str(body.get("workerVersion") or ""))[:32]
+    sha = str(body.get("workerSha") or "").lower()
+    sha = sha if re.fullmatch(r"[0-9a-f]{7,40}", sha) else ""
+    branch = re.sub(r"[^0-9A-Za-z._/-]", "", str(body.get("workerBranch") or ""))[:80]
+    checked = str(body.get("lastUpdateCheckAt") or "")[:64]
+    try:
+        if checked:
+            dt.datetime.fromisoformat(checked.replace("Z", "+00:00"))
+    except ValueError:
+        checked = ""
+    return {"workerVersion": version, "workerSha": sha, "workerBranch": branch,
+            "updateAvailable": bool(body.get("updateAvailable", False)), "lastUpdateCheckAt": checked}
+
+
+def _heartbeat(base, worker_id: str, capabilities=None, current_job_id="", metadata=None):
     now = _now()
     capabilities = capabilities if isinstance(capabilities, dict) else {}
+    # Keep this additive data in the existing heartbeat JSON column: no schema
+    # migration and no new server-side command channel are required.
+    capabilities = {**capabilities, **_worker_metadata(metadata)}
     conn, kind = base._db_conn(); ph = "%s" if kind == "postgres" else "?"
     try:
         raw = __import__("json").dumps(capabilities, ensure_ascii=False)
@@ -161,10 +181,10 @@ def register_free_worker(base):
         worker_id = _worker_id(body.get("workerId"))
         if not worker_id: return jsonify({"error": "workerId 不合法。"}), 400
         base.cleanup_r2_budget_state()
-        _heartbeat(base, worker_id, body.get("capabilities"))
+        _heartbeat(base, worker_id, body.get("capabilities"), metadata=body)
         job = base.claim_next_material_job(worker_id)
         if not job: return jsonify({"job": None})
-        _heartbeat(base, worker_id, body.get("capabilities"), job["id"])
+        _heartbeat(base, worker_id, body.get("capabilities"), job["id"], body)
         response = {"id": job["id"], "workerId": worker_id, "attempts": job["attempts"], "maxAttempts": job["maxAttempts"], "materialId": job["materialId"], "originalName": job["originalName"], "sourceBytes": job["sourceBytes"], "sourceSha256": job["sourceSha256"], "payload": job.get("payload") or {}, "stagingBackend": job.get("stagingBackend")}
         if job.get("stagingBackend") == "r2":
             response["downloadUrl"] = base.r2_client().generate_presigned_url("get_object", Params={"Bucket": base.R2_BUCKET_NAME, "Key": job.get("stagingKey", "")}, ExpiresIn=base.MATERIAL_WORKER_URL_TTL_SECONDS)
@@ -211,7 +231,7 @@ def register_free_worker(base):
         if job_id:
             _job, error = _worker_owned(base, job_id, worker_id)
             if error: return error
-        return jsonify({"ok": True, "lastSeen": _heartbeat(base, worker_id, body.get("capabilities"), job_id)})
+        return jsonify({"ok": True, "lastSeen": _heartbeat(base, worker_id, body.get("capabilities"), job_id, body)})
 
     def terminal(job_id, action):
         denied = _worker_auth(base)

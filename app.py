@@ -1898,7 +1898,7 @@ def material_job_operations_status():
                     capabilities = json.loads(raw_capabilities) if isinstance(raw_capabilities, str) else dict(raw_capabilities)
                 except (TypeError, ValueError):
                     capabilities = {}
-                workers.append({"workerId": str(item.get("worker_id") or ""), "lastSeen": last_seen, "currentJobId": str(item.get("current_job_id") or ""), "status": "busy" if online and item.get("current_job_id") else ("online" if online else "offline"), "ffmpeg": bool((capabilities.get("ffmpeg") or {}).get("available")), "libreOffice": bool((capabilities.get("libreOffice") or {}).get("available"))})
+                workers.append({"workerId": str(item.get("worker_id") or ""), "lastSeen": last_seen, "currentJobId": str(item.get("current_job_id") or ""), "status": "busy" if online and item.get("current_job_id") else ("online" if online else "offline"), "ffmpeg": bool((capabilities.get("ffmpeg") or {}).get("available")), "libreOffice": bool((capabilities.get("libreOffice") or {}).get("available")), "workerVersion": str(capabilities.get("workerVersion") or "")[:32], "workerSha": str(capabilities.get("workerSha") or "")[:40], "workerBranch": str(capabilities.get("workerBranch") or "")[:80], "updateAvailable": bool(capabilities.get("updateAvailable", False)), "lastUpdateCheckAt": str(capabilities.get("lastUpdateCheckAt") or "")[:64]})
         except Exception:
             workers = []
         return {
