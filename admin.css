@@ -1,0 +1,4 @@
+/* V5.9.0 · 管理後台介面 */
+.v580-admin-groups{display:grid;grid-template-columns:1.25fr .85fr .85fr;gap:12px;padding:14px 18px;background:#f7fafb;border-bottom:1px solid #e2ebee}
+.v580-admin-group{min-width:0}.v580-admin-group-label{display:block;margin:0 0 7px 2px;color:#7c8d97;font-size:10px;font-weight:950;letter-spacing:.09em}.v580-admin-group-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.v580-admin-group.compact .v580-admin-group-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+.platform-v580 .admin-nav-btn{min-height:42px!important;padding:7px 8px!important;font-size:11px!important;border-radius:10px!important;white-space:normal;line-height:1.2}

@@ -296,11 +296,13 @@ async function adminCreateCourseBundle(){
 
 async function getAdminKey() {
     if (adminKey) return adminKey;
-    const key = prompt('請輸入成績後台管理者金鑰（ADMIN_KEY）：');
-    if (!key) return null;
-    adminKey = key.trim();
-    sessionStorage.setItem('admin_key', adminKey);
-    return adminKey;
+    if (window.adminElevationFlight) return window.adminElevationFlight;
+    window.adminElevationFlight=(async()=>{
+        const current=await fetch('/api/admin/elevation',{cache:'no-store'}).then(r=>r.json()).catch(()=>({}));
+        if(!current.elevated){const password=prompt('請輸入管理密碼：');if(!password)return null;const r=await fetch('/api/admin/elevation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});if(!r.ok){alert('驗證失敗');return null;}}
+        adminKey='__elevated_session__'; return adminKey;
+    })().finally(()=>{window.adminElevationFlight=null;});
+    return window.adminElevationFlight;
 }
 
 const ADMIN_CACHE_MS = 30000;
@@ -1263,9 +1265,10 @@ async function renderMaterialJobs(force=false){
     try{
         const r=await fetch(`/api/material-jobs?limit=20${force?'&refresh=1':''}`,{headers:{'X-Admin-Key':key},cache:'no-store'}),d=await r.json().catch(()=>({}));
         if(!r.ok)throw new Error(d.error||'背景工作讀取失敗');
-        const jobs=d.jobs||[];
-        if(!jobs.length){host.innerHTML='<p class="text-xs text-slate-400">目前沒有背景教材工作。</p>';scheduleMaterialJobsRefresh(false);return;}
-        host.innerHTML=jobs.map(j=>{const pct=Math.max(0,Math.min(100,Number(j.progress||0))), retry=j.status==='failed'&&j.attempts>=j.maxAttempts;return `<div class="rounded-xl border bg-white p-3"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><div class="flex items-center gap-2 flex-wrap"><span class="text-[10px] border rounded-full px-2 py-0.5 font-bold ${materialJobStatusClass(j.status)}">${escapeHtml(materialJobStatusLabel(j.status))}</span><b class="text-xs text-slate-800 truncate">${escapeHtml(j.result?.title||j.title||j.result?.filename||j.originalName||j.id)}</b><span class="text-[10px] text-slate-400">${formatFileBytes(j.sourceBytes||0)}</span></div><p class="text-[11px] text-slate-600 mt-1">${escapeHtml(j.stage||'')}｜${escapeHtml(j.detail||'')}</p>${j.error?`<p class="text-[10px] text-rose-600 mt-1">${escapeHtml(j.error)}</p>`:''}</div><div class="flex gap-1 shrink-0">${retry?`<button onclick="retryMaterialJob('${escapeHtml(j.id)}')" class="text-[10px] px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold">重新處理</button>`:''}${['queued','retry_wait'].includes(j.status)?`<button onclick="cancelMaterialJob('${escapeHtml(j.id)}')" class="text-[10px] px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">取消</button>`:''}</div></div><div class="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-sky-500 transition-all" style="width:${j.status==='completed'?100:pct}%"></div></div><div class="mt-1 text-[10px] text-slate-400">工作 ${escapeHtml(j.id)} · 第 ${Number(j.attempts||0)}/${Number(j.maxAttempts||3)} 次${j.materialId?` · 教材 ${escapeHtml(j.materialId)}`:''}</div></div>`}).join('');
+        const jobs=d.jobs||[],workers=d.workers||[],worker=workers[0],workerLabel=worker?(worker.status==='busy'?'🟡 Busy':worker.status==='online'?'🟢 Online':'⚪ Offline'):'⚪ Offline',workerDetail=worker?`${worker.workerId}｜FFmpeg ${worker.ffmpeg?'✓':'✕'}｜LibreOffice ${worker.libreOffice?'✓':'✕'}`:'尚未收到本機 Worker heartbeat';
+        const summary=`<div class="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-950"><b>背景教材處理</b><div class="mt-1">Worker：${workerLabel}　${escapeHtml(workerDetail)}</div><div class="mt-1">Pending ${Number(d.pendingJobs||0)} · Processing ${Number(d.processingJobs||0)} · Retry ${Number(d.retryJobs||0)} · Failed ${Number(d.failedJobs||0)}</div></div>`;
+        if(!jobs.length){host.innerHTML=summary+'<p class="text-xs text-slate-400">目前沒有背景教材工作。</p>';scheduleMaterialJobsRefresh(false);return;}
+        host.innerHTML=summary+jobs.map(j=>{const pct=Math.max(0,Math.min(100,Number(j.progress||0))), retry=j.status==='failed'&&j.attempts>=j.maxAttempts;return `<div class="rounded-xl border bg-white p-3"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><div class="flex items-center gap-2 flex-wrap"><span class="text-[10px] border rounded-full px-2 py-0.5 font-bold ${materialJobStatusClass(j.status)}">${escapeHtml(materialJobStatusLabel(j.status))}</span><b class="text-xs text-slate-800 truncate">${escapeHtml(j.result?.title||j.title||j.result?.filename||j.originalName||j.id)}</b><span class="text-[10px] text-slate-400">${formatFileBytes(j.sourceBytes||0)}</span></div><p class="text-[11px] text-slate-600 mt-1">${escapeHtml(j.stage||'')}｜${escapeHtml(j.detail||'')}</p>${j.error?`<p class="text-[10px] text-rose-600 mt-1">${escapeHtml(j.error)}</p>`:''}</div><div class="flex gap-1 shrink-0">${retry?`<button onclick="retryMaterialJob('${escapeHtml(j.id)}')" class="text-[10px] px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold">重新處理</button>`:''}${['queued','retry_wait'].includes(j.status)?`<button onclick="cancelMaterialJob('${escapeHtml(j.id)}')" class="text-[10px] px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">取消</button>`:''}</div></div><div class="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-sky-500 transition-all" style="width:${j.status==='completed'?100:pct}%"></div></div><div class="mt-1 text-[10px] text-slate-400">工作 ${escapeHtml(j.id)} · 第 ${Number(j.attempts||0)}/${Number(j.maxAttempts||3)} 次${j.materialId?` · 教材 ${escapeHtml(j.materialId)}`:''}</div></div>`}).join('');
         scheduleMaterialJobsRefresh(jobs.some(j=>['queued','retry_wait','processing'].includes(j.status)));
     }catch(err){host.innerHTML=`<p class="text-xs text-rose-600">❌ ${escapeHtml(err.message)}</p>`;scheduleMaterialJobsRefresh(false);}
 }
@@ -1282,6 +1285,15 @@ function uploadAdminMaterialRequest(fd,progressId,fileName,key,status){
         xhr.send(fd);
     });
 }
+async function sha256File(file){const buf=await file.arrayBuffer(),hash=await crypto.subtle.digest('SHA-256',buf);return [...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+async function directR2MaterialUpload(file,meta,key,status){
+    if(!window.crypto?.subtle)throw new Error('此瀏覽器不支援大型影音安全雜湊直傳');
+    status.textContent=`⏳ 正在計算 ${file.name} SHA-256…`;
+    const sha256=await sha256File(file),init=await fetch('/api/material-upload/init',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({...meta,filename:file.name,size:file.size,sha256,partSizeMb:16})}),data=await init.json().catch(()=>({}));
+    if(!init.ok)throw new Error(data.error||'無法建立大型影音直傳');
+    const etags=[];for(const part of data.parts||[]){const start=(part.partNumber-1)*data.partSize,end=Math.min(file.size,start+data.partSize),res=await fetch(part.url,{method:'PUT',body:file.slice(start,end)});if(!res.ok)throw new Error(`R2 第 ${part.partNumber} 段上傳失敗`);const etag=res.headers.get('etag');if(!etag)throw new Error('R2 未回傳 ETag，請檢查 bucket CORS ExposeHeaders');etags.push({partNumber:part.partNumber,etag});status.textContent=`⬆️ ${file.name}｜R2 直傳 ${Math.round(end/file.size*100)}%`;}
+    const done=await fetch(`/api/material-upload/${encodeURIComponent(data.uploadId)}/complete`,{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({parts:etags})}),result=await done.json().catch(()=>({}));if(!done.ok)throw new Error(result.error||'R2 直傳完成驗證失敗');return result;
+}
 
 async function adminUploadMaterials() {
     const input=document.getElementById('admin-pptx-upload-input'),files=Array.from(input?.files||[]);if(!files.length){alert('請先選擇要上傳的教材檔案。');return;}
@@ -1292,7 +1304,7 @@ async function adminUploadMaterials() {
         const file=files[n],progressId=`manual-${Date.now()}-${n}-${Math.random().toString(36).slice(2,8)}`;
         status.innerHTML=`⏳ ${n+1}/${files.length} 接收「${escapeHtml(file.name)}」<span class="block text-[11px] text-slate-500 mt-1">只等待檔案傳到 Render；轉檔、壓縮、MEGA 上傳會在背景繼續。</span>`;
         const fd=new FormData();fd.append('file',file);fd.append('title',title);fd.append('desc',desc);fd.append('category',category);fd.append('group',group);fd.append('area',document.getElementById('admin-material-area')?.value||currentTrainingArea);fd.append('courseId',document.getElementById('admin-material-course')?.value||'');fd.append('materialType',document.getElementById('admin-material-type')?.value||'standard');fd.append('progressId',progressId);fd.append('atlasCategory',document.getElementById('admin-atlas-category')?.value||'');fd.append('atlasMagnification',document.getElementById('admin-atlas-magnification')?.value||'');fd.append('atlasInterpretation',document.getElementById('admin-atlas-interpretation')?.value||'');fd.append('atlasClinical',document.getElementById('admin-atlas-clinical')?.value||'');fd.append('atlasDifferential',document.getElementById('admin-atlas-differential')?.value||'');fd.append('atlasNormality',document.getElementById('admin-atlas-normality')?.value||'');fd.append('atlasTags',document.getElementById('admin-atlas-tags')?.value||'');
-        try{const data=await uploadAdminMaterialRequest(fd,progressId,file.name,key,status);queued++;if(data.jobId)jobIds.push(data.jobId);status.innerHTML=`✅ ${n+1}/${files.length}「${escapeHtml(file.name)}」已加入背景佇列<span class="block text-[11px] mt-1">${escapeHtml(data.jobId||'')}｜現在可切換頁面或關閉後台視窗，工作會繼續。</span>`;}
+        try{const meta={title,desc,category,group,area:document.getElementById('admin-material-area')?.value||currentTrainingArea,courseId:document.getElementById('admin-material-course')?.value||'',materialType:document.getElementById('admin-material-type')?.value||'standard'},data=file.size>250*1024*1024?await directR2MaterialUpload(file,meta,key,status):await uploadAdminMaterialRequest(fd,progressId,file.name,key,status);queued++;if(data.jobId)jobIds.push(data.jobId);status.innerHTML=`✅ ${n+1}/${files.length}「${escapeHtml(file.name)}」已加入背景佇列<span class="block text-[11px] mt-1">${escapeHtml(data.jobId||'')}｜現在可切換頁面或關閉後台視窗，工作會繼續。</span>`;}
         catch(err){failed.push({name:file.name,error:err.message});status.innerHTML=`❌ ${escapeHtml(file.name)}：${escapeHtml(err.message)}<span class="block text-[11px] mt-1">其他檔案會繼續接收。</span>`;}
     }
     if(failed.length){status.innerHTML=`⚠️ 已排入 ${queued}/${files.length} 份；${failed.length} 份接收失敗。<details class="mt-1"><summary class="cursor-pointer font-bold">查看失敗原因</summary><div class="mt-1 space-y-1">${failed.map(x=>`<div>• ${escapeHtml(x.name)}：${escapeHtml(x.error)}</div>`).join('')}</div></details>`;}
@@ -1459,15 +1471,15 @@ async function deleteAdminAnnouncement(id){if(!confirm('刪除此公告？這是
 async function renderAdminUserAccounts(){
     const body=document.getElementById('admin-user-accounts-body'),status=document.getElementById('admin-user-status');if(!body)return;body.innerHTML='<tr><td colspan="6" class="p-5 text-center text-slate-400">讀取帳號中…</td></tr>';
     const key=await getAdminKey();if(!key)return;
-    try{const r=await fetch('/api/users',{headers:{'X-Admin-Key':key},cache:'no-store'}),rows=await r.json().catch(()=>[]);if(!r.ok)throw new Error(rows.error||'帳號讀取失敗');const roleLabel={learner:'學員',teacher:'教師',manager:'管理者'},areaLabel={internal:'院內',pgy:'PGY'};
+    try{const r=await fetch('/api/users',{headers:{'X-Admin-Key':key},cache:'no-store'}),rows=await r.json().catch(()=>[]);if(!r.ok)throw new Error(rows.error||'帳號讀取失敗');const roleLabel={student:'學員',clinical_teacher:'臨床教師',group_leader:'組長',education_admin:'教學管理者',system_admin:'系統管理者',auditor:'稽核／唯讀',learner:'學員',teacher:'臨床教師',manager:'教學管理者'},areaLabel={internal:'院內',pgy:'PGY'};
         body.innerHTML=rows.length?rows.map(u=>`<tr class="${u.active?'':'opacity-55'}"><td class="p-3"><b>${escapeHtml(u.username)}</b><div class="text-slate-500 mt-1">${escapeHtml(u.name)}</div></td><td class="p-3 font-mono">${escapeHtml(u.empId)}</td><td class="p-3">${roleLabel[u.role]||escapeHtml(u.role)}</td><td class="p-3">${areaLabel[u.preferredArea]||''} · ${escapeHtml((GROUPS[u.preferredGroup]||GROUPS.grpBio).name)}</td><td class="p-3 text-slate-500">${escapeHtml((u.lastLoginAt||'尚未登入').slice(0,16).replace('T',' '))}</td><td class="p-3"><div class="flex flex-wrap gap-1.5"><button onclick="resetAdminUserPassword('${u.username}')" class="text-[11px] border border-slate-300 bg-white px-2.5 py-1.5 rounded-lg">重設密碼</button><button onclick="toggleAdminUserAccount('${u.username}',${u.active?'false':'true'})" class="text-[11px] ${u.active?'text-rose-600 border-rose-200':'text-emerald-700 border-emerald-200'} border bg-white px-2.5 py-1.5 rounded-lg">${u.active?'停用':'啟用'}</button></div></td></tr>`).join(''):'<tr><td colspan="6" class="p-5 text-center text-slate-400">尚未建立登入帳號。請使用上方表單建立第一個帳號。</td></tr>';if(status)status.textContent=`共 ${rows.length} 個帳號；登入預設自動記憶 30 天。`;
     }catch(e){body.innerHTML=`<tr><td colspan="6" class="p-5 text-center text-rose-600">❌ ${escapeHtml(e.message)}</td></tr>`;}
 }
 async function createAdminUserAccount(){
-    const status=document.getElementById('admin-user-status'),key=await getAdminKey();if(!key)return;const payload={username:document.getElementById('admin-user-username')?.value||'',password:document.getElementById('admin-user-password')?.value||'',name:document.getElementById('admin-user-name')?.value||'',empId:document.getElementById('admin-user-empid')?.value||'',role:document.getElementById('admin-user-role')?.value||'learner',preferredArea:document.getElementById('admin-user-area')?.value||'internal',preferredGroup:document.getElementById('admin-user-group')?.value||'grpBio'};status.textContent='⏳ 建立帳號中…';
+    const status=document.getElementById('admin-user-status'),key=await getAdminKey();if(!key)return;const payload={username:document.getElementById('admin-user-username')?.value||'',password:document.getElementById('admin-user-password')?.value||'',name:document.getElementById('admin-user-name')?.value||'',empId:document.getElementById('admin-user-empid')?.value||'',role:document.getElementById('admin-user-role')?.value||'student',preferredArea:document.getElementById('admin-user-area')?.value||'internal',preferredGroup:document.getElementById('admin-user-group')?.value||'grpBio'};status.textContent='⏳ 建立帳號中…';
     const r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify(payload)}),d=await r.json().catch(()=>({}));if(!r.ok){status.textContent='❌ '+(d.error||'建立失敗');return;}['admin-user-username','admin-user-password','admin-user-name','admin-user-empid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});status.textContent=`✅ 已建立 ${d.user.name}（${d.user.username}）`;await renderAdminUserAccounts();
 }
-async function resetAdminUserPassword(username){const password=prompt(`請輸入「${username}」的新密碼（至少 8 碼）：`);if(password===null)return;const key=await getAdminKey();if(!key)return;const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({password})}),d=await r.json().catch(()=>({}));alert(r.ok?'密碼已重設，該帳號需重新登入。':(d.error||'重設失敗'));if(r.ok)await renderAdminUserAccounts();}
+async function resetAdminUserPassword(username){const password=prompt(`請輸入「${username}」的新密碼（至少 4 碼）：`);if(password===null)return;const key=await getAdminKey();if(!key)return;const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({password})}),d=await r.json().catch(()=>({}));alert(r.ok?'密碼已重設，該帳號需重新登入。':(d.error||'重設失敗'));if(r.ok)await renderAdminUserAccounts();}
 async function toggleAdminUserAccount(username,active){const key=await getAdminKey();if(!key)return;const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({active})}),d=await r.json().catch(()=>({}));if(!r.ok){alert(d.error||'更新失敗');return;}await renderAdminUserAccounts();}
 
 async function renderAdminPeople(force=false){
@@ -1502,6 +1514,12 @@ async function fetchAdminRecords() {
     return adminRecords;
 }
 
+let adminResultsPage = 1;
+function adminResultDetail(index){
+    const row=adminRecords[index]; if(!row)return;
+    const el=document.getElementById(`admin-result-detail-${index}`); if(!el)return;
+    el.classList.toggle('hidden');
+}
 async function renderAdminTable() {
     updateResultsWorkspacePresentation();
     const tbody = document.getElementById('admin-table-body');
@@ -1514,10 +1532,24 @@ async function renderAdminTable() {
             return;
         }
         renderResultsAnalytics(records);
-        const visibleRecords = adminResultWorkspaceMode==='scoring' ? records.filter(r => r.reviewStatus==='pending' || (r.answersDetail||[]).some(a=>a.questionType==='essay')) : records;
+        let visibleRecords = adminResultWorkspaceMode==='scoring' ? records.filter(r => r.reviewStatus==='pending' || (r.answersDetail||[]).some(a=>a.questionType==='essay')) : records;
+        const query=(document.getElementById('admin-results-search')?.value||'').trim().toLowerCase();
+        const filter=document.getElementById('admin-results-filter')?.value||'all';
+        visibleRecords=visibleRecords.filter(r=>{
+            const text=`${r.name||''} ${r.empId||''} ${r.quizTitle||''} ${r.groupLabel||''}`.toLowerCase();
+            if(query&&!text.includes(query))return false;
+            if(filter==='pending')return r.reviewStatus==='pending';
+            if(filter==='pass')return r.status==='合格';
+            if(filter==='fail')return r.reviewStatus!=='pending'&&r.status!=='合格';
+            return true;
+        });
         if(visibleRecords.length===0){tbody.innerHTML=`<tr><td colspan="8" class="p-6 text-center text-slate-400">${adminResultWorkspaceMode==='scoring'?'目前沒有待人工評分的考核。':'目前尚無任何考核紀錄'}</td></tr>`;return;}
-        tbody.innerHTML = visibleRecords.map((r) => { const index=records.indexOf(r); return `
+        const pageSize=Math.max(20,Number(document.getElementById('admin-results-page-size')?.value||20));
+        const pages=Math.max(1,Math.ceil(visibleRecords.length/pageSize)); adminResultsPage=Math.min(Math.max(1,adminResultsPage),pages);
+        const pageRows=visibleRecords.slice((adminResultsPage-1)*pageSize,adminResultsPage*pageSize);
+        tbody.innerHTML = pageRows.map((r) => { const index=records.indexOf(r); const detail=(r.answersDetail||[]); return `
             <tr class="hover:bg-slate-50 transition-colors">
+                <td class="p-3"><button onclick="adminResultDetail(${index})" class="text-xs font-bold text-indigo-700">明細</button></td>
                 <td class="p-3 font-mono text-slate-500">${r.timestamp || ''}</td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">${escapeHtml(r.groupLabel || '1 生化組')}</span></td>
                 <td class="p-3 font-bold text-slate-800">${r.name || ''}</td>
@@ -1529,8 +1561,10 @@ async function renderAdminTable() {
                     ${(r.answersDetail||[]).some(a=>a.questionType==='essay') ? `<button onclick="openEssayReview(${index})" class="bg-rose-600 hover:bg-rose-500 text-white text-xs px-2.5 py-1 rounded shadow-sm">✍️ ${r.reviewStatus==='pending'?'批改問答題':'重新批改'}</button>` : ''}
                     <button onclick="exportRecordToWord(${index})" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded transition-colors shadow-sm">📄 匯出 Word</button>
                 </td>
-            </tr>
+            </tr><tr id="admin-result-detail-${index}" class="hidden bg-slate-50"><td colspan="9" class="p-3"><div class="text-xs text-slate-600"><b>作答明細（預設收合）</b><div class="mt-2 space-y-1">${detail.length?detail.map((a,i)=>`<div>${i+1}. ${escapeHtml(a.questionText||'')}　<span class="text-slate-500">${escapeHtml(String(a.userAnswer??'未作答'))}</span></div>`).join(''):'無逐題明細'}</div></div></td></tr>
         `; }).join('');
+        const pager=document.getElementById('admin-results-pagination');
+        if(pager)pager.innerHTML=`<span>顯示 ${(adminResultsPage-1)*pageSize+1}–${Math.min(adminResultsPage*pageSize,visibleRecords.length)}／${visibleRecords.length} 筆</span><span class="flex gap-2"><button ${adminResultsPage===1?'disabled':''} onclick="adminResultsPage--;renderAdminTable()" class="border rounded px-2 py-1 disabled:opacity-40">上一頁</button><b class="px-1 py-1">${adminResultsPage} / ${pages}</b><button ${adminResultsPage===pages?'disabled':''} onclick="adminResultsPage++;renderAdminTable()" class="border rounded px-2 py-1 disabled:opacity-40">下一頁</button></span>`;
     } catch (error) {
         tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-rose-500">❌ ${error.message}</td></tr>`;
     }
@@ -1542,7 +1576,7 @@ async function renderAdminTable() {
 // 不需要每次匯出都手動選檔。
 let cachedTemplateBuffer = null;
 let adminRecords = [];
-let adminKey = sessionStorage.getItem('admin_key') || '';
+let adminKey = '';
 let pendingExportRecordIndex = null;
 let isExportingCurrentTab = false;
 

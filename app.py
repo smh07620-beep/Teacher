@@ -42,6 +42,8 @@ import io
 import tempfile
 import hashlib
 import socket
+import sys
+import ntpath
 from functools import wraps
 from urllib.parse import quote
 from pathlib import Path
@@ -104,12 +106,11 @@ QUESTION_IMAGES_DIR = MATERIAL_STORAGE / "question_images"
 UPLOADED_SLIDES_DIR = MATERIAL_STORAGE / "slides"
 DOC_TEMPLATES_DIR = MATERIAL_STORAGE / "doc_templates"
 PGY_ASSESSMENT_TEMPLATES_DIR = MATERIAL_STORAGE / "pgy_assessment_templates"
-MATERIAL_JOB_DIR = MATERIAL_STORAGE / "job_staging"
 DATA_DIR = BASE_DIR / "data"
 META_FILE = DATA_DIR / "slides_meta.json"
 TMP_DIR = BASE_DIR / "tmp_convert"
 
-for d in (SLIDES_DIR, UPLOAD_DIR, UPLOADED_SLIDES_DIR, DOC_TEMPLATES_DIR, PGY_ASSESSMENT_TEMPLATES_DIR, MATERIAL_JOB_DIR, QUESTION_IMAGES_DIR, DATA_DIR, TMP_DIR):
+for d in (SLIDES_DIR, UPLOAD_DIR, UPLOADED_SLIDES_DIR, DOC_TEMPLATES_DIR, PGY_ASSESSMENT_TEMPLATES_DIR, QUESTION_IMAGES_DIR, DATA_DIR, TMP_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 UPLOAD_PROGRESS_DIR = TMP_DIR / "upload_progress"
@@ -174,6 +175,14 @@ MATERIAL_PREVIEW_CACHE_MB = max(64, min(2048, int(os.environ.get("MATERIAL_PREVI
 MATERIAL_PREVIEW_CACHE_TTL_SECONDS = max(300, min(86400, int(os.environ.get("MATERIAL_PREVIEW_CACHE_TTL_SECONDS", "21600"))))
 # V5.7.0：大型教材先完成 HTTP 接收，再交由資料庫佇列背景轉檔／上雲。
 MATERIAL_BACKGROUND_JOBS = os.environ.get("MATERIAL_BACKGROUND_JOBS", "true").strip().lower() not in {"0","false","no","off"}
+# Scheme B deliberately separates job creation from job consumption.  Local
+# development can still run `python -u material_worker.py` explicitly.
+MATERIAL_WORKER_ENABLED = os.environ.get("MATERIAL_WORKER_ENABLED", "true").strip().lower() in {"1","true","yes","on"}
+MATERIAL_SHARED_STAGING_BACKEND = os.environ.get("MATERIAL_SHARED_STAGING_BACKEND", "auto").strip().lower() or "auto"
+MATERIAL_DIRECT_UPLOAD_ENABLED = os.environ.get("MATERIAL_DIRECT_UPLOAD_ENABLED", "false").strip().lower() in {"1","true","yes","on"}
+MATERIAL_DIRECT_UPLOAD_MAX_MB = max(1, min(4096, int(os.environ.get("MATERIAL_DIRECT_UPLOAD_MAX_MB", "2048"))))
+MATERIAL_WORKER_TOKEN = os.environ.get("MATERIAL_WORKER_TOKEN", "").strip()
+MATERIAL_WORKER_URL_TTL_SECONDS = max(60, min(3600, int(os.environ.get("MATERIAL_WORKER_URL_TTL_SECONDS", "900"))))
 MATERIAL_JOB_MAX_ATTEMPTS = max(1, min(8, int(os.environ.get("MATERIAL_JOB_MAX_ATTEMPTS", "3"))))
 MATERIAL_JOB_STALE_SECONDS = max(300, min(21600, int(os.environ.get("MATERIAL_JOB_STALE_SECONDS", "1800"))))
 MATERIAL_JOB_RETENTION_HOURS = max(6, min(720, int(os.environ.get("MATERIAL_JOB_RETENTION_HOURS", "72"))))
@@ -207,6 +216,29 @@ R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
 R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "").strip()
 R2_PRESIGN_SECONDS = max(60, min(604800, int(os.environ.get("R2_PRESIGN_SECONDS", "3600"))))
+
+# Teacher's R2 values are a conservative estimate, not Cloudflare billing.
+# Keep parsing local and bounded so a malformed deployment variable cannot
+# prevent the web app from starting or accidentally disable the guard.
+def _bounded_env_number(name, default, lower, upper, cast=float):
+    try:
+        value = cast(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    try:
+        return max(lower, min(upper, value))
+    except TypeError:
+        return default
+
+
+R2_FREE_STORAGE_GB_MONTH = _bounded_env_number("R2_FREE_STORAGE_GB_MONTH", 10.0, 0.1, 10000.0)
+R2_WARNING_PERCENT = int(_bounded_env_number("R2_WARNING_PERCENT", 60, 1, 99, int))
+R2_UPLOAD_BLOCK_PERCENT = int(_bounded_env_number("R2_UPLOAD_BLOCK_PERCENT", 80, R2_WARNING_PERCENT, 99, int))
+R2_EMERGENCY_PERCENT = int(_bounded_env_number("R2_EMERGENCY_PERCENT", 90, R2_UPLOAD_BLOCK_PERCENT, 100, int))
+R2_STAGING_MAX_CURRENT_GB = _bounded_env_number("R2_STAGING_MAX_CURRENT_GB", 8.0, 0.1, 1000.0)
+R2_STAGING_FAILED_RETENTION_HOURS = int(_bounded_env_number("R2_STAGING_FAILED_RETENTION_HOURS", 24, 1, 720, int))
+R2_MULTIPART_ABANDON_HOURS = int(_bounded_env_number("R2_MULTIPART_ABANDON_HOURS", 6, 1, 168, int))
+MATERIAL_R2_LARGE_FILE_MB = int(_bounded_env_number("MATERIAL_R2_LARGE_FILE_MB", 100, 1, 4096, int))
 
 # V5.3.14：Oracle Cloud Object Storage Always Free（S3 相容 API）。
 # FREE_ONLY_MODE=true 時，網站會在接近免費容量上限前拒絕新上傳，避免意外超額。
@@ -301,6 +333,8 @@ def active_material_backend():
         return "r2"
     # V5.3.16 auto：優先官方 MEGAcmd；其餘後端僅保留既有資料相容性。
     if mega_is_configured(): return "mega"
+    if MEGA_EMAIL or MEGA_PASSWORD:
+        raise RuntimeError("MEGA 已設定但官方 MEGAcmd 指令不可用或帳密不完整；不會自動改用 Google Drive。")
     if oci_is_configured(): return "oci"
     if gdrive_is_configured(): return "gdrive"
     if r2_is_configured(): return "r2"
@@ -335,9 +369,21 @@ def _content_type_for(path_or_name):
     return mimetypes.guess_type(str(path_or_name))[0] or "application/octet-stream"
 
 
-def r2_put_file(local_path: Path, key: str, content_type=None):
+def r2_ascii_metadata(metadata):
+    """Return S3-compatible metadata without passing raw Unicode to boto3."""
+    return {
+        str(key).encode("ascii", "backslashreplace").decode("ascii")[:1024]:
+        str(value).encode("ascii", "backslashreplace").decode("ascii")[:1024]
+        for key, value in dict(metadata or {}).items()
+    }
+
+
+def r2_put_file(local_path: Path, key: str, content_type=None, metadata=None):
     extra = {"ContentType": content_type or _content_type_for(local_path)}
+    if metadata:
+        extra["Metadata"] = r2_ascii_metadata(metadata)
     r2_client().upload_file(str(local_path), R2_BUCKET_NAME, key, ExtraArgs=extra)
+    r2_record_object(key, Path(local_path).stat().st_size)
 
 
 def r2_presigned_get(key: str, *, download_name=None, inline=True):
@@ -363,6 +409,8 @@ def r2_delete_prefix(prefix: str):
         objects = [{"Key": x["Key"]} for x in res.get("Contents", [])]
         if objects:
             client.delete_objects(Bucket=R2_BUCKET_NAME, Delete={"Objects": objects, "Quiet": True})
+            for item in objects:
+                r2_record_deleted(item["Key"])
         if not res.get("IsTruncated"):
             break
         token = res.get("NextContinuationToken")
@@ -380,24 +428,86 @@ def upload_material_tree_to_r2(material_id: str, source_path: Path, slides_dir: 
 
 
 # ----------------------------- MEGA storage (official MEGAcmd) -----------------------------
+def _megacmd_path_module():
+    return ntpath if sys.platform.startswith("win") else os.path
+
+
+def _megacmd_windows_dirs():
+    """Return the standard official MEGAcmd install locations on Windows."""
+    if not sys.platform.startswith("win"):
+        return []
+    path_module = _megacmd_path_module()
+    return [
+        path_module.join(base, "MEGAcmd")
+        for base in (os.environ.get("ProgramFiles", ""), os.environ.get("ProgramFiles(x86)", ""))
+        if base
+    ]
+
+
+def _megacmd_path_separator():
+    return ";" if sys.platform.startswith("win") else os.pathsep
+
+
+def _megacmd_path(env):
+    """Prepend official Windows locations without changing global PATH."""
+    separator = _megacmd_path_separator()
+    path_module = _megacmd_path_module()
+    current = [item for item in str(env.get("PATH", "")).split(separator) if item]
+    known = {path_module.normcase(path_module.normpath(item)) for item in current}
+    additions = []
+    for directory in _megacmd_windows_dirs():
+        normalized = path_module.normcase(path_module.normpath(directory))
+        if normalized not in known:
+            additions.append(directory)
+            known.add(normalized)
+    return separator.join([*additions, *current])
+
+
 def _megacmd_env():
     env = os.environ.copy()
     env["HOME"] = MEGACMD_HOME
+    env["PATH"] = _megacmd_path(env)
     return env
 
 
+def _megacmd_find(command):
+    """Locate an official command, including the Windows .bat/.cmd wrappers."""
+    command = str(command)
+    candidates = [command]
+    if sys.platform.startswith("win") and not os.path.splitext(command)[1]:
+        candidates.extend(f"{command}{extension}" for extension in (".bat", ".cmd", ".exe"))
+    path = _megacmd_env().get("PATH", "")
+    for candidate in candidates:
+        resolved = shutil.which(candidate, path=path)
+        if resolved:
+            return resolved
+    return ""
+
+
+def _megacmd_is_windows_batch(command):
+    return sys.platform.startswith("win") and str(command).lower().endswith((".bat", ".cmd"))
+
+
 def _mega_run(args, *, check=True, timeout=None):
-    """執行官方 mega-* 指令。不得使用 shell，避免路徑/密碼被 shell 重新解讀。"""
+    """Run an official MEGAcmd command without interpolating user input."""
     cmd = [str(x) for x in args]
+    if cmd:
+        cmd[0] = _megacmd_find(cmd[0]) or cmd[0]
+    batch_wrapper = bool(cmd and _megacmd_is_windows_batch(cmd[0]))
+    # Windows starts .bat/.cmd files through cmd.exe even when shell=False.
+    # Keep argv as a sequence so subprocess owns Windows quoting for the
+    # resolved official wrapper; normal executables keep shell disabled.
+    invocation = cmd
     try:
         cp = subprocess.run(
-            cmd,
+            invocation,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             env=_megacmd_env(),
             timeout=timeout or MEGACMD_TIMEOUT_SECONDS,
             check=False,
+            shell=batch_wrapper,
         )
     except FileNotFoundError as exc:
         raise RuntimeError("找不到官方 MEGAcmd 指令。請確認 Dockerfile 已安裝 megacmd。") from exc
@@ -441,7 +551,7 @@ def _mega_ensure_dir(remote_path: str):
 
 
 def mega_is_configured():
-    return bool(MEGA_EMAIL and MEGA_PASSWORD and shutil.which("mega-whoami") and shutil.which("mega-put"))
+    return bool(MEGA_EMAIL and MEGA_PASSWORD and _megacmd_find("mega-whoami") and _megacmd_find("mega-put"))
 
 
 def _mega_login_if_needed(force=False):
@@ -987,6 +1097,30 @@ GROUPS = {
 PGY_ONLY_GROUPS = {"grpNew", "grpPgyDocs"}
 DEFAULT_GROUP = "grpBio"
 TRAINING_AREAS = {"internal": "內部教育訓練區", "pgy": "PGY訓練區"}
+# Milestone 4: one live RBAC policy for legacy and modular code.
+from teacher_app.common.auth import CANONICAL_ROLES, LEGACY_ROLE_ALIASES, ROLE_PERMISSIONS
+from teacher_app.auth import service as auth_service, routes as auth_routes
+import sys
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_normalize_role(value):
+    role = str(value or "student").strip().lower()
+    role = LEGACY_ROLE_ALIASES.get(role, role)
+    return role if role in CANONICAL_ROLES else "student"
+
+
+def normalize_role(value):
+    from teacher_app.common.auth import normalize_role as canonical_normalize_role
+    return canonical_normalize_role(value)
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_has_permission(user, permission):
+    return bool(user) and permission in ROLE_PERMISSIONS.get(normalize_role(user.get("role")), set())
+
+
+def has_permission(user, permission):
+    from teacher_app.common.auth import has_permission as canonical_has_permission
+    return canonical_has_permission(user, permission)
 DEFAULT_TRAINING_AREA = "internal"
 
 # 舊版生化四份考卷保留原 category 代碼，方便既有教材連結與成績紀錄相容；考卷本身已改為動態資料庫管理。
@@ -1075,9 +1209,383 @@ def _material_job_priority(source_bytes: int) -> int:
     return 40
 
 
+def shared_staging_backend():
+    """Select an object store that both the Render web and worker can reach.
+
+    `local` is intentionally a development fallback only.  A production web
+    service must never hand `/var/data` paths to a different service.
+    """
+    requested = MATERIAL_SHARED_STAGING_BACKEND
+    if requested not in {"auto", "r2", "mega", "gdrive", "local"}:
+        raise RuntimeError("MATERIAL_SHARED_STAGING_BACKEND 必須是 auto、r2、mega、gdrive 或 local。")
+    if requested == "r2":
+        if not r2_is_configured():
+            raise RuntimeError("Shared Staging 設為 R2，但 R2 尚未完成設定。")
+        return "r2"
+    if requested == "mega":
+        if not mega_is_configured():
+            raise RuntimeError("Shared Staging 設為 MEGA，但 MEGA 尚未完成設定。")
+        return "mega"
+    if requested == "gdrive":
+        if not gdrive_is_configured():
+            raise RuntimeError("Shared Staging 設為 Google Drive，但 OAuth 尚未完成設定。")
+        return "gdrive"
+    if requested == "local":
+        return "local"
+    # B-Free prefers R2 because it supports browser multipart PUT and short
+    # lived worker GET URLs. Local remains a development-only fallback.
+    if r2_is_configured():
+        return "r2"
+    backend = active_material_backend()
+    return backend if backend in {"mega", "gdrive"} else "local"
+
+
+def shared_staging_capability():
+    """Configuration-only capability report; it never exposes credentials."""
+    try:
+        backend = shared_staging_backend()
+        return {
+            "available": True,
+            "backend": backend,
+            "shared": backend in {"r2", "mega", "gdrive"},
+            "namespace": "_staging/material-jobs",
+        }
+    except Exception as exc:
+        return {"available": False, "backend": "", "shared": False, "namespace": "_staging/material-jobs", "reason": str(exc)[:180]}
+
+
+def _safe_staging_name(job_id: str, original_name: str) -> str:
+    ext = Path(original_name or "source.bin").suffix.lower()
+    if ext not in ALLOWED_EXT:
+        raise ValueError("Shared Staging 檔案副檔名不受支援。")
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "", str(job_id or ""))[:80]
+    if not safe_id:
+        raise ValueError("背景工作 ID 不合法。")
+    return f"source{ext}"
+
+
+def _gdrive_staging_parent():
+    root = gdrive_find_file_in_folder(GDRIVE_FOLDER_ID, "_staging")
+    if not root:
+        root = gdrive_create_folder("_staging", GDRIVE_FOLDER_ID, {"smh_kind": "staging"})
+    jobs = gdrive_find_file_in_folder(root, "material-jobs")
+    if not jobs:
+        jobs = gdrive_create_folder("material-jobs", root, {"smh_kind": "material_job_staging"})
+    return jobs
+
+
+def upload_material_job_staging(source: Path, job_id: str, original_name: str):
+    """Upload before making the job runnable; return only backend/object key."""
+    source = Path(source)
+    if not source.is_file() or source.stat().st_size <= 0:
+        raise ValueError("Shared Staging 原始檔不存在或空白。")
+    if source.stat().st_size > MAX_UPLOAD_MB * 1024 * 1024:
+        raise ValueError("教材檔案超過上傳大小限制。")
+    name = _safe_staging_name(job_id, original_name)
+    backend = shared_staging_backend()
+    if backend == "r2":
+        key = f"_staging/material-jobs/{job_id}/{name}"
+        reserved = False
+        if r2_large_file(source.stat().st_size):
+            enforce_r2_large_upload_budget(job_id, key, source.stat().st_size)
+            reserved = True
+        try:
+            r2_put_file(source, key, metadata={"jobid": job_id, "expectedbytes": source.stat().st_size, "sha256": _sha256_file(source), "createdat": _utc_now_iso()})
+        except Exception:
+            if reserved:
+                _r2_release_reservation(job_id, "staging_upload_failed")
+            raise
+        if reserved:
+            _r2_release_reservation(job_id, "staging_created")
+        return "r2", key, ""
+    if backend == "mega":
+        try:
+            _mega_free_guard(source.stat().st_size)
+            folder = _mega_remote_join(_mega_root_id(), "_staging", "material-jobs", str(job_id))
+            return "mega", _mega_upload_file(source, folder, name), ""
+        except Exception as exc:
+            # Keep the established MEGA-primary / GDrive-on-full contract.
+            if not (_is_mega_capacity_full_error(exc) and _mega_gdrive_failover_ready() == "gdrive"):
+                raise
+            backend = "gdrive"
+    if backend == "gdrive":
+        uploaded = gdrive_upload_file(
+            source,
+            f"{job_id}-{name}",
+            _gdrive_staging_parent(),
+            {"smh_kind": "material_job_staging", "smh_job_id": str(job_id)},
+        )
+        return "gdrive", str(uploaded["id"]), ""
+    # Local is explicitly retained for a single-process local/dev install.
+    local_dir = TMP_DIR / "material-job-staging" / str(job_id)
+    local_dir.mkdir(parents=True, exist_ok=True)
+    local_path = local_dir / name
+    shutil.copy2(source, local_path)
+    return "local", "", str(local_path)
+
+
+def download_material_job_staging(job: dict, target: Path):
+    backend = str(job.get("stagingBackend") or job.get("staging_backend") or "local").lower()
+    key = str(job.get("stagingKey") or job.get("staging_key") or "")
+    local_path = str(job.get("stagingPath") or job.get("staging_path") or "")
+    target = Path(target)
+    if backend == "r2":
+        if not key: raise RuntimeError("Shared Staging 缺少 R2 object key。")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        r2_client().download_file(R2_BUCKET_NAME, key, str(target))
+        return target
+    if backend == "mega":
+        if not key: raise RuntimeError("Shared Staging 缺少 MEGA object key。")
+        return mega_download_file(key, target)
+    if backend == "gdrive":
+        if not key: raise RuntimeError("Shared Staging 缺少 Google Drive object key。")
+        return gdrive_download_to_path(key, target)
+    path = Path(local_path)
+    if not path.is_file(): raise RuntimeError("本機開發 Shared Staging 原始檔不存在。")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(path, target)
+    return target
+
+
+def material_job_staging_exists(job: dict) -> bool:
+    backend = str(job.get("stagingBackend") or job.get("staging_backend") or "local").lower()
+    key = str(job.get("stagingKey") or job.get("staging_key") or "")
+    try:
+        if backend == "r2":
+            r2_client().head_object(Bucket=R2_BUCKET_NAME, Key=key)
+            return bool(key)
+        if backend == "mega":
+            return bool(key and _mega_run(["mega-ls", key], check=False, timeout=60).returncode == 0)
+        if backend == "gdrive":
+            return bool(key and gdrive_service().files().get(fileId=key, fields="id,trashed").execute().get("id"))
+        return Path(job.get("stagingPath") or job.get("staging_path") or "").is_file()
+    except Exception:
+        return False
+
+
+def delete_material_job_staging(job: dict):
+    backend = str(job.get("stagingBackend") or job.get("staging_backend") or "local").lower()
+    key = str(job.get("stagingKey") or job.get("staging_key") or "")
+    local_path = Path(job.get("stagingPath") or job.get("staging_path") or "")
+    if backend == "r2" and key:
+        r2_client().delete_object(Bucket=R2_BUCKET_NAME, Key=key)
+        r2_record_deleted(key)
+    elif backend == "mega" and key:
+        mega_destroy(key)
+    elif backend == "gdrive" and key:
+        gdrive_delete_file(key)
+    elif backend == "local" and local_path.exists():
+        shutil.rmtree(local_path.parent, ignore_errors=True)
+
+
+_R2_GB = 1024 ** 3
+
+
+def r2_large_file(source_bytes: int) -> bool:
+    return int(source_bytes or 0) >= MATERIAL_R2_LARGE_FILE_MB * 1024 * 1024
+
+
+def _r2_parse_time(value):
+    try:
+        parsed = datetime.datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _r2_month_bounds(now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    now = now if now.tzinfo else now.replace(tzinfo=datetime.timezone.utc)
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end = (start.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
+    return start, end
+
+
+def _r2_staging_totals(conn):
+    rows = conn.execute("SELECT object_bytes FROM r2_usage_ledger WHERE is_staging=TRUE AND deleted_at='' ").fetchall()
+    staging = sum(max(0, int(dict(row).get("object_bytes") or 0)) for row in rows)
+    rows = conn.execute("SELECT reserved_bytes FROM r2_upload_reservations WHERE status='active'").fetchall()
+    reserved = sum(max(0, int(dict(row).get("reserved_bytes") or 0)) for row in rows)
+    return staging, reserved
+
+
+def _r2_estimated_gb_month(conn, now=None):
+    """Teacher-owned estimate from its ledger; never an R2 invoice value."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    start, end = _r2_month_bounds(now)
+    total = 0.0
+    for row in conn.execute("SELECT object_bytes,uploaded_at,deleted_at FROM r2_usage_ledger").fetchall():
+        item = dict(row)
+        uploaded = _r2_parse_time(item.get("uploaded_at"))
+        deleted = _r2_parse_time(item.get("deleted_at")) or now
+        if not uploaded:
+            continue
+        active_start, active_end = max(uploaded, start), min(deleted, now, end)
+        if active_end > active_start:
+            total += max(0, int(item.get("object_bytes") or 0)) / _R2_GB * ((active_end - active_start).total_seconds() / (end - start).total_seconds())
+    return total
+
+
+def _r2_budget_level(percent: float) -> str:
+    if percent >= R2_EMERGENCY_PERCENT:
+        return "emergency"
+    if percent >= R2_UPLOAD_BLOCK_PERCENT:
+        return "blocked"
+    if percent >= R2_WARNING_PERCENT:
+        return "warning"
+    return "green"
+
+
+def _r2_release_reservation(upload_id: str, reason: str):
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        conn.execute(f"UPDATE r2_upload_reservations SET status='released', released_at={ph}, release_reason={ph} WHERE upload_id={ph} AND status='active'", (_utc_now_iso(), str(reason)[:80], upload_id))
+    finally:
+        conn.close()
+
+
+def r2_record_object(object_key: str, object_bytes: int, *, multipart_parts=0, estimated_operations=1, is_staging=None):
+    """Upsert an object observation into Teacher's private usage ledger."""
+    if not object_key:
+        return
+    key = str(object_key)[:1024]
+    size = max(0, int(object_bytes or 0))
+    staging = bool(str(key).startswith("_staging/")) if is_staging is None else bool(is_staging)
+    now = _utc_now_iso(); conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        if kind == "postgres":
+            conn.execute("INSERT INTO r2_usage_ledger(id,object_key,object_bytes,uploaded_at,deleted_at,multipart_parts,estimated_operations,is_staging) VALUES(%s,%s,%s,%s,'',%s,%s,%s) ON CONFLICT(object_key) DO UPDATE SET object_bytes=EXCLUDED.object_bytes,uploaded_at=EXCLUDED.uploaded_at,deleted_at='',multipart_parts=EXCLUDED.multipart_parts,estimated_operations=r2_usage_ledger.estimated_operations + EXCLUDED.estimated_operations,is_staging=EXCLUDED.is_staging", ("r2obj-" + hashlib.sha256(key.encode()).hexdigest()[:24], key, size, now, int(multipart_parts or 0), max(1, int(estimated_operations or 1)), staging))
+        else:
+            conn.execute("INSERT INTO r2_usage_ledger(id,object_key,object_bytes,uploaded_at,deleted_at,multipart_parts,estimated_operations,is_staging) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(object_key) DO UPDATE SET object_bytes=excluded.object_bytes,uploaded_at=excluded.uploaded_at,deleted_at='',multipart_parts=excluded.multipart_parts,estimated_operations=r2_usage_ledger.estimated_operations + excluded.estimated_operations,is_staging=excluded.is_staging", ("r2obj-" + hashlib.sha256(key.encode()).hexdigest()[:24], key, size, now, "", int(multipart_parts or 0), max(1, int(estimated_operations or 1)), int(staging)))
+    finally:
+        conn.close()
+
+
+def r2_record_deleted(object_key: str):
+    if not object_key:
+        return
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        conn.execute(f"UPDATE r2_usage_ledger SET deleted_at={ph}, estimated_operations=estimated_operations+1 WHERE object_key={ph} AND deleted_at=''", (_utc_now_iso(), str(object_key)[:1024]))
+    finally:
+        conn.close()
+
+
+def reserve_r2_upload(upload_id: str, object_key: str, source_bytes: int):
+    """Atomically reserve staging capacity for a large direct upload."""
+    size = max(0, int(source_bytes or 0))
+    if size <= 0:
+        raise ValueError("上傳大小不合法。")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    expiry = (now + datetime.timedelta(hours=R2_MULTIPART_ABANDON_HOURS)).isoformat()
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        if kind == "postgres":
+            with conn.transaction():
+                conn.execute("SELECT pg_advisory_xact_lock(67002026)")
+                staging, reserved = _r2_staging_totals(conn)
+                estimate = _r2_estimated_gb_month(conn, now)
+                projected = estimate + size / _R2_GB * ((_r2_month_bounds(now)[1] - now).total_seconds() / (_r2_month_bounds(now)[1] - _r2_month_bounds(now)[0]).total_seconds())
+                if FREE_ONLY_MODE and projected / R2_FREE_STORAGE_GB_MONTH * 100 >= R2_UPLOAD_BLOCK_PERCENT:
+                    raise ValueError("R2 免費額度預估已達大型檔案上傳安全門檻。")
+                if staging + reserved + size > R2_STAGING_MAX_CURRENT_GB * _R2_GB:
+                    raise ValueError("R2 staging 已達 8GB 安全上限。")
+                conn.execute("INSERT INTO r2_upload_reservations(id,upload_id,object_key,reserved_bytes,status,created_at,expires_at,released_at,release_reason) VALUES(%s,%s,%s,%s,'active',%s,%s,'','')", ("r2res-" + hashlib.sha256(upload_id.encode()).hexdigest()[:24], upload_id, object_key, size, now.isoformat(), expiry))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                staging, reserved = _r2_staging_totals(conn)
+                estimate = _r2_estimated_gb_month(conn, now)
+                start, end = _r2_month_bounds(now)
+                projected = estimate + size / _R2_GB * ((end - now).total_seconds() / (end - start).total_seconds())
+                if FREE_ONLY_MODE and projected / R2_FREE_STORAGE_GB_MONTH * 100 >= R2_UPLOAD_BLOCK_PERCENT:
+                    raise ValueError("R2 免費額度預估已達大型檔案上傳安全門檻。")
+                if staging + reserved + size > R2_STAGING_MAX_CURRENT_GB * _R2_GB:
+                    raise ValueError("R2 staging 已達 8GB 安全上限。")
+                conn.execute("INSERT INTO r2_upload_reservations(id,upload_id,object_key,reserved_bytes,status,created_at,expires_at,released_at,release_reason) VALUES(?,?,?,?,? ,?,?,?,?)", ("r2res-" + hashlib.sha256(upload_id.encode()).hexdigest()[:24], upload_id, object_key, size, "active", now.isoformat(), expiry, "", ""))
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+    finally:
+        conn.close()
+
+
+def r2_budget_status():
+    conn, kind = _db_conn()
+    try:
+        staging, reserved = _r2_staging_totals(conn)
+        estimate = _r2_estimated_gb_month(conn)
+        percent = (estimate / R2_FREE_STORAGE_GB_MONTH * 100) if R2_FREE_STORAGE_GB_MONTH else 100.0
+        rows = conn.execute("SELECT status,COUNT(*) AS count FROM material_upload_sessions GROUP BY status").fetchall()
+        active = sum(int(dict(row).get("count") or 0) for row in rows if dict(row).get("status") == "uploading")
+        cleanup_pending = conn.execute(
+            "SELECT COUNT(*) AS count FROM material_jobs WHERE cleanup_pending="
+            + ("TRUE" if kind == "postgres" else "1")
+        ).fetchone()
+        parts = conn.execute("SELECT COALESCE(SUM(multipart_parts),0) AS count,COALESCE(SUM(estimated_operations),0) AS operations FROM r2_usage_ledger").fetchone()
+        return {"enabled": bool(FREE_ONLY_MODE), "estimatedOnly": True, "freeStorageGbMonth": R2_FREE_STORAGE_GB_MONTH, "estimatedGbMonth": round(estimate, 6), "currentStagingBytes": staging, "reservedBytes": reserved, "usagePercent": round(percent, 2), "level": _r2_budget_level(percent), "activeUploads": active, "cleanupPending": int(dict(cleanup_pending).get("count") or 0), "multipartParts": int(dict(parts).get("count") or 0), "estimatedOperations": int(dict(parts).get("operations") or 0)}
+    finally:
+        conn.close()
+
+
+def cleanup_r2_budget_state():
+    """Abort abandoned multipart uploads and release their reservations."""
+    cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=R2_MULTIPART_ABANDON_HOURS)).isoformat()
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        rows = conn.execute(f"SELECT id,staging_key,r2_upload_id FROM material_upload_sessions WHERE status='uploading' AND updated_at < {ph}", (cutoff,)).fetchall()
+    finally:
+        conn.close()
+    expired = 0
+    for row in rows:
+        item = dict(row)
+        try:
+            r2_client().abort_multipart_upload(Bucket=R2_BUCKET_NAME, Key=item["staging_key"], UploadId=item["r2_upload_id"])
+        except Exception:
+            # It may already have been aborted remotely; make the local
+            # reservation safe to release regardless.
+            pass
+        conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+        try:
+            conn.execute(f"UPDATE material_upload_sessions SET status='expired',updated_at={ph} WHERE id={ph} AND status='uploading'", (_utc_now_iso(), item["id"]))
+        finally:
+            conn.close()
+        _r2_release_reservation(item["id"], "multipart_expired")
+        expired += 1
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        conn.execute(f"UPDATE r2_upload_reservations SET status='released',released_at={ph},release_reason='reservation_expired' WHERE status='active' AND expires_at < {ph}", (_utc_now_iso(), _utc_now_iso()))
+    finally:
+        conn.close()
+    cleanup_material_job_staging()
+    return expired
+
+
+def enforce_r2_large_upload_budget(upload_id: str, object_key: str, source_bytes: int):
+    """Reject only large uploads when FREE_ONLY_MODE reaches safe thresholds."""
+    if not r2_large_file(source_bytes):
+        return
+    cleanup_r2_budget_state()
+    status = r2_budget_status()
+    if FREE_ONLY_MODE and status["level"] == "emergency":
+        raise ValueError("R2 免費額度進入緊急保護，暫停大型檔案上傳。")
+    if FREE_ONLY_MODE and status["level"] == "blocked":
+        raise ValueError("R2 免費額度預估已達大型檔案上傳安全門檻。")
+    reserve_r2_upload(upload_id, object_key, source_bytes)
+
+
 def init_material_jobs_db():
     conn, kind = _db_conn()
     try:
+        # Kept here for direct legacy-app imports; pgy_app also runs the
+        # schema_migrations 0067 compatibility ensure on every startup.
+        boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
+        default_bool = "TRUE" if kind == "postgres" else "1"
+        conn.execute("CREATE TABLE IF NOT EXISTS r2_upload_reservations (id TEXT PRIMARY KEY,upload_id TEXT NOT NULL UNIQUE,object_key TEXT NOT NULL UNIQUE,reserved_bytes BIGINT NOT NULL,status TEXT NOT NULL DEFAULT 'active',created_at TEXT NOT NULL,expires_at TEXT NOT NULL,released_at TEXT NOT NULL DEFAULT '',release_reason TEXT NOT NULL DEFAULT '')")
+        conn.execute(f"CREATE TABLE IF NOT EXISTS r2_usage_ledger (id TEXT PRIMARY KEY,object_key TEXT NOT NULL UNIQUE,object_bytes BIGINT NOT NULL,uploaded_at TEXT NOT NULL,deleted_at TEXT NOT NULL DEFAULT '',multipart_parts INTEGER NOT NULL DEFAULT 0,estimated_operations BIGINT NOT NULL DEFAULT 0,is_staging {boolean} NOT NULL DEFAULT {default_bool})")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_r2_upload_reservations_active ON r2_upload_reservations(status, expires_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_r2_usage_ledger_active ON r2_usage_ledger(deleted_at, uploaded_at)")
         if kind == "postgres":
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS material_jobs (
@@ -1095,6 +1603,9 @@ def init_material_jobs_db():
                     detail TEXT NOT NULL DEFAULT '',
                     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
                     staging_path TEXT NOT NULL,
+                    staging_backend TEXT NOT NULL DEFAULT 'local',
+                    staging_key TEXT NOT NULL DEFAULT '',
+                    original_name TEXT NOT NULL DEFAULT '',
                     material_id TEXT NOT NULL DEFAULT '',
                     source_sha256 TEXT NOT NULL DEFAULT '',
                     source_bytes BIGINT NOT NULL DEFAULT 0,
@@ -1104,6 +1615,11 @@ def init_material_jobs_db():
                     cancel_requested BOOLEAN NOT NULL DEFAULT FALSE
                 )
             """)
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS staging_backend TEXT NOT NULL DEFAULT 'local'")
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS staging_key TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS original_name TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS worker_last_seen TEXT NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS cleanup_pending BOOLEAN NOT NULL DEFAULT FALSE")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_material_jobs_queue ON material_jobs(status, priority DESC, created_at)")
         else:
             conn.execute("""
@@ -1122,6 +1638,11 @@ def init_material_jobs_db():
                     detail TEXT NOT NULL DEFAULT '',
                     payload TEXT NOT NULL DEFAULT '{}',
                     staging_path TEXT NOT NULL,
+                    staging_backend TEXT NOT NULL DEFAULT 'local',
+                    staging_key TEXT NOT NULL DEFAULT '',
+                    original_name TEXT NOT NULL DEFAULT '',
+                    worker_last_seen TEXT NOT NULL DEFAULT '',
+                    cleanup_pending INTEGER NOT NULL DEFAULT 0,
                     material_id TEXT NOT NULL DEFAULT '',
                     source_sha256 TEXT NOT NULL DEFAULT '',
                     source_bytes INTEGER NOT NULL DEFAULT 0,
@@ -1131,6 +1652,17 @@ def init_material_jobs_db():
                     cancel_requested INTEGER NOT NULL DEFAULT 0
                 )
             """)
+            existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(material_jobs)").fetchall()}
+            if "staging_backend" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN staging_backend TEXT NOT NULL DEFAULT 'local'")
+            if "staging_key" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN staging_key TEXT NOT NULL DEFAULT ''")
+            if "original_name" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN original_name TEXT NOT NULL DEFAULT ''")
+            if "worker_last_seen" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN worker_last_seen TEXT NOT NULL DEFAULT ''")
+            if "cleanup_pending" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN cleanup_pending INTEGER NOT NULL DEFAULT 0")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_material_jobs_queue ON material_jobs(status, priority, created_at)")
     finally:
         conn.close()
@@ -1159,7 +1691,9 @@ def _material_job_row_to_dict(row, include_payload=False):
     r["sourceSha256"] = r.pop("source_sha256", "") or ""
     r["sourceBytes"] = int(r.pop("source_bytes", 0) or 0)
     r["workerId"] = r.pop("worker_id", "") or ""
-    r["originalName"] = str((r.get("payload") or {}).get("originalName", "") or "")
+    r["stagingBackend"] = r.pop("staging_backend", "local") or "local"
+    r["stagingKey"] = r.pop("staging_key", "") or ""
+    r["originalName"] = r.pop("original_name", "") or str((r.get("payload") or {}).get("originalName", "") or "")
     r["title"] = str((r.get("payload") or {}).get("title", "") or "")
     r["progress"] = 0.0
     progress_id = str(r.get("id") or "")
@@ -1181,25 +1715,26 @@ def _material_job_row_to_dict(row, include_payload=False):
     if not include_payload:
         r.pop("payload", None)
         r.pop("staging_path", None)
+        r.pop("staging_key", None)
     else:
         r["stagingPath"] = r.pop("staging_path", "")
     return r
 
 
-def create_material_job(*, job_id: str, payload: dict, staging_path: Path, source_sha256: str, source_bytes: int, material_id: str):
+def create_material_job(*, job_id: str, payload: dict, staging_backend: str, staging_key: str, staging_path: str = "", source_sha256: str, source_bytes: int, material_id: str, original_name: str = ""):
     now = _utc_now_iso()
     priority = _material_job_priority(source_bytes)
     conn, kind = _db_conn()
     try:
-        values = (job_id, "queued", priority, now, now, now, MATERIAL_JOB_MAX_ATTEMPTS, "等待背景處理", "教材已安全接收，可離開此頁；背景工作會繼續。", json.dumps(payload, ensure_ascii=False), str(staging_path), material_id, source_sha256, int(source_bytes or 0))
+        values = (job_id, "queued", priority, now, now, now, MATERIAL_JOB_MAX_ATTEMPTS, "等待背景處理", "教材已安全接收，可離開此頁；獨立背景 Worker 會繼續。", json.dumps(payload, ensure_ascii=False), str(staging_path or ""), staging_backend, staging_key, original_name, material_id, source_sha256, int(source_bytes or 0))
         if kind == "postgres":
             conn.execute("""INSERT INTO material_jobs
-                (id,status,priority,created_at,updated_at,available_at,max_attempts,stage,detail,payload,staging_path,material_id,source_sha256,source_bytes)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)""", values)
+                (id,status,priority,created_at,updated_at,available_at,max_attempts,stage,detail,payload,staging_path,staging_backend,staging_key,original_name,material_id,source_sha256,source_bytes)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s)""", values)
         else:
             conn.execute("""INSERT INTO material_jobs
-                (id,status,priority,created_at,updated_at,available_at,max_attempts,stage,detail,payload,staging_path,material_id,source_sha256,source_bytes)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", values)
+                (id,status,priority,created_at,updated_at,available_at,max_attempts,stage,detail,payload,staging_path,staging_backend,staging_key,original_name,material_id,source_sha256,source_bytes)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", values)
     finally:
         conn.close()
 
@@ -1224,7 +1759,7 @@ def list_material_jobs(limit=30):
 
 
 def _update_material_job(job_id: str, **fields):
-    allowed = {"status","updated_at","available_at","started_at","finished_at","attempts","stage","detail","material_id","error","result","worker_id","cancel_requested"}
+    allowed = {"status","updated_at","available_at","started_at","finished_at","attempts","stage","detail","material_id","error","result","worker_id","cancel_requested","staging_path","staging_key","worker_last_seen","cleanup_pending"}
     clean = {k:v for k,v in fields.items() if k in allowed}
     if not clean:
         return
@@ -1289,16 +1824,16 @@ def claim_next_material_job(worker_id: str):
 
 
 def recover_stale_material_jobs():
-    """Worker / Render 重啟後，把超時 processing 工作放回佇列；原始檔仍在 staging 就不必重新上傳。"""
+    """Recover stale jobs if their shared staging object is still available."""
     threshold = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=MATERIAL_JOB_STALE_SECONDS)).isoformat()
     now = _utc_now_iso()
     conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
     try:
-        rows = conn.execute(f"SELECT id,staging_path FROM material_jobs WHERE status='processing' AND updated_at < {ph}", (threshold,)).fetchall()
+        rows = conn.execute(f"SELECT id,staging_path,staging_backend,staging_key FROM material_jobs WHERE status='processing' AND updated_at < {ph}", (threshold,)).fetchall()
         recovered = 0
         for row in rows:
             rr = dict(row)
-            if Path(rr.get("staging_path") or "").exists():
+            if material_job_staging_exists(rr):
                 conn.execute(f"UPDATE material_jobs SET status='queued', available_at={ph}, updated_at={ph}, stage='重新排隊', detail='偵測到前次 Worker 中斷，已自動續接', worker_id='' WHERE id={ph}", (now, now, rr["id"]))
                 recovered += 1
             else:
@@ -1309,17 +1844,169 @@ def recover_stale_material_jobs():
 
 
 def cleanup_material_job_staging():
-    cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=MATERIAL_JOB_RETENTION_HOURS)).isoformat()
     conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
     try:
-        rows = conn.execute(f"SELECT id,staging_path,status FROM material_jobs WHERE updated_at < {ph} AND status IN ('completed','cancelled','failed')", (cutoff,)).fetchall()
+        rows = conn.execute("SELECT id,staging_path,staging_backend,staging_key,status,updated_at,cleanup_pending FROM material_jobs WHERE status IN ('completed','cancelled','failed')").fetchall()
         for row in rows:
-            rr = dict(row); path = Path(rr.get("staging_path") or "")
-            root = path.parent if path.name else path
-            if root.exists() and MATERIAL_JOB_DIR in root.parents:
-                shutil.rmtree(root, ignore_errors=True)
+            rr = dict(row)
+            retention = R2_STAGING_FAILED_RETENTION_HOURS if rr.get("status") == "failed" else MATERIAL_JOB_RETENTION_HOURS
+            updated = _r2_parse_time(rr.get("updated_at"))
+            due = bool(updated and updated <= datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=retention))
+            if not due and not bool(rr.get("cleanup_pending")):
+                continue
+            try:
+                delete_material_job_staging(rr)
+            except Exception:
+                conn.execute(f"UPDATE material_jobs SET cleanup_pending={ph}, updated_at={ph} WHERE id={ph}", (True if kind == "postgres" else 1, _utc_now_iso(), rr["id"]))
+                continue
+            conn.execute(f"UPDATE material_jobs SET staging_path='', staging_key='', cleanup_pending={ph}, updated_at={ph} WHERE id={ph}", (False if kind == "postgres" else 0, _utc_now_iso(), rr["id"]))
     finally:
         conn.close()
+
+
+def material_job_operations_status():
+    """Admin-only aggregate operational state; no paths, keys or credentials."""
+    conn, kind = _db_conn()
+    try:
+        rows = conn.execute("SELECT status, COUNT(*) AS count, MIN(created_at) AS oldest FROM material_jobs GROUP BY status").fetchall()
+        by_status = {str(dict(row).get("status") or ""): dict(row) for row in rows}
+        pending = sum(int((by_status.get(s) or {}).get("count") or 0) for s in ("queued", "retry_wait"))
+        processing = int((by_status.get("processing") or {}).get("count") or 0)
+        failed = int((by_status.get("failed") or {}).get("count") or 0)
+        oldest = min((str((by_status.get(s) or {}).get("oldest") or "") for s in ("queued", "retry_wait") if (by_status.get(s) or {}).get("oldest")), default="")
+        oldest_age = 0
+        if oldest:
+            try:
+                parsed = datetime.datetime.fromisoformat(oldest.replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+                oldest_age = max(0, int((datetime.datetime.now(datetime.timezone.utc) - parsed).total_seconds()))
+            except (TypeError, ValueError):
+                oldest_age = 0
+        workers = []
+        try:
+            heartbeat_rows = conn.execute("SELECT worker_id,last_seen,capabilities,current_job_id FROM material_worker_heartbeats ORDER BY last_seen DESC LIMIT 50").fetchall()
+            cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=120)
+            for row in heartbeat_rows:
+                item = dict(row); last_seen = str(item.get("last_seen") or "")
+                try:
+                    seen = datetime.datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+                    online = seen >= cutoff
+                except (TypeError, ValueError): online = False
+                raw_capabilities = item.get("capabilities") or {}
+                try:
+                    capabilities = json.loads(raw_capabilities) if isinstance(raw_capabilities, str) else dict(raw_capabilities)
+                except (TypeError, ValueError):
+                    capabilities = {}
+                workers.append({"workerId": str(item.get("worker_id") or ""), "lastSeen": last_seen, "currentJobId": str(item.get("current_job_id") or ""), "status": "busy" if online and item.get("current_job_id") else ("online" if online else "offline"), "ffmpeg": bool((capabilities.get("ffmpeg") or {}).get("available")), "libreOffice": bool((capabilities.get("libreOffice") or {}).get("available"))})
+        except Exception:
+            workers = []
+        return {
+            "backgroundJobsEnabled": MATERIAL_BACKGROUND_JOBS,
+            "workerEnabled": MATERIAL_WORKER_ENABLED,
+            "pendingJobs": pending,
+            "processingJobs": processing,
+            "retryJobs": int((by_status.get("retry_wait") or {}).get("count") or 0),
+            "failedJobs": failed,
+            "oldestPendingAt": oldest,
+            "oldestPendingAgeSeconds": oldest_age,
+            "workers": workers,
+            "staging": shared_staging_capability(),
+            "r2Budget": r2_budget_status(),
+        }
+    finally:
+        conn.close()
+
+
+def sync_media_processing_metadata(job: dict, status: str, failure_reason: str = ""):
+    """Keep 0067 media rows as read-only metadata linked to material_jobs.
+
+    This is deliberately not a second queue: claim/retry/ownership are always
+    implemented by material_jobs.
+    """
+    payload = dict(job.get("payload") or {})
+    original = str(job.get("originalName") or payload.get("originalName") or "")
+    if Path(original).suffix.lower() not in AI_VIDEO_EXT | AI_AUDIO_EXT:
+        return
+    job_id = str(job.get("id") or "")
+    material_id = str(job.get("materialId") or payload.get("materialId") or "")
+    if not job_id or not material_id:
+        return
+    now = _utc_now_iso()
+    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    try:
+        if kind == "postgres":
+            conn.execute(
+                "INSERT INTO media_processing_jobs(id,material_id,material_job_id,status,failure_reason,created_at,updated_at) VALUES(%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status,failure_reason=EXCLUDED.failure_reason,updated_at=EXCLUDED.updated_at",
+                (job_id, material_id, job_id, status, failure_reason[:1200], now, now),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO media_processing_jobs(id,material_id,material_job_id,status,failure_reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,failure_reason=excluded.failure_reason,updated_at=excluded.updated_at",
+                (job_id, material_id, job_id, status, failure_reason[:1200], now, now),
+            )
+    except Exception:
+        # Direct legacy app imports can run without the optional 0067 registry;
+        # queue correctness must never depend on reporting metadata.
+        pass
+    finally:
+        conn.close()
+
+
+def commit_material_job_result(job: dict, result: dict):
+    """Persist a Worker-produced material after ownership was verified by Web.
+
+    The worker can upload directly to MEGA/GDrive, but it never writes the
+    production database.  This function is deliberately invoked only by the
+    token-protected Web completion route.
+    """
+    payload = dict(job.get("payload") or {})
+    material_id = str(job.get("materialId") or payload.get("materialId") or "")
+    if not material_id:
+        raise ValueError("背景工作缺少 materialId。")
+    existing = get_material(material_id)
+    if existing:
+        return existing
+    backend = str(result.get("storageBackend") or "").lower()
+    if backend not in {"mega", "gdrive", "r2", "oci", "local"}:
+        raise ValueError("Worker 回報的儲存後端不合法。")
+    storage_key = str(result.get("storageKey") or "")[:1000]
+    if backend != "local" and not storage_key:
+        raise ValueError("Worker 回報缺少正式教材儲存位置。")
+    original = Path(payload.get("originalName") or job.get("originalName") or "untitled").name
+    source_name = Path(str(result.get("storageFilename") or f"source{Path(original).suffix.lower()}")).name
+    try:
+        page_count = max(0, min(10000, int(result.get("pageCount", 0) or 0)))
+    except (TypeError, ValueError):
+        page_count = 0
+    storage_meta = result.get("storageMeta") if isinstance(result.get("storageMeta"), dict) else {}
+    entry = {
+        "id": material_id, "filename": original,
+        "title": str(payload.get("title") or original)[:255],
+        "description": str(payload.get("desc") or "管理者上傳之教育訓練補充教材")[:1000],
+        "category": str(payload.get("category") or "")[:100],
+        "group_key": normalize_group(payload.get("group", DEFAULT_GROUP)),
+        "training_area": normalize_area(payload.get("area", DEFAULT_TRAINING_AREA)),
+        "course_id": str(payload.get("courseId") or "")[:100],
+        "folder": material_id, "page_count": page_count,
+        "date_added": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "storage_filename": source_name, "storage_backend": backend,
+        "storage_key": storage_key, "slides_prefix": str(result.get("slidesPrefix") or "")[:1000],
+        "storage_meta": json.dumps(storage_meta, ensure_ascii=False),
+        "material_type": str(payload.get("materialType") or "standard")[:40],
+        "atlas_meta": json.dumps(result.get("atlasMeta") if isinstance(result.get("atlasMeta"), dict) else {}, ensure_ascii=False),
+        "active": True,
+    }
+    conn, kind = _db_conn()
+    try:
+        vals = tuple(entry[k] for k in ("id", "filename", "title", "description", "category", "group_key", "training_area", "course_id", "folder", "page_count", "date_added", "storage_filename", "storage_backend", "storage_key", "slides_prefix", "storage_meta", "material_type", "atlas_meta", "active"))
+        if kind == "postgres":
+            conn.execute("INSERT INTO materials (id,filename,title,description,category,group_key,training_area,course_id,folder,page_count,date_added,storage_filename,storage_backend,storage_key,slides_prefix,storage_meta,material_type,atlas_meta,active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(id) DO NOTHING", vals)
+        else:
+            conn.execute("INSERT OR IGNORE INTO materials (id,filename,title,description,category,group_key,training_area,course_id,folder,page_count,date_added,storage_filename,storage_backend,storage_key,slides_prefix,storage_meta,material_type,atlas_meta,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", vals)
+    finally:
+        conn.close()
+    return get_material(material_id) or entry
 
 
 def init_exam_db():
@@ -1421,8 +2108,13 @@ def _record_to_dict(row):
 
 def require_admin():
     supplied = request.headers.get("X-Admin-Key", "")
-    if not ADMIN_KEY or supplied != ADMIN_KEY:
-        return jsonify({"error": "未授權。請提供正確的管理者金鑰 ADMIN_KEY。"}), 401
+    if ADMIN_KEY and supplied == ADMIN_KEY:
+        return None
+    user = _current_user()
+    if not user:
+        return jsonify({"error": "請先以管理者帳號登入，或提供正確的 ADMIN_KEY。", "loginRequired": True}), 401
+    if not (has_permission(user, "user.manage") or has_permission(user, "system.manage")):
+        return jsonify({"error": "權限不足：此功能限教學管理者使用。"}), 403
     return None
 
 
@@ -1696,11 +2388,11 @@ def material_row_to_dict(row):
 
 
 def list_uploaded_materials(include_inactive=False):
-    conn, _ = _db_conn()
+    conn, kind = _db_conn()
     try:
         sql = "SELECT * FROM materials"
         if not include_inactive:
-            sql += " WHERE active = " + ("TRUE" if DATABASE_URL else "1")
+            sql += " WHERE active = " + ("TRUE" if kind == "postgres" else "1")
         sql += " ORDER BY date_added DESC"
         return [material_row_to_dict(r) for r in conn.execute(sql).fetchall()]
     finally:
@@ -1863,17 +2555,24 @@ def init_user_accounts_db():
         conn.close()
 
 
-def _normalize_username(value):
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_normalize_username(value):
     return re.sub(r"[^a-z0-9._-]", "", str(value or "").strip().lower())[:64]
 
 
-def _user_public(row):
+def _normalize_username(value):
+    return auth_service.normalize_username(value)
+
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_user_public(row):
     d = dict(row)
     return {
         "username": str(d.get("username", "")),
         "name": str(d.get("display_name", "")),
         "empId": str(d.get("emp_id", "")),
-        "role": str(d.get("role", "learner")),
+        "role": normalize_role(d.get("role", "student")),
+        "legacyRole": str(d.get("role", "")) if str(d.get("role", "")) in LEGACY_ROLE_ALIASES else "",
         "preferredArea": normalize_area(d.get("preferred_area", DEFAULT_TRAINING_AREA)),
         "preferredGroup": normalize_group(d.get("preferred_group", DEFAULT_GROUP)),
         "active": bool(d.get("active", True)),
@@ -1883,7 +2582,12 @@ def _user_public(row):
     }
 
 
-def _current_user():
+def _user_public(row):
+    return auth_service.public_user(sys.modules[__name__], row)
+
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_current_user():
     username = _normalize_username(session.get("username", ""))
     if not username:
         return None
@@ -1901,6 +2605,14 @@ def _current_user():
     return _user_public(row)
 
 
+def _current_user():
+    return auth_service.current_user(
+        sys.modules[__name__],
+        session,
+        include_roles=True,
+    )
+
+
 def login_required(api=True):
     def decorator(fn):
         @wraps(fn)
@@ -1916,17 +2628,43 @@ def login_required(api=True):
     return decorator
 
 
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_require_roles(*allowed_roles):
+    """Return the authenticated user or an error response for RBAC checks."""
+    user = _current_user()
+    if not user:
+        return None, (jsonify({"error": "請先登入後再執行此操作。", "loginRequired": True}), 401)
+    normalized_allowed = {normalize_role(role) for role in allowed_roles}
+    if normalize_role(user.get("role")) not in normalized_allowed:
+        labels = {"student": "學員", "clinical_teacher": "臨床教師", "group_leader": "組長", "education_admin": "教學管理者", "system_admin": "系統管理者", "auditor": "稽核／唯讀"}
+        expected = "、".join(labels.get(role, role) for role in normalized_allowed)
+        return None, (jsonify({"error": f"權限不足：此操作限{expected}使用。"}), 403)
+    return user, None
+
+
+def require_roles(*allowed_roles):
+    return auth_routes.require_roles(_current_user(), *allowed_roles)
+
+
 init_user_accounts_db()
+
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_api_auth_me():
+    # Retained legacy path must keep the exact pre-6.6 response contract.
+    # Internal _current_user() intentionally includes roles[] for RBAC,
+    # while the legacy compatibility endpoint must not expose that field.
+    user = _legacy_current_user()
+    return jsonify({"authenticated": bool(user), "user": user})
 
 
 @app.get("/api/auth/me")
 def api_auth_me():
-    user = _current_user()
-    return jsonify({"authenticated": bool(user), "user": user})
+    return auth_routes.me(sys.modules[__name__])
 
 
-@app.post("/api/auth/login")
-def api_auth_login():
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_api_auth_login():
     data = request.get_json(silent=True) or {}
     username = _normalize_username(data.get("username"))
     password = str(data.get("password", ""))
@@ -1948,10 +2686,20 @@ def api_auth_login():
     return jsonify({"ok": True, "user": _user_public(raw)})
 
 
-@app.post("/api/auth/logout")
-def api_auth_logout():
+@app.post("/api/auth/login")
+def api_auth_login():
+    return auth_routes.login(sys.modules[__name__])
+
+
+# Retained pre-extraction implementation for compatibility verification.
+def _legacy_api_auth_logout():
     session.clear()
     return jsonify({"ok": True})
+
+
+@app.post("/api/auth/logout")
+def api_auth_logout():
+    return auth_routes.logout()
 
 
 @app.get("/api/users")
@@ -1975,10 +2723,12 @@ def api_user_create():
     password = str(data.get("password", ""))
     name = str(data.get("name", "")).strip()[:100]
     emp_id = str(data.get("empId", "")).strip()[:100]
-    role = str(data.get("role", "learner")).strip().lower()
-    if len(username) < 3 or len(password) < 8 or not name or not emp_id:
-        return jsonify({"error": "帳號至少 3 碼、密碼至少 8 碼，姓名與工號皆為必填。"}), 400
-    if role not in {"learner", "teacher", "manager"}: role = "learner"
+    requested_role = str(data.get("role", "student")).strip().lower()
+    if len(username) < 3 or len(password) < 4 or not name or not emp_id:
+        return jsonify({"error": "帳號至少 3 碼、密碼至少 4 碼，姓名與工號皆為必填。"}), 400
+    if requested_role not in CANONICAL_ROLES and requested_role not in LEGACY_ROLE_ALIASES:
+        return jsonify({"error": "角色格式不正確。"}), 400
+    role = normalize_role(requested_role)
     area = normalize_area(data.get("preferredArea", DEFAULT_TRAINING_AREA))
     group = normalize_group(data.get("preferredGroup", DEFAULT_GROUP))
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -2010,7 +2760,9 @@ def api_user_update(username):
         for key, column in mapping.items():
             if key not in data: continue
             value = str(data.get(key, "")).strip()[:100]
-            if key == "role" and value not in {"learner", "teacher", "manager"}: return jsonify({"error": "角色格式不正確。"}), 400
+            if key == "role":
+                if value not in CANONICAL_ROLES and value not in LEGACY_ROLE_ALIASES: return jsonify({"error": "角色格式不正確。"}), 400
+                value = normalize_role(value)
             if key == "preferredArea": value = normalize_area(value)
             if key == "preferredGroup": value = normalize_group(value)
             if key in {"name", "empId"} and not value: return jsonify({"error": "姓名與工號不可空白。"}), 400
@@ -2022,7 +2774,7 @@ def api_user_update(username):
             if not active: fields.append("session_version=session_version+1")
         password = str(data.get("password", ""))
         if password:
-            if len(password) < 8: return jsonify({"error": "新密碼至少 8 碼。"}), 400
+            if len(password) < 4: return jsonify({"error": "新密碼至少 4 碼。"}), 400
             fields.extend([f"password_hash={ph}", "session_version=session_version+1"]); values.append(generate_password_hash(password))
         if not fields: return jsonify({"error": "沒有可更新的欄位。"}), 400
         fields.append(f"updated_at={ph}"); values.append(datetime.datetime.now(datetime.timezone.utc).isoformat()); values.append(username)
@@ -2954,22 +3706,32 @@ def view_material(material_id):
     return send_file(path, as_attachment=False, download_name=entry["filename"])
 
 
-def _is_storage_full_error(exc):
+def _is_mega_capacity_full_error(exc):
     msg = str(exc or "").lower()
-    return any(x in msg for x in ("免費模式已鎖定", "超過網站硬上限", "storage full", "quota exceeded", "insufficient storage"))
+    return any(x in msg for x in (
+        "免費模式已鎖定", "超過網站硬上限", "storage full", "storage is full",
+        "quota exceeded", "over quota", "overquota", "insufficient storage",
+        "not enough storage", "out of storage", "storage quota",
+    ))
+
+
+def _is_storage_full_error(exc):
+    """Compatibility alias for the MEGA-only capacity classifier."""
+    return _is_mega_capacity_full_error(exc)
+
+
+def _mega_gdrive_failover_ready():
+    """GDrive is the sole opt-in fallback, and only for MEGA capacity events."""
+    if not STORAGE_FAILOVER_ON_FULL or STORAGE_FALLBACK_BACKEND != "gdrive":
+        return ""
+    if gdrive_is_configured():
+        return "gdrive"
+    return ""
 
 
 def _fallback_backend_ready():
-    if not STORAGE_FAILOVER_ON_FULL:
-        return ""
-    fb = STORAGE_FALLBACK_BACKEND
-    if fb == "gdrive" and gdrive_is_configured():
-        return "gdrive"
-    if fb == "r2" and r2_is_configured():
-        return "r2"
-    if fb == "oci" and oci_is_configured():
-        return "oci"
-    return ""
+    """Compatibility name retained for the storage-status response."""
+    return _mega_gdrive_failover_ready()
 
 
 
@@ -3124,7 +3886,21 @@ def api_list_material_jobs():
         limit = int(request.args.get("limit", 30) or 30)
     except Exception:
         limit = 30
-    return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS})
+    cleanup_r2_budget_state()
+    ops = material_job_operations_status()
+    return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS, "workerEnabled": MATERIAL_WORKER_ENABLED, "queueBackend": "material_jobs", "staging": shared_staging_capability(), "workers": ops.get("workers", []), "pendingJobs": ops.get("pendingJobs", 0), "processingJobs": ops.get("processingJobs", 0), "retryJobs": ops.get("retryJobs", 0), "failedJobs": ops.get("failedJobs", 0), "r2Budget": ops.get("r2Budget", {})})
+
+
+@app.get("/api/admin/background-jobs/status")
+def api_background_jobs_status():
+    denied = require_admin()
+    if denied:
+        return denied
+    from media_processing_67 import ffmpeg_capability, libreoffice_capability
+    cleanup_r2_budget_state()
+    data = material_job_operations_status()
+    data.update({"queueBackend": "material_jobs", "ffmpeg": ffmpeg_capability(), "libreOffice": libreoffice_capability(SOFFICE_BIN)})
+    return jsonify(data)
 
 
 @app.get("/api/material-jobs/<job_id>")
@@ -3156,35 +3932,48 @@ def api_enqueue_material_job():
 
     job_id = f"matjob-{uuid.uuid4().hex[:16]}"
     material_id = "upload-" + hashlib.sha256(job_id.encode("utf-8")).hexdigest()[:12]
-    job_dir = MATERIAL_JOB_DIR / job_id
-    job_dir.mkdir(parents=True, exist_ok=True)
-    staged = job_dir / f"source{ext}"
+    staging_record = None
     try:
-        file.save(str(staged))
-        source_bytes = staged.stat().st_size
-        if source_bytes <= 0:
-            raise ValueError("教材檔案為空白檔案")
-        source_sha256 = _sha256_file(staged)
-        payload = {
-            "originalName": original_name,
-            "title": request.form.get("title", "").strip()[:255],
-            "desc": request.form.get("desc", "").strip()[:1000],
-            "category": request.form.get("category", "").strip()[:100],
-            "group": normalize_group(request.form.get("group", DEFAULT_GROUP)),
-            "area": normalize_area(request.form.get("area", DEFAULT_TRAINING_AREA)),
-            "courseId": request.form.get("courseId", "").strip()[:100],
-            "materialType": request.form.get("materialType", "standard").strip().lower(),
-            "atlasCategory": request.form.get("atlasCategory", "").strip()[:120],
-            "atlasMagnification": request.form.get("atlasMagnification", "").strip()[:80],
-            "atlasInterpretation": request.form.get("atlasInterpretation", "").strip()[:1000],
-            "atlasClinical": request.form.get("atlasClinical", "").strip()[:1000],
-            "atlasDifferential": request.form.get("atlasDifferential", "").strip()[:1000],
-            "atlasNormality": request.form.get("atlasNormality", "").strip()[:40],
-            "atlasTags": request.form.get("atlasTags", "").strip()[:300],
-            "materialId": material_id,
-            "sourceSha256": source_sha256,
-        }
-        create_material_job(job_id=job_id, payload=payload, staging_path=staged, source_sha256=source_sha256, source_bytes=source_bytes, material_id=material_id)
+        # The Web process owns this temporary receiving file only until it has
+        # been copied to Shared Staging.  It is never a cross-service hand-off.
+        with tempfile.TemporaryDirectory(prefix="teacher-material-upload-") as temp_dir:
+            staged = Path(temp_dir) / f"source{ext}"
+            file.save(str(staged))
+            source_bytes = staged.stat().st_size
+            if source_bytes <= 0:
+                raise ValueError("教材檔案為空白檔案")
+            if source_bytes > MAX_UPLOAD_MB * 1024 * 1024:
+                raise ValueError("教材檔案超過上傳大小限制。")
+            source_sha256 = _sha256_file(staged)
+            payload = {
+                "originalName": original_name,
+                "sourceMime": _content_type_for(original_name),
+                "title": request.form.get("title", "").strip()[:255],
+                "desc": request.form.get("desc", "").strip()[:1000],
+                "category": request.form.get("category", "").strip()[:100],
+                "group": normalize_group(request.form.get("group", DEFAULT_GROUP)),
+                "area": normalize_area(request.form.get("area", DEFAULT_TRAINING_AREA)),
+                "courseId": request.form.get("courseId", "").strip()[:100],
+                "materialType": request.form.get("materialType", "standard").strip().lower(),
+                "atlasCategory": request.form.get("atlasCategory", "").strip()[:120],
+                "atlasMagnification": request.form.get("atlasMagnification", "").strip()[:80],
+                "atlasInterpretation": request.form.get("atlasInterpretation", "").strip()[:1000],
+                "atlasClinical": request.form.get("atlasClinical", "").strip()[:1000],
+                "atlasDifferential": request.form.get("atlasDifferential", "").strip()[:1000],
+                "atlasNormality": request.form.get("atlasNormality", "").strip()[:40],
+                "atlasTags": request.form.get("atlasTags", "").strip()[:300],
+                "materialId": material_id,
+                "sourceSha256": source_sha256,
+            }
+            staging_backend, staging_key, staging_path = upload_material_job_staging(staged, job_id, original_name)
+            staging_record = {"stagingBackend": staging_backend, "stagingKey": staging_key, "stagingPath": staging_path}
+            try:
+                create_material_job(job_id=job_id, payload=payload, staging_backend=staging_backend, staging_key=staging_key, staging_path=staging_path, source_sha256=source_sha256, source_bytes=source_bytes, material_id=material_id, original_name=original_name)
+                sync_media_processing_metadata({"id": job_id, "materialId": material_id, "originalName": original_name, "payload": payload}, "queued")
+            except Exception:
+                delete_material_job_staging(staging_record)
+                staging_record = None
+                raise
         clear_upload_progress(job_id)
         set_upload_progress(job_id, 9, "已加入背景佇列", "教材已安全接收，可離開此頁；背景 Worker 將自動轉檔、最佳化並送往雲端。")
         return jsonify({
@@ -3198,7 +3987,8 @@ def api_enqueue_material_job():
             "message": "教材已安全接收並加入背景佇列，可離開此頁。",
         }), 202
     except Exception as e:
-        shutil.rmtree(job_dir, ignore_errors=True)
+        if staging_record:
+            delete_material_job_staging(staging_record)
         return jsonify({"error": f"教材排隊失敗：{e}"}), 400
 
 
@@ -3212,8 +4002,7 @@ def api_retry_material_job(job_id):
         return jsonify({"error": "找不到此背景教材工作"}), 404
     if job.get("status") not in {"failed", "cancelled"}:
         return jsonify({"error": "只有失敗或已取消的工作可以重新處理"}), 409
-    staging = Path(job.get("stagingPath") or "")
-    if not staging.exists():
+    if not material_job_staging_exists(job):
         return jsonify({"error": "暫存原始檔已過期或不存在，請重新上傳教材。"}), 410
     now = _utc_now_iso()
     clear_upload_progress(job_id)
@@ -3377,7 +4166,7 @@ def api_upload_slide():
             elif backend == "r2":
                 storage_key, slides_prefix = upload_material_tree_to_r2(slide_id, saved_path, out_folder, page_count)
         except Exception as primary_error:
-            fallback = _fallback_backend_ready() if backend == "mega" and _is_storage_full_error(primary_error) else ""
+            fallback = _mega_gdrive_failover_ready() if backend == "mega" and _is_mega_capacity_full_error(primary_error) else ""
             if not fallback:
                 raise
             # 備援後端仍沿用舊逐頁介面；只有真的 failover 才額外產生頁面，正常 MEGA 路徑不付出這筆成本。
@@ -5308,6 +6097,168 @@ def api_create_quiz_question():
             try: indices.append(int(x))
             except Exception: pass
         answer_config["correctIndices"] = sorted(set(indices))
+    # Teacher 6.6 M4:
+    # Optional learning-review navigation is stored inside answer_config
+    # for backward-compatible persistence, but exam attempt projection
+    # keeps it hidden until the attempt is submitted.
+    review_source = answer_config.get("reviewSource")
+
+    if isinstance(review_source, dict):
+        clean_review_source = {}
+
+        material_id = str(
+            review_source.get(
+                "materialId",
+                "",
+            )
+            or ""
+        ).strip()[:200]
+
+        material_title = str(
+            review_source.get(
+                "materialTitle",
+                "",
+            )
+            or ""
+        ).strip()[:500]
+
+        section = str(
+            review_source.get(
+                "section",
+                "",
+            )
+            or ""
+        ).strip()[:1000]
+
+        review_hint = str(
+            review_source.get(
+                "reviewHint",
+                "",
+            )
+            or ""
+        ).strip()[:2000]
+
+
+        region_hint = str(
+            review_source.get(
+                "regionHint",
+                "",
+            )
+            or ""
+        ).strip()[:1000]
+
+        anchor_type = str(
+            review_source.get(
+                "anchorType",
+                "",
+            )
+            or ""
+        ).strip().lower()[:20]
+
+        if anchor_type not in {
+            "page",
+            "time",
+            "region",
+            "section",
+        }:
+            anchor_type = ""
+
+        try:
+            time_seconds = float(
+                review_source.get(
+                    "timeSeconds",
+                    0,
+                )
+                or 0
+            )
+        except Exception:
+            time_seconds = 0.0
+
+        time_seconds = max(
+            0.0,
+            min(
+                86400.0,
+                time_seconds,
+            ),
+        )
+
+        try:
+            page = int(
+                review_source.get(
+                    "page",
+                    0,
+                )
+                or 0
+            )
+        except Exception:
+            page = 0
+
+        page = max(
+            0,
+            min(
+                100000,
+                page,
+            ),
+        )
+
+        if material_id:
+            clean_review_source[
+                "materialId"
+            ] = material_id
+
+        if material_title:
+            clean_review_source[
+                "materialTitle"
+            ] = material_title
+
+
+        if anchor_type:
+            clean_review_source[
+                "anchorType"
+            ] = anchor_type
+
+        if page:
+            clean_review_source[
+                "page"
+            ] = page
+
+
+        if time_seconds:
+            clean_review_source[
+                "timeSeconds"
+            ] = time_seconds
+
+        if region_hint:
+            clean_review_source[
+                "regionHint"
+            ] = region_hint
+
+        if section:
+            clean_review_source[
+                "section"
+            ] = section
+
+        if review_hint:
+            clean_review_source[
+                "reviewHint"
+            ] = review_hint
+
+        if clean_review_source:
+            answer_config[
+                "reviewSource"
+            ] = clean_review_source
+        else:
+            answer_config.pop(
+                "reviewSource",
+                None,
+            )
+
+    else:
+        answer_config.pop(
+            "reviewSource",
+            None,
+        )
+
     if question_type == "fill":
         answer_config["acceptedAnswers"] = [str(x).strip() for x in answer_config.get("acceptedAnswers", []) if str(x).strip()][:20]
         answer_config["caseSensitive"] = bool(answer_config.get("caseSensitive", False))
@@ -6415,21 +7366,40 @@ def api_clear_records():
 
 
 # ---------------------------------------------------------------------------
-# V5.3.24：PGY 評量中心（六大核心能力 / DOPS / Ad-hoc / EPA / 學習評量）
+# V6.0.0：第三階段 PGY 評量中心（依正式評核代碼分類）
 # ---------------------------------------------------------------------------
 PGY_ASSESSMENT_TYPES = {
-    "core6": "六大核心能力檢核表",
     "dops": "DOPS 直接觀察操作技能評量",
-    "adhoc": "Ad-hoc 即時評量表",
-    "epa": "EPA 可信賴專業活動即時評估",
-    "learning": "PGY 學習評量表",
+    "mini_cex": "MINI-CEX 臨床能力評估",
+    "cbd": "CBD 案例討論",
+    "checklist": "CHECKLIST 技能查核表",
+    "qc": "QC 品管案例",
+    "feedback360": "360 度評量",
+    "report": "REPORT 學習報告",
+    "qi": "QI 品質改善專案",
+    "reflection": "REFLECTION 反思紀錄",
+    "attendance": "ATTENDANCE 課程完成",
+    # 舊代碼保留讀取與既有紀錄相容性，不再顯示於新版建立介面。
+    "core6": "六大核心能力檢核表（舊版）",
+    "adhoc": "Ad-hoc 即時評量表（舊版）",
+    "epa": "EPA 可信賴專業活動即時評估（舊版）",
+    "learning": "PGY 學習評量表（舊版）",
 }
 TSLM_EPA_REFERENCE_URL = "https://www.labmed.org.tw/upfiles/file/20240119/20240119172950815081.pdf"
 
 # V5.6.1：教師評核必須完成每一項評分。前後端各自檢查，避免繞過瀏覽器直接送入不完整紀錄。
 PGY_ASSESSMENT_ITEMS = {
-    "core6": ["病人／檢驗照護", "醫學與檢驗專業知識", "從工作中學習及成長", "人際與溝通技巧", "專業素養", "制度下之臨床工作"],
     "dops": ["操作前準備與身分確認", "技術步驟與熟練度", "安全與感染管制", "檢體／設備品質管理", "溝通與專業態度", "整體操作能力"],
+    "mini_cex": ["臨床任務與準備", "專業知識與判斷", "溝通與說明", "病人安全與專業態度", "整體臨床能力"],
+    "cbd": ["案例摘要與問題辨識", "檢驗數據判讀", "鑑別與臨床連結", "處置或追蹤建議", "討論與反思"],
+    "checklist": ["操作前準備", "病人／檢體識別", "SOP 步驟執行", "品質與安全確認", "操作後處理與紀錄"],
+    "qc": ["品管資料檢視", "管制規則判斷", "異常原因分析", "矯正措施", "後續監測與紀錄"],
+    "feedback360": ["團隊合作", "跨專業溝通", "尊重與同理", "責任感與可靠度", "專業態度"],
+    "report": ["主題與問題定義", "資料與文獻運用", "分析與論證", "結論與應用", "書面／口頭表達"],
+    "qi": ["問題辨識", "根本原因分析", "改善方案設計", "執行與團隊協作", "成效衡量與維持"],
+    "reflection": ["事件描述", "倫理與全人觀點", "自我覺察", "學習重點", "後續行動"],
+    "attendance": ["課前準備", "出席與參與", "課程任務完成", "重點理解", "學習應用"],
+    "core6": ["病人／檢驗照護", "醫學與檢驗專業知識", "從工作中學習及成長", "人際與溝通技巧", "專業素養", "制度下之臨床工作"],
     "adhoc": ["任務準備", "任務執行", "結果確認／後處置"],
     "epa": ["OPA / 任務一", "OPA / 任務二", "OPA / 任務三"],
     "learning": ["學習態度與主動性", "專業知識與技能", "工作品質與病人安全", "團隊合作與溝通", "時間管理與責任感", "反思與持續改善"],
@@ -6572,7 +7542,7 @@ def _store_pgy_template(local_path: Path, template_type: str, filename: str):
     try:
         return backend,do_store(backend)
     except Exception as exc:
-        fb=_fallback_backend_ready() if _is_storage_full_error(exc) else ''
+        fb=_mega_gdrive_failover_ready() if backend == 'mega' and _is_mega_capacity_full_error(exc) else ''
         if fb: return fb,do_store(fb)
         raise
 
@@ -6674,15 +7644,19 @@ def api_delete_pgy_assessment_template(template_type):
     return jsonify({'ok':True})
 
 @app.post('/api/pgy-assessments')
-@login_required()
 def api_create_pgy_assessment():
+    user, denied = require_roles('clinical_teacher')
+    if denied: return denied
     data=request.get_json(silent=True) or {}
     typ=str(data.get('assessmentType','')).strip()
     if typ not in PGY_ASSESSMENT_TYPES:return jsonify({'error':'評量類型不正確'}),400
     name=str(data.get('name','')).strip()[:100]; emp=str(data.get('empId','')).strip()[:100]
-    evaluator=str(data.get('evaluatorName','')).strip()[:100]
+    # 評估者身分必須來自登入帳號，不接受前端自由冒用姓名或職稱。
+    evaluator=str(user.get('name','')).strip()[:100]
     if not name or not emp or not evaluator:return jsonify({'error':'請填寫受評者姓名、工號與評估者'}),400
     group=normalize_group(data.get('group',DEFAULT_GROUP)); details=data.get('details') or {}
+    if normalize_role(user.get('role')) == 'clinical_teacher' and group != normalize_group(user.get('preferredGroup')):
+        return jsonify({'error':'權限不足：臨床教師只能評核自己負責組別的學員。'}),403
     if not isinstance(details, dict):
         return jsonify({'error':'評核明細格式錯誤'}),400
     ratings=details.get('ratings') or []
@@ -6705,7 +7679,8 @@ def api_create_pgy_assessment():
     score=sum(x['rating'] for x in details['ratings'])/len(details['ratings']) if details.get('ratings') else 0
     conn,kind=_db_conn()
     try:
-        vals=(rec_id,now,typ,group,name,emp,evaluator,str(data.get('evaluatorTitle',''))[:100],date,title,json.dumps(details,ensure_ascii=False),comments,score,'completed')
+        evaluator_title='臨床教師'
+        vals=(rec_id,now,typ,group,name,emp,evaluator,evaluator_title,date,title,json.dumps(details,ensure_ascii=False),comments,score,'completed')
         if kind=='postgres': conn.execute('INSERT INTO pgy_assessments(id,created_at,assessment_type,group_key,name,emp_id,evaluator_name,evaluator_title,assessment_date,title,details,comments,overall_score,status) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s)',vals)
         else: conn.execute('INSERT INTO pgy_assessments(id,created_at,assessment_type,group_key,name,emp_id,evaluator_name,evaluator_title,assessment_date,title,details,comments,overall_score,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',vals)
     finally: conn.close()
@@ -6716,12 +7691,19 @@ def api_list_pgy_assessments():
     emp=str(request.args.get('emp_id','')).strip()
     admin=request.headers.get('X-Admin-Key','')==ADMIN_KEY and bool(ADMIN_KEY)
     user=_current_user()
-    if not admin:
-        if not user:return jsonify({'error':'請先登入後查看評量紀錄','loginRequired':True}),401
+    if not admin and not user:
+        return jsonify({'error':'請先登入後查看評量紀錄','loginRequired':True}),401
+    if not admin and normalize_role(user.get('role')) == 'student':
         emp=user['empId']
+    elif not admin and normalize_role(user.get('role')) in {'clinical_teacher', 'group_leader'}:
+        requested_group=normalize_group(request.args.get('group', user.get('preferredGroup')))
+        if requested_group != normalize_group(user.get('preferredGroup')):
+            return jsonify({'error':'權限不足：臨床教師只能查看自己負責組別的評量。'}),403
     conn,kind=_db_conn(); ph='%s' if kind=='postgres' else '?'
     try:
-        if emp: rows=conn.execute(f'SELECT * FROM pgy_assessments WHERE emp_id={ph} ORDER BY created_at DESC',(emp,)).fetchall()
+        if not admin and user and normalize_role(user.get('role')) in {'clinical_teacher', 'group_leader'}:
+            rows=conn.execute(f'SELECT * FROM pgy_assessments WHERE group_key={ph} ORDER BY created_at DESC',(normalize_group(user.get('preferredGroup')),)).fetchall()
+        elif emp: rows=conn.execute(f'SELECT * FROM pgy_assessments WHERE emp_id={ph} ORDER BY created_at DESC',(emp,)).fetchall()
         else: rows=conn.execute('SELECT * FROM pgy_assessments ORDER BY created_at DESC').fetchall()
         return jsonify([_assessment_row_to_dict(r) for r in rows])
     finally: conn.close()

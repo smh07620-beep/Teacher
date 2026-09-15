@@ -1,0 +1,16 @@
+/* V5.9.0 · 全站設計語彙 */
+:root{
+  --platform-ink:#17384a;
+  --platform-teal:#087b78;
+  --platform-teal-dark:#075b5c;
+  --platform-surface:#ffffff;
+  --platform-canvas:#f4f8fa;
+  --platform-line:#dce8ed;
+  --platform-muted:#647b88;
+  --platform-radius:18px;
+  --platform-shadow:0 14px 36px rgba(25,65,84,.10);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+button,a,input,select,textarea{font:inherit}
+:focus-visible{outline:3px solid rgba(8,123,120,.28);outline-offset:2px}
