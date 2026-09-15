@@ -258,6 +258,7 @@ def _external_interactive_media_68(conn, kind: str) -> None:
     conn.execute(f"CREATE TABLE IF NOT EXISTS external_media (id TEXT PRIMARY KEY,material_id TEXT NOT NULL,provider TEXT NOT NULL,canonical_url TEXT NOT NULL,video_id TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(material_id))")
     conn.execute(f"CREATE TABLE IF NOT EXISTS admin_elevations (username TEXT PRIMARY KEY,elevated_at TEXT NOT NULL,expires_at TEXT NOT NULL,session_version INTEGER NOT NULL DEFAULT 0)")
     conn.execute(f"CREATE TABLE IF NOT EXISTS exam_blueprints (id TEXT PRIMARY KEY,quiz_category_id TEXT NOT NULL,question_count INTEGER NOT NULL,quotas {payload} NOT NULL DEFAULT '{{}}',exclude_recent INTEGER NOT NULL DEFAULT 0,created_by TEXT NOT NULL,created_at TEXT NOT NULL)")
+    conn.execute(f"CREATE TABLE IF NOT EXISTS exam_blueprint_snapshots (id TEXT PRIMARY KEY,blueprint_id TEXT NOT NULL,quiz_category_id TEXT NOT NULL,questions {payload} NOT NULL,created_at TEXT NOT NULL,UNIQUE(blueprint_id))")
     conn.execute(f"CREATE TABLE IF NOT EXISTS question_attempt_analytics (question_id TEXT NOT NULL,attempt_id TEXT NOT NULL,selected_option TEXT NOT NULL DEFAULT '',is_correct {boolean} NOT NULL DEFAULT {default_false},created_at TEXT NOT NULL,PRIMARY KEY(question_id,attempt_id))")
 
 

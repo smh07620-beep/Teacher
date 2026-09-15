@@ -1,6 +1,6 @@
 """Question Bank 2.0 review, duplicate and blueprint APIs."""
 from __future__ import annotations
-import datetime as dt, hashlib, json, re, uuid
+import datetime as dt, hashlib, json, random, re, uuid
 from collections import Counter
 from flask import jsonify, request
 
@@ -19,6 +19,24 @@ def metadata(data):
     out["tags"]=data.get("tags",[])
     if not isinstance(out["tags"],list):raise ValueError("tags 格式錯誤")
     return out
+def _decode(value, fallback):
+    try:return json.loads(value) if isinstance(value,str) else value
+    except Exception:return fallback
+def _draw(rows, count, quotas):
+    """Draw server-side, meeting each requested metadata quota where possible."""
+    selected=[]; used=set()
+    for field in ("topic","difficulty","cognitive_level"):
+        requested=quotas.get(field,{})
+        if not isinstance(requested,dict):continue
+        for value, amount in requested.items():
+            candidates=[r for r in rows if str(r.get(field) or "")==str(value) and r["id"] not in used]
+            random.shuffle(candidates)
+            take=max(0,int(amount or 0))
+            if len(candidates)<take:raise ValueError(f"{field} quota 無足夠已審核題目：{value}")
+            for row in candidates[:take]:selected.append(row);used.add(row["id"])
+    remainder=[r for r in rows if r["id"] not in used];random.shuffle(remainder)
+    if len(selected)+len(remainder)<count:raise ValueError("已審核題目不足以建立 blueprint")
+    return selected+remainder[:count-len(selected)]
 def register_question_bank(base):
     app=base.app
     if app.extensions.get("teacher_question_bank_68_registered"):return app
@@ -73,5 +91,25 @@ def register_question_bank(base):
         n=len(rows)
         if n<10:return jsonify({"attemptCount":n,"sufficientData":False,"message":"資料不足"})
         vals=[dict(r) for r in rows];return jsonify({"attemptCount":n,"sufficientData":True,"correctRate":round(sum(bool(r["is_correct"]) for r in vals)/n,3),"optionSelectionCounts":dict(Counter(r["selected_option"] for r in vals))})
+    @app.post("/api/exam-blueprints/<blueprint_id>/publish")
+    def publish_blueprint(blueprint_id):
+        denied=permitted(base)
+        if denied:return denied
+        conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
+        try:
+            existing=conn.execute(f"SELECT id,questions,created_at FROM exam_blueprint_snapshots WHERE blueprint_id={ph}",(blueprint_id,)).fetchone()
+            if existing:
+                row=dict(existing);return jsonify({"id":row["id"],"blueprintId":blueprint_id,"questions":_decode(row["questions"],[]),"createdAt":row["created_at"],"immutable":True})
+            bp=conn.execute(f"SELECT * FROM exam_blueprints WHERE id={ph}",(blueprint_id,)).fetchone()
+            if not bp:return jsonify({"error":"找不到 blueprint"}),404
+            bp=dict(bp); rows=[dict(r) for r in conn.execute(f"SELECT * FROM quiz_questions WHERE quiz_category_id={ph} AND status IN ('reviewed','published') AND active={ 'TRUE' if kind=='postgres' else '1'}",(bp["quiz_category_id"],)).fetchall()]
+            try:chosen=_draw(rows,int(bp["question_count"]),_decode(bp["quotas"],{}))
+            except ValueError as exc:return jsonify({"error":str(exc)}),409
+            # Stored snapshot includes answer material only on the server; learners
+            # continue to receive the established sanitized attempt projection.
+            sid=str(uuid.uuid4()); stamp=now(); packed=json.dumps(chosen,ensure_ascii=False)
+            conn.execute(f"INSERT INTO exam_blueprint_snapshots(id,blueprint_id,quiz_category_id,questions,created_at) VALUES({ph},{ph},{ph},{ph},{ph})",(sid,blueprint_id,bp["quiz_category_id"],packed,stamp))
+        finally:conn.close()
+        return jsonify({"id":sid,"blueprintId":blueprint_id,"questionCount":len(chosen),"immutable":True,"createdAt":stamp}),201
     app.extensions["teacher_question_bank_68_registered"]=True
     return app
