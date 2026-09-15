@@ -1,4 +1,6 @@
 .local-worker.env
+.worker-update-state.json
+.worker-requirements.sha256
 .env
 .env.*
 !.env.example

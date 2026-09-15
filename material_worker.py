@@ -1,6 +1,7 @@
-"""Teacher 6.7 B-Free local material worker (outbound HTTPS only)."""
+"""Teacher local material worker (outbound HTTPS only)."""
 from __future__ import annotations
-import hashlib, os, socket, subprocess, sys, tempfile, time
+import datetime as dt
+import hashlib, json, os, re, socket, subprocess, sys, tempfile, time
 from pathlib import Path
 import requests
 from upload_hardening import ZIP_EXT, _magic_ok, _validate_zip_bytes
@@ -12,6 +13,89 @@ POLL_SECONDS=max(2,min(60,int(os.environ.get("MATERIAL_WORKER_POLL_SECONDS","5")
 REQUEST_TIMEOUT=max(10,min(600,int(os.environ.get("MATERIAL_WORKER_HTTP_TIMEOUT","120"))))
 ALLOWED_EXT={".pptx",".ppt",".pdf",".doc",".docx",".xls",".xlsx",".odp",".odt",".ods",".png",".jpg",".jpeg",".gif",".webp",".mp4",".webm",".mov",".m4v",".mp3",".wav",".m4a",".ogg",".txt",".csv",".srt",".vtt",".zip"}
 VIDEO_EXT={".mp4",".webm",".mov",".m4v"}; AUDIO_EXT={".mp3",".wav",".m4a",".ogg"}
+RESTART_FOR_UPDATE=75
+ROOT=Path(__file__).resolve().parent
+
+def _env_true(name, default=False):
+    value=os.environ.get(name, "true" if default else "false").strip().lower()
+    return value in {"1","true","yes","on"}
+
+def _utc_now(): return dt.datetime.now(dt.timezone.utc).isoformat()
+
+def _run_git(*args):
+    try:
+        completed=subprocess.run(["git",*args],cwd=ROOT,capture_output=True,text=True,timeout=10,check=False)
+        return completed.returncode, (completed.stdout or "").strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, ""
+
+def worker_metadata():
+    """Return non-sensitive build/update data that is safe for the Web API."""
+    try: version=(ROOT/"VERSION").read_text(encoding="utf-8").strip()[:32]
+    except OSError: version=""
+    _code, sha=_run_git("rev-parse","--short=7","HEAD")
+    _code, branch=_run_git("branch","--show-current")
+    return {"workerVersion":version,"workerSha":sha[:40],"workerBranch":branch[:80]}
+
+class AutoUpdateController:
+    """Run the fixed local updater only between jobs; never hot-reload Python."""
+    def __init__(self, root=ROOT, runner=None, now=None):
+        self.root=Path(root); self.runner=runner or self._run_updater; self.now=now or _utc_now
+        self.enabled=_env_true("MATERIAL_WORKER_AUTO_UPDATE", True)
+        try: requested=float(os.environ.get("MATERIAL_WORKER_UPDATE_INTERVAL_HOURS","6"))
+        except ValueError: requested=6
+        self.interval_seconds=max(1.0, requested)*3600
+        self.state_path=Path(os.environ.get("MATERIAL_WORKER_UPDATE_STATE_PATH", str(self.root/".worker-update-state.json")))
+        self.last_check_at=""; self.update_available=False; self._load_state()
+
+    def _load_state(self):
+        try:
+            state=json.loads(self.state_path.read_text(encoding="utf-8"))
+            self.last_check_at=str(state.get("lastUpdateCheckAt") or "")[:64]
+            self.update_available=bool(state.get("updateAvailable", False))
+        except (OSError, ValueError, TypeError): pass
+
+    def _save_state(self):
+        # This local, gitignored state file intentionally has no credentials.
+        try: self.state_path.write_text(json.dumps({"lastUpdateCheckAt":self.last_check_at,"updateAvailable":self.update_available}),encoding="utf-8")
+        except OSError: pass
+
+    def metadata(self):
+        return {**worker_metadata(),"updateAvailable":self.update_available,"lastUpdateCheckAt":self.last_check_at}
+
+    def due(self, timestamp=None):
+        if not self.enabled: return False
+        if not self.last_check_at: return True
+        try:
+            last=dt.datetime.fromisoformat(self.last_check_at.replace("Z","+00:00"))
+            if last.tzinfo is None: last=last.replace(tzinfo=dt.timezone.utc)
+            current=timestamp or dt.datetime.now(dt.timezone.utc)
+            return (current-last).total_seconds()>=self.interval_seconds
+        except (TypeError, ValueError): return True
+
+    def _run_updater(self):
+        if sys.platform != "win32": return None
+        script=self.root/"update_material_worker.ps1"
+        if not script.is_file(): return None
+        shell=os.environ.get("POWERSHELL_EXE", "powershell.exe")
+        try:
+            return subprocess.run([shell,"-NoProfile","-ExecutionPolicy","Bypass","-File",str(script)],cwd=self.root,capture_output=True,text=True,timeout=180,check=False).returncode
+        except (OSError, subprocess.TimeoutExpired): return None
+
+    def check_when_idle(self):
+        """Return True only after a successful on-disk update requiring restart."""
+        if not self.due(): return False
+        before=worker_metadata().get("workerSha", "")
+        result=self.runner()
+        self.last_check_at=self.now()
+        after=worker_metadata().get("workerSha", "")
+        updated=bool(result == 0 and before and after and before != after)
+        self.update_available=updated
+        self._save_state()
+        if result not in (0, None): log(f"safe update check failed (exit {result}); continuing current local version")
+        return updated
+
+AUTO_UPDATER=AutoUpdateController()
 
 def log(message): print(f"[teacher-local-worker {WORKER_ID}] {message}",flush=True)
 def _bin(env,fallback):
@@ -40,7 +124,7 @@ class WorkerApi:
         return response.json()
     def heartbeat(self,job_id=""):
         path=f"/api/material-worker/{job_id}/heartbeat" if job_id else "/api/material-worker/heartbeat"
-        return self.post(path,{"workerId":WORKER_ID,"capabilities":capability()})
+        return self.post(path,{"workerId":WORKER_ID,"capabilities":capability(),**AUTO_UPDATER.metadata()})
     def download(self,job,target):
         url=str(job.get("downloadUrl") or "")
         headers={}
@@ -132,9 +216,17 @@ def main():
     caps=capability();log(f"startup ffmpeg={caps['ffmpeg']['available']} ffprobe={caps['ffprobe']['available']} libreoffice={caps['libreOffice']['available']}")
     while True:
         try:
-            api.heartbeat(); data=api.post("/api/material-worker/claim",{"workerId":WORKER_ID,"capabilities":caps}); job=data.get("job")
-            if job:process_one(api,job)
-            else:time.sleep(POLL_SECONDS)
+            api.heartbeat(); data=api.post("/api/material-worker/claim",{"workerId":WORKER_ID,"capabilities":caps,**AUTO_UPDATER.metadata()}); job=data.get("job")
+            if job:
+                # A claimed job is processing work: never fetch or modify code here.
+                process_one(api,job)
+            else:
+                # The updater may fast-forward files only after no job was claimed.
+                if AUTO_UPDATER.check_when_idle():
+                    api.heartbeat()
+                    log("safe update installed while idle; requesting launcher restart")
+                    return RESTART_FOR_UPDATE
+                time.sleep(POLL_SECONDS)
         except KeyboardInterrupt:return 0
         except Exception as exc:log(f"API unavailable: {exc}");time.sleep(POLL_SECONDS)
 if __name__=="__main__":sys.exit(main())
