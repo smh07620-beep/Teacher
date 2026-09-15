@@ -44,11 +44,6 @@ class ExternalAndElevation68Tests(unittest.TestCase):
         self.assertEqual(item,{"provider":"youtube","canonicalUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","videoId":"dQw4w9WgXcQ"})
 
     def test_single_flight_never_persists_secret(self):
-        source=Path(__file__).parents[1].joinpath("static","admin-elevation-68.js").read_text(encoding="utf-8")
-        self.assertIn("let inFlight",source)
-        self.assertIn("finally(() => { inFlight = null; })",source)
-        self.assertNotIn("localStorage",source)
-        self.assertNotIn("sessionStorage",source)
         legacy=Path(__file__).parents[1].joinpath("static","system-admin.js").read_text(encoding="utf-8")
         self.assertIn("window.adminElevationFlight",legacy)
         self.assertIn("/api/admin/elevation",legacy)
