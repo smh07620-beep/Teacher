@@ -1360,12 +1360,13 @@ let teacherWorkspaceMode = 'scoring';
 
 function normalizeAdminWorkspace(name){
     if(name==='courses'||name==='materials') return 'course-materials';
+    if(name==='assessment'||name==='questions') return 'assessment';
     if(name==='scoring'||name==='pgy') return 'teacher';
     return name;
 }
 function paintAdminWorkspaceNav(name){
     name=normalizeAdminWorkspace(name);
-    const names=['course-materials','exams','results','people','questions','teacher','word','system'];
+    const names=['course-materials','assessment','results','people','teacher','word','system'];
     names.forEach(n=>{const b=document.getElementById(`admin-nav-${n}`);if(!b)return;b.className=n===name?'admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-teal-700 text-white shadow-sm':'admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200';});
 }
 
@@ -1417,11 +1418,11 @@ async function switchAdminWorkspace(name, force=false){
         await switchAdminSection('content',force);
         const courses=document.getElementById('admin-course-workspace'), materials=document.getElementById('admin-material-workspace'), advanced=document.getElementById('admin-material-advanced');
         courses?.classList.remove('hidden'); materials?.classList.remove('hidden'); advanced?.classList.remove('hidden');
-        setTimeout(()=>{renderStorageStatus(false);renderMaterialJobs(false);},0);
+        // Storage/worker probes are intentionally deferred until their panel is opened.
         return;
     }
-    if(name==='questions'||name==='exams'){
-        adminQuizWorkspaceMode=name; await switchAdminSection('quiz',force); updateQuizWorkspacePresentation(); return;
+    if(name==='assessment'){
+        adminQuizWorkspaceMode='exams'; await switchAdminSection('quiz',force); updateQuizWorkspacePresentation(); return;
     }
     if(name==='teacher'){
         teacherWorkspaceMode=requested==='pgy'?'pgy':'scoring';paintTeacherMode();await switchTeacherMode(teacherWorkspaceMode);return;
@@ -1436,10 +1437,9 @@ async function switchAdminWorkspace(name, force=false){
 
 function updateQuizWorkspacePresentation(){
     const title=document.querySelector('#admin-quiz-workspace h4'); const desc=document.querySelector('#admin-quiz-workspace h4 + p');
-    if(title) title.textContent=adminQuizWorkspaceMode==='exams'?'📋 考卷管理':'📝 題庫管理與 AI 出題';
-    if(desc) desc.textContent=adminQuizWorkspaceMode==='exams'?'建立、啟用、停用與設定考卷；點「考卷設定」進入完整設定頁。':'選擇考卷後管理正式題庫、快速編輯、批次操作與 AI 候選題。';
-    document.querySelectorAll('[data-admin-role="questions-action"]').forEach(x=>x.classList.toggle('hidden',adminQuizWorkspaceMode!=='questions'));
-    document.querySelectorAll('[data-admin-role="exam-action"]').forEach(x=>x.classList.toggle('hidden',adminQuizWorkspaceMode!=='exams'));
+    if(title) title.textContent='📝 題庫與考卷';
+    if(desc) desc.textContent='考卷、題庫、AI 出題、出題藍圖與題目分析集中管理；預設顯示考卷。';
+    document.querySelectorAll('[data-admin-role="questions-action"],[data-admin-role="exam-action"]').forEach(x=>x.classList.remove('hidden'));
 }
 
 function updateResultsWorkspacePresentation(){
@@ -1455,7 +1455,6 @@ async function toggleAdminModal(show) {
         populateAdminGroupSelects();
         const matSel=document.getElementById('admin-material-group'),quizSel=document.getElementById('admin-quiz-group');
         if(matSel)matSel.value=currentGroupKey;if(quizSel)quizSel.value=currentGroupKey;
-        Object.keys(adminSectionLoaded).forEach(k=>adminSectionLoaded[k]=false);
         modal.classList.remove('hidden'); await switchAdminWorkspace('course-materials',false);
     } else modal.classList.add('hidden');
 }
