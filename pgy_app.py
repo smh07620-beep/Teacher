@@ -23,6 +23,7 @@ from external_media_68 import register_external_media
 from admin_elevation_68 import register_admin_elevation
 from question_bank_68 import register_question_bank
 from rbac_681 import register_rbac_681
+from legacy_office_69 import register_legacy_office_69
 
 app = register_pgy_workflow(legacy_app)
 app = register_schema_migrations(legacy_app)
@@ -43,6 +44,9 @@ app = register_external_media(legacy_app)
 app = register_admin_elevation(legacy_app)
 app = register_rbac_681(legacy_app)
 app = register_question_bank(legacy_app)
+# Register after RBAC so the legacy Office route uses canonical scoped
+# authorization and can never fall through to the original source handler.
+app = register_legacy_office_69(legacy_app)
 
 
 if __name__ == "__main__":
