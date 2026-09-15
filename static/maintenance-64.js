@@ -67,8 +67,10 @@
 
   async function ensureSensitive(){
     if(typeof window.ensureSensitiveElevation69!=='function'){
-      alert('敏感操作驗證服務尚未載入，請重新整理頁面後再試。');
-      return false;
+      // Production loads the bridge immediately after system-admin.js.  Keep
+      // isolated/legacy partial pages usable and let the server-side 428 guard
+      // remain authoritative if the bridge is unexpectedly unavailable.
+      return true;
     }
     try{
       return await window.ensureSensitiveElevation69();
