@@ -1,6 +1,6 @@
 /* Teacher 6.9: role-aware workspace presentation.
  *
- * Server-side RBAC remains authoritative.  This file only removes actions the
+ * Server-side RBAC remains authoritative. This file only removes actions the
  * current account cannot use, keeps group-scoped teachers inside their own
  * management scope, and translates expired sessions into login guidance
  * instead of the obsolete ADMIN_KEY prompt.
@@ -78,6 +78,7 @@
   const scopedTeacher = !crossGroup && (roles.has('clinical_teacher') || roles.has('group_leader'));
   const workspaceAccess = Object.values(WORKSPACE_RULES).some(hasAny);
   const canOpenWorkspace = name => hasAny(WORKSPACE_RULES[name] || []);
+  const groupCatalog = typeof GROUPS !== 'undefined' ? GROUPS : (window.GROUPS || {});
 
   window.TeacherRBAC681 = {
     user, roles, permissions, systemAdmin, crossGroup, scopedTeacher, workspaceAccess,
@@ -115,7 +116,7 @@
     if (!entry || document.getElementById('rbac-profile-badge')) return;
     const badge = document.createElement('span');
     badge.id = 'rbac-profile-badge';
-    const group = (window.GROUPS && window.GROUPS[user.preferredGroup] || {}).name || user.preferredGroup || '';
+    const group = (groupCatalog[user.preferredGroup] || {}).name || user.preferredGroup || '';
     const title = user.professionalTitle || roleSummary();
     badge.className = 'text-[11px] font-bold px-2 py-1 rounded-full bg-slate-100 text-slate-700';
     badge.textContent = [group, title].filter(Boolean).join(' · ');
@@ -138,13 +139,14 @@
   }
 
   function scopedGroupLabel() {
-    return (window.GROUPS && window.GROUPS[user.preferredGroup] || {}).label ||
-      (window.GROUPS && window.GROUPS[user.preferredGroup] || {}).name || user.preferredGroup || '所屬組別';
+    return (groupCatalog[user.preferredGroup] || {}).label ||
+      (groupCatalog[user.preferredGroup] || {}).name || user.preferredGroup || '所屬組別';
   }
 
   function applyScopedSelect(select) {
     if (!select || !scopedTeacher || !user.preferredGroup) return;
     const value = String(user.preferredGroup);
+    if (select.dataset.rbacScoped === '1' && select.options.length === 1 && select.value === value && select.disabled) return;
     select.innerHTML = `<option value="${value.replace(/"/g, '&quot;')}">${scopedGroupLabel()}</option>`;
     select.value = value;
     select.disabled = true;
@@ -156,18 +158,23 @@
     ['admin-material-group','admin-quiz-group','wizard-group'].forEach(id => applyScopedSelect(document.getElementById(id)));
   }
 
+  function hideMatches(root, selector) {
+    if (root.matches?.(selector)) root.classList.add('hidden');
+    root.querySelectorAll?.(selector).forEach(el => el.classList.add('hidden'));
+  }
+
   function guardSensitiveGeneratedActions(root = document) {
     if (!has('exam.publish')) {
-      root.querySelectorAll('[onclick*="PublishQuiz"],[onclick*="publishQuiz"],[onclick*="PublishExam"],[onclick*="publishExam"]').forEach(el => el.classList.add('hidden'));
+      hideMatches(root, '[onclick*="PublishQuiz"],[onclick*="publishQuiz"],[onclick*="PublishExam"],[onclick*="publishExam"]');
     }
     if (!has('question.review')) {
-      root.querySelectorAll('[onclick*="ReviewQuiz"],[onclick*="reviewQuiz"],[onclick*="approveQuiz"],[onclick*="ApproveQuiz"]').forEach(el => el.classList.add('hidden'));
+      hideMatches(root, '[onclick*="ReviewQuiz"],[onclick*="reviewQuiz"],[onclick*="approveQuiz"],[onclick*="ApproveQuiz"]');
     }
     if (!has('user.manage')) {
-      root.querySelectorAll('[onclick*="AdminUser"],[onclick*="adminUser"],[onclick*="UserAccount"],[onclick*="userAccount"]').forEach(el => el.classList.add('hidden'));
+      hideMatches(root, '[onclick*="AdminUser"],[onclick*="adminUser"],[onclick*="UserAccount"],[onclick*="userAccount"]');
     }
     if (!has('system.manage')) {
-      root.querySelectorAll('[onclick*="renderAdminSystemStatus"],[onclick*="createAdminAnnouncement"],[onclick*="toggleAdminAnnouncement"],[onclick*="deleteAdminAnnouncement"]').forEach(el => el.classList.add('hidden'));
+      hideMatches(root, '[onclick*="renderAdminSystemStatus"],[onclick*="createAdminAnnouncement"],[onclick*="toggleAdminAnnouncement"],[onclick*="deleteAdminAnnouncement"]');
     }
   }
 
