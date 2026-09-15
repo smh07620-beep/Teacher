@@ -81,8 +81,14 @@
   }
 
   async function downloadBackup(){
-    // Browser navigation cannot consume the fetch retry bridge, so elevate
-    // explicitly before starting the attachment download.
+    // Browser navigation cannot consume the fetch retry bridge.  Production
+    // elevates before navigating; isolated/legacy shells without the bridge
+    // keep the historical synchronous navigation and the server still fails
+    // closed with its elevation guard.
+    if(typeof window.ensureSensitiveElevation69!=='function'){
+      window.location.href='/api/maintenance/backup';
+      return;
+    }
     if(!(await ensureSensitive())) return;
     window.location.href='/api/maintenance/backup';
   }
