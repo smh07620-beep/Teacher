@@ -28,7 +28,8 @@ jobs:
             production_hardening.py schema_migrations.py backup_restore.py \
             upload_hardening.py ai_privacy.py health_65.py material_worker.py \
             media_processing_67.py smart_learning_67.py free_worker_67.py \
-            external_media_68.py admin_elevation_68.py question_bank_68.py release_contract.py
+            external_media_68.py admin_elevation_68.py sensitive_elevation_69.py \
+            question_bank_68.py release_contract.py
           python -m compileall -q teacher_app tests
       - name: Full Teacher regression and integration suite
         run: python -m unittest discover -s tests -v
@@ -44,6 +45,7 @@ jobs:
           node --check static/assessment-681.js
           node --check static/course-wizard-681.js
           node --check static/external-material-681.js
+          node --check static/sensitive-elevation-69.js
           node tests/test_external_media_behavior_681.js
       - name: Web and worker shell contracts
         run: |
@@ -96,6 +98,7 @@ jobs:
           grep -q 'UPLOAD_ZIP_MAX_RATIO' render.yaml
           grep -q 'GROQ_API_KEY' render.yaml
           grep -q 'register_health' pgy_app.py
+          grep -q 'register_sensitive_elevation_69' pgy_app.py
           grep -q '0066-additive-rbac-pgy-signing' schema_migrations.py
           grep -q '0067-smart-learning-content' schema_migrations.py
           grep -q '0067-render-worker-shared-staging' schema_migrations.py
