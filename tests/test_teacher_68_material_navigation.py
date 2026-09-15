@@ -23,6 +23,7 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         self.db_patch.start()
         self.addCleanup(self.db_patch.stop)
         legacy_app.init_user_accounts_db()
+        legacy_app.init_exam_db()
         legacy_app.init_materials_db()
         legacy_app.init_quiz_db()
         legacy_app.init_learning_db()
