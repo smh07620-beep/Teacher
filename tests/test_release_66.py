@@ -2,20 +2,22 @@ import unittest
 from pathlib import Path
 
 import health_65
+import release_contract
 import schema_migrations
 
 
 ROOT = Path(__file__).parents[1]
 
 
-class Release66Tests(unittest.TestCase):
+class ReleaseContractTests(unittest.TestCase):
     def test_release_version_entrypoint_and_migration_contract(self):
         self.assertEqual(
-            ROOT.joinpath("VERSION").read_text(encoding="utf-8").strip(),
-            "6.7.0",
+            release_contract.version_file_value(),
+            release_contract.RELEASE_VERSION,
         )
+        self.assertRegex(release_contract.RELEASE_VERSION, r"^\d+\.\d+\.\d+$")
         self.assertIn(
-            "pgy_app:app",
+            release_contract.ENTRYPOINT,
             ROOT.joinpath("run_web.sh").read_text(encoding="utf-8"),
         )
         self.assertIn(
@@ -23,9 +25,10 @@ class Release66Tests(unittest.TestCase):
             health_65.REQUIRED_MIGRATIONS,
         )
         self.assertIn(
-            "0066-additive-rbac-pgy-signing",
+            release_contract.REQUIRED_RELEASE_MIGRATION,
             [version for version, _fn in schema_migrations.MIGRATIONS],
         )
+        self.assertIn(release_contract.REQUIRED_RELEASE_MIGRATION, health_65.REQUIRED_MIGRATIONS)
 
     def test_release_document_records_security_and_operational_invariants(self):
         document = ROOT.joinpath("ARCHITECTURE_6_6.md").read_text(encoding="utf-8")
