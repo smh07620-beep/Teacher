@@ -1,9 +1,14 @@
-/* Teacher 6.9: role-aware workspace presentation.
+/* Teacher 7.0: role-aware workspace presentation.
  *
  * Server-side RBAC remains authoritative. This file only removes actions the
  * current account cannot use, keeps group-scoped teachers inside their own
  * management scope, and translates expired sessions into login guidance
  * instead of the obsolete ADMIN_KEY prompt.
+ *
+ * 7.0 presentation rule: users no longer enter one generic "admin" surface.
+ * The same proven backend workspaces are presented as Teacher, Education, or
+ * System workspaces according to canonical RBAC. professional_title and
+ * responsibility_tags remain presentation metadata and never grant access.
  */
 (async function () {
   const ROLE_PERMISSIONS = {
@@ -80,8 +85,82 @@
   const canOpenWorkspace = name => hasAny(WORKSPACE_RULES[name] || []);
   const groupCatalog = typeof GROUPS !== 'undefined' ? GROUPS : (window.GROUPS || {});
 
+  function workspaceSurface() {
+    if (systemAdmin) {
+      return {
+        key: 'system',
+        entryIcon: '⚙',
+        entryLabel: '系統管理',
+        heading: '系統管理工作區',
+        summary: '教學、人員、平台設定與高風險維護集中於此。',
+        teachingLabel: '教學管理',
+        evaluationLabel: '評核與成績',
+        platformLabel: '平台與系統'
+      };
+    }
+    if (roles.has('education_admin') || has('education.cross_group.manage')) {
+      return {
+        key: 'education',
+        entryIcon: '🎓',
+        entryLabel: '教學管理',
+        heading: '教學管理工作區',
+        summary: '跨組管理課程、教材、評量與學習成效；系統基礎設施設定仍由系統管理者負責。',
+        teachingLabel: '跨組教學內容',
+        evaluationLabel: '跨組評核與成績',
+        platformLabel: '教學平台工具'
+      };
+    }
+    if (roles.has('group_leader')) {
+      return {
+        key: 'teacher',
+        entryIcon: '👨‍🏫',
+        entryLabel: '教師工作區',
+        heading: '組別教學工作區',
+        summary: '管理所屬組別的教材、題庫、考卷、評核與成績。',
+        teachingLabel: '組內課程與評量',
+        evaluationLabel: '學員評核與成績',
+        platformLabel: '教學工具'
+      };
+    }
+    if (roles.has('clinical_teacher')) {
+      return {
+        key: 'teacher',
+        entryIcon: '👨‍🏫',
+        entryLabel: '教師工作區',
+        heading: '教師工作區',
+        summary: '只顯示教學內容、題庫考卷與自己負責學員相關功能。',
+        teachingLabel: '課程、教材與評量',
+        evaluationLabel: '負責學員與成績',
+        platformLabel: '教學工具'
+      };
+    }
+    if (roles.has('auditor')) {
+      return {
+        key: 'audit',
+        entryIcon: '🔎',
+        entryLabel: '稽核檢視',
+        heading: '稽核／唯讀工作區',
+        summary: '僅檢視授權的稽核資料，不提供新增、修改、發布或刪除操作。',
+        teachingLabel: '唯讀資料',
+        evaluationLabel: '稽核資料',
+        platformLabel: '稽核'
+      };
+    }
+    return {
+      key: 'learner',
+      entryIcon: '📚',
+      entryLabel: '學習中心',
+      heading: '學習中心',
+      summary: '教材、課程、考試、進度與個人成績。',
+      teachingLabel: '學習內容',
+      evaluationLabel: '學習進度',
+      platformLabel: '個人學習'
+    };
+  }
+  const surface = workspaceSurface();
+
   window.TeacherRBAC681 = {
-    user, roles, permissions, systemAdmin, crossGroup, scopedTeacher, workspaceAccess,
+    user, roles, permissions, systemAdmin, crossGroup, scopedTeacher, workspaceAccess, surface,
     hasPermission: has,
     canOpenWorkspace
   };
@@ -104,10 +183,12 @@
       entry.removeAttribute('aria-hidden');
       entry.disabled = false;
       if (entry.id === 'workspace-entry') {
-        entry.innerHTML = systemAdmin ? '<span>⚙</span>系統管理後台' : '<span>👨‍🏫</span>教師工作區';
+        entry.innerHTML = `<span>${surface.entryIcon}</span>${surface.entryLabel}`;
       } else {
-        entry.textContent = systemAdmin ? '⚙️ 系統管理' : '👨‍🏫 教師工作區';
+        entry.textContent = `${surface.entryIcon} ${surface.entryLabel}`;
       }
+      entry.dataset.workspaceSurface = surface.key;
+      entry.title = surface.summary;
     });
   }
 
@@ -123,6 +204,47 @@
     entry.parentNode?.insertBefore(badge, entry);
   }
 
+  function renderWorkspaceBanner() {
+    const groups = document.querySelector('.v580-admin-groups');
+    if (!groups) return;
+    const modal = document.getElementById('admin-modal');
+    if (modal) {
+      modal.dataset.workspaceSurface = surface.key;
+      modal.setAttribute('aria-label', surface.heading);
+    }
+    let banner = document.getElementById('rbac-workspace-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'rbac-workspace-banner';
+      banner.className = 'rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 mb-4';
+      groups.parentNode?.insertBefore(banner, groups);
+    }
+    const group = scopedTeacher ? ((groupCatalog[user.preferredGroup] || {}).name || user.preferredGroup || '所屬組別') : '';
+    const scopeText = scopedTeacher && group ? `目前管理範圍：${group}` : (crossGroup ? '管理範圍：跨組教學' : '');
+    banner.innerHTML = `
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div class="text-sm font-black text-slate-900">${surface.entryIcon} ${surface.heading}</div>
+          <div class="text-xs text-slate-500 mt-1">${surface.summary}</div>
+        </div>
+        ${scopeText ? `<span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">${scopeText}</span>` : ''}
+      </div>`;
+  }
+
+  function relabelNavigationGroups() {
+    document.querySelectorAll('.v580-admin-group').forEach(group => {
+      const label = group.querySelector('.v580-admin-group-label');
+      if (!label) return;
+      if (group.querySelector('#admin-nav-course-materials,#admin-nav-assessment,#admin-nav-questions,#admin-nav-exams')) {
+        label.textContent = surface.teachingLabel;
+      } else if (group.querySelector('#admin-nav-teacher,#admin-nav-results')) {
+        label.textContent = surface.evaluationLabel;
+      } else if (group.querySelector('#admin-nav-word,#admin-nav-people,#admin-nav-system')) {
+        label.textContent = surface.platformLabel;
+      }
+    });
+  }
+
   function applyNavVisibility() {
     Object.entries(NAV_RULES).forEach(([id, rules]) => {
       const button = document.getElementById(id);
@@ -136,6 +258,7 @@
       const visible = [...group.querySelectorAll('.admin-nav-btn')].some(button => !button.classList.contains('hidden'));
       group.classList.toggle('hidden', !visible);
     });
+    relabelNavigationGroups();
   }
 
   function scopedGroupLabel() {
@@ -181,6 +304,7 @@
   setWorkspaceEntry();
   if (!workspaceAccess) return;
   renderAccessBadge();
+  renderWorkspaceBanner();
   applyNavVisibility();
   applyGroupScope();
   guardSensitiveGeneratedActions();
@@ -215,6 +339,7 @@
       if (show && !workspaceAccess) return false;
       const result = await legacyToggle(show);
       if (show) {
+        renderWorkspaceBanner();
         applyNavVisibility();
         applyGroupScope();
         guardSensitiveGeneratedActions();
