@@ -48,10 +48,13 @@ class WorkspaceShell70Tests(unittest.TestCase):
         self.assertIn("navHost.replaceChildren(navGroup('稽核／唯讀'", self.source)
         self.assertIn("document.querySelectorAll('.admin-section-panel').forEach", self.source)
         self.assertIn("window.switchAdminWorkspace('audit', true)", self.source)
-        self.assertNotIn("professionalTitle", self.source)
-        self.assertNotIn("responsibilityTags", self.source)
-        self.assertNotIn("professional_title", self.source)
-        self.assertNotIn("responsibility_tags", self.source)
+        # Profile metadata may be documented in comments, but must never take part
+        # in the actual role/capability calculation block.
+        auth_block = self.source[self.source.index("const roles"):self.source.index("const workspaceHost")]
+        self.assertNotIn("professionalTitle", auth_block)
+        self.assertNotIn("responsibilityTags", auth_block)
+        self.assertNotIn("professional_title", auth_block)
+        self.assertNotIn("responsibility_tags", auth_block)
 
     def test_workspace_shell_is_loaded_after_maintenance_bridge(self):
         maintenance = self.frontend.index('/maintenance-64.js?v=6605')
