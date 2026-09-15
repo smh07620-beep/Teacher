@@ -19,6 +19,9 @@ from production_hardening import register_production_hardening
 from schema_migrations import register_schema_migrations
 from smart_learning_67 import register_smart_learning
 from upload_hardening import register_upload_hardening
+from external_media_68 import register_external_media
+from admin_elevation_68 import register_admin_elevation
+from question_bank_68 import register_question_bank
 
 app = register_pgy_workflow(legacy_app)
 app = register_schema_migrations(legacy_app)
@@ -35,6 +38,9 @@ app = register_backup_restore(legacy_app)
 app = register_smart_learning(legacy_app)
 app = register_free_worker(legacy_app)
 app = register_pgy_frontend(app)
+app = register_external_media(legacy_app)
+app = register_admin_elevation(legacy_app)
+app = register_question_bank(legacy_app)
 
 
 if __name__ == "__main__":
