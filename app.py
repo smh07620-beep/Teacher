@@ -43,6 +43,7 @@ import tempfile
 import hashlib
 import socket
 import sys
+import ntpath
 from functools import wraps
 from urllib.parse import quote
 from pathlib import Path
@@ -427,12 +428,17 @@ def upload_material_tree_to_r2(material_id: str, source_path: Path, slides_dir: 
 
 
 # ----------------------------- MEGA storage (official MEGAcmd) -----------------------------
+def _megacmd_path_module():
+    return ntpath if sys.platform.startswith("win") else os.path
+
+
 def _megacmd_windows_dirs():
     """Return the standard official MEGAcmd install locations on Windows."""
     if not sys.platform.startswith("win"):
         return []
+    path_module = _megacmd_path_module()
     return [
-        os.path.join(base, "MEGAcmd")
+        path_module.join(base, "MEGAcmd")
         for base in (os.environ.get("ProgramFiles", ""), os.environ.get("ProgramFiles(x86)", ""))
         if base
     ]
@@ -445,11 +451,12 @@ def _megacmd_path_separator():
 def _megacmd_path(env):
     """Prepend official Windows locations without changing global PATH."""
     separator = _megacmd_path_separator()
+    path_module = _megacmd_path_module()
     current = [item for item in str(env.get("PATH", "")).split(separator) if item]
-    known = {os.path.normcase(os.path.normpath(item)) for item in current}
+    known = {path_module.normcase(path_module.normpath(item)) for item in current}
     additions = []
     for directory in _megacmd_windows_dirs():
-        normalized = os.path.normcase(os.path.normpath(directory))
+        normalized = path_module.normcase(path_module.normpath(directory))
         if normalized not in known:
             additions.append(directory)
             known.add(normalized)
