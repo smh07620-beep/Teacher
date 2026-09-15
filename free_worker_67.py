@@ -273,7 +273,9 @@ def register_free_worker(base):
         if part_count > 10000: return jsonify({"error": "分段數量超過限制。"}), 400
         upload_id = "matup-" + uuid.uuid4().hex[:20]; job_id = "matjob-" + uuid.uuid4().hex[:16]; material_id = "upload-" + hashlib.sha256(job_id.encode()).hexdigest()[:12]
         key = f"_staging/material-jobs/{job_id}/source{ext}"
-        metadata = {"jobid": job_id, "originalname": original, "expectedbytes": str(size), "sha256": sha, "createdat": _now()}
+        # The filename remains in PostgreSQL/session payloads.  S3 metadata
+        # must be ASCII-only, so it deliberately contains no raw filename.
+        metadata = base.r2_ascii_metadata({"jobid": job_id, "expectedbytes": str(size), "sha256": sha, "createdat": _now()})
         r2_upload_id = ""
         try:
             base.enforce_r2_large_upload_budget(upload_id, key, size)

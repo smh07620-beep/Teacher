@@ -365,10 +365,19 @@ def _content_type_for(path_or_name):
     return mimetypes.guess_type(str(path_or_name))[0] or "application/octet-stream"
 
 
+def r2_ascii_metadata(metadata):
+    """Return S3-compatible metadata without passing raw Unicode to boto3."""
+    return {
+        str(key).encode("ascii", "backslashreplace").decode("ascii")[:1024]:
+        str(value).encode("ascii", "backslashreplace").decode("ascii")[:1024]
+        for key, value in dict(metadata or {}).items()
+    }
+
+
 def r2_put_file(local_path: Path, key: str, content_type=None, metadata=None):
     extra = {"ContentType": content_type or _content_type_for(local_path)}
     if metadata:
-        extra["Metadata"] = {str(k): str(v)[:1024] for k, v in dict(metadata).items()}
+        extra["Metadata"] = r2_ascii_metadata(metadata)
     r2_client().upload_file(str(local_path), R2_BUCKET_NAME, key, ExtraArgs=extra)
     r2_record_object(key, Path(local_path).stat().st_size)
 
@@ -1215,7 +1224,7 @@ def upload_material_job_staging(source: Path, job_id: str, original_name: str):
             enforce_r2_large_upload_budget(job_id, key, source.stat().st_size)
             reserved = True
         try:
-            r2_put_file(source, key, metadata={"jobid": job_id, "originalname": Path(original_name).name, "expectedbytes": source.stat().st_size, "sha256": _sha256_file(source), "createdat": _utc_now_iso()})
+            r2_put_file(source, key, metadata={"jobid": job_id, "expectedbytes": source.stat().st_size, "sha256": _sha256_file(source), "createdat": _utc_now_iso()})
         except Exception:
             if reserved:
                 _r2_release_reservation(job_id, "staging_upload_failed")

@@ -1,6 +1,7 @@
 import datetime as dt
 import hashlib
 import io
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -215,6 +216,116 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
             complete = client.post(f"/api/material-upload/{data['uploadId']}/complete", json={"parts": [{"partNumber": n, "etag": f'etag-{n}'} for n in range(1, 4)]}, headers=headers)
         self.assertEqual(complete.status_code, 202, complete.get_data(as_text=True))
         self.assertEqual(appmod.get_material_job(data["jobId"])["stagingBackend"], "r2")
+
+    def test_r2_metadata_boundary_is_ascii_safe_for_user_values(self):
+        source = Path(self.temp.name) / "source.pptx"
+        source.write_bytes(b"pptx")
+        captured = {}
+
+        class FakeR2:
+            def upload_file(self, *_args, **kwargs):
+                captured.update(kwargs)
+
+        metadata = {
+            "filename": "2026 生化教育訓練檢驗流程一致性.pptx",
+            "title": "教育訓練資料.pptx",
+            "description": "교육자료.pptx",
+            "category": "training material 2026.pptx",
+            "courseTitle": "training (final).pptx 教材📘.pptx",
+        }
+        with patch.object(appmod, "r2_client", return_value=FakeR2()), patch.object(appmod, "R2_BUCKET_NAME", "bucket"), patch.object(appmod, "r2_record_object"):
+            appmod.r2_put_file(source, "_staging/material-jobs/job-safe/source.pptx", metadata=metadata)
+        sent = captured["ExtraArgs"]["Metadata"]
+        self.assertEqual(set(sent), set(metadata))
+        self.assertTrue(all(key.isascii() and value.isascii() for key, value in sent.items()))
+        self.assertNotEqual(sent["filename"], metadata["filename"])
+        self.assertEqual(sent["category"], "training material 2026.pptx")
+        self.assertEqual(sent["courseTitle"].split()[0], "training")
+
+    def test_r2_staging_keeps_unicode_filename_out_of_object_metadata(self):
+        source = Path(self.temp.name) / "source.pptx"
+        source.write_bytes(b"pptx")
+        captured = {}
+
+        class FakeR2:
+            def upload_file(self, *_args, **kwargs):
+                captured.update(kwargs)
+
+        original = "2026 生化教育訓練檢驗流程一致性.pptx"
+        with patch.object(appmod, "shared_staging_backend", return_value="r2"), patch.object(appmod, "r2_large_file", return_value=False), patch.object(appmod, "r2_client", return_value=FakeR2()), patch.object(appmod, "R2_BUCKET_NAME", "bucket"), patch.object(appmod, "r2_record_object"):
+            backend, key, staging_path = appmod.upload_material_job_staging(source, "matjob-0123456789abcdef", original)
+        sent = captured["ExtraArgs"]["Metadata"]
+        self.assertEqual((backend, staging_path), ("r2", ""))
+        self.assertEqual(key, "_staging/material-jobs/matjob-0123456789abcdef/source.pptx")
+        self.assertNotIn("originalname", sent)
+        self.assertTrue(all(value.isascii() for value in sent.values()))
+
+    def test_r2_multipart_unicode_names_are_persisted_outside_metadata(self):
+        self.with_queue()
+        filenames = (
+            "2026 生化教育訓練檢驗流程一致性.pptx",
+            "教育訓練資料.pptx",
+            "교육자료.pptx",
+            "training material 2026.pptx",
+            "training (final).pptx",
+            "教材📘.pptx",
+        )
+        size = 8 * 1024 * 1024
+
+        class FakeR2:
+            def __init__(self):
+                self.multipart_calls = []
+                self.uploads = 0
+
+            def create_multipart_upload(self, **kwargs):
+                self.multipart_calls.append(kwargs)
+                self.uploads += 1
+                return {"UploadId": f"remote-upload-{self.uploads}"}
+
+            def generate_presigned_url(self, _operation, Params, ExpiresIn):
+                return f"https://r2.example/{Params.get('PartNumber', 'get')}?expires={ExpiresIn}"
+
+            def complete_multipart_upload(self, **_kwargs):
+                return {}
+
+            def head_object(self, **_kwargs):
+                return {"ContentLength": size, "Metadata": {"sha256": "a" * 64}}
+
+            def abort_multipart_upload(self, **_kwargs):
+                return {}
+
+            def delete_object(self, **_kwargs):
+                return {}
+
+        r2 = FakeR2()
+        client = pgy_app.app.test_client()
+        headers = {"Origin": "http://localhost"}
+        with patch.object(appmod, "require_admin", return_value=None), patch.object(appmod, "MATERIAL_DIRECT_UPLOAD_ENABLED", True), patch.object(appmod, "MATERIAL_DIRECT_UPLOAD_MAX_MB", 2048), patch.object(appmod, "r2_is_configured", return_value=True), patch.object(appmod, "r2_client", return_value=r2), patch.object(appmod, "R2_BUCKET_NAME", "bucket"):
+            for filename in filenames:
+                init = client.post("/api/material-upload/init", json={"filename": filename, "size": size, "sha256": "a" * 64, "partSizeMb": 8}, headers=headers)
+                self.assertEqual(init.status_code, 201, init.get_data(as_text=True))
+                data = init.get_json()
+                metadata = r2.multipart_calls[-1]["Metadata"]
+                self.assertNotIn("originalname", metadata)
+                self.assertTrue(all(key.isascii() and value.isascii() for key, value in metadata.items()))
+                self.assertRegex(r2.multipart_calls[-1]["Key"], r"^_staging/material-jobs/matjob-[0-9a-f]{16}/source\.pptx$")
+                conn, _ = self.connect()
+                try:
+                    session = conn.execute("SELECT original_name,payload FROM material_upload_sessions WHERE id=?", (data["uploadId"],)).fetchone()
+                finally:
+                    conn.close()
+                self.assertEqual(session["original_name"], filename)
+                self.assertEqual(json.loads(session["payload"])["originalName"], filename)
+                complete = client.post(f"/api/material-upload/{data['uploadId']}/complete", json={"parts": [{"partNumber": 1, "etag": "etag-1"}]}, headers=headers)
+                self.assertEqual(complete.status_code, 202, complete.get_data(as_text=True))
+                job = appmod.get_material_job(data["jobId"], include_payload=True)
+                self.assertEqual(job["originalName"], filename)
+                self.assertEqual(job["payload"]["originalName"], filename)
+            with patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"):
+                claimed = client.post("/api/material-worker/claim", json={"workerId": "unicode-worker"}, headers={"Authorization": "Bearer worker-secret"})
+        self.assertEqual(claimed.status_code, 200, claimed.get_data(as_text=True))
+        self.assertEqual(claimed.get_json()["job"]["originalName"], filenames[0])
+        self.assertEqual(claimed.get_json()["job"]["payload"]["originalName"], filenames[0])
 
     def test_local_worker_has_no_production_database_client(self):
         source = ROOT.joinpath("material_worker.py").read_text(encoding="utf-8")
