@@ -1,5 +1,4 @@
-"""Regression coverage for the 6.8 post-release material-navigation fix."""
-import os
+"""Regression coverage for the 6.8/6.8.1 material-navigation and RBAC fixes."""
 import sqlite3
 import tempfile
 import unittest
@@ -24,7 +23,10 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         self.db_patch.start()
         self.addCleanup(self.db_patch.stop)
         legacy_app.init_user_accounts_db()
+        legacy_app.init_exam_db()
         legacy_app.init_materials_db()
+        legacy_app.init_quiz_db()
+        legacy_app.init_learning_db()
         conn, _ = self.connect()
         try:
             conn.execute(
@@ -32,16 +34,24 @@ class MaterialReadAccess68Tests(unittest.TestCase):
                 "username TEXT PRIMARY KEY, elevated_at TEXT NOT NULL, "
                 "expires_at TEXT NOT NULL, session_version INTEGER NOT NULL DEFAULT 0)"
             )
-            conn.execute(
-                "INSERT INTO user_accounts "
-                "(username,password_hash,display_name,emp_id,role,preferred_area,preferred_group,active,session_version,created_at,updated_at,last_login_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    "education-admin", generate_password_hash("test-password"),
-                    "Education Admin", "E001", "education_admin", "internal", "grpHema",
-                    1, 1, "2026-01-01", "2026-01-01", "",
-                ),
+            users = (
+                ("education-admin", "Education Admin", "E001", "education_admin", "grpHema"),
+                ("group-leader", "Group Leader", "G001", "group_leader", "grpHema"),
+                ("clinical-teacher", "Clinical Teacher", "T001", "clinical_teacher", "grpHema"),
+                ("student-user", "Student", "S001", "student", "grpHema"),
+                ("auditor-user", "Auditor", "A001", "auditor", "grpHema"),
             )
+            for username, display_name, emp_id, role, group in users:
+                conn.execute(
+                    "INSERT INTO user_accounts "
+                    "(username,password_hash,display_name,emp_id,role,preferred_area,preferred_group,active,session_version,created_at,updated_at,last_login_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        username, generate_password_hash("test-password"), display_name,
+                        emp_id, role, "internal", group, 1, 1,
+                        "2026-01-01", "2026-01-01", "",
+                    ),
+                )
         finally:
             conn.close()
         self.client = pgy_app.app.test_client()
@@ -52,10 +62,10 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         conn.isolation_level = None
         return conn, "sqlite"
 
-    def login(self):
+    def login(self, username="education-admin"):
         response = self.client.post(
             "/api/auth/login",
-            json={"username": "education-admin", "password": "test-password"},
+            json={"username": username, "password": "test-password"},
             headers={"Origin": "http://localhost"},
         )
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
@@ -70,15 +80,77 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertTrue(response.get_json()["loginRequired"])
 
-    def test_material_mutations_do_not_emit_legacy_elevation_prompt(self):
-        self.login()
-        for response in (
-            self.client.get("/api/slides/admin"),
-            self.client.patch("/api/slides/not-a-material", json={"title": "x"}, headers={"Origin": "http://localhost"}),
-            self.client.delete("/api/slides/not-a-material", headers={"Origin": "http://localhost"}),
-        ):
+    def test_education_admin_can_use_cross_group_material_management_without_elevation(self):
+        self.login("education-admin")
+        listing = self.client.get("/api/slides/admin")
+        self.assertEqual(listing.status_code, 200, listing.get_data(as_text=True))
+        upload = self.client.post(
+            "/api/slides/upload",
+            data={"group": "grpBio", "area": "internal"},
+            headers={"Origin": "http://localhost"},
+        )
+        self.assertEqual(upload.status_code, 400, upload.get_data(as_text=True))
+        self.assertEqual(upload.get_json().get("error"), "未收到檔案")
+        self.assertFalse(upload.get_json().get("elevationRequired", False))
+
+    def test_group_leader_can_upload_only_to_own_group(self):
+        self.login("group-leader")
+        own = self.client.post(
+            "/api/slides/upload",
+            data={"group": "grpHema", "area": "internal"},
+            headers={"Origin": "http://localhost"},
+        )
+        self.assertEqual(own.status_code, 400, own.get_data(as_text=True))
+        self.assertEqual(own.get_json().get("error"), "未收到檔案")
+
+        other = self.client.post(
+            "/api/slides/upload",
+            data={"group": "grpBio", "area": "internal"},
+            headers={"Origin": "http://localhost"},
+        )
+        self.assertEqual(other.status_code, 403, other.get_data(as_text=True))
+        self.assertEqual(other.get_json().get("error"), "此資源不在你的授權範圍。")
+
+    def test_clinical_teacher_can_upload_only_to_own_group(self):
+        self.login("clinical-teacher")
+        own = self.client.post(
+            "/api/slides/upload",
+            data={"group": "grpHema", "area": "internal"},
+            headers={"Origin": "http://localhost"},
+        )
+        self.assertEqual(own.status_code, 400, own.get_data(as_text=True))
+        other = self.client.post(
+            "/api/slides/upload",
+            data={"group": "grpBio", "area": "internal"},
+            headers={"Origin": "http://localhost"},
+        )
+        self.assertEqual(other.status_code, 403, other.get_data(as_text=True))
+
+    def test_group_leader_question_management_is_group_scoped(self):
+        self.login("group-leader")
+        own = self.client.post(
+            "/api/quiz-categories",
+            json={"group": "grpHema", "area": "internal", "title": "Own group quiz"},
+            headers={"Origin": "http://localhost"},
+        )
+        self.assertNotEqual(own.status_code, 403, own.get_data(as_text=True))
+
+        other = self.client.post(
+            "/api/quiz-categories",
+            json={"group": "grpBio", "area": "internal", "title": "Other group quiz"},
+            headers={"Origin": "http://localhost"},
+        )
+        self.assertEqual(other.status_code, 403, other.get_data(as_text=True))
+
+    def test_student_and_auditor_cannot_mutate_materials(self):
+        for username in ("student-user", "auditor-user"):
+            self.login(username)
+            response = self.client.post(
+                "/api/slides/upload",
+                data={"group": "grpHema", "area": "internal"},
+                headers={"Origin": "http://localhost"},
+            )
             self.assertEqual(response.status_code, 403, response.get_data(as_text=True))
-            self.assertFalse(response.get_json().get("elevationRequired", False))
 
 
 class MaterialNavigationFrontend68Tests(unittest.TestCase):
