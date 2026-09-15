@@ -41,8 +41,9 @@ jobs:
           node --check static/review-links-66.js
           node --check static/maintenance-64.js
           node --check static/smart-learning-67.js
-          node --check static/media-player-68.js
-          node --check static/admin-elevation-68.js
+          node --check static/assessment-681.js
+          node --check static/course-wizard-681.js
+          node --check static/external-material-681.js
       - name: Web and worker shell contracts
         run: |
           bash -n run_web.sh
