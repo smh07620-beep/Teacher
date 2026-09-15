@@ -12,9 +12,10 @@ def similarity(a,b):
 def permitted(base):
     denied=base.require_admin();return denied
 def metadata(data):
-    out={k:data.get(k,"") for k in ("domain","topic","subtopic","learning_objective","source_material_id","review_source")}
+    aliases={"learning_objective":"learningObjective","source_material_id":"sourceMaterialId","review_source":"reviewSource","cognitive_level":"cognitiveLevel"}
+    out={k:(data[aliases[k]] if aliases.get(k) in data else data.get(k,"")) for k in ("domain","topic","subtopic","learning_objective","source_material_id","review_source")}
     for k,default in (("difficulty","medium"),("cognitive_level","understand"),("status","draft"),("origin","manual")):
-        out[k]=str(data.get(k,default));
+        out[k]=str(data[aliases[k]] if aliases.get(k) in data else data.get(k,default));
         if out[k] not in VALID[k]:raise ValueError(f"{k} 格式錯誤")
     out["tags"]=data.get("tags",[])
     if not isinstance(out["tags"],list):raise ValueError("tags 格式錯誤")
@@ -22,6 +23,26 @@ def metadata(data):
 def _decode(value, fallback):
     try:return json.loads(value) if isinstance(value,str) else value
     except Exception:return fallback
+def question_payload(row):
+    """Serialize the extended bank fields without leaking a second schema.
+
+    The legacy quiz reader deliberately only projects fields needed by a
+    learner.  This admin-only projection is the editor contract.
+    """
+    item=dict(row)
+    for key, fallback in (("options",[]),("tags",[]),("review_source",{})):
+        item[key]=_decode(item.get(key),fallback)
+    item["quizCategoryId"]=item.pop("quiz_category_id","") or ""
+    item["questionType"]=item.pop("question_type","choice") or "choice"
+    item["learningObjective"]=item.pop("learning_objective","") or ""
+    item["cognitiveLevel"]=item.pop("cognitive_level","understand") or "understand"
+    item["sourceMaterialId"]=item.pop("source_material_id","") or ""
+    item["reviewSource"]=item.pop("review_source",{}) or {}
+    item["updatedAt"]=item.pop("updated_at","") or ""
+    item["reviewedAt"]=item.pop("reviewed_at","") or ""
+    item["reviewedBy"]=item.pop("reviewed_by","") or ""
+    item["active"]=bool(item.get("active",True))
+    return item
 def _draw(rows, count, quotas, excluded=()):
     """Find one *single* exact-sized set satisfying all quota dimensions.
 
@@ -79,15 +100,60 @@ def register_question_bank(base):
             conn.execute(sql,values)
         finally:conn.close()
         return jsonify({"id":qid,"status":m["status"],"suspectedDuplicates":dup}),201
+    @app.get("/api/question-bank")
+    def list_bank():
+        denied=permitted(base)
+        if denied:return denied
+        category=str(request.args.get("quizCategoryId") or "").strip()
+        status=str(request.args.get("status") or "").strip()
+        conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
+        try:
+            sql="SELECT * FROM quiz_questions"; clauses=[]; args=[]
+            if category: clauses.append(f"quiz_category_id={ph}");args.append(category)
+            if status: clauses.append(f"status={ph}");args.append(status)
+            if clauses:sql+=" WHERE "+" AND ".join(clauses)
+            sql+=" ORDER BY updated_at DESC, sort_order ASC"
+            rows=[question_payload(row) for row in conn.execute(sql,args).fetchall()]
+        finally:conn.close()
+        return jsonify({"items":rows})
+    @app.patch("/api/question-bank/<question_id>")
+    def update_bank_question(question_id):
+        denied=permitted(base)
+        if denied:return denied
+        body=request.get_json(silent=True) or {}
+        conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
+        try:
+            existing=conn.execute(f"SELECT * FROM quiz_questions WHERE id={ph}",(question_id,)).fetchone()
+            if not existing:return jsonify({"error":"找不到題目"}),404
+            old=dict(existing); merged={**old,**body}
+            try:m=metadata(merged)
+            except ValueError as exc:return jsonify({"error":str(exc)}),400
+            question=str(merged.get("question") or "").strip()
+            options=merged.get("options")
+            if not question or not isinstance(options,list):return jsonify({"error":"題目與選項為必填"}),400
+            values=(question,json.dumps(options,ensure_ascii=False),int(merged.get("correct",0) or 0),str(merged.get("explanation") or ""),m["topic"],m["subtopic"],m["learning_objective"],m["difficulty"],m["cognitive_level"],json.dumps(m["tags"],ensure_ascii=False),m["source_material_id"],json.dumps(m["review_source"],ensure_ascii=False),m["status"],m["origin"],now(),question_id)
+            conn.execute(f"UPDATE quiz_questions SET question={ph},options={ph},correct={ph},explanation={ph},topic={ph},subtopic={ph},learning_objective={ph},difficulty={ph},cognitive_level={ph},tags={ph},source_material_id={ph},review_source={ph},status={ph},origin={ph},updated_at={ph},version=version+1 WHERE id={ph}",values)
+            row=conn.execute(f"SELECT * FROM quiz_questions WHERE id={ph}",(question_id,)).fetchone()
+        finally:conn.close()
+        return jsonify({"ok":True,"item":question_payload(row)})
+    @app.delete("/api/question-bank/<question_id>")
+    def delete_bank_question(question_id):
+        denied=permitted(base)
+        if denied:return denied
+        conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
+        try:cur=conn.execute(f"DELETE FROM quiz_questions WHERE id={ph}",(question_id,))
+        finally:conn.close()
+        return jsonify({"ok":bool(getattr(cur,"rowcount",0))})
     @app.post("/api/question-bank/<question_id>/review")
     def review(question_id):
         denied=permitted(base)
         if denied:return denied
         decision=str((request.get_json(silent=True) or {}).get("decision") or "")
-        if decision not in {"accept","reject"}:return jsonify({"error":"decision 格式錯誤"}),400
+        if decision not in {"accept","reject","return"}:return jsonify({"error":"decision 格式錯誤"}),400
         user=base._current_user() or {}; conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
         try:
             if decision=="accept":cur=conn.execute(f"UPDATE quiz_questions SET status={ph},reviewed_by={ph},reviewed_at={ph},updated_at={ph},version=version+1 WHERE id={ph} AND status='draft'",("reviewed",user.get("username",""),now(),now(),question_id))
+            elif decision=="return":cur=conn.execute(f"UPDATE quiz_questions SET status={ph},updated_at={ph},version=version+1 WHERE id={ph}",("draft",now(),question_id))
             else:cur=conn.execute(f"UPDATE quiz_questions SET status={ph},updated_at={ph},version=version+1 WHERE id={ph}",("retired",now(),question_id))
         finally:conn.close()
         return jsonify({"ok":bool(getattr(cur,"rowcount",0))})
@@ -110,7 +176,12 @@ def register_question_bank(base):
         finally:conn.close()
         n=len(rows)
         if n<10:return jsonify({"attemptCount":n,"sufficientData":False,"message":"資料不足"})
-        vals=[dict(r) for r in rows];return jsonify({"attemptCount":n,"sufficientData":True,"correctRate":round(sum(bool(r["is_correct"]) for r in vals)/n,3),"optionSelectionCounts":dict(Counter(r["selected_option"] for r in vals))})
+        vals=[dict(r) for r in rows]; counts=dict(Counter(r["selected_option"] for r in vals))
+        conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
+        try:question=conn.execute(f"SELECT correct FROM quiz_questions WHERE id={ph}",(question_id,)).fetchone()
+        finally:conn.close()
+        correct=str(dict(question).get("correct","") if question else "")
+        return jsonify({"attemptCount":n,"sufficientData":True,"correctRate":round(sum(bool(r["is_correct"]) for r in vals)/n,3),"optionSelectionCounts":counts,"distractorDistribution":{key:value for key,value in counts.items() if str(key)!=correct}})
     @app.post("/api/exam-blueprints/<blueprint_id>/publish")
     def publish_blueprint(blueprint_id):
         denied=permitted(base)
