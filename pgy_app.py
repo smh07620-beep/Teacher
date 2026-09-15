@@ -49,7 +49,7 @@ app = register_rbac_681(legacy_app)
 app = register_sensitive_elevation_69(legacy_app)
 app = register_question_bank(legacy_app)
 # Register after RBAC so the legacy Office route uses canonical scoped
-authorization and can never fall through to the original source handler.
+# authorization and can never fall through to the original source handler.
 app = register_legacy_office_69(legacy_app)
 
 
