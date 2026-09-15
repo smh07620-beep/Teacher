@@ -14,11 +14,11 @@ a supported hand-entered URL surface.
 | Learning progress | learning-progress API | smart-learning reader | authenticated learner | progress regressions | Usable |
 | ReviewSource | exam review projection | post-submit review link | server-authoritative | exam review tests | Usable |
 | Exam workspace | legacy category/question APIs | unified assessment workspace | session RBAC mutation | UI contract | Usable |
-| Sensitive elevation | elevation API | automatic retry only for account/storage/backup/destructive system actions | privileged role + 15 min TTL | elevation boundary tests | Usable |
-| Worker/jobs/retry | worker APIs | material jobs panel | worker token / elevated admin | worker tests | Usable |
-| Question Bank 2.0 drafts | `/api/question-bank/*` | `assessment-681.js` 題庫／AI 出題／Review queue | elevated admin | question-bank integration + UI contract | Usable |
-| Blueprint snapshots | `/api/exam-blueprints/*` | `assessment-681.js` 出題藍圖 tab | elevated admin | quota + UI payload tests | Usable |
-| Item analytics | `/api/questions/<id>/analytics` | `assessment-681.js` 題目分析 tab | elevated admin | analytics contract tests | Usable |
+| Admin elevation | elevation API | automatic retry only for account/storage/backup/destructive system actions | privileged role + 15 min TTL | elevation boundary tests | Usable |
+| Worker/jobs/retry | worker APIs | material jobs panel | worker token / session RBAC | worker tests | Usable |
+| Question Bank 2.0 drafts | `/api/question-bank/*` | `assessment-681.js` 題庫／AI 出題／Review queue | session RBAC | question-bank integration + UI contract | Usable |
+| Blueprint snapshots | `/api/exam-blueprints/*` | `assessment-681.js` 出題藍圖 tab | session RBAC | quota + UI payload tests | Usable |
+| Item analytics | `/api/questions/<id>/analytics` | `assessment-681.js` 題目分析 tab | session RBAC | analytics contract tests | Usable |
 
 ## Deliberate internal surfaces
 
@@ -31,5 +31,5 @@ five-tab assessment workspace; they are no longer classified as internal-only.
 
 `static/media-player-68.js` and `static/admin-elevation-68.js` were never
 loaded by HTML and duplicated active implementations. They were removed; the
-active learner player and single-flight elevation paths live in the loaded
-`smart-learning-67.js`/`system-admin.js` modules.
+active learner player and sensitive elevation bridge live in the loaded
+`smart-learning-67.js`/`sensitive-elevation-69.js` modules.
