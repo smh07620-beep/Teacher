@@ -1576,6 +1576,20 @@ async function renderAdminTable() {
 let cachedTemplateBuffer = null;
 let adminRecords = [];
 let adminKey = '';
+async function openExternalMaterialDrawer(){
+    const key=await getAdminKey(); if(!key)return;
+    const drawer=document.getElementById('external-material-drawer'),select=document.getElementById('external-material-id');
+    drawer?.classList.remove('hidden'); if(!select)return;
+    select.innerHTML='<option>載入教材…</option>';
+    try{const rows=await fetchAdminMaterials(false);select.innerHTML=(rows||[]).filter(m=>!m.isBuiltin).map(m=>`<option value="${escapeHtml(m.id)}">${escapeHtml(m.title||m.filename)}</option>`).join('')||'<option value="">沒有可設定的教材</option>';}catch(_){select.innerHTML='<option value="">教材載入失敗</option>';}
+}
+function closeExternalMaterialDrawer(){document.getElementById('external-material-drawer')?.classList.add('hidden');}
+async function saveExternalMaterialLink(){
+    const key=await getAdminKey(),id=document.getElementById('external-material-id')?.value,url=document.getElementById('external-material-url')?.value.trim(),preview=document.getElementById('external-material-preview');if(!key||!id||!url)return;
+    const r=await fetch(`/api/materials/${encodeURIComponent(id)}/external-media`,{method:'PUT',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({url})});const data=await r.json().catch(()=>({}));
+    if(!r.ok){if(preview)preview.textContent='❌ '+(data.error||'網址驗證失敗');return;}
+    if(preview)preview.textContent=`✅ ${data.provider} · ${data.canonicalUrl}${data.videoId?' · '+data.videoId:''}`;
+}
 let pendingExportRecordIndex = null;
 let isExportingCurrentTab = false;
 

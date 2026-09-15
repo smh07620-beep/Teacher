@@ -28,3 +28,8 @@ class UxConsolidation681Tests(unittest.TestCase):
         workspace=self.js[self.js.index('async function switchAdminWorkspace'):self.js.index('function updateQuizWorkspacePresentation')]
         self.assertNotIn('renderMaterialJobs(false)',workspace)
 
+    def test_external_material_drawer_uses_safe_backend_only(self):
+        for marker in ('external-material-drawer','YouTube、Shorts','openExternalMaterialDrawer'):
+            self.assertIn(marker,self.html)
+        self.assertIn('/external-media',self.js)
+        self.assertNotIn('iframe',self.html[self.html.index('external-material-drawer'):self.html.index('<!-- Footer -->')])

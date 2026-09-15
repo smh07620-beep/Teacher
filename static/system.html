@@ -438,7 +438,7 @@
                     </section>
 
                     <section id="admin-material-workspace" class="bg-white border border-teal-200 rounded-2xl p-5 shadow-sm space-y-4">
-                        <div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-teal-950 text-lg">📚 單獨上傳教材</h4><p class="text-xs text-teal-700 mt-1">若課程已存在，可直接把新教材補到指定課程／考卷。支援 PPT/PDF/Office/圖片/影音/ZIP。</p></div><div id="admin-storage-status" class="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-slate-600">讀取雲端儲存狀態中…</div></div>
+                        <div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-teal-950 text-lg">📚 ＋ 新增單一教材</h4><p class="text-xs text-teal-700 mt-1">若課程已存在，可直接把新教材補到指定課程／考卷。支援 PPT/PDF/Office/圖片/影音/ZIP。</p></div><div class="flex gap-2"><button onclick="openExternalMaterialDrawer()" class="rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-bold text-teal-700">🔗 外部連結</button><div id="admin-storage-status" class="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-slate-600">按需要檢查儲存狀態</div></div></div>
                         <div class="flex flex-wrap items-center gap-2"><button onclick="renderStorageStatus(true)" class="text-xs bg-white border border-teal-300 hover:bg-teal-50 text-teal-800 px-3 py-1.5 rounded-lg">🔄 檢查儲存狀態</button><button id="migrate-mega-btn" onclick="migrateMaterialsToMega()" class="text-xs bg-fuchsia-700 hover:bg-fuchsia-600 text-white px-3 py-1.5 rounded-lg">☁️ 搬移既有教材到 MEGA</button><button id="migrate-r2-btn" onclick="migrateLocalMaterialsToR2()" class="text-xs bg-white border border-cyan-300 hover:bg-cyan-50 text-cyan-800 px-3 py-1.5 rounded-lg">☁️ 搬移本機教材到 R2（舊備援）</button></div>
                         <div class="rounded-xl border-2 border-dashed border-teal-200 bg-teal-50/40 p-4"><label class="block text-xs font-bold text-teal-900 mb-2">① 選擇教材檔案（可多選）</label><input type="file" id="admin-pptx-upload-input" accept=".ppt,.pptx,.pdf,.doc,.docx,.xls,.xlsx,.odp,.odt,.ods,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov,.m4v,.mp3,.wav,.m4a,.ogg,.txt,.csv,.srt,.vtt,.zip" multiple class="w-full text-xs"></div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -676,6 +676,12 @@
         </div>
     </div>
 
+    <div id="external-material-drawer" class="hidden fixed inset-0 z-[90] bg-slate-950/50 p-4 sm:p-8">
+        <section class="ml-auto h-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+            <div class="flex items-start justify-between gap-3"><div><h3 class="font-black text-slate-900">＋ 外部連結教材</h3><p class="mt-1 text-xs text-slate-500">YouTube、Shorts 或允許的 HTTPS MP4/WebM；不會經過 Worker、R2、MEGA 或 Google Drive。</p></div><button onclick="closeExternalMaterialDrawer()">✕</button></div>
+            <div class="mt-5 space-y-3"><label class="block text-xs font-bold">既有教材<select id="external-material-id" class="mt-1 w-full rounded-xl border p-2 text-sm"></select></label><label class="block text-xs font-bold">URL<input id="external-material-url" type="url" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="https://youtube.com/watch?v=..."></label><div id="external-material-preview" class="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">貼上網址後會先安全驗證及標準化。</div><button onclick="saveExternalMaterialLink()" class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white">儲存外部連結</button></div>
+        </section>
+    </div>
     <!-- Footer -->
     <footer class="bg-slate-900 text-slate-400 text-xs py-6 border-t border-slate-800 mt-auto">
         <div class="max-w-7xl mx-auto px-4 text-center space-y-1.5">
