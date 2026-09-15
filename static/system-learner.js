@@ -77,7 +77,13 @@ async function renderSlidesGrid() {
     grid.innerHTML = `<p class="text-xs text-slate-400 col-span-full text-center py-6">載入教材清單中…</p>`;
     try {
         const [res, courseRes, quizRes] = await Promise.all([fetch(`/api/slides?area=${encodeURIComponent(currentTrainingArea)}`), fetch(`/api/courses?area=${encodeURIComponent(currentTrainingArea)}&group=${encodeURIComponent(currentGroupKey)}`), fetch(`/api/quiz-categories?group=${encodeURIComponent(currentGroupKey)}&area=${encodeURIComponent(currentTrainingArea)}`)]);
-        if (!res.ok) throw new Error('無法取得教材清單');
+        if (!res.ok) {
+            const detail = await res.json().catch(() => ({}));
+            const error = new Error(detail.error || '無法取得教材清單');
+            error.status = res.status;
+            error.loginRequired = Boolean(detail.loginRequired);
+            throw error;
+        }
         cachedCourses = courseRes.ok ? await courseRes.json() : [];
         cachedQuizCategories = quizRes.ok ? await quizRes.json() : [];
         dynamicCategoriesCache[`${currentTrainingArea}:${currentGroupKey}`] = cachedQuizCategories;
@@ -114,7 +120,19 @@ async function renderSlidesGrid() {
         else grid.innerHTML = standard.length ? standard.map(buildSlideCardHTML).join('') : `<p class="text-xs text-slate-400 col-span-full text-center py-8 bg-white border border-dashed border-slate-300 rounded-2xl">${emptyText}</p>`;
     } catch (err) {
         console.error(err);
-        grid.innerHTML = `<p class="text-xs text-rose-500 col-span-full text-center py-6">❌ 讀取教材清單失敗，請確認後端伺服器 (Flask) 是否已啟動。</p>`;
+        const status = Number(err?.status || 0);
+        const loginRequired = Boolean(err?.loginRequired);
+        let message = '❌ 無法連線至伺服器';
+        if (status === 401 || loginRequired) {
+            const next = `${location.pathname}${location.search}`;
+            const loginUrl = `/login?next=${encodeURIComponent(next)}`;
+            message = `❌ 登入已逾時，請<a class="underline font-semibold" href="${loginUrl}">重新登入</a>`;
+        } else if (status === 403) {
+            message = '❌ 沒有教材瀏覽權限';
+        } else if (status >= 500) {
+            message = '❌ 教材服務暫時發生錯誤';
+        }
+        grid.innerHTML = `<p class="text-xs text-rose-500 col-span-full text-center py-6">${message}</p>`;
     }
 }
 

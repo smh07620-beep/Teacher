@@ -5,12 +5,19 @@
   let authUser=null;
   const header=$('.v56-header'), menu=$('[data-v56-menu]');
   if(menu&&header) menu.addEventListener('click',()=>header.classList.toggle('menu-open'));
+  // Public "教學管理" navigation opens the area catalog.  The catalog keeps
+  // management behind its explicit in-system action, so this never triggers
+  // admin elevation merely to read teaching material.
+  $$('.v575-manage-direct').forEach(link=>link.addEventListener('click',event=>{
+    event.preventDefault();
+    location.assign(location.pathname==='/pgy'?'/pgy':'/internal');
+  }));
   const back=$('.v56-backtop');
   if(back){const sync=()=>back.classList.toggle('show',scrollY>350);addEventListener('scroll',sync,{passive:true});back.addEventListener('click',()=>scrollTo({top:0,behavior:'smooth'}));sync();}
   const search=$('[data-v56-search]');
   if(search){
     const routes=[
-      ['生化','/system?area=internal&group=grpBio&module=materials'],['鏡檢','/system?area=internal&group=grpMicro&module=materials'],['血清','/system?area=internal&group=grpSero&module=materials'],['血庫','/system?area=internal&group=grpBB&module=materials'],['細菌','/system?area=internal&group=grpBact&module=materials'],['血液','/system?area=internal&group=grpHema&module=materials'],['PGY','/system?area=pgy&group=grpNew&module=materials&from=home'],['新進','/system?area=pgy&group=grpNew&module=materials&from=home'],['考核','/system?area=internal&group=grpBio&module=exam'],['教材','/system?area=internal&group=grpBio&admin=1&workspace=course-materials'],['課程管理','/system?area=internal&group=grpBio&admin=1&workspace=course-materials'],['題庫','/system?area=internal&group=grpBio&admin=1&workspace=questions'],['教師評核','/system?area=internal&group=grpBio&admin=1&workspace=teacher']
+      ['生化','/system?area=internal&group=grpBio&module=materials'],['鏡檢','/system?area=internal&group=grpMicro&module=materials'],['血清','/system?area=internal&group=grpSero&module=materials'],['血庫','/system?area=internal&group=grpBB&module=materials'],['細菌','/system?area=internal&group=grpBact&module=materials'],['血液','/system?area=internal&group=grpHema&module=materials'],['PGY','/system?area=pgy&group=grpNew&module=materials&from=home'],['新進','/system?area=pgy&group=grpNew&module=materials&from=home'],['考核','/system?area=internal&group=grpBio&module=exam'],['教材','/internal'],['課程管理','/system?area=internal&group=grpBio&admin=1&workspace=course-materials'],['題庫','/system?area=internal&group=grpBio&admin=1&workspace=questions'],['教師評核','/system?area=internal&group=grpBio&admin=1&workspace=teacher']
     ];
     search.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const q=search.value.trim().toLowerCase();if(!q)return;const hit=routes.find(([k])=>q.includes(k.toLowerCase())||k.toLowerCase().includes(q));location.href=hit?hit[1]:'/#groups';});
   }

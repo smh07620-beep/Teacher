@@ -212,6 +212,12 @@ function switchLearningModule(module){
     window.scrollTo({top:0,behavior:'smooth'});
 }
 
+// This navigation entry opens the reader in the current area and group.
+// Management actions remain behind the explicit "開啟管理後台" control.
+function openTeachingMaterials(){
+    switchLearningModule('materials');
+}
+
 // 切換組別：同時刷新目前所在的投影片區 / 考試區內容
 function switchGroup(groupKey) {
     if (!GROUPS[groupKey]) groupKey = 'grpBio';
