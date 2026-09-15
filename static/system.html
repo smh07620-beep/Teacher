@@ -679,7 +679,7 @@
     <div id="external-material-drawer" class="hidden fixed inset-0 z-[90] bg-slate-950/50 p-4 sm:p-8">
         <section class="ml-auto h-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
             <div class="flex items-start justify-between gap-3"><div><h3 class="font-black text-slate-900">＋ 外部連結教材</h3><p class="mt-1 text-xs text-slate-500">YouTube、Shorts 或允許的 HTTPS MP4/WebM；不會經過 Worker、R2、MEGA 或 Google Drive。</p></div><button onclick="closeExternalMaterialDrawer()">✕</button></div>
-            <div class="mt-5 space-y-3"><label class="block text-xs font-bold">既有教材<select id="external-material-id" class="mt-1 w-full rounded-xl border p-2 text-sm"></select></label><label class="block text-xs font-bold">URL<input id="external-material-url" type="url" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="https://youtube.com/watch?v=..."></label><div id="external-material-preview" class="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">貼上網址後會先安全驗證及標準化。</div><button onclick="saveExternalMaterialLink()" class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white">儲存外部連結</button></div>
+            <div class="mt-5 space-y-3"><p class="text-xs text-teal-700">YouTube、Shorts 與 allowlisted HTTPS MP4/WebM 僅儲存經驗證的 metadata；不會經過 Worker、R2、MEGA、Google Drive 或任意第三方嵌入。</p><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block text-xs font-bold">名稱<input id="external-material-title" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="例如：儀器操作示範"></label><label class="block text-xs font-bold">訓練區<select id="external-material-area" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></label><label class="block text-xs font-bold">組別<select id="external-material-group" class="mt-1 w-full rounded-xl border p-2 text-sm"></select></label><label class="block text-xs font-bold">所屬課程<select id="external-material-course" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="">未指定課程</option></select></label><label class="block text-xs font-bold">相關考卷<select id="external-material-category" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="">未指定考卷</option></select></label><label class="block text-xs font-bold">URL<input id="external-material-url" type="url" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="https://youtube.com/watch?v=..."></label></div><label class="block text-xs font-bold">說明<textarea id="external-material-description" class="mt-1 w-full rounded-xl border p-2 text-sm" rows="2"></textarea></label><div id="external-material-preview" class="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">貼上網址後會先安全驗證及標準化。</div><button onclick="saveExternalMaterialLink()" class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white">建立外部教材</button></div>
         </section>
     </div>
     <!-- Footer -->
@@ -706,6 +706,9 @@
 <script defer src="/system-exam.js?v=6602"></script>
 <script defer src="/system-assessment.js?v=6100"></script>
 <script defer src="/system-admin.js?v=6502"></script>
+<script defer src="/assessment-681.js?v=6810"></script>
+<script defer src="/course-wizard-681.js?v=6810"></script>
+<script defer src="/external-material-681.js?v=6810"></script>
 <script defer src="/system-bootstrap.js?v=5900"></script>
 <script defer src="/teaching.js?v=6603"></script>
 <script defer src="/smart-learning-67.js?v=6701"></script>

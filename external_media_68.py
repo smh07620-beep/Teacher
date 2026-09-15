@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import datetime as dt
 import ipaddress
+import json
 import re
+import uuid
 from urllib.parse import parse_qs, urlparse
 
 from flask import jsonify, request
@@ -61,6 +63,43 @@ def register_external_media(base):
             else: conn.execute("INSERT INTO external_media(id,material_id,provider,canonical_url,video_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(material_id) DO UPDATE SET provider=excluded.provider,canonical_url=excluded.canonical_url,video_id=excluded.video_id,updated_at=excluded.updated_at", (material_id,material_id,data["provider"],data["canonicalUrl"],data["videoId"],stamp,stamp))
         finally: conn.close()
         return jsonify({"ok":True,"materialId":material_id,**data})
+    @app.post("/api/materials/external")
+    def create_external_material():
+        """Create an external video record without fetching or storing it.
+
+        The URL is validated before a material exists.  The resulting record
+        deliberately has no object-store key, upload job, or worker request.
+        """
+        denied=base.require_admin()
+        if denied:return denied
+        body=request.get_json(silent=True) or {}
+        try:data=validate_external_url(body.get("url"),app.config.get("DIRECT_MEDIA_ALLOWLIST",[]))
+        except ValueError as exc:return jsonify({"error":str(exc)}),400
+        title=str(body.get("title") or "").strip()[:255]
+        if not title:return jsonify({"error":"請輸入教材名稱"}),400
+        group=base.normalize_group(str(body.get("group") or base.DEFAULT_GROUP))
+        area=base.normalize_area(str(body.get("area") or base.DEFAULT_TRAINING_AREA))
+        course_id=str(body.get("courseId") or "").strip()
+        category=str(body.get("category") or "").strip()
+        if course_id:
+            course=base.get_course(course_id)
+            if not course or course.get("group")!=group or course.get("area")!=area:return jsonify({"error":"所屬課程不在相同訓練區／組別"}),400
+        if category:
+            quiz=base.get_quiz_category(category)
+            if not quiz or quiz.get("group")!=group or quiz.get("area")!=area:return jsonify({"error":"關聯考卷不在相同訓練區／組別"}),400
+        material_id=f"external-{uuid.uuid4().hex[:16]}"; stamp=now()
+        extension=".webm" if data["provider"]=="direct" and data["canonicalUrl"].lower().split("?")[0].endswith(".webm") else ".mp4"
+        filename=f"external{extension}"
+        meta=json.dumps({"external":True,"provider":data["provider"],"canonicalUrl":data["canonicalUrl"]},ensure_ascii=False)
+        conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
+        try:
+            values=(material_id,filename,title,str(body.get("description") or "")[:1000],category,group,area,material_id,0,stamp,filename,"external","","",meta,"video","{}",True if kind=="postgres" else 1,course_id)
+            conn.execute(f"INSERT INTO materials(id,filename,title,description,category,group_key,training_area,folder,page_count,date_added,storage_filename,storage_backend,storage_key,slides_prefix,storage_meta,material_type,atlas_meta,active,course_id) VALUES({','.join([ph]*19)})",values)
+            media_values=(material_id,material_id,data["provider"],data["canonicalUrl"],data["videoId"],stamp,stamp)
+            conn.execute(f"INSERT INTO external_media(id,material_id,provider,canonical_url,video_id,created_at,updated_at) VALUES({','.join([ph]*7)})",media_values)
+        finally:conn.close()
+        item=base.get_material(material_id)
+        return jsonify({"ok":True,"material":item,"externalMedia":data}),201
     @app.get("/api/materials/<material_id>/external-media")
     def get_external_media(material_id):
         if not base._current_user(): return jsonify({"error":"請先登入。","loginRequired":True}),401
