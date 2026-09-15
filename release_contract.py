@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-RELEASE_VERSION = "6.8.0"
+RELEASE_VERSION = "6.8.1"
 ENTRYPOINT = "pgy_app:app"
 REQUIRED_RELEASE_MIGRATION = "0068-external-interactive-media"
 
