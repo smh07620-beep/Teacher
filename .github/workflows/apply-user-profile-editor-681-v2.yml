@@ -1,0 +1,58 @@
+name: Apply user profile editor 6.8.1 v2
+
+on:
+  push:
+    branches:
+      - fix/user-profile-editor-681
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/user-profile-editor-681
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply corrected generated patch
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          driver = Path('.github/workflows/apply-user-profile-editor-681.yml').read_text(encoding='utf-8')
+          replacement = driver.split("replacement = r'''", 1)[1].split("\n          updated, count =", 1)[0].rsplit("'''", 1)[0]
+          test_content = driver.split("test.write_text(r'''", 1)[1].split("\n          ''', encoding='utf-8')", 1)[0]
+          replacement = re.sub(r'(?m)^          ', '', replacement)
+          test_content = re.sub(r'(?m)^          ', '', test_content)
+
+          path = Path('static/system-admin.js')
+          source = path.read_text(encoding='utf-8')
+          pattern = re.compile(
+              r"async function renderAdminUserAccounts\(\)\{.*?\nasync function renderAdminPeople\(force=false\)\{",
+              re.S,
+          )
+          updated, count = pattern.subn(lambda _: replacement, source, count=1)
+          if count != 1:
+              raise SystemExit(f'account UI block replacement count={count}')
+          path.write_text(updated, encoding='utf-8')
+          Path('tests/test_user_profile_editor_681.py').write_text(test_content, encoding='utf-8')
+      - name: Validate generated changes
+        run: |
+          python -m py_compile tests/test_user_profile_editor_681.py
+          node --check static/system-admin.js
+          git diff --check
+          python -m unittest tests.test_user_profile_editor_681 -v
+      - name: Commit generated patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add static/system-admin.js tests/test_user_profile_editor_681.py
+          git commit -m "Expose profile title and responsibility tags in account editor"
+          git push origin HEAD:fix/user-profile-editor-681
