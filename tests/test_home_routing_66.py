@@ -109,7 +109,7 @@ class HomeRouting66Tests(
         )
 
         self.assertIn(
-            "portal-v56.js?v=6602",
+            "portal-v56.js?v=6801",
             index,
         )
 

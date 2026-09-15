@@ -10,7 +10,6 @@ from werkzeug.security import generate_password_hash
 
 import app as legacy_app
 import pgy_app
-import schema_migrations
 
 
 ROOT = Path(__file__).parents[1]
@@ -26,9 +25,13 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         self.addCleanup(self.db_patch.stop)
         legacy_app.init_user_accounts_db()
         legacy_app.init_materials_db()
-        schema_migrations.apply_migrations(legacy_app)
         conn, _ = self.connect()
         try:
+            conn.execute(
+                "CREATE TABLE admin_elevations ("
+                "username TEXT PRIMARY KEY, elevated_at TEXT NOT NULL, "
+                "expires_at TEXT NOT NULL, session_version INTEGER NOT NULL DEFAULT 0)"
+            )
             conn.execute(
                 "INSERT INTO user_accounts "
                 "(username,password_hash,display_name,emp_id,role,preferred_area,preferred_group,active,session_version,created_at,updated_at,last_login_at) "
