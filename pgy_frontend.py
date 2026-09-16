@@ -105,6 +105,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/admin-external-media.js?v=7115"></script>')
             if "/admin-results-export.js" not in html:
                 body_assets.append('<script defer src="/admin-results-export.js?v=7116"></script>')
+            if "/learner-exam-controls.js" not in html:
+                body_assets.append('<script defer src="/learner-exam-controls.js?v=7122"></script>')
             if head_assets and "</head>" in html:
                 html = html.replace("</head>", "\n".join(head_assets) + "\n</head>", 1)
             if body_assets and "</body>" in html:
