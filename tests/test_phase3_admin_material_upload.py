@@ -24,7 +24,7 @@ class Phase3AdminMaterialUploadTests(unittest.TestCase):
             'deleteAdminMaterial',
         ):
             self.assertIn(f'window.{name}', source)
-        self.assertIn('/api/material-jobs/upload', source)
+        self.assertIn('MaterialUploadClient.enqueue', source)
         self.assertIn('/api/material-upload/init', source)
         self.assertIn('/complete', source)
         self.assertIn('/api/slides/${id}', source)

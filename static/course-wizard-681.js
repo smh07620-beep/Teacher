@@ -8,7 +8,7 @@ const MODE_META={
   ai:{label:'AI 草稿',next:'建立考卷後直接前往「題庫與考卷」選教材並產生 AI 草稿。'},
   blueprint:{label:'Blueprint',next:'建立考卷後直接前往「題庫與考卷」設定 Blueprint 與題型配額。'}
 };
-const state={step:1,files:[],existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false};
+const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -47,6 +47,7 @@ function mount(){
   window.courseWizard681RefreshMaterials=loadMaterials;
   window.courseWizard681SelectExisting=()=>{state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);};
   window.courseWizard681FilesChanged=input=>{state.files=[...(input?.files||[])];renderFileSummary();};
+  window.courseWizard681SetFileMeta=(index,field,value)=>{state.fileMeta[index]={...(state.fileMeta[index]||{}),[field]:value};};
   window.courseWizard681Continue=continueToAssessment;
   window.courseWizard681OpenCourse=openCourseWorkspace;
   window.courseWizard681Reset=reset;
@@ -82,9 +83,11 @@ function stepFour(){
   return `<h5 class="font-black">4. 確認建立</h5><div class="mt-3 rounded-xl border border-violet-100 bg-white p-4"><dl class="grid gap-3 text-sm md:grid-cols-2"><div><dt class="text-xs text-slate-500">課程</dt><dd class="font-bold">${esc(title||'（未填）')}</dd></div><div><dt class="text-xs text-slate-500">範圍</dt><dd>${esc(s.area)} · ${esc(el('wizard-group')?.selectedOptions?.[0]?.textContent||s.group)}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">說明</dt><dd>${esc(desc||'—')}</dd></div><div><dt class="text-xs text-slate-500">教材</dt><dd>新上傳 ${state.files.length} 份；既有關聯 ${state.existing.length} 份</dd></div><div><dt class="text-xs text-slate-500">出題流程</dt><dd class="font-bold">${esc(mode().label)}${exam?' · '+esc(exam):''}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">既有教材</dt><dd>${state.existing.map(id=>esc((state.materials||[]).find(m=>String(m.id)===String(id))?.title||id)).join('、')||'—'}</dd></div></dl><p class="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">建立完成後：${esc(mode().next)}</p></div>`;
 }
 
+function fileMeta(index,file){return {title:file.name.replace(/\.[^.]+$/,''),materialType:'auto',...(state.fileMeta[index]||{})};}
+
 function renderFileSummary(){
   const box=el('cw681-file-summary');if(!box)return;
-  box.innerHTML=state.files.length?`已選 ${state.files.length} 份：${state.files.map(f=>esc(f.name)).join('、')}`:'尚未選擇新檔案。';
+  box.innerHTML=state.files.length?state.files.map((file,index)=>{const meta=fileMeta(index,file);return `<div class="mt-2 rounded border bg-white p-2"><b>${esc(file.name)}</b><div class="mt-1 grid gap-1 sm:grid-cols-2"><input value="${esc(meta.title)}" oninput="courseWizard681SetFileMeta(${index},'title',this.value)" class="rounded border p-1" aria-label="教材名稱"><select onchange="courseWizard681SetFileMeta(${index},'materialType',this.value)" class="rounded border p-1" aria-label="教材類型"><option value="auto" ${meta.materialType==='auto'?'selected':''}>自動判定</option><option value="standard" ${meta.materialType==='standard'?'selected':''}>一般教材</option><option value="atlas" ${meta.materialType==='atlas'?'selected':''}>圖譜教材</option></select></div></div>`;}).join(''):'尚未選擇新檔案。';
 }
 
 function paintMaterials(){
@@ -162,15 +165,21 @@ async function create(){
       status.textContent=`⏳ 關聯既有教材 ${linked+1}/${state.existing.length}…`;
       await api('/api/slides/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({title:material.title||material.filename||'',desc:material.desc||'',courseId:course.id,category:state.categoryId||material.category||'',active:material.active!==false,group,area,materialType:material.materialType||'standard',atlasMeta:material.atlasMeta||{}})});linked++;
     }
-    let uploaded=0;
-    for(const file of files){
-      status.textContent=`⏳ 上傳新教材 ${uploaded+1}/${files.length}：${file.name}`;
-      const form=new FormData();form.append('file',file);form.append('title',file.name.replace(/\.[^.]+$/,''));form.append('desc',desc);form.append('group',group);form.append('area',area);form.append('courseId',course.id);form.append('category',state.categoryId);form.append('materialType','auto');
-      await api('/api/slides/upload',{method:'POST',body:form});uploaded++;
+    if(!window.MaterialUploadClient?.enqueue)throw new Error('教材背景上傳元件尚未載入，請重新整理後再試。');
+    let uploaded=0,failed=0;
+    for(let index=0;index<files.length;index++){
+      const file=files[index],meta=fileMeta(index,file);
+      status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name}`;
+      const form=new FormData();form.append('file',file);form.append('title',String(meta.title||file.name.replace(/\.[^.]+$/,'')).trim());form.append('desc',desc);form.append('group',group);form.append('area',area);form.append('courseId',course.id);form.append('category',state.categoryId);form.append('materialType',meta.materialType||'auto');
+      try{
+        await window.MaterialUploadClient.enqueue(form,{fileName:file.name,onUnauthorized:loginRedirect,onProgress:progress=>{status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name} ${progress.percent}%（完成後交由背景 Worker 處理）`;}});
+        uploaded++;
+      }catch(error){failed++;console.warn('Course wizard material upload failed',file.name,error);}
     }
     status.textContent='⏳ 同步課程、教材與考卷清單…';await refreshWorkspaceData();
     const nextButton=state.categoryId?'<button type="button" onclick="courseWizard681Continue()" class="ml-2 rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white">前往題庫與考卷 →</button>':'<button type="button" onclick="courseWizard681OpenCourse()" class="ml-2 rounded-lg bg-teal-700 px-3 py-1.5 font-bold text-white">查看課程總覽 →</button>';
-    status.innerHTML=`<span class="font-bold text-emerald-700">✅ 「${esc(title)}」建立完成。</span> 已關聯 ${linked} 份既有教材、上傳 ${uploaded} 份新教材${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。${nextButton}<button type="button" onclick="courseWizard681Reset()" class="ml-2 text-slate-500 underline">建立下一門課</button>`;
+    const uploadNote=failed?`；${failed} 份教材未能排入佇列，可重新選取後再試` : '';
+    status.innerHTML=`<span class="font-bold text-emerald-700">✅ 「${esc(title)}」建立完成。</span> 已關聯 ${linked} 份既有教材、已排入背景佇列 ${uploaded} 份新教材${uploadNote}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。${nextButton}<button type="button" onclick="courseWizard681Reset()" class="ml-2 text-slate-500 underline">建立下一門課</button>`;
   }catch(error){status.textContent='❌ '+error.message;}
   finally{setBusy(false);}
 }
@@ -191,7 +200,7 @@ async function openCourseWorkspace(){
 }
 
 function reset(){
-  state.step=1;state.files=[];state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;
+  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
