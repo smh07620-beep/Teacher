@@ -59,6 +59,7 @@ jobs:
           node --check static/admin-results-data.js
           node --check static/admin-quiz-materials.js
           node --check static/admin-question-editor-ui.js
+          node --check static/admin-question-actions.js
           node tests/test_external_media_behavior_681.js
       - name: Web and worker shell contracts
         run: |

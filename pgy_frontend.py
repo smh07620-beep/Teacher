@@ -26,11 +26,6 @@ def register_pgy_frontend(app):
             head_assets = []
             body_assets = []
 
-            # Workspace routing is wrapper-sensitive: RBAC, workspace-shell,
-            # and worker-status decorate switchAdminWorkspace/toggleAdminModal.
-            # Load the extracted router and results data directly after the
-            # legacy bundle, then let the teacher/results mode wrapper capture
-            # those canonical data/table implementations before later guards.
             legacy_admin_marker = '<script defer src="/system-admin.js?v=6502"></script>'
             workspace_marker = '<script defer src="/admin-workspace.js?v=7110"></script>'
             results_data_marker = '<script defer src="/admin-results-data.js?v=7117"></script>'
@@ -78,9 +73,6 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/workspace-shell-70.js?v=7001"></script>')
             if "/worker-status-70.js" not in html:
                 body_assets.append('<script defer src="/worker-status-70.js?v=7002"></script>')
-            # Phase 3 incremental admin split. Load after the legacy admin
-            # bundle so extracted domains can safely override their old global
-            # entry points while HTML onclick contracts remain unchanged.
             if "/admin-results.js" not in html:
                 body_assets.append('<script defer src="/admin-results.js?v=7100"></script>')
             if "/admin-course-material.js" not in html:
@@ -99,6 +91,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/admin-quiz-materials.js?v=7118"></script>')
             if "/admin-question-editor-ui.js" not in html:
                 body_assets.append('<script defer src="/admin-question-editor-ui.js?v=7119"></script>')
+            if "/admin-question-actions.js" not in html:
+                body_assets.append('<script defer src="/admin-question-actions.js?v=7120"></script>')
             if "/admin-jobs.js" not in html:
                 body_assets.append('<script defer src="/admin-jobs.js?v=7107"></script>')
             if "/admin-material-upload.js" not in html:
