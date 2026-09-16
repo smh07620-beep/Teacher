@@ -155,7 +155,7 @@ def _material_metrics(
     completed = sum(1 for item in values if item["completed"])
     progress_values = [float(item["progress"]) for item in values]
     last = _latest([item.get("last") for item in values])
-    events = [(str(item.get("last") or ""), "material") for item in values if item.get("last")]
+    events = [(str(item.get("last") or ""), "materials") for item in values if item.get("last")]
     return {
         "tracked": tracked,
         "completed": completed,
@@ -176,7 +176,7 @@ def _exam_metrics(emp_id: str, rows: Sequence[Mapping[str, Any]]) -> tuple[dict[
         key=lambda row: _parse_datetime(row.get("created_at")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc),
         default=None,
     )
-    events = [(str(row.get("created_at") or ""), "exam") for row in items if row.get("created_at")]
+    events = [(str(row.get("created_at") or ""), "exams") for row in items if row.get("created_at")]
     return {
         "attempts": len(items),
         "reviewedAttempts": len(reviewed),
@@ -216,7 +216,7 @@ def _pgy_metrics(
     for row in learner_assessments:
         timestamp = str(row.get("created_at") or row.get("assessment_date") or "")
         if timestamp:
-            events.append((timestamp, "assessment"))
+            events.append((timestamp, "assessments"))
     total = len(learner_assignments)
     return {
         "assignments": total,
