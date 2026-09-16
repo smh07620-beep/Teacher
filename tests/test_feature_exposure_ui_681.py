@@ -30,7 +30,8 @@ class FeatureExposureUi681Tests(unittest.TestCase):
         self.assertIn("state.files", self.wizard)
         for choice in ("稍後建立", "從題庫選", "AI 草稿", "Blueprint"):
             self.assertIn(choice, self.wizard)
-        self.assertIn("/api/slides/upload", self.wizard)
+        self.assertIn("MaterialUploadClient.enqueue", self.wizard)
+        self.assertNotIn("/api/slides/upload", self.wizard)
 
     def test_external_creation_has_no_storage_or_worker_caller(self):
         self.assertIn("/api/materials/external", self.external)
