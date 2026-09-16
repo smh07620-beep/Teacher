@@ -23,6 +23,22 @@ def register_pgy_frontend(app):
             if response.direct_passthrough:
                 response.direct_passthrough = False
             html = response.get_data(as_text=True)
+
+            # Teacher 7.1 P0 runtime recovery: production browsers can retain the
+            # old shared-core URL even after a deploy. Rewrite the critical
+            # runtime assets to a fresh cache key and insert an independent
+            # escape guard immediately after shared-core. The guard is only a
+            # compatibility bridge; AppCore.escapeHtml remains canonical.
+            stale_shared_core = '<script defer src="/shared-core.js?v=6500"></script>'
+            fresh_shared_core = '<script defer src="/shared-core.js?v=7111"></script>'
+            escape_guard = '<script defer src="/runtime-escape-guard-7111.js?v=7111"></script>'
+            if stale_shared_core in html:
+                html = html.replace(stale_shared_core, fresh_shared_core, 1)
+            if "/runtime-escape-guard-7111.js" not in html and fresh_shared_core in html:
+                html = html.replace(fresh_shared_core, fresh_shared_core + "\n" + escape_guard, 1)
+            html = html.replace('/system-exam.js?v=6602', '/system-exam.js?v=7111')
+            html = html.replace('/teaching.js?v=6603', '/teaching.js?v=7111')
+
             # Final Convergence: current server-rendered pages call the canonical
             # Course Wizard directly. The compatibility facade remains for
             # cached/older HTML that still carries the legacy onclick names.
