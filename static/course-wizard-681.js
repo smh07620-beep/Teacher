@@ -1,4 +1,4 @@
-/* Teacher 6.9: guided course -> material -> exam flow using session RBAC. */
+/* Teacher 7.2: guided course -> material -> exam flow using session RBAC. */
 (function(){
 'use strict';
 
@@ -8,7 +8,8 @@ const MODE_META={
   ai:{label:'AI 草稿',next:'建立考卷後直接前往「題庫與考卷」選教材並產生 AI 草稿。'},
   blueprint:{label:'Blueprint',next:'建立考卷後直接前往「題庫與考卷」設定 Blueprint 與題型配額。'}
 };
-const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false};
+const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
+const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false,workflowId:'',workflowFingerprint:''};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -35,6 +36,37 @@ function scope(){
 function mode(){return MODE_META[state.examMode]||MODE_META.later;}
 function setBusy(value){state.busy=!!value;const button=el('cw681-create');if(button){button.disabled=state.busy;button.textContent=state.busy?'⏳ 建立中…':'建立課程與關聯';}}
 
+function bundleFingerprint(payload){
+  return JSON.stringify([payload.area,payload.group,payload.title,payload.desc,payload.examMode,payload.examTitle]);
+}
+
+function newWorkflowId(){
+  if(window.crypto?.randomUUID)return `cw-${window.crypto.randomUUID()}`;
+  return `cw-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,12)}`;
+}
+
+function ensureWorkflowId(payload){
+  const fingerprint=bundleFingerprint(payload);
+  if(state.workflowId&&state.workflowFingerprint===fingerprint)return state.workflowId;
+  try{
+    const saved=JSON.parse(sessionStorage.getItem(WORKFLOW_STORAGE_KEY)||'{}');
+    if(saved.workflowId&&saved.fingerprint===fingerprint){
+      state.workflowId=String(saved.workflowId);
+      state.workflowFingerprint=fingerprint;
+      return state.workflowId;
+    }
+  }catch(_e){}
+  state.workflowId=newWorkflowId();
+  state.workflowFingerprint=fingerprint;
+  try{sessionStorage.setItem(WORKFLOW_STORAGE_KEY,JSON.stringify({workflowId:state.workflowId,fingerprint}));}catch(_e){}
+  return state.workflowId;
+}
+
+function clearWorkflowId(){
+  state.workflowId='';state.workflowFingerprint='';
+  try{sessionStorage.removeItem(WORKFLOW_STORAGE_KEY);}catch(_e){}
+}
+
 function mount(){
   const old=el('wizard-area')?.closest('.grid'),actions=el('wizard-create-btn')?.parentElement,host=el('admin-courses-list');
   if(!old||!host||el('course-wizard-681'))return;
@@ -46,7 +78,7 @@ function mount(){
   window.courseWizard681Create=create;
   window.courseWizard681RefreshMaterials=loadMaterials;
   window.courseWizard681SelectExisting=()=>{state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);};
-  window.courseWizard681FilesChanged=input=>{state.files=[...(input?.files||[])];renderFileSummary();};
+  window.courseWizard681FilesChanged=input=>{state.files=[...(input?.files||[])];state.fileMeta={};renderFileSummary();};
   window.courseWizard681SetFileMeta=(index,field,value)=>{state.fileMeta[index]={...(state.fileMeta[index]||{}),[field]:value};};
   window.courseWizard681Continue=continueToAssessment;
   window.courseWizard681OpenCourse=openCourseWorkspace;
@@ -149,16 +181,17 @@ async function create(){
   const {area,group}=scope(),title=String(el('wizard-course-title')?.value||'').trim(),desc=String(el('wizard-course-desc')?.value||'').trim(),exam=String(el('wizard-exam-title')?.value||'').trim(),files=state.files;
   if(!title)return alert('請輸入課程名稱');
   if(state.examMode!=='later'&&!exam)return alert('請輸入考卷名稱，或改選「稍後建立」。');
+  const bundlePayload={area,group,title,desc,examMode:state.examMode,examTitle:exam,existingMaterialCount:state.existing.length,uploadCount:files.length};
+  bundlePayload.workflowId=ensureWorkflowId(bundlePayload);
   const status=el('cw681-status');setBusy(true);
   try{
-    status.textContent='⏳ 建立課程…';
-    const course=await api('/api/courses',{method:'POST',body:JSON.stringify({area,group,title,desc})});
-    state.course=course;state.categoryId='';
-    if(state.examMode!=='later'){
-      status.textContent='⏳ 建立並連結考卷…';
-      const category=await api('/api/quiz-categories',{method:'POST',body:JSON.stringify({area,group,title:exam,desc:`${title} 課後評量`,courseId:course.id})});
-      state.categoryId=String(category.id||'');
-    }
+    status.textContent='⏳ 安全建立課程與考卷骨架…';
+    const bundle=await api('/api/course-bundles',{method:'POST',body:JSON.stringify(bundlePayload)});
+    const course=bundle.course||{};
+    if(!course.id)throw new Error('課程建立結果不完整，請使用相同流程重新嘗試。');
+    state.course=course;state.categoryId=String(bundle.quizCategory?.id||'');
+    if(bundle.reused)status.textContent='✅ 已回復先前完成的課程／考卷建立結果，繼續處理教材。';
+
     let linked=0;
     for(const id of state.existing){
       const material=state.materials.find(m=>String(m.id)===String(id));if(!material)continue;
@@ -170,7 +203,7 @@ async function create(){
     for(let index=0;index<files.length;index++){
       const file=files[index],meta=fileMeta(index,file);
       status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name}`;
-      const form=new FormData();form.append('file',file);form.append('title',String(meta.title||file.name.replace(/\.[^.]+$/,'')).trim());form.append('desc',desc);form.append('group',group);form.append('area',area);form.append('courseId',course.id);form.append('category',state.categoryId);form.append('materialType',meta.materialType||'auto');
+      const form=new FormData();form.append('file',file);form.append('title',String(meta.title||file.name.replace(/\.[^.]+$/,'')).trim());form.append('desc',desc);form.append('group',group);form.append('area',area);form.append('courseId',course.id);form.append('category',state.categoryId);form.append('materialType',meta.materialType||'auto');form.append('bundleWorkflowId',bundlePayload.workflowId);form.append('bundleFileIndex',String(index));
       try{
         await window.MaterialUploadClient.enqueue(form,{fileName:file.name,onUnauthorized:loginRedirect,onProgress:progress=>{status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name} ${progress.percent}%（完成後交由背景 Worker 處理）`;}});
         uploaded++;
@@ -179,8 +212,9 @@ async function create(){
     status.textContent='⏳ 同步課程、教材與考卷清單…';await refreshWorkspaceData();
     const nextButton=state.categoryId?'<button type="button" onclick="courseWizard681Continue()" class="ml-2 rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white">前往題庫與考卷 →</button>':'<button type="button" onclick="courseWizard681OpenCourse()" class="ml-2 rounded-lg bg-teal-700 px-3 py-1.5 font-bold text-white">查看課程總覽 →</button>';
     const uploadNote=failed?`；${failed} 份教材未能排入佇列，可重新選取後再試` : '';
-    status.innerHTML=`<span class="font-bold text-emerald-700">✅ 「${esc(title)}」建立完成。</span> 已關聯 ${linked} 份既有教材、已排入背景佇列 ${uploaded} 份新教材${uploadNote}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。${nextButton}<button type="button" onclick="courseWizard681Reset()" class="ml-2 text-slate-500 underline">建立下一門課</button>`;
-  }catch(error){status.textContent='❌ '+error.message;}
+    const retryNote=bundle.reused?'（本次安全沿用既有建立結果，未重複建立課程／考卷）':'';
+    status.innerHTML=`<span class="font-bold text-emerald-700">✅ 「${esc(title)}」建立完成${retryNote}。</span> 已關聯 ${linked} 份既有教材、已排入背景佇列 ${uploaded} 份新教材${uploadNote}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。${nextButton}<button type="button" onclick="courseWizard681Reset()" class="ml-2 text-slate-500 underline">建立下一門課</button>`;
+  }catch(error){status.textContent='❌ '+error.message+'（未變更內容時可直接重試，系統會沿用同一建立流程。）';}
   finally{setBusy(false);}
 }
 
@@ -200,7 +234,7 @@ async function openCourseWorkspace(){
 }
 
 function reset(){
-  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;
+  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
