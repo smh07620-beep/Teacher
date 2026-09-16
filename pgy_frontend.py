@@ -76,6 +76,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/maintenance-64.js?v=6605"></script>')
             if "/workspace-shell-70.js" not in html:
                 body_assets.append('<script defer src="/workspace-shell-70.js?v=7001"></script>')
+            if "/training-command-center-71.js" not in html:
+                body_assets.append('<script defer src="/training-command-center-71.js?v=7100"></script>')
             if "/worker-status-70.js" not in html:
                 body_assets.append('<script defer src="/worker-status-70.js?v=7002"></script>')
             if "/admin-results.js" not in html:
