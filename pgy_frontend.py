@@ -1,4 +1,4 @@
-"""Inject Teacher workflow/security/maintenance/workspace assets into the system page."""
+"""Inject Teacher workflow/security/maintenance/workspace assets into UI pages."""
 
 
 def register_pgy_frontend(app):
@@ -18,10 +18,26 @@ def register_pgy_frontend(app):
                 path = request.path
             except Exception:
                 return response
-            if path not in {"/system", "/system.html"}:
-                return response
             if response.direct_passthrough:
                 response.direct_passthrough = False
+
+            # Teacher 7.1 professional-title badge is presentation-only and can
+            # enhance the signed-in home header without changing /api/auth/me.
+            if path in {"/", "/internal", "/pgy"}:
+                html = response.get_data(as_text=True)
+                if "/home-profile-title-71.js" not in html and "</body>" in html:
+                    html = html.replace(
+                        "</body>",
+                        '<script defer src="/home-profile-title-71.js?v=7113"></script>\n</body>',
+                        1,
+                    )
+                    response.set_data(html)
+                    response.content_length = len(response.get_data())
+                return response
+
+            if path not in {"/system", "/system.html"}:
+                return response
+
             html = response.get_data(as_text=True)
 
             # Teacher 7.1 P0 runtime recovery: production browsers can retain the
@@ -93,13 +109,13 @@ def register_pgy_frontend(app):
             if "/workspace-shell-70.js" not in html:
                 body_assets.append('<script defer src="/workspace-shell-70.js?v=7001"></script>')
             if "/training-command-center-71.js" not in html:
-                body_assets.append('<script defer src="/training-command-center-71.js?v=7100"></script>')
+                body_assets.append('<script defer src="/training-command-center-71.js?v=7113"></script>')
             if "/pgy-competency-matrix-71.js" not in html:
-                body_assets.append('<script defer src="/pgy-competency-matrix-71.js?v=7101"></script>')
+                body_assets.append('<script defer src="/pgy-competency-matrix-71.js?v=7113"></script>')
             if "/learning-analytics-71.js" not in html:
-                body_assets.append('<script defer src="/learning-analytics-71.js?v=7102"></script>')
+                body_assets.append('<script defer src="/learning-analytics-71.js?v=7113"></script>')
             if "/notification-center-71.js" not in html:
-                body_assets.append('<script defer src="/notification-center-71.js?v=7103"></script>')
+                body_assets.append('<script defer src="/notification-center-71.js?v=7113"></script>')
             if "/worker-status-70.js" not in html:
                 body_assets.append('<script defer src="/worker-status-70.js?v=7002"></script>')
             if "/admin-results.js" not in html:
@@ -107,7 +123,7 @@ def register_pgy_frontend(app):
             if "/admin-course-material.js" not in html:
                 body_assets.append('<script defer src="/admin-course-material.js?v=7101"></script>')
             if "/admin-people.js" not in html:
-                body_assets.append('<script defer src="/admin-people.js?v=7102"></script>')
+                body_assets.append('<script defer src="/admin-people.js?v=7113"></script>')
             if "/admin-announcements.js" not in html:
                 body_assets.append('<script defer src="/admin-announcements.js?v=7103"></script>')
             if "/admin-system.js" not in html:
