@@ -24,6 +24,20 @@ class WorkspaceShell70Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
+    def test_multirole_accounts_follow_one_canonical_surface(self):
+        self.assertIn("const surfaceKey = String(R.surface?.key", self.source)
+        self.assertIn("roles.has('system_admin') ? 'system'", self.source)
+        self.assertIn("roles.has('education_admin') || has('education.cross_group.manage') ? 'education'", self.source)
+        self.assertIn("roles.has('group_leader') || roles.has('clinical_teacher') ? 'teacher'", self.source)
+        self.assertIn("roles.has('auditor') ? 'audit' : 'learner'", self.source)
+        self.assertIn("const isSystemAdmin = surfaceKey === 'system'", self.source)
+        self.assertIn("const isEducationAdmin = surfaceKey === 'education'", self.source)
+        self.assertIn("const isAuditor = surfaceKey === 'audit'", self.source)
+        # An auxiliary auditor role must not override a higher-precedence
+        # system/education/teacher presentation surface.
+        auth_block = self.source[self.source.index("const surfaceKey"):self.source.index("const workspaceHost")]
+        self.assertNotIn("const isAuditor = roles.has('auditor')", auth_block)
+
     def test_maintenance_card_moves_out_of_generic_system_panel(self):
         self.assertIn("admin-section-maintenance", self.source)
         self.assertIn("teacher64-maintenance", self.source)
@@ -32,7 +46,7 @@ class WorkspaceShell70Tests(unittest.TestCase):
 
     def test_auditor_gets_a_dedicated_read_only_surface(self):
         for marker in (
-            "roles.has('auditor')",
+            "surfaceKey === 'audit'",
             "admin-section-audit",
             "'/api/pgy/audit'",
             "唯讀稽核資料",
@@ -58,7 +72,7 @@ class WorkspaceShell70Tests(unittest.TestCase):
 
     def test_workspace_shell_is_loaded_after_maintenance_bridge(self):
         maintenance = self.frontend.index('/maintenance-64.js?v=6605')
-        shell = self.frontend.index('/workspace-shell-70.js?v=7001')
+        shell = self.frontend.index('/workspace-shell-70.js?v=7114')
         self.assertLess(maintenance, shell)
         self.assertIn('if "/workspace-shell-70.js" not in html', self.frontend)
 

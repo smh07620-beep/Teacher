@@ -135,7 +135,7 @@ class TrainingCommandCenterFrontendTests(unittest.TestCase):
         self.assertIn("register_training_audience_71", self.entrypoint)
         self.assertIn("/training-command-center-71.js?v=7113", self.frontend)
         self.assertLess(
-            self.frontend.index("/workspace-shell-70.js?v=7001"),
+            self.frontend.index("/workspace-shell-70.js?v=7114"),
             self.frontend.index("/training-command-center-71.js?v=7113"),
         )
 

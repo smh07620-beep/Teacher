@@ -10,9 +10,18 @@
   const R = window.TeacherRBAC681 || {};
   const roles = R.roles instanceof Set ? R.roles : new Set();
   const has = permission => typeof R.hasPermission === 'function' && R.hasPermission(permission);
-  const isSystemAdmin = roles.has('system_admin');
-  const isEducationAdmin = roles.has('education_admin') || has('education.cross_group.manage');
-  const isAuditor = roles.has('auditor');
+  // Multi-role accounts must have exactly one presentation surface. Prefer the
+  // canonical surface already resolved by rbac-ui-681; the fallback mirrors its
+  // precedence so an auxiliary auditor role can never redraw a teacher/admin UI.
+  const surfaceKey = String(R.surface?.key || (
+    roles.has('system_admin') ? 'system' :
+    roles.has('education_admin') || has('education.cross_group.manage') ? 'education' :
+    roles.has('group_leader') || roles.has('clinical_teacher') ? 'teacher' :
+    roles.has('auditor') ? 'audit' : 'learner'
+  ));
+  const isSystemAdmin = surfaceKey === 'system';
+  const isEducationAdmin = surfaceKey === 'education';
+  const isAuditor = surfaceKey === 'audit';
   const canMaintenance = has('backup.manage') || has('education.cross_group.manage');
   const canAudit = has('audit.read') || has('audit.view');
   const workspaceHost = document.getElementById('admin-workspace-content');
@@ -105,7 +114,7 @@
   }
 
   function addEducationMaintenanceNavigation() {
-    if (!isEducationAdmin || isSystemAdmin || !canMaintenance) return;
+    if (!isEducationAdmin || !canMaintenance) return;
     if (document.getElementById('admin-nav-maintenance')) return;
     navHost.appendChild(navGroup('資料保護', [button('admin-nav-maintenance', '🛡️ 備份維護', 'maintenance')], true));
   }
