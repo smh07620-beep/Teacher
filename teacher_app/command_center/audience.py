@@ -1,6 +1,6 @@
 """Teacher 7.1 audience/profile classification.
 
-`pgy_learner` is an explicit admin-managed training audience flag.  It is not
+`pgy_learner` is an explicit admin-managed training audience flag. It is not
 an RBAC role and never grants signing, administration, or clinical authority.
 Professional title remains presentation-only metadata.
 """
@@ -41,7 +41,10 @@ def _bool(value: Any) -> bool:
 def _row_for_username(username: str) -> dict[str, Any]:
     if not username:
         return {}
-    conn, kind = get_connection()
+    try:
+        conn, kind = get_connection()
+    except Exception:
+        return {}
     ph = placeholder(kind)
     try:
         try:
@@ -57,15 +60,18 @@ def _row_for_username(username: str) -> dict[str, Any]:
         except Exception:
             # Pre-0071/isolated test databases fail closed to ordinary online
             # training rather than guessing a PGY identity.
-            row = conn.execute(
-                f"""
-                SELECT username,display_name,emp_id,role,roles_json,
-                       preferred_group,professional_title
-                FROM user_accounts
-                WHERE username={ph}
-                """,
-                (username,),
-            ).fetchone()
+            try:
+                row = conn.execute(
+                    f"""
+                    SELECT username,display_name,emp_id,role,roles_json,
+                           preferred_group,professional_title
+                    FROM user_accounts
+                    WHERE username={ph}
+                    """,
+                    (username,),
+                ).fetchone()
+            except Exception:
+                return {}
         return dict(row) if row else {}
     finally:
         conn.close()
@@ -87,8 +93,8 @@ def current_profile(user: Optional[Mapping[str, Any]]) -> dict[str, Any]:
     merged.update(stored)
     roles = list(user_roles(merged))
 
-    # Explicit request/user mapping values are useful in isolated unit tests;
-    # production normally reads the persisted column above.
+    # Explicit mapping values make isolated tests deterministic; production
+    # normally reads the persisted column above.
     if "pgyLearner" in user:
         pgy_learner = _bool(user.get("pgyLearner"))
     else:
@@ -118,20 +124,28 @@ def annotate_learners(learners: Sequence[Mapping[str, Any]]) -> list[dict[str, A
     usernames = [_username(item.get("username")) for item in output if _username(item.get("username"))]
     flags: dict[str, bool] = {}
     if usernames:
-        conn, kind = get_connection()
         try:
-            ph = placeholder(kind)
-            marks = ",".join(ph for _ in usernames)
+            conn, kind = get_connection()
+        except Exception:
+            conn = None
+            kind = "sqlite"
+        if conn is not None:
             try:
-                rows = conn.execute(
-                    f"SELECT username,pgy_learner FROM user_accounts WHERE username IN ({marks})",
-                    tuple(usernames),
-                ).fetchall()
-                flags = {_username(dict(row).get("username")): _bool(dict(row).get("pgy_learner")) for row in rows}
-            except Exception:
-                flags = {}
-        finally:
-            conn.close()
+                ph = placeholder(kind)
+                marks = ",".join(ph for _ in usernames)
+                try:
+                    rows = conn.execute(
+                        f"SELECT username,pgy_learner FROM user_accounts WHERE username IN ({marks})",
+                        tuple(usernames),
+                    ).fetchall()
+                    flags = {
+                        _username(dict(row).get("username")): _bool(dict(row).get("pgy_learner"))
+                        for row in rows
+                    }
+                except Exception:
+                    flags = {}
+            finally:
+                conn.close()
 
     for item in output:
         username = _username(item.get("username"))
