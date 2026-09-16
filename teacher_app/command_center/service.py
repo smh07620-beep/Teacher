@@ -1,8 +1,8 @@
 """Read-only aggregation for Teacher 7.1 Training Command Center.
 
-M1 intentionally exposes only PGY actionable work. Later 7.1 milestones can
-append exam, learning-analytics, and notification domains without changing the
-existing task contract.
+PGY learner content is opt-in through the explicit admin-managed audience flag.
+Online/course/exam tasks are composed by the frontend from existing canonical
+read APIs; no mutation workflow is duplicated here.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any, Mapping, Optional
 
+from teacher_app.command_center import audience
 from teacher_app.common.auth import normalize_role
 from teacher_app.common.errors import ApiError
 from teacher_app.pgy import service as pgy_service
@@ -72,7 +73,7 @@ def build_summary(
     *,
     now: Optional[dt.datetime] = None,
 ) -> dict[str, Any]:
-    """Return the read-only command-center projection for one authenticated user."""
+    """Return one authenticated user's read-only command-center projection."""
     if not user:
         raise ApiError(
             "LOGIN_REQUIRED",
@@ -81,13 +82,16 @@ def build_summary(
             extra={"loginRequired": True},
         )
 
+    profile = audience.current_profile(user)
     role = normalize_role(user.get("role", "student"))
     current = now or dt.datetime.now(dt.timezone.utc)
     if current.tzinfo is None:
         current = current.replace(tzinfo=dt.timezone.utc)
     current = current.astimezone(dt.timezone.utc)
 
-    actionable = ACTIONABLE_PGY.get(role, {})
+    # Fail closed: a normal/online user never receives PGY workflow content,
+    # even if stale PGY rows happen to exist for the same account.
+    actionable = ACTIONABLE_PGY.get(role, {}) if profile["pgyLearner"] else {}
     assignments = pgy_service.list_assignments(user) if actionable else []
     items: list[dict[str, Any]] = []
 
@@ -119,7 +123,9 @@ def build_summary(
     overdue = sum(1 for item in items if item["overdue"])
     return {
         "role": role,
-        "scope": ["pgy"],
+        "audience": profile["audience"],
+        "pgyLearner": profile["pgyLearner"],
+        "scope": ["online", "pgy"] if profile["pgyLearner"] else ["online"],
         "generatedAt": current.isoformat(),
         "counts": {
             "total": len(items),
