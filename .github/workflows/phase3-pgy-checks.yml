@@ -111,3 +111,5 @@ jobs:
           grep -q 'MATERIAL_WORKER_TOKEN' render.yaml
           ! grep -q 'material_worker.py' run_web.sh
           grep -q 'Teacher 6.7' ARCHITECTURE_6_7.md
+          test -f ARCHITECTURE_ROOT_MIRROR_CLEANUP.md
+          grep -q 'Root freeze policy' ARCHITECTURE_ROOT_MIRROR_CLEANUP.md
