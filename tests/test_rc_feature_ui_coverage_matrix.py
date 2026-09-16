@@ -27,6 +27,7 @@ class RcFeatureUiCoverageMatrixTests(unittest.TestCase):
 
     def test_rc_matrix_covers_current_formal_product_surfaces(self):
         for marker in (
+            "Training Command Center / 我的待辦 (7.1 M1)",
             "Course Wizard",
             "Material catalog / metadata",
             "Assessment configuration / review / publication",
@@ -49,7 +50,7 @@ class RcFeatureUiCoverageMatrixTests(unittest.TestCase):
             "A backend feature without a normal UI entry must not be marked `Usable`",
             self.source,
         )
-        self.assertIn("explicitly classified as `Internal`", self.source)
+        self.assertIn("intentionally classified as `Internal`", self.source)
         self.assertIn("New product work must update this", self.source)
 
     def test_internal_and_deferred_surfaces_are_explicit(self):
