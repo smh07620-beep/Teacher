@@ -1,0 +1,134 @@
+name: One-time pre-7.1 branch cleanup
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: contains(github.event.head_commit.message, 'Pre-7.1 branch cleanup')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete audited stale branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          branches = [
+              'chore/remove-stale-root-ui-mirror-69',
+              'chore/root-mirror-cleanup',
+              'chore/root-mirror-freeze',
+              'codex/pgy-rbac-v1',
+              'codex/phase-3-pgy-architecture',
+              'codex/phase-3-pgy-workflow-ui',
+              'docs/rc-feature-ui-coverage-matrix',
+              'feat/phase2-atlas-import-management',
+              'feat/phase2-atlas-ui-search-completion',
+              'feat/phase2-search-atlas',
+              'feat/role-workspace-shell-70',
+              'feat/system-admin-subworkspaces-70',
+              'feat/worker-status-ui-70',
+              'feature/course-bundle-followup-idempotency',
+              'feature/course-bundle-idempotency',
+              'feature/course-wizard-followup-idempotency',
+              'feature/course-wizard-session-background-idempotent',
+              'fix/authorization-role-ui-69',
+              'fix/course-wizard-flow-69',
+              'fix/group-leader-scope-rbac-681',
+              'fix/legacy-office-download-69',
+              'fix/session-rbac-cleanup-69',
+              'fix/user-profile-editor-681-clean',
+              'fix/user-profile-editor-681-final',
+              'fix/user-profile-editor-681-review',
+              'fix/user-profile-editor-681',
+              'noop',
+              'refactor/final-convergence-compat-facade',
+              'refactor/final-convergence-stage3-source-cleanup',
+              'refactor/final-convergence-wizard-runtime-retirement',
+              'refactor/phase3-admin-modules',
+              'refactor/phase3b-course-material',
+              'refactor/phase3c-admin-people',
+              'refactor/phase3d-admin-announcements',
+              'refactor/phase3e-admin-system',
+              'refactor/phase3f-admin-materials',
+              'refactor/phase3g-admin-question-bank',
+              'refactor/phase3h-admin-jobs',
+              'refactor/phase3i-admin-material-upload',
+              'refactor/phase3j-admin-ai-questions',
+              'refactor/phase3k-admin-workspace-router',
+              'refactor/phase3l-admin-results-workspace',
+              'refactor/phase3m-admin-exam-settings',
+              'refactor/phase3n-admin-word-templates',
+              'refactor/phase3o-admin-pgy-assessments',
+              'refactor/phase3p-admin-external-media',
+              'refactor/phase3q-admin-results-export',
+              'refactor/phase3r-admin-results-data',
+              'refactor/phase3s-admin-quiz-materials',
+              'refactor/phase3t-admin-question-editor-ui',
+              'refactor/phase3u-admin-question-actions',
+              'refactor/phase3v-admin-question-panel',
+              'refactor/phase3w-learner-exam-controls',
+              'refactor/phase3x-learner-result-chart',
+              'refactor/stage4-5-legacy-retirement',
+              'refactor/stage4-5-prep',
+              'refactor/stage5.1-domain-ownership-prep',
+              'tmp/noop-check',
+              'tmp/noop-check-2',
+              'tmp/noop-check-3',
+              'tmp/noop-check-4',
+              'tmp/noop-check-5',
+              'tmp/noop-check-6',
+              'tmp/noop-check-7',
+              'tmp/noop-check-8',
+              'tmp/noop-check-9',
+              'chore/pre-7-1-branch-cleanup',
+          ]
+
+          owner_repo = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          failures = []
+          deleted = []
+
+          for branch in branches:
+              encoded = urllib.parse.quote(branch, safe='')
+              url = f'https://api.github.com/repos/{owner_repo}/git/refs/heads/{encoded}'
+              request = urllib.request.Request(
+                  url,
+                  method='DELETE',
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'teacher-pre-7-1-cleanup',
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request) as response:
+                      response.read()
+                  deleted.append(branch)
+                  print(f'deleted: {branch}')
+              except urllib.error.HTTPError as exc:
+                  body = exc.read().decode('utf-8', errors='replace')
+                  if exc.code == 404:
+                      print(f'already absent: {branch}')
+                      continue
+                  failures.append((branch, exc.code, body))
+                  print(f'FAILED {exc.code}: {branch}: {body}', file=sys.stderr)
+
+          print(f'deleted {len(deleted)} audited branches')
+          if failures:
+              print(json.dumps(failures, ensure_ascii=False, indent=2), file=sys.stderr)
+              sys.exit(1)
+          PY
