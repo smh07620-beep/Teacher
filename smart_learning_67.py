@@ -62,6 +62,30 @@ def _row(row):
     return dict(row) if row else {}
 
 
+def auto_index_material(base, material_id):
+    """Best-effort completion hook; never affects Worker completion/heartbeat."""
+    material=base.get_material(material_id)
+    def terminal(status, reason, source_kind=""):
+        conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
+        try:conn.execute(f"INSERT INTO material_search_status(material_id,status,page_count,last_indexed_at,failure_reason,source_kind) VALUES({ph},{ph},{ph},{ph},{ph},{ph}) ON CONFLICT(material_id) DO UPDATE SET status=EXCLUDED.status,page_count=EXCLUDED.page_count,last_indexed_at=EXCLUDED.last_indexed_at,failure_reason=EXCLUDED.failure_reason,source_kind=EXCLUDED.source_kind",(material_id,status,0,_now(),reason,source_kind))
+        finally:conn.close()
+        return status
+    if not material:return terminal("unsupported","找不到教材")
+    path=Path(base.UPLOADED_SLIDES_DIR)/str(material.get("folder") or material_id)/str(material.get("storageFilename") or material.get("filename") or "")
+    if material.get("storageBackend")!="local" or not path.is_file():return terminal("unsupported","此教材目前無可安全索引的本機原始檔",str(material.get("storageBackend") or ""))
+    try: rows=extract_slide_text(path)
+    except Exception:return terminal("failed","文字抽取失敗",path.suffix.lower())
+    conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
+    try:
+        conn.execute(f"DELETE FROM material_text_index WHERE material_id={ph}",(material_id,))
+        for page_no,text,title in rows:conn.execute(f"INSERT INTO material_text_index(material_id,page_no,title,text,indexed_at) VALUES({ph},{ph},{ph},{ph},{ph})",(material_id,page_no,title,text,_now()))
+        status="indexed" if rows else "no_text"
+        conn.execute(f"INSERT INTO material_search_status(material_id,status,page_count,last_indexed_at,failure_reason,source_kind) VALUES({ph},{ph},{ph},{ph},{ph},{ph}) ON CONFLICT(material_id) DO UPDATE SET status=EXCLUDED.status,page_count=EXCLUDED.page_count,last_indexed_at=EXCLUDED.last_indexed_at,failure_reason=EXCLUDED.failure_reason",(material_id,status,len(rows),_now(),"" if rows else "無可搜尋文字",path.suffix.lower()))
+        return status
+    except Exception:return terminal("failed","索引寫入失敗",path.suffix.lower())
+    finally:conn.close()
+
+
 def media_completion(duration, watched_buckets, threshold=.9):
     """Server-authoritative ten-second bucket coverage for video/audio."""
     duration=max(0.0, float(duration or 0)); threshold=max(0.0,min(1.0,float(threshold)))
@@ -179,10 +203,10 @@ def register_smart_learning(base):
         try:
             conn.execute(f"DELETE FROM material_text_index WHERE material_id={ph}",(material_id,))
             for page_no,text,title in rows: conn.execute(f"INSERT INTO material_text_index(material_id,page_no,title,text,indexed_at) VALUES({ph},{ph},{ph},{ph},{ph})",(material_id,page_no,title,text,_now()))
-            status="indexed" if rows else "unsupported"; reason="" if rows else "找不到可擷取文字；掃描型 PDF 不提供假性搜尋結果。"
+            status="indexed" if rows else "no_text"; reason="" if rows else "找不到可擷取文字；掃描型 PDF 不提供假性搜尋結果。"
             conn.execute(f"INSERT INTO material_search_status(material_id,status,page_count,last_indexed_at,failure_reason,source_kind) VALUES({ph},{ph},{ph},{ph},{ph},{ph}) ON CONFLICT(material_id) DO UPDATE SET status=EXCLUDED.status,page_count=EXCLUDED.page_count,last_indexed_at=EXCLUDED.last_indexed_at,failure_reason=EXCLUDED.failure_reason,source_kind=EXCLUDED.source_kind",(material_id,status,len(rows),_now(),reason,path.suffix.lower()))
         finally:conn.close()
-        return jsonify({"ok":True,"pages":len(rows),"searchable":bool(rows),"status":"indexed" if rows else "unsupported"})
+        return jsonify({"ok":True,"pages":len(rows),"searchable":bool(rows),"status":"indexed" if rows else "no_text"})
 
     @app.get("/api/material-search/<material_id>/status")
     def material_index_status(material_id):

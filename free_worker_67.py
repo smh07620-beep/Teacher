@@ -251,6 +251,13 @@ def register_free_worker(base):
             except Exception: cleanup_pending = True
             base._update_material_job(job_id, status="completed", finished_at=now, stage="已完成", detail="本機 Worker 已完成教材處理與正式儲存。", result=result, error="", cleanup_pending=cleanup_pending, staging_path="", staging_key="" if not cleanup_pending else job.get("stagingKey", ""))
             base.sync_media_processing_metadata(job, "completed")
+            # Indexing is best-effort and deliberately occurs after the job is
+            # terminal; it cannot delay heartbeats or alter restart semantics.
+            try:
+                from smart_learning_67 import auto_index_material
+                auto_index_material(base, str(result.get("id") or job.get("materialId") or ""))
+            except Exception:
+                pass
             return jsonify({"ok": True, "status": "completed", "cleanupPending": cleanup_pending})
         if action == "retry":
             attempts = int(job.get("attempts", 0) or 0); maximum = int(job.get("maxAttempts", 1) or 1)

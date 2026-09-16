@@ -2,6 +2,8 @@
 import sqlite3
 import tempfile
 import unittest
+import zipfile
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,6 +11,7 @@ from werkzeug.security import generate_password_hash
 
 import app as legacy_app
 import pgy_app
+from smart_learning_67 import auto_index_material
 
 
 ROOT = Path(__file__).parents[1]
@@ -36,6 +39,7 @@ class MaterialReadAccess68Tests(unittest.TestCase):
             )
             conn.execute("CREATE TABLE atlas_items (id TEXT PRIMARY KEY,category TEXT NOT NULL,group_key TEXT NOT NULL,title TEXT NOT NULL,image_url TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',tags TEXT NOT NULL DEFAULT '[]',differential_points TEXT NOT NULL DEFAULT '',teaching_notes TEXT NOT NULL DEFAULT '',difficulty TEXT NOT NULL DEFAULT 'general',published INTEGER NOT NULL DEFAULT 0,source TEXT NOT NULL DEFAULT 'manual',source_material_id TEXT NOT NULL DEFAULT '',source_docx TEXT NOT NULL DEFAULT '',sort_order INTEGER NOT NULL DEFAULT 0,annotation_json TEXT NOT NULL DEFAULT '{}',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,created_by TEXT NOT NULL DEFAULT '',updated_by TEXT NOT NULL DEFAULT '')")
             conn.execute("CREATE TABLE material_text_index (material_id TEXT NOT NULL,page_no INTEGER NOT NULL,title TEXT NOT NULL DEFAULT '',text TEXT NOT NULL DEFAULT '',indexed_at TEXT NOT NULL DEFAULT '',PRIMARY KEY(material_id,page_no))")
+            conn.execute("CREATE TABLE material_search_status (material_id TEXT PRIMARY KEY,status TEXT NOT NULL,page_count INTEGER NOT NULL DEFAULT 0,last_indexed_at TEXT NOT NULL DEFAULT '',failure_reason TEXT NOT NULL DEFAULT '',source_kind TEXT NOT NULL DEFAULT '')")
             users = (
                 ("education-admin", "Education Admin", "E001", "education_admin", "grpHema"),
                 ("group-leader", "Group Leader", "G001", "group_leader", "grpHema"),
@@ -180,6 +184,79 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         self.assertIn("/api/teaching-resource-search", ROOT.joinpath("atlas_70.py").read_text(encoding="utf-8"))
         self.assertIn("搜尋本教材內容", ROOT.joinpath("static/system.html").read_text(encoding="utf-8"))
         self.assertIn("搜尋教學資源", ROOT.joinpath("static/system.html").read_text(encoding="utf-8"))
+
+    def create_atlas(self, title, group="grpHema", published=False, tags=None):
+        response = self.client.post("/api/atlas", json={"group": group, "category": "blood_cell", "title": title, "description": title + " description", "tags": tags or [], "published": published}, headers={"Origin": "http://localhost"})
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        return response.get_json()["id"]
+
+    def test_atlas_edit_and_filters_are_behavioral_and_group_scoped(self):
+        self.login("education-admin")
+        hema = self.create_atlas("Blast original", published=True, tags=["blast", "acute"])
+        self.create_atlas("Urine draft", group="grpBio", published=False, tags=["sediment"])
+        updated = self.client.patch(f"/api/atlas/{hema}", json={"title": "Edited blast", "tags": ["edited"], "difficulty": "advanced", "sortOrder": 7}, headers={"Origin": "http://localhost"})
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        found = self.client.get("/api/atlas?group=grpHema&tag=edited&status=published")
+        self.assertEqual([x["title"] for x in found.get_json()["items"]], ["Edited blast"])
+        self.assertEqual(found.get_json()["items"][0]["difficulty"], "advanced")
+        self.login("student-user")
+        student = self.client.get("/api/atlas?status=published&group=grpHema&tag=edited")
+        self.assertEqual([x["title"] for x in student.get_json()["items"]], ["Edited blast"])
+        self.assertEqual(self.client.patch(f"/api/atlas/{hema}", json={"title":"blocked"}, headers={"Origin":"http://localhost"}).status_code, 403)
+
+    def test_unpublished_atlas_is_hidden_from_student_resource_search(self):
+        self.login("education-admin")
+        public_id = self.create_atlas("Public morphology", published=True, tags=["needle"])
+        self.create_atlas("Secret morphology", published=False, tags=["needle"])
+        self.login("student-user")
+        items = self.client.get("/api/teaching-resource-search?q=needle").get_json()["items"]
+        self.assertEqual([x.get("atlasItemId") for x in items if x["type"] == "atlas"], [public_id])
+
+    def test_docx_confirm_merges_common_metadata_and_per_image_override(self):
+        source = Path(self.temp.name) / "slides" / "docx-1"; source.mkdir(parents=True)
+        docx = source / "atlas.docx"
+        # A minimal valid PNG embedded twice is enough for the importer contract.
+        from PIL import Image
+        output = BytesIO(); Image.new("RGB", (1, 1), "white").save(output, format="PNG"); png = output.getvalue()
+        with zipfile.ZipFile(docx, "w") as archive:
+            archive.writestr("word/media/image1.png", png); archive.writestr("word/media/image2.png", png)
+        material = {"id":"docx-1","group":"grpHema","folder":"docx-1","storageFilename":"atlas.docx","filename":"atlas.docx"}
+        with patch.object(legacy_app, "get_material", return_value=material), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", source.parent), patch.object(legacy_app, "MATERIAL_STORAGE", Path(self.temp.name) / "storage"):
+            self.login("education-admin")
+            result = self.client.post("/api/atlas/import-docx/docx-1/confirm", json={"metadata":{"title":"Shared title","group":"grpHema","category":"blood_cell","description":"Shared description","tags":["shared"],"differentialPoints":"Shared differential","teachingNotes":"Shared notes","difficulty":"basic","sortOrder":3},"items":[{"index":1},{"index":2,"title":"Override title","tags":["override"],"sortOrder":9}]}, headers={"Origin":"http://localhost"})
+        self.assertEqual(result.status_code, 201, result.get_data(as_text=True))
+        ids = result.get_json()["created"]
+        records = [self.client.get(f"/api/atlas/{item_id}").get_json()["item"] for item_id in ids]
+        self.assertEqual([x["title"] for x in records], ["Shared title", "Override title"])
+        self.assertEqual(records[0]["tags"], ["shared"])
+        self.assertEqual(records[1]["tags"], ["override"])
+        self.assertTrue(all(not x["published"] and x["teachingNotes"] == "Shared notes" for x in records))
+
+    def test_auto_index_records_no_text_and_unsupported_terminal_states(self):
+        source = Path(self.temp.name) / "slides" / "empty"; source.mkdir(parents=True)
+        pdf = source / "scan.pdf"; pdf.write_bytes(b"not a searchable pdf")
+        material = {"id":"scan-1","group":"grpHema","folder":"empty","storageFilename":"scan.pdf","filename":"scan.pdf","storageBackend":"local"}
+        with patch.object(legacy_app, "get_material", return_value=material), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", source.parent), patch("smart_learning_67.extract_slide_text", return_value=[]):
+            self.assertEqual(auto_index_material(legacy_app, "scan-1"), "no_text")
+        conn, _ = self.connect()
+        try: self.assertEqual(conn.execute("SELECT status FROM material_search_status WHERE material_id=?", ("scan-1",)).fetchone()[0], "no_text")
+        finally: conn.close()
+
+    def test_manual_rebuild_reports_no_text_not_unsupported_for_scanned_pdf(self):
+        source = Path(self.temp.name) / "slides" / "manual"; source.mkdir(parents=True)
+        (source / "scan.pdf").write_bytes(b"scan")
+        material = {"id":"manual-scan","group":"grpHema","folder":"manual","storageFilename":"scan.pdf","filename":"scan.pdf","storageBackend":"local"}
+        self.login("education-admin")
+        with patch.object(legacy_app, "get_material", return_value=material), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", source.parent), patch("smart_learning_67.extract_slide_text", return_value=[]):
+            response = self.client.post("/api/material-search/manual-scan/index", headers={"Origin":"http://localhost"})
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()["status"], "no_text")
+        unsupported = {**material, "id":"remote-1", "storageBackend":"r2"}
+        with patch.object(legacy_app, "get_material", return_value=unsupported), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", source.parent):
+            self.assertEqual(auto_index_material(legacy_app, "remote-1"), "unsupported")
+        conn, _ = self.connect()
+        try: self.assertEqual(conn.execute("SELECT status FROM material_search_status WHERE material_id=?", ("remote-1",)).fetchone()[0], "unsupported")
+        finally: conn.close()
 
 
 class MaterialNavigationFrontend68Tests(unittest.TestCase):

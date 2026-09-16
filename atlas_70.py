@@ -145,16 +145,19 @@ def register_atlas_70(base):
         if denied:return denied
         material,path=docx_source(material_id)
         if not material or not path:return jsonify({"error":"需要可安全存取的 DOCX 原始檔。"}),409
-        group=str(material.get("group") or material.get("groupKey") or "")
-        if not can_manage(user,group):return jsonify({"error":"無權管理此教材。"}),403
+        source_group=str(material.get("group") or material.get("groupKey") or "")
+        if not can_manage(user,source_group):return jsonify({"error":"無權管理此教材。"}),403
         body=request.get_json(silent=True) or {}; selected=body.get("items")
         if not isinstance(selected,list) or not selected:return jsonify({"error":"請至少選擇一張圖片。"}),400
+        common=body.get("metadata") or body.get("commonMetadata") or {}
+        if not isinstance(common,dict):return jsonify({"error":"共用 metadata 格式不正確。"}),400
         with zipfile.ZipFile(path) as archive:
             media=[name for name in archive.namelist() if name.startswith("word/media/")]
             created=[]; now=_now(); conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
             try:
                 for picked in selected[:30]:
-                    index=int((picked or {}).get("index",0))-1
+                    if not isinstance(picked,dict):continue
+                    values={**common,**picked}; index=int(values.get("index",0))-1
                     if index<0 or index>=len(media):continue
                     raw=archive.read(media[index]); ext=Path(media[index]).suffix.lower()
                     if ext not in {".jpg",".jpeg",".png",".webp"}:continue
@@ -165,10 +168,12 @@ def register_atlas_70(base):
                         if im.format not in {"JPEG","PNG","WEBP"}:continue
                         name=f"{uuid.uuid4().hex}{ext}";image_dir().joinpath(name).write_bytes(raw);thumb=im.copy();thumb.thumbnail((640,640));thumb.save(image_dir()/f"thumb-{name}",format=im.format)
                     except Exception:continue
-                    category=str(picked.get("category") or "microscope")
+                    group=str(values.get("group") or source_group).strip()
+                    if not group or not can_manage(user,group):continue
+                    category=str(values.get("category") or "microscope")
                     if category not in ATLAS_CATEGORIES:category="microscope"
-                    item_id=uuid.uuid4().hex; title=str(picked.get("title") or Path(media[index]).stem)[:255]
-                    conn.execute(f"INSERT INTO atlas_items(id,category,group_key,title,image_url,description,tags,differential_points,teaching_notes,difficulty,published,source,source_material_id,source_docx,sort_order,annotation_json,created_at,updated_at,created_by,updated_by) VALUES({','.join([ph]*20)})",(item_id,category,group,title,f"/api/atlas/images/{name}",str(picked.get("description") or "")[:6000],json.dumps(_tags(picked.get("tags")),ensure_ascii=False),str(picked.get("differentialPoints") or "")[:6000],str(picked.get("teachingNotes") or "")[:6000],str(picked.get("difficulty") or "general")[:40],False,"docx",material_id,str(material.get("filename") or "")[:255],int(picked.get("sortOrder") or 0),"{}",now,now,str(user.get("username") or ""),str(user.get("username") or "")))
+                    item_id=uuid.uuid4().hex; title=str(values.get("title") or Path(media[index]).stem)[:255]
+                    conn.execute(f"INSERT INTO atlas_items(id,category,group_key,title,image_url,description,tags,differential_points,teaching_notes,difficulty,published,source,source_material_id,source_docx,sort_order,annotation_json,created_at,updated_at,created_by,updated_by) VALUES({','.join([ph]*20)})",(item_id,category,group,title,f"/api/atlas/images/{name}",str(values.get("description") or "")[:6000],json.dumps(_tags(values.get("tags")),ensure_ascii=False),str(values.get("differentialPoints") or "")[:6000],str(values.get("teachingNotes") or "")[:6000],str(values.get("difficulty") or "general")[:40],False,"docx",material_id,str(material.get("filename") or "")[:255],int(values.get("sortOrder") or 0),"{}",now,now,str(user.get("username") or ""),str(user.get("username") or "")))
                     created.append(item_id)
             finally:conn.close()
         if not created:return jsonify({"error":"沒有可安全匯入的內嵌圖片。","warnings":["請確認 DOCX 使用支援的 inline JPG/PNG/WEBP 圖片。"]}),409
@@ -180,6 +185,10 @@ def register_atlas_70(base):
         if denied: return denied
         if not can_read(user): return jsonify({"error":"權限不足。"}), 403
         category = str(request.args.get("category", "")).strip()
+        group_filter = str(request.args.get("group", "")).strip()
+        tag_filter = _normalise(request.args.get("tag", ""))[:80]
+        status_filter = str(request.args.get("status", "")).strip().lower()
+        if status_filter not in {"", "published", "draft"}: return jsonify({"error":"發布狀態篩選不正確。"}),400
         query = _normalise(request.args.get("q", ""))[:MAX_QUERY]
         groups = readable_groups(user)
         conn, kind = base._db_conn(); ph = "%s" if kind == "postgres" else "?"
@@ -191,6 +200,10 @@ def register_atlas_70(base):
             item=atlas_dict(row)
             if groups is not None and item["group"] not in groups: continue
             if not can_manage(user, item["group"]) and not item["published"]: continue
+            if group_filter and item["group"] != group_filter: continue
+            if tag_filter and tag_filter not in {_normalise(tag) for tag in item["tags"]}: continue
+            if status_filter == "published" and not item["published"]: continue
+            if status_filter == "draft" and (not can_manage(user,item["group"]) or item["published"]): continue
             hay=_normalise(" ".join([item["title"], item["description"], " ".join(item["tags"]), item["differentialPoints"]]))
             if category and item["category"] != category: continue
             if query and query not in hay: continue
@@ -271,7 +284,10 @@ def register_atlas_70(base):
         item=atlas_dict(row)
         if not item:return jsonify({"error":"找不到圖譜。"}),404
         if not can_manage(user,item["group"]):return jsonify({"error":"無權管理此圖譜。"}),403
-        allowed={"title":"title","imageUrl":"image_url","description":"description","differentialPoints":"differential_points","teachingNotes":"teaching_notes","difficulty":"difficulty","sourceDocx":"source_docx","sortOrder":"sort_order","published":"published","category":"category"}
+        if "group" in body:
+            next_group=str(body["group"] or "").strip()
+            if not next_group or not can_manage(user,next_group):return jsonify({"error":"無權移動至此組別。"}),403
+        allowed={"title":"title","imageUrl":"image_url","description":"description","differentialPoints":"differential_points","teachingNotes":"teaching_notes","difficulty":"difficulty","sourceDocx":"source_docx","sortOrder":"sort_order","published":"published","category":"category","group":"group_key"}
         changes=[]; params=[]
         for key,column in allowed.items():
             if key not in body: continue

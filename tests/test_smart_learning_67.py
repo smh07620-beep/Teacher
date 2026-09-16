@@ -40,4 +40,22 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('0067-smart-learning-content',schema)
         self.assertIn('CREATE TABLE IF NOT EXISTS learning_progress',schema)
 
+    def test_phase2_index_contract_has_safe_terminal_hook_and_admin_ui(self):
+        smart=ROOT.joinpath('smart_learning_67.py').read_text(encoding='utf-8')
+        worker=ROOT.joinpath('free_worker_67.py').read_text(encoding='utf-8')
+        admin=ROOT.joinpath('static/system-admin.js').read_text(encoding='utf-8')
+        self.assertIn('def auto_index_material', smart)
+        self.assertIn('"no_text"', smart)
+        self.assertIn('auto_index_material(base', worker)
+        self.assertIn('status="completed"', worker)
+        self.assertIn('rebuildMaterialIndex', admin)
+        self.assertIn('hydrateMaterialIndexStatus', admin)
+
+    def test_phase2_docx_wizard_ui_contract(self):
+        wizard=ROOT.joinpath('static/atlas-docx-wizard-70.js').read_text(encoding='utf-8')
+        self.assertIn('openAtlasDocxWizard', wizard)
+        self.assertIn('/preview', wizard)
+        self.assertIn('/confirm', wizard)
+        self.assertIn('去識別化', wizard)
+
 if __name__=='__main__': unittest.main()
