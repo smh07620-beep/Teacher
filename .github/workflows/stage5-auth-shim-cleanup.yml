@@ -1,0 +1,101 @@
+name: Stage 5 guarded auth shim cleanup
+
+on:
+  push:
+    branches:
+      - refactor/stage4-5-legacy-retirement
+
+permissions:
+  contents: write
+
+jobs:
+  retire-test-only-auth-implementations:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/stage4-5-legacy-retirement
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install release test dependencies
+        run: python -m pip install 'Flask>=3,<4' 'requests>=2.32,<3' 'Pillow>=10.4,<12.0'
+      - name: Delete exact test-only auth implementations
+        shell: python
+        run: |
+          import ast
+          from pathlib import Path
+
+          path = Path('app.py')
+          text = path.read_text(encoding='utf-8')
+          lines = text.splitlines(keepends=True)
+          tree = ast.parse(text)
+          target = {
+              '_legacy_normalize_role',
+              '_legacy_has_permission',
+              '_legacy_normalize_username',
+              '_legacy_user_public',
+              '_legacy_current_user',
+              '_legacy_require_roles',
+              '_legacy_api_auth_me',
+              '_legacy_api_auth_login',
+              '_legacy_api_auth_logout',
+          }
+          nodes = {
+              node.name: node
+              for node in tree.body
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in target
+          }
+          if set(nodes) != target:
+              missing = sorted(target - set(nodes))
+              extra = sorted(set(nodes) - target)
+              raise SystemExit(f'guard failed: expected exact legacy auth set; missing={missing}, extra={extra}')
+
+          # Delete whole function line ranges only. Adjacent historical comments may remain;
+          # product behavior is changed only by removing the dead function definitions.
+          for name, node in sorted(nodes.items(), key=lambda item: item[1].lineno, reverse=True):
+              start = node.lineno - 1
+              end = node.end_lineno
+              print(f'retire {name}: lines {node.lineno}-{node.end_lineno}')
+              del lines[start:end]
+
+          result = ''.join(lines)
+          live_markers = (
+              'def normalize_role(value):',
+              'def has_permission(user, permission):',
+              'def _normalize_username(value):',
+              'def _user_public(row):',
+              'def _current_user():',
+              'def require_roles(*allowed_roles):',
+              'def api_auth_me():',
+              'def api_auth_login():',
+              'def api_auth_logout():',
+          )
+          for marker in live_markers:
+              if marker not in result:
+                  raise SystemExit(f'guard failed: live delegate lost: {marker}')
+          for name in target:
+              if f'def {name}(' in result:
+                  raise SystemExit(f'guard failed: retired implementation remains: {name}')
+          path.write_text(result, encoding='utf-8')
+      - name: Guard deletion-only app diff
+        run: |
+          git diff --check
+          test "$(git diff --numstat -- app.py | awk '{print $1}')" = "0"
+          test "$(git diff --numstat -- app.py | awk '{print $2}')" -gt "0"
+          ! git diff -- app.py | grep -q '^+'
+          git diff --stat -- app.py
+      - name: Python compile and full regression suite
+        run: |
+          python -m py_compile app.py pgy_app.py pgy_workflow.py pgy_atomic.py pgy_signing_66.py
+          python -m compileall -q teacher_app tests
+          python -m unittest discover -s tests -v
+      - name: Commit guarded app.py deletion
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.py
+          git commit -m "refactor: retire duplicate legacy auth implementations [skip ci]"
+          git push origin HEAD:refactor/stage4-5-legacy-retirement
