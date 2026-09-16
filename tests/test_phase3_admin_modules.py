@@ -106,6 +106,35 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
         self.assertIn("method:'DELETE'", source)
         self.assertIn('X-Admin-Key', source)
 
+    def test_system_module_is_loaded_after_announcements_override(self):
+        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
+        announcements_pos = frontend.index('/admin-announcements.js?v=7103')
+        system_pos = frontend.index('/admin-system.js?v=7104')
+        self.assertLess(announcements_pos, system_pos)
+
+    def test_system_module_preserves_storage_global_contracts(self):
+        source = ROOT.joinpath('static/admin-system.js').read_text(encoding='utf-8')
+        for name in (
+            'renderStorageStatus',
+            'migrateMaterialsToMega',
+            'migrateMaterialsToGoogleDrive',
+            'migrateLocalMaterialsToR2',
+        ):
+            self.assertIn(f'window.{name}', source)
+        self.assertIn('/api/storage-status', source)
+        self.assertIn('/api/storage/migrate-to-mega', source)
+        self.assertIn('/api/storage/migrate-to-gdrive', source)
+        self.assertIn('/api/storage/migrate-to-r2', source)
+        self.assertIn('X-Admin-Key', source)
+
+    def test_system_module_keeps_existing_security_boundary(self):
+        source = ROOT.joinpath('static/admin-system.js').read_text(encoding='utf-8')
+        self.assertIn('getAdminKey', source)
+        self.assertNotIn('professional_title', source)
+        self.assertNotIn('responsibility_tags', source)
+        self.assertNotIn('localStorage.setItem', source)
+        self.assertNotIn('sessionStorage.setItem', source)
+
 
 if __name__ == '__main__':
     unittest.main()
