@@ -8,14 +8,14 @@ from tests.auth_support import AuthFixture
 
 class UserProfileEditorFrontend681Tests(unittest.TestCase):
     def test_existing_account_editor_exposes_profile_metadata_without_role_mutation(self):
-        source = Path(__file__).parents[1].joinpath('static', 'system-admin.js').read_text(encoding='utf-8')
+        source = Path(__file__).parents[1].joinpath('static', 'admin-people.js').read_text(encoding='utf-8')
         self.assertIn('function openAdminUserEditor(username)', source)
         self.assertIn('admin-user-editor-professional-title', source)
         self.assertIn('admin-user-editor-responsibility-tags', source)
         self.assertIn('professionalTitle', source)
         self.assertIn('responsibilityTags', source)
         start = source.index('async function saveAdminUserEditor()')
-        end = source.index('async function renderAdminUserAccounts()', start)
+        end = source.index('window.adminProfileTags', start)
         save = source[start:end]
         self.assertIn('const payload={name,empId,professionalTitle,responsibilityTags}', save)
         self.assertNotIn('role:', save)
