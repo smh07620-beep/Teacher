@@ -41,11 +41,13 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/workspace-shell-70.js?v=7001"></script>')
             if "/worker-status-70.js" not in html:
                 body_assets.append('<script defer src="/worker-status-70.js?v=7002"></script>')
-            # Phase 3 incremental admin split.  Load after the legacy admin
+            # Phase 3 incremental admin split. Load after the legacy admin
             # bundle so extracted domains can safely override their old global
             # entry points while HTML onclick contracts remain unchanged.
             if "/admin-results.js" not in html:
                 body_assets.append('<script defer src="/admin-results.js?v=7100"></script>')
+            if "/admin-course-material.js" not in html:
+                body_assets.append('<script defer src="/admin-course-material.js?v=7101"></script>')
             if head_assets and "</head>" in html:
                 html = html.replace("</head>", "\n".join(head_assets) + "\n</head>", 1)
             if body_assets and "</body>" in html:
