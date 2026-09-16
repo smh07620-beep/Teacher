@@ -10,9 +10,10 @@ import datetime as dt
 import json
 import re
 import uuid
+import zipfile
 from pathlib import Path
 
-from flask import jsonify, request
+from flask import jsonify, request, send_from_directory
 from teacher_app.common.auth import has_permission, has_role, is_system_admin
 
 ATLAS_CATEGORIES = {"microscope", "blood_cell", "urine_sediment", "colony"}
@@ -55,6 +56,11 @@ def register_atlas_70(base):
     def can_manage(user, group):
         return has_permission(user, "material.manage") and group_allowed(user, group)
 
+    def image_dir():
+        directory = Path(base.MATERIAL_STORAGE) / "atlas_images"
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
     def material_visible(user, material):
         return bool(material and material.get("active", True) and can_read(user) and (readable_groups(user) is None or str(material.get("group") or material.get("groupKey") or "") in readable_groups(user)))
 
@@ -66,6 +72,7 @@ def register_atlas_70(base):
         except Exception: item["annotationJson"] = {}
         item["group"] = item.pop("group_key", "")
         item["imageUrl"] = item.pop("image_url", "")
+        item["thumbnailUrl"] = item["imageUrl"].replace("/api/atlas/images/", "/api/atlas/images/thumb-") if item["imageUrl"].startswith("/api/atlas/images/") else item["imageUrl"]
         item["differentialPoints"] = item.pop("differential_points", "")
         item["teachingNotes"] = item.pop("teaching_notes", "")
         item["sourceMaterialId"] = item.pop("source_material_id", "")
@@ -77,6 +84,95 @@ def register_atlas_70(base):
         item["updatedBy"] = item.pop("updated_by", "")
         item["published"] = bool(item.get("published"))
         return item
+
+    @app.post("/api/atlas/images")
+    def atlas_image_upload():
+        user, denied=user_or_denied()
+        if denied:return denied
+        group=str(request.form.get("group") or "").strip()
+        if not can_manage(user, group):return jsonify({"error":"無權管理此組圖譜。"}),403
+        uploaded=request.files.get("file")
+        if not uploaded or not uploaded.filename:return jsonify({"error":"缺少圖片檔案。"}),400
+        ext=Path(uploaded.filename).suffix.lower()
+        if ext not in {".jpg",".jpeg",".png",".webp"}:return jsonify({"error":"僅接受 JPG、PNG、WEBP 圖片。"}),400
+        raw=uploaded.read()
+        if not raw or len(raw)>15*1024*1024:return jsonify({"error":"圖片不可為空且不得超過 15 MB。"}),400
+        try:
+            from PIL import Image
+            from io import BytesIO
+            image=Image.open(BytesIO(raw)); image.verify()
+            image=Image.open(BytesIO(raw)); image.load()
+            if image.format not in {"JPEG","PNG","WEBP"}:raise ValueError("format")
+            name=f"{uuid.uuid4().hex}{ext}"; target=image_dir()/name; target.write_bytes(raw)
+            thumb=image.copy(); thumb.thumbnail((640,640)); thumb.save(image_dir()/f"thumb-{name}", format=image.format)
+        except Exception:return jsonify({"error":"圖片內容或 MIME 驗證失敗。"}),400
+        return jsonify({"imageUrl":f"/api/atlas/images/{name}","thumbnailUrl":f"/api/atlas/images/thumb-{name}"}),201
+
+    @app.get("/api/atlas/images/<path:name>")
+    def atlas_image_read(name):
+        user, denied=user_or_denied()
+        if denied:return denied
+        safe=Path(name).name
+        original=safe[6:] if safe.startswith("thumb-") else safe
+        conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
+        try: row=conn.execute(f"SELECT group_key,published FROM atlas_items WHERE image_url={ph}",(f"/api/atlas/images/{original}",)).fetchone()
+        finally:conn.close()
+        item=_row(row); groups=readable_groups(user)
+        if not item or not can_read(user) or (groups is not None and item.get("group_key") not in groups) or (not bool(item.get("published")) and not can_manage(user,item.get("group_key"))):return jsonify({"error":"找不到圖譜圖片。"}),404
+        return send_from_directory(str(image_dir()),safe)
+
+    def docx_source(material_id):
+        material=base.get_material(material_id)
+        if not material:return None,None
+        path=Path(base.UPLOADED_SLIDES_DIR)/str(material.get("folder") or material_id)/str(material.get("storageFilename") or material.get("filename") or "")
+        return material,path if path.suffix.lower()==".docx" and path.is_file() else None
+
+    @app.post("/api/atlas/import-docx/<material_id>/preview")
+    def atlas_docx_preview(material_id):
+        user,denied=user_or_denied()
+        if denied:return denied
+        material,path=docx_source(material_id)
+        if not material or not path:return jsonify({"error":"需要可安全存取的 DOCX 原始檔。"}),409
+        if not can_manage(user,material.get("group") or material.get("groupKey")):return jsonify({"error":"無權管理此教材。"}),403
+        from smart_learning_67 import preview_docx_atlas
+        preview=preview_docx_atlas(path)
+        preview["warnings"]=list(preview.get("warnings") or [])+["只會匯入可驗證的內嵌圖片；浮動圖、SmartArt、圖表、群組物件、OLE 與損壞 relationship 不會自動建立圖譜。"]
+        return jsonify({"materialId":material_id,"preview":preview,"defaultGroup":material.get("group") or material.get("groupKey"),"initialStatus":"draft"})
+
+    @app.post("/api/atlas/import-docx/<material_id>/confirm")
+    def atlas_docx_confirm(material_id):
+        user,denied=user_or_denied()
+        if denied:return denied
+        material,path=docx_source(material_id)
+        if not material or not path:return jsonify({"error":"需要可安全存取的 DOCX 原始檔。"}),409
+        group=str(material.get("group") or material.get("groupKey") or "")
+        if not can_manage(user,group):return jsonify({"error":"無權管理此教材。"}),403
+        body=request.get_json(silent=True) or {}; selected=body.get("items")
+        if not isinstance(selected,list) or not selected:return jsonify({"error":"請至少選擇一張圖片。"}),400
+        with zipfile.ZipFile(path) as archive:
+            media=[name for name in archive.namelist() if name.startswith("word/media/")]
+            created=[]; now=_now(); conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
+            try:
+                for picked in selected[:30]:
+                    index=int((picked or {}).get("index",0))-1
+                    if index<0 or index>=len(media):continue
+                    raw=archive.read(media[index]); ext=Path(media[index]).suffix.lower()
+                    if ext not in {".jpg",".jpeg",".png",".webp"}:continue
+                    try:
+                        from PIL import Image
+                        from io import BytesIO
+                        im=Image.open(BytesIO(raw));im.verify();im=Image.open(BytesIO(raw));im.load()
+                        if im.format not in {"JPEG","PNG","WEBP"}:continue
+                        name=f"{uuid.uuid4().hex}{ext}";image_dir().joinpath(name).write_bytes(raw);thumb=im.copy();thumb.thumbnail((640,640));thumb.save(image_dir()/f"thumb-{name}",format=im.format)
+                    except Exception:continue
+                    category=str(picked.get("category") or "microscope")
+                    if category not in ATLAS_CATEGORIES:category="microscope"
+                    item_id=uuid.uuid4().hex; title=str(picked.get("title") or Path(media[index]).stem)[:255]
+                    conn.execute(f"INSERT INTO atlas_items(id,category,group_key,title,image_url,description,tags,differential_points,teaching_notes,difficulty,published,source,source_material_id,source_docx,sort_order,annotation_json,created_at,updated_at,created_by,updated_by) VALUES({','.join([ph]*20)})",(item_id,category,group,title,f"/api/atlas/images/{name}",str(picked.get("description") or "")[:6000],json.dumps(_tags(picked.get("tags")),ensure_ascii=False),str(picked.get("differentialPoints") or "")[:6000],str(picked.get("teachingNotes") or "")[:6000],str(picked.get("difficulty") or "general")[:40],False,"docx",material_id,str(material.get("filename") or "")[:255],int(picked.get("sortOrder") or 0),"{}",now,now,str(user.get("username") or ""),str(user.get("username") or "")))
+                    created.append(item_id)
+            finally:conn.close()
+        if not created:return jsonify({"error":"沒有可安全匯入的內嵌圖片。","warnings":["請確認 DOCX 使用支援的 inline JPG/PNG/WEBP 圖片。"]}),409
+        return jsonify({"ok":True,"created":created,"status":"draft"}),201
 
     @app.get("/api/atlas")
     def atlas_list():
