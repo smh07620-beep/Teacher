@@ -53,6 +53,38 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
         self.assertNotIn('localStorage.setItem', source)
         self.assertNotIn('sessionStorage.setItem', source)
 
+    def test_people_module_is_loaded_after_course_material_override(self):
+        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
+        course_pos = frontend.index('/admin-course-material.js?v=7101')
+        people_pos = frontend.index('/admin-people.js?v=7102')
+        self.assertLess(course_pos, people_pos)
+
+    def test_people_module_preserves_profile_editor_contracts(self):
+        source = ROOT.joinpath('static/admin-people.js').read_text(encoding='utf-8')
+        for name in (
+            'adminProfileTags',
+            'adminUserRoleSummary',
+            'ensureAdminUserEditor',
+            'adminSyncProfileTagChecks',
+            'adminSetProfileTag',
+            'openAdminUserEditor',
+            'closeAdminUserEditor',
+            'saveAdminUserEditor',
+        ):
+            self.assertIn(f'window.{name}', source)
+        self.assertIn('/api/users/${encodeURIComponent(username)}', source)
+        self.assertIn("method:'PATCH'", source)
+        self.assertIn('professionalTitle', source)
+        self.assertIn('responsibilityTags', source)
+
+    def test_people_profile_metadata_never_becomes_rbac_input(self):
+        source = ROOT.joinpath('static/admin-people.js').read_text(encoding='utf-8')
+        self.assertIn('職稱／職責標籤不參與 RBAC 判斷', source)
+        self.assertNotIn('professionalTitle===', source)
+        self.assertNotIn('responsibilityTags.includes', source)
+        self.assertNotIn('localStorage.setItem', source)
+        self.assertNotIn('sessionStorage.setItem', source)
+
 
 if __name__ == '__main__':
     unittest.main()
