@@ -34,13 +34,18 @@ def register_pgy_frontend(app):
             legacy_admin_marker = '<script defer src="/system-admin.js?v=6502"></script>'
             workspace_marker = '<script defer src="/admin-workspace.js?v=7110"></script>'
             results_mode_marker = '<script defer src="/admin-results-workspace.js?v=7111"></script>'
+            exam_settings_marker = '<script defer src="/admin-exam-settings.js?v=7112"></script>'
             if "/admin-workspace.js" not in html and legacy_admin_marker in html:
                 replacement = legacy_admin_marker + "\n" + workspace_marker
                 if "/admin-results-workspace.js" not in html:
                     replacement += "\n" + results_mode_marker
+                if "/admin-exam-settings.js" not in html:
+                    replacement += "\n" + exam_settings_marker
                 html = html.replace(legacy_admin_marker, replacement, 1)
             elif "/admin-results-workspace.js" not in html and workspace_marker in html:
                 html = html.replace(workspace_marker, workspace_marker + "\n" + results_mode_marker, 1)
+            elif "/admin-exam-settings.js" not in html and results_mode_marker in html:
+                html = html.replace(results_mode_marker, results_mode_marker + "\n" + exam_settings_marker, 1)
 
             if "/pgy-workflow.css" not in html:
                 head_assets.append('<link rel="stylesheet" href="/pgy-workflow.css?v=6500">')
