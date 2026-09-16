@@ -271,6 +271,38 @@ def _user_profile_titles_69(conn, kind: str) -> None:
     })
 
 
+@migration("0070-material-search-and-atlas")
+def _material_search_and_atlas_70(conn, kind: str) -> None:
+    """Formal, additive resource search and Atlas records.
+
+    Images remain in the configured material storage.  The database holds only
+    a storage URL/key and metadata, never image bytes.  This migration is safe
+    to apply repeatedly on both supported database engines.
+    """
+    boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
+    default_false = "FALSE" if kind == "postgres" else "0"
+    payload = "JSONB" if kind == "postgres" else "TEXT"
+    conn.execute(
+        f"CREATE TABLE IF NOT EXISTS material_search_status ("
+        "material_id TEXT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'not_indexed',"
+        "page_count INTEGER NOT NULL DEFAULT 0,last_indexed_at TEXT NOT NULL DEFAULT '',"
+        "failure_reason TEXT NOT NULL DEFAULT '',source_kind TEXT NOT NULL DEFAULT '')"
+    )
+    conn.execute(
+        f"CREATE TABLE IF NOT EXISTS atlas_items ("
+        "id TEXT PRIMARY KEY,category TEXT NOT NULL,group_key TEXT NOT NULL,"
+        "title TEXT NOT NULL,image_url TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',"
+        "tags TEXT NOT NULL DEFAULT '[]',differential_points TEXT NOT NULL DEFAULT '',"
+        "teaching_notes TEXT NOT NULL DEFAULT '',difficulty TEXT NOT NULL DEFAULT 'general',"
+        f"published {boolean} NOT NULL DEFAULT {default_false},source TEXT NOT NULL DEFAULT 'manual',"
+        "source_material_id TEXT NOT NULL DEFAULT '',source_docx TEXT NOT NULL DEFAULT '',"
+        "sort_order INTEGER NOT NULL DEFAULT 0,annotation_json " + payload + " NOT NULL DEFAULT '{}',"
+        "created_at TEXT NOT NULL,updated_at TEXT NOT NULL,created_by TEXT NOT NULL DEFAULT '',"
+        "updated_by TEXT NOT NULL DEFAULT '')"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_atlas_items_visibility ON atlas_items(group_key,published,category,sort_order)")
+
+
 def ensure_r2_free_budget_guard_67(base) -> None:
     """Backfill 6.7 R2 guard tables even when the 0067 marker already exists.
 

@@ -110,8 +110,8 @@ async function renderSlidesGrid() {
         if(atlasSection&&atlasGrid){
             const showAtlas=currentMaterialView==='atlas';
             atlasSection.classList.toggle('hidden',!showAtlas);
-            atlasGrid.innerHTML=atlas.length?atlas.map(buildAtlasCardHTML).join(''):`<div class="sm:col-span-2 xl:col-span-3 rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-400">目前尚無 Atlas 高畫質圖譜，請由管理者後台上傳。</div>`;
-            if(atlasCount)atlasCount.textContent=`${atlas.length} 張`;
+            if(showAtlas&&typeof window.renderFormalAtlas==='function') await window.renderFormalAtlas();
+            else {atlasGrid.innerHTML=atlas.length?atlas.map(buildAtlasCardHTML).join(''):`<div class="sm:col-span-2 xl:col-span-3 rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-400">目前尚無 Atlas 高畫質圖譜。</div>`;if(atlasCount)atlasCount.textContent=`${atlas.length} 張`;}
         }
         const emptyText=currentMaterialView==='media'?'目前尚無操作教學影片／影音教材。':(currentMaterialView==='troubleshooting'?'目前尚無常見錯誤分析或案例教材。':(currentMaterialView==='sop'?'目前尚無 SOP；可由管理者後台上傳，學員端僅提供站內閱讀。':'本區尚未上傳任何核心課程教材，請由管理者後台新增。'));
         const hideFlatGrid=currentMaterialView==='atlas'||currentMaterialView==='materials';

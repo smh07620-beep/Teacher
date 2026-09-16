@@ -34,6 +34,8 @@ class MaterialReadAccess68Tests(unittest.TestCase):
                 "username TEXT PRIMARY KEY, elevated_at TEXT NOT NULL, "
                 "expires_at TEXT NOT NULL, session_version INTEGER NOT NULL DEFAULT 0)"
             )
+            conn.execute("CREATE TABLE atlas_items (id TEXT PRIMARY KEY,category TEXT NOT NULL,group_key TEXT NOT NULL,title TEXT NOT NULL,image_url TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',tags TEXT NOT NULL DEFAULT '[]',differential_points TEXT NOT NULL DEFAULT '',teaching_notes TEXT NOT NULL DEFAULT '',difficulty TEXT NOT NULL DEFAULT 'general',published INTEGER NOT NULL DEFAULT 0,source TEXT NOT NULL DEFAULT 'manual',source_material_id TEXT NOT NULL DEFAULT '',source_docx TEXT NOT NULL DEFAULT '',sort_order INTEGER NOT NULL DEFAULT 0,annotation_json TEXT NOT NULL DEFAULT '{}',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,created_by TEXT NOT NULL DEFAULT '',updated_by TEXT NOT NULL DEFAULT '')")
+            conn.execute("CREATE TABLE material_text_index (material_id TEXT NOT NULL,page_no INTEGER NOT NULL,title TEXT NOT NULL DEFAULT '',text TEXT NOT NULL DEFAULT '',indexed_at TEXT NOT NULL DEFAULT '',PRIMARY KEY(material_id,page_no))")
             users = (
                 ("education-admin", "Education Admin", "E001", "education_admin", "grpHema"),
                 ("group-leader", "Group Leader", "G001", "group_leader", "grpHema"),
@@ -151,6 +153,33 @@ class MaterialReadAccess68Tests(unittest.TestCase):
                 headers={"Origin": "http://localhost"},
             )
             self.assertEqual(response.status_code, 403, response.get_data(as_text=True))
+
+    def test_atlas_publish_visibility_and_group_scope(self):
+        self.login("education-admin")
+        created = self.client.post("/api/atlas", json={
+            "group": "grpHema", "category": "blood_cell", "title": "Myeloblast",
+            "imageUrl": "/uploaded-slides/example/cell.png", "description": "blast cell",
+            "tags": ["blast"], "published": True,
+        }, headers={"Origin": "http://localhost"})
+        self.assertEqual(created.status_code, 201, created.get_data(as_text=True))
+        published_id = created.get_json()["id"]
+        draft = self.client.post("/api/atlas", json={
+            "group": "grpHema", "category": "blood_cell", "title": "Draft cell",
+            "published": False,
+        }, headers={"Origin": "http://localhost"})
+        self.assertEqual(draft.status_code, 201)
+        self.login("student-user")
+        listing = self.client.get("/api/atlas")
+        self.assertEqual(listing.status_code, 200, listing.get_data(as_text=True))
+        self.assertEqual([item["id"] for item in listing.get_json()["items"]], [published_id])
+        self.assertEqual(self.client.post("/api/atlas", json={"group":"grpHema","category":"blood_cell","title":"Nope"}, headers={"Origin": "http://localhost"}).status_code, 403)
+        self.login("auditor-user")
+        self.assertEqual(self.client.patch(f"/api/atlas/{published_id}", json={"title":"Nope"}, headers={"Origin": "http://localhost"}).status_code, 403)
+
+    def test_atlas_is_presented_as_formal_resource_ui(self):
+        self.assertIn("/api/teaching-resource-search", ROOT.joinpath("atlas_70.py").read_text(encoding="utf-8"))
+        self.assertIn("搜尋本教材內容", ROOT.joinpath("static/system.html").read_text(encoding="utf-8"))
+        self.assertIn("搜尋教學資源", ROOT.joinpath("static/system.html").read_text(encoding="utf-8"))
 
 
 class MaterialNavigationFrontend68Tests(unittest.TestCase):
