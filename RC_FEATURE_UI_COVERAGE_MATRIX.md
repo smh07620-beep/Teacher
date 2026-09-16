@@ -1,0 +1,72 @@
+# RC Feature / UI Coverage Matrix
+
+This document is the canonical release-candidate exposure record for Teacher.
+It replaces `FEATURE_EXPOSURE_681.md` as the living matrix for product-facing
+feature coverage. The older 6.8.1 document remains as historical release
+context only.
+
+Current RC baseline when this matrix was introduced:
+`423b5a1f22664f4b04d8432f0df7b13fd301276d`.
+
+## Update rule
+
+Every product-facing feature must have all of the following before release:
+
+1. a named backend/runtime owner;
+2. a stable API or explicitly documented no-API runtime surface;
+3. a normal UI/caller entry point, or an explicit `Internal` classification;
+4. an RBAC/scope rule;
+5. regression/integration coverage;
+6. one status from `Usable`, `Internal`, `Compatibility`, or `Deferred`.
+
+A backend feature without a normal UI entry must not be marked `Usable` unless
+it is intentionally classified as `Internal`. New product work must update this
+matrix in the same PR that introduces the feature.
+
+## RC coverage
+
+| Feature | Backend / runtime owner | API / contract | UI / caller | RBAC / scope | Regression coverage | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Authentication / session | `teacher_app.auth` + canonical session/RBAC adapters | `/api/auth/login`, `/api/auth/me`, `/api/auth/logout` | `static/login.html`, `static/login.js`, normal app bootstrap | authenticated session; canonical role normalization | `test_api_auth_integration.py`, `test_auth_*`, `test_rbac_*` | Usable |
+| Role-specific workspace shell | `pgy_frontend.py`, `static/workspace-shell-70.js` | frontend workspace composition | 教學管理、人員與權限、系統與儲存、備份維護、安全與稽核 workspaces | role/capability based; profile metadata never authorizes | `test_workspace_shell_70.py`, `test_role_based_ui_69.py` | Usable |
+| Course Wizard | `course_bundle_72.py`, `course_bundle_followup_73.py`, `static/course-wizard-681.js` | course bundle + follow-up material contracts | four-step course creation wizard | session RBAC + group scope | `test_course_wizard_*`, `test_course_bundle_*`, final convergence tests | Usable |
+| Course management / teaching plan | `teacher_app.courses.service`, `teacher_app.courses.routes` | `/api/courses*` | course/material hub + teaching-plan editor | teacher/admin mutation rules + scoped RBAC wrappers | `test_stage51_domain_ownership.py`, frontend admin module tests | Usable |
+| Material catalog / metadata | `teacher_app.materials.service`, `teacher_app.materials.routes` | `/api/slides`, `/api/slides/admin`, update/delete contracts | material workspace, course hub, learner material view | authenticated read; scoped teacher/admin mutation | `test_teacher_68_material_navigation.py`, `test_stage51_domain_ownership.py`, admin material tests | Usable |
+| Material upload / background processing | legacy provider/upload seams + `free_worker_67.py`, `material_worker.py`, `static/admin-material-upload.js`, `static/material-upload-client.js` | `/api/slides/upload`, material job/worker contracts | material upload flow + job/status surfaces | scoped teacher/admin mutation; worker secret stays server-side | `test_api_upload_integration.py`, `test_phase3_admin_material_upload.py`, worker tests | Usable |
+| External YouTube / Shorts material | `external_media_68.py`, `static/external-material-681.js`, `static/admin-external-media.js` | external-media creation/validation routes | direct-create drawer / admin material UI | session RBAC mutation | `test_external_media_behavior_681.js`, `test_phase3p_admin_external_media.py` | Usable |
+| Smart learning / material progress | `smart_learning_67.py`, `static/smart-learning-67.js` | learning progress / reader contracts | learner reader and progress UI | authenticated learner + scoped material access | `test_smart_learning_67.py`, `test_learning_flow_66.py` | Usable |
+| Assessment configuration / review / publication | `teacher_app.assessments.service`, `teacher_app.assessments.routes` | `/api/quiz-categories*` and publication/material-link contracts | unified assessment workspace + exam settings | teacher/admin mutation + RBAC/group scope | `test_stage51_domain_ownership.py`, `test_phase3m_admin_exam_settings.py`, assessment UI contracts | Usable |
+| Question Bank 2.0 drafts / review queue | `question_bank_68.py`, `static/assessment-681.js`, `static/admin-question-bank.js` | `/api/question-bank/*` | 題庫／AI 出題 / Review queue | session RBAC + group scope | question-bank integration + UI contract tests | Usable |
+| AI-assisted question generation | `static/admin-ai-questions.js` + server AI/privacy adapters | AI candidate generation/review contracts | assessment workspace AI tab; teacher review before publish | teacher/admin only; AI privacy rules apply | `test_phase3_admin_ai_questions.py`, `test_ai_privacy.py` | Usable |
+| Exam blueprint snapshots | assessment/question-bank runtime | `/api/exam-blueprints/*` | assessment workspace 出題藍圖 tab | session RBAC | blueprint/quota/UI payload tests | Usable |
+| Item analytics | exam/question analytics runtime | `/api/questions/<id>/analytics` | assessment workspace 題目分析 tab | authorized teaching roles | analytics/UI contract tests | Usable |
+| Exam attempt / grading / integrity | `teacher_app.exams`, `exam_integrity.py`, `static/exam-integrity.js` | exam attempt / grading / integrity contracts | learner exam UI | authenticated learner; server-authoritative scoring/integrity | `test_api_exam_integration.py`, `test_exam_*`, `test_exam_integrity.py` | Usable |
+| Exam results / review source | canonical exam result projection + `static/admin-results*.js`, learner result modules | result/review contracts | learner post-submit review + admin result workspace | learner owns own result; teaching/admin scopes for review | `test_exam_review_sources_66.py`, `test_exam_review_links_frontend_66.py`, admin result tests | Usable |
+| PGY assignment workflow | `teacher_app.pgy.service`, `repository`, `workflow`; `pgy_workflow.py` thin adapter | `/api/pgy/*` | `static/pgy-workflow.js` | student / clinical teacher / group leader / education admin workflow scopes | `test_api_pgy_integration.py`, `test_pgy_service.py`, `test_pgy_workflow.py` | Usable |
+| PGY signing / countersign / finalize | `teacher_app.pgy.signing`, `pgy_signing_66.py`, `pgy_atomic.py` compatibility overlays | PGY signing transition contracts | PGY workflow UI / role signing controls | signer role boundaries; system admin does not replace clinical signer | `test_pgy_signing_66.py`, `test_api_multi_role_66.py`, `test_multi_role_66.py` | Usable |
+| PGY assessment administration | `static/admin-pgy-assessments.js` + canonical PGY APIs | PGY assessment/read/update contracts | admin PGY assessment workspace | assigned teaching/admin scopes | `test_phase3o_admin_pgy_assessments.py` | Usable |
+| Atlas teaching resource | `atlas_70.py`, `static/atlas-70.js` | `/api/atlas*`, `/api/teaching-resource-search` | Atlas browse/search/create/edit/publish UI | learner published read; scoped teaching/admin mutation | `test_teacher_68_material_navigation.py` and Atlas acceptance paths | Usable |
+| DOCX → Atlas import | `atlas_70.py`, `static/atlas-docx-wizard-70.js` | `/api/atlas/import-docx/*` | four-step Atlas DOCX wizard | teaching/admin mutation scope | DOCX import contract coverage in material-navigation tests | Usable |
+| People / account administration | canonical RBAC/auth seams + `static/admin-people.js` | account administration contracts | 人員與權限 workspace | role/elevation boundaries for sensitive account operations | `test_user_profile_editor_681.py`, `test_rbac_*`, elevation tests | Usable |
+| Announcements | admin announcement runtime + `static/admin-announcements.js` | announcement CRUD/status contracts | admin announcement workspace | authorized admin/teaching management roles | `test_phase3_admin_modules.py` and announcement module contracts | Usable |
+| DOCX template management / result export | document-template backend + `static/admin-doc-templates.js`, `static/admin-results-export.js`; local biochemical fallback retained | document-template download/upload + export contract | template admin UI + result export UI | admin template management; authorized result export | `test_phase3n_admin_doc_templates.py`, `test_phase3q_admin_results_export.py`, Stage 3 fallback contract | Usable |
+| Worker / job operational status | `free_worker_67.py`, `health_65.py`, `static/worker-status-70.js`, `static/admin-jobs.js` | `/api/material-jobs*`, health/worker status contracts | system-admin Worker status + material jobs panel | system-admin read-only status; mutation remains protected | `test_worker_status_ui_70.py`, worker integration/contracts | Usable |
+| Backup / restore maintenance | `backup_restore.py`, `static/maintenance-64.js` | backup/restore maintenance contracts | 備份維護 workspace | sensitive elevation + privileged roles | `test_backup_restore*.py`, `test_admin_maintenance_m5.py`, maintenance integration | Usable |
+| Audit / read-only oversight | `teacher_app.pgy` audit projection + `static/workspace-shell-70.js` | `/api/pgy/audit` | 稽核／唯讀 workspace | auditor read-only; no mutation surface | `test_workspace_shell_70.py`, PGY audit integration coverage | Usable |
+| System / storage administration | legacy storage/system seams + `static/admin-system.js` | system status/storage management contracts | 系統與儲存 workspace | system admin; sensitive actions require elevation | `test_phase3_admin_modules.py`, elevation/security/deployment contracts | Usable |
+| Raw provider credentials / SDK clients | legacy storage provider layer | implementation-only | no normal UI; surfaced only through guarded higher-level operations | server-side only | deployment/security/provider tests | Internal |
+| Worker token / local worker protocol secret | `free_worker_67.py`, `material_worker.py` | worker protocol | no user-editable normal UI | server-side worker secret only | worker scheme/security tests | Internal |
+| Background media conversion primitives | upload/worker/storage provider layer | implementation-only | no direct UI; invoked by material workflows | protected backend/worker context | upload/worker tests | Internal |
+| Legacy `system-admin.js` compatibility shell | `static/system-admin.js`, `static/admin-compat-facade.js` | old `window.*` / cached HTML compatibility contracts | compatibility only; canonical modules own new behavior | same session RBAC as canonical flow | final convergence + Stage 3/4 ownership tests | Compatibility |
+| Storage/provider ownership extraction | currently legacy provider helpers in `app.py` + worker adapters | existing storage/upload contracts | existing higher-level UI already present | existing RBAC/elevation boundaries | root mirror policy + provider tests | Deferred |
+
+## Release gate
+
+Before an RC is promoted:
+
+- every `Usable` row must have a real UI/caller;
+- every user-facing API added since the prior RC must be represented here;
+- every `Internal` row must remain inaccessible as a normal user workflow;
+- `Compatibility` code must not gain new business logic;
+- `Deferred` work must not be presented as completed ownership convergence;
+- `Teacher release checks` must pass on the exact RC commit.

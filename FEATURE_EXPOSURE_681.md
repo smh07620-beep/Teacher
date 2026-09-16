@@ -1,5 +1,9 @@
 # Teacher 6.8.1 Feature Exposure Matrix
 
+> Historical release record. The living release-candidate coverage contract is
+> now `RC_FEATURE_UI_COVERAGE_MATRIX.md`. New product features and UI exposure
+> changes must update the RC matrix in the same PR.
+
 This is the release audit for features beyond the legacy course/exam API.
 Every API is either exposed by the normal UI, explicitly internal, or guarded
 as an administrative implementation endpoint.  The administrative API is not
