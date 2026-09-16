@@ -36,6 +36,7 @@ def register_pgy_frontend(app):
             results_mode_marker = '<script defer src="/admin-results-workspace.js?v=7111"></script>'
             exam_settings_marker = '<script defer src="/admin-exam-settings.js?v=7112"></script>'
             doc_templates_marker = '<script defer src="/admin-doc-templates.js?v=7113"></script>'
+            pgy_assessments_marker = '<script defer src="/admin-pgy-assessments.js?v=7114"></script>'
             if "/admin-workspace.js" not in html and legacy_admin_marker in html:
                 replacement = legacy_admin_marker + "\n" + workspace_marker
                 if "/admin-results-workspace.js" not in html:
@@ -44,6 +45,8 @@ def register_pgy_frontend(app):
                     replacement += "\n" + exam_settings_marker
                 if "/admin-doc-templates.js" not in html:
                     replacement += "\n" + doc_templates_marker
+                if "/admin-pgy-assessments.js" not in html:
+                    replacement += "\n" + pgy_assessments_marker
                 html = html.replace(legacy_admin_marker, replacement, 1)
             elif "/admin-results-workspace.js" not in html and workspace_marker in html:
                 html = html.replace(workspace_marker, workspace_marker + "\n" + results_mode_marker, 1)
@@ -51,6 +54,8 @@ def register_pgy_frontend(app):
                 html = html.replace(results_mode_marker, results_mode_marker + "\n" + exam_settings_marker, 1)
             elif "/admin-doc-templates.js" not in html and exam_settings_marker in html:
                 html = html.replace(exam_settings_marker, exam_settings_marker + "\n" + doc_templates_marker, 1)
+            elif "/admin-pgy-assessments.js" not in html and doc_templates_marker in html:
+                html = html.replace(doc_templates_marker, doc_templates_marker + "\n" + pgy_assessments_marker, 1)
 
             if "/pgy-workflow.css" not in html:
                 head_assets.append('<link rel="stylesheet" href="/pgy-workflow.css?v=6500">')
