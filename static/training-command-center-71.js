@@ -40,7 +40,7 @@
       <div id="training-command-status-71" class="text-xs text-slate-500 mt-4">讀取待辦中…</div>
       <div id="training-command-stats-71" class="hidden grid grid-cols-3 gap-2 sm:gap-3 mt-4"></div>
       <div id="training-command-list-71" class="space-y-2 mt-4"></div>
-      <p class="text-[10px] text-slate-400 mt-4">7.1 M1 目前整合 PGY 待辦；考試、學習分析與通知會在後續里程碑加入同一個 Command Center。</p>`;
+      <p class="text-[10px] text-slate-400 mt-4">M1 保持 PGY 待辦的正式操作入口；M2 能力矩陣、M3 Learning Analytics 與 M4 通知中心皆為唯讀聚合／分析層。</p>`;
     const firstSection = host.querySelector(':scope > section');
     if (firstSection?.nextSibling) host.insertBefore(section, firstSection.nextSibling);
     else if (firstSection) firstSection.after(section);
