@@ -60,6 +60,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/admin-question-bank.js?v=7106"></script>')
             if "/admin-jobs.js" not in html:
                 body_assets.append('<script defer src="/admin-jobs.js?v=7107"></script>')
+            if "/admin-material-upload.js" not in html:
+                body_assets.append('<script defer src="/admin-material-upload.js?v=7108"></script>')
             if head_assets and "</head>" in html:
                 html = html.replace("</head>", "\n".join(head_assets) + "\n</head>", 1)
             if body_assets and "</body>" in html:
