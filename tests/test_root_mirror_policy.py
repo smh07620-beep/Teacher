@@ -26,8 +26,12 @@ class RootMirrorPolicyTests(unittest.TestCase):
             "teacher_app.common.auth",
             "teacher_app.exams",
             "teacher_app.pgy.service",
+            "teacher_app.materials.service",
+            "teacher_app.courses.service",
+            "teacher_app.assessments.service",
+            "Stage 5.1 converged runtime ownership",
+            "Deferred storage debt",
             "Frozen / converged",
-            "Deferred debt",
             "professional_title",
             "responsibility_tags",
         ):
@@ -96,7 +100,6 @@ class RootMirrorPolicyTests(unittest.TestCase):
             "SELECT username,display_name,emp_id,role,preferred_group,active FROM user_accounts",
         ):
             self.assertNotIn(legacy_sql, source)
-        # Compatibility symbols consumed by pgy_signing_66 stay delegated.
         self.assertIn("_assignment_dict = pgy_repo.assignment_dict", source)
         self.assertIn("pgy_repo.write_audit", source)
 
@@ -118,6 +121,12 @@ class RootMirrorPolicyTests(unittest.TestCase):
         self.assertIn("import app as legacy_app", source)
         self.assertIn("app = register_rbac_681(legacy_app)", source)
         self.assertIn("app = register_sensitive_elevation_69(legacy_app)", source)
+        for name in (
+            "register_legacy_material_routes",
+            "register_legacy_course_routes",
+            "register_legacy_assessment_routes",
+        ):
+            self.assertIn(f"app = {name}(legacy_app)", source)
         self.assertNotIn("@app.", source)
         self.assertNotIn("CREATE TABLE", source)
 
