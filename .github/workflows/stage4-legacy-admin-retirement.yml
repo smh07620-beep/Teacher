@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.txt
       - name: Install AST parser
         run: npm install --no-save --package-lock=false acorn@8
       - name: Remove only top-level legacy functions with canonical window owners
