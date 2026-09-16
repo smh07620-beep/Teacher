@@ -1,14 +1,12 @@
-/* Phase 3K: admin workspace shell / section router.
+/* Phase 3K/3L: admin workspace shell / section router.
  *
  * This module intentionally loads immediately after the legacy system-admin.js
- * bundle and before RBAC/workspace wrappers.  The legacy bundle remains a
- * compatibility fallback for teacher/results mode state until that state is
- * extracted in a later increment.
+ * bundle and before RBAC/workspace wrappers. Teacher/results mode state is
+ * supplied by admin-results-workspace.js instead of the legacy router.
  */
 (() => {
   'use strict';
 
-  const legacySwitchWorkspace = window.switchAdminWorkspace;
   const state = {
     workspace: 'course-materials',
     section: 'content',
@@ -95,11 +93,13 @@
       return;
     }
 
-    // Teacher/results still own legacy lexical mode state used by result
-    // rendering.  Delegate those two routes until Phase 3 extracts that state.
     if (name === 'teacher' || name === 'results') {
-      if (typeof legacySwitchWorkspace === 'function') return legacySwitchWorkspace(requested, force);
-      return;
+      const modeRouter = window.__teacherAdminResultsWorkspace;
+      if (modeRouter && typeof modeRouter.switchWorkspace === 'function') {
+        return modeRouter.switchWorkspace({requested, workspace:name, force, switchSection});
+      }
+      if (name === 'teacher' && requested === 'pgy') return switchSection('pgy', true);
+      return switchSection('results', true);
     }
 
     if (name === 'word') return switchSection('word', force);

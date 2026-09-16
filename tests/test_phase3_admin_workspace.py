@@ -46,13 +46,15 @@ class Phase3AdminWorkspaceRouterTests(unittest.TestCase):
 
         html = app.test_client().get('/system').get_data(as_text=True)
         self.assertLess(html.index('/system-admin.js?v=6502'), html.index('/admin-workspace.js?v=7110'))
-        self.assertLess(html.index('/admin-workspace.js?v=7110'), html.index('/rbac-ui-681.js?v=6811'))
+        self.assertLess(html.index('/admin-workspace.js?v=7110'), html.index('/admin-results-workspace.js?v=7111'))
+        self.assertLess(html.index('/admin-results-workspace.js?v=7111'), html.index('/rbac-ui-681.js?v=6811'))
 
-    def test_teacher_and_results_keep_legacy_mode_state_bridge(self):
-        self.assertIn('const legacySwitchWorkspace = window.switchAdminWorkspace;', self.router)
+    def test_teacher_and_results_use_extracted_mode_router(self):
+        self.assertNotIn('const legacySwitchWorkspace = window.switchAdminWorkspace;', self.router)
         self.assertIn("name === 'teacher' || name === 'results'", self.router)
-        self.assertIn('legacySwitchWorkspace(requested, force)', self.router)
-        self.assertIn('until Phase 3 extracts that state', self.router)
+        self.assertIn('window.__teacherAdminResultsWorkspace', self.router)
+        self.assertIn('modeRouter.switchWorkspace({requested, workspace:name, force, switchSection})', self.router)
+        self.assertNotIn('legacySwitchWorkspace(requested, force)', self.router)
 
     def test_section_cache_and_worker_probe_policy_are_preserved(self):
         self.assertIn('loaded: {content:false, quiz:false, word:false, pgy:false, results:false}', self.router)

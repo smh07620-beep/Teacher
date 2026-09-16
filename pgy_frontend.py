@@ -26,19 +26,21 @@ def register_pgy_frontend(app):
             head_assets = []
             body_assets = []
 
-            # The workspace router is wrapper-sensitive: RBAC, workspace-shell,
-            # and worker-status all decorate switchAdminWorkspace/toggleAdminModal.
-            # Load the extracted router immediately after the legacy bundle so
-            # those later wrappers capture the new implementation instead of
-            # being bypassed by a late Phase 3 override.
-            if "/admin-workspace.js" not in html:
-                legacy_admin_marker = '<script defer src="/system-admin.js?v=6502"></script>'
-                if legacy_admin_marker in html:
-                    html = html.replace(
-                        legacy_admin_marker,
-                        legacy_admin_marker + '\n<script defer src="/admin-workspace.js?v=7110"></script>',
-                        1,
-                    )
+            # Workspace routing is wrapper-sensitive: RBAC, workspace-shell,
+            # and worker-status decorate switchAdminWorkspace/toggleAdminModal.
+            # Load the extracted router and teacher/results mode state directly
+            # after the legacy bundle so later wrappers capture the canonical
+            # implementations instead of being bypassed by a late override.
+            legacy_admin_marker = '<script defer src="/system-admin.js?v=6502"></script>'
+            workspace_marker = '<script defer src="/admin-workspace.js?v=7110"></script>'
+            results_mode_marker = '<script defer src="/admin-results-workspace.js?v=7111"></script>'
+            if "/admin-workspace.js" not in html and legacy_admin_marker in html:
+                replacement = legacy_admin_marker + "\n" + workspace_marker
+                if "/admin-results-workspace.js" not in html:
+                    replacement += "\n" + results_mode_marker
+                html = html.replace(legacy_admin_marker, replacement, 1)
+            elif "/admin-results-workspace.js" not in html and workspace_marker in html:
+                html = html.replace(workspace_marker, workspace_marker + "\n" + results_mode_marker, 1)
 
             if "/pgy-workflow.css" not in html:
                 head_assets.append('<link rel="stylesheet" href="/pgy-workflow.css?v=6500">')
