@@ -20,6 +20,7 @@ REQUIRED_MIGRATIONS = (
     "0068-external-interactive-media",
     "0069-user-profile-titles",
     "0072-course-bundle-idempotency",
+    "0073-course-bundle-followups",
 )
 
 
