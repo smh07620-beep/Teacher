@@ -1103,10 +1103,6 @@ from teacher_app.auth import service as auth_service, routes as auth_routes
 import sys
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_normalize_role(value):
-    role = str(value or "student").strip().lower()
-    role = LEGACY_ROLE_ALIASES.get(role, role)
-    return role if role in CANONICAL_ROLES else "student"
 
 
 def normalize_role(value):
@@ -1114,8 +1110,6 @@ def normalize_role(value):
     return canonical_normalize_role(value)
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_has_permission(user, permission):
-    return bool(user) and permission in ROLE_PERMISSIONS.get(normalize_role(user.get("role")), set())
 
 
 def has_permission(user, permission):
@@ -2560,8 +2554,6 @@ def init_user_accounts_db():
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_normalize_username(value):
-    return re.sub(r"[^a-z0-9._-]", "", str(value or "").strip().lower())[:64]
 
 
 def _normalize_username(value):
@@ -2569,21 +2561,6 @@ def _normalize_username(value):
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_user_public(row):
-    d = dict(row)
-    return {
-        "username": str(d.get("username", "")),
-        "name": str(d.get("display_name", "")),
-        "empId": str(d.get("emp_id", "")),
-        "role": normalize_role(d.get("role", "student")),
-        "legacyRole": str(d.get("role", "")) if str(d.get("role", "")) in LEGACY_ROLE_ALIASES else "",
-        "preferredArea": normalize_area(d.get("preferred_area", DEFAULT_TRAINING_AREA)),
-        "preferredGroup": normalize_group(d.get("preferred_group", DEFAULT_GROUP)),
-        "active": bool(d.get("active", True)),
-        "createdAt": str(d.get("created_at", "")),
-        "updatedAt": str(d.get("updated_at", "")),
-        "lastLoginAt": str(d.get("last_login_at", "")),
-    }
 
 
 def _user_public(row):
@@ -2591,22 +2568,6 @@ def _user_public(row):
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_current_user():
-    username = _normalize_username(session.get("username", ""))
-    if not username:
-        return None
-    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
-    try:
-        row = conn.execute(f"SELECT * FROM user_accounts WHERE username={ph}", (username,)).fetchone()
-    finally:
-        conn.close()
-    if not row or not bool(dict(row).get("active", True)):
-        session.clear()
-        return None
-    if int(dict(row).get("session_version", 1) or 1) != int(session.get("session_version", 0) or 0):
-        session.clear()
-        return None
-    return _user_public(row)
 
 
 def _current_user():
@@ -2633,17 +2594,6 @@ def login_required(api=True):
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_require_roles(*allowed_roles):
-    """Return the authenticated user or an error response for RBAC checks."""
-    user = _current_user()
-    if not user:
-        return None, (jsonify({"error": "請先登入後再執行此操作。", "loginRequired": True}), 401)
-    normalized_allowed = {normalize_role(role) for role in allowed_roles}
-    if normalize_role(user.get("role")) not in normalized_allowed:
-        labels = {"student": "學員", "clinical_teacher": "臨床教師", "group_leader": "組長", "education_admin": "教學管理者", "system_admin": "系統管理者", "auditor": "稽核／唯讀"}
-        expected = "、".join(labels.get(role, role) for role in normalized_allowed)
-        return None, (jsonify({"error": f"權限不足：此操作限{expected}使用。"}), 403)
-    return user, None
 
 
 def require_roles(*allowed_roles):
@@ -2654,12 +2604,6 @@ init_user_accounts_db()
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_api_auth_me():
-    # Retained legacy path must keep the exact pre-6.6 response contract.
-    # Internal _current_user() intentionally includes roles[] for RBAC,
-    # while the legacy compatibility endpoint must not expose that field.
-    user = _legacy_current_user()
-    return jsonify({"authenticated": bool(user), "user": user})
 
 
 @app.get("/api/auth/me")
@@ -2668,26 +2612,6 @@ def api_auth_me():
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_api_auth_login():
-    data = request.get_json(silent=True) or {}
-    username = _normalize_username(data.get("username"))
-    password = str(data.get("password", ""))
-    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
-    try:
-        row = conn.execute(f"SELECT * FROM user_accounts WHERE username={ph}", (username,)).fetchone()
-        raw = dict(row) if row else None
-        if not raw or not bool(raw.get("active", True)) or not check_password_hash(str(raw.get("password_hash", "")), password):
-            return jsonify({"error": "帳號或密碼不正確，請洽管理者。"}), 401
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        conn.execute(f"UPDATE user_accounts SET last_login_at={ph} WHERE username={ph}", (now, username))
-        raw["last_login_at"] = now
-    finally:
-        conn.close()
-    session.clear()
-    session.permanent = True
-    session["username"] = username
-    session["session_version"] = int(raw.get("session_version", 1) or 1)
-    return jsonify({"ok": True, "user": _user_public(raw)})
 
 
 @app.post("/api/auth/login")
@@ -2696,9 +2620,6 @@ def api_auth_login():
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_api_auth_logout():
-    session.clear()
-    return jsonify({"ok": True})
 
 
 @app.post("/api/auth/logout")
