@@ -28,17 +28,20 @@ def register_pgy_frontend(app):
 
             # Workspace routing is wrapper-sensitive: RBAC, workspace-shell,
             # and worker-status decorate switchAdminWorkspace/toggleAdminModal.
-            # Load the extracted router and teacher/results mode state directly
-            # after the legacy bundle so later wrappers capture the canonical
-            # implementations instead of being bypassed by a late override.
+            # Load the extracted router and results data directly after the
+            # legacy bundle, then let the teacher/results mode wrapper capture
+            # those canonical data/table implementations before later guards.
             legacy_admin_marker = '<script defer src="/system-admin.js?v=6502"></script>'
             workspace_marker = '<script defer src="/admin-workspace.js?v=7110"></script>'
+            results_data_marker = '<script defer src="/admin-results-data.js?v=7117"></script>'
             results_mode_marker = '<script defer src="/admin-results-workspace.js?v=7111"></script>'
             exam_settings_marker = '<script defer src="/admin-exam-settings.js?v=7112"></script>'
             doc_templates_marker = '<script defer src="/admin-doc-templates.js?v=7113"></script>'
             pgy_assessments_marker = '<script defer src="/admin-pgy-assessments.js?v=7114"></script>'
             if "/admin-workspace.js" not in html and legacy_admin_marker in html:
                 replacement = legacy_admin_marker + "\n" + workspace_marker
+                if "/admin-results-data.js" not in html:
+                    replacement += "\n" + results_data_marker
                 if "/admin-results-workspace.js" not in html:
                     replacement += "\n" + results_mode_marker
                 if "/admin-exam-settings.js" not in html:
@@ -48,8 +51,10 @@ def register_pgy_frontend(app):
                 if "/admin-pgy-assessments.js" not in html:
                     replacement += "\n" + pgy_assessments_marker
                 html = html.replace(legacy_admin_marker, replacement, 1)
-            elif "/admin-results-workspace.js" not in html and workspace_marker in html:
-                html = html.replace(workspace_marker, workspace_marker + "\n" + results_mode_marker, 1)
+            elif "/admin-results-data.js" not in html and workspace_marker in html:
+                html = html.replace(workspace_marker, workspace_marker + "\n" + results_data_marker, 1)
+            elif "/admin-results-workspace.js" not in html and results_data_marker in html:
+                html = html.replace(results_data_marker, results_data_marker + "\n" + results_mode_marker, 1)
             elif "/admin-exam-settings.js" not in html and results_mode_marker in html:
                 html = html.replace(results_mode_marker, results_mode_marker + "\n" + exam_settings_marker, 1)
             elif "/admin-doc-templates.js" not in html and exam_settings_marker in html:
