@@ -10,6 +10,12 @@
     el.setAttribute('aria-hidden', 'true');
   }
 
+  function show(el) {
+    if (!el) return;
+    el.classList.remove('hidden');
+    el.removeAttribute('aria-hidden');
+  }
+
   function apply() {
     const slidesPanel = document.getElementById('panel-slides');
     if (slidesPanel) {
@@ -41,10 +47,12 @@
       }
     }
 
-    // Keep the filter because it changes what learners see, but remove empty
-    // helper/status prose when it contains no useful result information.
+    // Keep the filter and useful result counts; only empty helper prose is hidden.
     const resultCount = document.getElementById('learning-result-count');
-    if (resultCount && !String(resultCount.textContent || '').trim()) hide(resultCount);
+    if (resultCount) {
+      if (String(resultCount.textContent || '').trim()) show(resultCount);
+      else hide(resultCount);
+    }
   }
 
   if (document.readyState === 'loading') {
