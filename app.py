@@ -1103,10 +1103,6 @@ from teacher_app.auth import service as auth_service, routes as auth_routes
 import sys
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_normalize_role(value):
-    role = str(value or "student").strip().lower()
-    role = LEGACY_ROLE_ALIASES.get(role, role)
-    return role if role in CANONICAL_ROLES else "student"
 
 
 def normalize_role(value):
@@ -1114,8 +1110,6 @@ def normalize_role(value):
     return canonical_normalize_role(value)
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_has_permission(user, permission):
-    return bool(user) and permission in ROLE_PERMISSIONS.get(normalize_role(user.get("role")), set())
 
 
 def has_permission(user, permission):
@@ -2560,8 +2554,6 @@ def init_user_accounts_db():
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_normalize_username(value):
-    return re.sub(r"[^a-z0-9._-]", "", str(value or "").strip().lower())[:64]
 
 
 def _normalize_username(value):
@@ -2569,21 +2561,6 @@ def _normalize_username(value):
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_user_public(row):
-    d = dict(row)
-    return {
-        "username": str(d.get("username", "")),
-        "name": str(d.get("display_name", "")),
-        "empId": str(d.get("emp_id", "")),
-        "role": normalize_role(d.get("role", "student")),
-        "legacyRole": str(d.get("role", "")) if str(d.get("role", "")) in LEGACY_ROLE_ALIASES else "",
-        "preferredArea": normalize_area(d.get("preferred_area", DEFAULT_TRAINING_AREA)),
-        "preferredGroup": normalize_group(d.get("preferred_group", DEFAULT_GROUP)),
-        "active": bool(d.get("active", True)),
-        "createdAt": str(d.get("created_at", "")),
-        "updatedAt": str(d.get("updated_at", "")),
-        "lastLoginAt": str(d.get("last_login_at", "")),
-    }
 
 
 def _user_public(row):
@@ -2591,22 +2568,6 @@ def _user_public(row):
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_current_user():
-    username = _normalize_username(session.get("username", ""))
-    if not username:
-        return None
-    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
-    try:
-        row = conn.execute(f"SELECT * FROM user_accounts WHERE username={ph}", (username,)).fetchone()
-    finally:
-        conn.close()
-    if not row or not bool(dict(row).get("active", True)):
-        session.clear()
-        return None
-    if int(dict(row).get("session_version", 1) or 1) != int(session.get("session_version", 0) or 0):
-        session.clear()
-        return None
-    return _user_public(row)
 
 
 def _current_user():
@@ -2633,17 +2594,6 @@ def login_required(api=True):
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_require_roles(*allowed_roles):
-    """Return the authenticated user or an error response for RBAC checks."""
-    user = _current_user()
-    if not user:
-        return None, (jsonify({"error": "請先登入後再執行此操作。", "loginRequired": True}), 401)
-    normalized_allowed = {normalize_role(role) for role in allowed_roles}
-    if normalize_role(user.get("role")) not in normalized_allowed:
-        labels = {"student": "學員", "clinical_teacher": "臨床教師", "group_leader": "組長", "education_admin": "教學管理者", "system_admin": "系統管理者", "auditor": "稽核／唯讀"}
-        expected = "、".join(labels.get(role, role) for role in normalized_allowed)
-        return None, (jsonify({"error": f"權限不足：此操作限{expected}使用。"}), 403)
-    return user, None
 
 
 def require_roles(*allowed_roles):
@@ -2654,12 +2604,6 @@ init_user_accounts_db()
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_api_auth_me():
-    # Retained legacy path must keep the exact pre-6.6 response contract.
-    # Internal _current_user() intentionally includes roles[] for RBAC,
-    # while the legacy compatibility endpoint must not expose that field.
-    user = _legacy_current_user()
-    return jsonify({"authenticated": bool(user), "user": user})
 
 
 @app.get("/api/auth/me")
@@ -2668,26 +2612,6 @@ def api_auth_me():
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_api_auth_login():
-    data = request.get_json(silent=True) or {}
-    username = _normalize_username(data.get("username"))
-    password = str(data.get("password", ""))
-    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
-    try:
-        row = conn.execute(f"SELECT * FROM user_accounts WHERE username={ph}", (username,)).fetchone()
-        raw = dict(row) if row else None
-        if not raw or not bool(raw.get("active", True)) or not check_password_hash(str(raw.get("password_hash", "")), password):
-            return jsonify({"error": "帳號或密碼不正確，請洽管理者。"}), 401
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        conn.execute(f"UPDATE user_accounts SET last_login_at={ph} WHERE username={ph}", (now, username))
-        raw["last_login_at"] = now
-    finally:
-        conn.close()
-    session.clear()
-    session.permanent = True
-    session["username"] = username
-    session["session_version"] = int(raw.get("session_version", 1) or 1)
-    return jsonify({"ok": True, "user": _user_public(raw)})
 
 
 @app.post("/api/auth/login")
@@ -2696,9 +2620,6 @@ def api_auth_login():
 
 
 # Retained pre-extraction implementation for compatibility verification.
-def _legacy_api_auth_logout():
-    session.clear()
-    return jsonify({"ok": True})
 
 
 @app.post("/api/auth/logout")
@@ -3506,55 +3427,16 @@ def convert_office_to_images(source_path: Path, out_folder: Path, progress_id: s
 @app.get("/api/slides")
 @login_required()
 def api_list_slides():
-    requested_area = normalize_area(request.args.get("area", DEFAULT_TRAINING_AREA))
-    labels = category_label_map()
-    builtin = []
-    for m in load_meta():
-        if not m.get("isBuiltin"):
-            continue
-        group = normalize_group(m.get("group", DEFAULT_GROUP))
-        area = normalize_area(m.get("area", DEFAULT_TRAINING_AREA))
-        if area != requested_area: continue
-        category = m.get("category", "")
-        builtin.append({
-            **m,
-            "group": group,
-            "area": area,
-            "viewerMode": "slides",
-            "categoryLabel": labels.get(category, CATEGORY_LABELS.get(category, CATEGORY_LABELS[""])),
-            "imageFolder": f"slides/{m['folder']}",
-            "viewUrl": "",
-        })
-    uploaded = []
-    for m in list_uploaded_materials(False):
-        if m.get("area") != requested_area: continue
-        category = m.get("category", "")
-        uploaded.append({
-            **m,
-            "categoryLabel": labels.get(category, CATEGORY_LABELS.get(category, CATEGORY_LABELS[""])),
-            "imageFolder": f"uploaded-slides/{m['folder']}",
-            "previewUrl": (f"/material-preview/{m['id']}" if m.get("viewerMode") == "preview_pdf" else m.get("previewUrl", "")),
-            "viewUrl": (f"/view/{m['id']}" if m.get("viewerMode") not in {"slides", "preview_pdf"} else ""),
-        })
-    return jsonify(builtin + uploaded)
+    from teacher_app.materials import service as canonical_materials
+    return jsonify(canonical_materials.list_materials(sys.modules[__name__], request.args.get("area", DEFAULT_TRAINING_AREA)))
 
 
 @app.get("/api/slides/admin")
 def api_admin_slides():
+    from teacher_app.materials import service as canonical_materials
     denied = require_admin()
-    if denied:
-        return denied
-    labels = category_label_map()
-    items = []
-    for m in load_meta():
-        if m.get("isBuiltin"):
-            group = normalize_group(m.get("group", DEFAULT_GROUP))
-            category = m.get("category", "")
-            items.append({**m, "group": group, "categoryLabel": labels.get(category, CATEGORY_LABELS.get(category, CATEGORY_LABELS[""]))})
-    for m in list_uploaded_materials(True):
-        category = m.get("category", "")
-        items.append({**m, "categoryLabel": labels.get(category, CATEGORY_LABELS.get(category, CATEGORY_LABELS[""]))})
-    return jsonify(items)
+    if denied: return denied
+    return jsonify(canonical_materials.list_admin_materials(sys.modules[__name__]))
 
 
 @app.get("/api/groups")
@@ -4277,85 +4159,28 @@ def api_upload_slide():
 
 @app.patch("/api/slides/<slide_id>")
 def api_update_slide(slide_id):
+    from teacher_app.common.errors import ApiError
+    from teacher_app.materials import service as canonical_materials
+    from teacher_app.materials.routes import _legacy_error as canonical_error
     denied = require_admin()
-    if denied:
-        return denied
-    entry = get_material(slide_id)
-    if not entry:
-        return jsonify({"error": "找不到可編輯的上傳教材"}), 404
-    data = request.get_json(silent=True) or {}
-    title = str(data.get("title", entry["title"])).strip()[:255]
-    desc = str(data.get("desc", entry.get("desc", ""))).strip()[:1000]
-    material_type = str(data.get("materialType", entry.get("materialType", "standard"))).strip().lower()
-    if material_type not in {"standard", "atlas", "infographic", "video", "troubleshooting", "sop", "case"}: material_type = "standard"
-    atlas_meta = data.get("atlasMeta", entry.get("atlasMeta", {}))
-    if not isinstance(atlas_meta, dict): atlas_meta = {}
-    atlas_meta = {k: str(atlas_meta.get(k, "")).strip()[:1000] for k in ("category","magnification","interpretation","clinical","differential","normality","tags")} if material_type == "atlas" else {}
-    group = normalize_group(str(data.get("group", entry.get("group", DEFAULT_GROUP))))
-    area = normalize_area(str(data.get("area", entry.get("area", DEFAULT_TRAINING_AREA))))
-    category = str(data.get("category", entry.get("category", "")))
-    course_id = str(data.get("courseId", entry.get("courseId", ""))).strip()
-    course = get_course(course_id) if course_id else None
-    if not course or course.get("group") != group or course.get("area") != area:
-        course_id = ""
-    active = bool(data.get("active", entry.get("active", True)))
-    cat = get_quiz_category(category) if category else None
-    if category and (not cat or cat["group"] != group or cat.get("area") != area):
-        category = ""
-    conn, kind = _db_conn()
+    if denied: return denied
     try:
-        if kind == "postgres":
-            conn.execute("UPDATE materials SET title=%s, description=%s, category=%s, group_key=%s, training_area=%s, course_id=%s, material_type=%s, atlas_meta=%s, active=%s WHERE id=%s", (title, desc, category, group, area, course_id, material_type, json.dumps(atlas_meta, ensure_ascii=False), active, slide_id))
-        else:
-            conn.execute("UPDATE materials SET title=?, description=?, category=?, group_key=?, training_area=?, course_id=?, material_type=?, atlas_meta=?, active=? WHERE id=?", (title, desc, category, group, area, course_id, material_type, json.dumps(atlas_meta, ensure_ascii=False), int(active), slide_id))
-    finally:
-        conn.close()
-    return jsonify({"ok": True})
+        return jsonify(canonical_materials.update_material(sys.modules[__name__], slide_id, request.get_json(silent=True) or {}))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 @app.delete("/api/slides/<slide_id>")
 def api_delete_slide(slide_id):
+    from teacher_app.common.errors import ApiError
+    from teacher_app.materials import service as canonical_materials
+    from teacher_app.materials.routes import _legacy_error as canonical_error
     denied = require_admin()
-    if denied:
-        return denied
-    entry = get_material(slide_id)
-    if not entry:
-        return jsonify({"error": "內建教材不能從後台刪除，或找不到此教材"}), 404
-    if entry.get("storageBackend") == "gdrive":
-        try:
-            gdrive_delete_material(entry)
-        except Exception as e:
-            return jsonify({"error": f"Google Drive 教材刪除失敗：{e}"}), 502
-    elif entry.get("storageBackend") == "mega":
-        mega_destroy((entry.get("storageMeta") or {}).get("folderId", ""))
-    elif entry.get("storageBackend") == "oci":
-        try:
-            oci_delete_prefix(f"materials/{entry['id']}/")
-        except Exception as e:
-            return jsonify({"error": f"Oracle Object Storage 教材刪除失敗：{e}"}), 502
-    elif entry.get("storageBackend") == "r2":
-        try:
-            r2_delete_prefix(f"materials/{entry['id']}/")
-        except Exception as e:
-            return jsonify({"error": f"R2 教材刪除失敗：{e}"}), 502
-    else:
-        shutil.rmtree(UPLOAD_DIR / entry["id"], ignore_errors=True)
-        shutil.rmtree(UPLOADED_SLIDES_DIR / entry["folder"], ignore_errors=True)
-    # 同步清除 Render 單一預覽快取；只刪暫存，不影響其他教材。
+    if denied: return denied
     try:
-        cache_file = PREVIEW_CACHE_DIR / (re.sub(r"[^A-Za-z0-9_-]", "_", str(slide_id)) + ".pdf")
-        if cache_file.exists(): cache_file.unlink()
-    except OSError:
-        pass
-    conn, kind = _db_conn()
-    try:
-        if kind == "postgres":
-            conn.execute("DELETE FROM materials WHERE id=%s", (slide_id,))
-        else:
-            conn.execute("DELETE FROM materials WHERE id=?", (slide_id,))
-    finally:
-        conn.close()
-    return jsonify({"ok": True})
+        return jsonify(canonical_materials.delete_material(sys.modules[__name__], slide_id))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 # ---------------------------------------------------------------------------
@@ -5609,181 +5434,55 @@ def api_ai_import_questions():
 @app.get("/api/quiz-categories")
 @login_required()
 def api_list_quiz_categories():
-    group = request.args.get("group", "")
-    group = group if group in GROUPS else None
-    area = normalize_area(request.args.get("area", DEFAULT_TRAINING_AREA))
-    return jsonify(list_quiz_categories_with_counts(group_key=group, training_area=area, include_inactive=False))
+    from teacher_app.assessments import service as canonical_assessments
+    return jsonify(canonical_assessments.list_categories(sys.modules[__name__], request.args.get("group", "") or None, request.args.get("area", DEFAULT_TRAINING_AREA), False))
 
 
 @app.get("/api/quiz-categories/admin")
 def api_admin_list_quiz_categories():
+    from teacher_app.assessments import service as canonical_assessments
     denied = require_admin()
-    if denied:
-        return denied
-    group = request.args.get("group", "")
-    group = group if group in GROUPS else None
-    area = normalize_area(request.args.get("area", DEFAULT_TRAINING_AREA))
-    return jsonify(list_quiz_categories_with_counts(group_key=group, training_area=area, include_inactive=True))
+    if denied: return denied
+    return jsonify(canonical_assessments.list_categories(sys.modules[__name__], request.args.get("group", "") or None, request.args.get("area", DEFAULT_TRAINING_AREA), True))
 
 
 @app.post("/api/quiz-categories")
 def api_create_quiz_category():
+    from teacher_app.common.errors import ApiError
+    from teacher_app.assessments import service as canonical_assessments
+    from teacher_app.assessments.routes import _legacy_error as canonical_error
     denied = require_admin()
-    if denied:
-        return denied
-    data = request.get_json(silent=True) or {}
-    group = normalize_group(str(data.get("group", DEFAULT_GROUP)))
-    area = normalize_area(str(data.get("area", DEFAULT_TRAINING_AREA)))
-    title = str(data.get("title", "")).strip()[:255]
-    desc = str(data.get("desc", "")).strip()[:1000]
-    audience = str(data.get("audience", "")).strip()[:200]
+    if denied: return denied
     try:
-        draw_count = max(0, int(data.get("drawCount", 0) or 0))
-    except (TypeError, ValueError):
-        draw_count = 0
-    try:
-        passing_score = max(1, min(100, int(data.get("passingScore", 80) or 80)))
-    except (TypeError, ValueError):
-        passing_score = 80
-    draw_rules = data.get("drawRules", {}) if isinstance(data.get("drawRules", {}), dict) else {}
-    if draw_rules.get("mode") != "type_quota":
-        draw_rules = {}
-    else:
-        raw_q = draw_rules.get("quotas", {}) if isinstance(draw_rules.get("quotas", {}), dict) else {}
-        draw_rules = {"mode":"type_quota","quotas":{k:max(0,min(200,int(raw_q.get(k,0) or 0))) for k in ("choice","multi","true_false","fill","essay","image","video")}}
-        if sum(draw_rules["quotas"].values()) <= 0:
-            draw_rules = {}
-    course_id = str(data.get("courseId", "")).strip()
-    course = get_course(course_id) if course_id else None
-    if not course or course.get("group") != group or course.get("area") != area:
-        course_id = ""
-    if not title:
-        return jsonify({"error": "請輸入頁籤名稱"}), 400
-    cat_id = f"cat-{uuid.uuid4().hex[:12]}"
-    conn, kind = _db_conn()
-    try:
-        existing = conn.execute(
-            f"SELECT COALESCE(MAX(sort_order), -1) AS m FROM quiz_categories WHERE group_key = {'%s' if kind == 'postgres' else '?'}",
-            (group,),
-        ).fetchone()
-        next_order = (existing["m"] if isinstance(existing, dict) else existing[0]) + 1
-        date_added = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        if kind == "postgres":
-            conn.execute(
-                "INSERT INTO quiz_categories (id,group_key,training_area,course_id,title,description,sort_order,date_added,active,draw_count,passing_score,audience,draw_rules,review_status,reviewer_name,reviewed_at,published_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)",
-                (cat_id, group, area, course_id, title, desc, next_order, date_added, False, draw_count, passing_score, audience, json.dumps(draw_rules, ensure_ascii=False), "draft", "", "", ""),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO quiz_categories (id,group_key,training_area,course_id,title,description,sort_order,date_added,active,draw_count,passing_score,audience,draw_rules,review_status,reviewer_name,reviewed_at,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (cat_id, group, area, course_id, title, desc, next_order, date_added, 0, draw_count, passing_score, audience, json.dumps(draw_rules, ensure_ascii=False), "draft", "", "", ""),
-            )
-    finally:
-        conn.close()
-    return jsonify(get_quiz_category(cat_id))
+        return jsonify(canonical_assessments.create_category(sys.modules[__name__], request.get_json(silent=True) or {}))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 @app.patch("/api/quiz-categories/<category_id>")
 def api_update_quiz_category(category_id):
+    from teacher_app.common.errors import ApiError
+    from teacher_app.assessments import service as canonical_assessments
+    from teacher_app.assessments.routes import _legacy_error as canonical_error
     denied = require_admin()
-    if denied:
-        return denied
-    entry = get_quiz_category(category_id)
-    if not entry:
-        return jsonify({"error": "找不到此考題頁籤"}), 404
-    data = request.get_json(silent=True) or {}
-    title = str(data.get("title", entry["title"])).strip()[:255]
-    desc = str(data.get("desc", entry.get("desc", ""))).strip()[:1000]
-    active = bool(data.get("active", entry.get("active", True)))
-    review_status = str(data.get("reviewStatus", entry.get("reviewStatus", "approved")) or "draft").lower()
-    if review_status not in {"draft", "approved"}:
-        review_status = entry.get("reviewStatus", "draft")
-    reviewer_name = str(data.get("reviewerName", entry.get("reviewerName", "")) or "").strip()[:100]
-    reviewed_at = str(data.get("reviewedAt", entry.get("reviewedAt", "")) or "")[:80]
-    published_at = str(data.get("publishedAt", entry.get("publishedAt", "")) or "")[:80]
-    blind_mode = bool(data.get("blindMode", entry.get("blindMode", False)))
-    audience = str(data.get("audience", entry.get("audience", ""))).strip()[:200]
-    course_id = str(data.get("courseId", entry.get("courseId", ""))).strip()[:100]
-    course = get_course(course_id) if course_id else None
-    if not course or course.get("group") != entry.get("group") or course.get("area") != entry.get("area"):
-        course_id = ""
+    if denied: return denied
     try:
-        draw_count = max(0, int(data.get("drawCount", entry.get("drawCount", 0)) or 0))
-    except (TypeError, ValueError):
-        draw_count = max(0, int(entry.get("drawCount", 0) or 0))
-    try:
-        passing_score = max(1, min(100, int(data.get("passingScore", entry.get("passingScore", 80)) or 80)))
-    except (TypeError, ValueError):
-        passing_score = max(1, min(100, int(entry.get("passingScore", 80) or 80)))
-    draw_rules = data.get("drawRules", entry.get("drawRules", {}))
-    draw_rules = draw_rules if isinstance(draw_rules, dict) else {}
-    if draw_rules.get("mode") != "type_quota":
-        draw_rules = {}
-    else:
-        raw_q = draw_rules.get("quotas", {}) if isinstance(draw_rules.get("quotas", {}), dict) else {}
-        draw_rules = {"mode":"type_quota","quotas":{k:max(0,min(200,int(raw_q.get(k,0) or 0))) for k in ("choice","multi","true_false","fill","essay","image","video")}}
-        if sum(draw_rules["quotas"].values()) <= 0:
-            draw_rules = {}
-
-    # 任何會改變考生實際作答內容／規則的設定變更，都必須重新審核。
-    config_changed = any([
-        title != entry.get("title", ""), desc != entry.get("desc", ""), blind_mode != bool(entry.get("blindMode", False)),
-        draw_count != int(entry.get("drawCount", 0) or 0), passing_score != int(entry.get("passingScore", 80) or 80),
-        audience != str(entry.get("audience", "") or ""), course_id != str(entry.get("courseId", "") or ""),
-        draw_rules != (entry.get("drawRules", {}) or {}),
-    ])
-    if config_changed:
-        review_status, reviewer_name, reviewed_at, published_at, active = "draft", "", "", "", False
-    elif active and review_status != "approved":
-        return jsonify({"error": "此考卷尚未完成審核，請先執行『審核』再發布。"}), 409
-
-    conn, kind = _db_conn()
-    try:
-        if kind == "postgres":
-            conn.execute("UPDATE quiz_categories SET title=%s, description=%s, active=%s, blind_mode=%s, draw_count=%s, passing_score=%s, audience=%s, course_id=%s, draw_rules=%s::jsonb, review_status=%s, reviewer_name=%s, reviewed_at=%s, published_at=%s WHERE id=%s", (title, desc, active, blind_mode, draw_count, passing_score, audience, course_id, json.dumps(draw_rules, ensure_ascii=False), review_status, reviewer_name, reviewed_at, published_at, category_id))
-        else:
-            conn.execute("UPDATE quiz_categories SET title=?, description=?, active=?, blind_mode=?, draw_count=?, passing_score=?, audience=?, course_id=?, draw_rules=?, review_status=?, reviewer_name=?, reviewed_at=?, published_at=? WHERE id=?", (title, desc, int(active), int(blind_mode), draw_count, passing_score, audience, course_id, json.dumps(draw_rules, ensure_ascii=False), review_status, reviewer_name, reviewed_at, published_at, category_id))
-        if config_changed:
-            ph = "%s" if kind == "postgres" else "?"
-            conn.execute(f"UPDATE quiz_categories SET publication_id='', publication_hash='' WHERE id={ph}", (category_id,))
-    finally:
-        conn.close()
-    return jsonify({"ok": True})
+        return jsonify(canonical_assessments.update_category(sys.modules[__name__], category_id, request.get_json(silent=True) or {}))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 @app.post("/api/quiz-categories/<category_id>/review")
 def api_review_quiz_category(category_id):
-    """V5.6.1 出題流程第 4 步：審核。至少需有一題啟用題，並留下審核者。"""
+    from teacher_app.common.errors import ApiError
+    from teacher_app.assessments import service as canonical_assessments
+    from teacher_app.assessments.routes import _legacy_error as canonical_error
     denied = require_admin()
-    if denied:
-        return denied
-    entry = get_quiz_category(category_id)
-    if not entry:
-        return jsonify({"error": "找不到此考卷"}), 404
-    data = request.get_json(silent=True) or {}
-    reviewer = str(data.get("reviewerName", "")).strip()[:100]
-    if not reviewer:
-        return jsonify({"error": "審核前請填寫審核者姓名"}), 400
-    questions = list_quiz_questions(category_id, include_inactive=False)
-    if not questions:
-        return jsonify({"error": "此考卷沒有啟用中的題目，無法完成審核"}), 409
-    invalid = []
-    for i, q in enumerate(questions, start=1):
-        if not str(q.get("question", "")).strip():
-            invalid.append(f"第 {i} 題題幹空白")
-        if q.get("questionType") in {"choice", "multi", "image", "video", "true_false"} and len(q.get("options") or []) < 2:
-            invalid.append(f"第 {i} 題選項不足")
-        if q.get("questionType") == "essay" and not str(q.get("explanation", "")).strip():
-            invalid.append(f"第 {i} 題問答題缺少評分參考")
-    if invalid:
-        return jsonify({"error": "題目審核未通過", "issues": invalid[:20]}), 409
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    if denied: return denied
     try:
-        conn.execute(f"UPDATE quiz_categories SET review_status={ph}, reviewer_name={ph}, reviewed_at={ph}, active={ph} WHERE id={ph}", ("approved", reviewer, now, False if kind == "postgres" else 0, category_id))
-    finally:
-        conn.close()
-    return jsonify({"ok": True, "reviewStatus": "approved", "reviewerName": reviewer, "reviewedAt": now, "questionCount": len(questions)})
+        return jsonify(canonical_assessments.review_category(sys.modules[__name__], category_id, request.get_json(silent=True) or {}))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 
@@ -5832,125 +5531,67 @@ def _quiz_publication_snapshot(category_id: str):
 
 @app.get("/api/quiz-categories/<category_id>/publications")
 def api_quiz_publications(category_id):
+    from teacher_app.common.errors import ApiError
+    from teacher_app.assessments import service as canonical_assessments
+    from teacher_app.assessments.routes import _legacy_error as canonical_error
     denied = require_admin()
-    if denied:
-        return denied
-    if not get_quiz_category(category_id):
-        return jsonify({"error": "找不到此考卷"}), 404
-    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    if denied: return denied
     try:
-        rows = conn.execute(f"SELECT id,created_at,reviewer_name,snapshot_hash FROM quiz_publications WHERE quiz_category_id={ph} ORDER BY created_at DESC LIMIT 30", (category_id,)).fetchall()
-        return jsonify([{"id":dict(r).get("id",""),"createdAt":dict(r).get("created_at",""),"reviewerName":dict(r).get("reviewer_name",""),"snapshotHash":dict(r).get("snapshot_hash","")} for r in rows])
-    finally:
-        conn.close()
+        return jsonify(canonical_assessments.list_publications(sys.modules[__name__], category_id))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 @app.post("/api/quiz-categories/<category_id>/publish")
 def api_publish_quiz_category(category_id):
-    """V5.6.1 出題流程第 5 步：只有已審核考卷可以發布。"""
+    from teacher_app.common.errors import ApiError
+    from teacher_app.assessments import service as canonical_assessments
+    from teacher_app.assessments.routes import _legacy_error as canonical_error
     denied = require_admin()
-    if denied:
-        return denied
-    entry = get_quiz_category(category_id)
-    if not entry:
-        return jsonify({"error": "找不到此考卷"}), 404
-    if entry.get("reviewStatus") != "approved":
-        return jsonify({"error": "此考卷尚未完成審核，不能發布"}), 409
-    if not list_quiz_questions(category_id, include_inactive=False):
-        return jsonify({"error": "此考卷沒有啟用中的題目，不能發布"}), 409
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    snapshot, snapshot_hash, publication_id = _quiz_publication_snapshot(category_id)
-    conn, kind = _db_conn(); ph = "%s" if kind == "postgres" else "?"
+    if denied: return denied
     try:
-        if kind == "postgres":
-            with conn.transaction():
-                conn.execute("INSERT INTO quiz_publications (id,quiz_category_id,created_at,reviewer_name,snapshot_hash,snapshot) VALUES (%s,%s,%s,%s,%s,%s::jsonb)", (publication_id, category_id, now, entry.get("reviewerName", ""), snapshot_hash, json.dumps(snapshot, ensure_ascii=False)))
-                conn.execute("UPDATE quiz_categories SET active=TRUE, published_at=%s, publication_id=%s, publication_hash=%s WHERE id=%s", (now, publication_id, snapshot_hash, category_id))
-        else:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute("INSERT INTO quiz_publications (id,quiz_category_id,created_at,reviewer_name,snapshot_hash,snapshot) VALUES (?,?,?,?,?,?)", (publication_id, category_id, now, entry.get("reviewerName", ""), snapshot_hash, json.dumps(snapshot, ensure_ascii=False)))
-            conn.execute("UPDATE quiz_categories SET active=1, published_at=?, publication_id=?, publication_hash=? WHERE id=?", (now, publication_id, snapshot_hash, category_id))
-            conn.execute("COMMIT")
-    except Exception:
-        if kind != "postgres":
-            try: conn.execute("ROLLBACK")
-            except Exception: pass
-        raise
-    finally:
-        conn.close()
-    return jsonify({"ok": True, "active": True, "publishedAt": now, "publicationId": publication_id, "publicationHash": snapshot_hash, "snapshotQuestionCount": len(snapshot.get("questions") or [])})
+        return jsonify(canonical_assessments.publish_category(sys.modules[__name__], category_id))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 @app.get("/api/quiz-categories/<category_id>/materials")
 def api_quiz_category_materials(category_id):
-    denied=require_admin()
+    from teacher_app.common.errors import ApiError
+    from teacher_app.assessments import service as canonical_assessments
+    from teacher_app.assessments.routes import _legacy_error as canonical_error
+    denied = require_admin()
     if denied: return denied
-    cat=get_quiz_category(category_id)
-    if not cat: return jsonify({"error":"找不到此考卷"}),404
-    items=[]
-    for m in list_uploaded_materials(include_inactive=True):
-        if m.get("group")==cat.get("group") and m.get("area")==cat.get("area"):
-            items.append({
-                "id":m.get("id"),"title":m.get("title") or m.get("filename"),"filename":m.get("filename",""),
-                "materialType":m.get("materialType","standard"),"courseId":m.get("courseId",""),
-                "category":m.get("category",""),"linked":m.get("category")==category_id,"active":m.get("active",True)
-            })
-    items.sort(key=lambda x:(not x["linked"], str(x.get("title","")).lower()))
-    return jsonify({"categoryId":category_id,"items":items})
+    try:
+        return jsonify(canonical_assessments.category_materials(sys.modules[__name__], category_id))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 @app.put("/api/quiz-categories/<category_id>/materials")
 def api_update_quiz_category_materials(category_id):
-    denied=require_admin()
+    from teacher_app.common.errors import ApiError
+    from teacher_app.assessments import service as canonical_assessments
+    from teacher_app.assessments.routes import _legacy_error as canonical_error
+    denied = require_admin()
     if denied: return denied
-    cat=get_quiz_category(category_id)
-    if not cat: return jsonify({"error":"找不到此考卷"}),404
-    data=request.get_json(silent=True) or {}
-    raw=data.get("materialIds") or []
-    if not isinstance(raw,list): return jsonify({"error":"materialIds 必須是陣列"}),400
-    allowed={m.get("id") for m in list_uploaded_materials(include_inactive=True) if m.get("group")==cat.get("group") and m.get("area")==cat.get("area")}
-    selected=[]
-    for x in raw:
-        mid=str(x).strip()
-        if mid in allowed and mid not in selected: selected.append(mid)
-    conn,kind=_db_conn()
     try:
-        if kind=="postgres":
-            conn.execute("UPDATE materials SET category='' WHERE category=%s",(category_id,))
-            if selected:
-                placeholders=','.join(['%s']*len(selected))
-                conn.execute(f"UPDATE materials SET category=%s WHERE id IN ({placeholders}) AND group_key=%s AND training_area=%s",tuple([category_id]+selected+[cat.get('group'),cat.get('area')]))
-        else:
-            conn.execute("UPDATE materials SET category='' WHERE category=?",(category_id,))
-            if selected:
-                placeholders=','.join(['?']*len(selected))
-                conn.execute(f"UPDATE materials SET category=? WHERE id IN ({placeholders}) AND group_key=? AND training_area=?",tuple([category_id]+selected+[cat.get('group'),cat.get('area')]))
-    finally:
-        conn.close()
-    return jsonify({"ok":True,"linkedIds":selected,"linked":len(selected)})
+        return jsonify(canonical_assessments.update_category_materials(sys.modules[__name__], category_id, request.get_json(silent=True) or {}))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 @app.delete("/api/quiz-categories/<category_id>")
 def api_delete_quiz_category(category_id):
+    from teacher_app.common.errors import ApiError
+    from teacher_app.assessments import service as canonical_assessments
+    from teacher_app.assessments.routes import _legacy_error as canonical_error
     denied = require_admin()
-    if denied:
-        return denied
-    entry = get_quiz_category(category_id)
-    if not entry:
-        return jsonify({"error": "找不到此考題頁籤"}), 404
-    conn, kind = _db_conn()
+    if denied: return denied
     try:
-        if kind == "postgres":
-            conn.execute("DELETE FROM quiz_questions WHERE quiz_category_id=%s", (category_id,))
-            conn.execute("DELETE FROM quiz_categories WHERE id=%s", (category_id,))
-            conn.execute("UPDATE materials SET category='' WHERE category=%s", (category_id,))
-        else:
-            conn.execute("DELETE FROM quiz_questions WHERE quiz_category_id=?", (category_id,))
-            conn.execute("DELETE FROM quiz_categories WHERE id=?", (category_id,))
-            conn.execute("UPDATE materials SET category='' WHERE category=?", (category_id,))
-    finally:
-        conn.close()
-    return jsonify({"ok": True})
+        return jsonify(canonical_assessments.delete_category(sys.modules[__name__], category_id))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 # ---------------------------------------------------------------------------
@@ -6833,133 +6474,78 @@ def api_delete_doc_template(group_key):
 @app.get("/api/courses")
 @login_required()
 def api_courses():
-    area=normalize_area(request.args.get("area", DEFAULT_TRAINING_AREA))
-    group=request.args.get("group", "")
-    group=normalize_group(group) if group else None
-    return jsonify(list_courses(area, group, False))
+    from teacher_app.courses import service as canonical_courses
+    area = request.args.get("area", DEFAULT_TRAINING_AREA)
+    group = request.args.get("group", "") or None
+    return jsonify(canonical_courses.list_courses(sys.modules[__name__], area, group, False))
 
 @app.get("/api/courses/admin")
 def api_courses_admin():
-    denied=require_admin()
+    from teacher_app.courses import service as canonical_courses
+    denied = require_admin()
     if denied: return denied
-    area=request.args.get("area", "") or None
-    group=request.args.get("group", "") or None
-    return jsonify(list_courses(normalize_area(area) if area else None, normalize_group(group) if group else None, True))
+    return jsonify(canonical_courses.list_courses(sys.modules[__name__], request.args.get("area", "") or None, request.args.get("group", "") or None, True))
 
 @app.post("/api/courses")
 def api_create_course():
-    denied=require_admin()
+    from teacher_app.common.errors import ApiError
+    from teacher_app.courses import service as canonical_courses
+    from teacher_app.courses.routes import _legacy_error as canonical_error
+    denied = require_admin()
     if denied: return denied
-    data=request.get_json(silent=True) or {}
-    area=normalize_area(str(data.get("area", "pgy")))
-    group=normalize_group(str(data.get("group", DEFAULT_GROUP)))
-    title=str(data.get("title","")).strip()[:255]
-    desc=str(data.get("desc","")).strip()[:2000]
-    if not title: return jsonify({"error":"請輸入課程名稱"}),400
-    course_id=f"course-{uuid.uuid4().hex[:12]}"
-    conn,kind=_db_conn(); ph='%s' if kind=='postgres' else '?'
     try:
-        row=conn.execute(f"SELECT COALESCE(MAX(sort_order),-1) AS m FROM courses WHERE training_area={ph} AND group_key={ph}",(area,group)).fetchone()
-        order=(row['m'] if isinstance(row,dict) else row[0])+1
-        date_added=datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        if kind=='postgres': conn.execute("INSERT INTO courses (id,training_area,group_key,title,description,sort_order,date_added,active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",(course_id,area,group,title,desc,order,date_added,True))
-        else: conn.execute("INSERT INTO courses (id,training_area,group_key,title,description,sort_order,date_added,active) VALUES (?,?,?,?,?,?,?,?)",(course_id,area,group,title,desc,order,date_added,1))
-    finally: conn.close()
-    return jsonify(get_course(course_id))
+        return jsonify(canonical_courses.create_course(sys.modules[__name__], request.get_json(silent=True) or {}))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 @app.patch("/api/courses/<course_id>")
 def api_update_course(course_id):
-    denied=require_admin()
+    from teacher_app.common.errors import ApiError
+    from teacher_app.courses import service as canonical_courses
+    from teacher_app.courses.routes import _legacy_error as canonical_error
+    denied = require_admin()
     if denied: return denied
-    entry=get_course(course_id)
-    if not entry: return jsonify({"error":"找不到課程"}),404
-    data=request.get_json(silent=True) or {}
-    title=str(data.get('title',entry['title'])).strip()[:255]
-    desc=str(data.get('desc',entry.get('desc',''))).strip()[:2000]
-    active=bool(data.get('active',entry.get('active',True)))
-    conn,kind=_db_conn()
     try:
-        if kind=='postgres': conn.execute("UPDATE courses SET title=%s,description=%s,active=%s WHERE id=%s",(title,desc,active,course_id))
-        else: conn.execute("UPDATE courses SET title=?,description=?,active=? WHERE id=?",(title,desc,int(active),course_id))
-    finally: conn.close()
-    return jsonify({"ok":True})
+        return jsonify(canonical_courses.update_course(sys.modules[__name__], course_id, request.get_json(silent=True) or {}))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 @app.delete("/api/courses/<course_id>")
 def api_delete_course(course_id):
-    denied=require_admin()
+    from teacher_app.common.errors import ApiError
+    from teacher_app.courses import service as canonical_courses
+    from teacher_app.courses.routes import _legacy_error as canonical_error
+    denied = require_admin()
     if denied: return denied
-    if not get_course(course_id): return jsonify({"error":"找不到課程"}),404
-    conn,kind=_db_conn(); ph='%s' if kind=='postgres' else '?'
     try:
-        conn.execute(f"UPDATE materials SET course_id='' WHERE course_id={ph}",(course_id,))
-        conn.execute(f"UPDATE quiz_categories SET course_id='' WHERE course_id={ph}",(course_id,))
-        conn.execute(f"DELETE FROM courses WHERE id={ph}",(course_id,))
-    finally: conn.close()
-    return jsonify({"ok":True})
+        return jsonify(canonical_courses.delete_course(sys.modules[__name__], course_id))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 @app.get('/api/courses/<course_id>/plan')
 def api_get_teaching_plan(course_id):
+    from teacher_app.common.errors import ApiError
+    from teacher_app.courses import service as canonical_courses
+    from teacher_app.courses.routes import _legacy_error as canonical_error
     denied = require_admin()
     if denied: return denied
-    course = get_course(course_id)
-    if not course: return jsonify({'error': '找不到課程'}), 404
-    materials = [m for m in list_uploaded_materials(True) if m.get('courseId') == course_id]
-    return jsonify({'course': course, 'materials': materials})
+    try:
+        return jsonify(canonical_courses.get_teaching_plan(sys.modules[__name__], course_id))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 @app.put('/api/courses/<course_id>/plan')
 def api_save_teaching_plan(course_id):
+    from teacher_app.common.errors import ApiError
+    from teacher_app.courses import service as canonical_courses
+    from teacher_app.courses.routes import _legacy_error as canonical_error
     denied = require_admin()
     if denied: return denied
-    course = get_course(course_id)
-    if not course: return jsonify({'error': '找不到課程'}), 404
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict): return jsonify({'error': '課程資料格式不正確'}), 400
     try:
-        title = data.get('title', course['title'])
-        desc = data.get('desc', course['desc'])
-        objectives = data.get('learningObjectives', course['learningObjectives'])
-        if not isinstance(title, str) or not title.strip() or len(title) > 255:
-            raise ValueError('請輸入 1–255 字的課程名稱')
-        if not isinstance(desc, str) or len(desc) > 2000 or not isinstance(objectives, str) or len(objectives) > 4000:
-            raise ValueError('課程說明限 2000 字，學習目標限 4000 字')
-        minutes = data.get('estimatedMinutes', course['estimatedMinutes'])
-        order = data.get('sortOrder', course['sortOrder'])
-        if type(minutes) is not int or not 0 <= minutes <= 10000 or type(order) is not int or not 0 <= order <= 100000:
-            raise ValueError('建議分鐘數與顯示順序須為有效非負整數')
-        start = data.get('startDate', course['startDate'])
-        end = data.get('endDate', course['endDate'])
-        for date in (start, end):
-            if not isinstance(date, str): raise ValueError('日期格式不正確')
-            if date and (not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date) or not datetime.date.fromisoformat(date)):
-                raise ValueError('日期格式不正確')
-        if start and end and start > end: raise ValueError('結束日期不可早於開始日期')
-        active = data.get('active', course['active'])
-        if type(active) is not bool: raise ValueError('課程狀態格式不正確')
-        material_order = data.get('materialOrder', course['materialOrder'])
-        if not isinstance(material_order, list) or any(not isinstance(x, str) for x in material_order) or len(set(material_order)) != len(material_order):
-            raise ValueError('教材順序格式不正確或含重複教材')
-    except (ValueError, TypeError) as exc:
-        return jsonify({'error': str(exc)}), 400
-    conn, kind = _db_conn()
-    ph = '%s' if kind == 'postgres' else '?'
-    try:
-        conn.execute('BEGIN')
-        rows = conn.execute(f'SELECT id FROM materials WHERE course_id={ph}', (course_id,)).fetchall()
-        valid = {dict(r)['id'] for r in rows}
-        if set(material_order) != valid:
-            conn.rollback()
-            return jsonify({'error': '教材清單已變更，請關閉後重新開啟課程編排再儲存'}), 409
-        values = (title.strip(), desc.strip(), objectives.strip(), minutes, start, end, json.dumps(material_order), order, active if kind == 'postgres' else int(active), course_id)
-        fields = ['title', 'description', 'learning_objectives', 'estimated_minutes', 'start_date', 'end_date', 'material_order', 'sort_order', 'active']
-        conn.execute(f"UPDATE courses SET {','.join(f'{field}={ph}' for field in fields)} WHERE id={ph}", values)
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-    return jsonify(get_course(course_id))
+        return jsonify(canonical_courses.save_teaching_plan(sys.modules[__name__], course_id, request.get_json(silent=True)))
+    except ApiError as exc:
+        return canonical_error(exc)
 
 
 @app.post("/api/material-progress")

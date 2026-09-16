@@ -43,7 +43,7 @@ class SmartLearning67Tests(unittest.TestCase):
     def test_phase2_index_contract_has_safe_terminal_hook_and_admin_ui(self):
         smart=ROOT.joinpath('smart_learning_67.py').read_text(encoding='utf-8')
         worker=ROOT.joinpath('free_worker_67.py').read_text(encoding='utf-8')
-        admin=ROOT.joinpath('static/system-admin.js').read_text(encoding='utf-8')
+        admin=ROOT.joinpath('static/admin-materials.js').read_text(encoding='utf-8')
         self.assertIn('def auto_index_material', smart)
         self.assertIn('"no_text"', smart)
         self.assertIn('auto_index_material(base', worker)
