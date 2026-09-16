@@ -156,6 +156,10 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/learner-exam-controls.js?v=7122"></script>')
             if "/learner-result-chart.js" not in html:
                 body_assets.append('<script defer src="/learner-result-chart.js?v=7123"></script>')
+            if "/question-authoring-ux-71.js" not in html:
+                body_assets.append('<script defer src="/question-authoring-ux-71.js?v=7130"></script>')
+            if "/learner-ui-cleanup-71.js" not in html:
+                body_assets.append('<script defer src="/learner-ui-cleanup-71.js?v=7131"></script>')
             # Final Convergence: load the compatibility facade after all
             # canonical feature owners so legacy globals resolve to them.
             if "/admin-compat-facade.js" not in html:
