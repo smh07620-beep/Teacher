@@ -82,6 +82,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/pgy-competency-matrix-71.js?v=7101"></script>')
             if "/learning-analytics-71.js" not in html:
                 body_assets.append('<script defer src="/learning-analytics-71.js?v=7102"></script>')
+            if "/notification-center-71.js" not in html:
+                body_assets.append('<script defer src="/notification-center-71.js?v=7103"></script>')
             if "/worker-status-70.js" not in html:
                 body_assets.append('<script defer src="/worker-status-70.js?v=7002"></script>')
             if "/admin-results.js" not in html:
