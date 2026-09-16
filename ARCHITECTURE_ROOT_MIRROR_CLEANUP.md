@@ -8,6 +8,29 @@ The rule is simple: when a domain has a canonical `teacher_app/` owner, new busi
 
 This phase makes no database migration, Render change, version change, or production-entrypoint change.
 
+## Completed stale frontend mirror removal
+
+`static/` is the sole canonical web-asset directory: the Flask application is
+configured with `STATIC_DIR = BASE_DIR / "static"` and every public page route
+uses that directory.  The former root copies of the following same-named
+assets have therefore been removed.  They were stale mirrors, not fallback
+assets or production entrypoints:
+
+- HTML: `index.html`, `area-internal.html`, `area-pgy.html`, `login.html`, and
+  `system.html`
+- JavaScript: `login.js`, `portal-v56.js`, `shared-core.js`, `system-admin.js`,
+  `system-assessment.js`, `system-bootstrap.js`, `system-core.js`,
+  `system-exam.js`, `system-learner.js`, and `teaching.js`
+- CSS: `admin.css`, `design-tokens.css`, `learner.css`, `phase3.css`,
+  `portal-v56.css`, `portal-v571.css`, `portal.css`, `teaching.css`, `v561.css`,
+  `v573.css`, `v574.css`, `v575.css`, and `v580.css`
+
+Do not recreate a root copy of a file that is served from `static/`.  A new
+root/static same-name pair requires an explicit compatibility decision and a
+corresponding policy-test update.  The deferred Python modules in the
+ownership matrix remain intentionally untouched because each still has unique
+production behavior.
+
 ## Canonical ownership matrix
 
 | Domain | Canonical owner | Root compatibility surface | Status / remaining debt |

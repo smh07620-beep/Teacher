@@ -77,6 +77,19 @@ class RootMirrorPolicyTests(unittest.TestCase):
         self.assertNotIn("@app.", source)
         self.assertNotIn("CREATE TABLE", source)
 
+    def test_frontend_assets_have_static_as_the_only_canonical_location(self):
+        static = ROOT / "static"
+        mirror_names = {
+            path.name for path in static.iterdir() if path.is_file() and path.suffix in {".css", ".html", ".js"}
+        }
+        root_mirrors = {path.name for path in ROOT.iterdir() if path.is_file()} & mirror_names
+        self.assertEqual(root_mirrors, set())
+
+        app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+        self.assertIn('STATIC_DIR = BASE_DIR / "static"', app_source)
+        for route in ("index.html", "area-internal.html", "area-pgy.html", "login.html", "system.html"):
+            self.assertIn(f'send_from_directory(STATIC_DIR, "{route}")', app_source)
+
 
 if __name__ == "__main__":
     unittest.main()
