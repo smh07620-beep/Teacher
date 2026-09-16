@@ -26,18 +26,35 @@ def assignment(status, *, assignment_id="a1", due_at="2026-09-17T12:00:00+00:00"
 
 
 class TrainingCommandCenterServiceTests(unittest.TestCase):
-    def summary_for(self, role, rows):
-        user = {"username": f"{role}-user", "role": role, "preferredGroup": "grpHema"}
+    def summary_for(self, role, rows, *, pgy=True):
+        user = {
+            "username": f"{role}-user",
+            "role": role,
+            "preferredGroup": "grpHema",
+            "pgyLearner": pgy,
+        }
         with patch("teacher_app.command_center.service.pgy_service.list_assignments", return_value=rows):
             return service.build_summary(user, now=NOW)
 
-    def test_student_only_gets_assigned_work(self):
+    def test_pgy_student_gets_assigned_work(self):
         data = self.summary_for("student", [assignment("assigned"), assignment("submitted", assignment_id="a2")])
         self.assertEqual([item["id"] for item in data["items"]], ["a1"])
         self.assertEqual(data["items"][0]["action"], "submit")
-        self.assertEqual(data["scope"], ["pgy"])
+        self.assertEqual(data["scope"], ["online", "pgy"])
+        self.assertTrue(data["pgyLearner"])
+        self.assertEqual(data["audience"], "pgy")
 
-    def test_each_professional_role_maps_to_its_existing_pgy_stage(self):
+    def test_online_student_never_receives_pgy_tasks(self):
+        user = {"username": "online", "role": "student", "pgyLearner": False}
+        with patch("teacher_app.command_center.service.pgy_service.list_assignments") as listing:
+            data = service.build_summary(user, now=NOW)
+        listing.assert_not_called()
+        self.assertEqual(data["items"], [])
+        self.assertEqual(data["scope"], ["online"])
+        self.assertFalse(data["pgyLearner"])
+        self.assertEqual(data["audience"], "online")
+
+    def test_pgy_professional_roles_keep_existing_stage_mapping(self):
         cases = (
             ("clinical_teacher", "submitted", "teacher_sign"),
             ("group_leader", "teacher_signed", "group_countersign"),
@@ -54,7 +71,7 @@ class TrainingCommandCenterServiceTests(unittest.TestCase):
             with self.subTest(role=role), patch(
                 "teacher_app.command_center.service.pgy_service.list_assignments"
             ) as listing:
-                data = service.build_summary({"username": role, "role": role}, now=NOW)
+                data = service.build_summary({"username": role, "role": role, "pgyLearner": False}, now=NOW)
                 self.assertEqual(data["items"], [])
                 self.assertEqual(data["counts"], {"total": 0, "overdue": 0, "pgy": 0})
                 listing.assert_not_called()
@@ -79,8 +96,8 @@ class TrainingCommandCenterRouteTests(unittest.TestCase):
         return app.test_client()
 
     def test_route_is_read_only_and_returns_summary(self):
-        expected = {"role": "student", "scope": ["pgy"], "counts": {"total": 0, "overdue": 0, "pgy": 0}, "items": []}
-        client = self.make_client({"username": "s", "role": "student"})
+        expected = {"role": "student", "audience": "online", "pgyLearner": False, "scope": ["online"], "counts": {"total": 0, "overdue": 0, "pgy": 0}, "items": []}
+        client = self.make_client({"username": "s", "role": "student", "pgyLearner": False})
         with patch("teacher_app.command_center.routes.service.build_summary", return_value=expected):
             response = client.get("/api/training-command-center")
         self.assertEqual(response.status_code, 200)
@@ -102,28 +119,30 @@ class TrainingCommandCenterFrontendTests(unittest.TestCase):
         cls.entrypoint = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
         cls.matrix = ROOT.joinpath("RC_FEATURE_UI_COVERAGE_MATRIX.md").read_text(encoding="utf-8")
 
-    def test_ui_is_a_normal_read_only_surface(self):
+    def test_ui_is_compact_read_only_and_audience_aware(self):
         self.assertIn("📌 我的待辦", self.ui)
-        self.assertIn("/api/training-command-center", self.ui)
-        self.assertIn("credentials: 'same-origin'", self.ui)
-        fetch_block = self.ui[self.ui.index("fetch('/api/training-command-center'"):]
-        for mutation in ("method: 'POST'", "method: 'PATCH'", "method: 'DELETE'"):
-            self.assertNotIn(mutation, fetch_block)
+        self.assertIn("#course-overview", self.ui)
+        self.assertIn("/api/training-command-center/profile", self.ui)
+        self.assertIn("/api/dashboard/me?", self.ui)
+        self.assertIn("profile?.pgyLearner", self.ui)
+        self.assertIn("一般／線上人員", self.ui)
         self.assertIn("switchLearningModule('assessment')", self.ui)
-        self.assertIn("pgy-workflow-center", self.ui)
+        for mutation in ("method: 'POST'", "method: 'PATCH'", "method: 'DELETE'"):
+            self.assertNotIn(mutation, self.ui)
 
-    def test_asset_and_backend_are_composed(self):
+    def test_asset_and_backend_are_composed_with_fresh_cache_key(self):
         self.assertIn("register_training_command_center", self.entrypoint)
-        self.assertIn("/training-command-center-71.js?v=7100", self.frontend)
+        self.assertIn("register_training_audience_71", self.entrypoint)
+        self.assertIn("/training-command-center-71.js?v=7113", self.frontend)
         self.assertLess(
             self.frontend.index("/workspace-shell-70.js?v=7001"),
-            self.frontend.index("/training-command-center-71.js?v=7100"),
+            self.frontend.index("/training-command-center-71.js?v=7113"),
         )
 
     def test_rc_matrix_records_71_m1(self):
         self.assertIn("Training Command Center / 我的待辦 (7.1 M1)", self.matrix)
-        self.assertIn("/api/training-command-center", self.matrix)
-        self.assertIn("static/training-command-center-71.js", self.matrix)
+        self.assertIn("pgy_learner", self.matrix)
+        self.assertIn("/api/dashboard/me", self.matrix)
 
 
 if __name__ == "__main__":
