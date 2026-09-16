@@ -1,137 +1,170 @@
-/* Teacher 7.1 M1 · Training Command Center / 我的待辦
- * Read-only aggregation. Mutations remain in their canonical workflow UIs.
+/* Teacher 7.1 M1 · compact Training Command Center / 我的待辦.
+ * PGY learner content is explicitly opt-in; all actions remain canonical links.
  */
 (function () {
   'use strict';
 
   const ID = 'training-command-center-71';
+  const ROLE_LABELS = {
+    student: '學員', clinical_teacher: '臨床教師', group_leader: '組長',
+    education_admin: '教學管理者', system_admin: '系統管理者', auditor: '稽核／唯讀'
+  };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[char]));
 
-  function formatDue(value) {
-    if (!value) return '未設定期限';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value);
-    return date.toLocaleString('zh-TW', {hour12: false});
+  let profilePromise = null;
+
+  async function getJSON(url) {
+    const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store'});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data?.error || `讀取失敗（${response.status}）`);
+      error.status = response.status;
+      throw error;
+    }
+    return data;
   }
 
-  function groupLabel(key) {
-    const group = (window.GROUPS || {})[key];
-    return group?.name || group?.label || key || '—';
+  function updateIdentityBadge(profile) {
+    if (!profile) return;
+    const name = document.getElementById('v573-system-user-name');
+    const meta = document.getElementById('v573-system-user-id');
+    if (name && profile.name) name.textContent = profile.name;
+    if (meta) {
+      const title = String(profile.professionalTitle || ROLE_LABELS[profile.role] || '醫檢師').trim();
+      const emp = String(profile.empId || '').trim();
+      meta.textContent = [title, emp ? `工號 ${emp}` : ''].filter(Boolean).join(' · ');
+    }
+  }
+
+  async function loadProfile(force = false) {
+    if (!profilePromise || force) {
+      profilePromise = getJSON('/api/training-command-center/profile').then(profile => {
+        updateIdentityBadge(profile);
+        document.documentElement.dataset.trainingAudience = profile?.pgyLearner ? 'pgy' : 'online';
+        return profile;
+      });
+    }
+    return profilePromise;
+  }
+
+  window.Teacher71Profile = Object.freeze({load: loadProfile, roleLabels: ROLE_LABELS});
+
+  function dashboardUrl(profile) {
+    const query = new URLSearchParams({empId: profile?.empId || ''});
+    if (profile?.name) query.set('name', profile.name);
+    return `/api/dashboard/me?${query.toString()}`;
+  }
+
+  function examHref(item) {
+    const query = new URLSearchParams({
+      area: item?.area || 'internal',
+      group: item?.group || 'grpBio',
+      module: 'exam',
+      from: 'training-command-center'
+    });
+    const examId = String(item?.id || item?.examId || item?.quizId || '').trim();
+    if (examId) query.set('examId', examId);
+    return `/system?${query.toString()}`;
   }
 
   function mount() {
-    if (document.getElementById(ID)) return document.getElementById(ID);
-    const host = document.querySelector('main.flex-grow') || document.querySelector('main');
-    if (!host) return null;
-    const section = document.createElement('section');
+    let section = document.getElementById(ID);
+    if (section) return section;
+    const course = document.getElementById('course-overview');
+    if (!course) return null;
+    section = document.createElement('details');
     section.id = ID;
-    section.className = 'edu-card p-5 sm:p-6 border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/40';
+    section.className = 'rounded-2xl border border-indigo-100 bg-indigo-50/30 px-4 py-3';
     section.innerHTML = `
-      <div class="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <p class="text-[11px] font-black tracking-[0.18em] text-indigo-500">TEACHER 7.1 · TRAINING COMMAND CENTER</p>
-          <h2 class="text-xl font-black text-slate-950 mt-1">📌 我的待辦</h2>
-          <p class="text-xs text-slate-500 mt-1">集中顯示目前真正需要你處理的訓練工作；操作仍回到原本正式流程完成。</p>
-        </div>
-        <button id="training-command-refresh-71" type="button" class="text-xs font-bold px-3 py-2 rounded-xl border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50">↻ 更新</button>
-      </div>
-      <div id="training-command-status-71" class="text-xs text-slate-500 mt-4">讀取待辦中…</div>
-      <div id="training-command-stats-71" class="hidden grid grid-cols-3 gap-2 sm:gap-3 mt-4"></div>
-      <div id="training-command-list-71" class="space-y-2 mt-4"></div>
-      <p class="text-[10px] text-slate-400 mt-4">M1 保持 PGY 待辦的正式操作入口；M2 能力矩陣、M3 Learning Analytics 與 M4 通知中心皆為唯讀聚合／分析層。</p>`;
-    const firstSection = host.querySelector(':scope > section');
-    if (firstSection?.nextSibling) host.insertBefore(section, firstSection.nextSibling);
-    else if (firstSection) firstSection.after(section);
-    else host.prepend(section);
-    section.querySelector('#training-command-refresh-71').addEventListener('click', () => load(true));
+      <summary class="cursor-pointer list-none flex items-center justify-between gap-3">
+        <span class="flex items-center gap-2 min-w-0"><b class="text-sm text-slate-900">📌 我的待辦</b><span id="training-command-summary-71" class="text-[11px] text-slate-500 truncate">讀取中…</span></span>
+        <span class="text-[11px] font-bold text-indigo-700">展開 ▾</span>
+      </summary>
+      <div id="training-command-status-71" class="text-xs text-slate-500 mt-3">讀取待辦中…</div>
+      <div id="training-command-stats-71" class="hidden grid grid-cols-3 gap-2 mt-3"></div>
+      <div id="training-command-list-71" class="space-y-2 mt-3"></div>`;
+    const header = course.querySelector(':scope > .edu-card');
+    if (header) header.after(section); else course.prepend(section);
     return section;
   }
 
-  function statCard(label, value, emphasis = '') {
-    return `<div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
-      <div class="text-[10px] text-slate-500">${escapeHtml(label)}</div>
-      <div class="text-lg font-black ${emphasis || 'text-slate-900'} mt-0.5">${Number(value || 0)}</div>
-    </div>`;
+  function chip(label, value) {
+    return `<div class="rounded-xl border border-slate-200 bg-white px-3 py-2"><div class="text-[9px] text-slate-400">${escapeHtml(label)}</div><div class="text-sm font-black text-slate-800 mt-0.5">${escapeHtml(value)}</div></div>`;
   }
 
   function openPGY() {
     if (typeof window.switchLearningModule === 'function') window.switchLearningModule('assessment');
-    window.setTimeout(() => {
-      const target = document.getElementById('pgy-workflow-center') || document.getElementById('panel-assessment');
-      target?.scrollIntoView?.({behavior: 'smooth', block: 'start'});
-      target?.classList?.add('ring-2', 'ring-indigo-200');
-      window.setTimeout(() => target?.classList?.remove('ring-2', 'ring-indigo-200'), 1600);
-    }, 120);
+    window.setTimeout(() => (document.getElementById('pgy-workflow-center') || document.getElementById('panel-assessment'))?.scrollIntoView?.({behavior:'smooth', block:'start'}), 120);
   }
 
-  function render(data) {
+  function render(profile, command, dashboard) {
     const status = document.getElementById('training-command-status-71');
+    const summaryLine = document.getElementById('training-command-summary-71');
     const stats = document.getElementById('training-command-stats-71');
     const list = document.getElementById('training-command-list-71');
-    if (!status || !stats || !list) return;
-    const counts = data?.counts || {};
-    const items = Array.isArray(data?.items) ? data.items : [];
-    status.textContent = items.length
-      ? `目前有 ${items.length} 項待辦${counts.overdue ? `，其中 ${counts.overdue} 項逾期` : ''}。`
-      : '目前沒有需要你執行的 PGY 待辦。';
+    if (!status || !summaryLine || !stats || !list) return;
+
+    const pending = Array.isArray(dashboard?.pendingExams) ? dashboard.pendingExams : [];
+    const pgyItems = profile?.pgyLearner && Array.isArray(command?.items) ? command.items : [];
+    const total = pending.length + pgyItems.length;
+    summaryLine.textContent = total ? `${total} 項需要處理` : '目前沒有待辦';
+    status.textContent = profile?.pgyLearner
+      ? 'PGY 學員會同時看到線上課程／考核與自己的 PGY 學員待辦。'
+      : '一般／線上人員只顯示課程、教材與考核相關待辦。';
+
     stats.classList.remove('hidden');
-    stats.innerHTML = [
-      statCard('全部待辦', counts.total),
-      statCard('逾期', counts.overdue, counts.overdue ? 'text-rose-600' : 'text-slate-900'),
-      statCard('PGY', counts.pgy)
-    ].join('');
-    if (!items.length) {
-      list.innerHTML = '<div class="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-xs text-emerald-700">✓ 目前沒有等待你處理的 PGY 工作。</div>';
-      return;
+    const statRows = [
+      chip('待完成考核', String(pending.length)),
+      chip('進行中課程', String(Number(dashboard?.activeCourses || 0))),
+      profile?.pgyLearner
+        ? chip('PGY 待辦', String(pgyItems.length))
+        : chip('教材完成', `${Number(dashboard?.materialsCompleted || 0)}/${Number(dashboard?.materialsTotal || 0)}`)
+    ];
+    stats.innerHTML = statRows.join('');
+
+    const rows = [];
+    pending.slice(0, 4).forEach(exam => rows.push(`
+      <a href="${examHref(exam)}" class="block rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-teal-300">
+        <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-800">${escapeHtml(exam.title || '待完成考核')}</b><span class="text-[10px] font-bold text-teal-700">前往考核 →</span></div>
+        <div class="text-[10px] text-slate-400 mt-1">${escapeHtml(exam.area === 'pgy' ? 'PGY考核' : '院內考核')} · 及格 ${Number(exam.passingScore || 80)} 分</div>
+      </a>`));
+
+    if (profile?.pgyLearner) {
+      pgyItems.slice(0, 4).forEach(item => rows.push(`
+        <article class="rounded-xl border ${item.overdue ? 'border-rose-200 bg-rose-50/60' : 'border-indigo-100 bg-white'} px-3 py-2 flex items-center justify-between gap-3">
+          <div class="min-w-0"><b class="block text-xs text-slate-800 truncate">${escapeHtml(item.title || 'PGY 訓練指派')}</b><span class="text-[10px] text-slate-400">${escapeHtml(item.statusLabel || item.status || '')}${item.overdue ? ' · 已逾期' : ''}</span></div>
+          <button type="button" data-pgy-command class="shrink-0 text-[10px] font-bold rounded-lg bg-indigo-700 text-white px-2.5 py-1.5">${escapeHtml(item.actionLabel || '開啟')}</button>
+        </article>`));
     }
-    const visible = items.slice(0, 6);
-    list.innerHTML = visible.map(item => `
-      <article class="rounded-xl border ${item.overdue ? 'border-rose-200 bg-rose-50/50' : 'border-slate-200 bg-white'} px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2 flex-wrap">
-            <span class="text-xs font-black text-slate-900">${escapeHtml(item.title || 'PGY 訓練指派')}</span>
-            <span class="text-[10px] rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 font-bold">${escapeHtml(item.statusLabel || item.status)}</span>
-            ${item.overdue ? '<span class="text-[10px] rounded-full bg-rose-100 text-rose-700 px-2 py-0.5 font-bold">已逾期</span>' : ''}
-          </div>
-          <div class="text-[11px] text-slate-500 mt-1">${escapeHtml(groupLabel(item.group))} · ${escapeHtml(formatDue(item.dueAt))}</div>
-        </div>
-        <button type="button" data-command-target="pgy-workflow" class="text-xs font-bold px-3 py-2 rounded-xl bg-indigo-700 text-white hover:bg-indigo-600 shrink-0">${escapeHtml(item.actionLabel || '開啟待辦')}</button>
-      </article>`).join('') + (items.length > visible.length
-        ? `<div class="text-[11px] text-slate-400 text-center">另有 ${items.length - visible.length} 項，進入 PGY 工作區查看全部。</div>`
-        : '');
-    list.querySelectorAll('[data-command-target="pgy-workflow"]').forEach(button => button.addEventListener('click', openPGY));
+
+    list.innerHTML = rows.length
+      ? rows.join('')
+      : '<div class="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-700">✓ 目前沒有待處理的線上學習工作。</div>';
+    list.querySelectorAll('[data-pgy-command]').forEach(button => button.addEventListener('click', openPGY));
   }
 
   async function load(force = false) {
     const section = mount();
     if (!section) return;
-    const status = document.getElementById('training-command-status-71');
-    if (status) status.textContent = force ? '更新待辦中…' : '讀取待辦中…';
     try {
-      const response = await fetch('/api/training-command-center', {
-        credentials: 'same-origin',
-        cache: 'no-store'
-      });
-      const data = await response.json().catch(() => ({}));
-      if (response.status === 401) {
-        section.classList.add('hidden');
-        return;
-      }
-      if (!response.ok) throw new Error(data?.error || `讀取失敗（${response.status}）`);
+      const profile = await loadProfile(force);
+      const requests = [
+        getJSON('/api/training-command-center').catch(() => ({items:[], counts:{}})),
+        profile?.empId ? getJSON(dashboardUrl(profile)).catch(() => ({pendingExams:[]})) : Promise.resolve({pendingExams:[]})
+      ];
+      const [command, dashboard] = await Promise.all(requests);
       section.classList.remove('hidden');
-      render(data);
+      render(profile, command, dashboard);
     } catch (error) {
+      if (error?.status === 401) { section.classList.add('hidden'); return; }
+      const status = document.getElementById('training-command-status-71');
       if (status) status.textContent = `❌ ${error.message || '無法讀取待辦'}`;
     }
   }
 
-  function init() {
-    if (!mount()) return;
-    load(false);
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once: true});
+  function init() { if (mount()) load(false); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true});
   else init();
 })();

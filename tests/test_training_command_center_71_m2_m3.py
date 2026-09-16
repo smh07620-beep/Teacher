@@ -19,6 +19,7 @@ LEARNER = {
     "name": "學員一",
     "empId": "E001",
     "group": "grpHema",
+    "pgyLearner": True,
 }
 
 
@@ -47,61 +48,15 @@ class CommandCenterScopeTests(unittest.TestCase):
 class CompetencyMatrixProjectionTests(unittest.TestCase):
     def test_matrix_uses_formal_assessment_tools_and_assignment_progress_only(self):
         assignments = [
-            {
-                "id": "a1",
-                "learner_username": "s1",
-                "group_key": "grpHema",
-                "title": "已完成訓練",
-                "due_at": "2026-09-14T12:00:00+00:00",
-                "status": "finalized",
-                "updated_at": "2026-09-15T08:00:00+00:00",
-            },
-            {
-                "id": "a2",
-                "learner_username": "s1",
-                "group_key": "grpHema",
-                "title": "逾期訓練",
-                "due_at": "2026-09-15T12:00:00+00:00",
-                "status": "assigned",
-                "updated_at": "2026-09-15T08:00:00+00:00",
-            },
+            {"id":"a1","learner_username":"s1","group_key":"grpHema","title":"已完成訓練","due_at":"2026-09-14T12:00:00+00:00","status":"finalized","updated_at":"2026-09-15T08:00:00+00:00"},
+            {"id":"a2","learner_username":"s1","group_key":"grpHema","title":"逾期訓練","due_at":"2026-09-15T12:00:00+00:00","status":"assigned","updated_at":"2026-09-15T08:00:00+00:00"},
         ]
         assessments = [
-            {
-                "id": "p1",
-                "assessment_type": "dops",
-                "emp_id": "E001",
-                "overall_score": 4,
-                "status": "completed",
-                "assessment_date": "2026-09-10",
-                "created_at": "2026-09-10T09:00:00+00:00",
-            },
-            {
-                "id": "p2",
-                "assessment_type": "dops",
-                "emp_id": "E001",
-                "overall_score": 5,
-                "status": "completed",
-                "assessment_date": "2026-09-12",
-                "created_at": "2026-09-12T09:00:00+00:00",
-            },
-            {
-                "id": "legacy",
-                "assessment_type": "core6",
-                "emp_id": "E001",
-                "overall_score": 5,
-                "status": "completed",
-                "assessment_date": "2026-09-13",
-                "created_at": "2026-09-13T09:00:00+00:00",
-            },
+            {"id":"p1","assessment_type":"dops","emp_id":"E001","overall_score":4,"status":"completed","assessment_date":"2026-09-10","created_at":"2026-09-10T09:00:00+00:00"},
+            {"id":"p2","assessment_type":"dops","emp_id":"E001","overall_score":5,"status":"completed","assessment_date":"2026-09-12","created_at":"2026-09-12T09:00:00+00:00"},
+            {"id":"legacy","assessment_type":"core6","emp_id":"E001","overall_score":5,"status":"completed","assessment_date":"2026-09-13","created_at":"2026-09-13T09:00:00+00:00"},
         ]
-        data = competency.project_matrix(
-            {"kind": "self", "roles": ["student"], "group": "grpHema"},
-            [LEARNER],
-            assignments,
-            assessments,
-            now=NOW,
-        )
+        data = competency.project_matrix({"kind":"self","roles":["student"],"group":"grpHema"}, [LEARNER], assignments, assessments, now=NOW)
         row = data["learners"][0]
         self.assertEqual(row["progress"]["assignmentsTotal"], 2)
         self.assertEqual(row["progress"]["assignmentsCompleted"], 1)
@@ -119,87 +74,20 @@ class CompetencyMatrixProjectionTests(unittest.TestCase):
 class LearningAnalyticsProjectionTests(unittest.TestCase):
     def test_analytics_describe_existing_records_without_synthetic_mastery(self):
         learning_rows = [
-            {
-                "material_id": "m1",
-                "username": "s1",
-                "progress": 50,
-                "completed": 0,
-                "last_viewed_at": "2026-09-10T10:00:00+00:00",
-                "completed_at": "",
-            },
-            {
-                "material_id": "m2",
-                "username": "s1",
-                "progress": 90,
-                "completed": 1,
-                "last_viewed_at": "2026-09-11T10:00:00+00:00",
-                "completed_at": "2026-09-11T10:00:00+00:00",
-            },
+            {"material_id":"m1","username":"s1","progress":50,"completed":0,"last_viewed_at":"2026-09-10T10:00:00+00:00","completed_at":""},
+            {"material_id":"m2","username":"s1","progress":90,"completed":1,"last_viewed_at":"2026-09-11T10:00:00+00:00","completed_at":"2026-09-11T10:00:00+00:00"},
         ]
-        legacy_material_rows = [
-            {"emp_id": "E001", "material_id": "m3", "completed_at": "2026-09-12T10:00:00+00:00"},
-        ]
+        legacy_material_rows = [{"emp_id":"E001","material_id":"m3","completed_at":"2026-09-12T10:00:00+00:00"}]
         exam_rows = [
-            {
-                "id": "e1",
-                "emp_id": "E001",
-                "quiz_title": "Exam 1",
-                "score": 90,
-                "status": "completed",
-                "review_status": "completed",
-                "passing_score": 80,
-                "training_area": "pgy",
-                "group_key": "grpHema",
-                "created_at": "2026-09-13T10:00:00+00:00",
-            },
-            {
-                "id": "e2",
-                "emp_id": "E001",
-                "quiz_title": "Essay",
-                "score": 0,
-                "status": "completed",
-                "review_status": "pending",
-                "passing_score": 80,
-                "training_area": "pgy",
-                "group_key": "grpHema",
-                "created_at": "2026-09-14T10:00:00+00:00",
-            },
+            {"id":"e1","emp_id":"E001","quiz_title":"Exam 1","score":90,"status":"completed","review_status":"completed","passing_score":80,"training_area":"pgy","group_key":"grpHema","created_at":"2026-09-13T10:00:00+00:00"},
+            {"id":"e2","emp_id":"E001","quiz_title":"Essay","score":0,"status":"completed","review_status":"pending","passing_score":80,"training_area":"pgy","group_key":"grpHema","created_at":"2026-09-14T10:00:00+00:00"},
         ]
         assignments = [
-            {
-                "id": "a1",
-                "learner_username": "s1",
-                "status": "finalized",
-                "updated_at": "2026-09-15T08:00:00+00:00",
-            },
-            {
-                "id": "a2",
-                "learner_username": "s1",
-                "status": "assigned",
-                "updated_at": "2026-09-15T09:00:00+00:00",
-            },
+            {"id":"a1","learner_username":"s1","status":"finalized","updated_at":"2026-09-15T08:00:00+00:00"},
+            {"id":"a2","learner_username":"s1","status":"assigned","updated_at":"2026-09-15T09:00:00+00:00"},
         ]
-        assessments = [
-            {
-                "id": "p1",
-                "assessment_type": "mini_cex",
-                "emp_id": "E001",
-                "overall_score": 4.5,
-                "status": "completed",
-                "assessment_date": "2026-09-15",
-                "created_at": "2026-09-15T10:00:00+00:00",
-            },
-        ]
-        data = analytics.project_analytics(
-            {"kind": "self", "roles": ["student"], "group": "grpHema"},
-            [LEARNER],
-            learning_rows,
-            legacy_material_rows,
-            exam_rows,
-            assignments,
-            assessments,
-            now=NOW,
-        )
+        assessments = [{"id":"p1","assessment_type":"mini_cex","emp_id":"E001","overall_score":4.5,"status":"completed","assessment_date":"2026-09-15","created_at":"2026-09-15T10:00:00+00:00"}]
+        data = analytics.project_analytics({"kind":"self","roles":["student"],"group":"grpHema"}, [LEARNER], learning_rows, legacy_material_rows, exam_rows, assignments, assessments, now=NOW)
         row = data["learners"][0]
         self.assertEqual(row["materials"]["tracked"], 3)
         self.assertEqual(row["materials"]["completed"], 2)
@@ -226,69 +114,79 @@ class CommandCenterM2M3RouteTests(unittest.TestCase):
         register_training_command_center(base)
         return app.test_client()
 
-    def test_matrix_and_analytics_routes_are_get_only(self):
-        client = self.make_client({"username": "s1", "role": "student"})
-        with patch(
-            "teacher_app.command_center.routes.competency.build_competency_matrix",
-            return_value={"learners": [], "summary": {}},
-        ):
-            response = client.get("/api/training-command-center/pgy-matrix")
+    def test_online_user_gets_no_pgy_matrix(self):
+        client = self.make_client({"username":"online","role":"student","pgyLearner":False})
+        with patch("teacher_app.command_center.routes.competency.build_competency_matrix") as matrix:
+            response = client.get('/api/training-command-center/pgy-matrix')
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["audience"], "online")
         self.assertEqual(response.get_json()["learners"], [])
-        self.assertEqual(client.post("/api/training-command-center/pgy-matrix").status_code, 405)
+        matrix.assert_not_called()
 
-        with patch(
-            "teacher_app.command_center.routes.analytics.build_learning_analytics",
-            return_value={"learners": [], "summary": {}},
-        ):
-            response = client.get("/api/training-command-center/learning-analytics")
+    def test_pgy_matrix_and_analytics_routes_are_get_only(self):
+        client = self.make_client({"username":"s1","role":"student","pgyLearner":True})
+        with patch("teacher_app.command_center.routes.competency.build_competency_matrix", return_value={"learners":[],"summary":{}}):
+            response = client.get('/api/training-command-center/pgy-matrix')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json()["learners"], [])
-        self.assertEqual(client.post("/api/training-command-center/learning-analytics").status_code, 405)
+        self.assertTrue(response.get_json()["pgyLearner"])
+        self.assertEqual(client.post('/api/training-command-center/pgy-matrix').status_code, 405)
+        with patch("teacher_app.command_center.routes.analytics.build_learning_analytics", return_value={"learners":[],"summary":{},"timeline":[]}):
+            response = client.get('/api/training-command-center/learning-analytics')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["audience"], "pgy")
+        self.assertEqual(client.post('/api/training-command-center/learning-analytics').status_code, 405)
+
+    def test_online_analytics_response_removes_pgy_projection(self):
+        client = self.make_client({"username":"online","role":"student","pgyLearner":False})
+        raw={"summary":{"materialsTracked":1,"pgyAssignments":3,"pgyCompletionRate":50},"learners":[{"name":"A","pgy":{"assignments":3}}],"timeline":[{"month":"2026-09","materials":1,"pgy":2,"assessments":1}]}
+        with patch("teacher_app.command_center.routes.analytics.build_learning_analytics", return_value=raw):
+            data=client.get('/api/training-command-center/learning-analytics').get_json()
+        self.assertNotIn('pgyAssignments', data['summary'])
+        self.assertNotIn('pgy', data['learners'][0])
+        self.assertNotIn('pgy', data['timeline'][0])
 
 
 class CommandCenterM2M3FrontendTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.matrix_ui = ROOT.joinpath("static", "pgy-competency-matrix-71.js").read_text(encoding="utf-8")
-        cls.analytics_ui = ROOT.joinpath("static", "learning-analytics-71.js").read_text(encoding="utf-8")
-        cls.frontend = ROOT.joinpath("pgy_frontend.py").read_text(encoding="utf-8")
-        cls.workflow = ROOT.joinpath(".github", "workflows", "phase3-pgy-checks.yml").read_text(encoding="utf-8")
-        cls.coverage = ROOT.joinpath("RC_FEATURE_UI_COVERAGE_MATRIX.md").read_text(encoding="utf-8")
+        cls.matrix_ui = ROOT.joinpath('static','pgy-competency-matrix-71.js').read_text(encoding='utf-8')
+        cls.analytics_ui = ROOT.joinpath('static','learning-analytics-71.js').read_text(encoding='utf-8')
+        cls.frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
+        cls.workflow = ROOT.joinpath('.github','workflows','phase3-pgy-checks.yml').read_text(encoding='utf-8')
+        cls.coverage = ROOT.joinpath('RC_FEATURE_UI_COVERAGE_MATRIX.md').read_text(encoding='utf-8')
 
-    def test_m2_ui_is_read_only_and_exposes_formal_matrix(self):
-        self.assertIn("PGY 能力矩陣／訓練進度", self.matrix_ui)
-        self.assertIn("/api/training-command-center/pgy-matrix", self.matrix_ui)
-        self.assertIn("不另產生能力分數", self.matrix_ui)
+    def test_m2_switches_between_pgy_and_online_progress(self):
+        self.assertIn('PGY 能力矩陣／訓練進度', self.matrix_ui)
+        self.assertIn('線上訓練進度', self.matrix_ui)
+        self.assertIn('p?.pgyLearner', self.matrix_ui)
+        self.assertIn('/api/dashboard/me?', self.matrix_ui)
+        self.assertIn('/api/training-command-center/pgy-matrix', self.matrix_ui)
         for mutation in ("method: 'POST'", "method: 'PATCH'", "method: 'DELETE'"):
             self.assertNotIn(mutation, self.matrix_ui)
 
-    def test_m3_ui_is_read_only_and_has_no_synthetic_total_score(self):
-        self.assertIn("Learning Analytics", self.analytics_ui)
-        self.assertIn("/api/training-command-center/learning-analytics", self.analytics_ui)
-        self.assertIn("不產生新的「總能力分數」", self.analytics_ui)
-        self.assertIn("已有學習紀錄的教材", self.analytics_ui)
+    def test_m3_is_compact_inside_course_center_and_uses_home_dashboard_source(self):
+        self.assertIn("document.querySelector('#course-overview > .edu-card')", self.analytics_ui)
+        self.assertIn('📊 學習摘要', self.analytics_ui)
+        self.assertIn('/api/dashboard/me?', self.analytics_ui)
+        self.assertIn('materialsCompleted', self.analytics_ui)
+        self.assertIn('materialsTotal', self.analytics_ui)
+        self.assertIn('p?.pgyLearner', self.analytics_ui)
+        self.assertIn('<details id="learning-analytics-detail-71"', self.analytics_ui)
         for mutation in ("method: 'POST'", "method: 'PATCH'", "method: 'DELETE'"):
             self.assertNotIn(mutation, self.analytics_ui)
 
     def test_m1_m2_m3_assets_load_in_order_and_are_syntax_checked(self):
-        self.assertLess(
-            self.frontend.index("/training-command-center-71.js?v=7100"),
-            self.frontend.index("/pgy-competency-matrix-71.js?v=7101"),
-        )
-        self.assertLess(
-            self.frontend.index("/pgy-competency-matrix-71.js?v=7101"),
-            self.frontend.index("/learning-analytics-71.js?v=7102"),
-        )
-        self.assertIn("node --check static/pgy-competency-matrix-71.js", self.workflow)
-        self.assertIn("node --check static/learning-analytics-71.js", self.workflow)
+        self.assertLess(self.frontend.index('/training-command-center-71.js?v=7113'), self.frontend.index('/pgy-competency-matrix-71.js?v=7113'))
+        self.assertLess(self.frontend.index('/pgy-competency-matrix-71.js?v=7113'), self.frontend.index('/learning-analytics-71.js?v=7113'))
+        self.assertIn('node --check static/pgy-competency-matrix-71.js', self.workflow)
+        self.assertIn('node --check static/learning-analytics-71.js', self.workflow)
 
-    def test_rc_matrix_records_m2_and_m3(self):
-        self.assertIn("PGY competency matrix / training progress (7.1 M2)", self.coverage)
-        self.assertIn("Learning Analytics (7.1 M3)", self.coverage)
-        self.assertIn("/api/training-command-center/pgy-matrix", self.coverage)
-        self.assertIn("/api/training-command-center/learning-analytics", self.coverage)
+    def test_rc_matrix_records_audience_split_and_compact_m3(self):
+        self.assertIn('PGY competency matrix / online training progress (7.1 M2)', self.coverage)
+        self.assertIn('Learning Analytics (7.1 M3)', self.coverage)
+        self.assertIn('compact', self.coverage.lower())
+        self.assertIn('pgy_learner', self.coverage)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

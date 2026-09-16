@@ -1,5 +1,5 @@
-/* Teacher 7.1 M3 · Learning Analytics
- * Descriptive read-only analytics over existing learning/exam/PGY records.
+/* Teacher 7.1 M3 · compact audience-aware Learning Analytics.
+ * Visible course/material counts use the same dashboard projection as home.
  */
 (function () {
   'use strict';
@@ -9,9 +9,26 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[char]));
 
-  function groupLabel(key) {
-    const group = (window.GROUPS || {})[key];
-    return group?.name || group?.label || key || '—';
+  async function getJSON(url) {
+    const response = await fetch(url, {credentials:'same-origin', cache:'no-store'});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data?.error || `讀取失敗（${response.status}）`);
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+
+  async function profile(force = false) {
+    if (window.Teacher71Profile?.load) return window.Teacher71Profile.load(force);
+    return getJSON('/api/training-command-center/profile');
+  }
+
+  function dashboardUrl(p) {
+    const query = new URLSearchParams({empId:p?.empId || ''});
+    if (p?.name) query.set('name', p.name);
+    return `/api/dashboard/me?${query.toString()}`;
   }
 
   function numberOrDash(value, digits = 1) {
@@ -23,145 +40,104 @@
   function mount() {
     let section = document.getElementById(ID);
     if (section) return section;
-    const matrix = document.getElementById('pgy-competency-matrix-71');
-    const command = document.getElementById('training-command-center-71');
-    const anchor = matrix || command;
-    const host = anchor?.parentElement || document.querySelector('main.flex-grow') || document.querySelector('main');
-    if (!host) return null;
-    section = document.createElement('section');
+    const header = document.querySelector('#course-overview > .edu-card');
+    if (!header) return null;
+    section = document.createElement('div');
     section.id = ID;
-    section.className = 'edu-card p-5 sm:p-6 border border-sky-100 bg-gradient-to-br from-white to-sky-50/30';
+    section.className = 'mt-4 pt-4 border-t border-slate-100';
     section.innerHTML = `
-      <div class="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <p class="text-[11px] font-black tracking-[0.18em] text-sky-600">TEACHER 7.1 · M3</p>
-          <h2 class="text-xl font-black text-slate-950 mt-1">📊 Learning Analytics</h2>
-          <p class="text-xs text-slate-500 mt-1">整合既有教材進度、考試與 PGY 紀錄；僅做描述性統計，不產生新的「總能力分數」。</p>
-        </div>
-        <button id="learning-analytics-refresh-71" type="button" class="text-xs font-bold px-3 py-2 rounded-xl border border-sky-200 bg-white text-sky-700 hover:bg-sky-50">↻ 更新</button>
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div><b class="text-xs text-slate-800">📊 學習摘要</b><span id="learning-analytics-status-71" class="ml-2 text-[10px] text-slate-400">讀取中…</span></div>
+        <button id="learning-analytics-refresh-71" type="button" class="text-[10px] font-bold text-sky-700 hover:text-sky-900">↻ 更新</button>
       </div>
-      <div id="learning-analytics-status-71" class="text-xs text-slate-500 mt-4">讀取學習分析中…</div>
-      <div id="learning-analytics-stats-71" class="hidden grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 mt-4"></div>
-      <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-4 mt-4">
-        <div id="learning-analytics-table-71" class="overflow-x-auto"></div>
-        <aside id="learning-analytics-timeline-71" class="rounded-2xl border border-slate-200 bg-white p-4"></aside>
-      </div>
-      <p class="text-[10px] text-slate-400 mt-4">教材完成率的分母是「已有學習紀錄的教材」，不是所有可用教材；考試平均與通過率只計已完成人工閱卷的紀錄。</p>`;
-    if (anchor) anchor.after(section);
-    else host.prepend(section);
+      <div id="learning-analytics-stats-71" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 mt-2"></div>
+      <details id="learning-analytics-detail-71" class="mt-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+        <summary class="cursor-pointer text-[11px] font-bold text-slate-600">查看詳細 Learning Analytics ▾</summary>
+        <div id="learning-analytics-table-71" class="mt-3 overflow-x-auto"></div>
+        <div id="learning-analytics-timeline-71" class="mt-3"></div>
+      </details>`;
+    header.appendChild(section);
     section.querySelector('#learning-analytics-refresh-71').addEventListener('click', () => load(true));
     return section;
   }
 
-  function statCard(label, value, suffix = '', note = '') {
-    return `<div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
-      <div class="text-[10px] text-slate-500">${escapeHtml(label)}</div>
-      <div class="text-lg font-black text-slate-900 mt-0.5">${escapeHtml(value)}${suffix ? `<span class="text-[10px] font-bold text-slate-400 ml-1">${escapeHtml(suffix)}</span>` : ''}</div>
-      ${note ? `<div class="text-[9px] text-slate-400 mt-0.5">${escapeHtml(note)}</div>` : ''}
-    </div>`;
+  function chip(label, value, note = '') {
+    return `<div class="rounded-xl border border-slate-200 bg-white px-3 py-2"><div class="text-[9px] text-slate-400">${escapeHtml(label)}</div><div class="text-sm font-black text-slate-800 mt-0.5">${escapeHtml(value)}</div>${note ? `<div class="text-[9px] text-slate-400 mt-0.5">${escapeHtml(note)}</div>` : ''}</div>`;
   }
 
-  function domainCell(primary, secondary = '') {
-    return `<div class="min-w-[110px]"><div class="font-black text-slate-900">${escapeHtml(primary)}</div>${secondary ? `<div class="text-[9px] text-slate-400 mt-0.5">${escapeHtml(secondary)}</div>` : ''}</div>`;
-  }
-
-  function renderTimeline(rows) {
+  function renderTimeline(rows, includePgy) {
     const host = document.getElementById('learning-analytics-timeline-71');
     if (!host) return;
-    const timeline = Array.isArray(rows) ? rows : [];
-    host.innerHTML = `<div class="font-black text-sm text-slate-900">近 6 個月活動</div>
-      <p class="text-[10px] text-slate-400 mt-1">每月以既有紀錄時間戳記計數。</p>
-      <div class="space-y-3 mt-4">${timeline.length ? timeline.map(month => {
-        const total = Number(month.materials || 0) + Number(month.exams || 0) + Number(month.pgy || 0) + Number(month.assessments || 0);
-        return `<div class="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5">
-          <div class="flex items-center justify-between gap-2"><span class="text-xs font-black text-slate-700">${escapeHtml(month.month)}</span><span class="text-xs font-black text-sky-700">${total}</span></div>
-          <div class="grid grid-cols-2 gap-x-2 gap-y-1 mt-2 text-[9px] text-slate-500">
-            <span>教材 ${Number(month.materials || 0)}</span><span>考試 ${Number(month.exams || 0)}</span>
-            <span>PGY完成 ${Number(month.pgy || 0)}</span><span>評量 ${Number(month.assessments || 0)}</span>
-          </div>
-        </div>`;
-      }).join('') : '<div class="text-xs text-slate-400">尚無近期活動。</div>'}</div>`;
+    const timeline = Array.isArray(rows) ? rows.slice(-6) : [];
+    host.innerHTML = `<div class="text-[10px] font-black text-slate-500 mb-2">近 6 個月活動</div><div class="grid sm:grid-cols-3 lg:grid-cols-6 gap-2">${timeline.map(month => {
+      const parts = [`教材 ${Number(month.materials || 0)}`, `考試 ${Number(month.exams || 0)}`];
+      if (includePgy) parts.push(`PGY ${Number(month.pgy || 0)}`, `評量 ${Number(month.assessments || 0)}`);
+      return `<div class="rounded-lg border border-slate-100 bg-white px-2 py-2"><b class="block text-[10px] text-slate-700">${escapeHtml(month.month)}</b><span class="text-[9px] text-slate-400">${parts.join(' · ')}</span></div>`;
+    }).join('') || '<span class="text-xs text-slate-400">尚無近期活動。</span>'}</div>`;
   }
 
-  function render(data) {
-    const status = document.getElementById('learning-analytics-status-71');
-    const stats = document.getElementById('learning-analytics-stats-71');
-    const table = document.getElementById('learning-analytics-table-71');
-    if (!status || !stats || !table) return;
-    const summary = data?.summary || {};
-    const learners = Array.isArray(data?.learners) ? data.learners : [];
-
-    status.textContent = learners.length
-      ? `目前分析 ${learners.length} 位學員的既有學習紀錄。`
-      : '目前範圍尚無可分析的學習紀錄。';
-    stats.classList.remove('hidden');
-    stats.innerHTML = [
-      statCard('教材完成', `${Number(summary.materialsCompleted || 0)}/${Number(summary.materialsTracked || 0)}`, '', '已有追蹤紀錄'),
-      statCard('教材平均進度', numberOrDash(summary.averageMaterialProgress), '%'),
-      statCard('考試平均', numberOrDash(summary.averageExamScore), '/ 100'),
-      statCard('考試通過率', numberOrDash(summary.examPassRate), '%', summary.examPendingReview ? `${summary.examPendingReview} 筆待人工閱卷` : ''),
-      statCard('PGY 指派完成率', numberOrDash(summary.pgyCompletionRate), '%'),
-      statCard('PGY 評量平均', numberOrDash(summary.averagePgyAssessmentScore), '/ 5')
-    ].join('');
-
+  function renderTable(rows, includePgy) {
+    const host = document.getElementById('learning-analytics-table-71');
+    if (!host) return;
+    const learners = Array.isArray(rows) ? rows : [];
     if (!learners.length) {
-      table.innerHTML = '<div class="rounded-xl border border-slate-200 bg-white px-4 py-5 text-xs text-slate-400 text-center">尚無 Learning Analytics 資料。</div>';
-      renderTimeline(data?.timeline || []);
+      host.innerHTML = '<div class="text-xs text-slate-400 py-2">尚無詳細學習分析資料。</div>';
       return;
     }
+    const pgyHead = includePgy ? '<th class="bg-white border-y border-slate-200 p-2">PGY 指派</th><th class="bg-white border-y border-r border-slate-200 p-2">PGY 評量</th>' : '<th class="bg-white border-y border-r border-slate-200 p-2">考試</th>';
+    host.innerHTML = `<table class="min-w-[620px] w-full text-left text-[10px] border-separate border-spacing-0"><thead><tr><th class="bg-white border-y border-l border-slate-200 p-2">學員</th><th class="bg-white border-y border-slate-200 p-2">教材</th>${includePgy ? '<th class="bg-white border-y border-slate-200 p-2">考試</th>' : ''}${pgyHead}</tr></thead><tbody>${learners.map(row => {
+      const pgy = row.pgy || {};
+      return `<tr><td class="bg-white border-b border-l border-slate-100 p-2"><b>${escapeHtml(row.name || row.empId)}</b><div class="text-slate-400">${escapeHtml(row.empId || '')}</div></td><td class="bg-white border-b border-slate-100 p-2"><b>${numberOrDash(row.materials?.averageProgress)}%</b><div class="text-slate-400">${Number(row.materials?.completed || 0)}/${Number(row.materials?.tracked || 0)} 完成</div></td><td class="bg-white border-b border-slate-100 p-2"><b>${numberOrDash(row.exams?.averageScore)}</b><div class="text-slate-400">${Number(row.exams?.passed || 0)}/${Number(row.exams?.reviewedAttempts || 0)} 通過</div></td>${includePgy ? `<td class="bg-white border-b border-slate-100 p-2"><b>${numberOrDash(pgy.completionRate)}%</b><div class="text-slate-400">${Number(pgy.completedAssignments || 0)}/${Number(pgy.assignments || 0)} 完成</div></td><td class="bg-white border-b border-r border-slate-100 p-2"><b>${numberOrDash(pgy.assessmentAverage)}</b><div class="text-slate-400">${Number(pgy.assessments || 0)} 筆</div></td>` : ''}</tr>`;
+    }).join('')}</tbody></table>`;
+  }
 
-    table.innerHTML = `<table class="min-w-[860px] w-full text-left text-xs border-separate border-spacing-0">
-      <thead><tr>
-        <th class="bg-slate-50 border-y border-l border-slate-200 rounded-tl-xl p-3 min-w-[180px]">學員</th>
-        <th class="bg-slate-50 border-y border-slate-200 p-3">教材</th>
-        <th class="bg-slate-50 border-y border-slate-200 p-3">考試</th>
-        <th class="bg-slate-50 border-y border-slate-200 p-3">PGY 指派</th>
-        <th class="bg-slate-50 border-y border-r border-slate-200 rounded-tr-xl p-3">PGY 評量</th>
-      </tr></thead>
-      <tbody>${learners.map(learner => {
-        const materialAvg = learner.materials?.averageProgress;
-        const examAvg = learner.exams?.averageScore;
-        const assessmentAvg = learner.pgy?.assessmentAverage;
-        return `<tr>
-          <td class="border-b border-l border-slate-100 bg-white p-3"><div class="font-black text-slate-900">${escapeHtml(learner.name || learner.empId)}</div><div class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(learner.empId)} · ${escapeHtml(groupLabel(learner.group))}</div></td>
-          <td class="border-b border-slate-100 bg-white p-3">${domainCell(`${numberOrDash(materialAvg)}%`, `${Number(learner.materials?.completed || 0)}/${Number(learner.materials?.tracked || 0)} 完成`)}</td>
-          <td class="border-b border-slate-100 bg-white p-3">${domainCell(numberOrDash(examAvg), `${Number(learner.exams?.passed || 0)}/${Number(learner.exams?.reviewedAttempts || 0)} 通過${Number(learner.exams?.pendingReview || 0) ? ` · ${learner.exams.pendingReview} 待閱` : ''}`)}</td>
-          <td class="border-b border-slate-100 bg-white p-3">${domainCell(`${numberOrDash(learner.pgy?.completionRate)}%`, `${Number(learner.pgy?.completedAssignments || 0)}/${Number(learner.pgy?.assignments || 0)} 完成`)}</td>
-          <td class="border-b border-r border-slate-100 bg-white p-3">${domainCell(numberOrDash(assessmentAvg), `${Number(learner.pgy?.assessments || 0)} 筆正式評量`)}</td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>`;
-    renderTimeline(data?.timeline || []);
+  function render(p, dashboard, analytics) {
+    const status = document.getElementById('learning-analytics-status-71');
+    const stats = document.getElementById('learning-analytics-stats-71');
+    if (!status || !stats) return;
+    const s = analytics?.summary || {};
+    const includePgy = Boolean(p?.pgyLearner);
+
+    // These visible material/course values intentionally come from /dashboard/me
+    // so M3 and the home-page personal summary cannot disagree.
+    const chips = [
+      chip('教材完成', `${Number(dashboard?.materialsCompleted || 0)}/${Number(dashboard?.materialsTotal || 0)}`),
+      chip('整體學習進度', `${Number(dashboard?.progressPercent || 0)}%`),
+      chip('進行中課程', String(Number(dashboard?.activeCourses || 0))),
+      chip('待完成考核', String(Number(dashboard?.examsPending || 0))),
+      chip('考試平均', numberOrDash(s.averageExamScore), '/ 100')
+    ];
+    if (includePgy) {
+      chips.push(chip('PGY 指派完成', `${numberOrDash(s.pgyCompletionRate)}%`));
+      chips.push(chip('PGY 評量平均', numberOrDash(s.averagePgyAssessmentScore), '/ 5'));
+    }
+    stats.className = `grid grid-cols-2 sm:grid-cols-4 ${includePgy ? 'lg:grid-cols-7' : 'lg:grid-cols-5'} gap-2 mt-2`;
+    stats.innerHTML = chips.join('');
+    status.textContent = includePgy ? 'PGY 學員：線上學習＋PGY 指標' : '線上學習：課程／教材／考試';
+    renderTable(analytics?.learners || [], includePgy);
+    renderTimeline(analytics?.timeline || [], includePgy);
   }
 
   async function load(force = false) {
     const section = mount();
     if (!section) return;
     const status = document.getElementById('learning-analytics-status-71');
-    if (status) status.textContent = force ? '更新學習分析中…' : '讀取學習分析中…';
+    if (status) status.textContent = force ? '更新中…' : '讀取中…';
     try {
-      const response = await fetch('/api/training-command-center/learning-analytics', {
-        credentials: 'same-origin',
-        cache: 'no-store'
-      });
-      const data = await response.json().catch(() => ({}));
-      if (response.status === 401 || response.status === 403) {
-        section.classList.add('hidden');
-        return;
-      }
-      if (!response.ok) throw new Error(data?.error || `讀取失敗（${response.status}）`);
+      const p = await profile(force);
+      const [dashboard, analytics] = await Promise.all([
+        p?.empId ? getJSON(dashboardUrl(p)).catch(()=>({})) : Promise.resolve({}),
+        getJSON('/api/training-command-center/learning-analytics').catch(()=>({summary:{},learners:[],timeline:[]}))
+      ]);
       section.classList.remove('hidden');
-      render(data);
+      render(p, dashboard, analytics);
     } catch (error) {
-      if (status) status.textContent = `❌ ${error.message || '無法讀取 Learning Analytics'}`;
+      if (error?.status === 401 || error?.status === 403) { section.classList.add('hidden'); return; }
+      if (status) status.textContent = `❌ ${error.message || '無法讀取學習摘要'}`;
     }
   }
 
-  function init() {
-    if (!mount()) return;
-    load(false);
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once: true});
+  function init() { if (mount()) load(false); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true});
   else init();
 })();

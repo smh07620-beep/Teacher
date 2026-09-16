@@ -37,6 +37,7 @@ jobs:
       - name: Browser JavaScript syntax
         run: |
           node --check static/shared-core.js
+          node --check static/home-profile-title-71.js
           node --check static/pgy-workflow.js
           node --check static/roles-signing-66.js
           node --check static/exam-integrity.js
@@ -100,6 +101,7 @@ jobs:
           assert REQUIRED_RELEASE_MIGRATION in REQUIRED_MIGRATIONS
           migrations = [version for version, _fn in __import__('schema_migrations').MIGRATIONS]
           assert '0066-additive-rbac-pgy-signing' in migrations
+          assert '0071-pgy-learner-audience' in migrations
           assert '0072-course-bundle-idempotency' in migrations
           assert '0073-course-bundle-followups' in migrations
           assert version_file_value() == RELEASE_VERSION
@@ -116,6 +118,7 @@ jobs:
           assert data['migrations']['missing'] == []
           assert '0066-additive-rbac-pgy-signing' in data['migrations']['applied']
           assert '0067-smart-learning-content' in data['migrations']['applied']
+          assert '0071-pgy-learner-audience' in data['migrations']['applied']
           assert '0073-course-bundle-followups' in data['migrations']['applied']
           assert REQUIRED_RELEASE_MIGRATION in data['migrations']['applied']
           PY
@@ -128,6 +131,7 @@ jobs:
           grep -q 'UPLOAD_ZIP_MAX_RATIO' render.yaml
           grep -q 'GROQ_API_KEY' render.yaml
           grep -q 'register_health' pgy_app.py
+          grep -q 'register_training_audience_71' pgy_app.py
           grep -q 'register_sensitive_elevation_69' pgy_app.py
           grep -q 'register_course_bundle_followup_73' pgy_app.py
           grep -q '0066-additive-rbac-pgy-signing' schema_migrations.py

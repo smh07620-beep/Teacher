@@ -15,17 +15,12 @@ class NotificationCenter71Tests(unittest.TestCase):
 
     def test_m4_is_normal_read_only_notification_surface(self):
         self.assertIn("🔔 通知中心", self.ui)
-        self.assertIn("唯讀聚合層", self.ui)
+        self.assertIn("不執行任何 mutation", self.ui)
         for mutation in ("method: 'POST'", 'method: "POST"', "method: 'PATCH'", "method: 'DELETE'"):
             self.assertNotIn(mutation, self.ui)
 
     def test_m4_reuses_existing_canonical_read_apis(self):
-        for contract in (
-            "/api/auth/me",
-            "/api/training-command-center",
-            "/api/dashboard/me?",
-            "/api/announcements?limit=5",
-        ):
+        for contract in ("/api/auth/me", "/api/training-command-center", "/api/dashboard/me?", "/api/announcements?limit=5"):
             self.assertIn(contract, self.ui)
         self.assertNotIn("/api/training-command-center/notifications", self.ui)
 
@@ -37,12 +32,10 @@ class NotificationCenter71Tests(unittest.TestCase):
         self.assertNotIn("finalize", self.ui)
         self.assertNotIn("/api/announcements/admin", self.ui)
 
-    def test_m4_asset_loads_after_m3_and_is_syntax_checked(self):
-        self.assertIn('/notification-center-71.js?v=7103', self.frontend)
-        self.assertLess(
-            self.frontend.index('/learning-analytics-71.js?v=7102'),
-            self.frontend.index('/notification-center-71.js?v=7103'),
-        )
+    def test_m4_sits_after_course_grid_and_asset_loads_after_m3(self):
+        self.assertIn("document.getElementById('course-overview-grid')", self.ui)
+        self.assertIn('/notification-center-71.js?v=7113', self.frontend)
+        self.assertLess(self.frontend.index('/learning-analytics-71.js?v=7113'), self.frontend.index('/notification-center-71.js?v=7113'))
         self.assertIn("node --check static/notification-center-71.js", self.workflow)
 
     def test_rc_matrix_records_m4(self):

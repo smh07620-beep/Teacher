@@ -9,18 +9,22 @@ from tests.auth_support import AuthFixture
 class UserProfileEditorFrontend681Tests(unittest.TestCase):
     def test_existing_account_editor_exposes_profile_metadata_without_role_mutation(self):
         source = Path(__file__).parents[1].joinpath('static', 'admin-people.js').read_text(encoding='utf-8')
-        self.assertIn('function openAdminUserEditor(username)', source)
+        self.assertIn('async function openAdminUserEditor(username)', source)
         self.assertIn('admin-user-editor-professional-title', source)
         self.assertIn('admin-user-editor-responsibility-tags', source)
+        self.assertIn('admin-user-editor-pgy-learner', source)
         self.assertIn('professionalTitle', source)
         self.assertIn('responsibilityTags', source)
+        self.assertIn('pgyLearner', source)
         start = source.index('async function saveAdminUserEditor()')
         end = source.index('window.adminProfileTags', start)
         save = source[start:end]
         self.assertIn('const payload={name,empId,professionalTitle,responsibilityTags}', save)
+        self.assertIn('/training-audience', save)
         self.assertNotIn('role:', save)
         self.assertNotIn('roles:', save)
-        self.assertIn('職稱／職責標籤不參與 RBAC 判斷', source)
+        self.assertIn('職稱、職責標籤與 PGY 學員分類都不參與 RBAC 判斷', source)
+        self.assertIn('不會授予教師簽核、組長複核或管理權限', source)
 
     def test_account_list_shows_profile_metadata_and_edit_action(self):
         source = Path(__file__).parents[1].joinpath('static', 'system-admin.js').read_text(encoding='utf-8')
