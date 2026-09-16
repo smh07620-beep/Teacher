@@ -95,6 +95,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/admin-materials.js?v=7105"></script>')
             if "/admin-question-bank.js" not in html:
                 body_assets.append('<script defer src="/admin-question-bank.js?v=7106"></script>')
+            if "/admin-quiz-materials.js" not in html:
+                body_assets.append('<script defer src="/admin-quiz-materials.js?v=7118"></script>')
             if "/admin-jobs.js" not in html:
                 body_assets.append('<script defer src="/admin-jobs.js?v=7107"></script>')
             if "/admin-material-upload.js" not in html:
