@@ -28,6 +28,9 @@ from rbac_681 import register_rbac_681
 from legacy_office_69 import register_legacy_office_69
 from sensitive_elevation_69 import register_sensitive_elevation_69
 from atlas_70 import register_atlas_70
+from teacher_app.assessments.routes import register_legacy_assessment_routes
+from teacher_app.courses.routes import register_legacy_course_routes
+from teacher_app.materials.routes import register_legacy_material_routes
 
 app = register_pgy_workflow(legacy_app)
 # Importing the Course Wizard adapters above registers their additive migrations
@@ -38,6 +41,13 @@ app = register_health(legacy_app)
 app = register_pgy_atomic_workflow(legacy_app)
 app = register_pgy_signing_66(legacy_app)
 app = register_exam_integrity(legacy_app)
+# Stage 5.1 moves the live materials/course/assessment controller behavior to
+# canonical teacher_app modules while retaining every legacy URL rule. Register
+# before RBAC and later compatibility overlays so those wrappers protect the
+# canonical handlers rather than the retired app.py implementations.
+app = register_legacy_material_routes(legacy_app)
+app = register_legacy_course_routes(legacy_app)
+app = register_legacy_assessment_routes(legacy_app)
 # Register same-origin/rate-limit checks before upload parsing/validation.
 app = register_production_hardening(legacy_app)
 app = register_upload_hardening(legacy_app)
