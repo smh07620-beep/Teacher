@@ -70,6 +70,8 @@ jobs:
           node --check static/admin-question-panel.js
           node --check static/learner-exam-controls.js
           node --check static/learner-result-chart.js
+          node --check static/question-authoring-ux-71.js
+          node --check static/learner-ui-cleanup-71.js
           node --check static/admin-compat-facade.js
           node tests/test_external_media_behavior_681.js
       - name: Web and worker shell contracts
