@@ -29,6 +29,7 @@ from legacy_office_69 import register_legacy_office_69
 from sensitive_elevation_69 import register_sensitive_elevation_69
 from atlas_70 import register_atlas_70
 from teacher_app.assessments.routes import register_legacy_assessment_routes
+from teacher_app.command_center.routes import register_training_command_center
 from teacher_app.courses.routes import register_legacy_course_routes
 from teacher_app.materials.routes import register_legacy_material_routes
 
@@ -40,6 +41,9 @@ app = register_multi_role_66(legacy_app)
 app = register_health(legacy_app)
 app = register_pgy_atomic_workflow(legacy_app)
 app = register_pgy_signing_66(legacy_app)
+# Teacher 7.1 command center is a read-only aggregation surface over canonical
+# domains. It owns no mutation rules and never replaces professional signers.
+app = register_training_command_center(legacy_app)
 app = register_exam_integrity(legacy_app)
 # Stage 5.1 moves the live materials/course/assessment controller behavior to
 # canonical teacher_app modules while retaining every legacy URL rule. Register
