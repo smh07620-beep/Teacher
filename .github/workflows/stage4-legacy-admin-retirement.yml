@@ -1,0 +1,189 @@
+name: Stage 4 guarded legacy admin retirement
+
+on:
+  push:
+    branches:
+      - refactor/stage4-5-legacy-retirement
+
+permissions:
+  contents: write
+
+jobs:
+  retire-shadowed-admin-functions:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/stage4-5-legacy-retirement
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Remove only top-level legacy functions with canonical window owners
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          legacy_path = Path('static/system-admin.js')
+          canonical_paths = [
+              Path('static/admin-workspace.js'),
+              Path('static/admin-results.js'),
+              Path('static/admin-results-data.js'),
+              Path('static/admin-results-workspace.js'),
+              Path('static/admin-results-export.js'),
+              Path('static/admin-course-material.js'),
+              Path('static/admin-materials.js'),
+              Path('static/admin-people.js'),
+              Path('static/admin-announcements.js'),
+              Path('static/admin-system.js'),
+              Path('static/admin-jobs.js'),
+              Path('static/admin-material-upload.js'),
+              Path('static/admin-question-bank.js'),
+              Path('static/admin-quiz-materials.js'),
+              Path('static/admin-question-editor-ui.js'),
+              Path('static/admin-question-actions.js'),
+              Path('static/admin-question-panel.js'),
+              Path('static/admin-ai-questions.js'),
+              Path('static/admin-exam-settings.js'),
+              Path('static/admin-doc-templates.js'),
+              Path('static/admin-pgy-assessments.js'),
+              Path('static/admin-external-media.js'),
+          ]
+          export_re = re.compile(r'window\.([A-Za-z_$][\w$]*)\s*=')
+          owners = {}
+          for path in canonical_paths:
+              source = path.read_text(encoding='utf-8')
+              for name in export_re.findall(source):
+                  owners.setdefault(name, []).append(path.name)
+
+          text = legacy_path.read_text(encoding='utf-8')
+
+          def skip_string_or_comment(src, i):
+              n = len(src)
+              if src.startswith('//', i):
+                  j = src.find('\n', i + 2)
+                  return n if j < 0 else j + 1
+              if src.startswith('/*', i):
+                  j = src.find('*/', i + 2)
+                  if j < 0:
+                      raise SystemExit('unterminated block comment')
+                  return j + 2
+              quote = src[i]
+              if quote not in "'\"`":
+                  return None
+              i += 1
+              while i < n:
+                  if src[i] == '\\':
+                      i += 2
+                      continue
+                  if src[i] == quote:
+                      return i + 1
+                  i += 1
+              raise SystemExit('unterminated string/template literal')
+
+          def function_end(src, start):
+              i = start
+              n = len(src)
+              paren = 0
+              brace_start = None
+              while i < n:
+                  skipped = skip_string_or_comment(src, i)
+                  if skipped is not None:
+                      i = skipped
+                      continue
+                  ch = src[i]
+                  if ch == '(':
+                      paren += 1
+                  elif ch == ')':
+                      paren = max(0, paren - 1)
+                  elif ch == '{' and paren == 0:
+                      brace_start = i
+                      break
+                  i += 1
+              if brace_start is None:
+                  raise SystemExit(f'could not locate function body at {start}')
+              depth = 1
+              i = brace_start + 1
+              while i < n:
+                  skipped = skip_string_or_comment(src, i)
+                  if skipped is not None:
+                      i = skipped
+                      continue
+                  if src[i] == '{':
+                      depth += 1
+                  elif src[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          end = i + 1
+                          while end < n and src[end] in ' \t':
+                              end += 1
+                          if end < n and src[end] == '\r':
+                              end += 1
+                          if end < n and src[end] == '\n':
+                              end += 1
+                          if end < n and src[end] == '\r':
+                              end += 1
+                          if end < n and src[end] == '\n':
+                              end += 1
+                          return end
+                  i += 1
+              raise SystemExit(f'unterminated function body at {start}')
+
+          decl_re = re.compile(r'(?m)^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(')
+          removals = []
+          for match in decl_re.finditer(text):
+              name = match.group(1)
+              if name not in owners:
+                  continue
+              removals.append((match.start(), function_end(text, match.start()), name, owners[name]))
+
+          if not removals:
+              raise SystemExit('guard failed: no shadowed top-level functions found')
+
+          # High-confidence anchors prove this is retiring already-extracted domains.
+          names = {item[2] for item in removals}
+          required_any = {
+              'openEssayReview', 'renderAdminCourses', 'renderAdminAnnouncements',
+              'renderStorageStatus', 'renderAdminMaterials', 'renderMaterialJobs'
+          }
+          if len(names & required_any) < 4:
+              raise SystemExit(f'guard failed: too few expected canonical overlaps: {sorted(names & required_any)}')
+          forbidden = {'getAdminKey'}
+          if names & forbidden:
+              raise SystemExit(f'guard failed: attempted compatibility deletion: {sorted(names & forbidden)}')
+
+          for start, end, name, owner in reversed(removals):
+              text = text[:start] + text[end:]
+              print(f'retired {name} -> {", ".join(owner)}')
+
+          for marker in ('async function getAdminKey()', 'cachedTemplateBuffer', 'pendingExportRecordIndex'):
+              if marker not in text:
+                  raise SystemExit(f'guard failed: required fallback marker lost: {marker}')
+
+          legacy_path.write_text(text, encoding='utf-8')
+          print(f'Removed {len(removals)} shadowed function implementations.')
+      - name: Guard deletion-only legacy diff
+        run: |
+          git diff --check
+          test "$(git diff --numstat -- static/system-admin.js | awk '{print $1}')" = "0"
+          test "$(git diff --numstat -- static/system-admin.js | awk '{print $2}')" -gt "0"
+          ! git diff -- static/system-admin.js | grep -q '^+'
+          echo "system-admin.js diff:"
+          git diff --stat -- static/system-admin.js
+      - name: JavaScript syntax
+        run: |
+          for file in static/*.js; do node --check "$file"; done
+      - name: Full Python regression suite
+        run: python -m unittest discover -s tests -v
+      - name: Commit guarded Stage 4 deletion
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add static/system-admin.js
+          git commit -m "refactor: retire shadowed legacy admin functions [skip ci]"
+          git push origin HEAD:refactor/stage4-5-legacy-retirement
