@@ -1,7 +1,7 @@
-"""Regression policy for the phase-1 stale root mirror cleanup.
+"""Regression policy for root compatibility cleanup.
 
-This is intentionally structural: it protects the production compatibility
-seams without pretending that the deferred root modules have already moved.
+Structural checks protect compatibility seams while preventing business logic
+from drifting back into root adapters after a canonical domain has converged.
 """
 
 import ast
@@ -55,6 +55,38 @@ class RootMirrorPolicyTests(unittest.TestCase):
         self.assertIn("from teacher_app.exams.routes import register_legacy_exam_routes", source)
         self.assertIn("return register_legacy_exam_routes(base)", source)
         self.assertNotIn("@app.", source)
+
+    def test_pgy_controller_is_thin_canonical_service_adapter(self):
+        source = (ROOT / "pgy_workflow.py").read_text(encoding="utf-8")
+        self.assertIn("from teacher_app.pgy import repository as pgy_repo", source)
+        self.assertIn("from teacher_app.pgy import service as pgy_service", source)
+        self.assertIn("pgy_repo.init_schema(conn, kind)", source)
+        for call in (
+            "workflow_meta",
+            "list_assignment_candidates",
+            "list_assignments",
+            "get_assignment",
+            "create_assignment",
+            "update_assignment",
+            "submit_assignment",
+            "teacher_sign_assignment",
+            "group_countersign_assignment",
+            "finalize_assignment",
+            "reopen_assignment",
+            "cancel_assignment",
+            "list_audit",
+        ):
+            self.assertIn(f"pgy_service.{call}", source)
+        for legacy_sql in (
+            "CREATE TABLE IF NOT EXISTS pgy_assignments",
+            "INSERT INTO pgy_assignments",
+            "UPDATE pgy_assignments SET",
+            "SELECT username,display_name,emp_id,role,preferred_group,active FROM user_accounts",
+        ):
+            self.assertNotIn(legacy_sql, source)
+        # Compatibility symbols consumed by pgy_signing_66 stay delegated.
+        self.assertIn("_assignment_dict = pgy_repo.assignment_dict", source)
+        self.assertIn("pgy_repo.write_audit", source)
 
     def test_pgy_atomic_actions_delegate_to_canonical_service(self):
         source = (ROOT / "pgy_atomic.py").read_text(encoding="utf-8")
