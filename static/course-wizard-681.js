@@ -1,4 +1,4 @@
-/* Teacher 7.2: guided course -> material -> exam flow using session RBAC. */
+/* Teacher 7.3: guided course -> material -> exam flow using session RBAC. */
 (function(){
 'use strict';
 
@@ -196,14 +196,14 @@ async function create(){
     for(const id of state.existing){
       const material=state.materials.find(m=>String(m.id)===String(id));if(!material)continue;
       status.textContent=`⏳ 關聯既有教材 ${linked+1}/${state.existing.length}…`;
-      await api('/api/slides/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({title:material.title||material.filename||'',desc:material.desc||'',courseId:course.id,category:state.categoryId||material.category||'',active:material.active!==false,group,area,materialType:material.materialType||'standard',atlasMeta:material.atlasMeta||{}})});linked++;
+      await api('/api/slides/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({title:material.title||material.filename||'',desc:material.desc||'',courseId:course.id,category:state.categoryId||material.category||'',active:material.active!==false,group,area,materialType:material.materialType||'standard',atlasMeta:material.atlasMeta||{},bundleWorkflowId:bundlePayload.workflowId,bundleLinkKey:String(id)})});linked++;
     }
     if(!window.MaterialUploadClient?.enqueue)throw new Error('教材背景上傳元件尚未載入，請重新整理後再試。');
     let uploaded=0,failed=0;
     for(let index=0;index<files.length;index++){
       const file=files[index],meta=fileMeta(index,file);
       status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name}`;
-      const form=new FormData();form.append('file',file);form.append('title',String(meta.title||file.name.replace(/\.[^.]+$/,'')).trim());form.append('desc',desc);form.append('group',group);form.append('area',area);form.append('courseId',course.id);form.append('category',state.categoryId);form.append('materialType',meta.materialType||'auto');form.append('bundleWorkflowId',bundlePayload.workflowId);form.append('bundleFileIndex',String(index));
+      const form=new FormData();form.append('file',file);form.append('title',String(meta.title||file.name.replace(/\.[^.]+$/,'')).trim());form.append('desc',desc);form.append('group',group);form.append('area',area);form.append('courseId',course.id);form.append('category',state.categoryId);form.append('materialType',meta.materialType||'auto');form.append('bundleWorkflowId',bundlePayload.workflowId);form.append('bundleFileIndex',String(index));form.append('bundleFileSize',String(file.size||0));form.append('bundleFileLastModified',String(file.lastModified||0));
       try{
         await window.MaterialUploadClient.enqueue(form,{fileName:file.name,onUnauthorized:loginRedirect,onProgress:progress=>{status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name} ${progress.percent}%（完成後交由背景 Worker 處理）`;}});
         uploaded++;
