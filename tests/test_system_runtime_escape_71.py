@@ -28,6 +28,28 @@ class SystemRuntimeEscape71Tests(unittest.TestCase):
         self.assertIn("escapeHtml(", teaching)
         self.assertIn("escapeHtml(", exam)
 
+    def test_runtime_frontend_forces_fresh_critical_asset_versions(self):
+        frontend = self.source("pgy_frontend.py")
+        self.assertIn('/shared-core.js?v=7111', frontend)
+        self.assertIn('/system-exam.js?v=7111', frontend)
+        self.assertIn('/teaching.js?v=7111', frontend)
+        self.assertIn('/runtime-escape-guard-7111.js?v=7111', frontend)
+
+    def test_runtime_escape_guard_has_independent_fallback(self):
+        guard = self.source("static/runtime-escape-guard-7111.js")
+        self.assertIn("typeof global.escapeHtml === 'function'", guard)
+        self.assertIn("global.AppCore", guard)
+        self.assertIn("global.escapeHtml = canonical || function", guard)
+        self.assertIn("__teacherEscapeGuard7111", guard)
+
+    def test_escape_guard_is_injected_immediately_after_fresh_shared_core(self):
+        frontend = self.source("pgy_frontend.py")
+        shared = frontend.index('fresh_shared_core =')
+        guard = frontend.index('escape_guard =')
+        injection = frontend.index('fresh_shared_core + "\\n" + escape_guard')
+        self.assertLess(shared, guard)
+        self.assertLess(guard, injection)
+
 
 if __name__ == "__main__":
     unittest.main()
