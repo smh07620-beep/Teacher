@@ -33,7 +33,7 @@ class RootMirrorPolicyTests(unittest.TestCase):
         ):
             self.assertIn(marker, document)
 
-    def test_live_auth_routes_are_thin_canonical_delegates(self):
+    def test_live_auth_routes_are_thin_canonical_delegates_without_duplicate_legacy_impls(self):
         functions = module_functions(ROOT / "app.py")
         expected_calls = {
             "api_auth_me": "auth_routes.me",
@@ -41,14 +41,26 @@ class RootMirrorPolicyTests(unittest.TestCase):
             "api_auth_logout": "auth_routes.logout",
             "normalize_role": "canonical_normalize_role",
             "has_permission": "canonical_has_permission",
+            "_normalize_username": "auth_service.normalize_username",
+            "_user_public": "auth_service.public_user",
+            "_current_user": "auth_service.current_user",
         }
         for name, canonical_symbol in expected_calls.items():
             source = ast.unparse(functions[name])
             self.assertIn(canonical_symbol, source, name)
 
-        app_source = (ROOT / "app.py").read_text(encoding="utf-8")
-        for live_route in ("api_auth_me", "api_auth_login", "api_auth_logout"):
-            self.assertNotIn(f"def {live_route}():\n    return _legacy", app_source)
+        retired = {
+            "_legacy_normalize_role",
+            "_legacy_has_permission",
+            "_legacy_normalize_username",
+            "_legacy_user_public",
+            "_legacy_current_user",
+            "_legacy_require_roles",
+            "_legacy_api_auth_me",
+            "_legacy_api_auth_login",
+            "_legacy_api_auth_logout",
+        }
+        self.assertFalse(retired & set(functions), sorted(retired & set(functions)))
 
     def test_exam_adapter_has_no_independent_business_logic(self):
         source = (ROOT / "exam_integrity.py").read_text(encoding="utf-8")
