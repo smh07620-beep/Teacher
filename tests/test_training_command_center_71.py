@@ -121,7 +121,7 @@ class TrainingCommandCenterFrontendTests(unittest.TestCase):
 
     def test_ui_is_compact_read_only_and_audience_aware(self):
         self.assertIn("📌 我的待辦", self.ui)
-        self.assertIn("#course-overview", self.ui)
+        self.assertIn("getElementById('course-overview')", self.ui)
         self.assertIn("/api/training-command-center/profile", self.ui)
         self.assertIn("/api/dashboard/me?", self.ui)
         self.assertIn("profile?.pgyLearner", self.ui)
