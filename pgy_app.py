@@ -7,6 +7,7 @@ RBAC/PGY signing migration on top of the 6.4 protection controls.
 import app as legacy_app
 from ai_privacy import register_ai_privacy
 from backup_restore import register_backup_restore
+from course_bundle_72 import register_course_bundle_72
 from exam_integrity import register_exam_integrity
 from free_worker_67 import register_free_worker
 from health_65 import register_health
@@ -28,6 +29,8 @@ from sensitive_elevation_69 import register_sensitive_elevation_69
 from atlas_70 import register_atlas_70
 
 app = register_pgy_workflow(legacy_app)
+# Importing course_bundle_72 above registers its additive migration before the
+# migration runner executes.
 app = register_schema_migrations(legacy_app)
 app = register_multi_role_66(legacy_app)
 app = register_health(legacy_app)
@@ -45,6 +48,9 @@ app = register_pgy_frontend(app)
 app = register_external_media(legacy_app)
 app = register_admin_elevation(legacy_app)
 app = register_rbac_681(legacy_app)
+# Course bundle creation is an ordinary teaching workflow: canonical session
+# RBAC and group scope are established by rbac_681 before this route is added.
+app = register_course_bundle_72(legacy_app)
 app = register_atlas_70(legacy_app)
 # Sensitive account/storage/backup/destructive system actions add a short-lived
 # elevation check on top of canonical RBAC. Normal teacher work never enters it.
