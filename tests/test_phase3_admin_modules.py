@@ -85,6 +85,27 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
         self.assertNotIn('localStorage.setItem', source)
         self.assertNotIn('sessionStorage.setItem', source)
 
+    def test_announcements_module_is_loaded_after_people_override(self):
+        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
+        people_pos = frontend.index('/admin-people.js?v=7102')
+        announcements_pos = frontend.index('/admin-announcements.js?v=7103')
+        self.assertLess(people_pos, announcements_pos)
+
+    def test_announcements_module_preserves_admin_global_contracts(self):
+        source = ROOT.joinpath('static/admin-announcements.js').read_text(encoding='utf-8')
+        for name in (
+            'renderAdminAnnouncements',
+            'createAdminAnnouncement',
+            'toggleAdminAnnouncement',
+            'deleteAdminAnnouncement',
+        ):
+            self.assertIn(f'window.{name}', source)
+        self.assertIn('/api/announcements/admin', source)
+        self.assertIn("method:'POST'", source)
+        self.assertIn("method:'PATCH'", source)
+        self.assertIn("method:'DELETE'", source)
+        self.assertIn('X-Admin-Key', source)
+
 
 if __name__ == '__main__':
     unittest.main()
