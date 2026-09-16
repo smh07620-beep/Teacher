@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - codex/phase-3-pgy-architecture
-      - feature/teacher-7-1-audience-compact-ux
   pull_request:
 
 permissions:
