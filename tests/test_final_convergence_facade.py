@@ -22,6 +22,16 @@ class FinalConvergenceFacadeTests(unittest.TestCase):
         self.assertIn("window.courseWizard681Create=create", self.wizard)
         self.assertIn("window.courseWizard681Reset=reset", self.wizard)
 
+    def test_current_system_html_entrypoints_are_rewritten_to_canonical_wizard(self):
+        self.assertIn(
+            "html.replace('onclick=\"adminCreateCourseBundle()\"', 'onclick=\"courseWizard681Create()\"')",
+            self.frontend,
+        )
+        self.assertIn(
+            "html.replace('onclick=\"resetCourseWizardForm(true)\"', 'onclick=\"courseWizard681Reset()\"')",
+            self.frontend,
+        )
+
     def test_facade_contains_no_business_or_authorization_logic(self):
         for forbidden in (
             "fetch(",
