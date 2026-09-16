@@ -23,6 +23,11 @@ def register_pgy_frontend(app):
             if response.direct_passthrough:
                 response.direct_passthrough = False
             html = response.get_data(as_text=True)
+            # Final Convergence: current server-rendered pages call the canonical
+            # Course Wizard directly. The compatibility facade remains for
+            # cached/older HTML that still carries the legacy onclick names.
+            html = html.replace('onclick="adminCreateCourseBundle()"', 'onclick="courseWizard681Create()"')
+            html = html.replace('onclick="resetCourseWizardForm(true)"', 'onclick="courseWizard681Reset()"')
             head_assets = []
             body_assets = []
 
