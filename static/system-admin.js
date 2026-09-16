@@ -16,9 +16,6 @@ async function renderAdminCourseMaterialHub(force=false){
     }catch(e){box.innerHTML=`<div class="text-xs text-rose-500">❌ 無法整理課程總覽：${escapeHtml(e.message)}</div>`;}
 }
 
-async function jumpToAdminQuiz(catId,area,group){
-    await switchAdminSection('quiz',true);const a=document.getElementById('admin-quiz-area'),g=document.getElementById('admin-quiz-group');if(a)a.value=area;if(g){g.innerHTML=groupOptionsForArea(area);g.value=group;}await renderAdminQuizCategories(true);setTimeout(()=>{const btn=[...document.querySelectorAll('button')].find(b=>b.getAttribute('onclick')?.includes(`'${catId}'`)&&b.textContent.includes('題庫'));btn?.scrollIntoView({behavior:'smooth',block:'center'});},100);
-}
 async function getAdminKey() {
     // Compatibility header only.  Server-side session RBAC authorizes every
     // request; no ADMIN_KEY is prompted for or persisted in this browser.
@@ -31,7 +28,6 @@ const ADMIN_COURSE_CACHE_MS = 60000;
 let adminMaterialsCache = { data: null, at: 0 };
 const adminQuizCategoriesCache = new Map();
 const adminCoursesCache = new Map();
-const adminSectionLoaded = { content: false, quiz: false, word: false, pgy: false, results: false };
 function adminScopeKey(area, group){ return `${area || 'internal'}::${group || 'grpBio'}`; }
 function setAdminQuizSyncStatus(text, tone='slate'){
     const el=document.getElementById('admin-quiz-sync-status'); if(!el)return;
@@ -149,7 +145,6 @@ function quizCategoryCardHTML(c) {
 }
 
 
-const aiQuestionDrafts = {};
 
 function aiMaterialKind(m) {
     const name=(m.filename||m.title||'').toLowerCase();
@@ -172,26 +167,6 @@ function _aiMaterialSearchText(m){
     return `${m.title||''} ${m.filename||''} ${m.materialType||''} ${m.atlasCategory||''} ${m.description||''}`.toLowerCase();
 }
 
-function _filteredAiMaterials(catId){
-    const catalog=aiMaterialCatalog[catId]||[], state=_aiPickerState(catId);
-    const q=(document.getElementById(`ai-material-search-${catId}`)?.value||'').trim().toLowerCase();
-    const scope=document.getElementById(`ai-material-scope-${catId}`)?.value||'linked';
-    const kindFilter=document.getElementById(`ai-material-kind-${catId}`)?.value||'all';
-    let list=catalog.filter(m=>{
-        const [kind]=aiMaterialKind(m);
-        if(kindFilter!=='all' && kind!==kindFilter)return false;
-        if(q && !_aiMaterialSearchText(m).includes(q))return false;
-        return true;
-    });
-    // 「本考卷教材」是優先排序而非完全隱藏，避免找不到跨課程 SOP/影片。
-    list.sort((a,b)=>{
-        const as=state.selected.has(String(a.id))?0:(a.category===catId?1:2);
-        const bs=state.selected.has(String(b.id))?0:(b.category===catId?1:2);
-        if(scope==='all') return (state.selected.has(String(a.id))?0:1)-(state.selected.has(String(b.id))?0:1) || String(a.title||a.filename).localeCompare(String(b.title||b.filename),'zh-Hant');
-        return as-bs || String(a.title||a.filename).localeCompare(String(b.title||b.filename),'zh-Hant');
-    });
-    return list;
-}
 
 
 
@@ -210,56 +185,7 @@ async function adminBatchQuestionPatch(catId,items,label='儲存題目'){
     const res=await fetch('/api/quiz-questions/batch',{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({items})});
     const d=await res.json().catch(()=>({})); if(!res.ok)throw new Error(d.error||`${label}失敗`); return d;
 }
-async function adminSaveExpandedQuestionEdits(catId){
-    if(questionBulkBusy.has(catId))return; const ids=[...document.querySelectorAll(`#qlist-${catId} [id^="qedit-"]:not(.hidden)`)].map(x=>x.dataset.qid).filter(Boolean);if(!ids.length){alert('目前沒有展開中的題目。請先按「編輯已選」或「全選編輯」。');return;}if(!confirm(`確定一次儲存目前展開的 ${ids.length} 題？`))return;
-    let items;try{items=ids.map(id=>({id,data:adminPayloadFromQuestionEditor(id,catId)}));}catch(e){alert(e.message);return;}
-    questionBulkBusy.add(catId);setQuestionBulkBusy(catId,true,`一次儲存 ${ids.length} 題…`);ids.forEach(id=>setQuestionRowBusy(id,true,'等待批次儲存'));
-    const prog=document.getElementById(`qbulk-progress-${catId}`);
-    try{const d=await adminBatchQuestionPatch(catId,items,'批次儲存');updateQuestionCacheAndPaint(catId,d.updated||items.map(x=>({id:x.id,...x.data})));if(prog)prog.textContent=`✅ 已一次儲存 ${d.count||ids.length} 題，不需重新載入題庫`;}
-    catch(e){if(prog)prog.textContent='⚠️ 批次儲存失敗，畫面內容已保留';alert(`批次儲存失敗：${e.message}`);}
-    finally{questionBulkBusy.delete(catId);setQuestionBulkBusy(catId,false);ids.forEach(id=>setQuestionRowBusy(id,false));}
-}
-async function adminBulkSetQuestionTag(catId){const ids=adminSelectedQuestionIds(catId);if(!ids.length){alert('請先勾選題目');return;}const tag=prompt(`將 ${ids.length} 題的分類統一改為：`);if(tag===null)return;if(questionBulkBusy.has(catId))return;questionBulkBusy.add(catId);setQuestionBulkBusy(catId,true,`批次修改 ${ids.length} 題分類…`);try{const d=await adminBatchQuestionPatch(catId,ids.map(id=>({id,data:{tag:tag.trim()||'一般'}})),'批次分類');updateQuestionCacheAndPaint(catId,d.updated||ids.map(id=>({id,tag:tag.trim()||'一般'})));const prog=document.getElementById(`qbulk-progress-${catId}`);if(prog)prog.textContent='✅ 批次分類完成';}catch(e){alert(e.message);}finally{questionBulkBusy.delete(catId);setQuestionBulkBusy(catId,false);}}
-const quizMaterialLinkState={};
-let adminEditingExamMeta=null;
 document.addEventListener('input',e=>{if(e.target?.id?.startsWith('exam-quota-'))updateExamQuotaTotal();});
-async function adminEditQuizQuestion(qId, catId) {
-    const key = await getAdminKey(); if (!key) return;
-    const res0 = await fetch(`/api/quiz-questions/admin?category=${catId}`, {headers:{'X-Admin-Key':key}});
-    const qs = await res0.json().catch(() => []); const q = (qs || []).find(x => x.id === qId); if (!q) return;
-    const type=q.questionType||'choice';
-    const question = prompt('題目內容：', q.question || ''); if (question === null) return;
-    const tag = prompt('題目分類標籤：', q.tag || ''); if (tag === null) return;
-    const explanation = prompt(type==='essay' ? '評分參考 / 標準答案重點：' : '詳解 / 答案依據：', q.explanation || ''); if (explanation === null) return;
-    const payload={question, tag, explanation, questionType:type, imageUrl:q.imageUrl||'', answerConfig:{...(q.answerConfig||{})}};
-    if(type==='essay'){payload.options=[];payload.correct=0;}
-    else if(type==='fill'){
-        const prev=(q.answerConfig?.acceptedAnswers||[]).join(' | ');
-        const raw=prompt('可接受答案（多個答案請用 | 分隔）：',prev); if(raw===null)return;
-        const arr=raw.split('|').map(x=>x.trim()).filter(Boolean);if(!arr.length){alert('至少需要一個可接受答案');return;}
-        payload.options=[];payload.correct=0;payload.answerConfig={...(q.answerConfig||{}),acceptedAnswers:arr,caseSensitive:false};
-    }else{
-        const opts=[];const optCount=Math.max(4,(q.options||[]).length);
-        for(let i=0;i<optCount;i++){const v=prompt(`選項 ${String.fromCharCode(65+i)}（留白代表不使用）：`,(q.options||[])[i]||'');if(v===null)return;if(v.trim())opts.push(v.trim());}
-        if(opts.length<2){alert('至少需要 2 個選項');return;} payload.options=opts;
-        if(type==='multi'){
-            const prev=(q.answerConfig?.correctIndices||[]).map(i=>'ABCDEF'[Number(i)]).filter(Boolean).join(',');
-            const raw=prompt(`多選正確答案（例如 A,C；可複選，選項上限 ${opts.length}）：`,prev);if(raw===null)return;
-            const indices=[...new Set((raw.toUpperCase().match(/[A-F]/g)||[]).map(x=>'ABCDEF'.indexOf(x)).filter(i=>i>=0&&i<opts.length))];
-            if(!indices.length){alert('多選題至少設定一個正確選項');return;}payload.correct=indices[0];payload.answerConfig={...(q.answerConfig||{}),correctIndices:indices};
-        }else{
-            const correctStr=prompt(`正確答案是第幾個選項？（輸入 1 ~ ${opts.length}）`,String((q.correct||0)+1));if(correctStr===null)return;
-            payload.correct=Math.max(0,Math.min(opts.length-1,(parseInt(correctStr,10)||1)-1));
-        }
-        if(type==='video'||q.answerConfig?.mediaUrl){
-            const media=prompt('影片網址 / 教材播放網址：',q.answerConfig?.mediaUrl||'');if(media===null)return;
-            const sec=prompt('建議觀察時間點（秒）：',String(q.answerConfig?.pauseAt||0));if(sec===null)return;
-            payload.answerConfig={...(payload.answerConfig||{}),mediaUrl:media.trim(),pauseAt:Math.max(0,Number(sec)||0)};
-        }
-    }
-    const res=await fetch(`/api/quiz-questions/${qId}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify(payload)});
-    const data=await res.json().catch(()=>({}));if(!res.ok){alert(data.error||'修改失敗');return;}await loadQuizQuestionsIntoPanel(catId);delete allQuizData[catId];
-}
 
 
 // ==================================================================
@@ -268,7 +194,6 @@ async function adminEditQuizQuestion(qId, catId) {
 // 管理者後台：各組別 Word 匯出範本 (doc_templates) 管理
 // 六組皆可由後台上傳 Word 匯出範本；生化組也納入統一管理。
 // ==================================================================
-let cachedDocTemplatesMeta = [];
 let pendingDocTemplateUploadGroup = null;
 
 document.getElementById('admin-doc-template-upload-input').addEventListener('change', async function (e) {
@@ -293,10 +218,6 @@ document.getElementById('admin-doc-template-upload-input').addEventListener('cha
 });
 
 let materialJobsRefreshTimer=null;
-let adminWorkspace = 'course-materials';
-let adminQuizWorkspaceMode = 'questions';
-let adminResultWorkspaceMode = 'results';
-let teacherWorkspaceMode = 'scoring';
 
 function updateQuizWorkspacePresentation(){
     const title=document.querySelector('#admin-quiz-workspace h4'); const desc=document.querySelector('#admin-quiz-workspace h4 + p');
@@ -306,8 +227,6 @@ function updateQuizWorkspacePresentation(){
 }
 
 let adminUserAccountsCache=[];
-const ADMIN_PROFILE_COMMON_TAGS=['品管','臨床教師','POCT','儀器管理','教學負責'];
-const ADMIN_USER_ROLE_LABELS={student:'學員',clinical_teacher:'臨床教師',group_leader:'組長',education_admin:'教學管理者',system_admin:'系統管理者',auditor:'稽核／唯讀',learner:'學員',teacher:'臨床教師',manager:'教學管理者'};
 const ADMIN_USER_AREA_LABELS={internal:'院內',pgy:'PGY'};
 async function renderAdminUserAccounts(){
     const body=document.getElementById('admin-user-accounts-body'),status=document.getElementById('admin-user-status');if(!body)return;body.innerHTML='<tr><td colspan="6" class="p-5 text-center text-slate-400">讀取帳號中…</td></tr>';
@@ -320,8 +239,6 @@ async function createAdminUserAccount(){
     const status=document.getElementById('admin-user-status'),key=await getAdminKey();if(!key)return;const payload={username:document.getElementById('admin-user-username')?.value||'',password:document.getElementById('admin-user-password')?.value||'',name:document.getElementById('admin-user-name')?.value||'',empId:document.getElementById('admin-user-empid')?.value||'',role:document.getElementById('admin-user-role')?.value||'student',preferredArea:document.getElementById('admin-user-area')?.value||'internal',preferredGroup:document.getElementById('admin-user-group')?.value||'grpBio',professionalTitle:document.getElementById('admin-user-professional-title')?.value||'',responsibilityTags:adminProfileTags(document.getElementById('admin-user-responsibility-tags')?.value||'')};status.textContent='⏳ 建立帳號中…';
     const r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify(payload)}),d=await r.json().catch(()=>({}));if(!r.ok){status.textContent='❌ '+(d.error||'建立失敗');return;}['admin-user-username','admin-user-password','admin-user-name','admin-user-empid','admin-user-professional-title','admin-user-responsibility-tags'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});status.textContent=`✅ 已建立 ${d.user.name}（${d.user.username}）`;await renderAdminUserAccounts();
 }
-async function resetAdminUserPassword(username){const password=prompt(`請輸入「${username}」的新密碼（至少 4 碼）：`);if(password===null)return;const key=await getAdminKey();if(!key)return;const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({password})}),d=await r.json().catch(()=>({}));alert(r.ok?'密碼已重設，該帳號需重新登入。':(d.error||'重設失敗'));if(r.ok)await renderAdminUserAccounts();}
-async function toggleAdminUserAccount(username,active){const key=await getAdminKey();if(!key)return;const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({active})}),d=await r.json().catch(()=>({}));if(!r.ok){alert(d.error||'更新失敗');return;}await renderAdminUserAccounts();}
 
 async function renderAdminPeople(force=false){
     await renderAdminUserAccounts();
@@ -348,24 +265,6 @@ let isExportingCurrentTab = false;
 // 組出後台某一筆已存檔成績的匯出資料與檔名
 // 用給定的範本二進位內容 (ArrayBuffer) 填入資料並下載，成功回傳 true
 // 依組別代碼向伺服器抓取該組已上傳的空白範本並直接匯出
-async function exportCurrentTabToWord() {
-    const nameInput = document.getElementById('examinee-name').value.trim();
-    const idInput = document.getElementById('examinee-id').value.trim();
-    const roleInput = document.getElementById('examinee-role').value;
-    const evaluatorNameInput = document.getElementById('evaluator-name').value.trim();
-    const evaluatorTitleInput = document.getElementById('evaluator-title').value;
-    if (!nameInput || !idInput || !roleInput || !evaluatorNameInput || !evaluatorTitleInput) {
-        alert('請先填寫「受測人員姓名」「員工工號」「考試人員類別」「考核人員姓名」與「考核人員職稱」再執行匯出！'); return;
-    }
-    rememberEvaluatorFields();
-    const { payload, filenamePart } = buildCurrentTabDocPayload();
-    const ok = await exportWithServerTemplate(currentGroupKey, payload, filenamePart, currentGroupKey === 'grpBio');
-    if (!ok && currentGroupKey === 'grpBio') {
-        isExportingCurrentTab = true;
-        if (cachedTemplateBuffer) generateCurrentTabWord();
-        else { alert('後台尚未上傳生化組 Word 範本。可暫時選擇本機「附件1.docx」匯出，或請管理者至後台上傳範本。'); document.getElementById('docx-template-input').click(); }
-    }
-}
 
 function generateCurrentTabWord() {
     const { payload, filenamePart } = buildCurrentTabDocPayload();
