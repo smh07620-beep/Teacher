@@ -52,6 +52,7 @@ jobs:
           node --check static/atlas-docx-wizard-70.js
           node --check static/admin-ai-questions.js
           node --check static/admin-exam-settings.js
+          node --check static/admin-doc-templates.js
           node tests/test_external_media_behavior_681.js
       - name: Web and worker shell contracts
         run: |
