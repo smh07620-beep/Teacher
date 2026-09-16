@@ -256,3 +256,17 @@
     setTimeout(install, 0);
   }
 })();
+
+/* Load the unified teacher content studio as a presentation-only companion.
+ * Keeping this composition next to the teacher-first authoring overlay avoids
+ * adding business logic to legacy compatibility bundles; all mutations remain
+ * owned by their existing canonical modules.
+ */
+(function(){
+  'use strict';
+  if (document.querySelector('script[src*="/teacher-content-studio-71.js"]')) return;
+  const script = document.createElement('script');
+  script.src = '/teacher-content-studio-71.js?v=7115';
+  script.defer = true;
+  document.head.appendChild(script);
+})();
