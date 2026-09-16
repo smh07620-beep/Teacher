@@ -148,6 +148,15 @@ def register_smart_learning(base):
         query = str(request.args.get("q", "")).strip()[:200]
         material_id = str(request.args.get("materialId", "")).strip()[:100]
         if not query or not material_id: return jsonify([])
+        material=base.get_material(material_id)
+        # Do not turn the index into a visibility bypass.  The reader already
+        # receives only active material, and search applies the same group
+        # boundary on the server rather than trusting the UI's selected group.
+        if not material or not material.get("active", True): return jsonify([])
+        from teacher_app.common.auth import has_role
+        group=str(material.get("group") or material.get("groupKey") or "")
+        own=str(user.get("preferredGroup") or user.get("preferred_group") or "")
+        if not (has_role(user,"system_admin") or has_role(user,"education_admin") or group==own): return jsonify([])
         conn, kind = base._db_conn(); ph = "%s" if kind == "postgres" else "?"
         try:
             rows = conn.execute(f"SELECT page_no,title,text FROM material_text_index WHERE material_id={ph} AND LOWER(text) LIKE {ph} ORDER BY page_no LIMIT 50", (material_id, "%" + query.lower() + "%")).fetchall()
@@ -161,13 +170,34 @@ def register_smart_learning(base):
         material=base.get_material(material_id)
         if not material:return jsonify({"error":"找不到教材"}),404
         path=Path(base.UPLOADED_SLIDES_DIR)/str(material.get("folder") or material_id)/str(material.get("storageFilename") or material.get("filename") or "")
-        if material.get("storageBackend")!="local" or not path.is_file(): return jsonify({"error":"此教材目前無可安全索引的本機原始檔"}),409
+        if material.get("storageBackend")!="local" or not path.is_file():
+            conn,kind=base._db_conn(); ph="%s" if kind=="postgres" else "?"
+            try: conn.execute(f"INSERT INTO material_search_status(material_id,status,page_count,last_indexed_at,failure_reason,source_kind) VALUES({ph},{ph},{ph},{ph},{ph},{ph}) ON CONFLICT(material_id) DO UPDATE SET status=EXCLUDED.status,failure_reason=EXCLUDED.failure_reason",(material_id,"unsupported",0,"","此教材目前無可安全索引的本機原始檔",str(material.get("storageBackend") or "")))
+            finally: conn.close()
+            return jsonify({"error":"此教材目前無可安全索引的本機原始檔","status":"unsupported"}),409
         rows=extract_slide_text(path); conn,kind=base._db_conn(); ph="%s" if kind=="postgres" else "?"
         try:
             conn.execute(f"DELETE FROM material_text_index WHERE material_id={ph}",(material_id,))
             for page_no,text,title in rows: conn.execute(f"INSERT INTO material_text_index(material_id,page_no,title,text,indexed_at) VALUES({ph},{ph},{ph},{ph},{ph})",(material_id,page_no,title,text,_now()))
+            status="indexed" if rows else "unsupported"; reason="" if rows else "找不到可擷取文字；掃描型 PDF 不提供假性搜尋結果。"
+            conn.execute(f"INSERT INTO material_search_status(material_id,status,page_count,last_indexed_at,failure_reason,source_kind) VALUES({ph},{ph},{ph},{ph},{ph},{ph}) ON CONFLICT(material_id) DO UPDATE SET status=EXCLUDED.status,page_count=EXCLUDED.page_count,last_indexed_at=EXCLUDED.last_indexed_at,failure_reason=EXCLUDED.failure_reason,source_kind=EXCLUDED.source_kind",(material_id,status,len(rows),_now(),reason,path.suffix.lower()))
         finally:conn.close()
-        return jsonify({"ok":True,"pages":len(rows),"searchable":bool(rows)})
+        return jsonify({"ok":True,"pages":len(rows),"searchable":bool(rows),"status":"indexed" if rows else "unsupported"})
+
+    @app.get("/api/material-search/<material_id>/status")
+    def material_index_status(material_id):
+        user, denied=_user(base)
+        if denied:return denied
+        material=base.get_material(material_id)
+        if not material:return jsonify({"error":"找不到教材"}),404
+        from teacher_app.common.auth import has_role
+        group=str(material.get("group") or material.get("groupKey") or "")
+        own=str(user.get("preferredGroup") or user.get("preferred_group") or "")
+        if not (has_role(user,"system_admin") or has_role(user,"education_admin") or group==own): return jsonify({"error":"找不到教材"}),404
+        conn,kind=base._db_conn(); ph="%s" if kind=="postgres" else "?"
+        try: row=conn.execute(f"SELECT status,page_count,last_indexed_at,failure_reason,source_kind FROM material_search_status WHERE material_id={ph}",(material_id,)).fetchone()
+        finally:conn.close()
+        return jsonify(_row(row) or {"status":"not_indexed","page_count":0,"last_indexed_at":"","failure_reason":"","source_kind":""})
 
     @app.post("/api/docx-atlas-preview/<material_id>")
     def docx_atlas_preview(material_id):

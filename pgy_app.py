@@ -25,6 +25,7 @@ from question_bank_68 import register_question_bank
 from rbac_681 import register_rbac_681
 from legacy_office_69 import register_legacy_office_69
 from sensitive_elevation_69 import register_sensitive_elevation_69
+from atlas_70 import register_atlas_70
 
 app = register_pgy_workflow(legacy_app)
 app = register_schema_migrations(legacy_app)
@@ -44,6 +45,7 @@ app = register_pgy_frontend(app)
 app = register_external_media(legacy_app)
 app = register_admin_elevation(legacy_app)
 app = register_rbac_681(legacy_app)
+app = register_atlas_70(legacy_app)
 # Sensitive account/storage/backup/destructive system actions add a short-lived
 # elevation check on top of canonical RBAC. Normal teacher work never enters it.
 app = register_sensitive_elevation_69(legacy_app)
