@@ -198,6 +198,12 @@
     return `/system?${params.toString()}`;
   }
 
+  // Legacy page modules such as teaching.js, system-exam.js, and several
+  // extracted admin renderers still call escapeHtml as a global helper. Keep
+  // the shared implementation available on window until those callers are
+  // migrated to AppCore.escapeHtml. shared-core.js is loaded before them.
+  global.escapeHtml = escapeHtml;
+
   global.AppCore = Object.freeze({
     api,
     AppApiError,
