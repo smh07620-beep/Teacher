@@ -25,6 +25,21 @@ def register_pgy_frontend(app):
             html = response.get_data(as_text=True)
             head_assets = []
             body_assets = []
+
+            # The workspace router is wrapper-sensitive: RBAC, workspace-shell,
+            # and worker-status all decorate switchAdminWorkspace/toggleAdminModal.
+            # Load the extracted router immediately after the legacy bundle so
+            # those later wrappers capture the new implementation instead of
+            # being bypassed by a late Phase 3 override.
+            if "/admin-workspace.js" not in html:
+                legacy_admin_marker = '<script defer src="/system-admin.js?v=6502"></script>'
+                if legacy_admin_marker in html:
+                    html = html.replace(
+                        legacy_admin_marker,
+                        legacy_admin_marker + '\n<script defer src="/admin-workspace.js?v=7110"></script>',
+                        1,
+                    )
+
             if "/pgy-workflow.css" not in html:
                 head_assets.append('<link rel="stylesheet" href="/pgy-workflow.css?v=6500">')
             if "/pgy-workflow.js" not in html:
