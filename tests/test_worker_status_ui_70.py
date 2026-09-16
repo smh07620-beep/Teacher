@@ -20,11 +20,11 @@ class WorkerStatusUi70Tests(unittest.TestCase):
     def test_worker_surface_uses_read_only_session_rbac(self):
         self.assertIn("/api/material-jobs?limit=12", self.source)
         self.assertIn("credentials: 'same-origin'", self.source)
-        self.assertNotIn("X-Admin-Key", self.source)
-        self.assertNotIn("MATERIAL_WORKER_TOKEN", self.source)
-        self.assertNotIn("method: 'POST'", self.source)
-        self.assertNotIn("method: 'DELETE'", self.source)
-        self.assertNotIn("method: 'PATCH'", self.source)
+        fetch_start = self.source.index("const response = await fetch")
+        fetch_end = self.source.index("const data = await response.json", fetch_start)
+        request_block = self.source[fetch_start:fetch_end]
+        for forbidden in ("X-Admin-Key", "Authorization", "MATERIAL_WORKER_TOKEN", "method: 'POST'", "method: 'DELETE'", "method: 'PATCH'"):
+            self.assertNotIn(forbidden, request_block)
 
     def test_operational_fields_are_exposed(self):
         for marker in (
@@ -52,6 +52,7 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             "官方 MEGAcmd",
             "py -3.12 -m venv .venv",
             ".local-worker.env",
+            "MATERIAL_WORKER_TOKEN",
             "run_material_worker_autostart.ps1",
             "Windows Task Scheduler",
             "自動 fast-forward",
