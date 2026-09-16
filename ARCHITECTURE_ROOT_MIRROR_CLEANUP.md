@@ -35,7 +35,7 @@ behavior.
 
 | Domain | Canonical owner | Root compatibility surface | Status / remaining debt |
 | --- | --- | --- | --- |
-| Auth and session lifecycle | `teacher_app.auth.service`, `repository`, `routes` | `app.py` calls the modular route/service functions; `_legacy_*` auth functions are test-only contract fixtures | **Frozen / converged.** Keep old URLs and JSON contracts; do not add auth logic to `app.py`. |
+| Auth and session lifecycle | `teacher_app.auth.service`, `repository`, `routes` | `app.py` exposes only thin live delegates needed by legacy route names | **Frozen / converged.** Pre-extraction `_legacy_*` auth implementations have been retired; keep old URLs and JSON contracts through canonical delegates only. |
 | RBAC, canonical roles, permissions | `teacher_app.common.auth`; public account serialization in `teacher_app.auth.service` | `app.py` exposes thin `normalize_role`, `has_permission`, `_current_user`, and `require_roles` seams; `rbac_681.py` adapts legacy endpoints and group scoping | **Frozen / converged.** Professional title and responsibility tags are presentation-only and never authorization input. |
 | Exam attempt grading and integrity | `teacher_app.exams.grading`, `repository`, `service`, `routes` | `exam_integrity.py` only re-exports canonical helpers and mounts the unchanged legacy URLs | **Frozen / converged.** New exam attempt logic belongs in `teacher_app.exams`. |
 | PGY workflow, atomic transitions and signing | `teacher_app.pgy.service`, `repository`, `workflow`, `signing` | `pgy_workflow.py` is now a thin legacy URL/JSON adapter; `pgy_atomic.py` and `pgy_signing_66.py` remain compatibility overlays | **Frozen / converged controller ownership.** Schema, reads, create/edit rules, transitions and audit writes belong to `teacher_app.pgy`; compatibility modules may only adapt old HTTP/signing contracts. |
@@ -49,13 +49,13 @@ behavior.
 ## Root freeze policy
 
 1. `pgy_app.py` is composition only. It may register explicitly named compatibility adapters, but not add business rules.
-2. `app.py` auth/RBAC seams must delegate to `teacher_app`; preserved `_legacy_*` routines are compatibility fixtures and must not be used by live `/api/auth/*` routes.
+2. `app.py` auth/RBAC seams must delegate to `teacher_app`; duplicate pre-extraction `_legacy_*` auth implementations must not return to production source.
 3. `exam_integrity.py` remains a thin adapter. New exam-attempt behavior goes in `teacher_app.exams`.
 4. `pgy_workflow.py` must remain a thin HTTP compatibility adapter: no independent PGY schema SQL, assignment query implementation, create/edit business rules, transition rules, or audit persistence may return to it. Compatibility symbols used by `pgy_signing_66.py` must delegate to `teacher_app.pgy`.
 5. Do not use `professional_title` or `responsibility_tags` in roles, permissions, scope, elevation, or query filters.
 6. Student management access, auditor immutability, group scope, cross-group education-admin access, system-admin limits on clinical signing, elevation, and worker-secret boundaries remain governed by their existing security tests.
 
-`tests/test_root_mirror_policy.py` is the CI enforcement point. It verifies the live auth route delegates, canonical RBAC seams, thin exam adapter, thin PGY controller/atomic adapters, the unchanged production entrypoint, and that this matrix remains present. Any new modularized-domain root implementation requires an explicit ownership decision and a policy-test update in the same review.
+`tests/test_root_mirror_policy.py` is the CI enforcement point. It verifies the live auth route delegates and absence of retired auth implementations, canonical RBAC seams, thin exam adapter, thin PGY controller/atomic adapters, the unchanged production entrypoint, and that this matrix remains present. Any new modularized-domain root implementation requires an explicit ownership decision and a policy-test update in the same review.
 
 ## Follow-up sequence
 
