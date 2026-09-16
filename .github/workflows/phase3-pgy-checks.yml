@@ -65,6 +65,7 @@ jobs:
           node --check static/admin-question-panel.js
           node --check static/learner-exam-controls.js
           node --check static/learner-result-chart.js
+          node --check static/admin-compat-facade.js
           node tests/test_external_media_behavior_681.js
       - name: Web and worker shell contracts
         run: |
@@ -137,3 +138,5 @@ jobs:
           grep -q 'Teacher 6.7' ARCHITECTURE_6_7.md
           test -f ARCHITECTURE_ROOT_MIRROR_CLEANUP.md
           grep -q 'Root freeze policy' ARCHITECTURE_ROOT_MIRROR_CLEANUP.md
+          test -f ARCHITECTURE_FINAL_CONVERGENCE.md
+          grep -q 'system-admin.js.*legacy compatibility bundle' ARCHITECTURE_FINAL_CONVERGENCE.md
