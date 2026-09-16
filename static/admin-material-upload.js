@@ -12,27 +12,13 @@
   };
 
   window.uploadAdminMaterialRequest = function(fd,progressId,fileName,key,status){
-    return new Promise((resolve,reject)=>{
-      const xhr=new XMLHttpRequest();
-      xhr.open('POST','/api/material-jobs/upload',true);
-      xhr.setRequestHeader('X-Admin-Key',key);
-      xhr.timeout=20*60*1000;
-      xhr.upload.onprogress=e=>{
-        if(e.lengthComputable&&status){
-          const pct=Math.round(e.loaded/e.total*100);
+    if(!window.MaterialUploadClient?.enqueue) return Promise.reject(new Error('教材上傳元件尚未載入'));
+    return window.MaterialUploadClient.enqueue(fd,{headers:{'X-Admin-Key':key},fileName,onProgress:e=>{
+        if(status){
+          const pct=e.percent;
           status.innerHTML=`⬆️ ${escapeHtml(fileName)}｜安全接收 ${pct}%<span class="block text-[11px] text-slate-500 mt-1">${(e.loaded/1024/1024).toFixed(1)} / ${(e.total/1024/1024).toFixed(1)} MB；接收後會立刻排入背景佇列，不再占住 Web worker。</span>`;
         }
-      };
-      xhr.onload=()=>{
-        let d={};
-        try{ d=JSON.parse(xhr.responseText||'{}'); }catch(_e){}
-        if(xhr.status>=200&&xhr.status<300) resolve(d);
-        else reject(new Error(d.error||`HTTP ${xhr.status}`));
-      };
-      xhr.onerror=()=>reject(new Error(`${fileName} 網路上傳失敗`));
-      xhr.ontimeout=()=>reject(new Error(`${fileName} 傳送到伺服器逾時`));
-      xhr.send(fd);
-    });
+      }});
   };
 
   window.sha256File = async function(file){

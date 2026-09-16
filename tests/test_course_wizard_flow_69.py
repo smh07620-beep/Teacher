@@ -31,12 +31,14 @@ class CourseWizardFlow69Tests(unittest.TestCase):
         self.assertIn("switchAdminWorkspace('assessment',true)", self.source)
         self.assertIn('前往題庫與考卷', self.source)
 
-    def test_created_course_links_existing_and_new_materials(self):
+    def test_created_course_links_existing_and_queues_new_materials(self):
         self.assertIn("courseId:course.id", self.source)
         self.assertIn("for(const id of state.existing)", self.source)
-        self.assertIn("for(const file of files)", self.source)
+        self.assertIn("for(let index=0;index<files.length;index++)", self.source)
         self.assertIn("form.append('courseId',course.id)", self.source)
         self.assertIn("form.append('category',state.categoryId)", self.source)
+        self.assertIn("MaterialUploadClient.enqueue", self.source)
+        self.assertNotIn("/api/slides/upload", self.source)
 
     def test_exam_is_created_as_skeleton_without_auto_publish(self):
         create = self.source[self.source.index('async function create()'):self.source.index('async function continueToAssessment()')]
