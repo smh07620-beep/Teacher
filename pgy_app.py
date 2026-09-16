@@ -1,8 +1,7 @@
-"""Teacher 6.6 deployment entrypoint.
+"""Teacher deployment entrypoint.
 
-The legacy ``app.py`` remains the primary application. Phase 3 workflow and
-modular exam-integrity adapters stay intact while 6.6 adds the formal additive
-RBAC/PGY signing migration on top of the 6.4 protection controls.
+The legacy ``app.py`` remains the primary application while canonical Teacher
+modules own the converged domains and compatibility adapters preserve routes.
 """
 import app as legacy_app
 from ai_privacy import register_ai_privacy
@@ -29,15 +28,18 @@ from legacy_office_69 import register_legacy_office_69
 from sensitive_elevation_69 import register_sensitive_elevation_69
 from atlas_70 import register_atlas_70
 from teacher_app.assessments.routes import register_legacy_assessment_routes
+from teacher_app.command_center.audience import register_training_audience_71
 from teacher_app.command_center.routes import register_training_command_center
 from teacher_app.courses.routes import register_legacy_course_routes
 from teacher_app.materials.routes import register_legacy_material_routes
 
 app = register_pgy_workflow(legacy_app)
-# Importing the Course Wizard adapters above registers their additive migrations
-# before the migration runner executes.
+# Importing the adapters above registers additive migrations before the runner.
 app = register_schema_migrations(legacy_app)
 app = register_multi_role_66(legacy_app)
+# Teacher 7.1 audience is an explicit training-track flag. It does not grant
+# RBAC, signing, or administrative authority.
+app = register_training_audience_71(legacy_app)
 app = register_health(legacy_app)
 app = register_pgy_atomic_workflow(legacy_app)
 app = register_pgy_signing_66(legacy_app)
