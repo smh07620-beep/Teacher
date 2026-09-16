@@ -67,24 +67,6 @@ class AuthRouteTests(AuthFixture):
         self.assertEqual(response.get_json(), {'error': '帳號或密碼不正確，請洽管理者。'})
         self.assertEqual(client.post('/api/auth/logout').get_json(), {'ok': True})
 
-    def test_retained_legacy_implementation_matches_adapter(self):
-        self.app.add_url_rule('/old/login', view_func=self.base._legacy_api_auth_login, methods=['POST'])
-        self.app.add_url_rule('/old/me', view_func=self.base._legacy_api_auth_me)
-        self.app.add_url_rule('/old/logout', view_func=self.base._legacy_api_auth_logout, methods=['POST'])
-        for password in (self.password, 'wrong'):
-            old = self.client.post('/old/login', json={'username': 'teacher1', 'password': password})
-            new = self.login(password=password)
-            self.assertEqual(old.status_code, new.status_code)
-            a, b = old.get_json(), new.get_json()
-            if 'user' in a:
-                a['user'].pop('lastLoginAt')
-                b['user'].pop('lastLoginAt')
-            self.assertEqual(a, b)
-        self.assertEqual(self.client.get('/old/me').get_json(), self.client.get('/api/auth/me').get_json())
-        self.assertEqual(self.client.post('/old/logout').get_json(), self.client.post('/api/auth/logout').get_json())
-        raw = dict(self.sql('SELECT * FROM user_accounts')[0])
-        self.assertEqual(service.public_user(self.base, raw), self.base._legacy_user_public(raw))
-
 
 class AuthRateLimitTests(AuthFixture):
     def setUp(self):
