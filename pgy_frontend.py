@@ -52,6 +52,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/admin-people.js?v=7102"></script>')
             if "/admin-announcements.js" not in html:
                 body_assets.append('<script defer src="/admin-announcements.js?v=7103"></script>')
+            if "/admin-system.js" not in html:
+                body_assets.append('<script defer src="/admin-system.js?v=7104"></script>')
             if head_assets and "</head>" in html:
                 html = html.replace("</head>", "\n".join(head_assets) + "\n</head>", 1)
             if body_assets and "</body>" in html:
