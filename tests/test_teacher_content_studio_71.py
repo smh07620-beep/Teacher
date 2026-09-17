@@ -133,25 +133,18 @@ class TeacherContentStudio71Tests(unittest.TestCase):
 
     def test_frontend_owns_authoring_asset_order(self):
         self.assertNotIn('function load(src, marker)', self.authoring)
-        for marker in (
-            '/question-authoring-ux-71.js?v=7133',
-            '/teacher-content-studio-71.js?v=7115',
-            '/teacher-content-composer-72.js?v=7200',
-            '/teacher-ux-convergence-72.js?v=7205',
-        ):
+        markers = (
+            'body_assets.append(\'<script defer src="/question-authoring-ux-71.js?v=7133"></script>\')',
+            'body_assets.append(\'<script defer src="/teacher-content-studio-71.js?v=7116"></script>\')',
+            'body_assets.append(\'<script defer data-teacher-tool-panels-710 src="/teacher-content-tool-panels-710.js?v=7110"></script>\')',
+            'body_assets.append(\'<script defer src="/teacher-content-latency-712.js?v=7120"></script>\')',
+            'body_assets.append(\'<script defer src="/teacher-content-composer-72.js?v=7200"></script>\')',
+            'body_assets.append(\'<script defer src="/teacher-ux-convergence-72.js?v=7205"></script>\')',
+        )
+        for marker in markers:
             self.assertIn(marker, self.frontend)
-        self.assertLess(
-            self.frontend.index('/question-authoring-ux-71.js?v=7133'),
-            self.frontend.index('/teacher-content-studio-71.js?v=7115'),
-        )
-        self.assertLess(
-            self.frontend.index('/teacher-content-studio-71.js?v=7115'),
-            self.frontend.index('/teacher-content-composer-72.js?v=7200'),
-        )
-        self.assertLess(
-            self.frontend.index('/teacher-content-composer-72.js?v=7200'),
-            self.frontend.index('/teacher-ux-convergence-72.js?v=7205'),
-        )
+        for before, after in zip(markers, markers[1:]):
+            self.assertLess(self.frontend.index(before), self.frontend.index(after))
 
     def test_release_matrix_records_studio(self):
         self.assertIn('Teacher content authoring studio (7.1/7.2)', self.matrix)
