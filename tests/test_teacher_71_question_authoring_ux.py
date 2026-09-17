@@ -1,4 +1,4 @@
-"""Teacher 7.1/7.2 question-authoring and learner-page UX regressions."""
+"""Teacher 7.1/7.2/7.3 question-authoring and learner-page UX regressions."""
 import unittest
 from pathlib import Path
 
@@ -12,6 +12,7 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
         cls.authoring = ROOT.joinpath("static", "question-authoring-ux-71.js").read_text(encoding="utf-8")
         cls.convergence = ROOT.joinpath("static", "teacher-ux-convergence-72.js").read_text(encoding="utf-8")
         cls.learner = ROOT.joinpath("static", "learner-ui-cleanup-71.js").read_text(encoding="utf-8")
+        cls.learner_css = ROOT.joinpath("static", "learner-layout-stability-73.css").read_text(encoding="utf-8")
         cls.frontend = ROOT.joinpath("pgy_frontend.py").read_text(encoding="utf-8")
         cls.workflow = ROOT.joinpath(".github", "workflows", "phase3-pgy-checks.yml").read_text(encoding="utf-8")
 
@@ -51,26 +52,28 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
         self.assertIn("題目來源", self.authoring)
 
     def test_assessment_surface_is_management_only(self):
-        # Surface ownership moved to the single 7.2 convergence owner so the
-        # question overlay no longer installs a competing observer/render loop.
         self.assertIn("setTextIfChanged(button,'考卷管理')", self.convergence)
         self.assertIn("setTextIfChanged(button,'已建立題目')", self.convergence)
         self.assertIn("hideOnce(button)", self.convergence)
         self.assertIn('新增、AI 出題、圖片題與影片題請從「＋ 建立教學內容」開始', self.convergence)
         self.assertNotIn("function simplifyTabs", self.authoring)
 
-    def test_learner_page_removes_redundant_instruction_blocks(self):
+    def test_learner_page_removes_redundant_instruction_blocks_without_observer(self):
         self.assertIn("const intro = slidesPanel.querySelector(':scope > section.edu-card')", self.learner)
         self.assertIn("learningStart.replaceChildren()", self.learner)
         self.assertIn("learningStart.dataset.ready = '1'", self.learner)
         self.assertIn("header?.querySelector('.edu-kicker')?.remove()", self.learner)
         self.assertIn("if (desc?.tagName === 'P') hide(desc)", self.learner)
-        self.assertIn("if (String(resultCount.textContent || '').trim()) show(resultCount)", self.learner)
+        self.assertNotIn('new MutationObserver', self.learner)
+        self.assertIn('#panel-slides > section.edu-card:first-child', self.learner_css)
+        self.assertIn('#learning-start', self.learner_css)
+        self.assertIn('#course-overview > .edu-card .edu-kicker', self.learner_css)
 
     def test_assets_are_composed_and_syntax_checked(self):
         self.assertIn('/question-authoring-ux-71.js?v=7133', self.frontend)
         self.assertIn('/teacher-ux-convergence-72.js?v=7205', self.frontend)
-        self.assertIn('/learner-ui-cleanup-71.js?v=7131', self.frontend)
+        self.assertIn('/learner-layout-stability-73.css?v=7300', self.frontend)
+        self.assertIn('/learner-ui-cleanup-71.js?v=7132', self.frontend)
         self.assertLess(
             self.frontend.index('/question-authoring-ux-71.js?v=7133'),
             self.frontend.index('/teacher-ux-convergence-72.js?v=7205'),
