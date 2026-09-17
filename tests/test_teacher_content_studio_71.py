@@ -110,6 +110,8 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn('static/teacher-content-studio-71.js', self.matrix)
         self.assertIn('static/teacher-content-composer-72.js', self.matrix)
         self.assertIn('three-step', self.matrix.lower())
+        self.assertIn('繼續出下一題／回題庫', self.matrix)
+        self.assertIn('unified success/warning/error outcomes', self.matrix)
 
     def test_browser_javascript_syntax(self):
         for asset in ('teacher-content-studio-71.js', 'teacher-content-composer-72.js'):
