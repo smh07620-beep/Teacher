@@ -22,7 +22,8 @@ jobs:
           import re
 
           root = Path('.')
-          legacy = (root/'static/system-admin.js').read_text(encoding='utf-8')
+          legacy_path = root/'static/system-admin.js'
+          legacy = legacy_path.read_text(encoding='utf-8')
           owner_paths = sorted((root/'static').glob('admin-*.js')) + [
               root/'static/course-wizard-681.js',
               root/'static/assessment-advanced-74.js',
@@ -30,27 +31,71 @@ jobs:
               root/'static/teacher-content-composer-72.js',
           ]
           fn_re = re.compile(r'(?m)^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(')
-          legacy_fns = set(fn_re.findall(legacy))
-          owners = {}
+          legacy_fns = list(fn_re.finditer(legacy))
+
+          def line_at(offset):
+              return legacy.count('\n', 0, offset) + 1
+
+          def matching_brace(text, brace_pos):
+              depth = 0
+              quote = None
+              esc = False
+              i = brace_pos
+              while i < len(text):
+                  ch = text[i]
+                  if quote:
+                      if esc:
+                          esc = False
+                      elif ch == '\\':
+                          esc = True
+                      elif ch == quote:
+                          quote = None
+                  else:
+                      if ch in "'\"`":
+                          quote = ch
+                      elif ch == '{':
+                          depth += 1
+                      elif ch == '}':
+                          depth -= 1
+                          if depth == 0:
+                              return i
+                  i += 1
+              return -1
+
+          print('=== LEGACY FUNCTION RANGES ===')
+          static_texts = {}
+          for path in sorted((root/'static').glob('*.js')):
+              if path == legacy_path:
+                  continue
+              static_texts[path] = path.read_text(encoding='utf-8', errors='ignore')
+          for m in legacy_fns:
+              name = m.group(1)
+              brace = legacy.find('{', m.end())
+              end = matching_brace(legacy, brace)
+              refs = []
+              for path, text in static_texts.items():
+                  count = len(re.findall(rf'(?<![\w$]){re.escape(name)}(?![\w$])', text))
+                  if count:
+                      refs.append(f'{path.name}:{count}')
+              print(f'{name}: lines {line_at(m.start())}-{line_at(end) if end>=0 else "?"}; external refs={",".join(refs) or "none"}')
+
+          print('\n=== EXTRACTED GLOBAL OWNERS ===')
+          patterns = [
+              re.compile(r'window\.([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?function\b'),
+              re.compile(r'window\.([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>'),
+              re.compile(r'window\.([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?[A-Za-z_$][\w$]*\s*;'),
+          ]
           for path in owner_paths:
               if not path.exists():
                   continue
-              text = path.read_text(encoding='utf-8')
-              names = set(fn_re.findall(text))
-              for name in names:
-                  owners.setdefault(name, []).append(str(path))
-              for name in re.findall(r'window\.([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?function\s*\(', text):
-                  owners.setdefault(name, []).append(str(path))
-          duplicates = sorted(name for name in legacy_fns if name in owners)
-          legacy_only = sorted(name for name in legacy_fns if name not in owners)
-          print('=== SAME-NAME EXTRACTED OWNERS ===')
-          for name in duplicates:
-              print(name, '=>', ', '.join(sorted(set(owners[name]))))
-          print('\n=== LEGACY-ONLY FUNCTIONS ===')
-          for name in legacy_only:
-              print(name)
-          print('\ncounts:', len(legacy_fns), 'legacy functions;', len(duplicates), 'same-name extracted;', len(legacy_only), 'legacy-only')
+              text = path.read_text(encoding='utf-8', errors='ignore')
+              names = set()
+              for pat in patterns:
+                  names.update(pat.findall(text))
+              if names:
+                  print(path.name, '=>', ', '.join(sorted(names)))
 
+          print('\n=== ENDPOINT FRONTEND OCCURRENCES ===')
           sources = '\n'.join(p.read_text(encoding='utf-8', errors='ignore') for p in (root/'static').glob('*.js'))
           for endpoint in (
               '/api/docx-atlas-preview/',
@@ -62,5 +107,5 @@ jobs:
               '/api/security/status',
               '/api/admin/background-jobs/status',
           ):
-              print('frontend occurrences', endpoint, sources.count(endpoint))
+              print(endpoint, sources.count(endpoint))
           PY
