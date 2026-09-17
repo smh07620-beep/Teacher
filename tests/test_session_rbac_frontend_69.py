@@ -54,13 +54,16 @@ class SessionRbacFrontend69Tests(unittest.TestCase):
         self.assertIn("if(!(await ensureSensitive())) return;", source)
         self.assertIn("window.location.href='/api/maintenance/backup'", source)
 
-    def test_sensitive_bridge_is_loaded_after_legacy_admin_bundle(self):
+    def test_shared_admin_runtime_replaces_legacy_bundle_before_sensitive_bridge(self):
+        frontend = ROOT.joinpath("pgy_frontend.py").read_text(encoding="utf-8")
         html = self.source("system.html")
         legacy = '<script defer src="/system-admin.js?v=6502"></script>'
         bridge = '<script defer src="/sensitive-elevation-69.js?v=6900"></script>'
         self.assertIn(legacy, html)
         self.assertIn(bridge, html)
-        self.assertLess(html.index(legacy), html.index(bridge))
+        self.assertIn("admin-runtime-shared.js?v=7400", frontend)
+        self.assertIn("html.replace(legacy_admin_marker, runtime_admin_marker, 1)", frontend)
+        self.assertFalse(ROOT.joinpath("static", "system-admin.js").exists())
 
 
 if __name__ == "__main__":
