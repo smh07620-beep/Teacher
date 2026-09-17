@@ -144,20 +144,6 @@
     }
   }
 
-  function simplifyTabs() {
-    const tabBox = document.getElementById('assessment-681-tabs'); if (!tabBox) return;
-    [...tabBox.querySelectorAll('button')].forEach(button => {
-      const onclick = button.getAttribute('onclick') || '';
-      if (onclick.includes("'exams'")) button.textContent = '考卷管理';
-      else if (onclick.includes("'bank'")) button.textContent = '已建立題目';
-      else { button.classList.add('hidden'); button.setAttribute('aria-hidden','true'); button.tabIndex = -1; }
-    });
-    const title = document.querySelector('#assessment-681 h4');
-    if (title) title.textContent = '📝 考卷與已建立題目';
-    const intro = document.querySelector('#assessment-681 h4 + p');
-    if (intro) intro.textContent = '新增題目、AI 輔助出題、圖片題與影片題統一從「＋ 建立教學內容」開始；此處專注管理既有內容。';
-  }
-
   function install() {
     if (typeof window.assessment681OpenQuestion === 'function' && !window.assessment681OpenQuestion.__teacher71Wrapped) {
       const originalOpen = window.assessment681OpenQuestion;
@@ -182,26 +168,8 @@
       } catch (error) { alert(error.message || '刪除失敗'); }
     };
     wrappedDelete.__teacher71Wrapped = true; window.assessment681Delete = wrappedDelete;
-
-    simplifyTabs();
-    const tabs = document.getElementById('assessment-681-tabs');
-    if (tabs && !tabs.dataset.teacher71Observed) {
-      tabs.dataset.teacher71Observed = '1';
-      new MutationObserver(simplifyTabs).observe(tabs, {childList:true});
-    }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(install, 0), {once:true});
   else setTimeout(install, 0);
-})();
-
-/* Load the unified creation studio and the convergence layer. */
-(function(){
-  'use strict';
-  function load(src, marker){
-    if (document.querySelector(`script[src*="${marker}"]`)) return;
-    const script = document.createElement('script'); script.src = src; script.defer = true; document.head.appendChild(script);
-  }
-  load('/teacher-content-studio-71.js?v=7115','/teacher-content-studio-71.js');
-  load('/teacher-ux-convergence-72.js?v=7202','/teacher-ux-convergence-72.js');
 })();
