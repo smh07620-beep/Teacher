@@ -30,7 +30,7 @@ jobs:
           node --check static/teacher-content-studio-71.js
           node --check static/admin-question-bank.js
           python -m unittest tests.test_rc79_container_runtime_regressions
-          python -m unittest tests.test_teacher_content_container_77 tests.test_management_surface_simplification_78
+          python -m unittest tests.test_content_container_convergence_77 tests.test_management_surface_simplification_78
           git diff --check
       - name: Commit product changes and remove patch helpers
         run: |
