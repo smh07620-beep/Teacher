@@ -170,6 +170,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/teacher-content-studio-71.js?v=7116"></script>')
             if "/teacher-content-tool-panels-710.js" not in html:
                 body_assets.append('<script defer data-teacher-tool-panels-710 src="/teacher-content-tool-panels-710.js?v=7110"></script>')
+            if "/teacher-content-latency-712.js" not in html:
+                body_assets.append('<script defer src="/teacher-content-latency-712.js?v=7120"></script>')
             if "/teacher-content-composer-72.js" not in html:
                 body_assets.append('<script defer src="/teacher-content-composer-72.js?v=7200"></script>')
             if "/teacher-ux-convergence-72.js" not in html:
