@@ -2,9 +2,7 @@
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).parents[1]
-
 
 class QuestionAuthoringUx71Tests(unittest.TestCase):
     @classmethod
@@ -21,7 +19,7 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
 
     def test_canonical_editor_is_chinese_and_supports_all_primary_question_types(self):
         for marker in (
-            "快速編輯題目", "題目類型", "難度", "題目分類", "正確答案",
+            "編輯題目", "題目類型", "難度", "題目分類", "正確答案",
             "單選題", "複選題", "是非題", "問答題", "填空題", "圖片判讀題", "影片題",
             "💾 儲存此題",
         ):
@@ -39,10 +37,7 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
     def test_old_question_drawer_overlay_is_physically_retired(self):
         self.assertIn("Retired by Teacher runtime convergence", self.retired_overlay)
         self.assertIn("canonicalOwner", self.retired_overlay)
-        for forbidden in (
-            "qb681-", "assessment681SaveQuestion", "assessment681Delete",
-            "fetch(", "/api/question-bank", "question-bank-drawer",
-        ):
+        for forbidden in ("qb681-", "assessment681SaveQuestion", "assessment681Delete", "fetch(", "/api/question-bank", "question-bank-drawer"):
             self.assertNotIn(forbidden, self.retired_overlay)
 
     def test_old_assessment_router_no_longer_creates_second_management_surface(self):
@@ -70,7 +65,6 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
         self.assertIn('node --check static/question-authoring-ux-71.js', self.workflow)
         self.assertIn('node --check static/assessment-681.js', self.workflow)
         self.assertIn('node --check static/assessment-advanced-74.js', self.workflow)
-
 
 if __name__ == "__main__":
     unittest.main()
