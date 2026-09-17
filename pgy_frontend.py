@@ -21,14 +21,14 @@ def register_pgy_frontend(app):
             if response.direct_passthrough:
                 response.direct_passthrough = False
 
-            # Teacher 7.1 professional-title badge is presentation-only and can
-            # enhance the signed-in home header without changing /api/auth/me.
+            # Teacher 7.2 unified identity renderer is presentation-only and can
+            # enhance signed-in headers without changing /api/auth/me.
             if path in {"/", "/internal", "/pgy"}:
                 html = response.get_data(as_text=True)
                 if "/home-profile-title-71.js" not in html and "</body>" in html:
                     html = html.replace(
                         "</body>",
-                        '<script defer src="/home-profile-title-71.js?v=7113"></script>\n</body>',
+                        '<script defer src="/home-profile-title-71.js?v=7203"></script>\n</body>',
                         1,
                     )
                     response.set_data(html)
@@ -157,9 +157,11 @@ def register_pgy_frontend(app):
             if "/learner-result-chart.js" not in html:
                 body_assets.append('<script defer src="/learner-result-chart.js?v=7123"></script>')
             if "/question-authoring-ux-71.js" not in html:
-                body_assets.append('<script defer src="/question-authoring-ux-71.js?v=7130"></script>')
+                body_assets.append('<script defer src="/question-authoring-ux-71.js?v=7132"></script>')
             if "/teacher-content-composer-72.js" not in html:
                 body_assets.append('<script defer src="/teacher-content-composer-72.js?v=7200"></script>')
+            if "/teacher-ux-convergence-72.js" not in html:
+                body_assets.append('<script defer src="/teacher-ux-convergence-72.js?v=7202"></script>')
             if "/learner-ui-cleanup-71.js" not in html:
                 body_assets.append('<script defer src="/learner-ui-cleanup-71.js?v=7131"></script>')
             # Final Convergence: load the compatibility facade after all
