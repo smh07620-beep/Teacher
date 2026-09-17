@@ -105,7 +105,7 @@ class TrainingAudienceFrontendTests(unittest.TestCase):
         self.assertIn("priority=['system_admin','education_admin','group_leader','clinical_teacher','auditor','student']", self.home_badge)
         self.assertIn('data-teacher-title-badge', self.home_badge)
         self.assertIn('工號 ${emp}', self.home_badge)
-        self.assertIn('/home-profile-title-71.js?v=7113', self.frontend)
+        self.assertIn('/home-profile-title-71.js?v=7203', self.frontend)
 
     def test_entrypoint_registers_audience_after_migration_runner(self):
         self.assertIn('register_training_audience_71', self.entrypoint)
