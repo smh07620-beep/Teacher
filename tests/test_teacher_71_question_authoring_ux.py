@@ -9,7 +9,6 @@ ROOT = Path(__file__).parents[1]
 class QuestionAuthoringUx71Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.retired_overlay = ROOT.joinpath("static", "question-authoring-ux-71.js").read_text(encoding="utf-8")
         cls.editor = ROOT.joinpath("static", "admin-question-editor-ui.js").read_text(encoding="utf-8")
         cls.actions = ROOT.joinpath("static", "admin-question-actions.js").read_text(encoding="utf-8")
         cls.panel = ROOT.joinpath("static", "admin-question-panel.js").read_text(encoding="utf-8")
@@ -36,14 +35,10 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
         self.assertIn("adminDeleteQuizCategory", self.panel)
         self.assertIn("頁籤內所有題目也會一併刪除", self.panel)
 
-    def test_old_question_drawer_overlay_is_physically_retired(self):
-        self.assertIn("Retired by Teacher runtime convergence", self.retired_overlay)
-        self.assertIn("canonicalOwner", self.retired_overlay)
-        for forbidden in (
-            "qb681-", "assessment681SaveQuestion", "assessment681Delete",
-            "fetch(", "/api/question-bank", "question-bank-drawer",
-        ):
-            self.assertNotIn(forbidden, self.retired_overlay)
+    def test_old_question_drawer_overlay_is_physically_deleted(self):
+        self.assertFalse(ROOT.joinpath("static", "question-authoring-ux-71.js").exists())
+        self.assertNotIn('/question-authoring-ux-71.js', self.frontend)
+        self.assertNotIn('node --check static/question-authoring-ux-71.js', self.workflow)
 
     def test_old_assessment_router_no_longer_creates_second_management_surface(self):
         self.assertIn("Compatibility router after Teacher runtime convergence", self.assessment_compat)
@@ -63,13 +58,13 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
         self.assertIn('#learning-start', self.learner_css)
         self.assertIn('#course-overview > .edu-card .edu-kicker', self.learner_css)
 
-    def test_compatibility_assets_remain_syntax_checked_for_one_cycle(self):
-        self.assertIn('/question-authoring-ux-71.js?v=7133', self.frontend)
+    def test_converged_assets_are_syntax_checked(self):
+        self.assertIn('/assessment-advanced-74.js?v=7400', self.frontend)
         self.assertIn('/learner-layout-stability-73.css?v=7300', self.frontend)
         self.assertIn('/learner-ui-cleanup-71.js?v=7132', self.frontend)
-        self.assertIn('node --check static/question-authoring-ux-71.js', self.workflow)
         self.assertIn('node --check static/assessment-681.js', self.workflow)
         self.assertIn('node --check static/assessment-advanced-74.js', self.workflow)
+        self.assertIn('node --check static/admin-runtime-shared.js', self.workflow)
 
 
 if __name__ == "__main__":
