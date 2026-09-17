@@ -40,9 +40,14 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           p=Path('tests/test_ai_authoring_ux_convergence_76.py')
-          s=p.read_text()
-          s=s.replace("'data-mix-type=\"choice\"','data-mix-type=\"essay\"'", "'data-mix-type=\"${t}\"','[\'choice\',\'單選\',4]','[\'essay\',\'問答\',2]' ")
-          p.write_text(s)
+          lines=p.read_text().splitlines()
+          out=[]
+          for line in lines:
+              if line.strip().startswith("for token in ('mixed_all'"):
+                  out.append("        for token in ('mixed_all','mixed_choice_multi','video_mixed','[自訂題型配置]','data-mix-type=\\\"${t}\\\"',\"['choice','單選',4]\",\"['essay','問答',2]\"):")
+              else:
+                  out.append(line)
+          p.write_text('\n'.join(out)+'\n')
           PY
       - name: JavaScript syntax
         run: |
