@@ -18,7 +18,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
 
     def test_task_first_content_types_are_visible(self):
         for label in (
-            '建立／管理考卷', '一般考題', '圖片判讀題', '影片互動題', 'AI 輔助出題',
+            '考卷管理', '一般考題', '圖片判讀題', '影片互動題', 'AI 輔助出題',
             '上傳教材', '上傳影音教材', '外部影音／連結', '顯微鏡／血球圖譜',
         ):
             self.assertIn(label, self.source)

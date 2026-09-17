@@ -23,11 +23,12 @@ class RcMobileWorkspaceStability75Tests(unittest.TestCase):
 
     def test_ai_authoring_stays_inside_unified_studio(self):
         self.assertIn('data-ai-question-studio="${c.id}"', self.bank)
-        for marker in ('chooseExamForAi', 'mountAiPanel', 'restoreAiPanel', 'data-studio-ai-confirm', 'data-teacher75-ai-host'):
+        for marker in ('renderExamContainer', 'runExamAction', 'mountAiPanel', 'restoreAiPanel', 'data-teacher75-ai-host', 'const deadline=Date.now()+6000'):
             self.assertIn(marker, self.studio)
-        self.assertIn("if(action === 'ai-question') return chooseExamForAi();", self.studio)
+        self.assertIn("if(action==='ai')return mountAiPanel(catId);", self.studio)
+        self.assertNotIn('chooseExamForAi', self.studio)
         self.assertNotIn("assessment681Tab?.('ai')", self.studio)
-        self.assertIn('AI 設定、產生候選題與人工審核都留在同一個建立流程', self.studio)
+        self.assertIn('已鎖定目前考卷；關聯教材會自動帶入', self.studio)
 
     def test_modified_browser_javascript_syntax(self):
         for asset in ('admin-workspace.js', 'admin-question-bank.js', 'teacher-content-studio-71.js'):

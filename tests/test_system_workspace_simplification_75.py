@@ -19,7 +19,10 @@ class SystemWorkspaceSimplification75Tests(unittest.TestCase):
         ux = self.source("static/teacher-ux-convergence-72.js")
         self.assertIn("const canCourse", studio)
         self.assertIn("card('course'", studio)
-        self.assertIn("teacher75OpenCourseWizard", studio)
+        self.assertIn("mountCourseWizardInStudio", studio)
+        self.assertIn("data-course-wizard-host-77", studio)
+        self.assertIn("document.getElementById('course-wizard-681')", studio)
+        self.assertNotIn("teacher75OpenCourseWizard", studio)
         self.assertIn("teacher75OpenCourseWizard", ux)
         self.assertIn("details.className='hidden", ux)
 
