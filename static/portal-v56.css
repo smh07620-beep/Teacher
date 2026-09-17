@@ -8,7 +8,7 @@ html{scroll-behavior:smooth}
 body.portal-v56{margin:0;background:linear-gradient(180deg,#f6fbfe 0,#f1f8fb 50%,#f8fbfd 100%);color:var(--v56-ink);font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif}
 body.portal-v56 a{text-decoration:none;color:inherit}
 body.portal-v56 button,body.portal-v56 input{font:inherit}
-.v56-shell{width:min(1380px,calc(100% - 36px));margin:18px auto 0;background:rgba(255,255,255,.92);border:1px solid #deedf4;border-radius:16px;box-shadow:0 18px 58px rgba(35,86,115,.13);overflow:hidden;backdrop-filter:blur(12px)}
+.v56-shell{width:100%;margin:0;background:transparent;border:0;border-radius:0;box-shadow:none;overflow:visible;backdrop-filter:none}
 .v56-header{height:74px;display:flex;align-items:center;gap:24px;padding:0 24px;border-bottom:1px solid #e3eef3;background:rgba(255,255,255,.97);position:sticky;top:0;z-index:50}
 .v56-brand{display:flex;align-items:center;gap:11px;min-width:max-content}
 .v56-logo{width:44px;height:44px;display:grid;place-items:center;filter:drop-shadow(0 5px 8px rgba(15,106,157,.15))}
