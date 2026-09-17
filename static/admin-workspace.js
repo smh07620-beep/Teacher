@@ -66,7 +66,14 @@
       void Promise.allSettled(jobs);
       return;
     }
-    if (name === 'quiz') await window.renderAdminQuizCategories?.(force);
+    if (name === 'quiz') {
+      // The assessment shell should become usable immediately; the category
+      // renderer already knows how to paint cache/skeleton state while its API
+      // request finishes. Callers that need fresh category DOM explicitly call
+      // renderAdminQuizCategories again after setting their scope.
+      void Promise.resolve().then(() => window.renderAdminQuizCategories?.(force));
+      return;
+    }
     if (name === 'word') await window.renderAdminDocTemplates?.();
     if (name === 'pgy') {
       await Promise.allSettled([
