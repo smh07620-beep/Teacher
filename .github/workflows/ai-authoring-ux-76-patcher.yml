@@ -20,6 +20,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Make patcher idempotent for existing AI mount marker
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/ai_authoring_ux_76_patch.py')
+          s=p.read_text()
+          start=s.index("text = replace_once(\n    text,\n    '<section class=\"rounded-2xl border border-violet-200 bg-white overflow-hidden\">")
+          end=s.index("old_toolbar =", start)
+          replacement="""if 'data-ai-question-studio=\"${c.id}\"' not in text:\n    text = replace_once(\n        text,\n        '<section class=\"rounded-2xl border border-violet-200 bg-white overflow-hidden\">\\n                      <div class=\"bg-gradient-to-r from-violet-800 to-indigo-800 text-white',\n        '<section data-ai-question-studio=\"${c.id}\" class=\"rounded-2xl border border-violet-200 bg-white overflow-hidden\">\\n                      <div class=\"bg-gradient-to-r from-violet-800 to-indigo-800 text-white',\n        'AI studio mount marker',\n    )\n"""
+          p.write_text(s[:start]+replacement+s[end:])
+          PY
       - name: Apply guarded patch
         run: python scripts/ai_authoring_ux_76_patch.py
       - name: JavaScript syntax
