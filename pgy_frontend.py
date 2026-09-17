@@ -60,6 +60,8 @@ def register_pgy_frontend(app):
                 html = html.replace(fresh_shared_core, fresh_shared_core + "\n" + escape_guard, 1)
             html = html.replace('/system-exam.js?v=6602', '/system-exam.js?v=7111')
             html = html.replace('/teaching.js?v=6603', '/teaching.js?v=7111')
+            html = html.replace('/teacher-content-studio-71.js?v=7115', '/teacher-content-studio-71.js?v=7116')
+            html = html.replace('/admin-compat-facade.js?v=7300', '/admin-compat-facade.js?v=7311')
 
             # Final Convergence: current server-rendered pages call the canonical
             # Course Wizard directly. The compatibility facade remains for
@@ -96,8 +98,6 @@ def register_pgy_frontend(app):
             elif "/admin-exam-settings.js" not in html and results_mode_marker in html:
                 html = html.replace(results_mode_marker, results_mode_marker + "\n" + exam_settings_marker, 1)
             elif "/admin-doc-templates.js" not in html and exam_settings_marker in html:
-                html = html.replace(exam_settings_marker, exam_settings_marker + "\n" + doc_templates_marker, 1)
-            elif "/admin-pgy-assessments.js" not in html and doc_templates_marker in html:
                 html = html.replace(doc_templates_marker, doc_templates_marker + "\n" + pgy_assessments_marker, 1)
 
             if "/pgy-workflow.css" not in html:
@@ -167,7 +167,9 @@ def register_pgy_frontend(app):
             if "/question-authoring-ux-71.js" not in html:
                 body_assets.append('<script defer src="/question-authoring-ux-71.js?v=7133"></script>')
             if "/teacher-content-studio-71.js" not in html:
-                body_assets.append('<script defer src="/teacher-content-studio-71.js?v=7115"></script>')
+                body_assets.append('<script defer src="/teacher-content-studio-71.js?v=7116"></script>')
+            if "/teacher-content-tool-panels-710.js" not in html:
+                body_assets.append('<script defer data-teacher-tool-panels-710 src="/teacher-content-tool-panels-710.js?v=7110"></script>')
             if "/teacher-content-composer-72.js" not in html:
                 body_assets.append('<script defer src="/teacher-content-composer-72.js?v=7200"></script>')
             if "/teacher-ux-convergence-72.js" not in html:
@@ -179,7 +181,7 @@ def register_pgy_frontend(app):
             # Final Convergence: load the compatibility facade after all
             # canonical feature owners so legacy globals resolve to them.
             if "/admin-compat-facade.js" not in html:
-                body_assets.append('<script defer src="/admin-compat-facade.js?v=7300"></script>')
+                body_assets.append('<script defer src="/admin-compat-facade.js?v=7311"></script>')
             if head_assets and "</head>" in html:
                 html = html.replace("</head>", "\n".join(head_assets) + "\n</head>", 1)
             if body_assets and "</body>" in html:
