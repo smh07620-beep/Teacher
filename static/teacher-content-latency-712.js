@@ -3,8 +3,10 @@
  * Goals:
  * - warm and de-duplicate the public exam-list request so opening the Studio does
  *   not start a second Render -> Supabase round trip;
- * - use AbortController for the exam-list fetch instead of a Promise.race that
- *   leaves the real request running after the UI already declared a timeout;
+ * - de-duplicate the canonical admin exam-list request as well (the slow
+ *   /api/quiz-categories/admin request seen in production);
+ * - use one AbortController per request instead of a Promise.race that leaves
+ *   the real request running after the UI already declared a timeout;
  * - route the six exam actions without waiting for the legacy force-refresh
  *   path in prepareAssessment77(); the canonical admin renderer may hydrate in
  *   the background while the requested tool waits only for its own panel DOM.
@@ -14,6 +16,8 @@
 
   const NATIVE_FETCH=window.fetch.bind(window);
   const PUBLIC_PATH='/api/quiz-categories';
+  const ADMIN_PATH='/api/quiz-categories/admin';
+  const CATEGORY_PATHS=new Set([PUBLIC_PATH,ADMIN_PATH]);
   const CACHE_TTL_MS=60000;
   const FETCH_TIMEOUT_MS=15000;
   const memoryCache=new Map();
@@ -39,8 +43,8 @@
     }
   }
 
-  function isPublicCategoryList(meta){
-    return !!meta&&meta.method==='GET'&&meta.url.origin===window.location.origin&&meta.url.pathname===PUBLIC_PATH;
+  function isCategoryList(meta){
+    return !!meta&&meta.method==='GET'&&meta.url.origin===window.location.origin&&CATEGORY_PATHS.has(meta.url.pathname);
   }
 
   function invalidatesExamList(meta){
@@ -91,6 +95,7 @@
   }
 
   async function networkEntry(input,init={}){
+    // Never reuse an AbortController: once aborted it remains aborted forever.
     const controller=new AbortController();
     const externalSignal=init?.signal||(typeof Request!=='undefined'&&input instanceof Request?input.signal:null);
     const abortFromCaller=()=>controller.abort(externalSignal?.reason);
@@ -109,7 +114,7 @@
         body
       };
     }catch(error){
-      if(error?.name==='AbortError')throw new Error('考卷清單讀取超過 15 秒，已停止本次請求；可直接重新嘗試。');
+      if(error?.name==='AbortError')throw new Error('考卷清單讀取超過 15 秒，已停止本次請求；主畫面仍可使用，可直接重新嘗試。');
       throw error;
     }finally{
       clearTimeout(timer);
@@ -121,6 +126,8 @@
     const key=cacheKey(meta.url);
     const cached=readCached(key);
     if(cached){
+      // Stale-while-revalidate: show the usable list now, refresh it once in
+      // the background. Repeated callers share the same in-flight request.
       if(!inflight.has(key)){
         const refresh=networkEntry(input,init)
           .then(entry=>{if(entry.status>=200&&entry.status<300)writeCached(key,entry);return entry;})
@@ -153,7 +160,7 @@
         return response;
       });
     }
-    if(isPublicCategoryList(meta))return fetchCategoryList(input,init||{},meta);
+    if(isCategoryList(meta))return fetchCategoryList(input,init||{},meta);
     return NATIVE_FETCH(input,init);
   };
 
@@ -204,9 +211,9 @@
 
     let panel=document.getElementById(`qpanel-${catId}`);
     if(!panel&&typeof window.renderAdminQuizCategories==='function'){
-      // Do not await a force refresh here. openAdminWorkspace already started the
-      // canonical renderer; a second forced request was the source of the old
-      // 2.8 s false timeout and duplicate Supabase round trip.
+      // openAdminWorkspace already started canonical hydration. Do not start a
+      // second forced request and then await it; simply join/cache the normal
+      // renderer and wait for this exam's DOM.
       void Promise.resolve(window.renderAdminQuizCategories(false)).catch(()=>{});
       panel=await waitForPanel(catId,FETCH_TIMEOUT_MS);
     }
@@ -253,6 +260,8 @@
   function warmCurrentScope(){
     const {area,group}=currentScope();
     if(!group)return;
+    // Warm only the public list. Warming the admin list too would cause a
+    // second DB round trip; admin list requests are instead de-duplicated on use.
     const url=`${PUBLIC_PATH}?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`;
     void window.fetch(url,{credentials:'same-origin'}).then(response=>response.text()).catch(()=>{});
   }
