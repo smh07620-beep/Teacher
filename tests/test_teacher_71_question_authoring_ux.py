@@ -1,4 +1,4 @@
-"""Teacher 7.1 question-authoring and learner-page UX regressions."""
+"""Teacher 7.1/7.2 question-authoring and learner-page UX regressions."""
 import unittest
 from pathlib import Path
 
@@ -16,16 +16,8 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
 
     def test_teacher_editor_is_chinese_and_progressively_disclosed(self):
         for marker in (
-            "主題",
-            "子主題",
-            "學習目標",
-            "難度",
-            "認知層次",
-            "來源定位方式",
-            "進階設定（選填）",
-            "正確答案",
-            "文件／PDF 頁碼",
-            "影片時間",
+            "主題", "子主題", "學習目標", "難度", "認知層次", "來源定位方式",
+            "進階設定（選填）", "正確答案", "文件／PDF 頁碼", "影片時間",
         ):
             self.assertIn(marker, self.authoring)
         for english_label in (
@@ -57,9 +49,12 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
         self.assertIn("題目狀態", self.authoring)
         self.assertIn("題目來源", self.authoring)
 
-    def test_primary_tabs_use_teacher_task_language(self):
-        for label in ("考卷管理", "設計題目", "AI 輔助出題", "進階抽題", "題目分析"):
-            self.assertIn(label, self.authoring)
+    def test_assessment_surface_is_management_only(self):
+        self.assertIn("button.textContent = '考卷管理'", self.authoring)
+        self.assertIn("button.textContent = '已建立題目'", self.authoring)
+        self.assertIn("else { button.classList.add('hidden')", self.authoring)
+        self.assertIn('新增題目、AI 輔助出題、圖片題與影片題統一從「＋ 建立教學內容」開始', self.authoring)
+        self.assertIn('/teacher-ux-convergence-72.js?v=7202', self.authoring)
 
     def test_learner_page_removes_redundant_instruction_blocks(self):
         self.assertIn("const intro = slidesPanel.querySelector(':scope > section.edu-card')", self.learner)
