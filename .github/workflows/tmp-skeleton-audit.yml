@@ -32,6 +32,7 @@ jobs:
               'nav = read("static/portal-navigation-73.js")ndead =': 'nav = read("static/portal-navigation-73.js")\nndead =',
               'assert header_removed == 3, ("public management header links", header_removed)': 'assert header_removed == 1, ("public management header links", header_removed)',
               'assert bottom_removed == 2, ("public direct bottom management links", bottom_removed)': 'assert bottom_removed == 1, ("public direct bottom management links", bottom_removed)',
+              "self.source('teacher_app/command_center.py')": "self.source('teacher_app/command_center/routes.py')",
           }
           for old, new in fixes.items():
               assert old in text, old
