@@ -43,12 +43,28 @@
     return !!meta&&meta.method==='GET'&&meta.url.origin===window.location.origin&&meta.url.pathname===PUBLIC_PATH;
   }
 
+  function invalidatesExamList(meta){
+    if(!meta||meta.method==='GET'||meta.url.origin!==window.location.origin)return false;
+    return meta.url.pathname.startsWith('/api/quiz-categories')||meta.url.pathname.startsWith('/api/quiz-questions');
+  }
+
   function cacheKey(url){
     const params=[...url.searchParams.entries()].sort(([a,av],[b,bv])=>a===b?String(av).localeCompare(String(bv)):a.localeCompare(b));
     return `${url.pathname}?${params.map(([k,v])=>`${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')}`;
   }
 
   function storageKey(key){return `teacher712:${key}`;}
+
+  function clearCachedLists(){
+    memoryCache.clear();
+    inflight.clear();
+    try{
+      for(let index=sessionStorage.length-1;index>=0;index--){
+        const key=sessionStorage.key(index);
+        if(key?.startsWith('teacher712:'))sessionStorage.removeItem(key);
+      }
+    }catch(_error){}
+  }
 
   function readCached(key){
     const inMemory=memoryCache.get(key);
@@ -130,6 +146,13 @@
 
   window.fetch=function(input,init){
     const meta=requestMeta(input,init);
+    if(invalidatesExamList(meta)){
+      clearCachedLists();
+      return NATIVE_FETCH(input,init).then(response=>{
+        if(response.ok)clearCachedLists();
+        return response;
+      });
+    }
     if(isPublicCategoryList(meta))return fetchCategoryList(input,init||{},meta);
     return NATIVE_FETCH(input,init);
   };
@@ -237,14 +260,5 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(warmCurrentScope,350),{once:true});
   else setTimeout(warmCurrentScope,350);
 
-  window.TeacherContentLatency712={
-    warm:warmCurrentScope,
-    clear(){
-      memoryCache.clear();
-      for(let index=sessionStorage.length-1;index>=0;index--){
-        const key=sessionStorage.key(index);
-        if(key?.startsWith('teacher712:'))sessionStorage.removeItem(key);
-      }
-    }
-  };
+  window.TeacherContentLatency712={warm:warmCurrentScope,clear:clearCachedLists};
 })();
