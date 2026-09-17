@@ -58,6 +58,27 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn("v('image')", self.composer)
         self.assertIn("v('media-url')", self.composer)
 
+    def test_phase_three_has_readiness_gate_and_post_create_next_actions(self):
+        for marker in (
+            'questionReadiness', '建立前檢查', '資料完整，可建立',
+            '圖片判讀題請上傳題目圖片', '影片題請填入影片網址',
+            '繼續出下一題', '回題庫',
+        ):
+            self.assertIn(marker, self.composer)
+        self.assertIn("add.removeAttribute('onclick')", self.composer)
+        self.assertIn('window.adminAddQuizQuestion?.(catId)', self.composer)
+        self.assertIn('data-composer-submit-question', self.composer)
+
+    def test_phase_three_unifies_material_and_external_completion_feedback(self):
+        for marker in (
+            '教材已送出處理', '教材部分完成', '查看處理進度', '繼續上傳',
+            '外部教材已建立', '外部教材建立失敗', '再新增一筆',
+        ):
+            self.assertIn(marker, self.composer)
+        self.assertIn("result.startsWith('✅')", self.composer)
+        self.assertIn("result.startsWith('⚠️')", self.composer)
+        self.assertIn("result.startsWith('❌')", self.composer)
+
     def test_phase_two_material_and_external_flows_delegate_to_canonical_owners(self):
         for marker in (
             'admin-pptx-upload-input', 'adminUploadMaterials', 'admin-material-title',
