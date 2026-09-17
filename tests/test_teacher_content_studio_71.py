@@ -75,8 +75,11 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn("assessment681Tab('ai')", self.convergence)
         self.assertIn("assessment681Tab('blueprint')", self.convergence)
         self.assertIn("classList.add('hidden')", self.convergence)
-        self.assertIn('進階：一次建立整套課程', self.convergence)
         self.assertIn("details.dataset.teacher72CourseWizard='1'", self.convergence)
+        self.assertIn("details.className='hidden", self.convergence)
+        self.assertIn('teacher75OpenCourseWizard', self.convergence)
+        self.assertIn("card('course'", self.source)
+        self.assertNotIn('進階：一次建立整套課程', self.convergence)
         self.assertNotIn('simplifyTabs', self.authoring)
         self.assertNotIn('new MutationObserver', self.authoring)
 
