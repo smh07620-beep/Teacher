@@ -28,10 +28,15 @@ jobs:
           from pathlib import Path
           path = Path('.github/scripts/final_skeleton_cleanup.py')
           text = path.read_text(encoding='utf-8')
-          old = 'nav = read("static/portal-navigation-73.js")ndead ='
-          new = 'nav = read("static/portal-navigation-73.js")\nndead ='
-          assert old in text
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          fixes = {
+              'nav = read("static/portal-navigation-73.js")ndead =': 'nav = read("static/portal-navigation-73.js")\nndead =',
+              'assert header_removed == 3, ("public management header links", header_removed)': 'assert header_removed == 1, ("public management header links", header_removed)',
+              'assert bottom_removed == 2, ("public direct bottom management links", bottom_removed)': 'assert bottom_removed == 1, ("public direct bottom management links", bottom_removed)',
+          }
+          for old, new in fixes.items():
+              assert old in text, old
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
           PY
           python .github/scripts/final_skeleton_cleanup.py
       - name: Install focused test dependencies
