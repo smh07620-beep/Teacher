@@ -54,10 +54,10 @@
       </section>` : '';
     const materialCards = canMaterial() ? `
       <section>
-        <div class="mb-2"><h4 class="font-black text-slate-900">📚 教材與媒體</h4><p class="text-xs text-slate-500 mt-1">建立教材時先選內容類型，不必先理解後台欄位名稱。</p></div>
+        <div class="mb-2"><h4 class="font-black text-slate-900">📚 教材與媒體</h4><p class="text-xs text-slate-500 mt-1">所有新增動作都從這裡開始；舊版直接上傳表單只保留作為背景執行器。</p></div>
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          ${card('material','📄','上傳教材','PDF、PPTX、DOCX、圖片等檔案，直接進入教材上傳區。','teal')}
-          ${card('video-material','🎥','上傳影音教材','直接切到影音教材設定並選擇檔案。','teal')}
+          ${card('material','📄','上傳教材','PDF、PPTX、DOCX、圖片等檔案，使用統一建立流程。','teal')}
+          ${card('video-material','🎥','上傳影音教材','影片與影音檔也從同一建立入口開始。','teal')}
           ${card('external','🔗','外部影音／連結','建立 YouTube、Shorts 或其他支援的外部教學連結。','sky')}
           ${card('atlas','🔬','顯微鏡／血球圖譜','建立顯微鏡、血球、尿液沉渣或菌落圖譜。','emerald')}
         </div>
@@ -203,6 +203,39 @@
     if(action === 'atlas') return openAtlas();
   }
 
+  function hideMaterialExecutorNode(node){
+    if(!node) return;
+    node.dataset.teacher72MaterialExecutor='1';
+    node.classList.add('hidden');
+    node.setAttribute('aria-hidden','true');
+  }
+
+  function consolidateMaterialWorkspace(){
+    const root=document.getElementById('admin-material-workspace');
+    if(!root) return;
+    if(root.dataset.teacher72MaterialConsolidated!=='1'){
+      root.dataset.teacher72MaterialConsolidated='1';
+      const heading=root.querySelector('h4');
+      const desc=heading?.parentElement?.querySelector('p');
+      if(heading) heading.textContent='📚 教材處理與背景工作';
+      if(desc) desc.textContent='新增教材與外部連結請使用「＋ 建立教學內容」；此區只保留儲存維護與背景處理狀態。';
+      const note=document.createElement('div');
+      note.dataset.teacher72MaterialNote='1';
+      note.className='rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2 text-xs text-teal-800';
+      note.textContent='建立入口已統一：一般教材、影音、外部連結與圖譜請從上方「＋ 建立教學內容」開始。';
+      root.insertBefore(note,root.children[1]||null);
+    }
+
+    const fileInput=document.getElementById('admin-pptx-upload-input');
+    hideMaterialExecutorNode(fileInput?.parentElement);
+    hideMaterialExecutorNode(document.getElementById('admin-material-title')?.closest('.grid'));
+    hideMaterialExecutorNode(document.getElementById('admin-atlas-fields'));
+    hideMaterialExecutorNode(document.getElementById('admin-upload-btn')?.parentElement);
+
+    const external=[...root.querySelectorAll('button')].find(button=>(button.getAttribute('onclick')||'').includes('openExternalMaterialDrawer'));
+    hideMaterialExecutorNode(external);
+  }
+
   function ensureLauncher(){
     if(!canOpen()) return;
     const modal = document.getElementById('admin-modal');
@@ -219,6 +252,7 @@
   function mount(){
     ensureStudio();
     ensureLauncher();
+    consolidateMaterialWorkspace();
     window.teacherContentStudioOpen = openStudio;
     window.teacherContentStudioClose = closeStudio;
   }
@@ -226,7 +260,10 @@
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once:true});
   else mount();
 
-  const observer = new MutationObserver(() => ensureLauncher());
+  const observer = new MutationObserver(() => {
+    ensureLauncher();
+    consolidateMaterialWorkspace();
+  });
   document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('admin-modal');
     if(modal) observer.observe(modal, {childList:true, subtree:true});
