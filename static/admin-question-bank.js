@@ -243,7 +243,7 @@
                       <div id="qlist-${c.id}" class="space-y-2"></div><div id="qsticky-save-${c.id}" class="sticky bottom-2 z-20 mt-3 rounded-xl border border-teal-200 bg-white/95 backdrop-blur shadow-lg p-2.5 flex items-center justify-between gap-3"><span class="text-[11px] text-slate-500">批次編輯後可直接在此儲存，不必回頁首。</span><button onclick="adminSaveExpandedQuestionEdits('${c.id}')" class="text-xs bg-teal-700 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold">💾 儲存全部修改</button></div>
                   </section>
 
-                  <section class="rounded-2xl border border-violet-200 bg-white overflow-hidden">
+                  <section data-ai-question-studio="${c.id}" class="rounded-2xl border border-violet-200 bg-white overflow-hidden">
                       <div class="bg-gradient-to-r from-violet-800 to-indigo-800 text-white px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                           <div><p class="font-black">✨ AI 教材出題工作室</p><p class="text-[11px] text-violet-100 mt-0.5">選教材 → 設定題型與難度 → 產生候選題 → 人工審核 → 匯入正式題庫</p></div>
                           <span id="ai-status-${c.id}" class="text-[11px] px-2.5 py-1 rounded-full bg-white/10 ring-1 ring-white/20">檢查 AI 設定中…</span>

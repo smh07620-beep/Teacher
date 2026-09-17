@@ -82,8 +82,11 @@
     if (name === 'course-materials') {
       await switchSection('content', force);
       document.getElementById('admin-course-workspace')?.classList.remove('hidden');
-      document.getElementById('admin-material-workspace')?.classList.remove('hidden');
+      const materialExecutor = document.getElementById('admin-material-workspace');
+      materialExecutor?.classList.add('hidden');
+      materialExecutor?.setAttribute('aria-hidden', 'true');
       document.getElementById('admin-material-advanced')?.classList.remove('hidden');
+      // RC 7.5 mobile stability: the canonical upload executor stays mounted but is never promoted into the daily workspace.
       // Storage/worker probes remain intentionally deferred until their panels open.
       return;
     }
