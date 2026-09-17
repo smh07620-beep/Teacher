@@ -21,9 +21,6 @@ def register_pgy_frontend(app):
             if response.direct_passthrough:
                 response.direct_passthrough = False
 
-            # Teacher 7.2/7.3 portal presentation is intentionally one-shot:
-            # identity and navigation can enhance public learning pages without
-            # adding another MutationObserver or changing authorization.
             if path in {"/", "/internal", "/pgy"}:
                 html = response.get_data(as_text=True)
                 portal_assets = []
@@ -32,11 +29,7 @@ def register_pgy_frontend(app):
                 if "/portal-navigation-73.js" not in html:
                     portal_assets.append('<script defer src="/portal-navigation-73.js?v=7300"></script>')
                 if portal_assets and "</body>" in html:
-                    html = html.replace(
-                        "</body>",
-                        "\n".join(portal_assets) + "\n</body>",
-                        1,
-                    )
+                    html = html.replace("</body>", "\n".join(portal_assets) + "\n</body>", 1)
                     response.set_data(html)
                     response.content_length = len(response.get_data())
                 return response
@@ -46,11 +39,6 @@ def register_pgy_frontend(app):
 
             html = response.get_data(as_text=True)
 
-            # Teacher 7.1 P0 runtime recovery: production browsers can retain the
-            # old shared-core URL even after a deploy. Rewrite the critical
-            # runtime assets to a fresh cache key and insert an independent
-            # escape guard immediately after shared-core. The guard is only a
-            # compatibility bridge; AppCore.escapeHtml remains canonical.
             stale_shared_core = '<script defer src="/shared-core.js?v=6500"></script>'
             fresh_shared_core = '<script defer src="/shared-core.js?v=7111"></script>'
             escape_guard = '<script defer src="/runtime-escape-guard-7111.js?v=7111"></script>'
@@ -61,23 +49,29 @@ def register_pgy_frontend(app):
             html = html.replace('/system-exam.js?v=6602', '/system-exam.js?v=7111')
             html = html.replace('/teaching.js?v=6603', '/teaching.js?v=7111')
 
-            # Final Convergence: current server-rendered pages call the canonical
-            # Course Wizard directly. The compatibility facade remains for
-            # cached/older HTML that still carries the legacy onclick names.
             html = html.replace('onclick="adminCreateCourseBundle()"', 'onclick="courseWizard681Create()"')
             html = html.replace('onclick="resetCourseWizardForm(true)"', 'onclick="courseWizard681Reset()"')
+
+            # Teacher 7.4 final runtime convergence: the historical
+            # system-admin.js file is retired. Keep the old static HTML marker
+            # as a source-compatibility seam, but rewrite it before the browser
+            # sees the page so no request is ever made for the deleted bundle.
+            legacy_admin_marker = '<script defer src="/system-admin.js?v=6502"></script>'
+            runtime_admin_marker = '<script defer src="/admin-runtime-shared.js?v=7400"></script>'
+            if legacy_admin_marker in html:
+                html = html.replace(legacy_admin_marker, runtime_admin_marker, 1)
+
             head_assets = []
             body_assets = []
 
-            legacy_admin_marker = '<script defer src="/system-admin.js?v=6502"></script>'
             workspace_marker = '<script defer src="/admin-workspace.js?v=7110"></script>'
             results_data_marker = '<script defer src="/admin-results-data.js?v=7117"></script>'
             results_mode_marker = '<script defer src="/admin-results-workspace.js?v=7111"></script>'
             exam_settings_marker = '<script defer src="/admin-exam-settings.js?v=7112"></script>'
             doc_templates_marker = '<script defer src="/admin-doc-templates.js?v=7113"></script>'
             pgy_assessments_marker = '<script defer src="/admin-pgy-assessments.js?v=7114"></script>'
-            if "/admin-workspace.js" not in html and legacy_admin_marker in html:
-                replacement = legacy_admin_marker + "\n" + workspace_marker
+            if "/admin-workspace.js" not in html and runtime_admin_marker in html:
+                replacement = runtime_admin_marker + "\n" + workspace_marker
                 if "/admin-results-data.js" not in html:
                     replacement += "\n" + results_data_marker
                 if "/admin-results-workspace.js" not in html:
@@ -88,7 +82,7 @@ def register_pgy_frontend(app):
                     replacement += "\n" + doc_templates_marker
                 if "/admin-pgy-assessments.js" not in html:
                     replacement += "\n" + pgy_assessments_marker
-                html = html.replace(legacy_admin_marker, replacement, 1)
+                html = html.replace(runtime_admin_marker, replacement, 1)
             elif "/admin-results-data.js" not in html and workspace_marker in html:
                 html = html.replace(workspace_marker, workspace_marker + "\n" + results_data_marker, 1)
             elif "/admin-results-workspace.js" not in html and results_data_marker in html:
@@ -104,80 +98,55 @@ def register_pgy_frontend(app):
                 head_assets.append('<link rel="stylesheet" href="/pgy-workflow.css?v=6500">')
             if "/learner-layout-stability-73.css" not in html:
                 head_assets.append('<link rel="stylesheet" href="/learner-layout-stability-73.css?v=7300">')
-            if "/pgy-workflow.js" not in html:
-                body_assets.append('<script defer src="/pgy-workflow.js?v=6601"></script>')
-            if "/roles-signing-66.js" not in html:
-                body_assets.append('<script defer src="/roles-signing-66.js?v=6601"></script>')
-            if "/exam-integrity.js" not in html:
-                body_assets.append('<script defer src="/exam-integrity.js?v=6604"></script>')
-            if "/review-links-66.js" not in html:
-                body_assets.append('<script defer src="/review-links-66.js?v=6604"></script>')
-            if "/maintenance-64.js" not in html:
-                body_assets.append('<script defer src="/maintenance-64.js?v=6605"></script>')
-            if "/workspace-shell-70.js" not in html:
-                body_assets.append('<script defer src="/workspace-shell-70.js?v=7114"></script>')
-            if "/training-command-center-71.js" not in html:
-                body_assets.append('<script defer src="/training-command-center-71.js?v=7113"></script>')
-            if "/pgy-competency-matrix-71.js" not in html:
-                body_assets.append('<script defer src="/pgy-competency-matrix-71.js?v=7113"></script>')
-            if "/learning-analytics-71.js" not in html:
-                body_assets.append('<script defer src="/learning-analytics-71.js?v=7113"></script>')
-            if "/notification-center-71.js" not in html:
-                body_assets.append('<script defer src="/notification-center-71.js?v=7113"></script>')
-            if "/worker-status-70.js" not in html:
-                body_assets.append('<script defer src="/worker-status-70.js?v=7002"></script>')
-            if "/admin-results.js" not in html:
-                body_assets.append('<script defer src="/admin-results.js?v=7100"></script>')
-            if "/admin-course-material.js" not in html:
-                body_assets.append('<script defer src="/admin-course-material.js?v=7101"></script>')
-            if "/admin-people.js" not in html:
-                body_assets.append('<script defer src="/admin-people.js?v=7113"></script>')
-            if "/admin-announcements.js" not in html:
-                body_assets.append('<script defer src="/admin-announcements.js?v=7103"></script>')
-            if "/admin-system.js" not in html:
-                body_assets.append('<script defer src="/admin-system.js?v=7104"></script>')
-            if "/admin-materials.js" not in html:
-                body_assets.append('<script defer src="/admin-materials.js?v=7105"></script>')
-            if "/admin-question-bank.js" not in html:
-                body_assets.append('<script defer src="/admin-question-bank.js?v=7106"></script>')
-            if "/admin-quiz-materials.js" not in html:
-                body_assets.append('<script defer src="/admin-quiz-materials.js?v=7118"></script>')
-            if "/admin-question-editor-ui.js" not in html:
-                body_assets.append('<script defer src="/admin-question-editor-ui.js?v=7119"></script>')
-            if "/admin-question-actions.js" not in html:
-                body_assets.append('<script defer src="/admin-question-actions.js?v=7120"></script>')
-            if "/admin-jobs.js" not in html:
-                body_assets.append('<script defer src="/admin-jobs.js?v=7107"></script>')
-            if "/admin-material-upload.js" not in html:
-                body_assets.append('<script defer src="/admin-material-upload.js?v=7108"></script>')
-            if "/material-upload-client.js" not in html:
-                body_assets.append('<script defer src="/material-upload-client.js?v=7201"></script>')
-            if "/admin-ai-questions.js" not in html:
-                body_assets.append('<script defer src="/admin-ai-questions.js?v=7109"></script>')
-            if "/admin-question-panel.js" not in html:
-                body_assets.append('<script defer src="/admin-question-panel.js?v=7121"></script>')
-            if "/admin-external-media.js" not in html:
-                body_assets.append('<script defer src="/admin-external-media.js?v=7115"></script>')
-            if "/admin-results-export.js" not in html:
-                body_assets.append('<script defer src="/admin-results-export.js?v=7116"></script>')
-            if "/learner-exam-controls.js" not in html:
-                body_assets.append('<script defer src="/learner-exam-controls.js?v=7122"></script>')
-            if "/learner-result-chart.js" not in html:
-                body_assets.append('<script defer src="/learner-result-chart.js?v=7123"></script>')
-            if "/question-authoring-ux-71.js" not in html:
-                body_assets.append('<script defer src="/question-authoring-ux-71.js?v=7133"></script>')
-            if "/teacher-content-studio-71.js" not in html:
-                body_assets.append('<script defer src="/teacher-content-studio-71.js?v=7115"></script>')
-            if "/teacher-content-composer-72.js" not in html:
-                body_assets.append('<script defer src="/teacher-content-composer-72.js?v=7200"></script>')
-            if "/teacher-ux-convergence-72.js" not in html:
-                body_assets.append('<script defer src="/teacher-ux-convergence-72.js?v=7205"></script>')
-            if "/learner-ui-cleanup-71.js" not in html:
-                body_assets.append('<script defer src="/learner-ui-cleanup-71.js?v=7132"></script>')
-            if "/portal-navigation-73.js" not in html:
-                body_assets.append('<script defer src="/portal-navigation-73.js?v=7300"></script>')
-            # Final Convergence: load the compatibility facade after all
-            # canonical feature owners so legacy globals resolve to them.
+
+            assets = (
+                ("/pgy-workflow.js", '<script defer src="/pgy-workflow.js?v=6601"></script>'),
+                ("/roles-signing-66.js", '<script defer src="/roles-signing-66.js?v=6601"></script>'),
+                ("/exam-integrity.js", '<script defer src="/exam-integrity.js?v=6604"></script>'),
+                ("/review-links-66.js", '<script defer src="/review-links-66.js?v=6604"></script>'),
+                ("/maintenance-64.js", '<script defer src="/maintenance-64.js?v=6605"></script>'),
+                ("/workspace-shell-70.js", '<script defer src="/workspace-shell-70.js?v=7114"></script>'),
+                ("/training-command-center-71.js", '<script defer src="/training-command-center-71.js?v=7113"></script>'),
+                ("/pgy-competency-matrix-71.js", '<script defer src="/pgy-competency-matrix-71.js?v=7113"></script>'),
+                ("/learning-analytics-71.js", '<script defer src="/learning-analytics-71.js?v=7113"></script>'),
+                ("/notification-center-71.js", '<script defer src="/notification-center-71.js?v=7113"></script>'),
+                ("/worker-status-70.js", '<script defer src="/worker-status-70.js?v=7002"></script>'),
+                ("/admin-results.js", '<script defer src="/admin-results.js?v=7100"></script>'),
+                ("/admin-course-material.js", '<script defer src="/admin-course-material.js?v=7101"></script>'),
+                ("/admin-course-material-hub.js", '<script defer src="/admin-course-material-hub.js?v=7400"></script>'),
+                ("/admin-people.js", '<script defer src="/admin-people.js?v=7113"></script>'),
+                ("/admin-people-accounts.js", '<script defer src="/admin-people-accounts.js?v=7400"></script>'),
+                ("/admin-announcements.js", '<script defer src="/admin-announcements.js?v=7103"></script>'),
+                ("/admin-system.js", '<script defer src="/admin-system.js?v=7104"></script>'),
+                ("/admin-system-status.js", '<script defer src="/admin-system-status.js?v=7400"></script>'),
+                ("/admin-materials.js", '<script defer src="/admin-materials.js?v=7105"></script>'),
+                ("/admin-question-card.js", '<script defer src="/admin-question-card.js?v=7400"></script>'),
+                ("/admin-question-presentation.js", '<script defer src="/admin-question-presentation.js?v=7400"></script>'),
+                ("/admin-question-bank.js", '<script defer src="/admin-question-bank.js?v=7106"></script>'),
+                ("/admin-quiz-materials.js", '<script defer src="/admin-quiz-materials.js?v=7118"></script>'),
+                ("/admin-question-editor-ui.js", '<script defer src="/admin-question-editor-ui.js?v=7119"></script>'),
+                ("/admin-question-actions.js", '<script defer src="/admin-question-actions.js?v=7120"></script>'),
+                ("/admin-jobs.js", '<script defer src="/admin-jobs.js?v=7107"></script>'),
+                ("/admin-material-upload.js", '<script defer src="/admin-material-upload.js?v=7108"></script>'),
+                ("/material-upload-client.js", '<script defer src="/material-upload-client.js?v=7201"></script>'),
+                ("/admin-ai-questions.js", '<script defer src="/admin-ai-questions.js?v=7109"></script>'),
+                ("/admin-question-panel.js", '<script defer src="/admin-question-panel.js?v=7121"></script>'),
+                ("/admin-external-media.js", '<script defer src="/admin-external-media.js?v=7115"></script>'),
+                ("/admin-results-export.js", '<script defer src="/admin-results-export.js?v=7116"></script>'),
+                ("/admin-results-docx-fallback.js", '<script defer src="/admin-results-docx-fallback.js?v=7400"></script>'),
+                ("/learner-exam-controls.js", '<script defer src="/learner-exam-controls.js?v=7122"></script>'),
+                ("/learner-result-chart.js", '<script defer src="/learner-result-chart.js?v=7123"></script>'),
+                ("/assessment-advanced-74.js", '<script defer src="/assessment-advanced-74.js?v=7400"></script>'),
+                ("/teacher-content-studio-71.js", '<script defer src="/teacher-content-studio-71.js?v=7115"></script>'),
+                ("/teacher-content-composer-72.js", '<script defer src="/teacher-content-composer-72.js?v=7200"></script>'),
+                ("/teacher-ux-convergence-72.js", '<script defer src="/teacher-ux-convergence-72.js?v=7205"></script>'),
+                ("/learner-ui-cleanup-71.js", '<script defer src="/learner-ui-cleanup-71.js?v=7132"></script>'),
+                ("/portal-navigation-73.js", '<script defer src="/portal-navigation-73.js?v=7300"></script>'),
+            )
+            for marker, tag in assets:
+                if marker not in html:
+                    body_assets.append(tag)
+
             if "/admin-compat-facade.js" not in html:
                 body_assets.append('<script defer src="/admin-compat-facade.js?v=7300"></script>')
             if head_assets and "</head>" in html:
