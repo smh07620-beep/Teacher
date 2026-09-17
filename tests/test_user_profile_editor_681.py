@@ -27,7 +27,7 @@ class UserProfileEditorFrontend681Tests(unittest.TestCase):
         self.assertIn('不會授予教師簽核、組長複核或管理權限', source)
 
     def test_account_list_shows_profile_metadata_and_edit_action(self):
-        source = Path(__file__).parents[1].joinpath('static', 'system-admin.js').read_text(encoding='utf-8')
+        source = Path(__file__).parents[1].joinpath('static', 'admin-people.js').read_text(encoding='utf-8')
         self.assertIn('編輯人員資料', source)
         self.assertIn('u.professionalTitle', source)
         self.assertIn('adminProfileTags(u.responsibilityTags)', source)

@@ -5,13 +5,6 @@
   let authUser=null;
   const header=$('.v56-header'), menu=$('[data-v56-menu]');
   if(menu&&header) menu.addEventListener('click',()=>header.classList.toggle('menu-open'));
-  // Public "教學管理" navigation opens the area catalog.  The catalog keeps
-  // management behind its explicit in-system action, so this never triggers
-  // admin elevation merely to read teaching material.
-  $$('.v575-manage-direct').forEach(link=>link.addEventListener('click',event=>{
-    event.preventDefault();
-    location.assign(location.pathname==='/pgy'?'/pgy':'/internal');
-  }));
   const back=$('.v56-backtop');
   if(back){const sync=()=>back.classList.toggle('show',scrollY>350);addEventListener('scroll',sync,{passive:true});back.addEventListener('click',()=>scrollTo({top:0,behavior:'smooth'}));sync();}
   const search=$('[data-v56-search]');

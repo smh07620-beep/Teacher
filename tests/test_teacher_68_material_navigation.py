@@ -272,10 +272,10 @@ class MaterialNavigationFrontend68Tests(unittest.TestCase):
         self.assertIn("switchLearningModule('materials')", core)
         self.assertIn('onclick="toggleAdminModal(true)"', html)
 
-    def test_portal_navigation_uses_area_catalog_without_group_hardcoding(self):
+    def test_portal_navigation_has_no_dead_public_management_handler(self):
         portal = self.source("static/portal-v56.js")
-        self.assertIn("$$('.v575-manage-direct')", portal)
-        self.assertIn("location.pathname==='/pgy'?'/pgy':'/internal'", portal)
+        self.assertNotIn("$$('.v575-manage-direct')", portal)
+        self.assertNotIn("location.pathname==='/pgy'?'/pgy':'/internal'", portal)
         self.assertIn("['教材','/internal']", portal)
 
     def test_reader_error_contract_is_specific_and_login_is_safe(self):

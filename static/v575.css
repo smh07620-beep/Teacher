@@ -1,11 +1,9 @@
 /* V5.7.5 navigation simplification: homepage has one direct management entry; backend uses direct workspaces. */
 body.portal-v56 .v575-home-nav{gap:8px!important;align-items:center}
-body.portal-v56 .v575-home-nav .v575-manage-direct{
   display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px!important;
   border:1px solid #cfe5ed;border-radius:11px;background:#eef9fb;color:#126b8d!important;
   text-decoration:none;font-weight:900!important;white-space:nowrap;
 }
-body.portal-v56 .v575-home-nav .v575-manage-direct:hover{background:#dff3f7;color:#075c7d!important;border-color:#acd8e5}
 body.v56-system .v575-system-nav{gap:8px!important}
 body.v56-system .v575-system-nav .v575-manage-direct{background:#eef9fb!important;border:1px solid #cfe5ed!important;color:#126b8d!important;font-weight:900!important}
 

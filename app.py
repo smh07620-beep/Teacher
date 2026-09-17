@@ -3439,13 +3439,7 @@ def api_admin_slides():
     return jsonify(canonical_materials.list_admin_materials(sys.modules[__name__]))
 
 
-@app.get("/api/groups")
-def api_list_groups():
-    return jsonify([{"key": k, "label": v} for k, v in GROUPS.items()])
 
-@app.get("/api/training-areas")
-def api_training_areas():
-    return jsonify([{"key": k, "label": v} for k, v in TRAINING_AREAS.items()])
 
 
 @app.get("/uploaded-slides/<folder>/<path:filename>")
@@ -3777,16 +3771,6 @@ def api_list_material_jobs():
     return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS, "workerEnabled": MATERIAL_WORKER_ENABLED, "queueBackend": "material_jobs", "staging": shared_staging_capability(), "workers": ops.get("workers", []), "pendingJobs": ops.get("pendingJobs", 0), "processingJobs": ops.get("processingJobs", 0), "retryJobs": ops.get("retryJobs", 0), "failedJobs": ops.get("failedJobs", 0), "r2Budget": ops.get("r2Budget", {})})
 
 
-@app.get("/api/admin/background-jobs/status")
-def api_background_jobs_status():
-    denied = require_admin()
-    if denied:
-        return denied
-    from media_processing_67 import ffmpeg_capability, libreoffice_capability
-    cleanup_r2_budget_state()
-    data = material_job_operations_status()
-    data.update({"queueBackend": "material_jobs", "ffmpeg": ffmpeg_capability(), "libreOffice": libreoffice_capability(SOFFICE_BIN)})
-    return jsonify(data)
 
 
 @app.get("/api/material-jobs/<job_id>")

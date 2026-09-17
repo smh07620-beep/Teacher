@@ -138,7 +138,7 @@ class R2FreeBudgetGuardTests(unittest.TestCase):
 
     def test_admin_status_is_protected_and_health_is_not_budget_gated(self):
         client = pgy_app.app.test_client()
-        self.assertIn(client.get("/api/admin/background-jobs/status").status_code, {401, 403, 503})
+        self.assertIn(client.get("/api/material-jobs").status_code, {401, 403, 503})
         baseline = client.get("/health").status_code
         with patch.object(appmod, "r2_budget_status", return_value={"level": "emergency"}):
             health = client.get("/health")

@@ -44,6 +44,20 @@ class FinalConvergenceStage3CleanupTests(unittest.TestCase):
         self.assertIn("let pendingExportRecordIndex = null", self.legacy)
         self.assertIn("docx-template-input", self.legacy)
 
+    def test_legacy_bundle_no_longer_owns_migrated_product_ui(self):
+        for forbidden in (
+            "function renderAdminCourseMaterialHub(",
+            "function quizCategoryCardHTML(",
+            "function renderAdminUserAccounts(",
+            "function renderAdminPeople(",
+            "function renderAdminSystemStatus(",
+            "function renderCategoryChart(",
+            "function resetCurrentQuiz(",
+            "function toggleSopModal(",
+            "function adminPayloadFromQuestionEditor(",
+        ):
+            self.assertNotIn(forbidden, self.legacy)
+
     def test_admin_key_remains_session_rbac_compatibility_only(self):
         self.assertIn("async function getAdminKey()", self.legacy)
         self.assertIn("return 'rbac-session';", self.legacy)

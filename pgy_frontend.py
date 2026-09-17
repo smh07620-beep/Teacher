@@ -110,8 +110,6 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/roles-signing-66.js?v=6601"></script>')
             if "/exam-integrity.js" not in html:
                 body_assets.append('<script defer src="/exam-integrity.js?v=6604"></script>')
-            if "/review-links-66.js" not in html:
-                body_assets.append('<script defer src="/review-links-66.js?v=6604"></script>')
             if "/maintenance-64.js" not in html:
                 body_assets.append('<script defer src="/maintenance-64.js?v=6605"></script>')
             if "/workspace-shell-70.js" not in html:
@@ -146,6 +144,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/admin-question-editor-ui.js?v=7119"></script>')
             if "/admin-question-actions.js" not in html:
                 body_assets.append('<script defer src="/admin-question-actions.js?v=7120"></script>')
+            if "/review-links-66.js" not in html:
+                body_assets.append('<script defer src="/review-links-66.js?v=7400"></script>')
             if "/admin-jobs.js" not in html:
                 body_assets.append('<script defer src="/admin-jobs.js?v=7107"></script>')
             if "/admin-material-upload.js" not in html:

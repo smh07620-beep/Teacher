@@ -536,7 +536,7 @@
 
 
     if (
-        typeof adminPayloadFromQuestionEditor
+        typeof window.adminBuildQuestionPayload
         === 'function'
         && !window.__teacher66ReviewPayloadWrapped
     ) {
@@ -544,9 +544,9 @@
             true;
 
         const original =
-            adminPayloadFromQuestionEditor;
+            window.adminBuildQuestionPayload;
 
-        adminPayloadFromQuestionEditor =
+        window.adminBuildQuestionPayload =
             function (qId, catId) {
                 const payload =
                     original.apply(
