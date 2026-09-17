@@ -27,7 +27,9 @@ class RcMobileWorkspaceStability75Tests(unittest.TestCase):
             self.assertIn(marker, self.studio)
         self.assertIn("if(action === 'ai-question') return chooseExamForAi();", self.studio)
         self.assertNotIn("assessment681Tab?.('ai')", self.studio)
-        self.assertIn('AI 設定、產生候選題與人工審核都留在同一個建立流程', self.studio)
+        self.assertIn('教材依考卷關聯自動帶入；常用設定由用途 preset 管理，細節需要時再展開', self.studio)
+        self.assertIn('data-ai-material-summary-77', self.studio)
+        self.assertIn('data-ai-advanced-77', self.studio)
 
     def test_modified_browser_javascript_syntax(self):
         for asset in ('admin-workspace.js', 'admin-question-bank.js', 'teacher-content-studio-71.js'):
