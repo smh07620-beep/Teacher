@@ -14,6 +14,7 @@ class TeacherContentLatency712Tests(unittest.TestCase):
         cls.assessments = ROOT.joinpath('teacher_app/assessments/service.py').read_text(encoding='utf-8')
         cls.backend_perf = ROOT.joinpath('assessment_performance_712.py').read_text(encoding='utf-8')
         cls.entrypoint = ROOT.joinpath('pgy_app.py').read_text(encoding='utf-8')
+        cls.requirements = ROOT.joinpath('requirements.txt').read_text(encoding='utf-8')
 
     def test_latency_guard_is_injected_after_dedicated_panels(self):
         self.assertIn('/teacher-content-latency-712.js?v=7120', self.frontend)
@@ -50,6 +51,22 @@ class TeacherContentLatency712Tests(unittest.TestCase):
         self.assertIn('has_request_context()', self.backend_perf)
         self.assertIn('_teacher712_current_user', self.backend_perf)
         self.assertIn('register_assessment_performance_712', self.entrypoint)
+
+    def test_backend_reuses_postgres_connections_without_cross_request_auth_cache(self):
+        for marker in (
+            'from psycopg_pool import ConnectionPool',
+            'teacher_db_pool_712',
+            'DB_POOL_MAX_SIZE',
+            'pool.getconn',
+            'pool.putconn',
+            'slow db checkout',
+        ):
+            self.assertIn(marker, self.backend_perf)
+        self.assertIn('psycopg[binary,pool]', self.requirements)
+        self.assertIn('repeat that validation only once', self.backend_perf)
+        self.assertNotIn('Flask-Caching', self.backend_perf)
+        self.assertNotIn('Redis', self.backend_perf)
+        self.assertNotIn('JWT', self.backend_perf)
 
     def test_browser_javascript_syntax(self):
         completed = subprocess.run(
