@@ -44,7 +44,7 @@
     // materials and AI provider status are independent secondary hydrations;
     // waiting for them serially caused 2–5 minute apparent freezes on Render.
     const jobs=[
-      Promise.resolve().then(()=>window.loadQuizQuestionsIntoPanel?.(catId)),
+      Promise.resolve().then(()=>window.loadQuizQuestionsIntoPanel(catId)),
       Promise.resolve().then(()=>typeof window.loadAiMaterialOptions==='function' ? window.loadAiMaterialOptions(catId) : null),
       Promise.resolve().then(()=>typeof window.refreshAiQuestionStatus==='function' ? window.refreshAiQuestionStatus(catId) : null)
     ];
