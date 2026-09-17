@@ -3,6 +3,7 @@
 'use strict';
 const C=window.AppCore||{};
 const secureAttemptMap={};
+const secureAttemptLoadMap={};
 function secureDraftKey(catId){return `v630-secure-exam:${currentTrainingArea}:${currentGroupKey}:${catId}`;}
 function readSecureDraft(catId){try{const raw=localStorage.getItem(secureDraftKey(catId));if(!raw)return null;const d=JSON.parse(raw);return d&&d.version===2&&d.attemptId&&Array.isArray(d.answers)?d:null;}catch(_){return null;}}
 function writeSecureDraft(catId=currentCatKey){if(!catId||isSubmittedMap[catId]||!allQuizData[catId]||!secureAttemptMap[catId])return;try{localStorage.setItem(secureDraftKey(catId),JSON.stringify({version:2,attemptId:secureAttemptMap[catId],savedAt:new Date().toISOString(),answers:userAnswersMap[catId]||[],flags:flaggedQuestionsMap[catId]||[]}));}catch(_){}}
@@ -82,19 +83,30 @@ async function secureApi(path,options={}){
 
 ensureDynamicCategoryLoaded=async function(catId){
     if(allQuizData[catId])return;
-    const cats=dynamicCategoriesCache[`${currentTrainingArea}:${currentGroupKey}`]||[],catMeta=cats.find(c=>c.id===catId)||{};
-    let draft=readSecureDraft(catId),attempt=null;
-    if(draft?.attemptId){
-        try{attempt=await secureApi(`/api/exam-attempts/${encodeURIComponent(draft.attemptId)}`);}catch(e){if([404,409,410].includes(e.status)){removeSecureDraft(catId);draft=null;}else throw e;}
+    if(secureAttemptLoadMap[catId])return secureAttemptLoadMap[catId];
+
+    const load=(async()=>{
+        const cats=dynamicCategoriesCache[`${currentTrainingArea}:${currentGroupKey}`]||[],catMeta=cats.find(c=>c.id===catId)||{};
+        let draft=readSecureDraft(catId),attempt=null;
+        if(draft?.attemptId){
+            try{attempt=await secureApi(`/api/exam-attempts/${encodeURIComponent(draft.attemptId)}`);}catch(e){if([404,409,410].includes(e.status)){removeSecureDraft(catId);draft=null;}else throw e;}
+        }
+        if(!attempt){attempt=await secureApi('/api/exam-attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quizCategoryId:catId})});draft=null;}
+        secureAttemptMap[catId]=attempt.attemptId;
+        const normalized=renumberQuestions((attempt.questions||[]).map(normalizePublicQuestion));
+        const passingScore=Math.max(1,Math.min(100,Number(attempt.passingScore||catMeta.passingScore||80))),audience=examAudienceLabel(catMeta),baseDesc=(catMeta.desc||'').trim();
+        allQuizData[catId]={title:attempt.quizTitle||catMeta.title||'考卷',desc:`${baseDesc?baseDesc+' · ':''}適用：${audience} · 本次 ${normalized.length} 題 · 及格 ${passingScore} 分`,courseId:attempt.courseId||catMeta.courseId||'',blindMode:!!catMeta.blindMode,passingScore,drawCount:Math.max(0,Number(catMeta.drawCount||0)),drawRules:catMeta.drawRules||{},audience,questions:normalized};
+        userAnswersMap[catId]=draft?.answers?.length===normalized.length?draft.answers:new Array(normalized.length).fill(null);
+        flaggedQuestionsMap[catId]=draft?.flags?.length===normalized.length?draft.flags:new Array(normalized.length).fill(false);
+        isSubmittedMap[catId]=false;writeSecureDraft(catId);
+    })();
+
+    secureAttemptLoadMap[catId]=load;
+    try{
+        return await load;
+    }finally{
+        if(secureAttemptLoadMap[catId]===load)delete secureAttemptLoadMap[catId];
     }
-    if(!attempt){attempt=await secureApi('/api/exam-attempts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quizCategoryId:catId})});draft=null;}
-    secureAttemptMap[catId]=attempt.attemptId;
-    const normalized=renumberQuestions((attempt.questions||[]).map(normalizePublicQuestion));
-    const passingScore=Math.max(1,Math.min(100,Number(attempt.passingScore||catMeta.passingScore||80))),audience=examAudienceLabel(catMeta),baseDesc=(catMeta.desc||'').trim();
-    allQuizData[catId]={title:attempt.quizTitle||catMeta.title||'考卷',desc:`${baseDesc?baseDesc+' · ':''}適用：${audience} · 本次 ${normalized.length} 題 · 及格 ${passingScore} 分`,courseId:attempt.courseId||catMeta.courseId||'',blindMode:!!catMeta.blindMode,passingScore,drawCount:Math.max(0,Number(catMeta.drawCount||0)),drawRules:catMeta.drawRules||{},audience,questions:normalized};
-    userAnswersMap[catId]=draft?.answers?.length===normalized.length?draft.answers:new Array(normalized.length).fill(null);
-    flaggedQuestionsMap[catId]=draft?.flags?.length===normalized.length?draft.flags:new Array(normalized.length).fill(false);
-    isSubmittedMap[catId]=false;writeSecureDraft(catId);
 };
 
 submitQuiz=async function(){
