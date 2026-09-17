@@ -10,6 +10,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
     def setUpClass(cls):
         cls.source = ROOT.joinpath('static/teacher-content-studio-71.js').read_text(encoding='utf-8')
         cls.composer = ROOT.joinpath('static/teacher-content-composer-72.js').read_text(encoding='utf-8')
+        cls.convergence = ROOT.joinpath('static/teacher-ux-convergence-72.js').read_text(encoding='utf-8')
         cls.authoring = ROOT.joinpath('static/question-authoring-ux-71.js').read_text(encoding='utf-8')
         cls.external = ROOT.joinpath('static/external-material-681.js').read_text(encoding='utf-8')
         cls.frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
@@ -58,6 +59,25 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn("v('image')", self.composer)
         self.assertIn("v('media-url')", self.composer)
 
+    def test_convergence_keeps_question_steps_inside_unified_studio(self):
+        for marker in ('選擇考卷', '編輯題目', '預覽確認', 'data-teacher72-question-preview', 'data-teacher72-question-submit'):
+            self.assertIn(marker, self.convergence)
+        self.assertIn("event.stopImmediatePropagation()", self.convergence)
+        self.assertIn('prepareCanonicalForm', self.convergence)
+        self.assertIn('window.adminAddQuizQuestion?.(state.question.catId)', self.convergence)
+        self.assertNotIn("method:'POST'", self.convergence)
+        self.assertNotIn("method:'PATCH'", self.convergence)
+        self.assertNotIn("method:'DELETE'", self.convergence)
+
+    def test_convergence_reduces_duplicate_authoring_surfaces(self):
+        self.assertIn('考卷管理', self.convergence)
+        self.assertIn('已建立題目', self.convergence)
+        self.assertIn("assessment681Tab('ai')", self.convergence)
+        self.assertIn("assessment681Tab('blueprint')", self.convergence)
+        self.assertIn("classList.add('hidden')", self.convergence)
+        self.assertIn('進階：一次建立整套課程', self.convergence)
+        self.assertIn('data-teacher72-course-wizard', self.convergence)
+
     def test_phase_three_has_readiness_gate_and_post_create_next_actions(self):
         for marker in (
             'questionReadiness', '建立前檢查', '資料完整，可建立',
@@ -98,7 +118,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
 
     def test_authoring_overlay_composes_fresh_studio_asset(self):
         self.assertIn('/teacher-content-studio-71.js?v=7115', self.authoring)
-        self.assertIn('presentation-only companion', self.authoring)
+        self.assertIn('/teacher-ux-convergence-72.js?v=7202', self.authoring)
         self.assertIn('/teacher-content-composer-72.js?v=7200', self.frontend)
         self.assertLess(
             self.frontend.index('/question-authoring-ux-71.js?v=7130'),
@@ -114,7 +134,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn('unified success/warning/error outcomes', self.matrix)
 
     def test_browser_javascript_syntax(self):
-        for asset in ('teacher-content-studio-71.js', 'teacher-content-composer-72.js'):
+        for asset in ('teacher-content-studio-71.js', 'teacher-content-composer-72.js', 'teacher-ux-convergence-72.js'):
             completed = subprocess.run(
                 ['node', '--check', str(ROOT / 'static' / asset)],
                 check=False, capture_output=True, text=True,
