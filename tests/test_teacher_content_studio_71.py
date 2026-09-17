@@ -49,7 +49,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn("String(o.value).startsWith('video_')", self.source)
 
     def test_phase_two_uses_three_step_guided_flow_and_student_preview(self):
-        for marker in ('選擇內容', '編輯內容', '預覽確認', '學生預覽', '即時更新'):
+        for marker in ('選擇內容', '編輯內容', '預覽確認', '學生預覽', '建立前檢查', '資料完整，可建立'):
             self.assertIn(marker, self.composer)
         for marker in ('顯微鏡', '血球', '題目圖片預覽', '教師檢查：正確答案／批改方式'):
             self.assertIn(marker, self.composer)
