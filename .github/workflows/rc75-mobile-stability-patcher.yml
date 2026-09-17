@@ -1,0 +1,44 @@
+name: RC 7.5 mobile stability patcher
+
+on:
+  push:
+    branches:
+      - hotfix/rc-mobile-stability-ai-studio-75
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix/rc-mobile-stability-ai-studio-75
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply guarded owner-level patch
+        run: python scripts/rc75_mobile_stability_patch.py
+      - name: JavaScript syntax
+        run: |
+          node --check static/admin-workspace.js
+          node --check static/admin-question-bank.js
+          node --check static/teacher-content-studio-71.js
+      - name: Focused regressions
+        run: python -m unittest tests.test_rc_mobile_workspace_stability_75 tests.test_teacher_content_studio_71 tests.test_final_ui_runtime_cleanup_72
+      - name: Diff hygiene
+        run: git diff --check
+      - name: Commit product patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add static/admin-workspace.js static/system.html static/admin-question-bank.js static/teacher-content-studio-71.js tests/test_rc_mobile_workspace_stability_75.py
+          git diff --cached --quiet && { echo 'No product changes to commit'; exit 0; }
+          git commit -m 'RC 7.5 stabilize mobile workspace and AI studio'
+          git push origin HEAD:hotfix/rc-mobile-stability-ai-studio-75
