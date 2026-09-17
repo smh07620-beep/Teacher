@@ -16,6 +16,7 @@
   const studioId = 'teacher-content-studio-71';
   const launcherId = 'teacher-content-studio-launcher-71';
   const aiMount = {section:null, placeholder:null, catId:''};
+  const courseMount = {root:null, placeholder:null};
 
   function scope(){
     return {
@@ -45,20 +46,16 @@
   function baseBody(){
     const questionCards = canQuestion() ? `
       <section>
-        <div class="mb-2"><h4 class="font-black text-slate-900">📝 出題與考核</h4><p class="text-xs text-slate-500 mt-1">先選你要完成的工作，系統會直接帶到對應編輯器。</p></div>
+        <div class="mb-2"><h4 class="font-black text-slate-900">📝 出題與考核</h4><p class="text-xs text-slate-500 mt-1">先管理考卷；選定考卷後才建立或管理題目。</p></div>
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          ${card('exam','📋','建立／管理考卷','設定考卷名稱、對象、抽題方式與發布流程。','indigo')}
-          ${card('question','✏️','一般考題','快速建立單選題；題幹、選項、答案與解析優先。','indigo')}
-          ${card('image-question','🖼️','圖片判讀題','直接進入圖片題模式，可上傳顯微鏡、血球或其他判讀圖片。','rose')}
-          ${card('video-question','🎬','影片互動題','直接進入影片題模式，設定媒體網址與暫停作答時間。','violet')}
-          ${card('ai-question','✨','AI 輔助出題','選教材與策略產生草稿，再由教師審核。','violet')}
+          ${card('exam','📋','考卷管理','管理既有考卷、建立新考卷，並在考卷內加入一般題、圖片題、影片題或 AI 題。','indigo')}
         </div>
       </section>` : '';
     const materialCards = canMaterial() ? `
       <section>
-        <div class="mb-2"><h4 class="font-black text-slate-900">📚 教材與媒體</h4><p class="text-xs text-slate-500 mt-1">所有新增動作都從這裡開始；舊版直接上傳表單只保留作為背景執行器。</p></div>
+        <div class="mb-2"><h4 class="font-black text-slate-900">📚 教材與課程</h4><p class="text-xs text-slate-500 mt-1">課程與教材從同一建立流程開始。</p></div>
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          ${canCourse()?card('course','🪄','建立課程','建立課程並視需要串接教材與考卷；進階欄位只在流程中出現。','violet'):''}
+          ${canCourse()?card('course','🪄','建立課程','在此完成課程、教材與考卷串接，不離開建立視窗。','violet'):''}
           ${card('material','📄','上傳教材','PDF、PPTX、DOCX、圖片等檔案，使用統一建立流程。','teal')}
           ${card('video-material','🎥','上傳影音教材','影片與影音檔也從同一建立入口開始。','teal')}
           ${card('external','🔗','外部影音／連結','建立 YouTube、Shorts 或其他支援的外部教學連結。','sky')}
@@ -81,6 +78,13 @@
       if(close){ closeStudio(); return; }
       const action = event.target.closest('[data-studio-action]')?.dataset.studioAction;
       if(action) launch(action);
+      const examOpen = event.target.closest('[data-exam-open]');
+      if(examOpen){ renderExamContainer(examOpen.dataset.examOpen); return; }
+      if(event.target.closest('[data-exam-create-open]')){ renderCreateExam(); return; }
+      if(event.target.closest('[data-exam-create-submit]')){ createExamFromStudio(); return; }
+      const examAction = event.target.closest('[data-exam-action]');
+      if(examAction){ runExamAction(examAction.dataset.examAction, examAction.dataset.examId); return; }
+      if(event.target.closest('[data-course-studio-back]')){ restoreCourseWizard(); renderHome(); return; }
       const back = event.target.closest('[data-studio-back]');
       if(back) renderHome();
       const confirmQuestion = event.target.closest('[data-studio-question-confirm]');
@@ -94,6 +98,7 @@
 
   function renderHome(){
     restoreAiPanel();
+    restoreCourseWizard();
     const body = document.getElementById('teacher-content-studio-body-71');
     if(body) body.innerHTML = baseBody();
   }
@@ -108,6 +113,7 @@
 
   function closeStudio(){
     restoreAiPanel();
+    restoreCourseWizard();
     document.getElementById(studioId)?.classList.add('hidden');
     delete document.body.dataset.teacherContentStudioOpen;
   }
@@ -118,6 +124,125 @@
     const data = await response.json().catch(() => []);
     if(!response.ok) throw new Error(data.error || '無法讀取考卷清單');
     return Array.isArray(data) ? data : [];
+  }
+
+  function timeout77(promise,ms,label){
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error(`${label}逾時，請重新嘗試。`)),ms))
+    ]);
+  }
+
+  function aiPrepare77(host,label,detail=''){
+    if(!host)return;
+    host.innerHTML=`<div class="rounded-2xl border border-violet-100 bg-violet-50 p-5"><div class="text-sm font-black text-violet-800">${esc(label)}</div>${detail?`<div class="mt-1 text-xs text-violet-600">${esc(detail)}</div>`:''}<div class="mt-3 h-1.5 overflow-hidden rounded-full bg-violet-100"><div class="h-full w-1/2 animate-pulse rounded-full bg-violet-500"></div></div></div>`;
+  }
+
+  async function prepareAssessment77(selectedScope=scope(),force=false){
+    if(!document.getElementById('admin-quiz-categories-list')){
+      await timeout77(window.openAdminWorkspace?.('assessment'),2200,'切換考卷管理');
+    }
+    const area=document.getElementById('admin-quiz-area'),group=document.getElementById('admin-quiz-group');
+    if(area)area.value=selectedScope.area;
+    if(group)group.value=selectedScope.group;
+    if(force) await timeout77(window.renderAdminQuizCategories?.(true),2800,'讀取考卷');
+    return selectedScope;
+  }
+
+  async function renderExamManager(message=''){
+    restoreAiPanel(); restoreCourseWizard();
+    const host=document.getElementById('teacher-content-studio-body-71'); if(!host)return;
+    host.innerHTML='<p class="text-sm text-slate-500">正在讀取考卷…</p>';
+    try{
+      const categories=await loadCategories();
+      host.innerHTML=`<div class="mx-auto max-w-4xl"><div class="flex items-start justify-between gap-3 flex-wrap"><div><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 返回建立首頁</button><h4 class="mt-2 text-xl font-black text-slate-950">📋 考卷管理</h4><p class="mt-1 text-xs text-slate-500">先選考卷，再在該考卷內建立與管理題目。</p></div><button type="button" data-exam-create-open class="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-black text-white">＋ 建立考卷</button></div>${message?`<div class="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">${esc(message)}</div>`:''}<div class="mt-5 grid gap-3">${categories.length?categories.map(c=>`<button type="button" data-exam-open="${esc(c.id)}" class="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-indigo-300 hover:shadow-sm"><div class="flex items-center justify-between gap-3"><div class="min-w-0"><div class="font-black text-slate-900">${esc(c.title||c.id)}</div><div class="mt-1 text-xs text-slate-500">${esc(c.desc||'尚未填寫考卷說明')}</div></div><span class="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">題庫 ${Number(c.questionCount||0)} 題</span></div></button>`).join(''):'<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">目前還沒有考卷。請先建立第一份考卷。</div>'}</div></div>`;
+    }catch(error){host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3"><button type="button" data-studio-action="exam" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">重新讀取</button></div></div>`;}
+  }
+
+  function renderCreateExam(){
+    const host=document.getElementById('teacher-content-studio-body-71'); if(!host)return;
+    host.innerHTML=`<div class="mx-auto max-w-2xl"><button type="button" data-studio-action="exam" class="text-sm font-bold text-slate-500">← 返回考卷管理</button><div class="mt-4 rounded-2xl border border-indigo-200 bg-white p-5"><div class="text-xs font-black tracking-wide text-indigo-700">建立新考卷</div><h4 class="mt-1 text-lg font-black text-slate-950">先建立考卷容器</h4><p class="mt-1 text-xs leading-5 text-slate-500">建立後再進入考卷加入一般題、圖片題、影片題或 AI 題。</p><label class="mt-4 block text-sm font-bold text-slate-700">考卷名稱<input id="teacher77-exam-title" maxlength="120" class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="例如：2026 生化組基礎訓練考核"></label><div id="teacher77-exam-create-status" class="mt-2 text-xs text-slate-500"></div><div class="mt-5 flex justify-end gap-2"><button type="button" data-studio-action="exam" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">取消</button><button type="button" data-exam-create-submit class="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-black text-white">建立考卷</button></div></div></div>`;
+    setTimeout(()=>document.getElementById('teacher77-exam-title')?.focus(),50);
+  }
+
+  async function createExamFromStudio(){
+    const title=document.getElementById('teacher77-exam-title')?.value.trim()||'';
+    const status=document.getElementById('teacher77-exam-create-status');
+    if(!title){if(status)status.textContent='請輸入考卷名稱。';return;}
+    const selectedScope=scope();
+    try{
+      if(status)status.textContent='⏳ 建立考卷中…';
+      await prepareAssessment77(selectedScope,false);
+      const titleInput=document.getElementById('admin-new-category-title');
+      if(!titleInput)throw new Error('考卷建立器尚未載入');
+      titleInput.value=title;
+      await timeout77(window.adminCreateQuizCategory?.(),3500,'建立考卷');
+      await renderExamManager(`已建立「${title}」，請進入考卷加入題目。`);
+    }catch(error){if(status)status.textContent=`❌ ${error.message}`;}
+  }
+
+  async function renderExamContainer(catId){
+    if(!catId)return renderExamManager();
+    restoreAiPanel(); restoreCourseWizard();
+    const host=document.getElementById('teacher-content-studio-body-71'); if(!host)return;
+    host.innerHTML='<p class="text-sm text-slate-500">正在開啟考卷…</p>';
+    try{
+      const categories=await loadCategories(); const exam=categories.find(c=>String(c.id)===String(catId));
+      if(!exam)throw new Error('找不到此考卷，可能已被移除。');
+      host.innerHTML=`<div class="mx-auto max-w-4xl"><button type="button" data-studio-action="exam" class="text-sm font-bold text-slate-500">← 返回考卷管理</button><div class="mt-4 rounded-2xl border border-indigo-200 bg-white p-5"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-indigo-700">目前考卷</div><h4 class="mt-1 text-xl font-black text-slate-950">${esc(exam.title||catId)}</h4><p class="mt-1 text-xs text-slate-500">所有出題動作都直接加入這份考卷，不需要再次選考卷。</p></div><span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">題庫 ${Number(exam.questionCount||0)} 題</span></div><div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><button type="button" data-exam-action="question" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-indigo-300"><b>✏️ 一般考題</b><span class="mt-1 block text-xs text-slate-500">手動建立一般題目。</span></button><button type="button" data-exam-action="image" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-rose-300"><b>🖼️ 圖片判讀題</b><span class="mt-1 block text-xs text-slate-500">圖片、顯微鏡或血球判讀。</span></button><button type="button" data-exam-action="video" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-violet-300"><b>🎬 影片互動題</b><span class="mt-1 block text-xs text-slate-500">依影片流程建立互動題。</span></button><button type="button" data-exam-action="ai" data-exam-id="${esc(catId)}" class="rounded-xl border border-violet-200 bg-violet-50/40 p-4 text-left hover:border-violet-400"><b>✨ AI 輔助出題</b><span class="mt-1 block text-xs text-slate-500">自動讀取本考卷關聯教材，再選用途與題數。</span></button><button type="button" data-exam-action="questions" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-teal-300"><b>🧠 題目管理</b><span class="mt-1 block text-xs text-slate-500">搜尋、編輯與批次管理既有題目。</span></button><button type="button" data-exam-action="settings" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-slate-400"><b>⚙️ 考卷設定</b><span class="mt-1 block text-xs text-slate-500">抽題、及格分數、審核與發布。</span></button></div></div></div>`;
+    }catch(error){host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3"><button type="button" data-studio-action="exam" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">返回考卷管理</button></div></div>`;}
+  }
+
+  async function runExamAction(action,catId){
+    if(action==='question')return confirmQuestionPreset('choice',catId);
+    if(action==='image')return confirmQuestionPreset('image',catId);
+    if(action==='video')return confirmQuestionPreset('video',catId);
+    if(action==='ai')return mountAiPanel(catId);
+    const selectedScope=scope();
+    closeStudio();
+    await prepareAssessment77(selectedScope,true);
+    if(action==='settings')return window.adminEditQuizCategory?.(catId);
+    if(action==='questions'){
+      const panel=document.getElementById(`qpanel-${catId}`);
+      if(panel?.classList.contains('hidden'))await window.toggleQuizQuestionsPanel?.(catId);
+      panel?.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+  }
+
+  function restoreCourseWizard(){
+    if(!courseMount.root)return;
+    if(courseMount.placeholder?.isConnected)courseMount.placeholder.replaceWith(courseMount.root);
+    else courseMount.root.remove();
+    courseMount.root=null; courseMount.placeholder=null;
+  }
+
+  async function waitFor77(selector,ms=2600){
+    const started=Date.now();
+    while(Date.now()-started<ms){const node=document.querySelector(selector);if(node)return node;await new Promise(r=>setTimeout(r,80));}
+    return null;
+  }
+
+  async function mountCourseWizardInStudio(){
+    restoreAiPanel(); restoreCourseWizard();
+    const host=document.getElementById('teacher-content-studio-body-71'); if(!host)return;
+    const selectedScope=scope();
+    host.innerHTML='<div class="rounded-2xl border border-violet-100 bg-violet-50 p-5 text-sm text-violet-700">正在準備課程建立流程…</div>';
+    try{
+      let root=document.getElementById('course-wizard-681');
+      if(!root){
+        await timeout77(window.openAdminWorkspace?.('course-materials'),2200,'開啟課程建立器');
+        root=await waitFor77('#course-wizard-681',2400);
+      }
+      if(!root)throw new Error('課程建立器尚未載入，請重新嘗試。');
+      const area=document.getElementById('wizard-area'),group=document.getElementById('wizard-group');
+      if(area)area.value=selectedScope.area;
+      if(group)group.value=selectedScope.group;
+      const placeholder=document.createElement('div');placeholder.hidden=true;placeholder.dataset.teacher77CoursePlaceholder='1';root.before(placeholder);
+      courseMount.root=root;courseMount.placeholder=placeholder;
+      host.innerHTML='<div class="mx-auto max-w-4xl"><div class="mb-4"><button type="button" data-course-studio-back class="text-sm font-bold text-slate-500">← 返回建立首頁</button><h4 class="mt-2 text-xl font-black text-slate-950">🪄 建立課程</h4><p class="mt-1 text-xs text-slate-500">課程、教材與考卷都在這個建立視窗完成，不會跳離目前工作。</p></div><div data-course-wizard-host-77></div></div>';
+      host.querySelector('[data-course-wizard-host-77]')?.appendChild(root);
+      requestAnimationFrame(()=>root.scrollIntoView({behavior:'smooth',block:'start'}));
+    }catch(error){restoreCourseWizard();host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3 flex gap-2"><button type="button" data-studio-action="course" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 重新嘗試</button><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;}
   }
 
 
@@ -179,7 +304,7 @@
   }
 
   function aiPresetPanel76(catId){
-    return `<section data-ai-ux-76 class="mb-4 rounded-2xl border border-violet-200 bg-violet-50/50 p-4"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-violet-700">STEP 2 / 3 · 出題策略</div><h5 class="mt-1 font-black text-slate-900">依教學需求自動混搭題型</h5><p class="mt-1 text-xs text-slate-500">先選用途快速套用；需要精準配置時再使用自訂混搭。</p></div><span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-violet-700 border border-violet-100">產生後進入 STEP 3 審核</span></div><div class="mt-3 grid sm:grid-cols-[1fr_auto] gap-2"><select data-ai-preset-select-76 class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm"><option value="auto">✨ 自動均衡</option><option value="newcomer">🌱 新人基礎考核</option><option value="pgy">🎯 PGY 核心能力</option><option value="case">🧩 案例判讀</option><option value="quality">🛡️ 品質管理／異常處理</option><option value="advanced">🧠 進階組內訓練</option><option value="image">🖼️ 圖片判讀</option><option value="video">🎬 影片互動</option><option value="custom">⚙️ 自訂混搭</option></select><button type="button" data-ai-apply-preset-76 class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">套用</button></div><p data-ai-preset-note-76="${esc(catId)}" class="mt-2 text-[11px] leading-5 text-violet-700">自動均衡：系統依教材重點配置題型。</p><div data-ai-custom-mix-76="${esc(catId)}" class="hidden mt-3 rounded-xl border border-violet-100 bg-white p-3"><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">${[['choice','單選',4],['multi','多選',2],['fill','填空',2],['essay','問答',2]].map(([t,l,n])=>`<label class="text-xs font-bold text-slate-600">${l}<input data-mix-type="${t}" type="number" min="0" max="30" value="${n}" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"></label>`).join('')}</div><button type="button" data-ai-apply-custom-76 class="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">套用自訂題型配置</button><p class="mt-2 text-[10px] leading-4 text-slate-400">自訂混搭會沿用同一支 AI 出題服務，以總題數＋明確配置要求產生候選題；教師仍需在匯入前審核。</p></div></section>`;
+    return `<section data-ai-ux-76 class="mb-4 rounded-2xl border border-violet-200 bg-violet-50/50 p-4"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-violet-700">STEP 2 / 3 · 出題策略</div><h5 class="mt-1 font-black text-slate-900">依教學需求自動混搭題型</h5><p class="mt-1 text-xs text-slate-500">先選用途快速套用；需要精準配置時再使用自訂混搭。</p></div><span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-violet-700 border border-violet-100">產生後進入 STEP 3 審核</span></div><div class="mt-3 grid sm:grid-cols-[1fr_140px_auto] gap-2"><select data-ai-preset-select-76 class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm"><option value="auto">✨ 自動均衡</option><option value="newcomer">🌱 新人基礎考核</option><option value="pgy">🎯 PGY 核心能力</option><option value="case">🧩 案例判讀</option><option value="quality">🛡️ 品質管理／異常處理</option><option value="advanced">🧠 進階組內訓練</option><option value="image">🖼️ 圖片判讀</option><option value="video">🎬 影片互動</option><option value="custom">⚙️ 自訂混搭</option></select><select data-ai-primary-count-77 class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm"><option value="5">5 題</option><option value="10" selected>10 題</option><option value="15">15 題</option><option value="20">20 題</option></select><button type="button" data-ai-apply-preset-76 class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">套用</button></div><p data-ai-preset-note-76="${esc(catId)}" class="mt-2 text-[11px] leading-5 text-violet-700">自動均衡：系統依教材重點配置題型。</p><div data-ai-custom-mix-76="${esc(catId)}" class="hidden mt-3 rounded-xl border border-violet-100 bg-white p-3"><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">${[['choice','單選',4],['multi','多選',2],['fill','填空',2],['essay','問答',2]].map(([t,l,n])=>`<label class="text-xs font-bold text-slate-600">${l}<input data-mix-type="${t}" type="number" min="0" max="30" value="${n}" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"></label>`).join('')}</div><button type="button" data-ai-apply-custom-76 class="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">套用自訂題型配置</button><p class="mt-2 text-[10px] leading-4 text-slate-400">自訂混搭會沿用同一支 AI 出題服務，以總題數＋明確配置要求產生候選題；教師仍需在匯入前審核。</p></div></section>`;
   }
 
   async function waitForAiSection76(catId,timeout=6500){
@@ -192,86 +317,48 @@
     return null;
   }
 
-  async function chooseExamForAi(){
-    restoreAiPanel();
-    const host = document.getElementById('teacher-content-studio-body-71');
-    if(!host) return;
-    host.innerHTML = '<p class="text-sm text-slate-500">正在讀取可使用 AI 出題的考卷…</p>';
-    try{
-      const categories = await loadCategories();
-      if(!categories.length){
-        host.innerHTML = `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h4 class="font-black text-amber-950">目前組別還沒有考卷</h4><p class="mt-1 text-sm text-amber-800">AI 候選題必須先指定要加入的考卷。</p><div class="mt-4 flex gap-2"><button type="button" data-studio-action="exam" class="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-bold text-white">建立考卷</button><button type="button" data-studio-back class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700">返回</button></div></div>`;
-        return;
-      }
-      host.innerHTML = `<div class="mx-auto max-w-2xl"><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 返回內容類型</button><div class="mt-4 rounded-2xl border border-violet-200 bg-white p-5"><div class="text-xs font-black tracking-wide text-violet-700">STEP 1 / 3 · 目標考卷</div><h4 class="mt-1 text-lg font-black text-slate-900">先選擇要加入的考卷</h4><p class="mt-1 text-xs leading-5 text-slate-500">下一步仍留在「建立教學內容」視窗，直接使用既有 AI 教材出題工作室，不會跳離目前流程。</p><label class="block mt-4 text-sm font-bold text-slate-700">加入哪一份考卷？<select id="teacher-studio-ai-exam-75" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">${categories.map(c => `<option value="${esc(c.id)}">${esc(c.title || c.id)}</option>`).join('')}</select></label><div class="mt-5 flex flex-wrap justify-end gap-2"><button type="button" data-studio-back class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">取消</button><button type="button" data-studio-ai-confirm class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">下一步：AI 出題設定</button></div></div></div>`;
-    }catch(error){
-      host.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3"><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;
-    }
-  }
-
   async function mountAiPanel(catId){
-    if(!catId) return;
-    const host = document.getElementById('teacher-content-studio-body-71');
-    if(!host) return;
-    const selectedScope = scope();
-    restoreAiPanel();
-    host.innerHTML = '<div class="rounded-2xl border border-violet-100 bg-violet-50 p-5 text-sm text-violet-700">正在準備 AI 教材出題工作室…</div>';
+    if(!catId)return;
+    const host=document.getElementById('teacher-content-studio-body-71');if(!host)return;
+    const selectedScope=scope(); restoreAiPanel(); restoreCourseWizard();
+    const deadline=Date.now()+6000;
+    const remaining=()=>Math.max(350,deadline-Date.now());
     try{
-      await window.openAdminWorkspace?.('assessment');
-      const area = document.getElementById('admin-quiz-area');
-      const group = document.getElementById('admin-quiz-group');
-      if(area) area.value = selectedScope.area;
-      if(group) group.value = selectedScope.group;
-      await window.renderAdminQuizCategories?.(true);
-      const panel = document.getElementById(`qpanel-${catId}`);
-      if(!panel) throw new Error('找不到指定考卷，請重新選擇。');
-      if(panel.classList.contains('hidden')) await window.toggleQuizQuestionsPanel?.(catId);
-      let section = panel.querySelector('[data-ai-question-studio]');
-      if(!section) section = await waitForAiSection76(catId);
-      if(!section) throw new Error('AI 出題工作室載入逾時，請按「重新嘗試」。');
-      const placeholder = document.createElement('div');
-      placeholder.hidden = true;
-      placeholder.dataset.teacher75AiPlaceholder = String(catId);
-      section.before(placeholder);
-      aiMount.section = section;
-      aiMount.placeholder = placeholder;
-      aiMount.catId = String(catId);
-      host.innerHTML = `<div class="mx-auto max-w-4xl"><div class="mb-4 flex items-start justify-between gap-3"><div><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 重新選擇考卷</button><h4 class="mt-2 text-lg font-black text-slate-950">✨ AI 輔助出題</h4><p class="mt-1 text-xs text-slate-500">AI 設定、產生候選題與人工審核都留在同一個建立流程。</p></div></div>${aiPresetPanel76(catId)}<div data-teacher75-ai-host></div></div>`;
-      host.querySelector('[data-teacher75-ai-host]')?.appendChild(section);
-      const presetSelect=host.querySelector('[data-ai-preset-select-76]');
-      const presetButton=host.querySelector('[data-ai-apply-preset-76]');
-      const customBox=host.querySelector(`[data-ai-custom-mix-76="${CSS.escape(String(catId))}"]`);
-      presetSelect?.addEventListener('change',()=>customBox?.classList.toggle('hidden',presetSelect.value!=='custom'));
-      presetButton?.addEventListener('click',()=>{if(presetSelect?.value==='custom'){customBox?.classList.remove('hidden');return;}applyAiPreset76(catId,presetSelect?.value||'auto');});
-      host.querySelector('[data-ai-apply-custom-76]')?.addEventListener('click',()=>applyAiCustomMix76(catId));
-      applyAiPreset76(catId,'auto');
-      requestAnimationFrame(() => section.scrollIntoView({behavior:'smooth', block:'start'}));
-    }catch(error){
-      restoreAiPanel();
-      host.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message || 'AI 出題工作室開啟失敗')}<div class="mt-3 flex gap-2 flex-wrap"><button type="button" data-ai-retry-76 class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 重新嘗試</button><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;
-      host.querySelector('[data-ai-retry-76]')?.addEventListener('click',()=>mountAiPanel(catId));
-    }
-  }
-
-  async function chooseExamForQuestion(preset){
-    const body = document.getElementById('teacher-content-studio-body-71');
-    if(!body) return;
-    body.innerHTML = '<p class="text-sm text-slate-500">正在讀取目前組別的考卷…</p>';
-    try{
-      const categories = await loadCategories();
-      if(!categories.length){
-        body.innerHTML = `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h4 class="font-black text-amber-950">目前組別還沒有考卷</h4><p class="mt-1 text-sm text-amber-800">先建立考卷，再加入題目。</p><div class="mt-4 flex gap-2"><button type="button" data-studio-action="exam" class="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-bold text-white">建立考卷</button><button type="button" data-studio-back class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700">返回</button></div></div>`;
-        return;
+      let panel=document.getElementById(`qpanel-${catId}`);
+      if(!panel){
+        aiPrepare77(host,'正在切換考卷工作區…','準備目前考卷的題庫與 AI 工具');
+        await timeout77(window.openAdminWorkspace?.('assessment'),Math.min(1800,remaining()),'切換考卷工作區');
+        const area=document.getElementById('admin-quiz-area'),group=document.getElementById('admin-quiz-group');if(area)area.value=selectedScope.area;if(group)group.value=selectedScope.group;
+        aiPrepare77(host,'正在讀取考卷…','同步題庫與關聯教材');
+        await timeout77(window.renderAdminQuizCategories?.(true),Math.min(2300,remaining()),'讀取考卷');
+        panel=document.getElementById(`qpanel-${catId}`);
       }
-      const title = preset === 'image' ? '圖片判讀題' : preset === 'video' ? '影片互動題' : '一般考題';
-      body.innerHTML = `<div class="max-w-2xl mx-auto"><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 返回內容類型</button><div class="mt-4 rounded-2xl border border-slate-200 bg-white p-5"><h4 class="text-lg font-black text-slate-900">${esc(title)} · 選擇考卷</h4><p class="mt-1 text-xs text-slate-500">題目會直接建立在所選考卷的題庫中。</p><label class="block mt-4 text-sm font-bold text-slate-700">加入哪一份考卷？<select id="teacher-studio-question-exam-71" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">${categories.map(c => `<option value="${esc(c.id)}">${esc(c.title || c.id)}</option>`).join('')}</select></label><div class="mt-5 flex flex-wrap justify-end gap-2"><button type="button" data-studio-back class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">取消</button><button type="button" data-studio-question-confirm data-preset="${esc(preset)}" class="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-black text-white">下一步：開始出題</button></div></div></div>`;
-    }catch(error){
-      body.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3"><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;
-    }
+      if(!panel)throw new Error('找不到指定考卷，請返回考卷管理重新選擇。');
+      if(panel.classList.contains('hidden')){
+        aiPrepare77(host,'正在開啟題庫…','載入本考卷題目與關聯教材');
+        await timeout77(window.toggleQuizQuestionsPanel?.(catId),Math.min(2200,remaining()),'開啟題庫');
+      }
+      aiPrepare77(host,'正在掛載 AI 出題工作室…','即將完成');
+      let section=panel.querySelector('[data-ai-question-studio]');
+      if(!section)section=await waitForAiSection76(catId,Math.min(1400,remaining()));
+      if(!section)throw new Error('AI 出題工作室載入逾時，請重新嘗試。');
+      const placeholder=document.createElement('div');placeholder.hidden=true;placeholder.dataset.teacher75AiPlaceholder=String(catId);section.before(placeholder);aiMount.section=section;aiMount.placeholder=placeholder;aiMount.catId=String(catId);
+      host.innerHTML=`<div class="mx-auto max-w-4xl"><div class="mb-4"><button type="button" data-exam-open="${esc(catId)}" class="text-sm font-bold text-slate-500">← 返回考卷</button><h4 class="mt-2 text-xl font-black text-slate-950">✨ AI 輔助出題</h4><p class="mt-1 text-xs text-slate-500">已鎖定目前考卷；關聯教材會自動帶入，教師只需選用途與題數。</p></div>${aiPresetPanel76(catId)}<div data-teacher75-ai-host></div></div>`;
+      host.querySelector('[data-teacher75-ai-host]')?.appendChild(section);
+      const materialBox=section.querySelector(`#ai-materials-${CSS.escape(String(catId))}`);const materialBlock=materialBox?.closest('.lg\:col-span-3');
+      if(materialBlock&&!materialBlock.closest('[data-ai-material-details-77]')){const details=document.createElement('details');details.dataset.aiMaterialDetails77='1';details.className='rounded-xl border border-violet-100 bg-white';const summary=document.createElement('summary');summary.className='cursor-pointer list-none px-3 py-2 text-xs font-bold text-violet-800';summary.textContent='📚 已自動帶入考卷關聯教材（最多 4 份）｜查看／調整';materialBlock.before(details);details.appendChild(summary);details.appendChild(materialBlock);}
+      const controls=['type','difficulty','strategy','focus'].map(name=>document.getElementById(`ai-${name}-${catId}`)?.parentElement).filter(Boolean);
+      if(controls.length&&!section.querySelector('[data-ai-advanced-77]')){const details=document.createElement('details');details.dataset.aiAdvanced77='1';details.className='rounded-xl border border-slate-200 bg-white';details.innerHTML='<summary class="cursor-pointer list-none px-3 py-2 text-xs font-bold text-slate-600">⚙️ 進階設定（題型／難度／策略／重點）</summary><div data-ai-advanced-host-77 class="grid gap-3 p-3 sm:grid-cols-2"></div>';const first=controls[0];first.parentElement?.insertBefore(details,first);const advanced=details.querySelector('[data-ai-advanced-host-77]');controls.forEach(node=>advanced?.appendChild(node));}
+      const presetSelect=host.querySelector('[data-ai-preset-select-76]'),presetButton=host.querySelector('[data-ai-apply-preset-76]'),customBox=host.querySelector(`[data-ai-custom-mix-76="${CSS.escape(String(catId))}"]`),primaryCount=host.querySelector('[data-ai-primary-count-77]');
+      presetSelect?.addEventListener('change',()=>customBox?.classList.toggle('hidden',presetSelect.value!=='custom'));
+      presetButton?.addEventListener('click',()=>{if(presetSelect?.value==='custom'){customBox?.classList.remove('hidden');return;}applyAiPreset76(catId,presetSelect?.value||'auto');if(primaryCount)setAiControl76(catId,'count',primaryCount.value);});
+      primaryCount?.addEventListener('change',()=>setAiControl76(catId,'count',primaryCount.value));
+      host.querySelector('[data-ai-apply-custom-76]')?.addEventListener('click',()=>applyAiCustomMix76(catId));applyAiPreset76(catId,'auto');if(primaryCount)setAiControl76(catId,'count',primaryCount.value);
+    }catch(error){restoreAiPanel();host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message||'AI 出題工作室開啟失敗')}<div class="mt-3 flex gap-2 flex-wrap"><button type="button" data-ai-retry-76 class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 重新嘗試</button><button type="button" data-exam-open="${esc(catId)}" class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回考卷</button></div></div>`;host.querySelector('[data-ai-retry-76]')?.addEventListener('click',()=>mountAiPanel(catId));}
   }
 
-  async function confirmQuestionPreset(preset){
-    const catId = document.getElementById('teacher-studio-question-exam-71')?.value;
+  async function confirmQuestionPreset(preset, catIdOverride=''){
+    const catId = catIdOverride || document.getElementById('teacher-studio-question-exam-71')?.value;
     if(!catId) return;
     const selectedScope = scope();
     closeStudio();
@@ -313,34 +400,12 @@
   }
 
   async function launch(action){
-    if(action === 'question') return chooseExamForQuestion('choice');
-    if(action === 'image-question') return chooseExamForQuestion('image');
-    if(action === 'video-question') return chooseExamForQuestion('video');
-    if(action === 'exam'){
-      closeStudio();
-      await window.openAdminWorkspace?.('assessment');
-      window.assessment681Tab?.('exams');
-      const title = document.getElementById('admin-new-category-title');
-      title?.scrollIntoView({behavior:'smooth', block:'center'});
-      setTimeout(() => title?.focus(), 200);
-      return;
-    }
-    if(action === 'ai-question') return chooseExamForAi();
-    if(action === 'course'){
-      closeStudio();
-      await window.openAdminWorkspace?.('course-materials');
-      window.teacher75OpenCourseWizard?.();
-      return;
-    }
-    if(action === 'material') return openMaterialUpload('standard');
-    if(action === 'video-material') return openMaterialUpload('video');
-    if(action === 'external'){
-      closeStudio();
-      await window.openAdminWorkspace?.('course-materials');
-      await window.openExternalMaterialDrawer?.();
-      return;
-    }
-    if(action === 'atlas') return openAtlas();
+    if(action==='exam')return renderExamManager();
+    if(action==='course')return mountCourseWizardInStudio();
+    if(action==='material')return openMaterialUpload('standard');
+    if(action==='video-material')return openMaterialUpload('video');
+    if(action==='external'){closeStudio();await window.openAdminWorkspace?.('course-materials');await window.openExternalMaterialDrawer?.();return;}
+    if(action==='atlas')return openAtlas();
   }
 
   function hideMaterialExecutorNode(node){
