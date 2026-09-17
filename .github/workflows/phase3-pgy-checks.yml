@@ -59,6 +59,13 @@ jobs:
           node --check static/worker-status-70.js
           node --check static/atlas-70.js
           node --check static/atlas-docx-wizard-70.js
+          node --check static/admin-runtime-shared.js
+          node --check static/admin-course-material-hub.js
+          node --check static/admin-question-card.js
+          node --check static/admin-question-presentation.js
+          node --check static/admin-people-accounts.js
+          node --check static/admin-system-status.js
+          node --check static/admin-results-docx-fallback.js
           node --check static/admin-ai-questions.js
           node --check static/admin-exam-settings.js
           node --check static/admin-doc-templates.js
@@ -72,7 +79,6 @@ jobs:
           node --check static/admin-question-panel.js
           node --check static/learner-exam-controls.js
           node --check static/learner-result-chart.js
-          node --check static/question-authoring-ux-71.js
           node --check static/teacher-content-studio-71.js
           node --check static/teacher-content-composer-72.js
           node --check static/teacher-ux-convergence-72.js
@@ -155,4 +161,6 @@ jobs:
           test -f ARCHITECTURE_ROOT_MIRROR_CLEANUP.md
           grep -q 'Root freeze policy' ARCHITECTURE_ROOT_MIRROR_CLEANUP.md
           test -f ARCHITECTURE_FINAL_CONVERGENCE.md
-          grep -q 'system-admin.js.*legacy compatibility bundle' ARCHITECTURE_FINAL_CONVERGENCE.md
+          grep -q 'system-admin.js.*deleted' ARCHITECTURE_FINAL_CONVERGENCE.md
+          test ! -f static/system-admin.js
+          test ! -f static/question-authoring-ux-71.js
