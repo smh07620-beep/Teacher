@@ -54,8 +54,9 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         for marker in ('顯微鏡', '血球', '題目圖片預覽', '教師檢查：正確答案／批改方式'):
             self.assertIn(marker, self.composer)
         self.assertIn('decorateQuestionEditor', self.composer)
-        self.assertIn('qform-${catId}-image', self.composer)
-        self.assertIn('qform-${catId}-media-url', self.composer)
+        self.assertIn('qform-${catId}-${id}', self.composer)
+        self.assertIn("v('image')", self.composer)
+        self.assertIn("v('media-url')", self.composer)
 
     def test_phase_two_material_and_external_flows_delegate_to_canonical_owners(self):
         for marker in (
@@ -84,7 +85,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         )
 
     def test_release_matrix_records_studio(self):
-        self.assertIn('Teacher content authoring studio (7.1)', self.matrix)
+        self.assertIn('Teacher content authoring studio (7.1/7.2)', self.matrix)
         self.assertIn('static/teacher-content-studio-71.js', self.matrix)
         self.assertIn('static/teacher-content-composer-72.js', self.matrix)
         self.assertIn('three-step', self.matrix.lower())
