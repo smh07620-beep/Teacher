@@ -21,6 +21,19 @@
     return `<div class="grid grid-cols-3 gap-2 mb-5">${labels.map((label,i)=>{const n=i+1,done=n<step,active=n===step;return `<div class="rounded-xl border px-3 py-2 text-center ${active?'border-teal-300 bg-teal-50 text-teal-900':done?'border-emerald-200 bg-emerald-50 text-emerald-800':'border-slate-200 bg-white text-slate-400'}"><div class="text-[10px] font-black">${done?'✓':n}</div><div class="text-xs font-bold mt-0.5">${esc(label)}</div></div>`;}).join('')}</div>`;
   }
 
+  function closeOutcome(){document.getElementById('teacher-content-outcome-72')?.remove();}
+
+  function showOutcome(tone,title,message,actions=[]){
+    closeOutcome();
+    const palette={success:['emerald','✅'],warning:['amber','⚠️'],error:['rose','❌'],info:['sky','ℹ️']}[tone]||['slate','ℹ️'];
+    const root=document.createElement('div');root.id='teacher-content-outcome-72';root.className='fixed inset-0 z-[180] flex items-center justify-center bg-slate-950/45 p-4';
+    root.innerHTML=`<section class="w-full max-w-lg rounded-3xl border border-${palette[0]}-200 bg-white p-5 shadow-2xl"><div class="flex items-start gap-3"><div class="text-3xl">${palette[1]}</div><div class="min-w-0 flex-1"><h4 class="text-lg font-black text-slate-950">${esc(title)}</h4><p class="mt-1 whitespace-pre-line text-sm leading-6 text-slate-600">${esc(message)}</p></div></div><div data-outcome-actions class="mt-5 flex flex-wrap justify-end gap-2"></div></section>`;
+    const bar=root.querySelector('[data-outcome-actions]');
+    const list=actions.length?actions:[{label:'知道了',primary:true}];
+    list.forEach(action=>{const btn=document.createElement('button');btn.type='button';btn.className=action.primary?'rounded-xl bg-teal-700 px-4 py-2 text-sm font-black text-white hover:bg-teal-600':'rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50';btn.textContent=action.label;btn.addEventListener('click',async()=>{closeOutcome();if(typeof action.run==='function')await action.run();});bar.appendChild(btn);});
+    root.addEventListener('click',event=>{if(event.target===root)closeOutcome();});document.body.appendChild(root);
+  }
+
   function setSelect(select,wanted){
     if(!select)return false;
     const options=[...select.options];
@@ -62,7 +75,7 @@
     const v=id=>document.getElementById(`qform-${catId}-${id}`);
     const raw=v('type')?.value||'choice';
     const type=raw.startsWith('video_')?raw.slice(6):raw;
-    const question=v('question')?.value.trim()||'尚未輸入題幹';
+    const question=v('question')?.value.trim()||'';
     const options=[0,1,2,3].map(i=>v(`opt${i}`)?.value.trim()||'').filter(Boolean);
     let answer='';
     if(['choice','image'].includes(type)||raw==='video_choice')answer=String.fromCharCode(65+Number(v('correct')?.value||0));
@@ -70,13 +83,26 @@
     else if(type==='true_false')answer=Number(v('truefalse-correct')?.value||0)===0?'是':'否';
     else if(type==='fill')answer=v('fill-answers')?.value||'未設定';
     else answer='人工批改';
-    return {raw,type,question,options,answer,mediaUrl:v('media-url')?.value.trim()||'',pauseAt:Number(v('pause-at')?.value||0),imageFile:v('image')?.files?.[0]||null};
+    return {raw,type,question,options,answer,mediaUrl:v('media-url')?.value.trim()||'',pauseAt:Number(v('pause-at')?.value||0),imageFile:v('image')?.files?.[0]||null,fillAnswers:v('fill-answers')?.value.trim()||'',multiCorrect:[0,1,2,3].filter(i=>v(`multi${i}`)?.checked)};
+  }
+
+  function questionReadiness(catId){
+    const data=questionPreviewData(catId),issues=[];
+    if(!data.question)issues.push('請輸入題幹');
+    if(['choice','multi','image'].includes(data.type)||['video_choice','video_multi'].includes(data.raw)){
+      if(data.options.length<2)issues.push('至少填寫 2 個選項');
+    }
+    if(data.type==='multi'&&!data.multiCorrect.length)issues.push('請設定至少 1 個正確答案');
+    if(data.type==='fill'&&!data.fillAnswers)issues.push('請設定可接受答案');
+    if(data.type==='image'&&!data.imageFile)issues.push('圖片判讀題請上傳題目圖片');
+    if(data.raw.startsWith('video_')&&!data.mediaUrl)issues.push('影片題請填入影片網址');
+    return {ok:issues.length===0,issues,data};
   }
 
   function paintQuestionPreview(catId,preview){
     if(!preview)return;
-    const data=questionPreviewData(catId);
-    preview.querySelector('[data-preview-question]').textContent=data.question;
+    const ready=questionReadiness(catId),data=ready.data;
+    preview.querySelector('[data-preview-question]').textContent=data.question||'尚未輸入題幹';
     const media=preview.querySelector('[data-preview-media]');
     media.innerHTML='';
     if(data.imageFile){const img=document.createElement('img');img.src=URL.createObjectURL(data.imageFile);img.alt='題目圖片預覽';img.className='mb-3 max-h-72 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain';media.appendChild(img);}
@@ -88,6 +114,25 @@
     else if(data.type==='fill')answers.innerHTML='<div class="rounded-xl border border-dashed bg-white p-3 text-sm text-slate-400">學員輸入答案…</div>';
     else answers.innerHTML='<div class="rounded-xl border border-dashed bg-white p-3 text-sm text-slate-400">學員輸入作答內容…</div>';
     preview.querySelector('[data-preview-answer]').textContent=`教師檢查：正確答案／批改方式 → ${data.answer}`;
+    const badge=preview.querySelector('[data-preview-readiness]');
+    if(badge){badge.textContent=ready.ok?'資料完整，可建立':`請補齊 ${ready.issues.length} 項`;badge.className=`rounded-full px-2 py-1 text-[10px] font-bold ${ready.ok?'bg-emerald-100 text-emerald-700':'bg-amber-100 text-amber-800'}`;badge.title=ready.issues.join('、');}
+    const add=[...preview.parentElement.querySelectorAll('button')].find(b=>b.dataset.composerSubmitQuestion==='1');if(add)add.disabled=!ready.ok;
+  }
+
+  async function submitQuestion(catId,preset,imageKind){
+    const ready=questionReadiness(catId);
+    if(!ready.ok){showOutcome('warning','建立前檢查尚未完成',ready.issues.join('\n'),[{label:'返回補資料',primary:true,run:()=>document.getElementById(`qform-${catId}-question`)?.focus()}]);return;}
+    const question=document.getElementById(`qform-${catId}-question`),before=question?.value.trim()||'';
+    const button=document.querySelector(`[data-composer-submit-question][data-cat-id="${CSS.escape(String(catId))}"]`);if(button){button.disabled=true;button.textContent='⏳ 建立中…';}
+    try{
+      await window.adminAddQuizQuestion?.(catId);
+      const succeeded=!!before&&!(question?.value.trim());
+      if(!succeeded)return;
+      showOutcome('success','題目已建立','題目已加入這份考卷的題庫。接下來可以繼續出題，或回到題庫檢查排序與啟用狀態。',[
+        {label:'回題庫',run:()=>document.getElementById(`qlist-${catId}`)?.scrollIntoView({behavior:'smooth',block:'start'})},
+        {label:'繼續出下一題',primary:true,run:()=>{const tag=document.getElementById(`qform-${catId}-tag`);if(imageKind&&tag&&!tag.value)tag.value=imageKind;paintQuestionPreview(catId,document.querySelector('[data-composer-question-preview]'));question?.scrollIntoView({behavior:'smooth',block:'center'});question?.focus();}}
+      ]);
+    }finally{if(button){button.textContent='✅ 建立題目';button.disabled=!questionReadiness(catId).ok;}}
   }
 
   function decorateQuestionEditor(catId,preset,imageKind){
@@ -98,9 +143,9 @@
     const existing=host.querySelector('[data-composer-question-guide]');if(existing){paintQuestionPreview(catId,host.querySelector('[data-composer-question-preview]'));return;}
     const guide=document.createElement('div');guide.dataset.composerQuestionGuide='1';guide.className='rounded-2xl border border-teal-200 bg-teal-50/70 p-3';guide.innerHTML=`${stepper(2,['選擇考卷','編輯題目','學生預覽'])}<div class="flex flex-wrap items-center justify-between gap-2"><div><div class="text-sm font-black text-teal-950">教師出題導引</div><div class="text-xs text-teal-700 mt-0.5">必要欄位先完成；右下方會即時呈現學生看到的題目。</div></div><span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-teal-700">${preset==='image'?'圖片判讀題':preset==='video'?'影片互動題':'一般考題'}</span></div>`;
     host.prepend(guide);
-    const preview=document.createElement('div');preview.dataset.composerQuestionPreview='1';preview.className='rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4';preview.innerHTML=`<div class="mb-3 flex items-center justify-between"><div><div class="text-sm font-black text-indigo-950">③ 學生預覽</div><div class="text-[11px] text-indigo-700">只模擬學員看到的內容，不會顯示答案。</div></div><span class="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-indigo-700">即時更新</span></div><div data-preview-media></div><div data-preview-question class="font-black text-slate-900"></div><div data-preview-options class="mt-3 space-y-2"></div><div data-preview-answer class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-800"></div>`;
+    const preview=document.createElement('div');preview.dataset.composerQuestionPreview='1';preview.className='rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4';preview.innerHTML=`<div class="mb-3 flex items-center justify-between"><div><div class="text-sm font-black text-indigo-950">③ 學生預覽</div><div class="text-[11px] text-indigo-700">只模擬學員看到的內容，不會顯示答案。</div></div><span data-preview-readiness class="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800">建立前檢查</span></div><div data-preview-media></div><div data-preview-question class="font-black text-slate-900"></div><div data-preview-options class="mt-3 space-y-2"></div><div data-preview-answer class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-800"></div>`;
     const add=[...host.querySelectorAll('button')].find(b=>b.getAttribute('onclick')?.includes('adminAddQuizQuestion'));
-    if(add){add.textContent='✅ 建立題目';add.classList.add('w-full','sm:w-auto');host.insertBefore(preview,add);}else host.appendChild(preview);
+    if(add){add.textContent='✅ 建立題目';add.classList.add('w-full','sm:w-auto');add.dataset.composerSubmitQuestion='1';add.dataset.catId=String(catId);add.removeAttribute('onclick');add.addEventListener('click',()=>submitQuestion(catId,preset,imageKind));host.insertBefore(preview,add);}else host.appendChild(preview);
     const refresh=()=>paintQuestionPreview(catId,preview);
     host.addEventListener('input',refresh);host.addEventListener('change',refresh);refresh();
     question.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>question.focus(),250);
@@ -135,12 +180,12 @@
   }
 
   function pickMaterialFiles(){
-    const input=document.getElementById('admin-pptx-upload-input');if(!input)return alert('教材上傳元件尚未載入');
+    const input=document.getElementById('admin-pptx-upload-input');if(!input)return showOutcome('error','無法選擇教材','教材上傳元件尚未載入，請重新開啟後台後再試。');
     input.value='';input.addEventListener('change',()=>{state.material.files=[...(input.files||[])].map(f=>({name:f.name,size:f.size,type:f.type}));const label=document.getElementById('composer-material-files-72');if(label)label.textContent=state.material.files.length?`${state.material.files.length} 份｜${state.material.files.map(f=>f.name).join('、')}`:'尚未選擇';},{once:true});input.click();
   }
 
   function renderMaterialPreview(){
-    if(!state.material?.files?.length)return alert('請先選擇教材檔案');
+    if(!state.material?.files?.length){showOutcome('warning','資料尚未完成','請先選擇至少一份教材檔案。');return;}
     state.material.title=document.getElementById('composer-material-title-72')?.value.trim()||'';state.material.desc=document.getElementById('composer-material-desc-72')?.value.trim()||'';state.material.courseId=document.getElementById('composer-material-course-72')?.value||'';state.material.courseLabel=document.getElementById('composer-material-course-72')?.selectedOptions?.[0]?.textContent||'未指定課程';
     const total=state.material.files.reduce((n,f)=>n+f.size,0),host=body();
     host.innerHTML=`${stepper(3)}<div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-5"><h4 class="text-lg font-black">確認教材</h4><div class="mt-4 rounded-2xl bg-slate-50 p-4"><div class="text-3xl">${state.material.kind==='video'?'🎥':'📄'}</div><div class="mt-2 font-black">${esc(state.material.title||state.material.files[0].name)}</div><div class="mt-1 text-xs text-slate-500">${state.material.files.length} 份檔案｜${formatSize(total)}｜${esc(state.material.courseLabel)}</div><ul class="mt-3 space-y-1 text-xs text-slate-600">${state.material.files.map(f=>`<li>• ${esc(f.name)} <span class="text-slate-400">${formatSize(f.size)}</span></li>`).join('')}</ul>${state.material.desc?`<p class="mt-3 text-sm text-slate-600">${esc(state.material.desc)}</p>`:''}</div><div class="mt-5 flex justify-between gap-2"><button data-composer-material-edit class="rounded-xl border px-4 py-2 text-sm font-bold">← 返回修改</button><button data-composer-material-submit class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-black text-white">確認並開始上傳</button></div></div>`;
@@ -152,7 +197,14 @@
     const area=document.getElementById('admin-material-area'),group=document.getElementById('admin-material-group');if(area)area.value=draft.area;if(group)group.value=draft.group;
     await Promise.resolve(window.refreshAdminMaterialCourses?.());
     const title=document.getElementById('admin-material-title'),desc=document.getElementById('admin-material-desc'),course=document.getElementById('admin-material-course'),type=document.getElementById('admin-material-type');if(title)title.value=draft.title;if(desc)desc.value=draft.desc;if(course&&[...course.options].some(o=>o.value===draft.courseId))course.value=draft.courseId;setSelect(type,draft.kind==='video'?'video-material':'standard');window.updateAdminMaterialTypeFields?.();
-    const status=document.getElementById('admin-upload-status');status?.scrollIntoView({behavior:'smooth',block:'center'});await window.adminUploadMaterials?.();
+    const status=document.getElementById('admin-upload-status');status?.scrollIntoView({behavior:'smooth',block:'center'});
+    await window.adminUploadMaterials?.();
+    const result=(status?.textContent||'').trim();
+    const again=()=>{window.teacherContentStudioOpen?.();renderMaterialEdit(draft.kind);};
+    const jobs=async()=>{await window.renderMaterialJobs?.(true);document.getElementById('admin-material-jobs')?.scrollIntoView({behavior:'smooth',block:'start'});};
+    if(result.startsWith('✅'))showOutcome('success','教材已送出處理',result,[{label:'查看處理進度',run:jobs},{label:'繼續上傳',primary:true,run:again}]);
+    else if(result.startsWith('⚠️'))showOutcome('warning','教材部分完成',result,[{label:'查看處理進度',run:jobs},{label:'繼續上傳',primary:true,run:again}]);
+    else if(result.startsWith('❌'))showOutcome('error','教材上傳失敗',result,[{label:'重新整理後再試',primary:true,run:again}]);
   }
 
   function renderExternalEdit(){
@@ -163,7 +215,8 @@
   function externalProvider(url){try{const u=new URL(url);if(u.protocol!=='https:')return {ok:false,label:'僅接受 HTTPS'};const host=u.hostname.toLowerCase();if(host.includes('youtube.com')||host==='youtu.be')return {ok:true,label:u.pathname.includes('/shorts/')?'YouTube Shorts':'YouTube'};if(/\.(mp4|webm)$/i.test(u.pathname))return {ok:true,label:'HTTPS 影音檔'};return {ok:true,label:'外部 HTTPS 連結'};}catch(_){return {ok:false,label:'網址格式不正確'};}}
 
   function renderExternalPreview(){
-    const title=document.getElementById('composer-external-title-72')?.value.trim()||'',url=document.getElementById('composer-external-url-72')?.value.trim()||'',desc=document.getElementById('composer-external-desc-72')?.value.trim()||'',course=document.getElementById('composer-external-course-72');const provider=externalProvider(url);if(!title)return alert('請輸入教材名稱');if(!provider.ok)return alert(provider.label);
+    const title=document.getElementById('composer-external-title-72')?.value.trim()||'',url=document.getElementById('composer-external-url-72')?.value.trim()||'',desc=document.getElementById('composer-external-desc-72')?.value.trim()||'',course=document.getElementById('composer-external-course-72');const provider=externalProvider(url);
+    if(!title){showOutcome('warning','資料尚未完成','請輸入教材名稱。');return;}if(!provider.ok){showOutcome('warning','網址無法使用',provider.label);return;}
     state.external={...state.external,title,url,desc,courseId:course?.value||'',courseLabel:course?.selectedOptions?.[0]?.textContent||'未指定課程',provider:provider.label};const host=body();
     host.innerHTML=`${stepper(3)}<div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-5"><h4 class="text-lg font-black">確認外部教材</h4><div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4"><div class="text-xs font-black text-sky-700">${esc(state.external.provider)}</div><div class="mt-2 font-black text-slate-900">${esc(title)}</div><div class="mt-1 break-all text-xs text-slate-500">${esc(url)}</div><div class="mt-2 text-xs text-slate-600">課程：${esc(state.external.courseLabel)}</div>${desc?`<p class="mt-3 text-sm text-slate-600">${esc(desc)}</p>`:''}</div><p class="mt-3 text-[11px] text-slate-500">此處不直接嵌入第三方內容；建立時仍由既有後端驗證 provider 與網址。</p><div class="mt-5 flex justify-between gap-2"><button data-composer-external-edit class="rounded-xl border px-4 py-2 text-sm font-bold">← 返回修改</button><button data-composer-external-submit class="rounded-xl bg-sky-700 px-4 py-2 text-sm font-black text-white">確認並建立</button></div></div>`;
   }
@@ -175,6 +228,10 @@
     const opener=window.openExternalMaterialCreateDrawer||window.openExternalMaterialDrawer;await opener?.();
     const set=(id,value)=>{const el=document.getElementById(id);if(el)el.value=value||'';};set('external-material-title',draft.title);set('external-material-description',draft.desc);set('external-material-url',draft.url);set('external-material-area',draft.area);set('external-material-group',draft.group);set('external-material-course',draft.courseId);
     const create=window.createExternalMaterialFromDrawer||window.saveExternalMaterialLink;if(typeof create==='function')await create();
+    const result=(document.getElementById('external-material-preview')?.textContent||'').trim();
+    const again=()=>{window.closeExternalMaterialDrawer?.();window.teacherContentStudioOpen?.();renderExternalEdit();};
+    if(result.startsWith('✅'))showOutcome('success','外部教材已建立',result,[{label:'完成',run:()=>window.closeExternalMaterialDrawer?.()},{label:'再新增一筆',primary:true,run:again}]);
+    else if(result.startsWith('❌'))showOutcome('error','外部教材建立失敗',result,[{label:'返回修正',primary:true}]);
   }
 
   function handleStudioAction(action){
@@ -201,5 +258,5 @@
     if(event.target.closest('[data-composer-external-submit]')){event.preventDefault();event.stopImmediatePropagation();submitExternal();}
   },true);
 
-  window.TeacherContentComposer72={handleStudioAction,renderQuestionStart,decorateQuestionEditor};
+  window.TeacherContentComposer72={handleStudioAction,renderQuestionStart,decorateQuestionEditor,questionReadiness,submitQuestion,showOutcome};
 })();
