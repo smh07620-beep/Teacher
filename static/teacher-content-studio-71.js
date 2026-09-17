@@ -16,6 +16,47 @@
   const studioId = 'teacher-content-studio-71';
   const launcherId = 'teacher-content-studio-launcher-71';
   const aiMount = {section:null, placeholder:null, catId:''};
+  const AI_PREPARE_DEADLINE_77 = 6000;
+
+  function withTimeout77(task,ms,label){
+    const promise=Promise.resolve(task);
+    return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error(`${label}逾時，請重新嘗試。`)),Math.max(250,ms||250)))]);
+  }
+
+  function aiPrepareStatus77(host,label,detail=''){
+    if(!host) return;
+    host.innerHTML=`<div class="rounded-2xl border border-violet-100 bg-violet-50 p-5 text-sm text-violet-700"><div class="font-black">${esc(label)}</div>${detail?`<div class="mt-1 text-xs text-violet-500">${esc(detail)}</div>`:''}</div>`;
+  }
+
+  function compactAiStudio77(section,catId){
+    if(!section) return;
+    const search=document.getElementById(`ai-material-search-${catId}`);
+    const materialBlock=search?.closest('[class*="lg:col-span-3"]');
+    const selectedBox=document.getElementById(`ai-selected-${catId}`);
+    if(materialBlock&&selectedBox&&!section.querySelector('[data-ai-material-summary-77]')){
+      const compact=document.createElement('div');
+      compact.dataset.aiMaterialSummary77='1';
+      compact.className='lg:col-span-3 rounded-2xl border border-violet-100 bg-violet-50/50 p-3';
+      compact.innerHTML=`<div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black text-violet-900">📚 出題教材</div><div class="mt-1 text-[11px] text-slate-500">依所選考卷自動帶入最多 3 份關聯教材；影片最多 1 支。</div></div><button type="button" data-ai-adjust-materials-77 class="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700">調整教材</button></div><div data-ai-linked-summary-77 class="mt-2"></div>`;
+      materialBlock.before(compact);
+      compact.querySelector('[data-ai-linked-summary-77]')?.appendChild(selectedBox);
+      materialBlock.classList.add('hidden');
+      compact.querySelector('[data-ai-adjust-materials-77]')?.addEventListener('click',()=>materialBlock.classList.toggle('hidden'));
+    }
+
+    const controlNames=['type','difficulty','count','strategy','focus'];
+    const wrappers=[...new Set(controlNames.map(name=>document.getElementById(`ai-${name}-${catId}`)?.parentElement).filter(Boolean))];
+    if(wrappers.length&&!section.querySelector('[data-ai-advanced-77]')){
+      const parent=wrappers[0].parentElement;
+      const details=document.createElement('details');
+      details.dataset.aiAdvanced77='1';
+      details.className='lg:col-span-3 rounded-xl border border-slate-200 bg-slate-50 p-3';
+      details.innerHTML='<summary class="cursor-pointer text-xs font-black text-slate-700">⚙️ 進階設定（題型／難度／題數／策略／出題重點）</summary><div data-ai-advanced-grid-77 class="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>';
+      parent?.insertBefore(details,wrappers[0]);
+      const grid=details.querySelector('[data-ai-advanced-grid-77]');
+      wrappers.forEach(node=>grid?.appendChild(node));
+    }
+  }
 
   function scope(){
     return {
@@ -211,44 +252,55 @@
 
   async function mountAiPanel(catId){
     if(!catId) return;
-    const host = document.getElementById('teacher-content-studio-body-71');
+    const host=document.getElementById('teacher-content-studio-body-71');
     if(!host) return;
-    const selectedScope = scope();
+    const selectedScope=scope(),deadline=Date.now()+AI_PREPARE_DEADLINE_77;
+    const remain=()=>Math.max(250,deadline-Date.now());
+    const bounded=(task,label,maxMs=2600)=>withTimeout77(task,Math.min(maxMs,remain()),label);
     restoreAiPanel();
-    host.innerHTML = '<div class="rounded-2xl border border-violet-100 bg-violet-50 p-5 text-sm text-violet-700">正在準備 AI 教材出題工作室…</div>';
     try{
-      await window.openAdminWorkspace?.('assessment');
-      const area = document.getElementById('admin-quiz-area');
-      const group = document.getElementById('admin-quiz-group');
-      if(area) area.value = selectedScope.area;
-      if(group) group.value = selectedScope.group;
-      await window.renderAdminQuizCategories?.(true);
-      const panel = document.getElementById(`qpanel-${catId}`);
+      let panel=document.getElementById(`qpanel-${catId}`);
+      if(!panel){
+        aiPrepareStatus77(host,'正在切換到考核工作區…','只在需要時建立考卷／題庫 DOM。');
+        await bounded(window.openAdminWorkspace?.('assessment'),'切換考核工作區',1800);
+        const area=document.getElementById('admin-quiz-area'),group=document.getElementById('admin-quiz-group');
+        if(area) area.value=selectedScope.area;
+        if(group) group.value=selectedScope.group;
+        panel=document.getElementById(`qpanel-${catId}`);
+        if(!panel){
+          aiPrepareStatus77(host,'正在讀取考卷…','同步目前組別的考卷與關聯教材。');
+          await bounded(window.renderAdminQuizCategories?.(true),'讀取考卷',2600);
+          panel=document.getElementById(`qpanel-${catId}`);
+        }
+      }
       if(!panel) throw new Error('找不到指定考卷，請重新選擇。');
-      if(panel.classList.contains('hidden')) await window.toggleQuizQuestionsPanel?.(catId);
-      let section = panel.querySelector('[data-ai-question-studio]');
-      if(!section) section = await waitForAiSection76(catId);
+      if(panel.classList.contains('hidden')){
+        aiPrepareStatus77(host,'正在開啟題庫…','準備既有 AI 出題工作室。');
+        await bounded(window.toggleQuizQuestionsPanel?.(catId),'開啟題庫',1600);
+      }
+      aiPrepareStatus77(host,'正在掛載 AI 出題工作室…','完成後會自動帶入本考卷關聯教材。');
+      let section=panel.querySelector('[data-ai-question-studio]');
+      if(!section) section=await waitForAiSection76(catId,Math.min(1400,remain()));
       if(!section) throw new Error('AI 出題工作室載入逾時，請按「重新嘗試」。');
-      const placeholder = document.createElement('div');
-      placeholder.hidden = true;
-      placeholder.dataset.teacher75AiPlaceholder = String(catId);
+      const placeholder=document.createElement('div');
+      placeholder.hidden=true;
+      placeholder.dataset.teacher75AiPlaceholder=String(catId);
       section.before(placeholder);
-      aiMount.section = section;
-      aiMount.placeholder = placeholder;
-      aiMount.catId = String(catId);
-      host.innerHTML = `<div class="mx-auto max-w-4xl"><div class="mb-4 flex items-start justify-between gap-3"><div><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 重新選擇考卷</button><h4 class="mt-2 text-lg font-black text-slate-950">✨ AI 輔助出題</h4><p class="mt-1 text-xs text-slate-500">AI 設定、產生候選題與人工審核都留在同一個建立流程。</p></div></div>${aiPresetPanel76(catId)}<div data-teacher75-ai-host></div></div>`;
+      aiMount.section=section;
+      aiMount.placeholder=placeholder;
+      aiMount.catId=String(catId);
+      host.innerHTML=`<div class="mx-auto max-w-4xl"><div class="mb-4 flex items-start justify-between gap-3"><div><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 重新選擇考卷</button><h4 class="mt-2 text-lg font-black text-slate-950">✨ AI 輔助出題</h4><p class="mt-1 text-xs text-slate-500">教材依考卷關聯自動帶入；常用設定由用途 preset 管理，細節需要時再展開。</p></div></div>${aiPresetPanel76(catId)}<div data-teacher75-ai-host></div></div>`;
       host.querySelector('[data-teacher75-ai-host]')?.appendChild(section);
-      const presetSelect=host.querySelector('[data-ai-preset-select-76]');
-      const presetButton=host.querySelector('[data-ai-apply-preset-76]');
-      const customBox=host.querySelector(`[data-ai-custom-mix-76="${CSS.escape(String(catId))}"]`);
+      compactAiStudio77(section,catId);
+      const presetSelect=host.querySelector('[data-ai-preset-select-76]'),presetButton=host.querySelector('[data-ai-apply-preset-76]'),customBox=host.querySelector(`[data-ai-custom-mix-76="${CSS.escape(String(catId))}"]`);
       presetSelect?.addEventListener('change',()=>customBox?.classList.toggle('hidden',presetSelect.value!=='custom'));
       presetButton?.addEventListener('click',()=>{if(presetSelect?.value==='custom'){customBox?.classList.remove('hidden');return;}applyAiPreset76(catId,presetSelect?.value||'auto');});
       host.querySelector('[data-ai-apply-custom-76]')?.addEventListener('click',()=>applyAiCustomMix76(catId));
       applyAiPreset76(catId,'auto');
-      requestAnimationFrame(() => section.scrollIntoView({behavior:'smooth', block:'start'}));
+      requestAnimationFrame(()=>host.querySelector('[data-ai-ux-76]')?.scrollIntoView({behavior:'smooth',block:'start'}));
     }catch(error){
       restoreAiPanel();
-      host.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message || 'AI 出題工作室開啟失敗')}<div class="mt-3 flex gap-2 flex-wrap"><button type="button" data-ai-retry-76 class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 重新嘗試</button><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;
+      host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message||'AI 出題工作室開啟失敗')}<div class="mt-3 flex gap-2 flex-wrap"><button type="button" data-ai-retry-76 class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 重新嘗試</button><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;
       host.querySelector('[data-ai-retry-76]')?.addEventListener('click',()=>mountAiPanel(catId));
     }
   }
