@@ -158,6 +158,8 @@ def register_pgy_frontend(app):
                 body_assets.append('<script defer src="/learner-result-chart.js?v=7123"></script>')
             if "/question-authoring-ux-71.js" not in html:
                 body_assets.append('<script defer src="/question-authoring-ux-71.js?v=7130"></script>')
+            if "/teacher-content-composer-72.js" not in html:
+                body_assets.append('<script defer src="/teacher-content-composer-72.js?v=7200"></script>')
             if "/learner-ui-cleanup-71.js" not in html:
                 body_assets.append('<script defer src="/learner-ui-cleanup-71.js?v=7131"></script>')
             # Final Convergence: load the compatibility facade after all
