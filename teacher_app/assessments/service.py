@@ -1,8 +1,11 @@
 """Canonical assessment configuration, review and publication behavior."""
 from __future__ import annotations
 
+import copy
 import datetime
 import json
+import threading
+import time
 import uuid
 from typing import Any, Mapping
 
@@ -10,6 +13,17 @@ from teacher_app.common.errors import ApiError
 
 
 QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video")
+
+# Render currently runs one Gunicorn worker with multiple threads.  Opening the
+# Teacher Content Studio first reads the public exam list and then the admin
+# workspace used to read the same rows again through a second Supabase
+# connection.  Keep a very short, process-local snapshot of the *full* list so
+# the public read can warm the immediately-following admin read.  All mutations
+# below invalidate this cache; question counts can be at most this TTL stale and
+# are refreshed automatically on the next read.
+_CATEGORY_LIST_CACHE_TTL_SECONDS = 15.0
+_CATEGORY_LIST_CACHE: dict[tuple[int, str, str], tuple[float, list[dict]]] = {}
+_CATEGORY_LIST_CACHE_LOCK = threading.Lock()
 
 
 def _fail(code: str, message: str, status: int = 400, extra: dict | None = None) -> ApiError:
@@ -25,14 +39,54 @@ def _draw_rules(value: Any) -> dict:
     return {"mode": "type_quota", "quotas": quotas} if sum(quotas.values()) > 0 else {}
 
 
+def _category_cache_key(base, group: str | None, area: str) -> tuple[int, str, str]:
+    return (id(base), str(group or ""), str(area or ""))
+
+
+def _clear_category_list_cache(base=None, group: str | None = None, area: str | None = None) -> None:
+    with _CATEGORY_LIST_CACHE_LOCK:
+        if base is None and group is None and area is None:
+            _CATEGORY_LIST_CACHE.clear()
+            return
+        base_id = id(base) if base is not None else None
+        wanted_group = None if group is None else str(group)
+        wanted_area = None if area is None else str(area)
+        for key in list(_CATEGORY_LIST_CACHE):
+            key_base, key_group, key_area = key
+            if base_id is not None and key_base != base_id:
+                continue
+            if wanted_group is not None and key_group != wanted_group:
+                continue
+            if wanted_area is not None and key_area != wanted_area:
+                continue
+            _CATEGORY_LIST_CACHE.pop(key, None)
+
+
 def list_categories(base, group: str | None, area: str, include_inactive: bool) -> list[dict]:
     safe_group = group if group in base.GROUPS else None
     safe_area = base.normalize_area(area or base.DEFAULT_TRAINING_AREA)
-    return base.list_quiz_categories_with_counts(
-        group_key=safe_group,
-        training_area=safe_area,
-        include_inactive=include_inactive,
-    )
+    key = _category_cache_key(base, safe_group, safe_area)
+    now = time.monotonic()
+
+    with _CATEGORY_LIST_CACHE_LOCK:
+        cached = _CATEGORY_LIST_CACHE.get(key)
+        full_list = copy.deepcopy(cached[1]) if cached and now - cached[0] < _CATEGORY_LIST_CACHE_TTL_SECONDS else None
+
+    if full_list is None:
+        # Always fetch the full list once.  The public endpoint filters inactive
+        # rows below, while the admin endpoint can reuse the same DB result a
+        # moment later instead of opening another Supabase connection.
+        full_list = base.list_quiz_categories_with_counts(
+            group_key=safe_group,
+            training_area=safe_area,
+            include_inactive=True,
+        )
+        with _CATEGORY_LIST_CACHE_LOCK:
+            _CATEGORY_LIST_CACHE[key] = (time.monotonic(), copy.deepcopy(full_list))
+
+    if include_inactive:
+        return full_list
+    return [item for item in full_list if bool(item.get("active"))]
 
 
 def create_category(base, data: Mapping[str, Any]) -> dict:
@@ -101,6 +155,7 @@ def create_category(base, data: Mapping[str, Any]) -> dict:
             )
     finally:
         conn.close()
+    _clear_category_list_cache(base, group, area)
     return base.get_quiz_category(category_id)
 
 
@@ -190,6 +245,7 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
             )
     finally:
         conn.close()
+    _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
     return {"ok": True}
 
 
@@ -223,6 +279,7 @@ def review_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
         )
     finally:
         conn.close()
+    _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
     return {
         "ok": True,
         "reviewStatus": "approved",
@@ -297,6 +354,7 @@ def publish_category(base, category_id: str) -> dict:
         raise
     finally:
         conn.close()
+    _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
     return {
         "ok": True,
         "active": True,
@@ -371,7 +429,8 @@ def update_category_materials(base, category_id: str, data: Mapping[str, Any]) -
 
 
 def delete_category(base, category_id: str) -> dict:
-    if not base.get_quiz_category(category_id):
+    entry = base.get_quiz_category(category_id)
+    if not entry:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考題頁籤", 404)
     conn, kind = base._db_conn()
     try:
@@ -385,4 +444,5 @@ def delete_category(base, category_id: str) -> dict:
             conn.execute("UPDATE materials SET category='' WHERE category=?", (category_id,))
     finally:
         conn.close()
+    _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
     return {"ok": True}
