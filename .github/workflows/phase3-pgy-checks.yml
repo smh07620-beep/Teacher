@@ -46,6 +46,7 @@ jobs:
           node --check static/maintenance-64.js
           node --check static/smart-learning-67.js
           node --check static/assessment-681.js
+          node --check static/assessment-advanced-74.js
           node --check static/course-wizard-681.js
           node --check static/material-upload-client.js
           node --check static/external-material-681.js
