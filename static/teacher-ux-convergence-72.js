@@ -229,13 +229,22 @@
     requestAnimationFrame(reconcile);
   }
 
+  function mutationTargetNeedsReconcile(target){
+    if(!target||target.nodeType!==1)return false;
+    if(target.id==='assessment-681'||target.id==='assessment-681-tabs'||target.id==='assessment-681-body')return true;
+    if(target.closest?.('#assessment-681'))return true;
+    if(target.matches?.('[data-course-wizard-root], [data-admin-course-wizard]'))return true;
+    return false;
+  }
+
   function mutationNeedsReconcile(mutation){
+    if(mutationTargetNeedsReconcile(mutation.target))return true;
     return [...mutation.addedNodes].some(node=>{
       if(node.nodeType!==1)return false;
       if(node.id==='assessment-681'||node.id==='assessment-681-tabs'||node.id==='assessment-681-body')return true;
       if(node.matches?.('[data-course-wizard-root], [data-admin-course-wizard]'))return true;
       if(node.querySelector?.('#assessment-681, #assessment-681-tabs, #assessment-681-body'))return true;
-      if(node.querySelector?.('h4')&&node.textContent?.includes('快速建立整套課程'))return true;
+      if((node.matches?.('h4')||node.querySelector?.('h4'))&&node.textContent?.includes('快速建立整套課程'))return true;
       return false;
     });
   }
