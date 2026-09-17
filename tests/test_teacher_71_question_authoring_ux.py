@@ -65,10 +65,15 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
         self.assertIn("if (String(resultCount.textContent || '').trim()) show(resultCount)", self.learner)
 
     def test_assets_are_composed_and_syntax_checked(self):
-        self.assertIn('/question-authoring-ux-71.js?v=7130', self.frontend)
+        self.assertIn('/question-authoring-ux-71.js?v=7132', self.frontend)
+        self.assertIn('/teacher-ux-convergence-72.js?v=7202', self.frontend)
         self.assertIn('/learner-ui-cleanup-71.js?v=7131', self.frontend)
         self.assertLess(
-            self.frontend.index('/question-authoring-ux-71.js?v=7130'),
+            self.frontend.index('/question-authoring-ux-71.js?v=7132'),
+            self.frontend.index('/teacher-ux-convergence-72.js?v=7202'),
+        )
+        self.assertLess(
+            self.frontend.index('/teacher-ux-convergence-72.js?v=7202'),
             self.frontend.index('/admin-compat-facade.js?v=7300'),
         )
         self.assertIn('node --check static/question-authoring-ux-71.js', self.workflow)
