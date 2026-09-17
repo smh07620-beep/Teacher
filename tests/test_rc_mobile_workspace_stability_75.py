@@ -5,7 +5,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 
-
 class RcMobileWorkspaceStability75Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -27,18 +26,14 @@ class RcMobileWorkspaceStability75Tests(unittest.TestCase):
             self.assertIn(marker, self.studio)
         self.assertIn("if(action === 'ai-question') return chooseExamForAi();", self.studio)
         self.assertNotIn("assessment681Tab?.('ai')", self.studio)
-        self.assertIn('AI 設定、產生候選題與人工審核都留在同一個建立流程', self.studio)
+        self.assertIn("window.switchAdminWorkspace('assessment', true)", self.studio)
+        self.assertIn('2 AI 出題設定', self.studio)
+        self.assertIn('3 審核匯入', self.studio)
 
     def test_modified_browser_javascript_syntax(self):
         for asset in ('admin-workspace.js', 'admin-question-bank.js', 'teacher-content-studio-71.js'):
-            completed = subprocess.run(
-                ['node', '--check', str(ROOT / 'static' / asset)],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
+            completed = subprocess.run(['node','--check',str(ROOT/'static'/asset)],check=False,capture_output=True,text=True)
             self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-
 
 if __name__ == '__main__':
     unittest.main()
