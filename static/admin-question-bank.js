@@ -76,6 +76,40 @@
     window.renderAdminQuizCategories(false);
   };
 
+  window.exposeQuestionDeleteActions = function(root=document){
+    if(!root?.querySelectorAll) return;
+
+    root.querySelectorAll('button[onclick*="adminDeleteQuizQuestion"]').forEach(btn=>{
+      if(btn.textContent.trim()!=='🗑️ 刪除') btn.textContent='🗑️ 刪除';
+      btn.className='text-[11px] bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-2.5 py-1.5 rounded-lg font-bold';
+    });
+
+    root.querySelectorAll('button[onclick*="adminBulkDeleteQuestions"]').forEach(btn=>{
+      if(btn.textContent.trim()!=='🗑️ 刪除已選題目') btn.textContent='🗑️ 刪除已選題目';
+      btn.className='text-[11px] bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg font-bold';
+    });
+
+    root.querySelectorAll('button[onclick*="adminDeleteQuizCategory"]').forEach(btn=>{
+      if(btn.textContent.trim()!=='🗑️ 刪除考卷') btn.textContent='🗑️ 刪除考卷';
+      btn.className='text-xs bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-3 py-2 rounded-lg font-bold';
+      const details=btn.closest('details');
+      const actions=details?.parentElement;
+      if(details&&actions){
+        actions.insertBefore(btn,details);
+        details.remove();
+      }
+    });
+  };
+
+  function startQuestionDeleteVisibilityObserver(){
+    const box=document.getElementById('admin-quiz-categories-list');
+    if(!box||box.dataset.questionDeleteVisibilityObserver==='1') return;
+    box.dataset.questionDeleteVisibilityObserver='1';
+    window.exposeQuestionDeleteActions(box);
+    const observer=new MutationObserver(()=>window.exposeQuestionDeleteActions(box));
+    observer.observe(box,{childList:true,subtree:true});
+  }
+
   window.paintAdminQuizCategories = function(cats){
     const box=document.getElementById('admin-quiz-categories-list');
     if(!box) return;
@@ -84,6 +118,7 @@
       return;
     }
     box.innerHTML=cats.map(quizCategoryCardHTML).join('');
+    window.exposeQuestionDeleteActions(box);
     updateQuizWorkspacePresentation();
   };
 
@@ -149,4 +184,7 @@
       box.classList.remove('opacity-75');
     }
   };
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',startQuestionDeleteVisibilityObserver,{once:true});
+  else startQuestionDeleteVisibilityObserver();
 })();
