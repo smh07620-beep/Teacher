@@ -1,4 +1,4 @@
-"""Teacher 7.1/7.2/7.3 question-authoring and learner-page UX regressions."""
+"""Teacher question-authoring and learner-page UX regressions after runtime convergence."""
 import unittest
 from pathlib import Path
 
@@ -9,54 +9,48 @@ ROOT = Path(__file__).parents[1]
 class QuestionAuthoringUx71Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.authoring = ROOT.joinpath("static", "question-authoring-ux-71.js").read_text(encoding="utf-8")
-        cls.convergence = ROOT.joinpath("static", "teacher-ux-convergence-72.js").read_text(encoding="utf-8")
+        cls.retired_overlay = ROOT.joinpath("static", "question-authoring-ux-71.js").read_text(encoding="utf-8")
+        cls.editor = ROOT.joinpath("static", "admin-question-editor-ui.js").read_text(encoding="utf-8")
+        cls.actions = ROOT.joinpath("static", "admin-question-actions.js").read_text(encoding="utf-8")
+        cls.panel = ROOT.joinpath("static", "admin-question-panel.js").read_text(encoding="utf-8")
+        cls.assessment_compat = ROOT.joinpath("static", "assessment-681.js").read_text(encoding="utf-8")
         cls.learner = ROOT.joinpath("static", "learner-ui-cleanup-71.js").read_text(encoding="utf-8")
         cls.learner_css = ROOT.joinpath("static", "learner-layout-stability-73.css").read_text(encoding="utf-8")
         cls.frontend = ROOT.joinpath("pgy_frontend.py").read_text(encoding="utf-8")
         cls.workflow = ROOT.joinpath(".github", "workflows", "phase3-pgy-checks.yml").read_text(encoding="utf-8")
 
-    def test_teacher_editor_is_chinese_and_progressively_disclosed(self):
+    def test_canonical_editor_is_chinese_and_supports_all_primary_question_types(self):
         for marker in (
-            "主題", "子主題", "學習目標", "難度", "認知層次", "來源定位方式",
-            "進階設定（選填）", "正確答案", "文件／PDF 頁碼", "影片時間",
+            "快速編輯題目", "題目類型", "難度", "題目分類", "正確答案",
+            "單選題", "複選題", "是非題", "問答題", "填空題", "圖片判讀題", "影片題",
+            "💾 儲存此題",
         ):
-            self.assertIn(marker, self.authoring)
-        for english_label in (
-            "renameLabel('qb681-topic', 'Topic')",
-            "renameLabel('qb681-subtopic', 'Subtopic')",
-            "renameLabel('qb681-objective', 'Learning objective')",
-            "renameLabel('qb681-difficulty', 'Difficulty')",
-            "renameLabel('qb681-cognitive', 'Cognitive level')",
-            "renameLabel('qb681-rstype', 'ReviewSource 類型')",
+            self.assertIn(marker, self.editor)
+
+    def test_canonical_actions_own_save_delete_and_bulk_delete(self):
+        for marker in (
+            "adminSaveOneInlineQuestion", "adminDeleteQuizQuestion", "adminBulkDeleteQuestions",
+            "確定刪除此題目？此操作無法復原。", "method:'DELETE'", "method:'PATCH'",
         ):
-            self.assertNotIn(english_label, self.authoring)
+            self.assertIn(marker, self.actions)
+        self.assertIn("adminDeleteQuizCategory", self.panel)
+        self.assertIn("頁籤內所有題目也會一併刪除", self.panel)
 
-    def test_save_closes_only_after_success_and_cancel_is_explicit(self):
-        self.assertIn("const result = await originalSave()", self.authoring)
-        self.assertIn("if (result) window.assessment681CloseQuestion?.()", self.authoring)
-        self.assertIn("cancel.textContent = '取消'", self.authoring)
-        self.assertIn("save.textContent = '💾 儲存題目'", self.authoring)
+    def test_old_question_drawer_overlay_is_physically_retired(self):
+        self.assertIn("Retired by Teacher runtime convergence", self.retired_overlay)
+        self.assertIn("canonicalOwner", self.retired_overlay)
+        for forbidden in (
+            "qb681-", "assessment681SaveQuestion", "assessment681Delete",
+            "fetch(", "/api/question-bank", "question-bank-drawer",
+        ):
+            self.assertNotIn(forbidden, self.retired_overlay)
 
-    def test_delete_resolves_category_for_scoped_rbac(self):
-        self.assertIn("const bank = await api('/api/question-bank')", self.authoring)
-        self.assertIn("item?.quizCategoryId", self.authoring)
-        self.assertIn("?quizCategoryId=${encodeURIComponent(category)}", self.authoring)
-        self.assertIn("method: 'DELETE'", self.authoring)
-        self.assertIn("🗑️ 刪除此題", self.authoring)
-
-    def test_workflow_state_is_not_normal_teacher_input(self):
-        self.assertIn("['qb681-status', 'qb681-origin']", self.authoring)
-        self.assertIn("classList.add('hidden')", self.authoring)
-        self.assertIn("題目狀態", self.authoring)
-        self.assertIn("題目來源", self.authoring)
-
-    def test_assessment_surface_is_management_only(self):
-        self.assertIn("setTextIfChanged(button,'考卷管理')", self.convergence)
-        self.assertIn("setTextIfChanged(button,'已建立題目')", self.convergence)
-        self.assertIn("hideOnce(button)", self.convergence)
-        self.assertIn('新增、AI 出題、圖片題與影片題請從「＋ 建立教學內容」開始', self.convergence)
-        self.assertNotIn("function simplifyTabs", self.authoring)
+    def test_old_assessment_router_no_longer_creates_second_management_surface(self):
+        self.assertIn("Compatibility router after Teacher runtime convergence", self.assessment_compat)
+        self.assertIn("openCanonicalAssessment", self.assessment_compat)
+        self.assertNotIn("insertAdjacentHTML", self.assessment_compat)
+        self.assertNotIn("assessment-681-body", self.assessment_compat)
+        self.assertNotIn("question-bank-drawer", self.assessment_compat)
 
     def test_learner_page_removes_redundant_instruction_blocks_without_observer(self):
         self.assertIn("const intro = slidesPanel.querySelector(':scope > section.edu-card')", self.learner)
@@ -69,22 +63,13 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
         self.assertIn('#learning-start', self.learner_css)
         self.assertIn('#course-overview > .edu-card .edu-kicker', self.learner_css)
 
-    def test_assets_are_composed_and_syntax_checked(self):
+    def test_compatibility_assets_remain_syntax_checked_for_one_cycle(self):
         self.assertIn('/question-authoring-ux-71.js?v=7133', self.frontend)
-        self.assertIn('/teacher-ux-convergence-72.js?v=7205', self.frontend)
         self.assertIn('/learner-layout-stability-73.css?v=7300', self.frontend)
         self.assertIn('/learner-ui-cleanup-71.js?v=7132', self.frontend)
-        self.assertLess(
-            self.frontend.index('/question-authoring-ux-71.js?v=7133'),
-            self.frontend.index('/teacher-ux-convergence-72.js?v=7205'),
-        )
-        self.assertLess(
-            self.frontend.index('/teacher-ux-convergence-72.js?v=7205'),
-            self.frontend.index('/admin-compat-facade.js?v=7300'),
-        )
         self.assertIn('node --check static/question-authoring-ux-71.js', self.workflow)
-        self.assertIn('node --check static/teacher-ux-convergence-72.js', self.workflow)
-        self.assertIn('node --check static/learner-ui-cleanup-71.js', self.workflow)
+        self.assertIn('node --check static/assessment-681.js', self.workflow)
+        self.assertIn('node --check static/assessment-advanced-74.js', self.workflow)
 
 
 if __name__ == "__main__":
