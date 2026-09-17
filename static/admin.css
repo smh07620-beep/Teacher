@@ -89,3 +89,14 @@
         padding-bottom: env(safe-area-inset-bottom);
     }
 }
+
+/* RC content-studio layering and scope convergence.
+   The mobile admin modal is z-index 200, so the studio must sit above it.
+   The unified creation launcher belongs only to authoring workspaces. */
+#teacher-content-studio-71 {
+    z-index: 260 !important;
+}
+
+#admin-modal:not([data-workspace="course-materials"]):not([data-workspace="assessment"]) #teacher-content-studio-launcher-71 {
+    display: none !important;
+}
