@@ -76,7 +76,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn("assessment681Tab('blueprint')", self.convergence)
         self.assertIn("classList.add('hidden')", self.convergence)
         self.assertIn('進階：一次建立整套課程', self.convergence)
-        self.assertIn('data-teacher72-course-wizard', self.convergence)
+        self.assertIn("details.dataset.teacher72CourseWizard='1'", self.convergence)
 
     def test_phase_three_has_readiness_gate_and_post_create_next_actions(self):
         for marker in (
@@ -121,8 +121,12 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn('/teacher-ux-convergence-72.js?v=7202', self.authoring)
         self.assertIn('/teacher-content-composer-72.js?v=7200', self.frontend)
         self.assertLess(
-            self.frontend.index('/question-authoring-ux-71.js?v=7130'),
+            self.frontend.index('/question-authoring-ux-71.js?v=7132'),
             self.frontend.index('/teacher-content-composer-72.js?v=7200'),
+        )
+        self.assertLess(
+            self.frontend.index('/teacher-content-composer-72.js?v=7200'),
+            self.frontend.index('/teacher-ux-convergence-72.js?v=7202'),
         )
 
     def test_release_matrix_records_studio(self):
