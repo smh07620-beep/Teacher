@@ -11,7 +11,9 @@ new='''                    <section id="admin-quiz-workspace" class="bg-white bo
                         <div data-teacher78-canonical-create-executor class="hidden" aria-hidden="true"><input id="admin-new-category-title" type="text" maxlength="255"><button type="button" onclick="adminCreateQuizCategory()">建立</button></div>
                         <div id="admin-quiz-categories-list" class="space-y-3"></div>
                     </section>'''
-s,n=re.subn(r'                    <section id="admin-quiz-workspace"[\s\S]*?<div id="admin-quiz-categories-list" class="space-y-4"></div>\s*</section>',new,s,count=1)
-assert n==1,n
+start=s.index('<section id="admin-quiz-workspace"')
+list_pos=s.index('<div id="admin-quiz-categories-list"',start)
+end=s.index('</section>',list_pos)+len('</section>')
+s=s[:start]+new+s[end:]
 s=s.replace('<small id="v573-system-user-id">請回首頁設定</small>','<small id="v573-system-user-id" aria-live="polite">載入身分…</small>',1)
 path.write_text(s,encoding='utf-8')
