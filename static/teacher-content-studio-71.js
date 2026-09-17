@@ -11,6 +11,7 @@
   const has = permission => typeof rbac().hasPermission === 'function' ? !!rbac().hasPermission(permission) : false;
   const canQuestion = () => has('question.manage') || has('exam.manage');
   const canMaterial = () => has('material.manage') || has('course.manage');
+  const canCourse = () => has('course.manage');
   const canOpen = () => canQuestion() || canMaterial();
   const studioId = 'teacher-content-studio-71';
   const launcherId = 'teacher-content-studio-launcher-71';
@@ -56,6 +57,7 @@
       <section>
         <div class="mb-2"><h4 class="font-black text-slate-900">📚 教材與媒體</h4><p class="text-xs text-slate-500 mt-1">所有新增動作都從這裡開始；舊版直接上傳表單只保留作為背景執行器。</p></div>
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          ${canCourse()?card('course','🪄','建立課程','建立課程並視需要串接教材與考卷；進階欄位只在流程中出現。','violet'):''}
           ${card('material','📄','上傳教材','PDF、PPTX、DOCX、圖片等檔案，使用統一建立流程。','teal')}
           ${card('video-material','🎥','上傳影音教材','影片與影音檔也從同一建立入口開始。','teal')}
           ${card('external','🔗','外部影音／連結','建立 YouTube、Shorts 或其他支援的外部教學連結。','sky')}
@@ -192,6 +194,12 @@
       document.getElementById('assessment-681')?.scrollIntoView({behavior:'smooth', block:'start'});
       return;
     }
+    if(action === 'course'){
+      closeStudio();
+      await window.openAdminWorkspace?.('course-materials');
+      window.teacher75OpenCourseWizard?.();
+      return;
+    }
     if(action === 'material') return openMaterialUpload('standard');
     if(action === 'video-material') return openMaterialUpload('video');
     if(action === 'external'){
@@ -213,18 +221,10 @@
   function consolidateMaterialWorkspace(){
     const root=document.getElementById('admin-material-workspace');
     if(!root) return;
-    if(root.dataset.teacher72MaterialConsolidated!=='1'){
-      root.dataset.teacher72MaterialConsolidated='1';
-      const heading=root.querySelector('h4');
-      const desc=heading?.parentElement?.querySelector('p');
-      if(heading) heading.textContent='📚 教材處理與背景工作';
-      if(desc) desc.textContent='新增教材與外部連結請使用「＋ 建立教學內容」；此區只保留儲存維護與背景處理狀態。';
-      const note=document.createElement('div');
-      note.dataset.teacher72MaterialNote='1';
-      note.className='rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2 text-xs text-teal-800';
-      note.textContent='建立入口已統一：一般教材、影音、外部連結與圖譜請從上方「＋ 建立教學內容」開始。';
-      root.insertBefore(note,root.children[1]||null);
-    }
+    // RC 7.5: this DOM remains the canonical upload executor, but it is not a daily management surface.
+    root.dataset.teacher75MaterialExecutorRoot='1';
+    root.classList.add('hidden');
+    root.setAttribute('aria-hidden','true');
 
     const fileInput=document.getElementById('admin-pptx-upload-input');
     hideMaterialExecutorNode(fileInput?.parentElement);
