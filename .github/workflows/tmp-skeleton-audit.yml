@@ -1,0 +1,66 @@
+name: Temp skeleton ownership audit
+
+on:
+  push:
+    branches:
+      - cleanup/final-skeleton-orphans-20260917
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit system-admin function ownership and orphan routes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+          legacy = (root/'static/system-admin.js').read_text(encoding='utf-8')
+          owner_paths = sorted((root/'static').glob('admin-*.js')) + [
+              root/'static/course-wizard-681.js',
+              root/'static/assessment-advanced-74.js',
+              root/'static/teacher-content-studio-71.js',
+              root/'static/teacher-content-composer-72.js',
+          ]
+          fn_re = re.compile(r'(?m)^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(')
+          legacy_fns = set(fn_re.findall(legacy))
+          owners = {}
+          for path in owner_paths:
+              if not path.exists():
+                  continue
+              text = path.read_text(encoding='utf-8')
+              names = set(fn_re.findall(text))
+              for name in names:
+                  owners.setdefault(name, []).append(str(path))
+              for name in re.findall(r'window\.([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?function\s*\(', text):
+                  owners.setdefault(name, []).append(str(path))
+          duplicates = sorted(name for name in legacy_fns if name in owners)
+          legacy_only = sorted(name for name in legacy_fns if name not in owners)
+          print('=== SAME-NAME EXTRACTED OWNERS ===')
+          for name in duplicates:
+              print(name, '=>', ', '.join(sorted(set(owners[name]))))
+          print('\n=== LEGACY-ONLY FUNCTIONS ===')
+          for name in legacy_only:
+              print(name)
+          print('\ncounts:', len(legacy_fns), 'legacy functions;', len(duplicates), 'same-name extracted;', len(legacy_only), 'legacy-only')
+
+          sources = '\n'.join(p.read_text(encoding='utf-8', errors='ignore') for p in (root/'static').glob('*.js'))
+          for endpoint in (
+              '/api/docx-atlas-preview/',
+              '/api/learning-analytics',
+              '/api/media-processing/capability',
+              '/api/groups',
+              '/api/training-areas',
+              '/api/quiz-questions/batch-delete',
+              '/api/security/status',
+              '/api/admin/background-jobs/status',
+          ):
+              print('frontend occurrences', endpoint, sources.count(endpoint))
+          PY
