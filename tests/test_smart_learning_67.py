@@ -16,10 +16,12 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('zipfile.ZipFile',source)
         self.assertIn('page.get_text',source)
         self.assertIn('material-search/<material_id>/index',source)
-    def test_docx_import_is_preview_first(self):
+    def test_docx_import_uses_one_canonical_preview_parser(self):
         source=ROOT.joinpath('smart_learning_67.py').read_text(encoding='utf-8')
-        self.assertIn('preview_docx_atlas',source)
-        self.assertIn('publishRequired',source)
+        atlas=ROOT.joinpath('atlas_70.py').read_text(encoding='utf-8')
+        self.assertIn('def preview_docx_atlas',source)
+        self.assertNotIn('/api/docx-atlas-preview/',source)
+        self.assertIn('from smart_learning_67 import preview_docx_atlas',atlas)
         self.assertIn('SmartArt',source)
     def test_media_pipeline_is_not_an_http_thread_transcode(self):
         source=ROOT.joinpath('media_processing_67.py').read_text(encoding='utf-8')

@@ -43,8 +43,7 @@
   function normalizePublicPortal(){
     const path=location.pathname;
     if(path==='/' || path==='/internal' || path==='/pgy'){
-      document.querySelectorAll('.v575-manage-direct').forEach(entry=>entry.remove());
-      normalizeSearch();
+        normalizeSearch();
     }
 
     if(path==='/pgy'){

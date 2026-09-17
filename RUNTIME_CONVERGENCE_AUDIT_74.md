@@ -46,3 +46,7 @@ A release candidate fails convergence if:
 - `assessment-advanced-74.js` calls AI generation or exam/question CRUD mutation endpoints;
 - canonical question/exam/AI owner files lose their expected management functions;
 - a new product workflow is implemented in `system-admin.js` or `admin-compat-facade.js`.
+
+## Final skeleton cleanup result
+
+The post-audit cleanup physically removes dead public navigation markup, retires obsolete unconsumed HTTP routes, connects batch-delete and security-status to canonical frontend owners, retires `teaching.css`, unifies `portal-v56.js` cache keys, and migrates the remaining course/question/people/system UI owners out of `system-admin.js`. The compatibility shell deliberately retains shared cache/state helpers, `getAdminKey()` as a non-secret session-RBAC header seam, and the tested local DOCX fallback only.

@@ -107,4 +107,9 @@
   window.reviewCurrentExam = review;
   window.publishCurrentExam = publish;
   window.adminToggleBlindMode = toggleBlindMode;
+
+  // Final convergence: canonical owner migrated from system-admin.js.
+  function difficultyLabel(d){return ({basic:'基礎',standard:'一般',advanced:'進階'})[d||'standard']||'一般';}
+
+  window.difficultyLabel=difficultyLabel;
 })();

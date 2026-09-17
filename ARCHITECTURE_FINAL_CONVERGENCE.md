@@ -53,3 +53,13 @@ This document freezes the frontend ownership model after Phase 3 modularization 
 5. Remove facade/router files only after no live HTML or module references remain.
 
 The final target is a small bootstrap/compatibility shell rather than a second implementation of any workflow.
+
+## Final skeleton cleanup (7.4 RC)
+
+- Public `/`, `/internal`, and `/pgy` pages no longer carry the retired `v575-manage-direct` markup; role-aware management entries remain the only public-to-management path.
+- `system-admin.js` no longer owns course/material hub rendering, question-bank presentation, people management, system health UI, or learner controls. Those implementations live in their canonical extracted modules.
+- `getAdminKey()` remains only as the session-RBAC compatibility header seam, and local DOCX fallback state remains intentionally preserved.
+- Obsolete unconsumed HTTP routes retired here: legacy DOCX Atlas preview, legacy learning analytics, standalone media capability, legacy background-job status, and unused groups/training-areas catalog APIs. The shared `preview_docx_atlas()` parser remains because the canonical Atlas DOCX wizard imports it directly.
+- Supported replacements are the Atlas DOCX import wizard, training command-center analytics, and `/api/material-jobs`. Public group cards remain static presentation data for this RC; a data-driven catalog is a separate future change rather than a release-candidate refactor.
+- `/api/quiz-questions/batch-delete` and `/api/security/status` now have canonical frontend consumers.
+- `static/teaching.css` is retired; `static/learner.css` is the single owner of the teaching layout classes.
