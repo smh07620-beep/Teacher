@@ -25,8 +25,8 @@ jobs:
           from pathlib import Path
           p=Path('static/system-core.js')
           b=p.read_bytes()
-          old=b"    set('v573-system-user-name',display);set('v573-system-user-id',empId?`\xe5\xb7\xa5\xe8\x99\x9f ${empId}`:'\xe8\xab\x8b\xe5\x9b\x9e\xe9\xa6\x96\xe9\xa0\x81\xe8\xa8\xad\xe5\xae\x9a');"
-          new=b"    set('v573-system-user-name',display);const identityMeta=document.getElementById('v573-system-user-id');if(identityMeta&&identityMeta.dataset.profileHydrated!=='1'&&identityMeta.textContent!=='\xe8\xbc\x89\xe5\x85\xa5\xe8\xba\xab\xe5\x88\x86\xe2\x80\xa6')identityMeta.textContent='\xe8\xbc\x89\xe5\x85\xa5\xe8\xba\xab\xe5\x88\x86\xe2\x80\xa6';"
+          old=b"    set('v573-system-user-name',display);set('v573-system-user-id',empId?`\xe5\xb7\xa5\xe8\x99\x9f ${empId}`:'\xe8\xab\x8b\xe5\x9b\x9e\xe9\xa6\x96\xe9\xa0\x81\xe8\xa8\xad\xe5\xae\x9a');\r\n"
+          new=b"    set('v573-system-user-name',display);const identityMeta=document.getElementById('v573-system-user-id');if(identityMeta&&identityMeta.dataset.profileHydrated!=='1'&&identityMeta.textContent!=='\xe8\xbc\x89\xe5\x85\xa5\xe8\xba\xab\xe5\x88\x86\xe2\x80\xa6')identityMeta.textContent='\xe8\xbc\x89\xe5\x85\xa5\xe8\xba\xab\xe5\x88\x86\xe2\x80\xa6';\n"
           assert b.count(old)==1, b.count(old)
           p.write_bytes(b.replace(old,new,1))
           PY
