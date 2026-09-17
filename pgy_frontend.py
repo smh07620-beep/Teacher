@@ -102,6 +102,8 @@ def register_pgy_frontend(app):
 
             if "/pgy-workflow.css" not in html:
                 head_assets.append('<link rel="stylesheet" href="/pgy-workflow.css?v=6500">')
+            if "/learner-layout-stability-73.css" not in html:
+                head_assets.append('<link rel="stylesheet" href="/learner-layout-stability-73.css?v=7300">')
             if "/pgy-workflow.js" not in html:
                 body_assets.append('<script defer src="/pgy-workflow.js?v=6601"></script>')
             if "/roles-signing-66.js" not in html:
@@ -171,7 +173,7 @@ def register_pgy_frontend(app):
             if "/teacher-ux-convergence-72.js" not in html:
                 body_assets.append('<script defer src="/teacher-ux-convergence-72.js?v=7205"></script>')
             if "/learner-ui-cleanup-71.js" not in html:
-                body_assets.append('<script defer src="/learner-ui-cleanup-71.js?v=7131"></script>')
+                body_assets.append('<script defer src="/learner-ui-cleanup-71.js?v=7132"></script>')
             if "/portal-navigation-73.js" not in html:
                 body_assets.append('<script defer src="/portal-navigation-73.js?v=7300"></script>')
             # Final Convergence: load the compatibility facade after all
