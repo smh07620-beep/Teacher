@@ -38,3 +38,4 @@ jobs:
           git add static/teacher-content-studio-71.js static/admin-question-bank.js tests/test_rc76_ai_question_mobile_ux.py
           git commit -m 'RC 7.6 converge AI authoring and mobile question actions'
           git push
+# rerun 2
