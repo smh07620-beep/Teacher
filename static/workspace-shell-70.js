@@ -56,6 +56,30 @@
   const maintenanceObserver = new MutationObserver(moveMaintenanceCard);
   maintenanceObserver.observe(workspaceHost, {childList: true, subtree: true});
 
+  function ensureSystemAdvancedMaintenance(){
+    if(!isSystemAdmin)return;
+    const systemPanel=document.getElementById('admin-section-system');
+    if(!systemPanel)return;
+    let details=document.getElementById('system-advanced-maintenance-75');
+    if(!details){
+      details=document.createElement('details');
+      details.id='system-advanced-maintenance-75';
+      details.className='bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden';
+      details.innerHTML=`<summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3"><div><h4 class="font-black text-slate-950">🧰 進階維護</h4><p class="mt-1 text-xs text-slate-500">只在儲存搬移或背景工作異常時使用；日常教學不需要展開。</p></div><span class="text-xs font-bold text-slate-500">需要時展開</span></summary><div class="border-t border-slate-100 p-5 space-y-4"><div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">僅 system_admin 顯示。教材建立請使用「＋ 建立教學內容」；這裡只保留高風險維運工具。</div><div class="flex flex-wrap gap-2"><button id="system75-refresh-status" type="button" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold">🔄 重新檢查系統狀態</button><button id="system75-migrate-mega" type="button" class="rounded-xl bg-fuchsia-700 px-3 py-2 text-xs font-bold text-white">☁️ 搬移既有教材到 MEGA</button><button id="system75-migrate-r2" type="button" class="rounded-xl border border-cyan-300 bg-white px-3 py-2 text-xs font-bold text-cyan-800">☁️ R2 舊備援搬移</button></div><div data-system75-jobs></div></div>`;
+      systemPanel.appendChild(details);
+      details.querySelector('#system75-refresh-status').onclick=()=>window.renderAdminSystemStatus?.(true);
+      details.querySelector('#system75-migrate-mega').onclick=async()=>{await window.migrateMaterialsToMega?.();await window.renderAdminSystemStatus?.(true);};
+      details.querySelector('#system75-migrate-r2').onclick=async()=>{await window.migrateLocalMaterialsToR2?.();await window.renderAdminSystemStatus?.(true);};
+    }
+    const jobs=document.getElementById('admin-material-jobs-panel');
+    const host=details.querySelector('[data-system75-jobs]');
+    if(jobs&&host&&jobs.parentElement!==host){
+      jobs.classList.remove('hidden');
+      jobs.removeAttribute('aria-hidden');
+      host.appendChild(jobs);
+    }
+  }
+
   function button(id, label, workspace) {
     let item = document.getElementById(id);
     if (!item) {
@@ -262,12 +286,14 @@
     const result = typeof previousToggle === 'function' ? await previousToggle(show) : false;
     if (show) {
       moveMaintenanceCard();
+      ensureSystemAdvancedMaintenance();
       if (isSystemAdmin) buildSystemNavigation();
       else addEducationMaintenanceNavigation();
     }
     return result;
   };
 
+  ensureSystemAdvancedMaintenance();
   buildSystemNavigation();
   addEducationMaintenanceNavigation();
   exposeAuditorEntry();

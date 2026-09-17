@@ -80,23 +80,46 @@
   }
 
   function compactLegacyCourseWizard(){
+    const existing=document.querySelector('[data-teacher72-course-wizard]');
+    if(existing)return existing;
     const heading=[...document.querySelectorAll('h4')].find(node=>node.textContent.includes('快速建立整套課程'));
-    if(!heading)return;
+    if(!heading)return null;
     const card=heading.closest('.rounded-2xl')||heading.parentElement?.parentElement;
-    if(!card||card.dataset.teacher72Compact==='1'||card.closest('[data-teacher72-course-wizard]'))return;
+    if(!card)return null;
     card.dataset.teacher72Compact='1';
     const details=document.createElement('details');
     details.dataset.teacher72CourseWizard='1';
-    details.className='rounded-2xl border border-slate-200 bg-white shadow-sm';
+    details.className='hidden rounded-2xl border border-violet-200 bg-white shadow-sm';
+    details.setAttribute('aria-hidden','true');
     const summary=document.createElement('summary');
     summary.className='cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3';
-    summary.innerHTML='<span><span class="font-black text-slate-900">進階：一次建立整套課程</span><span class="ml-2 text-xs text-slate-500">需要課程＋多份教材＋考卷時才使用</span></span><span class="text-xs font-bold text-teal-700">展開</span>';
+    summary.innerHTML='<span><span class="font-black text-slate-900">建立整套課程</span><span class="ml-2 text-xs text-slate-500">課程＋教材＋考卷</span></span><span class="text-xs font-bold text-violet-700">收合</span>';
     card.parentNode?.insertBefore(details,card);
     details.appendChild(summary);
     details.appendChild(card);
     card.classList.remove('rounded-2xl','shadow-sm');
     card.classList.add('border-0','shadow-none');
+    details.addEventListener('toggle',()=>{
+      if(!details.open&&details.dataset.teacher75Explicit==='1'){
+        details.classList.add('hidden');
+        details.setAttribute('aria-hidden','true');
+        delete details.dataset.teacher75Explicit;
+      }
+    });
+    return details;
   }
+
+  function openCourseWizardFromStudio(){
+    const details=compactLegacyCourseWizard();
+    if(!details)return false;
+    details.dataset.teacher75Explicit='1';
+    details.classList.remove('hidden');
+    details.removeAttribute('aria-hidden');
+    details.open=true;
+    requestAnimationFrame(()=>details.scrollIntoView({behavior:'smooth',block:'start'}));
+    return true;
+  }
+  window.teacher75OpenCourseWizard=openCourseWizardFromStudio;
 
   function getStartSelection(){
     const catId=document.getElementById('composer-question-exam-72')?.value||'';

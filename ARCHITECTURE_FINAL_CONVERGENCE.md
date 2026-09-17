@@ -63,3 +63,12 @@ The final target is a small bootstrap/compatibility shell rather than a second i
 - Supported replacements are the Atlas DOCX import wizard, training command-center analytics, and `/api/material-jobs`. Public group cards remain static presentation data for this RC; a data-driven catalog is a separate future change rather than a release-candidate refactor.
 - `/api/quiz-questions/batch-delete` and `/api/security/status` now have canonical frontend consumers.
 - `static/teaching.css` is retired; `static/learner.css` is the single owner of the teaching layout classes.
+
+
+## RC 7.5 workspace simplification
+
+- `課程＋教材` 日常畫面不再顯示 STEP 1–4 教學卡；建立動作由 `＋ 建立教學內容` 統一承接。
+- Course Wizard 仍是 canonical course bundle owner，但預設不佔據管理畫面；只有從 Studio 選擇「建立課程」才顯示。
+- `admin-material-workspace` 保留為 hidden canonical upload executor，不再同時扮演日常維護 UI。
+- MEGA/R2 搬移與背景 Worker 狀態移到 `system_admin` 專用、預設收合的「進階維護」；一般教學角色看不到。
+- `getAdminKey()` compatibility seam 與 DOCX fallback state 本輪不變。

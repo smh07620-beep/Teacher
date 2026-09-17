@@ -12,9 +12,13 @@ class UxConsolidation681Tests(unittest.TestCase):
         cls.external=ROOT.joinpath("static/admin-external-media.js").read_text(encoding="utf-8")
 
     def test_existing_wizard_is_course_first_and_multi_material(self):
-        for marker in ("wizard-area", "wizard-group", "wizard-course-title", "wizard-material-files", "multiple", "建立整套課程"):
+        for marker in (
+            "wizard-area", "wizard-group", "wizard-course-title", "wizard-material-files",
+            "wizard-exam-title", "multiple", "建立整套課程",
+        ):
             self.assertIn(marker,self.html)
-        self.assertIn("AI 候選題需人工確認",self.html)
+        self.assertIn("RC75_WORKSPACE_SIMPLIFIED",self.html)
+        self.assertNotIn("AI 候選題需人工確認後才匯入",self.html)
 
     def test_assessment_navigation_is_unified(self):
         self.assertIn('admin-nav-assessment',self.html)

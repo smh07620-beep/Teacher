@@ -18,10 +18,13 @@ class FinalUiRuntimeCleanup72Tests(unittest.TestCase):
             'consolidateMaterialWorkspace',
             'admin-material-workspace',
             'teacher72MaterialExecutor',
-            '新增教材與外部連結請使用「＋ 建立教學內容」',
-            '建立入口已統一',
+            'teacher75MaterialExecutorRoot',
+            "root.classList.add('hidden')",
+            "root.setAttribute('aria-hidden','true')",
         ):
             self.assertIn(marker, self.studio)
+        self.assertNotIn('教材處理與背景工作', self.studio)
+        self.assertNotIn('建立入口已統一', self.studio)
         # Executor controls stay in the DOM for canonical upload code; cleanup is
         # presentation-only and must not disable or delete them.
         self.assertIn('admin-pptx-upload-input', self.studio)
