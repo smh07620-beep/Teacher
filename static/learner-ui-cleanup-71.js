@@ -1,5 +1,6 @@
-/* Teacher 7.1: keep learner pages focused on the next useful action.
- * Presentation-only cleanup; no learning/progress data is changed.
+/* Teacher 7.1/7.3: keep learner pages focused on the next useful action.
+ * Presentation-only compatibility cleanup; first-paint hiding is owned by
+ * learner-layout-stability-73.css, so this script runs once and never observes DOM.
  */
 (function () {
   'use strict';
@@ -19,14 +20,10 @@
   function apply() {
     const slidesPanel = document.getElementById('panel-slides');
     if (slidesPanel) {
-      // The large introductory card repeats the course center directly below it.
-      // Hide it so learners see search + courses without unnecessary scrolling.
       const intro = slidesPanel.querySelector(':scope > section.edu-card');
       hide(intro);
     }
 
-    // Home identity is already visible in the global header. Do not repeat an
-    // instructional identity card inside the course list.
     const learningStart = document.getElementById('learning-start');
     if (learningStart) {
       learningStart.replaceChildren();
@@ -47,7 +44,6 @@
       }
     }
 
-    // Keep the filter and useful result counts; only empty helper prose is hidden.
     const resultCount = document.getElementById('learning-result-count');
     if (resultCount) {
       if (String(resultCount.textContent || '').trim()) show(resultCount);
@@ -60,12 +56,4 @@
   } else {
     apply();
   }
-
-  // Course rendering can happen after async data arrives. Reapply the compact
-  // presentation without touching any data or interactive course cards.
-  const observer = new MutationObserver(() => apply());
-  document.addEventListener('DOMContentLoaded', () => {
-    const host = document.getElementById('panel-slides');
-    if (host) observer.observe(host, {childList: true, subtree: true});
-  }, {once: true});
 })();
