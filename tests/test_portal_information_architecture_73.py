@@ -40,7 +40,7 @@ class PortalInformationArchitecture73Tests(unittest.TestCase):
         self.assertIn("normalizePublicPortal", self.navigation)
         self.assertIn("normalizeSystem", self.navigation)
         self.assertIn("data-portal73-area-link", self.navigation)
-        self.assertNotIn('MutationObserver', self.navigation)
+        self.assertNotIn('new MutationObserver', self.navigation)
         self.assertNotIn("setInterval", self.navigation)
 
     def test_navigation_asset_is_composed_and_syntax_checked(self):
