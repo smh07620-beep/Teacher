@@ -20,6 +20,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install focused test dependency
+        run: python -m pip install pytest
       - name: Apply guarded patch
         run: python .github/scripts/rc76_ai_question_ux.py
       - name: Syntax and focused regression
