@@ -26,7 +26,7 @@
     const typeOptions=[['choice','單選題'],['multi','複選題'],['true_false','是非題'],['essay','問答題'],['fill','填空題'],['image','圖片判讀題'],['video','影片題']];
     const optionType=['choice','multi','image','video'].includes(type);
     return `<div id="qedit-${q.id}" data-qid="${q.id}" data-has-media="${hasMedia?'1':'0'}" class="hidden mt-3 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 space-y-2.5">
-      <div class="flex items-center justify-between gap-2"><span class="text-xs font-black text-indigo-900">快速編輯題目</span><button onclick="adminToggleInlineQuestionEditor('${q.id}','${catId}',false)" class="text-[11px] text-slate-500 hover:text-slate-800">收合</button></div>
+      <div class="flex items-center justify-between gap-2"><span class="text-xs font-black text-indigo-900">編輯題目</span><button onclick="adminToggleInlineQuestionEditor('${q.id}','${catId}',false)" class="text-[11px] text-slate-500 hover:text-slate-800">收合</button></div>
       <textarea data-field="question" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white" placeholder="題目內容">${escapeHtml(q.question||'')}</textarea>
       <div class="grid sm:grid-cols-3 gap-2">
         <label><span class="text-[11px] font-bold text-slate-600">題目類型</span><select data-field="questionType" onchange="adminInlineQuestionTypeChanged('${q.id}')" class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white">${typeOptions.map(([v,t])=>`<option value="${v}" ${type===v?'selected':''}>${t}</option>`).join('')}</select></label>
@@ -62,12 +62,12 @@
 
   window.adminQuestionRowHTML = function(q,i,catId){
     return `<div id="qrow-${q.id}" class="border ${q.active===false?'border-amber-200 bg-amber-50/50':'border-slate-200 bg-white'} rounded-xl p-3">
-      <div class="flex items-start justify-between gap-3">
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div class="min-w-0 flex-1 text-xs flex items-start gap-2.5">
-          <input type="checkbox" class="qselect-${catId} mt-1 rounded" data-qid="${q.id}" onchange="adminUpdateQuestionSelection('${catId}')">
-          <div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-slate-800">${i+1}. ${escapeHtml(q.question)}</span><span class="text-[10px] px-2 py-0.5 rounded-full ${q.active===false?'bg-amber-100 text-amber-800':'bg-emerald-50 text-emerald-700'}">${q.active===false?'停用':'啟用'}</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${questionTypeLabel(q.questionType||'choice')}</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">${({basic:'基礎',standard:'一般',advanced:'進階'})[q.difficulty||'standard']||'一般'}</span></div><div class="text-slate-500 mt-1">${window.adminAnswerSummary(q)}${q.tag?' · 分類：'+escapeHtml(q.tag):''}</div></div>
+          <input type="checkbox" class="qselect-${catId} mt-1 rounded shrink-0" data-qid="${q.id}" onchange="adminUpdateQuestionSelection('${catId}')" aria-label="選取第 ${i+1} 題進行批次操作">
+          <div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-slate-800 break-words">${i+1}. ${escapeHtml(q.question)}</span><span class="text-[10px] px-2 py-0.5 rounded-full ${q.active===false?'bg-amber-100 text-amber-800':'bg-emerald-50 text-emerald-700'}">${q.active===false?'停用':'啟用'}</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${questionTypeLabel(q.questionType||'choice')}</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">${({basic:'基礎',standard:'一般',advanced:'進階'})[q.difficulty||'standard']||'一般'}</span></div><div class="text-slate-500 mt-1 break-words">${window.adminAnswerSummary(q)}${q.tag?' · 分類：'+escapeHtml(q.tag):''}</div></div>
         </div>
-        <div class="flex gap-1.5 shrink-0 flex-wrap justify-end"><button onclick="adminToggleQuizQuestion('${q.id}','${catId}',${q.active===false?'true':'false'})" class="text-[11px] ${q.active===false?'bg-emerald-600 hover:bg-emerald-500':'bg-amber-500 hover:bg-amber-400'} text-white px-2.5 py-1.5 rounded-lg">${q.active===false?'▶ 啟用':'⏸ 停用'}</button><button onclick="adminToggleInlineQuestionEditor('${q.id}','${catId}',true)" class="text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg">✏️ 快速編輯</button><button onclick="adminDeleteQuizQuestion('${q.id}','${catId}')" class="text-[11px] bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1.5 rounded-lg">🗑️</button></div>
+        <div class="flex items-center gap-2 self-end sm:self-auto shrink-0"><button onclick="adminToggleInlineQuestionEditor('${q.id}','${catId}',true)" class="text-[11px] bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold">✏️ 編輯</button><details class="relative"><summary class="list-none cursor-pointer text-[11px] bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-lg font-bold">⋯</summary><div class="absolute right-0 mt-1 z-30 w-36 bg-white border border-slate-200 shadow-xl rounded-xl p-2 space-y-1"><button onclick="adminToggleQuizQuestion('${q.id}','${catId}',${q.active===false?'true':'false'})" class="w-full text-left text-[11px] px-3 py-2 rounded-lg ${q.active===false?'text-emerald-700 hover:bg-emerald-50':'text-amber-700 hover:bg-amber-50'}">${q.active===false?'▶ 啟用':'⏸ 停用'}</button><button onclick="adminDeleteQuizQuestion('${q.id}','${catId}')" class="w-full text-left text-[11px] text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-lg">🗑️ 刪除</button></div></details></div>
       </div>${window.adminQuestionEditFormHTML(q,catId)}
     </div>`;
   };
@@ -86,6 +86,8 @@
       master.checked=all.length>0&&selected.length===all.length;
       master.indeterminate=selected.length>0&&selected.length<all.length;
     }
+    const actions=document.getElementById(`qselection-actions-${catId}`);
+    actions?.classList.toggle('hidden',selected.length===0);
   };
 
   window.adminSelectAllQuestions = function(catId,checked){
@@ -97,18 +99,14 @@
     const el=document.getElementById(`qedit-${qId}`);
     if(!el) return;
     el.classList.toggle('hidden',!open);
-    if(open){
-      const cb=document.querySelector(`.qselect-${catId}[data-qid="${qId}"]`);
-      if(cb) cb.checked=true;
-      window.adminUpdateQuestionSelection(catId);
-    }
+    if(open) requestAnimationFrame(()=>el.scrollIntoView({behavior:'smooth',block:'nearest'}));
   };
 
   window.adminEditSelectedQuestions = function(catId,selectAll=false){
     if(selectAll) window.adminSelectAllQuestions(catId,true);
     const ids=window.adminSelectedQuestionIds(catId);
-    if(!ids.length){alert('請先勾選要編輯的題目，或按「全選編輯」。');return;}
-    if(ids.length>80&&!confirm(`即將一次展開 ${ids.length} 題，頁面可能較長，是否繼續？`)) return;
+    if(!ids.length){alert('請先勾選要編輯的題目。');return;}
+    if(ids.length>40&&!confirm(`即將一次展開 ${ids.length} 題，手機操作建議分批處理。是否繼續？`)) return;
     ids.forEach(id=>window.adminToggleInlineQuestionEditor(id,catId,true));
     document.getElementById(`qedit-${ids[0]}`)?.scrollIntoView({behavior:'smooth',block:'center'});
   };
