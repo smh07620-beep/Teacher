@@ -4,12 +4,47 @@
 (function(){
   'use strict';
 
+  const GROUP_ROUTES={
+    '生化':'grpBio','鏡檢':'grpMicro','血清':'grpSero','血庫':'grpBB','細菌':'grpBact','血液':'grpHema'
+  };
+
   function text(el,value){ if(el && el.textContent!==value) el.textContent=value; }
+
+  function normalizeSearch(){
+    const search=document.querySelector('[data-v56-search]');
+    if(!search) return;
+    search.addEventListener('keydown',event=>{
+      if(event.key!=='Enter') return;
+      const query=String(search.value||'').trim();
+      if(!query) return;
+      const hit=Object.entries(GROUP_ROUTES).find(([label])=>query.includes(label)||label.includes(query));
+      if(hit){
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const area=location.pathname==='/pgy'?'pgy':'internal';
+        location.assign(`/system?area=${area}&group=${encodeURIComponent(hit[1])}&module=materials&from=search`);
+        return;
+      }
+      if(query.includes('考核')||query.includes('測驗')){
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if(location.pathname==='/') location.assign('/#pending-exams');
+        else location.assign(location.pathname==='/pgy'?'/pgy#pgy-assessments':'/#pending-exams');
+        return;
+      }
+      if(query.includes('教材')||query.includes('課程')){
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        location.assign(location.pathname==='/pgy'?'/pgy#rotations':'/internal');
+      }
+    },true);
+  }
 
   function normalizePublicPortal(){
     const path=location.pathname;
     if(path==='/' || path==='/internal' || path==='/pgy'){
       document.querySelectorAll('.v575-manage-direct').forEach(entry=>entry.remove());
+      normalizeSearch();
     }
 
     if(path==='/pgy'){
