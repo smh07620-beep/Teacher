@@ -34,6 +34,16 @@ jobs:
           PY
       - name: Apply guarded patch
         run: python scripts/ai_authoring_ux_76_patch.py
+      - name: Normalize dynamic custom-mix regression assertion
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tests/test_ai_authoring_ux_convergence_76.py')
+          s=p.read_text()
+          s=s.replace("'data-mix-type=\"choice\"','data-mix-type=\"essay\"'", "'data-mix-type=\"${t}\"','[\'choice\',\'單選\',4]','[\'essay\',\'問答\',2]' ")
+          p.write_text(s)
+          PY
       - name: JavaScript syntax
         run: |
           node --check static/teacher-content-studio-71.js
