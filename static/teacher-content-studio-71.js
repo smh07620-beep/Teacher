@@ -134,6 +134,64 @@
     aiMount.catId = '';
   }
 
+  const AI_PRESETS_76 = {
+    auto: {label:'自動均衡', type:'mixed_all', count:5, difficulty:'standard', strategy:'auto', focus:'依教材重點自動配置單選、多選、填空與問答題。'},
+    newcomer: {label:'新人基礎考核', type:'mixed_choice_multi', count:10, difficulty:'basic', strategy:'balanced', focus:'以基礎概念、流程與常見注意事項為主；單選題為主，多選題少量，避免過度刁鑽。'},
+    pgy: {label:'PGY 核心能力', type:'mixed_all', count:10, difficulty:'standard', strategy:'balanced', focus:'涵蓋核心知識、操作判斷、臨床情境與反思；混合單選、多選、填空與問答。'},
+    case: {label:'案例判讀', type:'mixed', count:5, difficulty:'advanced', strategy:'scenario', focus:'以案例資訊整合、判讀依據與下一步處置為主；情境單選與問答混合。'},
+    quality: {label:'品質管理／異常處理', type:'mixed_all', count:10, difficulty:'standard', strategy:'safety', focus:'聚焦 QC、異常辨識、故障排除、通報與病人安全；混合單選、多選與問答。'},
+    advanced: {label:'進階組內訓練', type:'mixed_all', count:10, difficulty:'advanced', strategy:'scenario', focus:'提高多步推理與情境整合比例，增加多選與問答，避免只考記憶。'},
+    image: {label:'圖片判讀', type:'choice', count:5, difficulty:'standard', strategy:'recognition', focus:'優先根據圖片／Atlas 視覺證據出題，要求辨識特徵與判讀依據。'},
+    video: {label:'影片互動', type:'video_mixed', count:5, difficulty:'standard', strategy:'workflow', focus:'依影片流程與關鍵操作時間點設計互動題，混合選擇、填空與問答。'},
+  };
+
+  function setAiControl76(catId, name, value){
+    const el=document.getElementById(`ai-${name}-${catId}`); if(!el) return false;
+    if(el.tagName==='SELECT' && ![...el.options].some(o=>String(o.value)===String(value))){
+      const option=document.createElement('option'); option.value=String(value); option.textContent=String(value); el.appendChild(option);
+    }
+    el.value=String(value); el.dispatchEvent(new Event('change',{bubbles:true})); return true;
+  }
+
+  function applyAiPreset76(catId,key){
+    const preset=AI_PRESETS_76[key]||AI_PRESETS_76.auto;
+    setAiControl76(catId,'type',preset.type); setAiControl76(catId,'count',preset.count); setAiControl76(catId,'difficulty',preset.difficulty); setAiControl76(catId,'strategy',preset.strategy);
+    const focus=document.getElementById(`ai-focus-${catId}`); if(focus) focus.value=preset.focus;
+    const note=document.querySelector(`[data-ai-preset-note-76="${CSS.escape(String(catId))}"]`); if(note) note.textContent=`${preset.label}：${preset.focus}`;
+    const custom=document.querySelector(`[data-ai-custom-mix-76="${CSS.escape(String(catId))}"]`); custom?.classList.add('hidden');
+  }
+
+  function applyAiCustomMix76(catId){
+    const root=document.querySelector(`[data-ai-custom-mix-76="${CSS.escape(String(catId))}"]`); if(!root) return;
+    const counts={choice:0,multi:0,fill:0,essay:0};
+    Object.keys(counts).forEach(type=>{counts[type]=Math.max(0,Number(root.querySelector(`[data-mix-type="${type}"]`)?.value||0));});
+    const active=Object.entries(counts).filter(([,n])=>n>0),total=active.reduce((sum,[,n])=>sum+n,0);
+    if(!total){alert('請至少設定一種題型的題數');return;}
+    let type='mixed_all';
+    if(active.length===1) type=active[0][0];
+    else if(active.every(([t])=>['choice','multi'].includes(t))) type='mixed_choice_multi';
+    else if(active.every(([t])=>['choice','essay'].includes(t))) type='mixed';
+    setAiControl76(catId,'type',type); setAiControl76(catId,'count',total);
+    const labels={choice:'單選',multi:'多選',fill:'填空',essay:'問答'};
+    const request=active.map(([t,n])=>`${labels[t]} ${n} 題`).join('、');
+    const focus=document.getElementById(`ai-focus-${catId}`); if(focus) focus.value=`[自訂題型配置] 目標共 ${total} 題：${request}。請盡量嚴格依此配置產生，題目內容仍須完全根據所選教材。`;
+    const note=document.querySelector(`[data-ai-preset-note-76="${CSS.escape(String(catId))}"]`); if(note) note.textContent=`自訂混搭：${request}（共 ${total} 題）`;
+  }
+
+  function aiPresetPanel76(catId){
+    return `<section data-ai-ux-76 class="mb-4 rounded-2xl border border-violet-200 bg-violet-50/50 p-4"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-violet-700">STEP 2 / 3 · 出題策略</div><h5 class="mt-1 font-black text-slate-900">依教學需求自動混搭題型</h5><p class="mt-1 text-xs text-slate-500">先選用途快速套用；需要精準配置時再使用自訂混搭。</p></div><span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-violet-700 border border-violet-100">產生後進入 STEP 3 審核</span></div><div class="mt-3 grid sm:grid-cols-[1fr_auto] gap-2"><select data-ai-preset-select-76 class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm"><option value="auto">✨ 自動均衡</option><option value="newcomer">🌱 新人基礎考核</option><option value="pgy">🎯 PGY 核心能力</option><option value="case">🧩 案例判讀</option><option value="quality">🛡️ 品質管理／異常處理</option><option value="advanced">🧠 進階組內訓練</option><option value="image">🖼️ 圖片判讀</option><option value="video">🎬 影片互動</option><option value="custom">⚙️ 自訂混搭</option></select><button type="button" data-ai-apply-preset-76 class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">套用</button></div><p data-ai-preset-note-76="${esc(catId)}" class="mt-2 text-[11px] leading-5 text-violet-700">自動均衡：系統依教材重點配置題型。</p><div data-ai-custom-mix-76="${esc(catId)}" class="hidden mt-3 rounded-xl border border-violet-100 bg-white p-3"><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">${[['choice','單選',4],['multi','多選',2],['fill','填空',2],['essay','問答',2]].map(([t,l,n])=>`<label class="text-xs font-bold text-slate-600">${l}<input data-mix-type="${t}" type="number" min="0" max="30" value="${n}" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"></label>`).join('')}</div><button type="button" data-ai-apply-custom-76 class="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">套用自訂題型配置</button><p class="mt-2 text-[10px] leading-4 text-slate-400">自訂混搭會沿用同一支 AI 出題服務，以總題數＋明確配置要求產生候選題；教師仍需在匯入前審核。</p></div></section>`;
+  }
+
+  async function waitForAiSection76(catId,timeout=6500){
+    const started=Date.now();
+    while(Date.now()-started<timeout){
+      const panel=document.getElementById(`qpanel-${catId}`); const section=panel?.querySelector('[data-ai-question-studio]');
+      if(section) return section;
+      await new Promise(resolve=>setTimeout(resolve,120));
+    }
+    return null;
+  }
+
   async function chooseExamForAi(){
     restoreAiPanel();
     const host = document.getElementById('teacher-content-studio-body-71');
@@ -145,7 +203,7 @@
         host.innerHTML = `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h4 class="font-black text-amber-950">目前組別還沒有考卷</h4><p class="mt-1 text-sm text-amber-800">AI 候選題必須先指定要加入的考卷。</p><div class="mt-4 flex gap-2"><button type="button" data-studio-action="exam" class="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-bold text-white">建立考卷</button><button type="button" data-studio-back class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700">返回</button></div></div>`;
         return;
       }
-      host.innerHTML = `<div class="mx-auto max-w-2xl"><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 返回內容類型</button><div class="mt-4 rounded-2xl border border-violet-200 bg-white p-5"><div class="text-xs font-black tracking-wide text-violet-700">AI 輔助出題</div><h4 class="mt-1 text-lg font-black text-slate-900">先選擇要加入的考卷</h4><p class="mt-1 text-xs leading-5 text-slate-500">下一步仍留在「建立教學內容」視窗，直接使用既有 AI 教材出題工作室，不會跳離目前流程。</p><label class="block mt-4 text-sm font-bold text-slate-700">加入哪一份考卷？<select id="teacher-studio-ai-exam-75" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">${categories.map(c => `<option value="${esc(c.id)}">${esc(c.title || c.id)}</option>`).join('')}</select></label><div class="mt-5 flex flex-wrap justify-end gap-2"><button type="button" data-studio-back class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">取消</button><button type="button" data-studio-ai-confirm class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">下一步：AI 出題設定</button></div></div></div>`;
+      host.innerHTML = `<div class="mx-auto max-w-2xl"><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 返回內容類型</button><div class="mt-4 rounded-2xl border border-violet-200 bg-white p-5"><div class="text-xs font-black tracking-wide text-violet-700">STEP 1 / 3 · 目標考卷</div><h4 class="mt-1 text-lg font-black text-slate-900">先選擇要加入的考卷</h4><p class="mt-1 text-xs leading-5 text-slate-500">下一步仍留在「建立教學內容」視窗，直接使用既有 AI 教材出題工作室，不會跳離目前流程。</p><label class="block mt-4 text-sm font-bold text-slate-700">加入哪一份考卷？<select id="teacher-studio-ai-exam-75" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">${categories.map(c => `<option value="${esc(c.id)}">${esc(c.title || c.id)}</option>`).join('')}</select></label><div class="mt-5 flex flex-wrap justify-end gap-2"><button type="button" data-studio-back class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">取消</button><button type="button" data-studio-ai-confirm class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">下一步：AI 出題設定</button></div></div></div>`;
     }catch(error){
       host.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3"><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;
     }
@@ -168,8 +226,9 @@
       const panel = document.getElementById(`qpanel-${catId}`);
       if(!panel) throw new Error('找不到指定考卷，請重新選擇。');
       if(panel.classList.contains('hidden')) await window.toggleQuizQuestionsPanel?.(catId);
-      const section = panel.querySelector('[data-ai-question-studio]');
-      if(!section) throw new Error('AI 出題工作室尚未載入，請重新開啟。');
+      let section = panel.querySelector('[data-ai-question-studio]');
+      if(!section) section = await waitForAiSection76(catId);
+      if(!section) throw new Error('AI 出題工作室載入逾時，請按「重新嘗試」。');
       const placeholder = document.createElement('div');
       placeholder.hidden = true;
       placeholder.dataset.teacher75AiPlaceholder = String(catId);
@@ -177,12 +236,20 @@
       aiMount.section = section;
       aiMount.placeholder = placeholder;
       aiMount.catId = String(catId);
-      host.innerHTML = `<div class="mx-auto max-w-4xl"><div class="mb-4 flex items-start justify-between gap-3"><div><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 重新選擇考卷</button><h4 class="mt-2 text-lg font-black text-slate-950">✨ AI 輔助出題</h4><p class="mt-1 text-xs text-slate-500">AI 設定、產生候選題與人工審核都留在同一個建立流程。</p></div></div><div data-teacher75-ai-host></div></div>`;
+      host.innerHTML = `<div class="mx-auto max-w-4xl"><div class="mb-4 flex items-start justify-between gap-3"><div><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 重新選擇考卷</button><h4 class="mt-2 text-lg font-black text-slate-950">✨ AI 輔助出題</h4><p class="mt-1 text-xs text-slate-500">AI 設定、產生候選題與人工審核都留在同一個建立流程。</p></div></div>${aiPresetPanel76(catId)}<div data-teacher75-ai-host></div></div>`;
       host.querySelector('[data-teacher75-ai-host]')?.appendChild(section);
+      const presetSelect=host.querySelector('[data-ai-preset-select-76]');
+      const presetButton=host.querySelector('[data-ai-apply-preset-76]');
+      const customBox=host.querySelector(`[data-ai-custom-mix-76="${CSS.escape(String(catId))}"]`);
+      presetSelect?.addEventListener('change',()=>customBox?.classList.toggle('hidden',presetSelect.value!=='custom'));
+      presetButton?.addEventListener('click',()=>{if(presetSelect?.value==='custom'){customBox?.classList.remove('hidden');return;}applyAiPreset76(catId,presetSelect?.value||'auto');});
+      host.querySelector('[data-ai-apply-custom-76]')?.addEventListener('click',()=>applyAiCustomMix76(catId));
+      applyAiPreset76(catId,'auto');
       requestAnimationFrame(() => section.scrollIntoView({behavior:'smooth', block:'start'}));
     }catch(error){
       restoreAiPanel();
-      host.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message || 'AI 出題工作室開啟失敗')}<div class="mt-3"><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;
+      host.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message || 'AI 出題工作室開啟失敗')}<div class="mt-3 flex gap-2 flex-wrap"><button type="button" data-ai-retry-76 class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 重新嘗試</button><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;
+      host.querySelector('[data-ai-retry-76]')?.addEventListener('click',()=>mountAiPanel(catId));
     }
   }
 
