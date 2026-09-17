@@ -55,12 +55,16 @@
     state.loaded[name] = true;
 
     if (name === 'content') {
-      await Promise.allSettled([
-        Promise.resolve(window.refreshAdminMaterialCategoryOptions?.()),
-        Promise.resolve(window.renderAdminCourses?.()),
-        Promise.resolve(window.renderAdminMaterials?.(force))
-      ]);
-      await window.renderAdminCourseMaterialHub?.(force);
+      // RC 7.10: the daily course/material hub paints progressively. Do not
+      // wait for the legacy hidden material list or per-material search-index
+      // probes before allowing the workspace to open.
+      const jobs = [
+        Promise.resolve().then(() => window.renderAdminCourseMaterialHub?.(force)),
+        Promise.resolve().then(() => window.renderAdminCourses?.(force)),
+        Promise.resolve().then(() => window.refreshAdminMaterialCategoryOptions?.())
+      ];
+      void Promise.allSettled(jobs);
+      return;
     }
     if (name === 'quiz') await window.renderAdminQuizCategories?.(force);
     if (name === 'word') await window.renderAdminDocTemplates?.();
