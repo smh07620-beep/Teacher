@@ -47,7 +47,7 @@ class FinalConvergenceFacadeTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.facade)
 
     def test_facade_loads_last_among_injected_admin_assets(self):
-        facade_marker = '<script defer src="/admin-compat-facade.js?v=7300"></script>'
+        facade_marker = '<script defer src="/admin-compat-facade.js?v=7311"></script>'
         learner_marker = '<script defer src="/learner-result-chart.js?v=7123"></script>'
         self.assertIn(facade_marker, self.frontend)
         self.assertIn(learner_marker, self.frontend)
