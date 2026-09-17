@@ -77,6 +77,14 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn("classList.add('hidden')", self.convergence)
         self.assertIn('進階：一次建立整套課程', self.convergence)
         self.assertIn("details.dataset.teacher72CourseWizard='1'", self.convergence)
+        self.assertNotIn('simplifyTabs', self.authoring)
+        self.assertNotIn('new MutationObserver', self.authoring)
+
+    def test_convergence_reconciles_existing_assessment_rerenders(self):
+        self.assertIn('mutation.target', self.convergence)
+        self.assertIn("target.closest?.('#assessment-681')", self.convergence)
+        self.assertIn('reconcileScheduled', self.convergence)
+        self.assertIn('mutations.some(mutationNeedsReconcile)', self.convergence)
 
     def test_phase_three_has_readiness_gate_and_post_create_next_actions(self):
         for marker in (
@@ -116,17 +124,26 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn('window.openExternalMaterialCreateDrawer=window.openExternalMaterialDrawer', self.external)
         self.assertIn('window.createExternalMaterialFromDrawer=window.saveExternalMaterialLink', self.external)
 
-    def test_authoring_overlay_composes_fresh_studio_asset(self):
-        self.assertIn('/teacher-content-studio-71.js?v=7115', self.authoring)
-        self.assertIn('/teacher-ux-convergence-72.js?v=7202', self.authoring)
-        self.assertIn('/teacher-content-composer-72.js?v=7200', self.frontend)
+    def test_frontend_owns_authoring_asset_order(self):
+        self.assertNotIn('function load(src, marker)', self.authoring)
+        for marker in (
+            '/question-authoring-ux-71.js?v=7133',
+            '/teacher-content-studio-71.js?v=7115',
+            '/teacher-content-composer-72.js?v=7200',
+            '/teacher-ux-convergence-72.js?v=7205',
+        ):
+            self.assertIn(marker, self.frontend)
         self.assertLess(
-            self.frontend.index('/question-authoring-ux-71.js?v=7132'),
+            self.frontend.index('/question-authoring-ux-71.js?v=7133'),
+            self.frontend.index('/teacher-content-studio-71.js?v=7115'),
+        )
+        self.assertLess(
+            self.frontend.index('/teacher-content-studio-71.js?v=7115'),
             self.frontend.index('/teacher-content-composer-72.js?v=7200'),
         )
         self.assertLess(
             self.frontend.index('/teacher-content-composer-72.js?v=7200'),
-            self.frontend.index('/teacher-ux-convergence-72.js?v=7202'),
+            self.frontend.index('/teacher-ux-convergence-72.js?v=7205'),
         )
 
     def test_release_matrix_records_studio(self):
