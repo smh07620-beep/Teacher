@@ -35,3 +35,15 @@
     })
   });
 })();
+
+// RC 7.10 presentation hotfix. Load after every canonical Teacher/admin owner
+// so the Studio can route AI and question-management into dedicated panels
+// without changing persistence or RBAC ownership.
+(function loadTeacherContentToolPanels710(){
+  if(document.querySelector('script[data-teacher-tool-panels-710]'))return;
+  const script=document.createElement('script');
+  script.src='/teacher-content-tool-panels-710.js?v=7101';
+  script.async=false;
+  script.dataset.teacherToolPanels710='1';
+  document.head.appendChild(script);
+})();
