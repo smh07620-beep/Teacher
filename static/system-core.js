@@ -34,7 +34,7 @@ function syncLinkedLearnerUI(){
     ['examinee-id','progress-empid','pgy-assess-empid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=empId;});
     const display=name||'未設定姓名';
     const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-    set('v573-system-user-name',display);set('v573-system-user-id',empId?`工號 ${empId}`:'請回首頁設定');
+    set('v573-system-user-name',display);const identityMeta=document.getElementById('v573-system-user-id');if(identityMeta&&identityMeta.dataset.profileHydrated!=='1'&&identityMeta.textContent!=='載入身分…')identityMeta.textContent='載入身分…';
     set('v573-exam-person-name',display);set('v573-exam-person-id',empId?`工號 ${empId}`:'請先回首頁設定個人資料');
     set('v573-progress-person',empId?`${display}｜工號 ${empId}`:'尚未設定，請回首頁設定個人資料');
     document.getElementById('v573-exam-linked')?.classList.toggle('missing',!empId);

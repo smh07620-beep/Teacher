@@ -35,6 +35,7 @@
       const title = String(profile.professionalTitle || ROLE_LABELS[profile.role] || '醫檢師').trim();
       const emp = String(profile.empId || '').trim();
       meta.textContent = [title, emp ? `工號 ${emp}` : ''].filter(Boolean).join(' · ');
+      meta.dataset.profileHydrated = '1';
     }
   }
 
