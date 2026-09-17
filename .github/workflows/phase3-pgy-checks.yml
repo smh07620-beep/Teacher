@@ -75,6 +75,7 @@ jobs:
           node --check static/teacher-content-composer-72.js
           node --check static/teacher-ux-convergence-72.js
           node --check static/learner-ui-cleanup-71.js
+          node --check static/portal-navigation-73.js
           node --check static/admin-compat-facade.js
           node tests/test_external_media_behavior_681.js
       - name: Web and worker shell contracts
