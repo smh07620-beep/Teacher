@@ -33,23 +33,6 @@
     }
   };
 
-  function ensureQuizPanelCloseControl(panel,catId){
-    if(!panel||panel.querySelector('[data-quiz-panel-close-710]'))return;
-    const bar=document.createElement('div');
-    bar.dataset.quizPanelClose710='1';
-    bar.className='sticky top-0 z-30 mb-3 flex justify-end border-b border-slate-100 bg-white/95 py-2 backdrop-blur';
-    const button=document.createElement('button');
-    button.type='button';
-    button.className='rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50';
-    button.textContent='↑ 收合考卷工具';
-    button.addEventListener('click',()=>{
-      panel.classList.add('hidden');
-      document.getElementById(`qcard-${catId}`)?.scrollIntoView({behavior:'smooth',block:'center'});
-    });
-    bar.appendChild(button);
-    panel.prepend(bar);
-  }
-
   window.toggleQuizQuestionsPanel = function(catId){
     const panel=document.getElementById(`qpanel-${catId}`);
     if(!panel) return Promise.resolve(null);
@@ -65,7 +48,6 @@
       if(other!==panel)other.classList.add('hidden');
     });
     panel.querySelectorAll('details[open]').forEach(details=>details.removeAttribute('open'));
-    ensureQuizPanelCloseControl(panel,catId);
     panel.classList.remove('hidden');
 
     // RC 7.10: opening the panel must be immediate. Question rows, linked
