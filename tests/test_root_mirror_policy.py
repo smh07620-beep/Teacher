@@ -29,7 +29,7 @@ class RootMirrorPolicyTests(unittest.TestCase):
             "teacher_app.materials.service",
             "teacher_app.courses.service",
             "teacher_app.assessments.service",
-            "Converged runtime and source ownership",
+            "Converged read/data ownership",
             "Deferred storage debt",
             "Frozen / converged",
             "professional_title",
