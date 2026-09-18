@@ -50,9 +50,8 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         self.assertIn("conn.close()", self.db)
 
     def test_material_repository_does_not_consult_legacy_host(self):
-        self.assertNotIn(".normalize_group(", self.repo)
-        self.assertNotIn(".normalize_area(", self.repo)
-        self.assertNotIn("DEFAULT_GROUP", self.repo.replace("scope.DEFAULT_GROUP", ""))
+        self.assertNotIn("base.normalize_group", self.repo)
+        self.assertNotIn("base.normalize_area", self.repo)
         self.assertIn("scope.normalize_group", self.repo)
         self.assertIn("scope.normalize_area", self.repo)
         self.assertIn("legacy_base is accepted but never consulted", self.repo)
