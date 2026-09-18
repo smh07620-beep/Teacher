@@ -9,6 +9,7 @@ import time
 import uuid
 from typing import Any, Mapping
 
+from teacher_app.common import db as common_db
 from teacher_app.common.errors import ApiError
 from teacher_app.materials import repository as materials_repository
 
@@ -406,26 +407,12 @@ def update_category_materials(base, category_id: str, data: Mapping[str, Any]) -
         material_id = str(value).strip()
         if material_id in allowed and material_id not in selected:
             selected.append(material_id)
-    conn, kind = base._db_conn()
-    try:
-        if kind == "postgres":
-            conn.execute("UPDATE materials SET category='' WHERE category=%s", (category_id,))
-            if selected:
-                placeholders = ",".join(["%s"] * len(selected))
-                conn.execute(
-                    f"UPDATE materials SET category=%s WHERE id IN ({placeholders}) AND group_key=%s AND training_area=%s",
-                    tuple([category_id] + selected + [category.get("group"), category.get("area")]),
-                )
-        else:
-            conn.execute("UPDATE materials SET category='' WHERE category=?", (category_id,))
-            if selected:
-                placeholders = ",".join(["?"] * len(selected))
-                conn.execute(
-                    f"UPDATE materials SET category=? WHERE id IN ({placeholders}) AND group_key=? AND training_area=?",
-                    tuple([category_id] + selected + [category.get("group"), category.get("area")]),
-                )
-    finally:
-        conn.close()
+    materials_repository.replace_category_assignments(
+        category_id,
+        selected,
+        group_key=category.get("group"),
+        training_area=category.get("area"),
+    )
     return {"ok": True, "linkedIds": selected, "linked": len(selected)}
 
 
@@ -433,17 +420,10 @@ def delete_category(base, category_id: str) -> dict:
     entry = base.get_quiz_category(category_id)
     if not entry:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考題頁籤", 404)
-    conn, kind = base._db_conn()
-    try:
-        if kind == "postgres":
-            conn.execute("DELETE FROM quiz_questions WHERE quiz_category_id=%s", (category_id,))
-            conn.execute("DELETE FROM quiz_categories WHERE id=%s", (category_id,))
-            conn.execute("UPDATE materials SET category='' WHERE category=%s", (category_id,))
-        else:
-            conn.execute("DELETE FROM quiz_questions WHERE quiz_category_id=?", (category_id,))
-            conn.execute("DELETE FROM quiz_categories WHERE id=?", (category_id,))
-            conn.execute("UPDATE materials SET category='' WHERE category=?", (category_id,))
-    finally:
-        conn.close()
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        conn.execute(f"DELETE FROM quiz_questions WHERE quiz_category_id={ph}", (category_id,))
+        conn.execute(f"DELETE FROM quiz_categories WHERE id={ph}", (category_id,))
+        materials_repository.clear_category_assignment(conn, kind, category_id)
     _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
     return {"ok": True}
