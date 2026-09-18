@@ -71,6 +71,19 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         self.assertNotIn("DELETE FROM materials", self.materials)
         self.assertIn("repository.update_material_metadata(", self.materials)
         self.assertIn("repository.delete_material_record(", self.materials)
+    def test_course_and_assessment_material_relations_use_repository(self):
+        for forbidden in (
+            "UPDATE materials",
+            "SELECT id FROM materials",
+        ):
+            self.assertNotIn(forbidden, self.courses)
+        self.assertNotIn("UPDATE materials", self.assessments)
+        self.assertIn("materials_repository.clear_course_assignment(", self.courses)
+        self.assertIn("materials_repository.material_ids_for_course(", self.courses)
+        self.assertIn("materials_repository.replace_category_assignments(", self.assessments)
+        self.assertIn("materials_repository.clear_category_assignment(", self.assessments)
+        self.assertIn("with common_db.transaction()", self.courses)
+        self.assertIn("with common_db.transaction()", self.assessments)
     def test_repository_has_no_provider_credentials_or_storage_clients(self):
         for forbidden in (
             "R2_SECRET_ACCESS_KEY",
