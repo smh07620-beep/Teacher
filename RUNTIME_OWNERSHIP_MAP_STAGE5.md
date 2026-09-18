@@ -108,9 +108,25 @@ Remaining:
 
 `smart_learning_67.py` still owns reader progress, coverage, preview/indexing integration and API behavior. Converge the state/repository logic before touching the frontend adapter.
 
-### Worker — pending
+### Worker — heartbeat canonical; queue/terminal/direct-upload pending
 
-`free_worker_67.py` and `material_worker.py` still own unique queue/worker protocol behavior. Preserve the existing single-worker protocol and server-side token boundary; do not create a second queue implementation.
+Completed:
+
+- `teacher_app.worker.protocol` owns worker-ID normalization, bounded non-secret build metadata whitelisting, heartbeat capability projection and heartbeat orchestration.
+- `teacher_app.worker.repository` is the single SQL owner for `material_worker_heartbeats` upsert persistence.
+- `free_worker_67.py` keeps `_worker_id` / `_worker_metadata` only as compatibility aliases and delegates heartbeat persistence to the canonical worker domain.
+- The current-job `worker_last_seen` touch remains a narrow callback into the still-legacy material-job owner; the canonical worker modules do not import the legacy host object.
+- A narrow `connection_factory` seam preserves isolated legacy-host tests while production still resolves through the already-canonical shared DB connection path.
+- `material_worker.py` remains the only executable local worker loop. No second poller, queue consumer, provider client or code-update loop exists under `teacher_app.worker`.
+
+Remaining:
+
+- claim/job ownership (`claim_next_material_job`, ownership validation and claimed-job projection);
+- complete/retry/fail terminal transitions and post-completion indexing hook;
+- direct multipart upload session state and R2 orchestration in `free_worker_67.py`;
+- local worker processing/storage execution in `material_worker.py` remains unique and should be migrated only by delegation, never duplicated.
+
+Preserve the existing single-worker protocol and server-side token boundary while moving those pieces in separate bounded slices.
 
 ### External media — pending
 
@@ -167,7 +183,7 @@ Do **not** add a second MEGA client or second connection/session implementation 
 1. Finish PGY by moving unique multi-role/sign-mode behavior out of `pgy_signing_66.py` into `teacher_app.pgy`.
 2. Move backup/restore ownership into a canonical maintenance domain.
 3. Move smart-learning state/data ownership into a canonical domain; retire its dead Atlas preview helper during that cleanup.
-4. Move worker queue/protocol ownership without creating a second worker implementation.
+4. Continue worker ownership from the now-canonical heartbeat into claim/terminal/direct-upload slices without creating a second worker implementation.
 5. Move external-media validation/persistence ownership.
 6. Move course-bundle and follow-up workflow ownership while preserving idempotency.
 7. Atlas runtime convergence is complete; keep `register_atlas_70` only as the established HTTP compatibility adapter until app-factory cutover.
