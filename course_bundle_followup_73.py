@@ -1,25 +1,21 @@
 """Retry-safe Course Wizard follow-up HTTP compatibility adapter.
 
-The established upload/link handlers remain the mutation owners.  Workflow
+The established upload/link handlers remain the mutation owners. Workflow
 lookup, scope validation, request hashes and idempotency persistence live in
-``teacher_app.courses.bundle_followup``.
+``teacher_app.courses.bundle_followup``. Schema registration lives in
+``schema_migrations``.
 """
 from __future__ import annotations
 
 from flask import jsonify, request
 
-from schema_migrations import MIGRATIONS, migration
+from schema_migrations import _course_bundle_followups_73
 from teacher_app.common.errors import ApiError
 from teacher_app.courses import bundle_followup as followup_service
 
 
 MIGRATION_ID = followup_service.MIGRATION_ID
 MAX_FOLLOWUP_INDEX = followup_service.MAX_FOLLOWUP_INDEX
-_course_bundle_followups_73 = followup_service._course_bundle_followups_73
-
-
-if not any(version == MIGRATION_ID for version, _fn in MIGRATIONS):
-    migration(MIGRATION_ID)(_course_bundle_followups_73)
 
 
 def _error(exc: ApiError):
