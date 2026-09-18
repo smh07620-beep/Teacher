@@ -19,7 +19,7 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
 
     def test_material_read_sql_is_owned_by_repository(self):
         self.assertIn("SELECT * FROM materials", self.repo)
-        self.assertNotRegex(self.app, re.compile(r"SELECT\\s+\\*\\s+FROM\\s+materials", re.I))
+        self.assertNotRegex(self.app, re.compile(r"SELECT\s+\*\s+FROM\s+materials", re.I))
 
     def test_legacy_material_read_functions_are_thin_delegates(self):
         for name, target in (
@@ -87,8 +87,8 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         self.assertIn("with common_db.transaction()", self.assessments)
     def test_runtime_material_dml_exists_only_in_repository(self):
         material_dml = re.compile(
-            r"(SELECT\\s+.*FROM\\s+materials|INSERT\\s+.*INTO\\s+materials|"
-            r"UPDATE\\s+materials|DELETE\\s+FROM\\s+materials)",
+            r"(SELECT\s+.*FROM\s+materials|INSERT\s+.*INTO\s+materials|"
+            r"UPDATE\s+materials|DELETE\s+FROM\s+materials)",
             re.I,
         )
         for source in (self.app, self.materials, self.courses, self.assessments, self.external):
