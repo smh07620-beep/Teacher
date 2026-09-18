@@ -125,8 +125,9 @@ class RootMirrorPolicyTests(unittest.TestCase):
             "register_legacy_material_routes",
             "register_legacy_course_routes",
             "register_legacy_assessment_routes",
+            "register_assessment_performance_712",
         ):
-            self.assertIn(f"app = {name}(legacy_app)", source)
+            self.assertNotIn(name, source)
         self.assertNotIn("@app.", source)
         self.assertNotIn("CREATE TABLE", source)
 
