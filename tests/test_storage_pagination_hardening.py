@@ -1,9 +1,9 @@
-from types import SimpleNamespace
 import unittest
 
-from storage_pagination_hardening import (
+from teacher_app.materials.storage import (
     StoragePaginationError,
-    install_storage_pagination_hardening,
+    bucket_usage_bytes,
+    delete_prefix,
     iter_s3_pages,
 )
 
@@ -94,7 +94,7 @@ class StoragePaginationHardeningTests(unittest.TestCase):
 
         self.assertEqual(len(client.calls), 2)
 
-    def test_install_replaces_r2_delete_with_guarded_idempotent_batches(self):
+    def test_delete_prefix_uses_guarded_idempotent_batches(self):
         client = FakeClient([
             {
                 "Contents": [{"Key": "materials/1/a"}],
@@ -107,22 +107,18 @@ class StoragePaginationHardeningTests(unittest.TestCase):
             },
         ])
         recorded = []
-        base = SimpleNamespace(
-            R2_BUCKET_NAME="r2-bucket",
-            OCI_BUCKET_NAME="oci-bucket",
-            r2_client=lambda: client,
-            oci_client=lambda: client,
-            r2_record_deleted=recorded.append,
-        )
 
-        install_storage_pagination_hardening(base)
-        base.r2_delete_prefix("materials/1/")
+        delete_prefix(
+            client,
+            "r2-bucket",
+            "materials/1/",
+            on_deleted=recorded.append,
+        )
 
         self.assertEqual(recorded, ["materials/1/a", "materials/1/b"])
         self.assertEqual(len(client.deleted), 2)
-        self.assertTrue(base._storage_pagination_hardening_installed)
 
-    def test_install_hardens_oci_usage_listing_too(self):
+    def test_bucket_usage_uses_the_same_guarded_pagination(self):
         client = FakeClient([
             {
                 "Contents": [{"Key": "a", "Size": 7}],
@@ -134,17 +130,8 @@ class StoragePaginationHardeningTests(unittest.TestCase):
                 "IsTruncated": False,
             },
         ])
-        base = SimpleNamespace(
-            R2_BUCKET_NAME="r2-bucket",
-            OCI_BUCKET_NAME="oci-bucket",
-            r2_client=lambda: client,
-            oci_client=lambda: client,
-            r2_record_deleted=lambda _key: None,
-        )
 
-        install_storage_pagination_hardening(base)
-
-        self.assertEqual(base.oci_bucket_usage_bytes(), 18)
+        self.assertEqual(bucket_usage_bytes(client, "oci-bucket"), 18)
 
 
 if __name__ == "__main__":
