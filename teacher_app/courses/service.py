@@ -12,6 +12,7 @@ import re
 import uuid
 from typing import Any, Mapping
 
+from teacher_app.common import db as common_db
 from teacher_app.common.errors import ApiError
 from teacher_app.materials import repository as materials_repository
 
@@ -86,14 +87,11 @@ def update_course(base, course_id: str, data: Mapping[str, Any]) -> dict:
 def delete_course(base, course_id: str) -> dict:
     if not base.get_course(course_id):
         raise _fail("COURSE_NOT_FOUND", "找不到課程", 404)
-    conn, kind = base._db_conn()
-    ph = "%s" if kind == "postgres" else "?"
-    try:
-        conn.execute(f"UPDATE materials SET course_id='' WHERE course_id={ph}", (course_id,))
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        materials_repository.clear_course_assignment(conn, kind, course_id)
         conn.execute(f"UPDATE quiz_categories SET course_id='' WHERE course_id={ph}", (course_id,))
         conn.execute(f"DELETE FROM courses WHERE id={ph}", (course_id,))
-    finally:
-        conn.close()
     return {"ok": True}
 
 
@@ -158,17 +156,10 @@ def save_teaching_plan(base, course_id: str, data: Any) -> dict:
     except (ValueError, TypeError) as exc:
         raise _fail("COURSE_PLAN_INVALID", str(exc)) from exc
 
-    conn, kind = base._db_conn()
-    ph = "%s" if kind == "postgres" else "?"
-    try:
-        conn.execute("BEGIN")
-        rows = conn.execute(
-            f"SELECT id FROM materials WHERE course_id={ph}",
-            (course_id,),
-        ).fetchall()
-        valid = {dict(row)["id"] for row in rows}
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        valid = materials_repository.material_ids_for_course(conn, kind, course_id)
         if set(material_order) != valid:
-            conn.rollback()
             raise _fail(
                 "COURSE_MATERIALS_CHANGED",
                 "教材清單已變更，請關閉後重新開啟課程編排再儲存",
@@ -201,12 +192,4 @@ def save_teaching_plan(base, course_id: str, data: Any) -> dict:
             f"UPDATE courses SET {','.join(f'{field}={ph}' for field in fields)} WHERE id={ph}",
             values,
         )
-        conn.commit()
-    except ApiError:
-        raise
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
     return base.get_course(course_id)
