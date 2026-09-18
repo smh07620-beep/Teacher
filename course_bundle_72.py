@@ -1,14 +1,14 @@
 """Course Wizard bundle HTTP compatibility adapter.
 
 Retry-safe course/exam bundle creation lives in ``teacher_app.courses.bundle``.
-This root module preserves the public URL, capability gates, response projection
-and the historical 0072 migration registration order.
+This root module preserves the public URL, capability gates and response
+projection only. Schema registration lives in ``schema_migrations``.
 """
 from __future__ import annotations
 
 from flask import jsonify, request
 
-from schema_migrations import MIGRATIONS, migration
+from schema_migrations import _course_bundle_idempotency_72
 from teacher_app.common.errors import ApiError
 from teacher_app.courses import bundle as bundle_service
 
@@ -16,26 +16,6 @@ from teacher_app.courses import bundle as bundle_service
 MIGRATION_ID = bundle_service.MIGRATION_ID
 WORKFLOW_RE = bundle_service.WORKFLOW_RE
 EXAM_MODES = bundle_service.EXAM_MODES
-
-
-def _course_bundle_idempotency_72(conn, kind: str) -> None:
-    """Historical startup migration hook retained until migration convergence."""
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS course_bundle_requests ("
-        "username TEXT NOT NULL,workflow_id TEXT NOT NULL,request_hash TEXT NOT NULL,"
-        "training_area TEXT NOT NULL,group_key TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'creating',"
-        "course_id TEXT NOT NULL DEFAULT '',quiz_category_id TEXT NOT NULL DEFAULT '',"
-        "result_json TEXT NOT NULL DEFAULT '{}',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,"
-        "PRIMARY KEY(username,workflow_id))"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_course_bundle_requests_status "
-        "ON course_bundle_requests(status,updated_at)"
-    )
-
-
-if not any(version == MIGRATION_ID for version, _fn in MIGRATIONS):
-    migration(MIGRATION_ID)(_course_bundle_idempotency_72)
 
 
 def _hydrate(base, result: dict) -> dict:
