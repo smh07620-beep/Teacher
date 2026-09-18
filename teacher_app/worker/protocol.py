@@ -1,9 +1,10 @@
-"""Canonical Web-side heartbeat protocol for Teacher's single local worker."""
+"""Pure protocol rules for Teacher's single local material worker."""
 from __future__ import annotations
 
 import datetime as dt
+import hmac
 import re
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 from teacher_app.worker import repository
 
@@ -14,6 +15,15 @@ def now() -> str:
 
 def normalize_worker_id(value: Any) -> str:
     return re.sub(r"[^A-Za-z0-9._:-]", "", str(value or ""))[:160]
+
+
+def bearer_token_matches(configured_token: Any, authorization_header: Any) -> bool:
+    """Constant-time validation for the one local worker bearer token."""
+    token = str(configured_token or "")
+    supplied = str(authorization_header or "")
+    if not token:
+        return False
+    return hmac.compare_digest(supplied, f"Bearer {token}")
 
 
 def sanitize_metadata(body: Any) -> dict[str, Any]:
@@ -55,6 +65,69 @@ def heartbeat_capabilities(
     return payload
 
 
+def retry_plan(
+    attempts: Any,
+    max_attempts: Any,
+    *,
+    stamp: str | None = None,
+) -> dict[str, Any]:
+    """Return the legacy retry/backoff decision without touching persistence."""
+    try:
+        attempt_count = max(0, int(attempts or 0))
+    except (TypeError, ValueError):
+        attempt_count = 0
+    try:
+        maximum = max(1, int(max_attempts or 1))
+    except (TypeError, ValueError):
+        maximum = 1
+    if attempt_count >= maximum:
+        return {"retry": False, "delaySeconds": 0, "availableAt": ""}
+    delay = min(300, max(10, attempt_count * 15))
+    if stamp:
+        current = dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=dt.timezone.utc)
+    else:
+        current = dt.datetime.now(dt.timezone.utc)
+    return {
+        "retry": True,
+        "delaySeconds": delay,
+        "availableAt": (current + dt.timedelta(seconds=delay)).isoformat(),
+    }
+
+
+def validate_multipart_parts(
+    parts: Any,
+    expected_parts: Any,
+) -> list[dict[str, Any]]:
+    """Validate the ordered multipart completion manifest.
+
+    Raises ``ValueError`` for malformed input so the HTTP adapter can preserve
+    its existing 400 response without owning multipart protocol rules.
+    """
+    try:
+        expected_count = int(expected_parts)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("multipart expected_parts 不合法。") from exc
+    if expected_count < 1:
+        raise ValueError("multipart expected_parts 不合法。")
+    if not isinstance(parts, list) or len(parts) != expected_count:
+        raise ValueError("multipart parts 不完整。")
+    normalized: list[dict[str, Any]] = []
+    for expected, part in enumerate(parts, 1):
+        if not isinstance(part, Mapping):
+            raise ValueError("multipart part 格式錯誤。")
+        try:
+            number = int(part.get("partNumber", 0) or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("multipart part 格式錯誤。") from exc
+        etag = str(part.get("etag") or "")
+        if number != expected or not etag.strip():
+            raise ValueError("multipart part 格式錯誤。")
+        normalized.append({"PartNumber": expected, "ETag": etag})
+    return normalized
+
+
 def record_heartbeat(
     worker_id: str,
     *,
@@ -63,14 +136,9 @@ def record_heartbeat(
     metadata: Any = None,
     stamp: str | None = None,
     touch_job: Callable[[str, str], None] | None = None,
-    connection_factory: Callable[[], tuple[Any, str]] | None = None,
+    connection_factory: repository.ConnectionFactory | None = None,
 ) -> str:
-    """Persist heartbeat state and optionally touch the current legacy job row.
-
-    ``touch_job`` and ``connection_factory`` are narrow transition seams while
-    material-job persistence remains legacy-owned.  The canonical worker
-    protocol never imports the legacy host object directly.
-    """
+    """Persist heartbeat state and optionally touch the current legacy job row."""
     seen = stamp or now()
     repository.upsert_heartbeat(
         worker_id,

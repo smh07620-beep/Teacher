@@ -16,6 +16,7 @@ from teacher_app.common import scope
 from teacher_app.common.errors import ApiError
 from teacher_app.courses import repository as course_repository
 from teacher_app.materials import catalog, repository
+from teacher_app import storage as canonical_storage
 
 
 MATERIAL_TYPES = {"standard", "atlas", "infographic", "video", "troubleshooting", "sop", "case"}
@@ -160,32 +161,51 @@ def update_material(_legacy_base, material_id: str, data: Mapping[str, Any]) -> 
 
 
 def delete_material(base, material_id: str) -> dict:
-    """Delete storage object + row; provider seam remains legacy until storage convergence."""
+    """Strictly delete material storage before removing the canonical DB row."""
     entry = repository.get_material(material_id)
     if not entry:
         raise _fail("MATERIAL_NOT_FOUND", "內建教材不能從後台刪除，或找不到此教材", 404)
 
-    backend = entry.get("storageBackend")
+    backend = str(entry.get("storageBackend") or "local").lower()
+    if backend not in canonical_storage.VALID_BACKENDS:
+        backend = "local"
+
+    def delete_local_material(payload):
+        upload_dir = base.UPLOAD_DIR / payload["id"]
+        slides_dir = base.UPLOADED_SLIDES_DIR / payload["folder"]
+        if upload_dir.exists():
+            shutil.rmtree(upload_dir)
+        if slides_dir.exists():
+            shutil.rmtree(slides_dir)
+
     if backend == "gdrive":
-        try:
-            base.gdrive_delete_material(entry)
-        except Exception as exc:
-            raise _fail("GDRIVE_DELETE_FAILED", f"Google Drive 教材刪除失敗：{exc}", 502) from exc
+        request = canonical_storage.DeleteRequest(backend, "material", entry)
     elif backend == "mega":
-        base.mega_destroy((entry.get("storageMeta") or {}).get("folderId", ""))
-    elif backend == "oci":
-        try:
-            base.oci_delete_prefix(f"materials/{entry['id']}/")
-        except Exception as exc:
-            raise _fail("OCI_DELETE_FAILED", f"Oracle Object Storage 教材刪除失敗：{exc}", 502) from exc
-    elif backend == "r2":
-        try:
-            base.r2_delete_prefix(f"materials/{entry['id']}/")
-        except Exception as exc:
-            raise _fail("R2_DELETE_FAILED", f"R2 教材刪除失敗：{exc}", 502) from exc
+        meta = entry.get("storageMeta") or {}
+        request = canonical_storage.DeleteRequest(
+            backend,
+            "object",
+            meta.get("folderId") or meta.get("materialFolderId") or entry.get("storageKey", ""),
+        )
+    elif backend in {"oci", "r2"}:
+        request = canonical_storage.DeleteRequest(backend, "prefix", f"materials/{entry['id']}/")
     else:
-        shutil.rmtree(base.UPLOAD_DIR / entry["id"], ignore_errors=True)
-        shutil.rmtree(base.UPLOADED_SLIDES_DIR / entry["folder"], ignore_errors=True)
+        request = canonical_storage.DeleteRequest("local", "material", entry)
+
+    adapters = base.storage_delete_adapters(local_delete_material=delete_local_material)
+    try:
+        canonical_storage.delete_strict(request, adapters)
+    except Exception as exc:
+        cause = exc.cause if isinstance(exc, canonical_storage.StorageDeletionError) else exc
+        failures = {
+            "gdrive": ("GDRIVE_DELETE_FAILED", "Google Drive 教材刪除失敗"),
+            "mega": ("MEGA_DELETE_FAILED", "MEGA 教材刪除失敗"),
+            "oci": ("OCI_DELETE_FAILED", "Oracle Object Storage 教材刪除失敗"),
+            "r2": ("R2_DELETE_FAILED", "R2 教材刪除失敗"),
+            "local": ("LOCAL_DELETE_FAILED", "本機教材刪除失敗"),
+        }
+        code, message = failures[backend]
+        raise _fail(code, f"{message}：{cause}", 502) from exc
 
     try:
         cache_file = base.PREVIEW_CACHE_DIR / (re.sub(r"[^A-Za-z0-9_-]", "_", str(material_id)) + ".pdf")

@@ -16,6 +16,8 @@ from typing import Any, Mapping, Optional
 from teacher_app.common import db as common_db
 from teacher_app.common import scope
 from teacher_app.common.errors import ApiError
+from teacher_app.assessments import repository as assessment_repository
+from teacher_app.courses import repository as course_repository
 
 
 MIGRATION_ID = "0072-course-bundle-idempotency"
@@ -153,46 +155,22 @@ def _load_claim(conn, kind: str, username: str, workflow_id: str) -> dict:
     )
 
 
-def _next_order(conn, kind: str, table: str, where_sql: str, params) -> int:
-    row = conn.execute(
-        f"SELECT COALESCE(MAX(sort_order),-1) AS m FROM {table} WHERE {where_sql}",
-        params,
-    ).fetchone()
-    value = _row_dict(row).get("m") if row is not None else -1
-    if value is None and row is not None:
-        try:
-            value = row[0]
-        except Exception:
-            value = -1
-    return int(value or 0) + 1
-
-
 def _create_course(conn, kind: str, core: Mapping[str, Any]) -> str:
     course_id = f"course-{uuid.uuid4().hex[:12]}"
-    ph = common_db.placeholder(kind)
-    order = _next_order(
+    order = course_repository.next_sort_order_on_connection(
+        conn, kind, area=core["area"], group=core["group"]
+    )
+    course_repository.insert_course_on_connection(
         conn,
         kind,
-        "courses",
-        f"training_area={ph} AND group_key={ph}",
-        (core["area"], core["group"]),
-    )
-    values = (
-        course_id,
-        core["area"],
-        core["group"],
-        core["title"],
-        core["desc"],
-        order,
-        _display_time(),
-        True if kind == "postgres" else 1,
-    )
-    marks = ",".join([ph] * 8)
-    conn.execute(
-        "INSERT INTO courses "
-        "(id,training_area,group_key,title,description,sort_order,date_added,active) "
-        f"VALUES ({marks})",
-        values,
+        course_id=course_id,
+        area=core["area"],
+        group=core["group"],
+        title=core["title"],
+        description=core["desc"],
+        sort_order=order,
+        date_added=_display_time(),
+        active=True,
     )
     return course_id
 
@@ -207,47 +185,31 @@ def _create_exam(
         return ""
 
     category_id = f"cat-{uuid.uuid4().hex[:12]}"
-    ph = common_db.placeholder(kind)
-    order = _next_order(
+    order = assessment_repository.next_category_sort_order_on_connection(
         conn,
         kind,
-        "quiz_categories",
-        f"group_key={ph} AND training_area={ph}",
-        (core["group"], core["area"]),
+        group=core["group"],
+        training_area=core["area"],
     )
-    values = (
-        category_id,
-        core["group"],
-        core["area"],
-        course_id,
-        core["examTitle"],
-        f"{core['title']} 課後評量",
-        order,
-        _display_time(),
-        False if kind == "postgres" else 0,
-        0,
-        80,
-        "",
-        json.dumps({}, ensure_ascii=False),
-        "draft",
-        "",
-        "",
-        "",
-    )
-    if kind == "postgres":
-        conn.execute(
-            "INSERT INTO quiz_categories "
-            "(id,group_key,training_area,course_id,title,description,sort_order,date_added,active,draw_count,passing_score,audience,draw_rules,review_status,reviewer_name,reviewed_at,published_at) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)",
-            values,
-        )
-    else:
-        conn.execute(
-            "INSERT INTO quiz_categories "
-            "(id,group_key,training_area,course_id,title,description,sort_order,date_added,active,draw_count,passing_score,audience,draw_rules,review_status,reviewer_name,reviewed_at,published_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            values,
-        )
+    assessment_repository.insert_category_on_connection(conn, kind, {
+        "id": category_id,
+        "group_key": core["group"],
+        "training_area": core["area"],
+        "course_id": course_id,
+        "title": core["examTitle"],
+        "description": f"{core['title']} 課後評量",
+        "sort_order": order,
+        "date_added": _display_time(),
+        "active": False,
+        "draw_count": 0,
+        "passing_score": 80,
+        "audience": "",
+        "draw_rules": json.dumps({}, ensure_ascii=False),
+        "review_status": "draft",
+        "reviewer_name": "",
+        "reviewed_at": "",
+        "published_at": "",
+    })
     return category_id
 
 

@@ -7,6 +7,7 @@ import random
 import uuid
 from typing import Any, Mapping
 
+from teacher_app.assessments import repository as assessment_repository
 from teacher_app.common.errors import ApiError
 from teacher_app.exams import grading
 from teacher_app.exams import repository as repo
@@ -37,9 +38,13 @@ def require_user(user: Mapping[str, Any] | None) -> Mapping[str, Any]:
     return user
 
 
-def _draw_questions(base, category: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _draw_questions(_base, category: Mapping[str, Any]) -> list[dict[str, Any]]:
     category_id = str(category.get("id") or "")
-    questions = [dict(q) for q in base.list_quiz_questions(category_id) if q.get("active", True)]
+    questions = [
+        dict(question)
+        for question in assessment_repository.list_questions(category_id, include_inactive=False)
+        if question.get("active", True)
+    ]
     draw_rules = category.get("drawRules") if isinstance(category.get("drawRules"), dict) else {}
     if draw_rules.get("mode") == "type_quota":
         quotas = draw_rules.get("quotas") if isinstance(draw_rules.get("quotas"), dict) else {}
@@ -93,7 +98,7 @@ def start_attempt(base, user: Mapping[str, Any] | None, data: Mapping[str, Any])
     category_id = _text(data.get("quizCategoryId") or data.get("categoryId"), 100)
     if not category_id:
         raise ApiError("CATEGORY_REQUIRED", "缺少考卷識別碼。", 400)
-    category = base.get_quiz_category(category_id)
+    category = assessment_repository.get_category_full(category_id)
     if not category or not category.get("active", True):
         raise ApiError("CATEGORY_NOT_FOUND", "找不到可使用的考卷。", 404)
     questions = _draw_questions(base, category)
