@@ -1154,7 +1154,14 @@ def set_browser_cache_policy(response):
 # 考核成績資料庫
 # ---------------------------------------------------------------------------
 def _db_conn():
-    """Return the canonical pooled database connection seam.\n\n    PostgreSQL connection ownership lives in teacher_app.common.db so the\n    legacy compatibility host and canonical modules share one bounded pool.\n    SQLite remains the local-development fallback through the same seam.\n    """\n    return common_db.get_connection()\n
+    """Return the canonical pooled database connection seam.
+
+    PostgreSQL connection ownership lives in teacher_app.common.db so the
+    legacy compatibility host and canonical modules share one bounded pool.
+    SQLite remains the local-development fallback through the same seam.
+    """
+    return common_db.get_connection()
+
 
 
 # ---------------------------------------------------------------------------
