@@ -11,6 +11,7 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
         cls.wizard = ROOT.joinpath("static", "course-wizard-681.js").read_text(encoding="utf-8")
         cls.adapter = ROOT.joinpath("course_bundle_72.py").read_text(encoding="utf-8")
         cls.bundle = ROOT.joinpath("teacher_app", "courses", "bundle.py").read_text(encoding="utf-8")
+        cls.schema = ROOT.joinpath("schema_migrations.py").read_text(encoding="utf-8")
         cls.entry = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
         cls.health = ROOT.joinpath("health_65.py").read_text(encoding="utf-8")
 
@@ -48,9 +49,16 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
 
     def test_migration_and_route_registration_order_remain_stable(self):
         self.assertIn("0072-course-bundle-idempotency", self.health)
-        self.assertIn("migration(MIGRATION_ID)(_course_bundle_idempotency_72)", self.adapter)
-        self.assertLess(self.entry.index("from course_bundle_72 import"), self.entry.index("app = register_schema_migrations"))
-        self.assertLess(self.entry.index("app = register_rbac_681"), self.entry.index("app = register_course_bundle_72"))
+        self.assertIn('@migration("0072-course-bundle-idempotency")', self.schema)
+        self.assertNotIn("migration(MIGRATION_ID)", self.adapter)
+        self.assertLess(
+            self.entry.index("app = register_schema_migrations"),
+            self.entry.index("app = register_course_bundle_72"),
+        )
+        self.assertLess(
+            self.entry.index("app = register_rbac_681"),
+            self.entry.index("app = register_course_bundle_72"),
+        )
 
 
 if __name__ == "__main__":
