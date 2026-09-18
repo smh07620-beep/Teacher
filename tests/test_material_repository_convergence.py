@@ -76,14 +76,15 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         self.assertIn("with common_db.read_connection()", self.course_repo)
         self.assertIn("with common_db.read_connection()", self.assessment_repo)
 
-    def test_material_delete_is_the_only_remaining_legacy_provider_seam(self):
+    def test_material_delete_uses_canonical_storage_deletion_policy(self):
         delete_start = self.materials.index("def delete_material(")
         before_delete = self.materials[:delete_start]
         self.assertNotIn("base.", before_delete)
         delete_source = self.materials[delete_start:]
-        self.assertIn("base.mega_destroy", delete_source)
-        self.assertIn("base.gdrive_delete_material", delete_source)
-        self.assertIn("base.r2_delete_prefix", delete_source)
+        self.assertIn("canonical_storage.delete_strict", delete_source)
+        self.assertIn("base.storage_delete_adapters", delete_source)
+        for retired in ("base.mega_destroy", "base.gdrive_delete_material", "base.r2_delete_prefix", "base.oci_delete_prefix"):
+            self.assertNotIn(retired, delete_source)
 
     def test_material_inserts_use_repository_transaction_boundary(self):
         self.assertIn("def insert_material(", self.repo)

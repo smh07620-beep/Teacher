@@ -136,7 +136,7 @@ class PostgreSQLBooleanRuntime67Tests(unittest.TestCase):
 
     def test_postgres_material_active_queries_do_not_use_integer_literals(self):
         connection = RecordingConnection()
-        with patch.object(appmod, "_db_conn", return_value=(connection, "postgres")):
+        with patch.object(appmod.common_db, "get_connection", return_value=(connection, "postgres")):
             appmod.list_uploaded_materials(False)
             appmod.list_courses(include_inactive=False)
             appmod.list_quiz_categories(include_inactive=False)

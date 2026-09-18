@@ -60,6 +60,41 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
         self.assertIn("base.claim_next_material_job", self.adapter)
         self.assertIn("base.commit_material_job_result", self.adapter)
 
+    def test_phase4_groundwork_owns_queue_and_upload_session_persistence(self):
+        for marker in (
+            "def material_job_row_to_dict(",
+            "def create_material_job(",
+            "def get_material_job(",
+            "def list_material_jobs(",
+            "def cas_material_job(",
+            "def transition_owned_material_job(",
+            "def claim_next_material_job(",
+            "def list_stale_processing_jobs(",
+            "def list_cleanup_candidates(",
+            "def queue_aggregates(",
+            "def count_cleanup_pending_jobs(",
+            "def list_heartbeats(",
+            "def create_upload_session(",
+            "def get_upload_session(",
+            "def cas_upload_session_status(",
+            "def upload_session_status_counts(",
+            "def finalize_upload_session_with_job(",
+        ):
+            self.assertIn(marker, self.repository)
+        self.assertNotIn("CREATE TABLE", self.repository)
+        self.assertNotIn("ALTER TABLE", self.repository)
+
+    def test_phase4_protocol_rules_are_pure_and_canonical(self):
+        for marker in (
+            "def bearer_token_matches(",
+            "def retry_plan(",
+            "def validate_multipart_parts(",
+        ):
+            self.assertIn(marker, self.protocol)
+        combined = self.protocol + self.repository
+        for forbidden in ("from flask", "import requests", "import subprocess", "r2_client"):
+            self.assertNotIn(forbidden, combined)
+
     def test_protocol_preserves_metadata_and_job_touch_contract(self):
         touched = []
         with patch.object(protocol.repository, "upsert_heartbeat") as upsert:

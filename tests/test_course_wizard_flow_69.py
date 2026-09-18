@@ -46,7 +46,7 @@ class CourseWizardFlow69Tests(unittest.TestCase):
         self.assertIn("api('/api/course-bundles'", create)
         self.assertIn('examMode:state.examMode', create)
         self.assertIn('"draft"', self.bundle)
-        self.assertIn('False if kind == "postgres" else 0', self.bundle)
+        self.assertIn('"active": False', self.bundle)
         self.assertNotIn('/publish', create)
         self.assertNotIn('publishExam', create)
         self.assertNotIn('publishQuiz', create)

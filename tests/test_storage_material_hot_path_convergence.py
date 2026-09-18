@@ -11,6 +11,7 @@ class StorageMaterialHotPathConvergenceTests(unittest.TestCase):
         cls.app = ROOT.joinpath("app.py").read_text(encoding="utf-8")
         cls.entrypoint = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
         cls.storage = ROOT.joinpath("teacher_app/materials/storage.py").read_text(encoding="utf-8")
+        cls.provider_storage = ROOT.joinpath("teacher_app/storage/providers.py").read_text(encoding="utf-8")
 
     def test_storage_pagination_patch_layer_is_retired(self):
         self.assertFalse(ROOT.joinpath("storage_pagination_hardening.py").exists())
@@ -40,13 +41,37 @@ class StorageMaterialHotPathConvergenceTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.storage)
 
-    def test_mega_session_cache_does_not_probe_whoami_on_each_hit(self):
-        start = self.app.index("def _mega_login_if_needed")
-        end = self.app.index("def _mega_remote_join", start)
-        source = self.app[start:end]
+    def test_live_provider_credentials_clients_and_mega_session_owner_moved_out_of_app(self):
+        for marker in (
+            'os.environ.get("R2_SECRET_ACCESS_KEY"',
+            'os.environ.get("OCI_SECRET_ACCESS_KEY"',
+            'os.environ.get("GDRIVE_CLIENT_SECRET"',
+            'os.environ.get("GDRIVE_REFRESH_TOKEN"',
+            'os.environ.get("MEGA_PASSWORD"',
+            "boto3.client(",
+            "AuthorizedSession(",
+            '_MEGA_AUTH_CACHE = {"ok": False, "at": 0.0}',
+            "_MEGA_LOCK = threading.RLock()",
+        ):
+            self.assertIn(marker, self.provider_storage)
+            self.assertNotIn(marker, self.app)
+        for delegate in (
+            "canonical_storage.r2_client(",
+            "canonical_storage.oci_client(",
+            "canonical_storage.gdrive_credentials(",
+            "canonical_storage.gdrive_service(",
+            "canonical_storage.mega_login_if_needed(",
+        ):
+            self.assertIn(delegate, self.app)
+
+    def test_mega_session_cache_owner_is_canonical_and_does_not_probe_whoami_on_each_hit(self):
+        self.assertNotIn('_MEGA_AUTH_CACHE = {"ok": False, "at": 0.0}', self.app)
+        self.assertNotIn("_MEGA_LOCK = threading.RLock()", self.app)
+        start = self.provider_storage.index("def mega_login_if_needed")
+        source = self.provider_storage[start:]
         cache_branch = source[
-            source.index('if (not force) and _MEGA_AUTH_CACHE.get("ok")'):
-            source.index('probe = _mega_run(["mega-whoami"]', source.index('if (not force)'))
+            source.index('and _MEGA_AUTH_CACHE.get("ok")'):
+            source.index('probe = run(', source.index('and _MEGA_AUTH_CACHE.get("ok")'))
         ]
         self.assertIn("return", cache_branch)
         self.assertNotIn("mega-whoami", cache_branch)
@@ -63,7 +88,8 @@ class StorageMaterialHotPathConvergenceTests(unittest.TestCase):
         app = self.app
         render = ROOT.joinpath("render.yaml").read_text(encoding="utf-8")
         run_web = ROOT.joinpath("run_web.sh").read_text(encoding="utf-8")
-        self.assertIn('MEGA_WEB_READ_TIMEOUT_SECONDS", "120"', app)
+        self.assertIn('MEGA_WEB_READ_TIMEOUT_SECONDS", "120"', self.provider_storage)
+        self.assertIn("MEGA_WEB_READ_TIMEOUT_SECONDS = canonical_storage.MEGA_WEB_READ_TIMEOUT_SECONDS", app)
         self.assertIn("timeout_seconds=MEGA_WEB_READ_TIMEOUT_SECONDS", app)
         self.assertIn('key: MEGA_WEB_READ_TIMEOUT_SECONDS', render)
         self.assertIn('value: "120"', render)
@@ -74,7 +100,7 @@ class StorageMaterialHotPathConvergenceTests(unittest.TestCase):
         start = self.app.index("def mega_download_file")
         end = self.app.index("def mega_destroy", start)
         source = self.app[start:end]
-        self.assertIn('_MEGA_AUTH_CACHE.update({"ok": False, "at": 0.0})', source)
+        self.assertIn("canonical_storage.invalidate_mega_auth_cache()", source)
         self.assertIn("_mega_login_if_needed(force=True, deadline=deadline)", source)
 
 

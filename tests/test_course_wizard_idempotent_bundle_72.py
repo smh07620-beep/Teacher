@@ -13,6 +13,8 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
         cls.wizard = ROOT.joinpath("static", "course-wizard-681.js").read_text(encoding="utf-8")
         cls.adapter = ROOT.joinpath("course_bundle_72.py").read_text(encoding="utf-8")
         cls.bundle = ROOT.joinpath("teacher_app", "courses", "bundle.py").read_text(encoding="utf-8")
+        cls.course_repo = ROOT.joinpath("teacher_app", "courses", "repository.py").read_text(encoding="utf-8")
+        cls.assessment_repo = ROOT.joinpath("teacher_app", "assessments", "repository.py").read_text(encoding="utf-8")
         cls.schema = ROOT.joinpath("schema_migrations.py").read_text(encoding="utf-8")
         cls.entry = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
 
@@ -39,14 +41,15 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
         self.assertNotIn("X-Admin-Key", self.adapter)
         self.assertNotIn("getAdminKey", self.adapter)
         self.assertIn("IDEMPOTENCY_KEY_REUSED", self.bundle)
-        for runtime_sql in (
-            "INSERT INTO courses",
-            "INSERT INTO quiz_categories",
-            "SELECT * FROM course_bundle_requests",
-            "UPDATE course_bundle_requests SET",
-        ):
+        for runtime_sql in ("SELECT * FROM course_bundle_requests", "UPDATE course_bundle_requests SET"):
             self.assertNotIn(runtime_sql, self.adapter)
             self.assertIn(runtime_sql, self.bundle)
+        self.assertNotIn("INSERT INTO courses", self.bundle)
+        self.assertNotIn("INSERT INTO quiz_categories", self.bundle)
+        self.assertIn("course_repository.insert_course_on_connection", self.bundle)
+        self.assertIn("assessment_repository.insert_category_on_connection", self.bundle)
+        self.assertIn("INSERT INTO courses", self.course_repo)
+        self.assertIn("INSERT INTO quiz_categories", self.assessment_repo)
 
     def test_migration_and_route_registration_order_remain_stable(self):
         self.assertIn("0072-course-bundle-idempotency", release_contract.REQUIRED_MIGRATIONS)

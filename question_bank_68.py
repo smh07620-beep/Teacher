@@ -6,6 +6,7 @@ from flask import jsonify, request
 from teacher_app.assessments import analytics as analytics_service
 from teacher_app.assessments import blueprints as blueprint_service
 from teacher_app.assessments import question_bank as bank_service
+from teacher_app.assessments import repository as assessment_repository
 from teacher_app.common.errors import ApiError
 
 # Historical acceptance/tests import this symbol from the root module.  Keep a
@@ -31,7 +32,7 @@ def permitted(base, capability="question.manage", group=None):
             or ""
         ).strip()
         if category:
-            quiz = base.get_quiz_category(category)
+            quiz = assessment_repository.get_category(category)
             group = (quiz or {}).get("group")
     return base.require_scoped_permission(capability, group)
 

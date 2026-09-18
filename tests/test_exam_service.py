@@ -11,6 +11,24 @@ class ExamServiceTests(unittest.TestCase):
     def setUp(self):
         self.base = ExamBase()
         repo.init_schema(self.base)
+        category_patch = patch.object(
+            service.assessment_repository,
+            "get_category_full",
+            side_effect=self.base.get_quiz_category,
+        )
+        questions_patch = patch.object(
+            service.assessment_repository,
+            "list_questions",
+            side_effect=lambda category_id, include_inactive=False: [
+                dict(question)
+                for question in self.base.list_quiz_questions(category_id)
+                if include_inactive or question.get("active", True)
+            ],
+        )
+        category_patch.start()
+        questions_patch.start()
+        self.addCleanup(category_patch.stop)
+        self.addCleanup(questions_patch.stop)
 
     def tearDown(self):
         self.base.close()

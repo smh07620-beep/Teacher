@@ -20,6 +20,8 @@ from teacher_app.common.auth import (
     normalize_roles,
 )
 from teacher_app.auth.service import public_user
+from teacher_app.assessments import repository as assessment_repository
+from teacher_app.courses import repository as course_repository
 
 OFFICE_EXTENSIONS = {".ppt", ".pptx", ".doc", ".docx", ".xls", ".xlsx", ".odp", ".odt", ".ods"}
 TEACHER_ROLES = {"clinical_teacher", "group_leader", "education_admin", "system_admin"}
@@ -145,7 +147,7 @@ def _category_group(base, category_id):
     if not category_id:
         return ""
     try:
-        return _row_group(base.get_quiz_category(category_id) or {})
+        return _row_group(assessment_repository.get_category(category_id) or {})
     except Exception:
         return ""
 
@@ -155,27 +157,12 @@ def _question_group(base, question_id):
     if not question_id:
         return ""
     try:
-        question = base.get_quiz_question(question_id) or {}
+        question = assessment_repository.get_question(question_id) or {}
     except Exception:
         question = {}
     category_id = str(question.get("quizCategoryId") or question.get("quiz_category_id") or "").strip()
     if category_id:
         return _category_group(base, category_id)
-    # Question Bank 2.0 and legacy rows share quiz_questions, but keep a direct
-    # DB fallback so authorization does not depend on the presentation helper.
-    conn = None
-    try:
-        conn, kind = base._db_conn()
-        ph = "%s" if kind == "postgres" else "?"
-        row = conn.execute(f"SELECT quiz_category_id FROM quiz_questions WHERE id={ph}", (question_id,)).fetchone()
-        if row:
-            category_id = str(dict(row).get("quiz_category_id") or "")
-            return _category_group(base, category_id)
-    except Exception:
-        return ""
-    finally:
-        if conn is not None:
-            conn.close()
     return ""
 
 
@@ -255,7 +242,7 @@ def _request_groups(base):
     course_id = view.get("course_id") or body.get("courseId") or request.args.get("courseId")
     if course_id:
         try:
-            add(_row_group(base.get_course(course_id) or {}))
+            add(_row_group(course_repository.get_course(course_id) or {}))
         except Exception:
             pass
 
@@ -386,7 +373,7 @@ def _item_group(base, item):
     course_id = item.get("courseId") or item.get("course_id")
     if course_id:
         try:
-            return _row_group(base.get_course(course_id) or {})
+            return _row_group(course_repository.get_course(course_id) or {})
         except Exception:
             pass
     return ""

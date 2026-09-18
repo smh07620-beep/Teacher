@@ -67,6 +67,8 @@ class QuestionBankConvergenceStage5Tests(unittest.TestCase):
             "bank_service.review_question",
         ):
             self.assertIn(marker, self.adapter)
+        self.assertIn("assessment_repository.get_category", self.adapter)
+        self.assertNotIn("base.get_quiz_category", self.adapter)
 
     def test_blueprint_selection_and_snapshot_ownership_is_canonical(self):
         for marker in (

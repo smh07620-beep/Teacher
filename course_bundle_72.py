@@ -9,8 +9,10 @@ from __future__ import annotations
 from flask import jsonify, request
 
 from schema_migrations import _course_bundle_idempotency_72
+from teacher_app.assessments import repository as assessment_repository
 from teacher_app.common.errors import ApiError
 from teacher_app.courses import bundle as bundle_service
+from teacher_app.courses import repository as course_repository
 
 
 MIGRATION_ID = bundle_service.MIGRATION_ID
@@ -24,14 +26,14 @@ def _hydrate(base, result: dict) -> dict:
     course = output.get("course") or {}
     category = output.get("quizCategory") or None
     try:
-        current = base.get_course(str(course.get("id") or "")) if course else None
+        current = course_repository.get_course(str(course.get("id") or "")) if course else None
         if current:
             output["course"] = current
     except Exception:
         pass
     if category:
         try:
-            current = base.get_quiz_category(str(category.get("id") or ""))
+            current = assessment_repository.get_category_full(str(category.get("id") or ""))
             if current:
                 output["quizCategory"] = current
         except Exception:

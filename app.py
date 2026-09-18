@@ -49,27 +49,10 @@ from urllib.parse import quote
 from pathlib import Path
 
 import requests
+from teacher_app import storage as canonical_storage
 
 from flask import Flask, request, jsonify, send_from_directory, send_file, abort, redirect, Response, stream_with_context, session
 from werkzeug.security import generate_password_hash, check_password_hash
-
-try:
-    import boto3
-    from botocore.config import Config as BotoConfig
-except ImportError:
-    boto3 = None
-    BotoConfig = None
-
-try:
-    from google.oauth2.credentials import Credentials as GoogleCredentials
-    from google.auth.transport.requests import AuthorizedSession
-    from googleapiclient.discovery import build as google_build
-    from googleapiclient.http import MediaFileUpload
-except ImportError:
-    GoogleCredentials = None
-    AuthorizedSession = None
-    google_build = None
-    MediaFileUpload = None
 
 try:
     from google import genai as google_genai
@@ -200,22 +183,22 @@ MATERIAL_STORAGE_BACKEND = os.environ.get("MATERIAL_STORAGE_BACKEND", "auto").st
 STORAGE_FALLBACK_BACKEND = os.environ.get("STORAGE_FALLBACK_BACKEND", "").strip().lower()
 STORAGE_FAILOVER_ON_FULL = os.environ.get("STORAGE_FAILOVER_ON_FULL", "false").strip().lower() in {"1","true","yes","on"}
 
-# Google Drive：使用「使用者 OAuth refresh token」而不是 Service Account，
-# 這樣檔案會計入該 Google 帳號的 My Drive 空間（適合使用個人帳號免費容量）。
-GDRIVE_CLIENT_ID = os.environ.get("GDRIVE_CLIENT_ID", "").strip()
-GDRIVE_CLIENT_SECRET = os.environ.get("GDRIVE_CLIENT_SECRET", "").strip()
-GDRIVE_REFRESH_TOKEN = os.environ.get("GDRIVE_REFRESH_TOKEN", "").strip()
-GDRIVE_FOLDER_ID = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
-GDRIVE_TOKEN_URI = os.environ.get("GDRIVE_TOKEN_URI", "https://oauth2.googleapis.com/token").strip()
-GDRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
-GDRIVE_CHUNK_MB = max(1, min(64, int(os.environ.get("GDRIVE_CHUNK_MB", "8"))))
+# Provider credentials and SDK construction are canonically owned by
+# teacher_app.storage. These aliases preserve the legacy app.py public surface
+# while avoiding a second environment/client owner during the transition.
+GDRIVE_CLIENT_ID = canonical_storage.GDRIVE_CLIENT_ID
+GDRIVE_CLIENT_SECRET = canonical_storage.GDRIVE_CLIENT_SECRET
+GDRIVE_REFRESH_TOKEN = canonical_storage.GDRIVE_REFRESH_TOKEN
+GDRIVE_FOLDER_ID = canonical_storage.GDRIVE_FOLDER_ID
+GDRIVE_TOKEN_URI = canonical_storage.GDRIVE_TOKEN_URI
+GDRIVE_SCOPE = canonical_storage.GDRIVE_SCOPE
+GDRIVE_CHUNK_MB = canonical_storage.GDRIVE_CHUNK_MB
 
-# Cloudflare R2 保留為可選備援/舊資料相容。
-R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "").strip()
-R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
-R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
-R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "").strip()
-R2_PRESIGN_SECONDS = max(60, min(604800, int(os.environ.get("R2_PRESIGN_SECONDS", "3600"))))
+R2_ACCOUNT_ID = canonical_storage.R2_ACCOUNT_ID
+R2_ACCESS_KEY_ID = canonical_storage.R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY = canonical_storage.R2_SECRET_ACCESS_KEY
+R2_BUCKET_NAME = canonical_storage.R2_BUCKET_NAME
+R2_PRESIGN_SECONDS = canonical_storage.R2_PRESIGN_SECONDS
 
 # Teacher's R2 values are a conservative estimate, not Cloudflare billing.
 # Keep parsing local and bounded so a malformed deployment variable cannot
@@ -242,32 +225,26 @@ MATERIAL_R2_LARGE_FILE_MB = int(_bounded_env_number("MATERIAL_R2_LARGE_FILE_MB",
 
 # V5.3.14：Oracle Cloud Object Storage Always Free（S3 相容 API）。
 # FREE_ONLY_MODE=true 時，網站會在接近免費容量上限前拒絕新上傳，避免意外超額。
-OCI_NAMESPACE = os.environ.get("OCI_NAMESPACE", "").strip()
-OCI_REGION = os.environ.get("OCI_REGION", "").strip()
-OCI_ACCESS_KEY_ID = os.environ.get("OCI_ACCESS_KEY_ID", "").strip()
-OCI_SECRET_ACCESS_KEY = os.environ.get("OCI_SECRET_ACCESS_KEY", "").strip()
-OCI_BUCKET_NAME = os.environ.get("OCI_BUCKET_NAME", "smh-teaching-materials").strip()
-OCI_PRESIGN_SECONDS = max(60, min(604800, int(os.environ.get("OCI_PRESIGN_SECONDS", "3600"))))
-OCI_FREE_LIMIT_GB = max(1.0, min(20.0, float(os.environ.get("OCI_FREE_LIMIT_GB", "19.5"))))
+OCI_NAMESPACE = canonical_storage.OCI_NAMESPACE
+OCI_REGION = canonical_storage.OCI_REGION
+OCI_ACCESS_KEY_ID = canonical_storage.OCI_ACCESS_KEY_ID
+OCI_SECRET_ACCESS_KEY = canonical_storage.OCI_SECRET_ACCESS_KEY
+OCI_BUCKET_NAME = canonical_storage.OCI_BUCKET_NAME
+OCI_PRESIGN_SECONDS = canonical_storage.OCI_PRESIGN_SECONDS
+OCI_FREE_LIMIT_GB = canonical_storage.OCI_FREE_LIMIT_GB
 FREE_ONLY_MODE = os.environ.get("FREE_ONLY_MODE", "true").strip().lower() not in {"0","false","no","off"}
 
 # V5.3.16：官方 MEGAcmd 優先教材儲存。
-# Render 只保存登入環境變數，MEGAcmd 的本地 session/cache 放在暫存 HOME。
-MEGA_EMAIL = os.environ.get("MEGA_EMAIL", "").strip()
-MEGA_PASSWORD = os.environ.get("MEGA_PASSWORD", "").strip()
-MEGA_ROOT_FOLDER = os.environ.get("MEGA_ROOT_FOLDER", "smh-teaching-materials").strip().strip("/") or "smh-teaching-materials"
-MEGA_STORAGE_LIMIT_GB = max(1.0, min(100.0, float(os.environ.get("MEGA_STORAGE_LIMIT_GB", "18.0"))))
-MEGA_SESSION_CACHE_SECONDS = max(60, min(86400, int(os.environ.get("MEGA_SESSION_CACHE_SECONDS", "1800"))))
-# Use the operating system's temporary directory by default.  The former
-# hard-coded /tmp path resolves to C:\\tmp on Windows and prevented the
-# application from starting during local development.
-_DEFAULT_MEGACMD_HOME = str(Path(tempfile.gettempdir()) / "megacmd-home")
-MEGACMD_HOME = os.environ.get("MEGACMD_HOME", _DEFAULT_MEGACMD_HOME).strip() or _DEFAULT_MEGACMD_HOME
-MEGACMD_TIMEOUT_SECONDS = max(30, min(1800, int(os.environ.get("MEGACMD_TIMEOUT_SECONDS", "300"))))
-MEGA_WEB_READ_TIMEOUT_SECONDS = max(20, min(150, int(os.environ.get("MEGA_WEB_READ_TIMEOUT_SECONDS", "120"))))
-Path(MEGACMD_HOME).mkdir(parents=True, exist_ok=True)
-_MEGA_AUTH_CACHE = {"ok": False, "at": 0.0}
-_MEGA_LOCK = threading.RLock()
+# Render 只保存登入環境變數；live auth cache/session owner 已移至
+# teacher_app.storage，app.py 僅保留相容名稱。
+MEGA_EMAIL = canonical_storage.MEGA_EMAIL
+MEGA_PASSWORD = canonical_storage.MEGA_PASSWORD
+MEGA_ROOT_FOLDER = canonical_storage.MEGA_ROOT_FOLDER
+MEGA_STORAGE_LIMIT_GB = canonical_storage.MEGA_STORAGE_LIMIT_GB
+MEGA_SESSION_CACHE_SECONDS = canonical_storage.MEGA_SESSION_CACHE_SECONDS
+MEGACMD_HOME = canonical_storage.MEGACMD_HOME
+MEGACMD_TIMEOUT_SECONDS = canonical_storage.MEGACMD_TIMEOUT_SECONDS
+MEGA_WEB_READ_TIMEOUT_SECONDS = canonical_storage.MEGA_WEB_READ_TIMEOUT_SECONDS
 # V5.3.19：後台儲存狀態短暫快取，避免每次開啟後台都同步執行 mega-whoami / mega-df。
 STORAGE_STATUS_CACHE_SECONDS = max(5, min(300, int(os.environ.get("STORAGE_STATUS_CACHE_SECONDS", "30"))))
 _STORAGE_STATUS_CACHE = {"at": 0.0, "data": None}
@@ -300,46 +277,56 @@ SQLITE_DB = DATA_DIR / "exam_records.db"
 # V5.3.16 雲端教材儲存層：官方 MEGAcmd 優先；Google Drive / OCI / R2 / 本機相容
 # ---------------------------------------------------------------------------
 def r2_is_configured():
-    return bool(R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_BUCKET_NAME and boto3 is not None)
+    return canonical_storage.r2_is_configured(
+        account_id=R2_ACCOUNT_ID,
+        access_key_id=R2_ACCESS_KEY_ID,
+        secret_access_key=R2_SECRET_ACCESS_KEY,
+        bucket_name=R2_BUCKET_NAME,
+    )
 
 
 def gdrive_is_configured():
-    return bool(
-        GDRIVE_CLIENT_ID and GDRIVE_CLIENT_SECRET and GDRIVE_REFRESH_TOKEN and GDRIVE_FOLDER_ID
-        and GoogleCredentials is not None and AuthorizedSession is not None
-        and google_build is not None and MediaFileUpload is not None
+    return canonical_storage.gdrive_is_configured(
+        client_id=GDRIVE_CLIENT_ID,
+        client_secret=GDRIVE_CLIENT_SECRET,
+        refresh_token=GDRIVE_REFRESH_TOKEN,
+        folder_id=GDRIVE_FOLDER_ID,
     )
 
 
 def active_material_backend():
-    mode = MATERIAL_STORAGE_BACKEND
-    if mode not in {"auto", "local", "r2", "gdrive", "oci", "mega"}:
-        mode = "auto"
-    if mode == "local": return "local"
-    if mode == "mega":
-        if not mega_is_configured():
-            raise RuntimeError("MATERIAL_STORAGE_BACKEND=mega，但 MEGA_EMAIL / MEGA_PASSWORD 未設定，或容器內找不到官方 MEGAcmd。")
-        return "mega"
-    if mode == "oci":
-        if not oci_is_configured():
-            raise RuntimeError("MATERIAL_STORAGE_BACKEND=oci，但 Oracle Object Storage 環境變數不完整。")
-        return "oci"
-    if mode == "gdrive":
-        if not gdrive_is_configured():
-            raise RuntimeError("MATERIAL_STORAGE_BACKEND=gdrive，但 Google Drive OAuth 環境變數不完整，或缺少 Google API 套件。")
-        return "gdrive"
-    if mode == "r2":
-        if not r2_is_configured():
-            raise RuntimeError("MATERIAL_STORAGE_BACKEND=r2，但 R2 環境變數不完整，或缺少 boto3。")
-        return "r2"
-    # V5.3.16 auto：優先官方 MEGAcmd；其餘後端僅保留既有資料相容性。
-    if mega_is_configured(): return "mega"
-    if MEGA_EMAIL or MEGA_PASSWORD:
-        raise RuntimeError("MEGA 已設定但官方 MEGAcmd 指令不可用或帳密不完整；不會自動改用 Google Drive。")
-    if oci_is_configured(): return "oci"
-    if gdrive_is_configured(): return "gdrive"
-    if r2_is_configured(): return "r2"
-    return "local"
+    adapters = {
+        "mega": canonical_storage.StorageProviderAdapter(
+            name="mega",
+            is_configured=mega_is_configured,
+            has_configuration=lambda: canonical_storage.mega_credentials_present(
+                email=MEGA_EMAIL,
+                password=MEGA_PASSWORD,
+            ),
+            block_auto_if_present=True,
+            unavailable_message="MATERIAL_STORAGE_BACKEND=mega，但 MEGA_EMAIL / MEGA_PASSWORD 未設定，或容器內找不到官方 MEGAcmd。",
+            partial_configuration_message="MEGA 已設定但官方 MEGAcmd 指令不可用或帳密不完整；不會自動改用 Google Drive。",
+        ),
+        "oci": canonical_storage.StorageProviderAdapter(
+            name="oci",
+            is_configured=oci_is_configured,
+            unavailable_message="MATERIAL_STORAGE_BACKEND=oci，但 Oracle Object Storage 環境變數不完整。",
+        ),
+        "gdrive": canonical_storage.StorageProviderAdapter(
+            name="gdrive",
+            is_configured=gdrive_is_configured,
+            unavailable_message="MATERIAL_STORAGE_BACKEND=gdrive，但 Google Drive OAuth 環境變數不完整，或缺少 Google API 套件。",
+        ),
+        "r2": canonical_storage.StorageProviderAdapter(
+            name="r2",
+            is_configured=r2_is_configured,
+            unavailable_message="MATERIAL_STORAGE_BACKEND=r2，但 R2 環境變數不完整，或缺少 boto3。",
+        ),
+    }
+    try:
+        return canonical_storage.select_backend(MATERIAL_STORAGE_BACKEND, adapters)
+    except canonical_storage.StorageConfigurationError as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 def resolve_material_storage_backend():
@@ -354,15 +341,21 @@ def resolve_material_storage_backend():
 
 
 def r2_client():
-    if not r2_is_configured():
-        raise RuntimeError("Cloudflare R2 尚未完成設定。")
-    return boto3.client(
-        service_name="s3",
-        endpoint_url=f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
-        aws_access_key_id=R2_ACCESS_KEY_ID,
-        aws_secret_access_key=R2_SECRET_ACCESS_KEY,
-        region_name="auto",
-        config=BotoConfig(signature_version="s3v4") if BotoConfig else None,
+    return canonical_storage.r2_client(
+        account_id=R2_ACCOUNT_ID,
+        access_key_id=R2_ACCESS_KEY_ID,
+        secret_access_key=R2_SECRET_ACCESS_KEY,
+        bucket_name=R2_BUCKET_NAME,
+    )
+
+
+def r2_delete_object(key: str):
+    return canonical_storage.r2_delete_object(
+        key,
+        account_id=R2_ACCOUNT_ID,
+        access_key_id=R2_ACCESS_KEY_ID,
+        secret_access_key=R2_SECRET_ACCESS_KEY,
+        bucket_name=R2_BUCKET_NAME,
     )
 
 
@@ -541,38 +534,27 @@ def _mega_ensure_dir(remote_path: str):
 
 
 def mega_is_configured():
-    return bool(MEGA_EMAIL and MEGA_PASSWORD and _megacmd_find("mega-whoami") and _megacmd_find("mega-put"))
+    return canonical_storage.mega_is_configured(
+        _megacmd_find,
+        email=MEGA_EMAIL,
+        password=MEGA_PASSWORD,
+    )
 
 
 def _mega_timeout_for_deadline(deadline, default_seconds):
-    """Clamp one MEGAcmd call to the remaining request budget."""
-    if deadline is None:
-        return default_seconds
-    remaining = float(deadline) - time.monotonic()
-    if remaining <= 0:
-        raise RuntimeError("MEGA 讀取逾時，請稍後重試。")
-    return max(1, min(int(default_seconds), int(max(1, remaining))))
+    return canonical_storage.mega_timeout_for_deadline(deadline, default_seconds)
 
 
 def _mega_login_if_needed(force=False, deadline=None):
-    if not mega_is_configured():
-        raise RuntimeError("MEGA 尚未完成設定。請設定 MEGA_EMAIL、MEGA_PASSWORD，並確認官方 MEGAcmd 已安裝。")
-    now = time.time()
-    with _MEGA_LOCK:
-        if (not force) and _MEGA_AUTH_CACHE.get("ok") and now - float(_MEGA_AUTH_CACHE.get("at", 0) or 0) < MEGA_SESSION_CACHE_SECONDS:
-            return
-        probe = _mega_run(["mega-whoami"], check=False, timeout=_mega_timeout_for_deadline(deadline, 30))
-        if probe.returncode != 0:
-            # 殘留 session 可能屬於舊帳號，先安全登出再登入。
-            _mega_run(["mega-logout"], check=False, timeout=_mega_timeout_for_deadline(deadline, 30))
-            login = _mega_run(["mega-login", MEGA_EMAIL, MEGA_PASSWORD], check=False, timeout=_mega_timeout_for_deadline(deadline, 120))
-            if login.returncode != 0:
-                detail = (login.stderr or login.stdout or "login failed").strip()
-                raise RuntimeError(f"MEGA 登入失敗：{detail[-600:]}")
-        verify = _mega_run(["mega-whoami"], check=False, timeout=_mega_timeout_for_deadline(deadline, 30))
-        if verify.returncode != 0:
-            raise RuntimeError("MEGA 登入後仍無法驗證帳號 session。")
-        _MEGA_AUTH_CACHE.update({"ok": True, "at": now})
+    return canonical_storage.mega_login_if_needed(
+        is_configured=mega_is_configured,
+        run=_mega_run,
+        email=MEGA_EMAIL,
+        password=MEGA_PASSWORD,
+        session_cache_seconds=MEGA_SESSION_CACHE_SECONDS,
+        force=force,
+        deadline=deadline,
+    )
 
 
 def _mega_remote_join(*parts):
@@ -660,7 +642,7 @@ def mega_download_file(file_id: str, target: Path, *, timeout_seconds=None, retr
             # Cached authentication deliberately avoids a per-request whoami
             # subprocess. If the provider-side session really expired, refresh
             # it once and retry the actual read inside the same total budget.
-            _MEGA_AUTH_CACHE.update({"ok": False, "at": 0.0})
+            canonical_storage.invalidate_mega_auth_cache()
             if not retry_auth:
                 raise
             _mega_login_if_needed(force=True, deadline=deadline)
@@ -688,6 +670,17 @@ def mega_destroy(file_id: str):
         _mega_run(["mega-rm", "-r", "-f", str(file_id)], check=False, timeout=120)
     except Exception:
         pass
+
+
+def mega_delete_object(file_id: str):
+    return canonical_storage.mega_delete_object(
+        file_id,
+        is_configured=mega_is_configured,
+        run=_mega_run,
+        email=MEGA_EMAIL,
+        password=MEGA_PASSWORD,
+        session_cache_seconds=MEGA_SESSION_CACHE_SECONDS,
+    )
 
 
 def upload_material_tree_to_mega(material_id: str, source_path: Path, slides_dir: Path, page_count: int, progress_id: str = ""):
@@ -865,17 +858,32 @@ def _download_material_from_mega(entry, source: Path, slides: Path):
 
 # ----------------------------- Oracle OCI ------------------------------
 def oci_is_configured():
-    return bool(OCI_NAMESPACE and OCI_REGION and OCI_ACCESS_KEY_ID and OCI_SECRET_ACCESS_KEY and OCI_BUCKET_NAME and boto3 is not None)
+    return canonical_storage.oci_is_configured(
+        namespace=OCI_NAMESPACE,
+        region=OCI_REGION,
+        access_key_id=OCI_ACCESS_KEY_ID,
+        secret_access_key=OCI_SECRET_ACCESS_KEY,
+        bucket_name=OCI_BUCKET_NAME,
+    )
 
 def oci_client():
-    if not oci_is_configured():
-        raise RuntimeError("Oracle Object Storage 尚未完成設定。")
-    endpoint = f"https://{OCI_NAMESPACE}.compat.objectstorage.{OCI_REGION}.oci.customer-oci.com"
-    return boto3.client(
-        service_name="s3", endpoint_url=endpoint,
-        aws_access_key_id=OCI_ACCESS_KEY_ID, aws_secret_access_key=OCI_SECRET_ACCESS_KEY,
-        region_name=OCI_REGION,
-        config=BotoConfig(signature_version="s3v4", s3={"addressing_style":"path"}) if BotoConfig else None,
+    return canonical_storage.oci_client(
+        namespace=OCI_NAMESPACE,
+        region=OCI_REGION,
+        access_key_id=OCI_ACCESS_KEY_ID,
+        secret_access_key=OCI_SECRET_ACCESS_KEY,
+        bucket_name=OCI_BUCKET_NAME,
+    )
+
+
+def oci_delete_object(key: str):
+    return canonical_storage.oci_delete_object(
+        key,
+        namespace=OCI_NAMESPACE,
+        region=OCI_REGION,
+        access_key_id=OCI_ACCESS_KEY_ID,
+        secret_access_key=OCI_SECRET_ACCESS_KEY,
+        bucket_name=OCI_BUCKET_NAME,
     )
 
 def oci_bucket_usage_bytes():
@@ -918,20 +926,25 @@ def upload_material_tree_to_oci(material_id: str, source_path: Path, slides_dir:
 
 # ----------------------------- Google Drive ------------------------------
 def gdrive_credentials():
-    if not gdrive_is_configured():
-        raise RuntimeError("Google Drive 尚未完成 OAuth 設定。")
-    return GoogleCredentials(
-        token=None,
-        refresh_token=GDRIVE_REFRESH_TOKEN,
-        token_uri=GDRIVE_TOKEN_URI,
+    return canonical_storage.gdrive_credentials(
         client_id=GDRIVE_CLIENT_ID,
         client_secret=GDRIVE_CLIENT_SECRET,
-        scopes=[GDRIVE_SCOPE],
+        refresh_token=GDRIVE_REFRESH_TOKEN,
+        folder_id=GDRIVE_FOLDER_ID,
+        token_uri=GDRIVE_TOKEN_URI,
+        scope=GDRIVE_SCOPE,
     )
 
 
 def gdrive_service():
-    return google_build("drive", "v3", credentials=gdrive_credentials(), cache_discovery=False)
+    return canonical_storage.gdrive_service(
+        client_id=GDRIVE_CLIENT_ID,
+        client_secret=GDRIVE_CLIENT_SECRET,
+        refresh_token=GDRIVE_REFRESH_TOKEN,
+        folder_id=GDRIVE_FOLDER_ID,
+        token_uri=GDRIVE_TOKEN_URI,
+        scope=GDRIVE_SCOPE,
+    )
 
 
 def gdrive_check():
@@ -960,11 +973,10 @@ def gdrive_upload_file(local_path: Path, name: str, parent_id: str, app_properti
     body = {"name": name, "parents": [parent_id]}
     if app_properties:
         body["appProperties"] = app_properties
-    media = MediaFileUpload(
-        str(local_path),
+    media = canonical_storage.gdrive_media_file_upload(
+        local_path,
         mimetype=_content_type_for(local_path),
-        chunksize=GDRIVE_CHUNK_MB * 1024 * 1024,
-        resumable=True,
+        chunk_mb=GDRIVE_CHUNK_MB,
     )
     return gdrive_service().files().create(
         body=body, media_body=media, fields="id,name,size,mimeType"
@@ -972,8 +984,15 @@ def gdrive_upload_file(local_path: Path, name: str, parent_id: str, app_properti
 
 
 def gdrive_delete_file(file_id: str):
-    if file_id:
-        gdrive_service().files().delete(fileId=file_id).execute()
+    return canonical_storage.gdrive_delete_file(
+        file_id,
+        client_id=GDRIVE_CLIENT_ID,
+        client_secret=GDRIVE_CLIENT_SECRET,
+        refresh_token=GDRIVE_REFRESH_TOKEN,
+        folder_id=GDRIVE_FOLDER_ID,
+        token_uri=GDRIVE_TOKEN_URI,
+        scope=GDRIVE_SCOPE,
+    )
 
 
 def upload_material_tree_to_gdrive(material_id: str, source_path: Path, slides_dir: Path, page_count: int, original_name=None):
@@ -1033,8 +1052,14 @@ def gdrive_find_file_in_folder(folder_id: str, filename: str):
 def gdrive_proxy_file(file_id: str, filename: str, inline=True):
     if not file_id:
         abort(404)
-    creds = gdrive_credentials()
-    session = AuthorizedSession(creds)
+    session = canonical_storage.gdrive_authorized_session(
+        client_id=GDRIVE_CLIENT_ID,
+        client_secret=GDRIVE_CLIENT_SECRET,
+        refresh_token=GDRIVE_REFRESH_TOKEN,
+        folder_id=GDRIVE_FOLDER_ID,
+        token_uri=GDRIVE_TOKEN_URI,
+        scope=GDRIVE_SCOPE,
+    )
     headers = {}
     range_header = request.headers.get("Range")
     if range_header:
@@ -1067,7 +1092,14 @@ def gdrive_proxy_file(file_id: str, filename: str, inline=True):
 
 def gdrive_download_to_path(file_id: str, dest: Path):
     dest.parent.mkdir(parents=True, exist_ok=True)
-    session = AuthorizedSession(gdrive_credentials())
+    session = canonical_storage.gdrive_authorized_session(
+        client_id=GDRIVE_CLIENT_ID,
+        client_secret=GDRIVE_CLIENT_SECRET,
+        refresh_token=GDRIVE_REFRESH_TOKEN,
+        folder_id=GDRIVE_FOLDER_ID,
+        token_uri=GDRIVE_TOKEN_URI,
+        scope=GDRIVE_SCOPE,
+    )
     try:
         with session.get(
             f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media",
@@ -1090,10 +1122,52 @@ def gdrive_delete_material(entry):
         return
     ids = [entry.get("storageKey", "")] + list((meta.get("slideFiles") or {}).values())
     for fid in dict.fromkeys(x for x in ids if x):
-        try:
-            gdrive_delete_file(fid)
-        except Exception:
-            pass
+        gdrive_delete_file(fid)
+
+
+def storage_delete_adapters(
+    *,
+    local_delete_object=None,
+    local_delete_prefix=None,
+    local_delete_material=None,
+):
+    """Compose canonical deletion policy around the live provider owners."""
+
+    return canonical_storage.build_delete_adapters(
+        mega_is_configured=mega_is_configured,
+        mega_delete_object=mega_delete_object,
+        gdrive_is_configured=gdrive_is_configured,
+        gdrive_delete_object=gdrive_delete_file,
+        gdrive_delete_material=gdrive_delete_material,
+        oci_is_configured=oci_is_configured,
+        oci_delete_object=oci_delete_object,
+        oci_delete_prefix=oci_delete_prefix,
+        r2_is_configured=r2_is_configured,
+        r2_delete_object=r2_delete_object,
+        r2_delete_prefix=r2_delete_prefix,
+        local_delete_object=local_delete_object,
+        local_delete_prefix=local_delete_prefix,
+        local_delete_material=local_delete_material,
+    )
+
+
+def _delete_storage_object(
+    backend,
+    key,
+    *,
+    local_payload=None,
+    local_delete_object=None,
+    best_effort=False,
+):
+    backend = str(backend or "local").lower()
+    payload = local_payload if backend == "local" else key
+    if not payload:
+        return canonical_storage.DeleteOutcome(backend=backend, operation="object", deleted=True)
+    request = canonical_storage.DeleteRequest(backend, "object", payload)
+    adapters = storage_delete_adapters(local_delete_object=local_delete_object)
+    if best_effort:
+        return canonical_storage.delete_best_effort(request, adapters)
+    return canonical_storage.delete_strict(request, adapters)
 
 # ---------------------------------------------------------------------------
 # 六大組別（頁面最上層分組）
@@ -1118,6 +1192,8 @@ from teacher_app.common.auth import CANONICAL_ROLES, LEGACY_ROLE_ALIASES, ROLE_P
 from teacher_app.common import db as common_db
 from teacher_app.materials import storage as material_storage
 from teacher_app.materials import repository as material_repository
+from teacher_app.courses import repository as course_repository
+from teacher_app.assessments import repository as assessment_repository
 from teacher_app.auth import service as auth_service, routes as auth_routes
 import sys
 
@@ -1368,15 +1444,24 @@ def delete_material_job_staging(job: dict):
     backend = str(job.get("stagingBackend") or job.get("staging_backend") or "local").lower()
     key = str(job.get("stagingKey") or job.get("staging_key") or "")
     local_path = Path(job.get("stagingPath") or job.get("staging_path") or "")
+    if backend == "local" and not local_path.exists():
+        return
+    if backend != "local" and not key:
+        return
+
+    def delete_local_staging(path):
+        target = Path(path)
+        if target.exists():
+            shutil.rmtree(target.parent)
+
+    _delete_storage_object(
+        backend,
+        key,
+        local_payload=local_path,
+        local_delete_object=delete_local_staging,
+    )
     if backend == "r2" and key:
-        r2_client().delete_object(Bucket=R2_BUCKET_NAME, Key=key)
         r2_record_deleted(key)
-    elif backend == "mega" and key:
-        mega_destroy(key)
-    elif backend == "gdrive" and key:
-        gdrive_delete_file(key)
-    elif backend == "local" and local_path.exists():
-        shutil.rmtree(local_path.parent, ignore_errors=True)
 
 
 _R2_GB = 1024 ** 3
@@ -2439,41 +2524,13 @@ def init_learning_db():
 
 
 def course_row_to_dict(row):
-    r=dict(row)
-    r['area']=normalize_area(r.pop('training_area', DEFAULT_TRAINING_AREA))
-    r['group']=normalize_group(r.pop('group_key', DEFAULT_GROUP))
-    r['desc']=r.pop('description','')
-    r['sortOrder']=int(r.pop('sort_order',0) or 0)
-    r['dateAdded']=r.pop('date_added','')
-    r['active']=bool(r.get('active', True))
-    r['learningObjectives']=r.pop('learning_objectives','')
-    r['estimatedMinutes']=int(r.pop('estimated_minutes',0) or 0)
-    r['startDate']=r.pop('start_date','')
-    r['endDate']=r.pop('end_date','')
-    try:
-        r['materialOrder']=json.loads(r.pop('material_order','[]') or '[]')
-    except (ValueError, TypeError):
-        r['materialOrder']=[]
-    return r
+    return course_repository.course_row_to_dict(row)
 
 def get_course(course_id):
-    if not course_id: return None
-    conn,kind=_db_conn(); ph='%s' if kind=='postgres' else '?'
-    try:
-        row=conn.execute(f"SELECT * FROM courses WHERE id={ph}",(course_id,)).fetchone()
-        return course_row_to_dict(row) if row else None
-    finally: conn.close()
+    return course_repository.get_course(course_id)
 
 def list_courses(area=None, group=None, include_inactive=False):
-    conn,kind=_db_conn(); ph='%s' if kind=='postgres' else '?'
-    try:
-        clauses=[]; params=[]
-        if area: clauses.append(f"training_area={ph}"); params.append(normalize_area(area))
-        if group: clauses.append(f"group_key={ph}"); params.append(normalize_group(group))
-        if not include_inactive: clauses.append("active=" + ("TRUE" if kind=='postgres' else "1"))
-        sql='SELECT * FROM courses' + ((' WHERE '+' AND '.join(clauses)) if clauses else '') + ' ORDER BY sort_order ASC, date_added ASC'
-        return [course_row_to_dict(r) for r in conn.execute(sql,params).fetchall()]
-    finally: conn.close()
+    return course_repository.list_courses(area, group, include_inactive)
 
 init_learning_db()
 
@@ -2814,168 +2871,31 @@ migrate_v540_exam_settings()
 # 考題頁籤 (quiz_categories) 與題目 (quiz_questions) 存取輔助函式
 # ---------------------------------------------------------------------------
 def quiz_category_row_to_dict(row):
-    r = dict(row)
-    r["desc"] = r.pop("description", "")
-    r["dateAdded"] = r.pop("date_added", "")
-    r["active"] = bool(r.get("active", True))
-    r["blindMode"] = bool(r.pop("blind_mode", False))
-    r["group"] = normalize_group(r.pop("group_key", DEFAULT_GROUP))
-    r["area"] = normalize_area(r.pop("training_area", DEFAULT_TRAINING_AREA))
-    r["courseId"] = r.pop("course_id", "") or ""
-    r["sortOrder"] = int(r.pop("sort_order", 0) or 0)
-    try:
-        r["drawCount"] = max(0, int(r.pop("draw_count", 0) or 0))
-    except Exception:
-        r["drawCount"] = 0
-    try:
-        r["passingScore"] = max(1, min(100, int(r.pop("passing_score", 80) or 80)))
-    except Exception:
-        r["passingScore"] = 80
-    r["audience"] = str(r.pop("audience", "") or "")
-    raw_draw_rules = r.pop("draw_rules", {}) or {}
-    if isinstance(raw_draw_rules, str):
-        try:
-            raw_draw_rules = json.loads(raw_draw_rules)
-        except Exception:
-            raw_draw_rules = {}
-    r["drawRules"] = raw_draw_rules if isinstance(raw_draw_rules, dict) else {}
-    review_status = str(r.pop("review_status", "approved") or "approved").lower()
-    r["reviewStatus"] = review_status if review_status in {"draft", "approved"} else "draft"
-    r["reviewerName"] = str(r.pop("reviewer_name", "") or "")
-    r["reviewedAt"] = str(r.pop("reviewed_at", "") or "")
-    r["publishedAt"] = str(r.pop("published_at", "") or "")
-    r["publicationId"] = str(r.pop("publication_id", "") or "")
-    r["publicationHash"] = str(r.pop("publication_hash", "") or "")
-    if r.get("active"):
-        r["workflowStage"] = "published"
-    elif r["reviewStatus"] == "approved":
-        r["workflowStage"] = "reviewed"
-    else:
-        r["workflowStage"] = "draft"
-    return r
+    return assessment_repository.category_row_to_dict(row)
 
 
 def quiz_question_row_to_dict(row):
-    r = dict(row)
-    raw_options = r.pop("options", "[]")
-    if isinstance(raw_options, str):
-        try:
-            raw_options = json.loads(raw_options)
-        except json.JSONDecodeError:
-            raw_options = []
-    r["options"] = raw_options
-    raw_answer_config = r.pop("answer_config", {}) or {}
-    if isinstance(raw_answer_config, str):
-        try:
-            raw_answer_config = json.loads(raw_answer_config)
-        except Exception:
-            raw_answer_config = {}
-    r["answerConfig"] = raw_answer_config if isinstance(raw_answer_config, dict) else {}
-    r["questionType"] = r.pop("question_type", "choice")
-    diff = str(r.pop("difficulty", "standard") or "standard").lower()
-    r["difficulty"] = diff if diff in {"basic", "standard", "advanced"} else "standard"
-    r["imageUrl"] = r.pop("image_url", "")
-    r["quizCategoryId"] = r.pop("quiz_category_id", "")
-    r["sortOrder"] = int(r.pop("sort_order", 0) or 0)
-    r["active"] = bool(r.get("active", True))
-    return r
+    return assessment_repository.question_row_to_dict(row)
 
 
 def list_quiz_categories(group_key=None, training_area=None, include_inactive=False):
-    conn, kind = _db_conn()
-    try:
-        ph = "%s" if kind == "postgres" else "?"
-        sql = "SELECT * FROM quiz_categories"
-        params = []
-        clauses = []
-        if group_key:
-            clauses.append(f"group_key = {ph}")
-            params.append(group_key)
-        if training_area:
-            clauses.append(f"training_area = {ph}")
-            params.append(normalize_area(training_area))
-        if not include_inactive:
-            clauses.append("active = " + ("TRUE" if kind == "postgres" else "1"))
-        if clauses:
-            sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY sort_order ASC, date_added ASC"
-        return [quiz_category_row_to_dict(r) for r in conn.execute(sql, params).fetchall()]
-    finally:
-        conn.close()
+    return assessment_repository.list_categories(group_key, training_area, include_inactive)
 
 
 def list_quiz_categories_with_counts(group_key=None, training_area=None, include_inactive=True):
-    """用同一個資料庫連線取得考卷與題數，減少 Render ↔ Supabase 往返。"""
-    conn, kind = _db_conn()
-    try:
-        ph = "%s" if kind == "postgres" else "?"
-        sql = "SELECT * FROM quiz_categories"
-        params = []
-        clauses = []
-        if group_key:
-            clauses.append(f"group_key = {ph}")
-            params.append(group_key)
-        if training_area:
-            clauses.append(f"training_area = {ph}")
-            params.append(normalize_area(training_area))
-        if not include_inactive:
-            clauses.append("active = " + ("TRUE" if kind == "postgres" else "1"))
-        if clauses:
-            sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY sort_order ASC, date_added ASC"
-        cats = [quiz_category_row_to_dict(r) for r in conn.execute(sql, params).fetchall()]
-        ids = [str(c.get("id", "")) for c in cats if c.get("id")]
-        counts = {}
-        if ids:
-            placeholders = ",".join([ph] * len(ids))
-            qsql = f"SELECT quiz_category_id, COUNT(*) AS cnt FROM quiz_questions WHERE quiz_category_id IN ({placeholders})"
-            qsql += " AND active = " + ("TRUE" if kind == "postgres" else "1")
-            qsql += " GROUP BY quiz_category_id"
-            for row in conn.execute(qsql, ids).fetchall():
-                try:
-                    d = dict(row)
-                    counts[str(d.get("quiz_category_id", ""))] = int(d.get("cnt", 0) or 0)
-                except Exception:
-                    counts[str(row[0])] = int(row[1] or 0)
-        for c in cats:
-            c["questionCount"] = counts.get(str(c.get("id", "")), 0)
-        return cats
-    finally:
-        conn.close()
+    return assessment_repository.list_categories_with_counts(group_key, training_area, include_inactive)
 
 
 def get_quiz_category(category_id):
-    conn, kind = _db_conn()
-    try:
-        ph = "%s" if kind == "postgres" else "?"
-        row = conn.execute(f"SELECT * FROM quiz_categories WHERE id = {ph}", (category_id,)).fetchone()
-        return quiz_category_row_to_dict(row) if row else None
-    finally:
-        conn.close()
+    return assessment_repository.get_category_full(category_id)
 
 
 def list_quiz_questions(category_id, include_inactive=False):
-    conn, kind = _db_conn()
-    try:
-        ph = "%s" if kind == "postgres" else "?"
-        sql = f"SELECT * FROM quiz_questions WHERE quiz_category_id = {ph}"
-        if not include_inactive:
-            sql += " AND active = " + ("TRUE" if kind == "postgres" else "1")
-        sql += " ORDER BY sort_order ASC"
-        rows = conn.execute(sql, (category_id,)).fetchall()
-        return [quiz_question_row_to_dict(r) for r in rows]
-    finally:
-        conn.close()
+    return assessment_repository.list_questions(category_id, include_inactive)
 
 
 def get_quiz_question(question_id):
-    conn, kind = _db_conn()
-    try:
-        ph = "%s" if kind == "postgres" else "?"
-        row = conn.execute(f"SELECT * FROM quiz_questions WHERE id = {ph}", (question_id,)).fetchone()
-        return quiz_question_row_to_dict(row) if row else None
-    finally:
-        conn.close()
+    return assessment_repository.get_question(question_id)
 
 
 def resolve_category_label(category, group_key):
@@ -2992,8 +2912,7 @@ def category_label_map():
     """一次讀取所有動態考卷名稱，避免教材清單逐筆連 Supabase 查名稱（N+1）。"""
     labels = dict(CATEGORY_LABELS)
     try:
-        for cat in list_quiz_categories(include_inactive=True):
-            labels[cat.get("id", "")] = cat.get("title", "") or labels.get(cat.get("id", ""), CATEGORY_LABELS[""])
+        labels.update(assessment_repository.category_labels())
     except Exception:
         # 教材 API 即使暫時讀不到題庫名稱也應可回傳清單。
         pass
@@ -3001,29 +2920,7 @@ def category_label_map():
 
 
 def quiz_question_counts(category_ids, include_inactive=False):
-    """以單一 SQL 取得多張考卷題數，取代前端每張考卷各打一個 API。"""
-    ids = [str(x) for x in category_ids if x]
-    if not ids:
-        return {}
-    conn, kind = _db_conn()
-    try:
-        ph = "%s" if kind == "postgres" else "?"
-        placeholders = ",".join([ph] * len(ids))
-        sql = f"SELECT quiz_category_id, COUNT(*) AS cnt FROM quiz_questions WHERE quiz_category_id IN ({placeholders})"
-        if not include_inactive:
-            sql += " AND active = " + ("TRUE" if kind == "postgres" else "1")
-        sql += " GROUP BY quiz_category_id"
-        rows = conn.execute(sql, ids).fetchall()
-        out = {}
-        for row in rows:
-            try:
-                d = dict(row)
-                out[str(d.get("quiz_category_id", ""))] = int(d.get("cnt", 0) or 0)
-            except Exception:
-                out[str(row[0])] = int(row[1] or 0)
-        return out
-    finally:
-        conn.close()
+    return assessment_repository.question_counts(category_ids, include_inactive)
 
 
 # ---------------------------------------------------------------------------
@@ -5190,17 +5087,23 @@ def _insert_quiz_question_payload(category_id, payload):
     difficulty=str(payload.get("difficulty","standard") or "standard").lower()
     if difficulty not in {"basic","standard","advanced"}: difficulty="standard"
     q_id=f"q-{uuid.uuid4().hex[:12]}"
-    conn,kind=_db_conn()
-    try:
-        ph="%s" if kind=="postgres" else "?"
-        row=conn.execute(f"SELECT COALESCE(MAX(sort_order), -1) AS m FROM quiz_questions WHERE quiz_category_id={ph}",(category_id,)).fetchone()
-        order=(row["m"] if isinstance(row,dict) else row[0])+1
-        vals=(q_id,category_id,str(payload.get("tag",""))[:100],qtext[:2000],qtype,difficulty,str(payload.get("imageUrl",""))[:1000],json.dumps(options,ensure_ascii=False),correct,json.dumps(cfg,ensure_ascii=False),str(payload.get("explanation",""))[:4000],order)
-        if kind=="postgres":
-            conn.execute("INSERT INTO quiz_questions (id,quiz_category_id,tag,question,question_type,difficulty,image_url,options,correct,answer_config,explanation,sort_order,active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,TRUE)",vals)
-        else:
-            conn.execute("INSERT INTO quiz_questions (id,quiz_category_id,tag,question,question_type,difficulty,image_url,options,correct,answer_config,explanation,sort_order,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)",vals)
-    finally: conn.close()
+    with common_db.transaction() as (conn, kind):
+        order = assessment_repository.next_question_sort_order(conn, kind, category_id)
+        assessment_repository.insert_runtime_question_on_connection(conn, kind, {
+            "id": q_id,
+            "quiz_category_id": category_id,
+            "tag": str(payload.get("tag", ""))[:100],
+            "question": qtext[:2000],
+            "question_type": qtype,
+            "difficulty": difficulty,
+            "image_url": str(payload.get("imageUrl", ""))[:1000],
+            "options": json.dumps(options, ensure_ascii=False),
+            "correct": correct,
+            "answer_config": json.dumps(cfg, ensure_ascii=False),
+            "explanation": str(payload.get("explanation", ""))[:4000],
+            "sort_order": order,
+            "active": True,
+        })
     return q_id
 
 
@@ -5252,20 +5155,18 @@ def _insert_quiz_question_payloads_bulk(category_id, items):
             "explanation":str(payload.get("explanation",""))[:4000], "active":True,
         })
     if not prepared: return []
-    conn,kind=_db_conn()
-    try:
-        ph="%s" if kind=="postgres" else "?"
-        row=conn.execute(f"SELECT COALESCE(MAX(sort_order), -1) AS m FROM quiz_questions WHERE quiz_category_id={ph}",(category_id,)).fetchone()
-        order=(row["m"] if isinstance(row,dict) else row[0])+1
+    with common_db.transaction() as (conn, kind):
+        order = assessment_repository.next_question_sort_order(conn, kind, category_id)
         for idx,q in enumerate(prepared):
             q["sortOrder"]=order+idx
-            vals=(q["id"],category_id,q["tag"],q["question"],q["questionType"],q["difficulty"],q["imageUrl"],json.dumps(q["options"],ensure_ascii=False),q["correct"],json.dumps(q["answerConfig"],ensure_ascii=False),q["explanation"],q["sortOrder"])
-            if kind=="postgres":
-                conn.execute("INSERT INTO quiz_questions (id,quiz_category_id,tag,question,question_type,difficulty,image_url,options,correct,answer_config,explanation,sort_order,active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,TRUE)",vals)
-            else:
-                conn.execute("INSERT INTO quiz_questions (id,quiz_category_id,tag,question,question_type,difficulty,image_url,options,correct,answer_config,explanation,sort_order,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)",vals)
-    finally:
-        conn.close()
+            assessment_repository.insert_runtime_question_on_connection(conn, kind, {
+                "id": q["id"], "quiz_category_id": category_id, "tag": q["tag"],
+                "question": q["question"], "question_type": q["questionType"],
+                "difficulty": q["difficulty"], "image_url": q["imageUrl"],
+                "options": json.dumps(q["options"], ensure_ascii=False), "correct": q["correct"],
+                "answer_config": json.dumps(q["answerConfig"], ensure_ascii=False),
+                "explanation": q["explanation"], "sort_order": q["sortOrder"], "active": True,
+            })
     return prepared
 
 
@@ -5412,46 +5313,9 @@ def api_review_quiz_category(category_id):
 
 
 def _quiz_publication_snapshot(category_id: str):
-    """建立不可漂移的發布快照；歷史成績可追溯當時實際考卷內容。"""
-    category = get_quiz_category(category_id)
-    if not category:
-        raise ValueError("找不到此考卷")
-    questions = list_quiz_questions(category_id, include_inactive=False)
-    snapshot = {
-        "schemaVersion": 1,
-        "category": {
-            "id": category.get("id"),
-            "title": category.get("title"),
-            "desc": category.get("desc", ""),
-            "group": category.get("group"),
-            "area": category.get("area"),
-            "courseId": category.get("courseId", ""),
-            "blindMode": bool(category.get("blindMode", False)),
-            "drawCount": int(category.get("drawCount", 0) or 0),
-            "passingScore": int(category.get("passingScore", 80) or 80),
-            "audience": category.get("audience", ""),
-            "drawRules": category.get("drawRules", {}) or {},
-            "reviewerName": category.get("reviewerName", ""),
-            "reviewedAt": category.get("reviewedAt", ""),
-        },
-        "questions": [{
-            "id": q.get("id"),
-            "tag": q.get("tag", ""),
-            "question": q.get("question", ""),
-            "questionType": q.get("questionType", "choice"),
-            "imageUrl": q.get("imageUrl", ""),
-            "options": q.get("options", []) or [],
-            "correct": q.get("correct", 0),
-            "answerConfig": q.get("answerConfig", {}) or {},
-            "explanation": q.get("explanation", ""),
-            "difficulty": q.get("difficulty", "standard"),
-            "sortOrder": int(q.get("sortOrder", 0) or 0),
-        } for q in questions],
-    }
-    canonical = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-    publication_id = f"pub-{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d%H%M%S')}-{digest[:10]}"
-    return snapshot, digest, publication_id
+    """Compatibility delegate for the canonical immutable publication builder."""
+    from teacher_app.assessments import service as canonical_assessments
+    return canonical_assessments.publication_snapshot(category_id)
 
 
 @app.get("/api/quiz-categories/<category_id>/publications")
@@ -5626,18 +5490,10 @@ def _mark_quiz_category_draft(category_id, conn=None, kind=None):
     category_id = str(category_id or '').strip()
     if not category_id:
         return
-    own_conn = conn is None
-    if own_conn:
-        conn, kind = _db_conn()
-    ph = "%s" if kind == "postgres" else "?"
-    try:
-        conn.execute(
-            f"UPDATE quiz_categories SET review_status={ph}, reviewer_name={ph}, reviewed_at={ph}, published_at={ph}, publication_id={ph}, publication_hash={ph}, active={ph} WHERE id={ph}",
-            ("draft", "", "", "", "", "", False if kind == "postgres" else 0, category_id),
-        )
-    finally:
-        if own_conn:
-            conn.close()
+    if conn is not None:
+        assessment_repository.mark_category_draft_on_connection(conn, kind, category_id)
+        return
+    assessment_repository.mark_category_draft(category_id)
 
 
 @app.post("/api/quiz-questions")
@@ -5855,26 +5711,16 @@ def api_create_quiz_question():
     if question_type == "fill" and not answer_config.get("acceptedAnswers"):
         return jsonify({"error": "填空題至少要設定一個可接受答案"}), 400
     q_id = f"q-{uuid.uuid4().hex[:12]}"
-    conn, kind = _db_conn()
-    try:
-        existing = conn.execute(
-            f"SELECT COALESCE(MAX(sort_order), -1) AS m FROM quiz_questions WHERE quiz_category_id = {'%s' if kind == 'postgres' else '?'}",
-            (category_id,),
-        ).fetchone()
-        next_order = (existing["m"] if isinstance(existing, dict) else existing[0]) + 1
-        if kind == "postgres":
-            conn.execute(
-                "INSERT INTO quiz_questions (id,quiz_category_id,tag,question,question_type,difficulty,image_url,options,correct,answer_config,explanation,sort_order,active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,TRUE)",
-                (q_id, category_id, tag, question, question_type, difficulty, image_url, json.dumps(options, ensure_ascii=False), correct, json.dumps(answer_config, ensure_ascii=False), explanation, next_order),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO quiz_questions (id,quiz_category_id,tag,question,question_type,difficulty,image_url,options,correct,answer_config,explanation,sort_order,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)",
-                (q_id, category_id, tag, question, question_type, difficulty, image_url, json.dumps(options, ensure_ascii=False), correct, json.dumps(answer_config, ensure_ascii=False), explanation, next_order),
-            )
+    with common_db.transaction() as (conn, kind):
+        next_order = assessment_repository.next_question_sort_order(conn, kind, category_id)
+        assessment_repository.insert_runtime_question_on_connection(conn, kind, {
+            "id": q_id, "quiz_category_id": category_id, "tag": tag, "question": question,
+            "question_type": question_type, "difficulty": difficulty, "image_url": image_url,
+            "options": json.dumps(options, ensure_ascii=False), "correct": correct,
+            "answer_config": json.dumps(answer_config, ensure_ascii=False), "explanation": explanation,
+            "sort_order": next_order, "active": True,
+        })
         _mark_quiz_category_draft(category_id, conn, kind)
-    finally:
-        conn.close()
     return jsonify(get_quiz_question(q_id))
 
 
@@ -5938,23 +5784,9 @@ def _prepare_quiz_question_update(entry, data):
 
 
 def _execute_quiz_question_update(conn, kind, question_id, normalized):
-    values = (
-        normalized["tag"], normalized["question"], normalized["questionType"], normalized["difficulty"], normalized["imageUrl"],
-        json.dumps(normalized["options"], ensure_ascii=False), normalized["correct"],
-        json.dumps(normalized["answerConfig"], ensure_ascii=False), normalized["explanation"],
-        normalized["active"], question_id,
+    assessment_repository.update_runtime_question_on_connection(
+        conn, kind, question_id, normalized
     )
-    if kind == "postgres":
-        conn.execute(
-            "UPDATE quiz_questions SET tag=%s, question=%s, question_type=%s, difficulty=%s, image_url=%s, options=%s, correct=%s, answer_config=%s, explanation=%s, active=%s WHERE id=%s",
-            values,
-        )
-    else:
-        values = values[:-2] + (int(bool(normalized["active"])), question_id)
-        conn.execute(
-            "UPDATE quiz_questions SET tag=?, question=?, question_type=?, difficulty=?, image_url=?, options=?, correct=?, answer_config=?, explanation=?, active=? WHERE id=?",
-            values,
-        )
 
 
 @app.patch("/api/quiz-questions/<question_id>")
@@ -5970,12 +5802,9 @@ def api_update_quiz_question(question_id):
         normalized = _prepare_quiz_question_update(entry, data)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    conn, kind = _db_conn()
-    try:
+    with common_db.transaction() as (conn, kind):
         _execute_quiz_question_update(conn, kind, question_id, normalized)
         _mark_quiz_category_draft(entry.get("quizCategoryId"), conn, kind)
-    finally:
-        conn.close()
     return jsonify({"ok": True, "question": {"id": question_id, **normalized}})
 
 
@@ -6003,12 +5832,8 @@ def api_batch_update_quiz_questions():
         patches[qid] = item.get("data") if isinstance(item.get("data"), dict) else {k:v for k,v in item.items() if k != "id"}
     if not requested:
         return jsonify({"error": "沒有有效題目"}), 400
-    conn, kind = _db_conn()
-    try:
-        ph = "%s" if kind == "postgres" else "?"
-        placeholders = ",".join([ph] * len(requested))
-        rows = conn.execute(f"SELECT * FROM quiz_questions WHERE id IN ({placeholders})", tuple(requested)).fetchall()
-        existing = {str(quiz_question_row_to_dict(r).get("id")): quiz_question_row_to_dict(r) for r in rows}
+    with common_db.transaction() as (conn, kind):
+        existing = assessment_repository.get_questions_by_ids_on_connection(conn, kind, requested)
         missing = [qid for qid in requested if qid not in existing]
         if missing:
             return jsonify({"error": f"找不到 {len(missing)} 題", "missing": missing}), 404
@@ -6024,8 +5849,6 @@ def api_batch_update_quiz_questions():
         for category_id in {str(existing[qid].get("quizCategoryId", "")) for qid in requested}:
             _mark_quiz_category_draft(category_id, conn, kind)
         return jsonify({"ok": True, "updated": [{"id": qid, **normalized} for qid, normalized in normalized_items], "count": len(normalized_items), "reviewInvalidated": True})
-    finally:
-        conn.close()
 
 
 @app.post("/api/quiz-questions/batch-delete")
@@ -6040,18 +5863,11 @@ def api_batch_delete_quiz_questions():
         return jsonify({"error": "ids 必須是非空陣列"}), 400
     if len(ids) > 200:
         return jsonify({"error": "一次最多刪除 200 題"}), 400
-    conn, kind = _db_conn()
-    try:
-        ph = "%s" if kind == "postgres" else "?"
-        placeholders = ",".join([ph] * len(ids))
-        category_rows = conn.execute(f"SELECT DISTINCT quiz_category_id FROM quiz_questions WHERE id IN ({placeholders})", tuple(ids)).fetchall()
-        category_ids = {str(dict(r).get("quiz_category_id", "")) for r in category_rows}
-        conn.execute(f"DELETE FROM quiz_questions WHERE id IN ({placeholders})", tuple(ids))
+    with common_db.transaction() as (conn, kind):
+        category_ids = assessment_repository.delete_questions_on_connection(conn, kind, ids)
         for category_id in category_ids:
             _mark_quiz_category_draft(category_id, conn, kind)
         return jsonify({"ok": True, "deleted": ids, "count": len(ids), "reviewInvalidated": True})
-    finally:
-        conn.close()
 
 
 @app.post("/api/quiz-questions/import-url")
@@ -6133,17 +5949,11 @@ def api_import_quiz_questions_url():
         if qtype=="multi" and not answer_config.get("correctIndices"): errors.append(f"第{idx}題缺少多選正確答案"); continue
         if qtype=="fill" and not answer_config.get("acceptedAnswers"): errors.append(f"第{idx}題缺少填空可接受答案"); continue
         payload={"quizCategoryId":category_id,"question":qtext,"questionType":qtype,"difficulty":item.get("difficulty",item.get("難度","standard")),"options":options,"correct":corr,"answerConfig":answer_config,"tag":item.get("tag",item.get("分類","一般")),"explanation":item.get("explanation",item.get("詳解","")),"imageUrl":item.get("imageUrl","")}
-        # directly insert using same validation core
-        q_id=f"q-{uuid.uuid4().hex[:12]}"; conn,kind=_db_conn()
         try:
-            ex=conn.execute(f"SELECT COALESCE(MAX(sort_order), -1) AS m FROM quiz_questions WHERE quiz_category_id = {'%s' if kind=='postgres' else '?'}",(category_id,)).fetchone(); order=(ex["m"] if isinstance(ex,dict) else ex[0])+1
-            opts=[str(o).strip() for o in options][:6]; corr=max(0,min(len(opts)-1,corr)) if opts else 0
-            difficulty=str(payload.get('difficulty','standard') or 'standard').lower(); difficulty=difficulty if difficulty in {'basic','standard','advanced'} else 'standard'
-            vals=(q_id,category_id,str(payload['tag'])[:100],qtext,qtype,difficulty,str(payload['imageUrl'])[:1000],json.dumps(opts,ensure_ascii=False),corr,json.dumps(payload.get('answerConfig',{}),ensure_ascii=False),str(payload['explanation']),order)
-            if kind=='postgres': conn.execute("INSERT INTO quiz_questions (id,quiz_category_id,tag,question,question_type,difficulty,image_url,options,correct,answer_config,explanation,sort_order,active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,TRUE)",vals)
-            else: conn.execute("INSERT INTO quiz_questions (id,quiz_category_id,tag,question,question_type,difficulty,image_url,options,correct,answer_config,explanation,sort_order,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)",vals)
+            _insert_quiz_question_payload(category_id, payload)
             imported+=1
-        finally: conn.close()
+        except ValueError as exc:
+            errors.append(f"第{idx}題：{exc}")
     if imported:
         _mark_quiz_category_draft(category_id)
     return jsonify({"ok":True,"imported":imported,"errors":errors[:20],"reviewInvalidated":bool(imported)})
@@ -6156,15 +5966,9 @@ def api_delete_quiz_question(question_id):
     entry = get_quiz_question(question_id)
     if not entry:
         return jsonify({"error": "找不到此題目"}), 404
-    conn, kind = _db_conn()
-    try:
-        if kind == "postgres":
-            conn.execute("DELETE FROM quiz_questions WHERE id=%s", (question_id,))
-        else:
-            conn.execute("DELETE FROM quiz_questions WHERE id=?", (question_id,))
+    with common_db.transaction() as (conn, kind):
+        assessment_repository.delete_questions_on_connection(conn, kind, [question_id])
         _mark_quiz_category_draft(entry.get("quizCategoryId"), conn, kind)
-    finally:
-        conn.close()
     return jsonify({"ok": True})
 
 
@@ -6173,6 +5977,23 @@ def api_delete_quiz_question(question_id):
 # ---------------------------------------------------------------------------
 DOC_TEMPLATE_ALLOWED_EXT = {".docx"}
 MAX_DOC_TEMPLATE_MB = max(1, min(50, int(os.environ.get("MAX_DOC_TEMPLATE_MB", "20"))))
+
+
+def _delete_doc_template_storage(row, *, best_effort: bool):
+    if not row:
+        return canonical_storage.DeleteOutcome("local", "object", True)
+    data = dict(row)
+    backend = str(data.get("storage_backend") or "local").lower()
+    key = str(data.get("storage_key") or "")
+    local_path = DOC_TEMPLATES_DIR / str(data.get("storage_filename") or "")
+    outcome = _delete_storage_object(
+        backend,
+        key,
+        local_payload=local_path,
+        local_delete_object=lambda path: Path(path).unlink(missing_ok=True),
+        best_effort=best_effort,
+    )
+    return outcome
 
 def _validate_template_file(path: Path, ext: str, max_mb: int):
     """驗證副檔名之外的實際內容；拒絕只改副檔名、空檔與損壞的 DOCX/PDF。"""
@@ -6261,6 +6082,7 @@ def api_upload_doc_template(group_key):
     tmp_path = TMP_DIR / f"doc-template-{group_key}-{uuid.uuid4().hex[:8]}.docx"
     backend = "local"
     storage_key = ""
+    storage_created = False
     try:
         file.save(str(tmp_path))
         validation=_validate_template_file(tmp_path, ext, MAX_DOC_TEMPLATE_MB)
@@ -6270,9 +6092,11 @@ def api_upload_doc_template(group_key):
             _mega_free_guard(tmp_path.stat().st_size)
             root=_mega_root_id(); folder_id=_mega_remote_join(root, "doc-templates"); _mega_ensure_dir(folder_id)
             storage_key=_mega_upload_file(tmp_path,folder_id,f"word-template-{group_key}-{uuid.uuid4().hex[:8]}.docx")
+            storage_created = True
         elif backend == "oci":
             storage_key = f"doc_templates/{group_key}/{uuid.uuid4().hex}.docx"
             oci_put_file(tmp_path, storage_key, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            storage_created = True
         elif backend == "gdrive":
             uploaded = gdrive_upload_file(
                 tmp_path,
@@ -6281,33 +6105,29 @@ def api_upload_doc_template(group_key):
                 {"smh_kind": "doc_template", "smh_group": group_key},
             )
             storage_key = uploaded["id"]
+            storage_created = True
         elif backend == "r2":
             storage_key = f"doc_templates/{group_key}/{uuid.uuid4().hex}.docx"
             r2_put_file(tmp_path, storage_key, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            storage_created = True
         else:
             backend = "local"
             local_path = DOC_TEMPLATES_DIR / storage_filename
             shutil.copy2(tmp_path, local_path)
+            storage_created = True
 
-        # 新檔成功後才刪除舊的遠端檔，避免上傳失敗造成範本遺失。
+        # 新檔成功後才清理舊檔；replacement cleanup 不影響已成功的新版本。
         if old:
             old_backend = (old.get("storage_backend") or "local").lower()
             old_key = old.get("storage_key") or ""
-            try:
-                if old_backend == "mega" and old_key and old_key != storage_key and mega_is_configured():
-                    mega_destroy(old_key)
-                elif old_backend == "oci" and old_key and old_key != storage_key and oci_is_configured():
-                    oci_client().delete_object(Bucket=OCI_BUCKET_NAME, Key=old_key)
-                elif old_backend == "gdrive" and old_key and old_key != storage_key:
-                    gdrive_delete_file(old_key)
-                elif old_backend == "r2" and old_key and old_key != storage_key and r2_is_configured():
-                    r2_client().delete_object(Bucket=R2_BUCKET_NAME, Key=old_key)
-                elif old_backend == "local":
-                    old_path = DOC_TEMPLATES_DIR / (old.get("storage_filename") or storage_filename)
-                    if backend != "local" and old_path.exists():
-                        old_path.unlink()
-            except Exception as cleanup_exc:
-                app.logger.warning("old doc template cleanup failed: %s", cleanup_exc)
+            should_cleanup = (
+                (old_backend == "local" and backend != "local")
+                or (old_backend != "local" and bool(old_key) and old_key != storage_key)
+            )
+            if should_cleanup:
+                cleanup = _delete_doc_template_storage(old, best_effort=True)
+                if not cleanup.deleted:
+                    app.logger.warning("old doc template cleanup failed: %s", cleanup.error)
 
         save_doc_template_row(group_key, original_name, storage_filename, backend, storage_key)
         return jsonify({"ok": True, "group": group_key, "filename": original_name, "storageBackend": backend, "validation": validation})
@@ -6315,18 +6135,24 @@ def api_upload_doc_template(group_key):
         return jsonify({"error": f"Word 範本檢查失敗：{exc}", "stage": "範本內容驗證"}), 400
     except Exception as exc:
         app.logger.exception("doc template upload failed")
-        # 若遠端新檔已建立但 DB 尚未完成，盡量清掉孤兒檔。
-        try:
-            if backend == "mega" and storage_key and mega_is_configured():
-                mega_destroy(storage_key)
-            elif backend == "oci" and storage_key and oci_is_configured():
-                oci_client().delete_object(Bucket=OCI_BUCKET_NAME, Key=storage_key)
-            elif backend == "gdrive" and storage_key:
-                gdrive_delete_file(storage_key)
-            elif backend == "r2" and storage_key and r2_is_configured():
-                r2_client().delete_object(Bucket=R2_BUCKET_NAME, Key=storage_key)
-        except Exception:
-            pass
+        # DB 尚未完成時，新建物件屬 orphan cleanup；失敗只記錄，不覆蓋原錯誤。
+        old_local_same_path = bool(
+            old
+            and backend == "local"
+            and str(old.get("storage_backend") or "local").lower() == "local"
+            and str(old.get("storage_filename") or storage_filename) == storage_filename
+        )
+        if storage_created and not old_local_same_path:
+            orphan = _delete_doc_template_storage(
+                {
+                    "storage_backend": backend,
+                    "storage_key": storage_key,
+                    "storage_filename": storage_filename,
+                },
+                best_effort=True,
+            )
+            if not orphan.deleted:
+                app.logger.warning("orphan doc template cleanup failed: %s", orphan.error)
         return jsonify({"error": f"Word 範本上傳失敗：{exc}"}), 500
     finally:
         try:
@@ -6373,23 +6199,12 @@ def api_delete_doc_template(group_key):
         return denied
     row = get_doc_template_row(group_key)
     if row:
-        backend = (row.get("storage_backend") or "local").lower()
-        key = row.get("storage_key") or ""
         try:
-            if backend == "mega" and key and mega_is_configured():
-                mega_destroy(key)
-            elif backend == "oci" and key and oci_is_configured():
-                oci_client().delete_object(Bucket=OCI_BUCKET_NAME, Key=key)
-            elif backend == "gdrive" and key and gdrive_is_configured():
-                gdrive_delete_file(key)
-            elif backend == "r2" and key and r2_is_configured():
-                r2_client().delete_object(Bucket=R2_BUCKET_NAME, Key=key)
-            else:
-                path = DOC_TEMPLATES_DIR / row["storage_filename"]
-                if path.exists():
-                    path.unlink()
-        finally:
-            delete_doc_template_row(group_key)
+            _delete_doc_template_storage(row, best_effort=False)
+        except Exception as exc:
+            cause = exc.cause if isinstance(exc, canonical_storage.StorageDeletionError) else exc
+            return jsonify({"error": f"Word 範本刪除失敗：{cause}"}), 502
+        delete_doc_template_row(group_key)
     return jsonify({"ok": True})
 
 
@@ -7013,29 +6828,20 @@ def _get_pgy_template(template_type):
     finally: conn.close()
 
 
-def _delete_pgy_template_storage(row):
-    """Best-effort removal of a superseded PGY assessment template file."""
+def _delete_pgy_template_storage(row, *, best_effort=True):
+    """Delete PGY template storage with explicit replacement/admin semantics."""
     if not row:
-        return
-    try:
-        backend=(row['storage_backend'] or 'local').lower()
-        key=row['storage_key'] or ''
-        if not key:
-            return
-        if backend=='mega' and mega_is_configured():
-            mega_destroy(key)
-        elif backend=='gdrive' and gdrive_is_configured():
-            gdrive_delete_file(key)
-        elif backend=='oci' and oci_is_configured():
-            oci_client().delete_object(Bucket=OCI_BUCKET_NAME, Key=key)
-        elif backend=='r2' and r2_is_configured():
-            r2_client().delete_object(Bucket=R2_BUCKET_NAME, Key=key)
-        elif backend=='local':
-            Path(key).unlink(missing_ok=True)
-    except Exception:
-        # New template has already been stored; cleanup failure must not make
-        # the administrator lose the successful replacement operation.
-        pass
+        return canonical_storage.DeleteOutcome("local", "object", True)
+    data=dict(row)
+    backend=(data.get('storage_backend') or 'local').lower()
+    key=data.get('storage_key') or ''
+    return _delete_storage_object(
+        backend,
+        key,
+        local_payload=Path(key) if backend == 'local' and key else None,
+        local_delete_object=lambda path: Path(path).unlink(missing_ok=True),
+        best_effort=best_effort,
+    )
 
 
 def _store_pgy_template(local_path: Path, template_type: str, filename: str):
@@ -7146,13 +6952,11 @@ def api_delete_pgy_assessment_template(template_type):
     if denied:return denied
     row=_get_pgy_template(template_type)
     if not row:return jsonify({'ok':True})
-    backend=(row['storage_backend'] or 'local').lower(); key=row['storage_key']
     try:
-        if backend=='mega' and key: _mega_run(['mega-rm','-f',key],check=False,timeout=60)
-        elif backend=='gdrive' and key and gdrive_is_configured(): gdrive_delete_file(key)
-        elif backend=='r2' and key and r2_client(): r2_client().delete_object(Bucket=R2_BUCKET_NAME,Key=key)
-        elif backend=='local' and key: Path(key).unlink(missing_ok=True)
-    except Exception: pass
+        _delete_pgy_template_storage(row, best_effort=False)
+    except Exception as exc:
+        cause=exc.cause if isinstance(exc,canonical_storage.StorageDeletionError) else exc
+        return jsonify({'error':f'評量範本刪除失敗：{cause}'}),502
     conn,kind=_db_conn(); ph='%s' if kind=='postgres' else '?'
     try: conn.execute(f'DELETE FROM pgy_assessment_templates WHERE template_type={ph}',(template_type,))
     finally: conn.close()
