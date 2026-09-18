@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import zipfile
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from teacher_app.atlas import image_store, service
 from teacher_app.common.errors import ApiError
@@ -22,8 +22,17 @@ PREVIEW_WARNING = (
 EMPTY_IMPORT_WARNING = "請確認 DOCX 使用支援的 inline JPG/PNG/WEBP 圖片。"
 
 
-def docx_source(material_id: str, uploaded_slides_dir) -> tuple[dict | None, Path | None]:
+def docx_source(
+    material_id: str,
+    uploaded_slides_dir,
+    *,
+    legacy_material_getter: Callable[[str], Mapping[str, Any] | None] | None = None,
+) -> tuple[dict | None, Path | None]:
+    """Resolve DOCX source through canonical materials, with isolated legacy fallback."""
     material = material_repository.get_material(material_id)
+    if not material and legacy_material_getter is not None:
+        legacy_material = legacy_material_getter(material_id)
+        material = dict(legacy_material) if legacy_material else None
     if not material:
         return None, None
     path = (
@@ -61,8 +70,18 @@ def preview_docx_atlas(path: Path) -> dict:
     }
 
 
-def preview_import(user: Mapping[str, Any], material_id: str, uploaded_slides_dir) -> dict:
-    material, path = docx_source(material_id, uploaded_slides_dir)
+def preview_import(
+    user: Mapping[str, Any],
+    material_id: str,
+    uploaded_slides_dir,
+    *,
+    legacy_material_getter: Callable[[str], Mapping[str, Any] | None] | None = None,
+) -> dict:
+    material, path = docx_source(
+        material_id,
+        uploaded_slides_dir,
+        legacy_material_getter=legacy_material_getter,
+    )
     if not material or not path:
         raise ApiError(
             "ATLAS_DOCX_SOURCE_UNAVAILABLE",
@@ -89,8 +108,13 @@ def confirm_import(
     *,
     uploaded_slides_dir,
     material_storage,
+    legacy_material_getter: Callable[[str], Mapping[str, Any] | None] | None = None,
 ) -> dict:
-    material, path = docx_source(material_id, uploaded_slides_dir)
+    material, path = docx_source(
+        material_id,
+        uploaded_slides_dir,
+        legacy_material_getter=legacy_material_getter,
+    )
     if not material or not path:
         raise ApiError(
             "ATLAS_DOCX_SOURCE_UNAVAILABLE",
