@@ -138,9 +138,22 @@ Source cleanup note:
 
 - `smart_learning_67.py` still contains the old `preview_docx_atlas` helper as dead compatibility source, but Atlas runtime no longer imports or calls it. Remove or convert it to a re-export when the Smart Learning domain is converged, rather than reopening Atlas ownership.
 
-### Question Bank — pending
+### Question Bank — CRUD/review canonical; blueprint/analytics pending
 
-`question_bank_68.py` still owns Bank 2.0 draft/review/blueprint/analytics behavior. Category publication ownership already belongs to `teacher_app.assessments`; the Question Bank migration must not recreate a second assessment owner.
+Completed:
+
+- `teacher_app.assessments.repository` owns Bank 2.0 `quiz_questions` list/get/duplicate-candidate/insert/update/delete/review SQL.
+- `teacher_app.assessments.question_bank` owns Bank metadata validation, payload projection, duplicate detection, draft creation, editing, deletion and review transitions.
+- `question_bank_68.py` keeps the existing `/api/question-bank/*` HTTP/RBAC surface but delegates CRUD/review behavior to the canonical assessment modules.
+- Structural regression coverage prevents `quiz_questions` CRUD/review SQL from returning to the root adapter.
+
+Remaining:
+
+- exam blueprint persistence and exact-quota selection (`exam_blueprints`, `_draw`);
+- immutable blueprint snapshot publication (`exam_blueprint_snapshots`);
+- item analytics aggregation (`question_attempt_analytics`).
+
+Those remaining behaviors should migrate into assessment-owned canonical modules without creating a second assessment publication owner.
 
 ## Storage / MEGA ownership
 
@@ -159,7 +172,7 @@ Do **not** add a second MEGA client or second connection/session implementation 
 5. Move external-media validation/persistence ownership.
 6. Move course-bundle and follow-up workflow ownership while preserving idempotency.
 7. Atlas runtime convergence is complete; keep `register_atlas_70` only as the established HTTP compatibility adapter until app-factory cutover.
-8. Move Question Bank ownership without duplicating assessment publication logic.
+8. Finish Question Bank by moving blueprint/snapshot and analytics ownership into `teacher_app.assessments` without duplicating assessment publication logic.
 9. Continue course/assessment repository migration and provider/storage extraction in bounded slices.
 10. Only after the runtime ownership map has no domain implementation in `app.py`, replace `pgy_app.py` with `app = create_app()`.
 
