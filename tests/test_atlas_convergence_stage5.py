@@ -13,6 +13,7 @@ class AtlasConvergenceStage5Tests(unittest.TestCase):
         cls.repository = ROOT.joinpath("teacher_app", "atlas", "repository.py").read_text(encoding="utf-8")
         cls.search = ROOT.joinpath("teacher_app", "atlas", "search.py").read_text(encoding="utf-8")
         cls.image_store = ROOT.joinpath("teacher_app", "atlas", "image_store.py").read_text(encoding="utf-8")
+        cls.importer = ROOT.joinpath("teacher_app", "atlas", "importer.py").read_text(encoding="utf-8")
         cls.learning_repository = ROOT.joinpath("teacher_app", "learning", "repository.py").read_text(encoding="utf-8")
 
     def test_root_adapter_has_no_atlas_table_sql(self):
@@ -80,10 +81,29 @@ class AtlasConvergenceStage5Tests(unittest.TestCase):
         self.assertNotIn('mkdir(parents=True, exist_ok=True)', self.adapter)
         self.assertNotIn("thumb.thumbnail(", self.adapter)
 
-    def test_remaining_transport_debt_is_docx_only(self):
+    def test_docx_import_orchestration_is_canonical(self):
+        for marker in (
+            "def docx_source(",
+            "def preview_docx_atlas(",
+            "def preview_import(",
+            "def confirm_import(",
+            "zipfile.ZipFile",
+            "material_repository.get_material",
+            "image_store.store_image_bytes",
+            "service.create_item",
+        ):
+            self.assertIn(marker, self.importer)
+        self.assertIn("atlas_importer.preview_import", self.adapter)
+        self.assertIn("atlas_importer.confirm_import", self.adapter)
+        self.assertNotIn("zipfile", self.adapter)
+        self.assertNotIn("def docx_source(", self.adapter)
+        self.assertNotIn("preview_docx_atlas", self.adapter)
+        self.assertNotIn("atlas_repository.insert_item", self.adapter)
+        self.assertNotIn("uuid.uuid4", self.adapter)
+        self.assertNotIn("json.dumps", self.adapter)
+
+    def test_root_is_http_compatibility_surface_only(self):
         self.assertIn("send_from_directory", self.adapter)
-        self.assertIn("zipfile.ZipFile", self.adapter)
-        self.assertIn("preview_docx_atlas", self.adapter)
         self.assertNotIn("material_text_index", self.adapter)
         self.assertNotIn("MATERIAL_STORAGE", self.service)
         self.assertNotIn("UPLOADED_SLIDES_DIR", self.service)
