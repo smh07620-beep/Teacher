@@ -72,8 +72,8 @@ setImmediate(() => {
   }
 });
 '''
-        for key, value in {'SOURCE': self.source('static/maintenance-64.js'), 'ROLE': role,
-                           'ROLES': roles, 'HOST': host, 'DUPLICATE': duplicate}.items():
+        for key, value in {'SOURCE': self.source('static/maintenance-64.js'), 'ROLES': roles,
+                           'ROLE': role, 'HOST': host, 'DUPLICATE': duplicate}.items():
             script = script.replace(key, json.dumps(value))
         result = subprocess.run([node, '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
