@@ -105,24 +105,40 @@ MATERIAL_DB_COLUMNS = (
 )
 
 
+def insert_material_on_connection(
+    conn,
+    kind: str,
+    entry: dict,
+    *,
+    ignore_conflict: bool = False,
+) -> None:
+    """Insert one material using a caller-owned transaction."""
+    ph = common_db.placeholder(kind)
+    columns = ",".join(MATERIAL_DB_COLUMNS)
+    marks = ",".join([ph] * len(MATERIAL_DB_COLUMNS))
+    values = tuple(
+        (bool(entry.get(name)) if name == "active" and kind == "postgres" else
+         int(bool(entry.get(name))) if name == "active" else entry.get(name))
+        for name in MATERIAL_DB_COLUMNS
+    )
+    if kind == "sqlite" and ignore_conflict:
+        sql = f"INSERT OR IGNORE INTO materials ({columns}) VALUES ({marks})"
+    else:
+        sql = f"INSERT INTO materials ({columns}) VALUES ({marks})"
+        if kind == "postgres" and ignore_conflict:
+            sql += " ON CONFLICT(id) DO NOTHING"
+    conn.execute(sql, values)
+
+
 def insert_material(entry: dict, *, ignore_conflict: bool = False) -> None:
     """Insert one material inside an explicit transaction."""
     with common_db.transaction() as (conn, kind):
-        ph = common_db.placeholder(kind)
-        columns = ",".join(MATERIAL_DB_COLUMNS)
-        marks = ",".join([ph] * len(MATERIAL_DB_COLUMNS))
-        values = tuple(
-            (bool(entry.get(name)) if name == "active" and kind == "postgres" else
-             int(bool(entry.get(name))) if name == "active" else entry.get(name))
-            for name in MATERIAL_DB_COLUMNS
+        insert_material_on_connection(
+            conn,
+            kind,
+            entry,
+            ignore_conflict=ignore_conflict,
         )
-        if kind == "sqlite" and ignore_conflict:
-            sql = f"INSERT OR IGNORE INTO materials ({columns}) VALUES ({marks})"
-        else:
-            sql = f"INSERT INTO materials ({columns}) VALUES ({marks})"
-            if kind == "postgres" and ignore_conflict:
-                sql += " ON CONFLICT(id) DO NOTHING"
-        conn.execute(sql, values)
 
 
 def update_material_storage(
