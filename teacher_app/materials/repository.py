@@ -146,3 +146,39 @@ def update_material_storage(
                 f"UPDATE materials SET storage_backend={ph}, storage_key={ph}, slides_prefix={ph}, storage_meta={ph} WHERE id={ph}",
                 (backend, storage_key, slides_prefix, storage_meta_json, material_id),
             )
+
+
+def update_material_metadata(
+    material_id: str,
+    *,
+    title: str,
+    description: str,
+    category: str,
+    group_key: str,
+    training_area: str,
+    course_id: str,
+    material_type: str,
+    atlas_meta_json: str,
+    active: bool,
+) -> None:
+    """Persist editable material metadata in one explicit transaction."""
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        conn.execute(
+            "UPDATE materials SET "
+            f"title={ph}, description={ph}, category={ph}, group_key={ph}, "
+            f"training_area={ph}, course_id={ph}, material_type={ph}, "
+            f"atlas_meta={ph}, active={ph} WHERE id={ph}",
+            (
+                title, description, category, group_key, training_area,
+                course_id, material_type, atlas_meta_json,
+                active if kind == "postgres" else int(active), material_id,
+            ),
+        )
+
+
+def delete_material_record(material_id: str) -> None:
+    """Delete one material row in an explicit transaction."""
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        conn.execute(f"DELETE FROM materials WHERE id={ph}", (material_id,))
