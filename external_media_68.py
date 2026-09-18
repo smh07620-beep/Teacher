@@ -55,7 +55,7 @@ def register_external_media(base):
     def put_external_media(material_id):
         denied=(base.require_permission("material.manage") if hasattr(base,"require_permission") else base.require_admin())
         if denied: return denied
-        if not material_repository.get_material(base, material_id): return jsonify({"error":"找不到教材"}),404
+        if not base.get_material(material_id): return jsonify({"error":"找不到教材"}),404
         try: data=validate_external_url((request.get_json(silent=True) or {}).get("url"), app.config.get("DIRECT_MEDIA_ALLOWLIST", []))
         except ValueError as exc: return jsonify({"error":str(exc)}),400
         stamp=now()
@@ -118,7 +118,7 @@ def register_external_media(base):
             material_repository.insert_material_on_connection(conn,kind,entry)
             media_values=(material_id,material_id,data["provider"],data["canonicalUrl"],data["videoId"],stamp,stamp)
             conn.execute(f"INSERT INTO external_media(id,material_id,provider,canonical_url,video_id,created_at,updated_at) VALUES({','.join([ph]*7)})",media_values)
-        item=material_repository.get_material(base, material_id)
+        item=base.get_material(material_id)
         return jsonify({"ok":True,"material":item,"externalMedia":data}),201
     @app.get("/api/materials/<material_id>/external-media")
     def get_external_media(material_id):
