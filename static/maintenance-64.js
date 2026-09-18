@@ -54,15 +54,30 @@
     return error?.message||fallback;
   }
 
-  async function me(){
+  async function profile(){
     try{
       return await api(
-        '/api/auth/me',
+        '/api/auth/profile',
         {cache:'no-store'}
       );
     }catch(_error){
       return null;
     }
+  }
+
+  function canMaintain(auth){
+    const user=auth?.user||{};
+    const roles=Array.isArray(user.roles)&&user.roles.length
+      ?user.roles
+      :[user.role||''];
+
+    return roles.some(
+      role=>allowed.has(
+        role==='manager'
+          ?'education_admin'
+          :role
+      )
+    );
   }
 
   async function ensureSensitive(){
@@ -173,10 +188,9 @@
   }
 
   async function init(){
-    const auth=await me();
-    const role=auth?.user?.role||'';
+    const auth=await profile();
 
-    if(!allowed.has(role)){
+    if(!canMaintain(auth)){
       return;
     }
 
