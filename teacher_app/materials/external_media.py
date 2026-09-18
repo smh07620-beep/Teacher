@@ -10,6 +10,7 @@ import ipaddress
 import json
 import re
 import uuid
+from collections.abc import Callable
 from typing import Any, Mapping
 from urllib.parse import parse_qs, urlparse
 
@@ -141,8 +142,17 @@ def set_external_media(material_id: str, value: Any, allow_hosts=()) -> dict:
     return data
 
 
-def create_external_material(body: Mapping[str, Any], allow_hosts=()) -> dict:
-    """Create external video metadata without object storage or worker work."""
+def create_external_material(
+    body: Mapping[str, Any],
+    allow_hosts=(),
+    *,
+    material_loader: Callable[[str], dict | None] | None = None,
+) -> dict:
+    """Create external video metadata without object storage or worker work.
+
+    ``material_loader`` preserves the caller's historical response projection;
+    persistence and validation remain canonical here.
+    """
     data = _validated(body.get("url"), allow_hosts)
 
     title = str(body.get("title") or "").strip()[:255]
@@ -207,8 +217,9 @@ def create_external_material(body: Mapping[str, Any], allow_hosts=()) -> dict:
         material_repository.insert_material_on_connection(conn, kind, entry)
         _insert_media_on_connection(conn, kind, material_id, data, stamp)
 
+    loader = material_loader or material_repository.get_material
     return {
-        "material": material_repository.get_material(material_id),
+        "material": loader(material_id),
         "externalMedia": data,
     }
 
