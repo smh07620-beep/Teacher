@@ -70,6 +70,16 @@ behavior.
 - Assessment list indexes are registered in `schema_migrations.py` instead of by importing a performance patch module.
 - Materials, courses, and assessment-category legacy URL rules delegate directly from `app.py` to canonical services. Their former `app.view_functions.update(...)` replacement adapters have been removed from runtime composition.
 
+## Backend convergence stage 2 — storage/material hot path
+
+- `storage_pagination_hardening.py` is retired. Bounded S3-compatible pagination, usage calculation and prefix deletion now live in `teacher_app.materials.storage` and are called directly by the R2/OCI compatibility seams.
+- `pgy_app.py` no longer monkey-patches storage functions during application startup.
+- A successful MEGA login/session is trusted for the configured process-local cache window. Normal material reads no longer spawn `mega-whoami` on every cache hit.
+- If a real `mega-get` fails, the read path invalidates the cached auth state, refreshes the MEGA session once and retries once. This preserves recovery without a provider probe on every request.
+- Material preview files are immutable for a material id. A non-empty local preview cache entry remains valid until size-based eviction or explicit material deletion; the former time-based expiry that periodically forced a synchronous MEGA re-download has been removed.
+- Provider health/capacity probes remain operational/admin concerns and must not be introduced into normal material catalog reads.
+
+
 ## Follow-up sequence
 
 1. Extract storage/provider ownership one bounded backend at a time; do not combine cloud credentials, upload jobs, conversion and material metadata into one rewrite.
