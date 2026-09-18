@@ -185,6 +185,7 @@ def _additive_rbac_pgy_signing_66(conn, kind: str) -> None:
     _backfill_legacy_user_roles(conn, kind)
     _add_columns(conn, kind, "pgy_assignments", {"sign_mode": "sign_mode TEXT NOT NULL DEFAULT 'legacy'", "first_signature": "first_signature TEXT NOT NULL DEFAULT '{}'", "second_signature": "second_signature TEXT NOT NULL DEFAULT '{}'"})
 
+
 @migration("0067-smart-learning-content")
 def _smart_learning_67(conn, kind: str) -> None:
     """Additive/idempotent learning metadata; no legacy row is overwritten."""
@@ -301,6 +302,19 @@ def _material_search_and_atlas_70(conn, kind: str) -> None:
         "updated_by TEXT NOT NULL DEFAULT '')"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atlas_items_visibility ON atlas_items(group_key,published,category,sort_order)")
+
+
+@migration("0071-pgy-learner-audience")
+def _pgy_learner_audience_71(conn, kind: str) -> None:
+    """Persist the explicit PGY learner audience flag without granting RBAC."""
+    boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
+    default_false = "FALSE" if kind == "postgres" else "0"
+    _add_columns(
+        conn,
+        kind,
+        "user_accounts",
+        {"pgy_learner": f"pgy_learner {boolean} NOT NULL DEFAULT {default_false}"},
+    )
 
 
 @migration("0072-course-bundle-idempotency")
