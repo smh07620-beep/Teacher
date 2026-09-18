@@ -111,6 +111,18 @@ def search_material(material_id: str, query: str, limit: int = 50) -> list[dict]
     return [dict(row) for row in rows]
 
 
+def get_material_text_rows(material_id: str, limit: int = 100) -> list[dict]:
+    """Return bounded indexed text rows for cross-resource search aggregation."""
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        rows = conn.execute(
+            f"SELECT page_no,title,text FROM material_text_index "
+            f"WHERE material_id={ph} ORDER BY page_no LIMIT {int(limit)}",
+            (material_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_index_status(material_id: str) -> dict:
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
