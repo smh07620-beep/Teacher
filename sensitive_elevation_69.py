@@ -17,6 +17,7 @@ from teacher_app.common.auth import has_permission
 SENSITIVE_RULES = (
     ({"POST", "PUT", "PATCH", "DELETE"}, "/api/users", ("user.manage",)),
     ({"POST"}, "/api/storage/migrate-to-", ("storage.manage",)),
+    ({"POST"}, "/api/maintenance/storage/mega/purge-root", ("system.manage",)),
     ({"POST"}, "/api/maintenance/restore", ("backup.manage", "education.cross_group.manage")),
     ({"GET"}, "/api/maintenance/backup", ("backup.manage", "education.cross_group.manage")),
     ({"DELETE"}, "/api/records", ("system.manage",)),
