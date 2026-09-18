@@ -24,7 +24,7 @@ class PgySigningConvergenceStage5Tests(unittest.TestCase):
         self.assertIn("signing_facade.list_assignments", self.adapter)
         self.assertIn("signing_facade.get_assignment", self.adapter)
         self.assertIn("signing_facade.create_assignment", self.adapter)
-        self.assertIn("signing_facade.update_sign_mode", self.adapter)
+        self.assertIn("signing_facade.update_assignment", self.adapter)
 
     def test_multi_role_scope_is_canonical(self):
         self.assertIn("user_roles(actor)", self.facade)
@@ -40,15 +40,38 @@ class PgySigningConvergenceStage5Tests(unittest.TestCase):
         self.assertIn('"clinical_teacher" in roles', self.repo)
         self.assertNotIn("base.", self.repo)
 
-    def test_adapter_keeps_only_legacy_mode_fallback(self):
-        self.assertIn('if mode == "legacy"', self.adapter)
-        self.assertIn("legacy_teacher_sign", self.adapter)
-        self.assertIn("legacy_countersign", self.adapter)
-        self.assertIn("legacy_reopen", self.adapter)
-        self.assertIn("legacy_update", self.adapter)
-        self.assertIn("signing.sign_assignment", self.adapter)
-        self.assertIn("signing.countersign_assignment", self.adapter)
-        self.assertIn("signing.reopen_assignment", self.adapter)
+    def test_legacy_new_mode_dispatch_is_canonical(self):
+        for retired_root_marker in (
+            "legacy_teacher_sign",
+            "legacy_countersign",
+            "legacy_reopen",
+            "legacy_update",
+            'if mode == "legacy"',
+            "signing.sign_assignment",
+            "signing.countersign_assignment",
+            "signing.reopen_assignment",
+        ):
+            self.assertNotIn(retired_root_marker, self.adapter)
+
+        for canonical_call in (
+            "signing_facade.update_assignment",
+            "signing_facade.teacher_sign_assignment",
+            "signing_facade.countersign_assignment",
+            "signing_facade.reopen_assignment",
+        ):
+            self.assertIn(canonical_call, self.adapter)
+
+        for facade_marker in (
+            'get_sign_mode(assignment_id) == "legacy"',
+            "pgy_service.update_assignment",
+            "pgy_service.teacher_sign_assignment",
+            "pgy_service.group_countersign_assignment",
+            "pgy_service.reopen_assignment",
+            "signing.sign_assignment",
+            "signing.countersign_assignment",
+            "signing.reopen_assignment",
+        ):
+            self.assertIn(facade_marker, self.facade)
 
 
 if __name__ == "__main__":
