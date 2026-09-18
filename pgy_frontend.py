@@ -1,5 +1,27 @@
 """Inject Teacher workflow/security/maintenance/workspace assets into UI pages."""
 
+import os
+import re
+from pathlib import Path
+
+
+def _runtime_asset_version() -> str:
+    raw = str(os.environ.get("ASSET_VERSION") or os.environ.get("RENDER_GIT_COMMIT") or "").strip()
+    if raw:
+        return re.sub(r"[^A-Za-z0-9._-]", "", raw)[:12] or "runtime"
+    try:
+        value = Path(__file__).with_name("VERSION").read_text(encoding="utf-8").strip()
+        return re.sub(r"[^A-Za-z0-9._-]", "", value) or "runtime"
+    except Exception:
+        return "runtime"
+
+
+def _rewrite_local_asset_versions(html: str) -> str:
+    """Bind same-origin JS/CSS cache keys to the deployed build identity."""
+    version = _runtime_asset_version()
+    pattern = re.compile(r'(?P<prefix>(?:src|href)="/[^"]+?\.(?:js|css))(?:\?v=[^"]*)?"')
+    return pattern.sub(lambda match: f'{match.group("prefix")}?v={version}"', html)
+
 
 def register_pgy_frontend(app):
     if app.extensions.get("pgy_frontend_registered"):
@@ -39,6 +61,9 @@ def register_pgy_frontend(app):
                     )
                     response.set_data(html)
                     response.content_length = len(response.get_data())
+                html = _rewrite_local_asset_versions(html)
+                response.set_data(html)
+                response.content_length = len(response.get_data())
                 return response
 
             if path not in {"/system", "/system.html"}:
@@ -188,6 +213,7 @@ def register_pgy_frontend(app):
                 html = html.replace("</head>", "\n".join(head_assets) + "\n</head>", 1)
             if body_assets and "</body>" in html:
                 html = html.replace("</body>", "\n".join(body_assets) + "\n</body>", 1)
+            html = _rewrite_local_asset_versions(html)
             response.set_data(html)
             response.content_length = len(response.get_data())
         except Exception:
