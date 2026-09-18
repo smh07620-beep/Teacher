@@ -21,21 +21,6 @@ MIGRATION_ID = "0073-course-bundle-followups"
 MAX_FOLLOWUP_INDEX = 499
 
 
-def _course_bundle_followups_73(conn, kind: str) -> None:
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS course_bundle_followups ("
-        "username TEXT NOT NULL,workflow_id TEXT NOT NULL,item_key TEXT NOT NULL,"
-        "kind TEXT NOT NULL,request_hash TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'processing',"
-        "response_status INTEGER NOT NULL DEFAULT 0,response_json TEXT NOT NULL DEFAULT '{}',"
-        "created_at TEXT NOT NULL,updated_at TEXT NOT NULL,"
-        "PRIMARY KEY(username,workflow_id,item_key))"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_course_bundle_followups_status "
-        "ON course_bundle_followups(status,updated_at)"
-    )
-
-
 def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
