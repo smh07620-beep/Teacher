@@ -17,6 +17,8 @@ from pathlib import Path
 
 from flask import jsonify, request, send_file
 
+from teacher_app.worker import protocol as worker_protocol
+
 
 _RATE_LOCK = threading.Lock()
 _RATE: dict[str, list[float]] = {}
@@ -30,8 +32,10 @@ def _json_row(row):
     return dict(row) if row else {}
 
 
-def _worker_id(value) -> str:
-    return re.sub(r"[^A-Za-z0-9._:-]", "", str(value or ""))[:160]
+# Compatibility exports for existing callers/tests.  Implementation ownership
+# is canonical in teacher_app.worker.protocol.
+_worker_id = worker_protocol.normalize_worker_id
+_worker_metadata = worker_protocol.sanitize_metadata
 
 
 def _worker_rate_ok() -> bool:
@@ -67,41 +71,17 @@ def _worker_owned(base, job_id: str, worker_id: str):
     return job, None
 
 
-def _worker_metadata(body):
-    """Whitelist bounded, non-secret worker build metadata for heartbeat JSON."""
-    body = body if isinstance(body, dict) else {}
-    version = re.sub(r"[^0-9A-Za-z._-]", "", str(body.get("workerVersion") or ""))[:32]
-    sha = str(body.get("workerSha") or "").lower()
-    sha = sha if re.fullmatch(r"[0-9a-f]{7,40}", sha) else ""
-    branch = re.sub(r"[^0-9A-Za-z._/-]", "", str(body.get("workerBranch") or ""))[:80]
-    checked = str(body.get("lastUpdateCheckAt") or "")[:64]
-    try:
-        if checked:
-            dt.datetime.fromisoformat(checked.replace("Z", "+00:00"))
-    except ValueError:
-        checked = ""
-    return {"workerVersion": version, "workerSha": sha, "workerBranch": branch,
-            "updateAvailable": bool(body.get("updateAvailable", False)), "lastUpdateCheckAt": checked}
-
-
 def _heartbeat(base, worker_id: str, capabilities=None, current_job_id="", metadata=None):
-    now = _now()
-    capabilities = capabilities if isinstance(capabilities, dict) else {}
-    # Keep this additive data in the existing heartbeat JSON column: no schema
-    # migration and no new server-side command channel are required.
-    capabilities = {**capabilities, **_worker_metadata(metadata)}
-    conn, kind = base._db_conn(); ph = "%s" if kind == "postgres" else "?"
-    try:
-        raw = __import__("json").dumps(capabilities, ensure_ascii=False)
-        if kind == "postgres":
-            conn.execute("INSERT INTO material_worker_heartbeats(worker_id,last_seen,capabilities,current_job_id) VALUES(%s,%s,%s::jsonb,%s) ON CONFLICT(worker_id) DO UPDATE SET last_seen=EXCLUDED.last_seen,capabilities=EXCLUDED.capabilities,current_job_id=EXCLUDED.current_job_id", (worker_id, now, raw, current_job_id))
-        else:
-            conn.execute("INSERT INTO material_worker_heartbeats(worker_id,last_seen,capabilities,current_job_id) VALUES(?,?,?,?) ON CONFLICT(worker_id) DO UPDATE SET last_seen=excluded.last_seen,capabilities=excluded.capabilities,current_job_id=excluded.current_job_id", (worker_id, now, raw, current_job_id))
-    finally:
-        conn.close()
-    if current_job_id:
-        base._update_material_job(current_job_id, worker_last_seen=now)
-    return now
+    return worker_protocol.record_heartbeat(
+        worker_id,
+        capabilities=capabilities,
+        current_job_id=current_job_id,
+        metadata=metadata,
+        touch_job=lambda job_id, seen: base._update_material_job(
+            job_id,
+            worker_last_seen=seen,
+        ),
+    )
 
 
 def _safe_upload_filename(value) -> tuple[str, str]:
