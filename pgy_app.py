@@ -30,7 +30,8 @@ from teacher_app.command_center.audience import register_training_audience_71
 from teacher_app.command_center.routes import register_training_command_center
 
 app = register_pgy_workflow(legacy_app)
-# Importing the adapters above registers additive migrations before the runner.
+# schema_migrations.py is the sole migration-registration owner; adapter import
+# order no longer contributes migrations to the release baseline.
 app = register_schema_migrations(legacy_app)
 app = register_multi_role_66(legacy_app)
 # Teacher 7.1 audience is an explicit training-track flag. It does not grant
