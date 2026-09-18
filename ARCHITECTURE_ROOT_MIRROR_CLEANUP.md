@@ -78,6 +78,11 @@ behavior.
 - If a real `mega-get` fails, the read path invalidates the cached auth state, refreshes the MEGA session once and retries once. This preserves recovery without a provider probe on every request.
 - Material preview files are immutable for a material id. A non-empty local preview cache entry remains valid until size-based eviction or explicit material deletion; the former time-based expiry that periodically forced a synchronous MEGA re-download has been removed.
 - Provider health/capacity probes remain operational/admin concerns and must not be introduced into normal material catalog reads.
+- Material row projection and all runtime material SELECT/INSERT/UPDATE/DELETE statements now live in `teacher_app.materials.repository`.
+- `app.py` keeps only `material_row_to_dict`, `list_uploaded_materials`, and `get_material` compatibility delegates; it contains no runtime material DML.
+- Read-only repository work uses `teacher_app.common.db.read_connection()`, which always checks out from the shared process-local pool and returns/closes the handle at scope exit.
+- Repository-owned writes use `teacher_app.common.db.transaction()`. Cross-domain course/assessment/external-media workflows pass the same caller-owned connection into material repository helpers so commit/rollback stays atomic across all affected tables.
+- Canonical material, course and assessment services read material data directly through `teacher_app.materials.repository` rather than bouncing through the legacy host.
 
 
 ## Follow-up sequence
