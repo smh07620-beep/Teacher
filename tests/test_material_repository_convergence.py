@@ -26,7 +26,7 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
             ("list_uploaded_materials", "material_repository.list_uploaded_materials"),
             ("get_material", "material_repository.get_material"),
         ):
-            start = self.app.index(f"def {name}")
+            start = self.app.index(f"def {name}(")
             next_def = self.app.find("\ndef ", start + 5)
             end = next_def if next_def >= 0 else len(self.app)
             source = self.app[start:end]
