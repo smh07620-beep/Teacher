@@ -397,23 +397,12 @@ def r2_presigned_get(key: str, *, download_name=None, inline=True):
 
 
 def r2_delete_prefix(prefix: str):
-    if not prefix:
-        return
-    client = r2_client()
-    token = None
-    while True:
-        kwargs = {"Bucket": R2_BUCKET_NAME, "Prefix": prefix}
-        if token:
-            kwargs["ContinuationToken"] = token
-        res = client.list_objects_v2(**kwargs)
-        objects = [{"Key": x["Key"]} for x in res.get("Contents", [])]
-        if objects:
-            client.delete_objects(Bucket=R2_BUCKET_NAME, Delete={"Objects": objects, "Quiet": True})
-            for item in objects:
-                r2_record_deleted(item["Key"])
-        if not res.get("IsTruncated"):
-            break
-        token = res.get("NextContinuationToken")
+    material_storage.delete_prefix(
+        r2_client(),
+        R2_BUCKET_NAME,
+        prefix,
+        on_deleted=r2_record_deleted,
+    )
 
 
 def upload_material_tree_to_r2(material_id: str, source_path: Path, slides_dir: Path, page_count: int):
@@ -560,9 +549,7 @@ def _mega_login_if_needed(force=False):
     now = time.time()
     with _MEGA_LOCK:
         if (not force) and _MEGA_AUTH_CACHE.get("ok") and now - float(_MEGA_AUTH_CACHE.get("at", 0) or 0) < MEGA_SESSION_CACHE_SECONDS:
-            probe = _mega_run(["mega-whoami"], check=False, timeout=30)
-            if probe.returncode == 0:
-                return
+            return
         probe = _mega_run(["mega-whoami"], check=False, timeout=30)
         if probe.returncode != 0:
             # 殘留 session 可能屬於舊帳號，先安全登出再登入。
@@ -645,7 +632,15 @@ def mega_download_file(file_id: str, target: Path):
     tempdir = target.parent / f".mega-get-{uuid.uuid4().hex[:8]}"
     tempdir.mkdir(parents=True, exist_ok=True)
     try:
-        _mega_run(["mega-get", str(file_id), str(tempdir)], timeout=max(MEGACMD_TIMEOUT_SECONDS, 600))
+        try:
+            _mega_run(["mega-get", str(file_id), str(tempdir)], timeout=max(MEGACMD_TIMEOUT_SECONDS, 600))
+        except RuntimeError:
+            # Cached authentication deliberately avoids a per-request whoami
+            # subprocess. If the provider-side session really expired, refresh
+            # it once and retry the actual read instead of probing every hit.
+            _MEGA_AUTH_CACHE.update({"ok": False, "at": 0.0})
+            _mega_login_if_needed(force=True)
+            _mega_run(["mega-get", str(file_id), str(tempdir)], timeout=max(MEGACMD_TIMEOUT_SECONDS, 600))
         files = [x for x in tempdir.iterdir() if x.is_file()]
         if not files:
             raise RuntimeError(f"MEGA 下載完成但找不到檔案：{file_id}")
@@ -846,15 +841,7 @@ def oci_client():
     )
 
 def oci_bucket_usage_bytes():
-    client = oci_client(); total = 0; token = None
-    while True:
-        kw = {"Bucket": OCI_BUCKET_NAME}
-        if token: kw["ContinuationToken"] = token
-        res = client.list_objects_v2(**kw)
-        total += sum(int(x.get("Size",0) or 0) for x in res.get("Contents", []))
-        if not res.get("IsTruncated"): break
-        token = res.get("NextContinuationToken")
-    return total
+    return material_storage.bucket_usage_bytes(oci_client(), OCI_BUCKET_NAME)
 
 def _oci_free_guard(extra_bytes=0):
     if not FREE_ONLY_MODE: return
@@ -876,16 +863,7 @@ def oci_presigned_get(key: str, *, download_name=None, inline=True):
     return oci_client().generate_presigned_url("get_object", Params=params, ExpiresIn=OCI_PRESIGN_SECONDS)
 
 def oci_delete_prefix(prefix: str):
-    if not prefix: return
-    client = oci_client(); token = None
-    while True:
-        kw={"Bucket":OCI_BUCKET_NAME,"Prefix":prefix}
-        if token: kw["ContinuationToken"]=token
-        res=client.list_objects_v2(**kw)
-        objs=[{"Key":x["Key"]} for x in res.get("Contents",[])]
-        if objs: client.delete_objects(Bucket=OCI_BUCKET_NAME, Delete={"Objects":objs,"Quiet":True})
-        if not res.get("IsTruncated"): break
-        token=res.get("NextContinuationToken")
+    material_storage.delete_prefix(oci_client(), OCI_BUCKET_NAME, prefix)
 
 def upload_material_tree_to_oci(material_id: str, source_path: Path, slides_dir: Path, page_count: int):
     # 一次估算原始檔＋已轉出的頁面大小，先做免費硬上限檢查。
@@ -1100,6 +1078,7 @@ TRAINING_AREAS = {"internal": "內部教育訓練區", "pgy": "PGY訓練區"}
 # Milestone 4: one live RBAC policy for legacy and modular code.
 from teacher_app.common.auth import CANONICAL_ROLES, LEGACY_ROLE_ALIASES, ROLE_PERMISSIONS
 from teacher_app.common import db as common_db
+from teacher_app.materials import storage as material_storage
 from teacher_app.auth import service as auth_service, routes as auth_routes
 import sys
 
