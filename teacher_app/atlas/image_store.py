@@ -43,9 +43,9 @@ def store_image_bytes(
     *,
     max_bytes: int | None = MAX_UPLOAD_BYTES,
 ) -> dict:
+    ext = normalize_extension(filename_or_extension)
     if not raw or (max_bytes is not None and len(raw) > max_bytes):
         raise AtlasImageError("圖片不可為空且不得超過 15 MB。")
-    ext = normalize_extension(filename_or_extension)
     try:
         image = Image.open(BytesIO(raw))
         image.verify()
