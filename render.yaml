@@ -6,7 +6,7 @@ services:
     region: singapore
     numInstances: 1
     healthCheckPath: /health
-    autoDeployTrigger: commit
+    autoDeployTrigger: checksPass
     envVars:
       - key: DATABASE_URL
         sync: false
