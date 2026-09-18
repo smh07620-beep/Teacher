@@ -46,7 +46,7 @@ behavior.
 | Worker queue and local-worker HTTP adapter | `free_worker_67.py` plus `material_worker.py`; queue/storage helpers remain in `app.py` | `pgy_app.py` registers `register_free_worker`; `health_65.py` reports status | **Deferred debt.** The adapter has unique queue/upload protocol logic. Keep local tokens server-side and do not introduce a second worker. |
 | Smart learning / material progress | `teacher_app.learning` plus `smart_learning_67.py` compatibility registration | `pgy_app.py` registration only; material storage remains in `app.py` | **Converging.** Smart-learning persistence/SQL is canonical; remaining reader/media compatibility behavior stays behind the existing adapter until its callers are retired. |
 | Question Bank 2.0 | `question_bank_68.py` | `rbac_681.py` scopes legacy and Bank 2.0 endpoints | **Deferred compatibility overlay.** Do not duplicate category/review/publication rules back into this adapter. |
-| External interactive media | `external_media_68.py` | `pgy_app.py` registration and RBAC adapter | **Deferred debt.** Unique URL validation and material adapter; keep server-side validation. |
+| External interactive media | `teacher_app.materials.external_media` | `external_media_68.py` preserves routes, permission gates, legacy validator export and response projection; `pgy_app.py` keeps registration | **Converged runtime owner.** URL safety validation, course/assessment scope checks, external-media SQL and atomic material creation are canonical. The root adapter no longer owns persistence or URL policy. |
 | Admin elevation | `admin_elevation_68.py` | `sensitive_elevation_69.py` consumes its exported guard | **Frozen as one adapter pair.** New sensitive operations extend `SENSITIVE_RULES`, never duplicate elevation storage/session checks. |
 
 ## Root freeze policy
@@ -56,11 +56,12 @@ behavior.
 3. `exam_integrity.py` remains a thin adapter. New exam-attempt behavior goes in `teacher_app.exams`.
 4. `pgy_workflow.py` must remain a thin HTTP compatibility adapter: no independent PGY schema SQL, assignment query implementation, create/edit business rules, transition rules, or audit persistence may return to it. `pgy_signing_66.py` must remain an HTTP/schema-registration compatibility surface; multi-role scope and legacy/new signing dispatch belong to `teacher_app.pgy.signing_facade`, while signing transactions belong to `teacher_app.pgy.signing`. The retired `pgy_atomic.py` must not return.
 5. Materials catalog/metadata, course/teaching-plan, and assessment category/review/publication rules belong to their `teacher_app` services/repositories. The corresponding `app.py` route bodies are thin canonical delegates only and must not regain SQL, provider branching, validation policy or independent business rules.
-6. Provider credentials, cloud SDK setup, upload/conversion engines and worker protocol remain outside the current extraction. Canonical material code may call narrow compatibility seams but must not import or duplicate credentials.
-7. Do not use `professional_title` or `responsibility_tags` in roles, permissions, scope, elevation, or query filters.
-8. Student management access, auditor immutability, group scope, cross-group education-admin access, system-admin limits on clinical signing, elevation, and worker-secret boundaries remain governed by their existing security tests.
+6. External-media URL validation, metadata SQL and atomic external material creation belong to `teacher_app.materials.external_media`. `external_media_68.py` may keep legacy routes, permission gates and response-shape compatibility, but must not regain those implementations.
+7. Provider credentials, cloud SDK setup, upload/conversion engines and worker protocol remain outside the current extraction. Canonical material code may call narrow compatibility seams but must not import or duplicate credentials.
+8. Do not use `professional_title` or `responsibility_tags` in roles, permissions, scope, elevation, or query filters.
+9. Student management access, auditor immutability, group scope, cross-group education-admin access, system-admin limits on clinical signing, elevation, and worker-secret boundaries remain governed by their existing security tests.
 
-`tests/test_root_mirror_policy.py`, `tests/test_stage51_domain_ownership.py`, and `tests/test_pgy_signing_convergence_stage5.py` are CI enforcement points. They verify live canonical ownership, compatibility composition order, the unchanged production entrypoint, and that storage/provider implementation has not been accidentally duplicated in canonical domain services.
+`tests/test_root_mirror_policy.py`, `tests/test_stage51_domain_ownership.py`, `tests/test_pgy_signing_convergence_stage5.py`, and `tests/test_external_media_convergence.py` are CI enforcement points. They verify live canonical ownership, compatibility composition order, the unchanged production entrypoint, and that storage/provider implementation has not been accidentally duplicated in canonical domain services.
 
 ## Backend convergence stage 1
 
@@ -103,10 +104,11 @@ behavior.
 - `pgy_workflow.py` remains the single legacy PGY URL/JSON adapter while `teacher_app.pgy.service/repository/workflow` remain the canonical business/data owners.
 - Multi-role scope, sign-mode configuration, and legacy/new signing dispatch now live in `teacher_app.pgy.signing_facade`; single/dual signature transactions remain in `teacher_app.pgy.signing`.
 - `pgy_signing_66.py` no longer captures or calls legacy Flask handlers to decide runtime behavior. It keeps schema startup, route replacement and legacy response compatibility only.
+- External-media validation, metadata persistence and external material creation now live in `teacher_app.materials.external_media`. `external_media_68.py` is reduced to HTTP/RBAC compatibility plus the historical material-response projection callback.
 
 ## Follow-up sequence
 
-1. Converge the remaining unique compatibility domains one at a time: worker, external media, course bundle, Atlas and Question Bank. Re-check backup/restore and smart learning only for still-live compatibility behavior; do not redo already-canonical persistence work.
+1. Converge the remaining unique compatibility domains one at a time: worker, course bundle, Atlas and Question Bank. Re-check backup/restore and smart learning only for still-live compatibility behavior; do not redo already-canonical persistence work.
 2. Extract storage/provider ownership one bounded backend at a time; do not combine cloud credentials, upload jobs, conversion and material metadata into one rewrite.
 3. Retire remaining root compatibility logic only after the matching canonical domain owns every live caller and release checks cover the old contract.
 4. Only after each domain has no unique legacy logic should `app.py` shrink from compatibility host to a true shim and `pgy_app.py` move to `app = create_app()`.
