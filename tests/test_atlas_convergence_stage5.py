@@ -12,6 +12,7 @@ class AtlasConvergenceStage5Tests(unittest.TestCase):
         cls.service = ROOT.joinpath("teacher_app", "atlas", "service.py").read_text(encoding="utf-8")
         cls.repository = ROOT.joinpath("teacher_app", "atlas", "repository.py").read_text(encoding="utf-8")
         cls.search = ROOT.joinpath("teacher_app", "atlas", "search.py").read_text(encoding="utf-8")
+        cls.image_store = ROOT.joinpath("teacher_app", "atlas", "image_store.py").read_text(encoding="utf-8")
         cls.learning_repository = ROOT.joinpath("teacher_app", "learning", "repository.py").read_text(encoding="utf-8")
 
     def test_root_adapter_has_no_atlas_table_sql(self):
@@ -62,14 +63,33 @@ class AtlasConvergenceStage5Tests(unittest.TestCase):
         self.assertNotIn("material_text_index", self.adapter)
         self.assertIn("atlas_search.search_resources", self.adapter)
 
-    def test_transport_debt_remains_explicit_not_duplicated(self):
+    def test_local_image_storage_and_thumbnail_generation_are_canonical(self):
+        for marker in (
+            "def image_directory(",
+            "def store_image_bytes(",
+            "def requested_image(",
+            "Image.open(",
+            "thumb.thumbnail(",
+            '"atlas_images"',
+        ):
+            self.assertIn(marker, self.image_store)
+        self.assertIn("atlas_image_store.store_image_bytes", self.adapter)
+        self.assertIn("atlas_image_store.requested_image", self.adapter)
+        self.assertNotIn("Image.open(", self.adapter)
+        self.assertNotIn("BytesIO", self.adapter)
+        self.assertNotIn('mkdir(parents=True, exist_ok=True)', self.adapter)
+        self.assertNotIn("thumb.thumbnail(", self.adapter)
+
+    def test_remaining_transport_debt_is_docx_only(self):
         self.assertIn("send_from_directory", self.adapter)
         self.assertIn("zipfile.ZipFile", self.adapter)
+        self.assertIn("preview_docx_atlas", self.adapter)
         self.assertNotIn("material_text_index", self.adapter)
         self.assertNotIn("MATERIAL_STORAGE", self.service)
         self.assertNotIn("UPLOADED_SLIDES_DIR", self.service)
         self.assertNotIn("send_from_directory", self.search)
         self.assertNotIn("zipfile", self.search)
+        self.assertNotIn("zipfile", self.image_store)
 
 
 if __name__ == "__main__":
