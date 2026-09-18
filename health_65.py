@@ -1,4 +1,4 @@
-"""Teacher 6.5 production health endpoint.
+"""Teacher production health endpoint.
 
 The health response exposes only operational state.  It never returns
 database URLs, credentials, API keys, stack traces, or exception details.
@@ -6,36 +6,14 @@ database URLs, credentials, API keys, stack traces, or exception details.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from flask import jsonify
 
-
-REQUIRED_MIGRATIONS = (
-    "0064-baseline",
-    "0065-architecture",
-    "0066-additive-rbac-pgy-signing",
-    "0067-smart-learning-content",
-    "0067-render-worker-shared-staging",
-    "0067-b-free-local-worker",
-    "0068-external-interactive-media",
-    "0069-user-profile-titles",
-    "0072-course-bundle-idempotency",
-    "0073-course-bundle-followups",
-)
+from release_contract import RELEASE_VERSION, REQUIRED_MIGRATIONS
 
 
 def app_version() -> str:
-    try:
-        value = (
-            Path(__file__)
-            .with_name("VERSION")
-            .read_text(encoding="utf-8")
-            .strip()
-        )
-        return value or "unknown"
-    except Exception:
-        return "unknown"
+    return RELEASE_VERSION or "unknown"
 
 
 def deployment_identity() -> dict:
@@ -47,6 +25,7 @@ def deployment_identity() -> dict:
         "branch": branch or None,
         "commit": raw_commit[:12] if raw_commit else None,
     }
+
 
 def health_state(base):
     database = {
