@@ -33,14 +33,14 @@ class AdminMaintenanceM5Tests(unittest.TestCase):
     def source(self, name):
         return ROOT.joinpath(name).read_text(encoding='utf-8')
 
-    def run_card(self, role, host=True, duplicate=False):
+    def run_card(self, role, host=True, duplicate=False, roles=None):
         node = shutil.which('node')
         self.assertIsNotNone(node, 'Node.js is required for M5 behavioral regressions')
         script = r'''
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const source = SOURCE;
-const role = ROLE, hasHost = HOST, duplicate = DUPLICATE;
+const role = ROLE, roles = ROLES, hasHost = HOST, duplicate = DUPLICATE;
 const nodes = {'teacher64-backup': {}, 'teacher64-restore': {}};
 let inserted = 0, authCalls = 0;
 const host = {prepend(box) { inserted++; nodes[box.id] = box; }};
@@ -48,8 +48,8 @@ if (hasHost) nodes['admin-section-system'] = host;
 if (duplicate) nodes['teacher64-maintenance'] = {};
 const context = {
   window: {AppCore: {api: async path => {
-    assert.equal(path, '/api/auth/me'); authCalls++;
-    return {user: {role}};
+    assert.equal(path, '/api/auth/profile'); authCalls++;
+    return {user: {role, roles}};
   }}, location: {}},
   document: {
     readyState: 'complete',
@@ -61,7 +61,8 @@ const context = {
 };
 vm.runInNewContext(source, context);
 setImmediate(() => {
-  const expected = ['system_admin', 'education_admin'].includes(role) && hasHost && !duplicate;
+  const effectiveRoles = Array.isArray(roles) && roles.length ? roles : [role];
+  const expected = effectiveRoles.some(item => ['system_admin', 'education_admin', 'manager'].includes(item)) && hasHost && !duplicate;
   assert.equal(authCalls, 1);
   assert.equal(inserted, expected ? 1 : 0);
   if (expected) {
@@ -72,7 +73,7 @@ setImmediate(() => {
 });
 '''
         for key, value in {'SOURCE': self.source('static/maintenance-64.js'), 'ROLE': role,
-                           'HOST': host, 'DUPLICATE': duplicate}.items():
+                           'ROLES': roles, 'HOST': host, 'DUPLICATE': duplicate}.items():
             script = script.replace(key, json.dumps(value))
         result = subprocess.run([node, '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -87,6 +88,12 @@ setImmediate(() => {
         for role in ('student', 'clinical_teacher', 'group_leader', 'auditor', ''):
             with self.subTest(role=role):
                 self.run_card(role)
+
+    def test_multi_role_system_admin_keeps_maintenance(self):
+        self.run_card(
+            'clinical_teacher',
+            roles=['clinical_teacher', 'system_admin', 'auditor'],
+        )
 
     def test_missing_settings_has_no_frontend_fallback(self):
         self.run_card('system_admin', host=False)
@@ -122,5 +129,5 @@ setImmediate(() => {
         self.assertIn('pgy_app:app', self.source('run_web.sh').splitlines()[-1])
 
     def test_updated_assets_have_fresh_cache_versions(self):
-        self.assertIn('/maintenance-64.js?v=6605', self.source('pgy_frontend.py'))
+        self.assertIn('/maintenance-64.js?v=6606', self.source('pgy_frontend.py'))
         self.assertIn('/admin.css?v=6605', self.source('static/system.html'))
