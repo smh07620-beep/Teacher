@@ -45,9 +45,11 @@ class Phase3AdminWorkspaceRouterTests(unittest.TestCase):
             )
 
         html = app.test_client().get('/system').get_data(as_text=True)
-        self.assertLess(html.index('/system-admin.js?v=6502'), html.index('/admin-workspace.js?v=7110'))
-        self.assertLess(html.index('/admin-workspace.js?v=7110'), html.index('/admin-results-workspace.js?v=7111'))
-        self.assertLess(html.index('/admin-results-workspace.js?v=7111'), html.index('/rbac-ui-681.js?v=6811'))
+        self.assertLess(html.index('/system-admin.js?v='), html.index('/admin-workspace.js?v='))
+        self.assertLess(html.index('/admin-workspace.js?v='), html.index('/admin-results-workspace.js?v='))
+        self.assertLess(html.index('/admin-results-workspace.js?v='), html.index('/rbac-ui-681.js?v='))
+        self.assertNotIn('/system-admin.js?v=6502', html)
+        self.assertNotIn('/admin-workspace.js?v=7110', html)
 
     def test_teacher_and_results_use_extracted_mode_router(self):
         self.assertNotIn('const legacySwitchWorkspace = window.switchAdminWorkspace;', self.router)
