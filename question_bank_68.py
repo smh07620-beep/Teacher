@@ -9,6 +9,11 @@ from teacher_app.assessments import blueprints as blueprint_service
 from teacher_app.assessments import question_bank as bank_service
 from teacher_app.common.errors import ApiError
 
+# Historical acceptance/tests import this symbol from the root module.  Keep a
+# compatibility alias only; the implementation and runtime ownership are
+# canonical in teacher_app.assessments.blueprints.
+_draw = blueprint_service._draw
+
 
 def _error(exc: ApiError):
     return jsonify({"error": exc.message, **(exc.extra or {})}), exc.status
