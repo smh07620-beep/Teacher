@@ -10,6 +10,7 @@ import uuid
 from typing import Any, Mapping
 
 from teacher_app.common.errors import ApiError
+from teacher_app.materials import repository as materials_repository
 
 
 QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video")
@@ -370,7 +371,7 @@ def category_materials(base, category_id: str) -> dict:
     if not category:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考卷", 404)
     items = []
-    for material in base.list_uploaded_materials(include_inactive=True):
+    for material in materials_repository.list_uploaded_materials(base, include_inactive=True):
         if material.get("group") == category.get("group") and material.get("area") == category.get("area"):
             items.append(
                 {
@@ -397,7 +398,7 @@ def update_category_materials(base, category_id: str, data: Mapping[str, Any]) -
         raise _fail("MATERIAL_IDS_INVALID", "materialIds 必須是陣列")
     allowed = {
         material.get("id")
-        for material in base.list_uploaded_materials(include_inactive=True)
+        for material in materials_repository.list_uploaded_materials(base, include_inactive=True)
         if material.get("group") == category.get("group") and material.get("area") == category.get("area")
     }
     selected: list[str] = []
