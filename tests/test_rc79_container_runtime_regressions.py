@@ -17,11 +17,14 @@ class RC79ContainerRuntimeRegressions(unittest.TestCase):
         self.assertIn("function collapseQuizPanels78",bank)
         self.assertIn("setTimeout(()=>collapseQuizPanels78(box),0)",bank)
 
-    def test_exam_container_cards_have_explicit_handlers(self):
+    def test_exam_container_cards_have_single_delegated_handler(self):
         studio=self.src("static/teacher-content-studio-71.js")
         self.assertIn("window.teacherContentStudioExamAction=(action,catId)=>runExamAction(action,catId)",studio)
+        self.assertIn("dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId)",studio)
+        self.assertIn("const handler=window.teacherContentStudioExamAction",studio)
+        self.assertNotIn('onclick="event.stopPropagation();window.teacherContentStudioExamAction',studio)
         for action in ("question","image","video","ai","questions","settings"):
-            self.assertIn(f"window.teacherContentStudioExamAction?.('{action}'",studio)
+            self.assertIn(f'data-exam-action="{action}"',studio)
 
     def test_material_container_mounts_before_background_refresh(self):
         studio=self.src("static/teacher-content-studio-71.js")
