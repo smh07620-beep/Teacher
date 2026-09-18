@@ -84,6 +84,14 @@ setImmediate(() => {
                 self.run_card(role)
         self.assertIn("'/api/maintenance/restore'", self.source('static/maintenance-64.js'))
 
+    def test_maintenance_visibility_prefers_canonical_capabilities(self):
+        source = self.source('static/maintenance-64.js')
+        self.assertIn('const rbac=window.TeacherRBAC681', source)
+        self.assertIn("rbac.hasPermission('backup.manage')", source)
+        self.assertIn("rbac.hasPermission('education.cross_group.manage')", source)
+        canonical = source[source.index('function canMaintain'):source.index('async function ensureSensitive')]
+        self.assertLess(canonical.index('rbac.hasPermission'), canonical.index('const user=auth?.user'))
+
     def test_ordinary_roles_do_not_get_maintenance(self):
         for role in ('student', 'clinical_teacher', 'group_leader', 'auditor', ''):
             with self.subTest(role=role):
