@@ -1,4 +1,3 @@
-import ast
 import os
 import tempfile
 import unittest
@@ -45,6 +44,21 @@ class ApplicationFactoryTests(unittest.TestCase):
         self.assertEqual(payload["error"], "找不到指派。")
         self.assertEqual(payload["errorDetail"]["code"], "ASSIGNMENT_NOT_FOUND")
         self.assertEqual(payload["errorDetail"]["message"], "找不到指派。")
+
+    def test_factory_composition_has_no_legacy_host_adapter(self):
+        source = Path(__file__).parents[1].joinpath("teacher_app", "factory.py").read_text(encoding="utf-8")
+        self.assertNotIn("legacy_host", source)
+        self.assertNotIn("LegacyBaseAdapter", source)
+        self.assertNotIn("runtime_from_owner", source)
+        self.assertIn("build_canonical_question_runtime", source)
+
+    def test_fresh_factories_expose_the_same_route_set(self):
+        first = create_app()
+        second = create_app()
+        first_routes = {(rule.rule, rule.endpoint, tuple(sorted(rule.methods or ()))) for rule in first.url_map.iter_rules()}
+        second_routes = {(rule.rule, rule.endpoint, tuple(sorted(rule.methods or ()))) for rule in second.url_map.iter_rules()}
+        self.assertEqual(first_routes, second_routes)
+        self.assertGreater(len(first_routes), 0)
 
 
 class CommonAuthTests(unittest.TestCase):
@@ -117,14 +131,13 @@ class AuditHelperTests(unittest.TestCase):
         self.assertTrue(event["created_at"])
 
 
-class LegacyAppPyStillOwnsRoutes(unittest.TestCase):
-    def test_app_py_still_defines_flask_app_and_db_conn(self):
+class RootCompatibilitySurfaceTests(unittest.TestCase):
+    def test_app_py_is_only_a_legacy_host_alias(self):
         source = Path(__file__).parents[1].joinpath("app.py").read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        names = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
-        self.assertIn("_db_conn", names)
-        self.assertIn("require_roles", names)
-        self.assertTrue(any(isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "app" for t in node.targets) for node in tree.body))
+        self.assertIn("from teacher_app import legacy_host as _legacy_host", source)
+        self.assertIn("sys.modules[__name__] = _legacy_host", source)
+        self.assertNotIn("def _db_conn", source)
+        self.assertNotIn("Flask(", source)
 
 
 if __name__ == "__main__":

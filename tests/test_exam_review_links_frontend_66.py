@@ -41,9 +41,9 @@ class ExamReviewLinksFrontend66Tests(
                 source,
             )
 
-    def test_exam_integrity_still_does_not_expect_explanation_or_answer_key(self):
+    def test_exam_runtime_still_does_not_expect_explanation_or_answer_key(self):
         source = self.source(
-            "static/exam-integrity.js"
+            "static/system-exam.js"
         )
 
         self.assertNotIn(

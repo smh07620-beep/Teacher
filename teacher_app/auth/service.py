@@ -11,10 +11,12 @@ from flask import g, has_request_context
 from werkzeug.security import check_password_hash
 
 from teacher_app.auth import repository
+from teacher_app.common import scope
 from teacher_app.common.auth import (
     LEGACY_ROLE_ALIASES,
     normalize_role,
     normalize_roles,
+    permissions_for_roles,
 )
 from teacher_app.common.errors import ApiError
 
@@ -28,7 +30,15 @@ def normalize_username(value):
     return re.sub(r"[^a-z0-9._-]", "", str(value or "").strip().lower())[:64]
 
 
-def public_user(base, row, *, include_roles=False):
+def public_user(base_or_row, row=None, *, include_roles=False):
+    """Project one account row to the public user contract.
+
+    The historical call shape was ``public_user(base, row)``.  Keep accepting
+    it while compatibility callers converge, but production normalization now
+    comes exclusively from :mod:`teacher_app.common.scope`.
+    """
+    if row is None:
+        row = base_or_row
     d = dict(row)
 
     primary_role = normalize_role(
@@ -41,8 +51,8 @@ def public_user(base, row, *, include_roles=False):
         "empId": str(d.get("emp_id", "")),
         "role": primary_role,
         "legacyRole": str(d.get("role", "")) if str(d.get("role", "")) in LEGACY_ROLE_ALIASES else "",
-        "preferredArea": base.normalize_area(d.get("preferred_area", base.DEFAULT_TRAINING_AREA)),
-        "preferredGroup": base.normalize_group(d.get("preferred_group", base.DEFAULT_GROUP)),
+        "preferredArea": scope.normalize_area(d.get("preferred_area", scope.DEFAULT_TRAINING_AREA)),
+        "preferredGroup": scope.normalize_group(d.get("preferred_group", scope.DEFAULT_GROUP)),
         "active": bool(d.get("active", True)),
         "createdAt": str(d.get("created_at", "")),
         "updatedAt": str(d.get("updated_at", "")),
@@ -50,10 +60,12 @@ def public_user(base, row, *, include_roles=False):
     }
 
     if include_roles:
-        user["roles"] = normalize_roles(
+        roles = normalize_roles(
             d.get("roles_json"),
             primary=primary_role,
         )
+        user["roles"] = roles
+        user["permissions"] = permissions_for_roles(roles, primary=primary_role)
         user["professionalTitle"] = str(d.get("professional_title", "") or "")[:100]
         user["responsibilityTags"] = _profile_tags(d.get("responsibility_tags"))
 
@@ -71,7 +83,7 @@ def _profile_tags(value):
     return [str(tag).strip()[:50] for tag in parsed if str(tag).strip()][:12]
 
 
-def _load_current_user_row(base, session):
+def _load_current_user_row(session):
     username = normalize_username(session.get("username", ""))
     if not username:
         return None
@@ -84,7 +96,7 @@ def _load_current_user_row(base, session):
             return cached.get("row")
 
     started = time.perf_counter()
-    raw = repository.find_user(base, username)
+    raw = repository.find_user(username)
     elapsed_ms = (time.perf_counter() - started) * 1000
     if elapsed_ms >= _SLOW_AUTH_MS:
         _LOG.warning("slow auth lookup: %.0fms", elapsed_ms)
@@ -106,32 +118,42 @@ def _load_current_user_row(base, session):
     return raw
 
 
-def current_user(base, session, *, include_roles=False):
+def current_user(base_or_session, session=None, *, include_roles=False):
     """Resolve the authenticated user once per request, never across requests."""
-    raw = _load_current_user_row(base, session)
+    # Backward-compatible input normalization: old callers pass ``(base,
+    # session)``; canonical callers pass only ``(session,)``.
+    session_obj = session if session is not None else base_or_session
+    raw = _load_current_user_row(session_obj)
     if not raw:
         return None
     return public_user(
-        base,
         raw,
         include_roles=include_roles,
     )
 
 
-def login(base, data, session):
+def login(base_or_data, data_or_session, session=None):
+    # Preserve the historical ``login(base, data, session)`` seam while the
+    # production route uses the canonical ``login(data, session)`` form.
+    if session is None:
+        data = base_or_data
+        session_obj = data_or_session
+    else:
+        data = data_or_session
+        session_obj = session
     username = normalize_username(data.get("username"))
     password = str(data.get("password", ""))
-    raw = repository.find_user(base, username)
+    raw = repository.find_user(username)
     if not raw or not bool(raw.get("active", True)) or not check_password_hash(str(raw.get("password_hash", "")), password):
         raise ApiError("INVALID_CREDENTIALS", "帳號或密碼不正確，請洽管理者。", status=401)
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    repository.record_login(base, username, now)
+    repository.record_login(username, now)
     raw["last_login_at"] = now
-    user = public_user(base, raw)
-    session.clear()
-    session.permanent = True
-    session["username"] = username
-    session["session_version"] = int(raw.get("session_version", 1) or 1)
+    user = public_user(raw)
+    session_obj.clear()
+    session_obj.permanent = True
+    session_obj["username"] = username
+    session_obj["session_version"] = int(raw.get("session_version", 1) or 1)
     return {"ok": True, "user": user}
 
 

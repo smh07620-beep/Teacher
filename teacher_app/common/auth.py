@@ -146,6 +146,16 @@ def user_roles(user: Optional[Mapping[str, Any]]) -> list[str]:
     )
 
 
+def permissions_for_roles(value: Any, primary: Any = None) -> list[str]:
+    """Return the canonical capability union for a role set."""
+    roles = normalize_roles(value, primary=primary)
+    return sorted({
+        permission
+        for role in roles
+        for permission in ROLE_PERMISSIONS.get(role, set())
+    })
+
+
 def has_role(user: Optional[Mapping[str, Any]], role: str) -> bool:
     return normalize_role(role) in user_roles(user)
 

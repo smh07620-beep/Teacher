@@ -41,44 +41,6 @@
     if(node.hasAttribute('aria-hidden')) node.removeAttribute('aria-hidden');
   }
 
-  function simplifyAssessmentSurface(){
-    const root=document.getElementById('assessment-681');
-    if(!root)return;
-    setTextIfChanged(root.querySelector('h4'),'📝 考卷與已建立題目');
-    setTextIfChanged(root.querySelector('h4 + p'),'這裡只管理既有考卷與題目；新增、AI 出題、圖片題與影片題請從「＋ 建立教學內容」開始。');
-
-    const tabs=document.getElementById('assessment-681-tabs');
-    [...(tabs?.querySelectorAll('button')||[])].forEach(button=>{
-      const onclick=button.getAttribute('onclick')||'';
-      if(onclick.includes("'exams'")){
-        setTextIfChanged(button,'考卷管理');
-        showOnce(button);
-        return;
-      }
-      if(onclick.includes("'bank'")){
-        setTextIfChanged(button,'已建立題目');
-        showOnce(button);
-        return;
-      }
-      hideOnce(button);
-    });
-
-    const assessmentBody=document.getElementById('assessment-681-body');
-    if(!assessmentBody)return;
-    [...assessmentBody.querySelectorAll('button')].forEach(button=>{
-      const onclick=button.getAttribute('onclick')||'';
-      if(onclick.includes("assessment681Tab('ai')")||onclick.includes("assessment681Tab('blueprint')")){
-        hideOnce(button.closest('.rounded-lg')||button);
-      }
-      if(onclick.includes("assessment681OpenQuestion('')")) hideOnce(button);
-    });
-    [...assessmentBody.querySelectorAll('p')].forEach(p=>{
-      if(p.textContent.includes('點選題列會打開完整 editor')){
-        setTextIfChanged(p,'點選既有題目即可查看、編輯或刪除；新增題目請使用「＋ 建立教學內容」。');
-      }
-    });
-  }
-
   function compactLegacyCourseWizard(){
     const existing=document.querySelector('[data-teacher72-course-wizard]');
     if(existing)return existing;
@@ -208,7 +170,7 @@
       const succeeded=!!before&&!(canonicalQuestion?.value.trim());
       if(!succeeded)throw new Error('題目尚未建立，請檢查欄位或權限後再試。');
       window.TeacherContentComposer72?.showOutcome?.('success','題目已建立','題目已加入考卷。你可以繼續出下一題，或回到已建立題目清單管理。',[
-        {label:'回到已建立題目',run:async()=>{window.teacherContentStudioClose?.();await window.openAdminWorkspace?.('assessment');window.assessment681Tab?.('bank');scheduleReconcile();}},
+        {label:'回到已建立題目',run:async()=>{window.teacherContentStudioClose?.();await window.openAdminWorkspace?.('assessment');await window.renderAdminQuizCategories?.(true);const panel=document.getElementById(`qpanel-${state.question.catId}`);if(panel?.classList.contains('hidden'))await window.toggleQuizQuestionsPanel?.(state.question.catId);panel?.scrollIntoView({behavior:'smooth',block:'start'});scheduleReconcile();}},
         {label:'繼續出下一題',primary:true,run:()=>{state.question.draft=null;window.teacherContentStudioOpen?.();renderQuestionEdit();}}
       ]);
     }catch(error){
@@ -242,7 +204,6 @@
 
   function reconcile(){
     reconcileScheduled=false;
-    simplifyAssessmentSurface();
     compactLegacyCourseWizard();
   }
 
@@ -254,8 +215,6 @@
 
   function mutationTargetNeedsReconcile(target){
     if(!target||target.nodeType!==1)return false;
-    if(target.id==='assessment-681'||target.id==='assessment-681-tabs'||target.id==='assessment-681-body')return true;
-    if(target.closest?.('#assessment-681'))return true;
     if(target.matches?.('[data-course-wizard-root], [data-admin-course-wizard]'))return true;
     return false;
   }
@@ -264,9 +223,7 @@
     if(mutationTargetNeedsReconcile(mutation.target))return true;
     return [...mutation.addedNodes].some(node=>{
       if(node.nodeType!==1)return false;
-      if(node.id==='assessment-681'||node.id==='assessment-681-tabs'||node.id==='assessment-681-body')return true;
       if(node.matches?.('[data-course-wizard-root], [data-admin-course-wizard]'))return true;
-      if(node.querySelector?.('#assessment-681, #assessment-681-tabs, #assessment-681-body'))return true;
       if((node.matches?.('h4')||node.querySelector?.('h4'))&&node.textContent?.includes('快速建立整套課程'))return true;
       return false;
     });
@@ -285,5 +242,5 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});
   else install();
 
-  window.TeacherUxConvergence72=Object.freeze({simplifyAssessmentSurface,compactLegacyCourseWizard,renderQuestionEdit,renderQuestionPreview,scheduleReconcile});
+  window.TeacherUxConvergence72=Object.freeze({compactLegacyCourseWizard,renderQuestionEdit,renderQuestionPreview,scheduleReconcile});
 })();

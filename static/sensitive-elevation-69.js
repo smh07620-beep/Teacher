@@ -8,7 +8,8 @@
 (function(){
   'use strict';
 
-  const nativeFetch = window.fetch.bind(window);
+  const apiClient = window.AppApiClient;
+  const nativeFetch = apiClient?.nativeFetch || window.fetch.bind(window);
   let elevationFlight = null;
 
   function sameOrigin(input){
@@ -75,9 +76,11 @@
 
   window.ensureSensitiveElevation69 = ensureElevation;
 
-  window.fetch = async function(input, init={}){
+  async function elevationMiddleware(context, next){
+    const input=context.input;
+    const init=context.init||{};
     const options = normalizeOptions(input, init);
-    const response = await nativeFetch(input, options);
+    const response = await next({init:options});
     if(!sameOrigin(input) || response.status !== 428) return response;
 
     const contract = await response.clone().json().catch(()=>({}));
@@ -91,6 +94,8 @@
     // reusable.  If a future caller supplies a Request object with a consumed
     // body, fail safely rather than guessing how to replay it.
     if(input instanceof Request && input.bodyUsed) return response;
-    return nativeFetch(input, normalizeOptions(input, init));
-  };
+    return next({init:normalizeOptions(input, init)});
+  }
+
+  apiClient?.use('sensitive-elevation-69', elevationMiddleware, 300);
 })();

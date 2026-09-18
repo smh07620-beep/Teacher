@@ -8,12 +8,15 @@ ROOT = Path(__file__).parents[1]
 class AtlasConvergenceStage5Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.adapter = ROOT.joinpath("atlas_70.py").read_text(encoding="utf-8")
+        cls.adapter = ROOT.joinpath("teacher_app", "atlas", "routes.py").read_text(encoding="utf-8")
+        cls.root_alias = ROOT.joinpath("atlas_70.py").read_text(encoding="utf-8")
         cls.service = ROOT.joinpath("teacher_app", "atlas", "service.py").read_text(encoding="utf-8")
         cls.repository = ROOT.joinpath("teacher_app", "atlas", "repository.py").read_text(encoding="utf-8")
         cls.search = ROOT.joinpath("teacher_app", "atlas", "search.py").read_text(encoding="utf-8")
         cls.image_store = ROOT.joinpath("teacher_app", "atlas", "image_store.py").read_text(encoding="utf-8")
         cls.importer = ROOT.joinpath("teacher_app", "atlas", "importer.py").read_text(encoding="utf-8")
+        cls.config = ROOT.joinpath("teacher_app", "config.py").read_text(encoding="utf-8")
+        cls.factory = ROOT.joinpath("teacher_app", "factory.py").read_text(encoding="utf-8")
         cls.learning_repository = ROOT.joinpath("teacher_app", "learning", "repository.py").read_text(encoding="utf-8")
 
     def test_root_adapter_has_no_atlas_table_sql(self):
@@ -104,12 +107,22 @@ class AtlasConvergenceStage5Tests(unittest.TestCase):
 
     def test_root_is_http_compatibility_surface_only(self):
         self.assertIn("send_from_directory", self.adapter)
+        self.assertIn("sys.modules[__name__] = _routes", self.root_alias)
         self.assertNotIn("material_text_index", self.adapter)
         self.assertNotIn("MATERIAL_STORAGE", self.service)
         self.assertNotIn("UPLOADED_SLIDES_DIR", self.service)
         self.assertNotIn("send_from_directory", self.search)
         self.assertNotIn("zipfile", self.search)
         self.assertNotIn("zipfile", self.image_store)
+
+    def test_storage_path_compatibility_is_injected_without_legacy_globals_in_atlas(self):
+        self.assertIn("def with_runtime_overrides(", self.config)
+        self.assertIn("paths_provider", self.adapter)
+        self.assertIn('paths_provider=lambda: app.config["STORAGE_PATHS"]', self.factory)
+        self.assertNotIn("base.MATERIAL_STORAGE", self.adapter)
+        self.assertNotIn("base.UPLOADED_SLIDES_DIR", self.adapter)
+        self.assertNotIn("base.MATERIAL_STORAGE", self.factory)
+        self.assertNotIn("base.UPLOADED_SLIDES_DIR", self.factory)
 
 
 if __name__ == "__main__":

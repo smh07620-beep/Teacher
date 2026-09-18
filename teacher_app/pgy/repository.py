@@ -135,27 +135,6 @@ def init_schema(conn, kind: str) -> None:
     )
     execute(conn, "CREATE INDEX IF NOT EXISTS idx_pgy_assignment_audit_assignment ON pgy_assignment_audit(assignment_id, created_at)")
     execute(conn, "CREATE INDEX IF NOT EXISTS idx_pgy_assignment_audit_actor ON pgy_assignment_audit(actor_username, created_at)")
-    active_type = "BOOLEAN" if kind == "postgres" else "INTEGER"
-    active_default = "TRUE" if kind == "postgres" else "1"
-    execute(
-        conn,
-        f"""
-            CREATE TABLE IF NOT EXISTS user_accounts (
-                username TEXT PRIMARY KEY,
-                password_hash TEXT NOT NULL DEFAULT '',
-                display_name TEXT NOT NULL,
-                emp_id TEXT NOT NULL UNIQUE,
-                role TEXT NOT NULL DEFAULT 'student',
-                preferred_area TEXT NOT NULL DEFAULT 'internal',
-                preferred_group TEXT NOT NULL DEFAULT 'grpBio',
-                active {active_type} NOT NULL DEFAULT {active_default},
-                session_version INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL DEFAULT '',
-                updated_at TEXT NOT NULL DEFAULT '',
-                last_login_at TEXT NOT NULL DEFAULT ''
-            )
-        """,
-    )
     execute(
         conn,
         """

@@ -4,10 +4,10 @@
  * file never sends worker tokens, storage credentials, ADMIN_KEY headers, or
  * mutation requests.
  */
-(function () {
+(async function () {
   'use strict';
 
-  const R = window.TeacherRBAC681 || {};
+  const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));
   const roles = R.roles instanceof Set ? R.roles : new Set();
   if (!roles.has('system_admin')) return;
 
@@ -216,9 +216,8 @@
     }
   }
 
-  const previousSwitch = window.switchAdminWorkspace;
-  window.switchAdminWorkspace = async function (name, force) {
-    if (name === 'worker') {
+  const adminShell = window.AdminWorkspaceShell;
+  adminShell?.registerWorkspace('worker', async ({force}) => {
       document.querySelectorAll('.admin-section-panel').forEach(item => item.classList.add('hidden'));
       panel.classList.remove('hidden');
       modal.dataset.section = 'worker';
@@ -227,18 +226,17 @@
       if (status) status.textContent = '系統管理者唯讀檢視 Worker heartbeat、背景佇列與自動更新訊號。';
       await renderWorkerStatus(Boolean(force));
       return true;
+  });
+  adminShell?.addBeforeWorkspace(({requested, workspace}) => {
+    if (requested !== 'worker' && workspace !== 'worker' && refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
     }
-    if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
-    return typeof previousSwitch === 'function' ? previousSwitch(name, force) : false;
-  };
-
-  const previousToggle = window.toggleAdminModal;
-  window.toggleAdminModal = async function (show) {
-    const result = typeof previousToggle === 'function' ? await previousToggle(show) : false;
+  });
+  adminShell?.addAfterModal(({show}) => {
     if (show) ensureNavigation();
     else if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
-    return result;
-  };
+  });
 
   ensureNavigation();
 })();

@@ -1,178 +1,29 @@
-"""Teacher production health endpoint.
-
-The health response exposes only operational state.  It never returns
-database URLs, credentials, API keys, stack traces, or exception details.
-"""
+"""Legacy health adapter; canonical implementation lives in teacher_app."""
 from __future__ import annotations
 
-import os
+from release_contract import REQUIRED_MIGRATIONS
+from teacher_app.maintenance import health as maintenance_health
 
-from flask import jsonify
-
-from release_contract import RELEASE_VERSION, REQUIRED_MIGRATIONS
-
-
-def app_version() -> str:
-    return RELEASE_VERSION or "unknown"
+app_version = maintenance_health.app_version
+deployment_identity = maintenance_health.deployment_identity
 
 
-def deployment_identity() -> dict:
-    """Return non-secret deploy identity for runtime verification."""
-    raw_commit = str(os.environ.get("RENDER_GIT_COMMIT") or "").strip()
-    branch = str(os.environ.get("RENDER_GIT_BRANCH") or "").strip()
-    return {
-        "provider": "render" if str(os.environ.get("RENDER") or "").lower() == "true" else "local",
-        "branch": branch or None,
-        "commit": raw_commit[:12] if raw_commit else None,
-    }
-
-
-def health_state(base):
-    database = {
-        "ok": False,
-        "kind": "unknown",
-    }
-
-    migrations = {
-        "ok": False,
-        "required": list(REQUIRED_MIGRATIONS),
-        "applied": [],
-        "missing": list(REQUIRED_MIGRATIONS),
-    }
-
-    conn = None
-
-    try:
-        conn, kind = base._db_conn()
-
-        database = {
-            "ok": True,
-            "kind": str(kind or "unknown"),
-        }
-
-        rows = conn.execute(
-            """
-            SELECT version
-            FROM schema_migrations
-            ORDER BY version
-            """
-        ).fetchall()
-
-        applied = sorted(
-            {
-                str(dict(row).get("version", ""))
-                for row in rows
-                if str(
-                    dict(row).get(
-                        "version",
-                        "",
-                    )
-                ).strip()
-            }
-        )
-
-        missing = [
-            version
-            for version in REQUIRED_MIGRATIONS
-            if version not in applied
-        ]
-
-        migrations = {
-            "ok": not missing,
-            "required": list(
-                REQUIRED_MIGRATIONS
-            ),
-            "applied": applied,
-            "missing": missing,
-        }
-
-    except Exception:
-        # Deliberately suppress exception text.  Database URLs and
-        # driver exceptions can contain credentials or infrastructure
-        # details that must never appear in a public health response.
-        database = {
-            "ok": False,
-            "kind": "unavailable",
-        }
-
-        migrations = {
-            "ok": False,
-            "required": list(
-                REQUIRED_MIGRATIONS
-            ),
-            "applied": [],
-            "missing": list(
-                REQUIRED_MIGRATIONS
-            ),
-        }
-
-    finally:
-        if conn is not None:
-            try:
-                conn.close()
-            except Exception:
-                pass
-
-    healthy = bool(
-        database["ok"]
-        and migrations["ok"]
-    )
-
-    payload = {
-        "ok": healthy,
-        "status": (
-            "healthy"
-            if healthy
-            else "degraded"
-        ),
-        "version": app_version(),
-        "deployment": deployment_identity(),
-        "database": database,
-        "migrations": migrations,
-    }
-
-    return payload, 200 if healthy else 503
+def health_state(base=None):
+    factory = getattr(base, "_db_conn", None) if base is not None else None
+    return maintenance_health.health_state(factory)
 
 
 def register_health(base):
-    app = base.app
+    return maintenance_health.register_health(
+        base.app,
+        connection_factory=getattr(base, "_db_conn", None),
+    )
 
-    if app.extensions.get(
-        "teacher_health_65_registered"
-    ):
-        return app
 
-    def teacher_health():
-        payload, status = health_state(
-            base
-        )
-        return jsonify(payload), status
-
-    # Render already probes /health.  If the legacy application has an
-    # older /health route, replace its view function instead of adding a
-    # competing URL rule.
-    existing = [
-        rule
-        for rule in app.url_map.iter_rules()
-        if rule.rule == "/health"
-        and "GET" in rule.methods
-    ]
-
-    if existing:
-        for rule in existing:
-            app.view_functions[
-                rule.endpoint
-            ] = teacher_health
-    else:
-        app.add_url_rule(
-            "/health",
-            endpoint="teacher_health_65",
-            view_func=teacher_health,
-            methods=["GET"],
-        )
-
-    app.extensions[
-        "teacher_health_65_registered"
-    ] = True
-
-    return app
+__all__ = [
+    "REQUIRED_MIGRATIONS",
+    "app_version",
+    "deployment_identity",
+    "health_state",
+    "register_health",
+]

@@ -7,35 +7,10 @@
 (async function () {
   'use strict';
 
-  async function waitForCanonicalRbac(timeoutMs = 4000) {
-    const started = Date.now();
-    while (Date.now() - started < timeoutMs) {
-      const current = window.TeacherRBAC681;
-      if (
-        current
-        && current.roles instanceof Set
-        && typeof current.hasPermission === 'function'
-        && current.surface
-      ) {
-        return current;
-      }
-      await new Promise(resolve => setTimeout(resolve, 25));
-    }
-    return window.TeacherRBAC681 || {};
-  }
-
-  const R = await waitForCanonicalRbac();
+  const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));
   const roles = R.roles instanceof Set ? R.roles : new Set();
   const has = permission => typeof R.hasPermission === 'function' && R.hasPermission(permission);
-  // Multi-role accounts must have exactly one presentation surface. Prefer the
-  // canonical surface already resolved by rbac-ui-681; the fallback mirrors its
-  // precedence so an auxiliary auditor role can never redraw a teacher/admin UI.
-  const surfaceKey = String(R.surface?.key || (
-    roles.has('system_admin') ? 'system' :
-    roles.has('education_admin') || has('education.cross_group.manage') ? 'education' :
-    roles.has('group_leader') || roles.has('clinical_teacher') ? 'teacher' :
-    roles.has('auditor') ? 'audit' : 'learner'
-  ));
+  const surfaceKey = String(R.surface?.key || 'learner');
   const isSystemAdmin = surfaceKey === 'system';
   const isEducationAdmin = surfaceKey === 'education';
   const isAuditor = surfaceKey === 'audit';
@@ -274,41 +249,37 @@
     }
   }
 
-  const previousSwitch = window.switchAdminWorkspace;
-  window.switchAdminWorkspace = async function (name, force) {
-    if (name === 'maintenance') {
+  const adminShell = window.AdminWorkspaceShell;
+  adminShell?.registerWorkspace('maintenance', async ({force}) => {
       if (!canMaintenance) return false;
       moveMaintenanceCard();
       showOnlyPanel(maintenancePanel, 'maintenance', 'admin-nav-maintenance');
       return true;
-    }
-    if (name === 'audit') {
+  });
+  adminShell?.registerWorkspace('audit', async ({force}) => {
       if (!canAudit) return false;
       showOnlyPanel(auditPanel, 'audit', 'admin-nav-audit');
       await renderAudit(Boolean(force));
       return true;
-    }
-    return typeof previousSwitch === 'function' ? previousSwitch(name, force) : false;
-  };
-
-  const previousToggle = window.toggleAdminModal;
-  window.toggleAdminModal = async function (show) {
-    if (show && isAuditor && canAudit && !R.workspaceAccess) {
+  });
+  adminShell?.addModalOpenOverride(async ({show}) => {
+    if (show && isAuditor && canAudit) {
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       document.body?.classList.add('overflow-hidden');
       await window.switchAdminWorkspace('audit', true);
-      return true;
+      return {handled:true, result:true};
     }
-    const result = typeof previousToggle === 'function' ? await previousToggle(show) : false;
+    return null;
+  });
+  adminShell?.addAfterModal(({show}) => {
     if (show) {
       moveMaintenanceCard();
       ensureSystemAdvancedMaintenance();
       if (isSystemAdmin) buildSystemNavigation();
       else addEducationMaintenanceNavigation();
     }
-    return result;
-  };
+  });
 
   ensureSystemAdvancedMaintenance();
   buildSystemNavigation();

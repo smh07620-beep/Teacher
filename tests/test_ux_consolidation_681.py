@@ -35,7 +35,7 @@ class UxConsolidation681Tests(unittest.TestCase):
         self.assertNotIn('renderMaterialJobs(false)',self.workspace)
 
     def test_external_material_drawer_uses_safe_backend_only(self):
-        for marker in ('external-material-drawer','YouTube、Shorts','openExternalMaterialDrawer'):
+        for marker in ('external-material-drawer','YouTube、Shorts','openExternalMaterialCreateDrawer'):
             self.assertIn(marker,self.html)
         self.assertIn('/external-media',self.external)
         self.assertNotIn('<iframe',self.external.lower())

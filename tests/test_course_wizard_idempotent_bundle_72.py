@@ -11,12 +11,12 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.wizard = ROOT.joinpath("static", "course-wizard-681.js").read_text(encoding="utf-8")
-        cls.adapter = ROOT.joinpath("course_bundle_72.py").read_text(encoding="utf-8")
+        cls.adapter = ROOT.joinpath("teacher_app", "courses", "bundle_routes.py").read_text(encoding="utf-8")
         cls.bundle = ROOT.joinpath("teacher_app", "courses", "bundle.py").read_text(encoding="utf-8")
         cls.course_repo = ROOT.joinpath("teacher_app", "courses", "repository.py").read_text(encoding="utf-8")
         cls.assessment_repo = ROOT.joinpath("teacher_app", "assessments", "repository.py").read_text(encoding="utf-8")
-        cls.schema = ROOT.joinpath("schema_migrations.py").read_text(encoding="utf-8")
-        cls.entry = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
+        cls.schema = ROOT.joinpath("teacher_app", "maintenance", "migrations.py").read_text(encoding="utf-8")
+        cls.entry = ROOT.joinpath("teacher_app", "factory.py").read_text(encoding="utf-8")
 
     def test_wizard_uses_one_session_scoped_bundle_endpoint(self):
         self.assertIn("/api/course-bundles", self.wizard)
@@ -34,8 +34,10 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
         self.assertIn("pending-background", self.bundle)
 
     def test_bundle_route_uses_capability_rbac_and_canonical_transaction(self):
-        self.assertIn('base.require_permission("course.manage")', self.adapter)
-        self.assertIn('base.require_permission("question.manage")', self.adapter)
+        self.assertIn('scope_filter.require_permission(app, "course.manage")', self.adapter)
+        self.assertIn('scope_filter.require_permission(app, "question.manage")', self.adapter)
+        self.assertIn('getattr(g, "teacher_user", None)', self.adapter)
+        self.assertNotIn("base.require_permission", self.adapter)
         self.assertIn("bundle_service.create_bundle", self.adapter)
         self.assertIn("with common_db.transaction()", self.bundle)
         self.assertNotIn("X-Admin-Key", self.adapter)

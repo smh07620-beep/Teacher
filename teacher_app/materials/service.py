@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Mapping
 
 from teacher_app.assessments import repository as assessment_repository
@@ -17,6 +19,7 @@ from teacher_app.common.errors import ApiError
 from teacher_app.courses import repository as course_repository
 from teacher_app.materials import catalog, repository
 from teacher_app import storage as canonical_storage
+from teacher_app.storage.web_runtime import WebStorageRuntime
 
 
 MATERIAL_TYPES = {"standard", "atlas", "infographic", "video", "troubleshooting", "sop", "case"}
@@ -37,7 +40,9 @@ def _category_labels() -> dict[str, str]:
     return labels
 
 
-def list_materials(_legacy_base, requested_area: str) -> list[dict]:
+def list_materials(base_or_area=None, requested_area: str | None = None) -> list[dict]:
+    if requested_area is None:
+        requested_area = str(base_or_area or scope.DEFAULT_TRAINING_AREA)
     area_filter = scope.normalize_area(requested_area or scope.DEFAULT_TRAINING_AREA)
     labels = _category_labels()
     builtin: list[dict] = []
@@ -85,7 +90,7 @@ def list_materials(_legacy_base, requested_area: str) -> list[dict]:
     return builtin + uploaded
 
 
-def list_admin_materials(_legacy_base) -> list[dict]:
+def list_admin_materials(_legacy_base=None) -> list[dict]:
     labels = _category_labels()
     items: list[dict] = []
     for material in catalog.load_builtin_meta():
@@ -110,7 +115,12 @@ def list_admin_materials(_legacy_base) -> list[dict]:
     return items
 
 
-def update_material(_legacy_base, material_id: str, data: Mapping[str, Any]) -> dict:
+def update_material(base_or_material_id, material_id_or_data, data: Mapping[str, Any] | None = None) -> dict:
+    if data is None:
+        material_id = str(base_or_material_id)
+        data = material_id_or_data
+    else:
+        material_id = str(material_id_or_data)
     entry = repository.get_material(material_id)
     if not entry:
         raise _fail("MATERIAL_NOT_FOUND", "找不到可編輯的上傳教材", 404)
@@ -160,8 +170,19 @@ def update_material(_legacy_base, material_id: str, data: Mapping[str, Any]) -> 
     return {"ok": True}
 
 
-def delete_material(base, material_id: str) -> dict:
+def delete_material(
+    base_or_material_id,
+    material_id: str | None = None,
+    *,
+    paths=None,
+    storage_runtime=None,
+) -> dict:
     """Strictly delete material storage before removing the canonical DB row."""
+    base = None if material_id is None else base_or_material_id
+    if material_id is None:
+        material_id = str(base_or_material_id)
+    else:
+        material_id = str(material_id)
     entry = repository.get_material(material_id)
     if not entry:
         raise _fail("MATERIAL_NOT_FOUND", "內建教材不能從後台刪除，或找不到此教材", 404)
@@ -170,9 +191,18 @@ def delete_material(base, material_id: str) -> dict:
     if backend not in canonical_storage.VALID_BACKENDS:
         backend = "local"
 
+    if paths is None and base is not None:
+        paths = SimpleNamespace(
+            upload_dir=Path(base.UPLOAD_DIR),
+            uploaded_slides_dir=Path(base.UPLOADED_SLIDES_DIR),
+            preview_cache_dir=Path(base.PREVIEW_CACHE_DIR),
+        )
+    if paths is None:
+        raise RuntimeError("StoragePaths is required for material deletion")
+
     def delete_local_material(payload):
-        upload_dir = base.UPLOAD_DIR / payload["id"]
-        slides_dir = base.UPLOADED_SLIDES_DIR / payload["folder"]
+        upload_dir = Path(paths.upload_dir) / payload["id"]
+        slides_dir = Path(paths.uploaded_slides_dir) / payload["folder"]
         if upload_dir.exists():
             shutil.rmtree(upload_dir)
         if slides_dir.exists():
@@ -192,7 +222,12 @@ def delete_material(base, material_id: str) -> dict:
     else:
         request = canonical_storage.DeleteRequest("local", "material", entry)
 
-    adapters = base.storage_delete_adapters(local_delete_material=delete_local_material)
+    if storage_runtime is not None:
+        adapters = storage_runtime.delete_adapters(local_delete_material=delete_local_material)
+    elif base is not None and hasattr(base, "storage_delete_adapters"):
+        adapters = base.storage_delete_adapters(local_delete_material=delete_local_material)
+    else:
+        adapters = WebStorageRuntime(paths).delete_adapters(local_delete_material=delete_local_material)
     try:
         canonical_storage.delete_strict(request, adapters)
     except Exception as exc:
@@ -208,7 +243,7 @@ def delete_material(base, material_id: str) -> dict:
         raise _fail(code, f"{message}：{cause}", 502) from exc
 
     try:
-        cache_file = base.PREVIEW_CACHE_DIR / (re.sub(r"[^A-Za-z0-9_-]", "_", str(material_id)) + ".pdf")
+        cache_file = Path(paths.preview_cache_dir) / (re.sub(r"[^A-Za-z0-9_-]", "_", str(material_id)) + ".pdf")
         if cache_file.exists():
             cache_file.unlink()
     except OSError:

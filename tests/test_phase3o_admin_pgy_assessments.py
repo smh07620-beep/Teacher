@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -9,7 +11,7 @@ class Phase3OAdminPgyAssessmentsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "static" / "admin-pgy-assessments.js").read_text(encoding="utf-8")
-        cls.frontend = (ROOT / "pgy_frontend.py").read_text(encoding="utf-8")
+        cls.ordered = dict(ASSET_MANIFEST["system"]["ordered"])["/system-admin.js"]
 
     def test_preserves_pgy_admin_globals_and_onclick_contracts(self):
         for name in (
@@ -41,10 +43,7 @@ class Phase3OAdminPgyAssessmentsTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.source)
 
     def test_loads_after_legacy_bundle_and_before_workflow_wrappers(self):
-        marker = 'pgy_assessments_marker = \'<script defer src="/admin-pgy-assessments.js?v=7114"></script>\''
-        self.assertIn(marker, self.frontend)
-        self.assertIn('replacement += "\\n" + pgy_assessments_marker', self.frontend)
-        self.assertLess(self.frontend.index("admin-pgy-assessments.js"), self.frontend.index("/pgy-workflow.js"))
+        self.assertIn('/admin-pgy-assessments.js', self.ordered)
 
 
 if __name__ == "__main__":

@@ -6,9 +6,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SOFFICE_PATH=soffice \
     MEGACMD_HOME=/tmp/megacmd-home
 
-# LibreOffice: Office/PPT -> PDF
-# ffmpeg: 多媒體 AI 出題
-# MEGAcmd: MEGA 官方命令列客戶端（取代不相容 Python 3.12 的 mega.py）
+# Web image runtime dependencies:
+# - LibreOffice: legacy synchronous Office upload + Office text/preview extraction for AI questions.
+# - ffmpeg: Groq video-question generation extracts audio and representative frames in the Web process.
+# - qpdf: optional PDF linearization on the synchronous compatibility upload path.
+# - MEGAcmd: Web-side MEGA storage reads/downloads/deletes/status checks, not only worker uploads.
+# Background material conversion itself is owned by the local worker.  Do not remove these packages
+# from the Web image until the remaining synchronous/AI call sites are migrated away from them.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        libreoffice-impress ffmpeg qpdf fonts-noto-cjk wget ca-certificates gnupg procps \

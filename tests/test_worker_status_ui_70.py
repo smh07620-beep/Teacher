@@ -13,6 +13,8 @@ class WorkerStatusUi70Tests(unittest.TestCase):
         cls.frontend = ROOT.joinpath("pgy_frontend.py").read_text(encoding="utf-8")
 
     def test_worker_surface_is_system_admin_only(self):
+        self.assertIn("window.TeacherRBAC681Ready", self.source)
+        self.assertIn("const R = await", self.source)
         self.assertIn("if (!roles.has('system_admin')) return", self.source)
         self.assertIn("admin-nav-worker", self.source)
         self.assertIn("admin-section-worker", self.source)
@@ -60,10 +62,9 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             self.assertIn(marker, self.source)
 
     def test_worker_asset_loads_after_role_workspace_shell(self):
-        shell = self.frontend.index('/workspace-shell-70.js?v=7114')
-        worker = self.frontend.index('/worker-status-70.js?v=7002')
-        self.assertLess(shell, worker)
-        self.assertIn('if "/worker-status-70.js" not in html', self.frontend)
+        from pgy_frontend import ASSET_MANIFEST
+        body = ASSET_MANIFEST["system"]["body"]
+        self.assertLess(body.index('/workspace-shell-70.js'), body.index('/worker-status-70.js'))
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from flask import Flask
+from flask import Flask, g
 
 import schema_migrations
 from course_bundle_72 import (
@@ -38,6 +38,9 @@ class CourseBundle72Tests(unittest.TestCase):
         self.base.require_permission = lambda permission: _require_permission(self.base, permission)
         self.base.get_course = self.get_course
         self.base.get_quiz_category = self.get_quiz_category
+        @self.app.before_request
+        def bind_teacher_user():
+            g.teacher_user = self.current_user
         self._create_schema()
         self.canonical_db = patch(
             "teacher_app.common.db.get_connection",

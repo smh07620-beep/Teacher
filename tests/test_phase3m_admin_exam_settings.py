@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -9,7 +11,7 @@ class Phase3MAdminExamSettingsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "static" / "admin-exam-settings.js").read_text(encoding="utf-8")
-        cls.frontend = (ROOT / "pgy_frontend.py").read_text(encoding="utf-8")
+        cls.ordered = dict(ASSET_MANIFEST["system"]["ordered"])["/system-admin.js"]
 
     def test_preserves_exam_settings_global_and_onclick_contracts(self):
         for name in ("adminEditQuizCategory", "openExamSettings", "saveExamSettings", "syncExamDrawModeUI", "updateExamQuotaTotal", "updateExamWorkflowUI", "previewCurrentExam", "reviewCurrentExam", "publishCurrentExam", "adminToggleBlindMode"):
@@ -27,9 +29,7 @@ class Phase3MAdminExamSettingsTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.source)
 
     def test_loads_after_legacy_and_before_wrappers(self):
-        self.assertIn('exam_settings_marker = \'<script defer src="/admin-exam-settings.js?v=7112"></script>\'', self.frontend)
-        self.assertIn('replacement += "\\n" + exam_settings_marker', self.frontend)
-        self.assertLess(self.frontend.index("admin-exam-settings.js"), self.frontend.index("/pgy-workflow.js"))
+        self.assertIn('/admin-exam-settings.js', self.ordered)
 
 
 if __name__ == "__main__":

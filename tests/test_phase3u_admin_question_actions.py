@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -9,7 +11,6 @@ class Phase3UAdminQuestionActionsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "static" / "admin-question-actions.js").read_text(encoding="utf-8")
-        cls.frontend = (ROOT / "pgy_frontend.py").read_text(encoding="utf-8")
         cls.workflow = (ROOT / ".github" / "workflows" / "phase3-pgy-checks.yml").read_text(encoding="utf-8")
 
     def test_preserves_question_mutation_globals(self):
@@ -63,12 +64,9 @@ class Phase3UAdminQuestionActionsTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.source)
 
     def test_asset_loads_after_question_editor_ui_and_is_syntax_checked(self):
-        ui_marker = '<script defer src="/admin-question-editor-ui.js?v=7119"></script>'
-        action_marker = '<script defer src="/admin-question-actions.js?v=7120"></script>'
-        self.assertIn(ui_marker, self.frontend)
-        self.assertIn(action_marker, self.frontend)
-        self.assertLess(self.frontend.index(ui_marker), self.frontend.index(action_marker))
-        self.assertIn("node --check static/admin-question-actions.js", self.workflow)
+        body = ASSET_MANIFEST["system"]["body"]
+        self.assertLess(body.index('/admin-question-editor-ui.js'), body.index('/admin-question-actions.js'))
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
 
 
 if __name__ == "__main__":

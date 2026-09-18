@@ -9,7 +9,10 @@ ROOT = Path(__file__).parents[1]
 class QuestionBankConvergenceStage5Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.adapter = ROOT.joinpath("question_bank_68.py").read_text(encoding="utf-8")
+        cls.root_adapter = ROOT.joinpath("question_bank_68.py").read_text(encoding="utf-8")
+        cls.adapter = ROOT.joinpath(
+            "teacher_app", "assessments", "question_bank_routes.py"
+        ).read_text(encoding="utf-8")
         cls.service = ROOT.joinpath(
             "teacher_app", "assessments", "question_bank.py"
         ).read_text(encoding="utf-8")
@@ -67,7 +70,7 @@ class QuestionBankConvergenceStage5Tests(unittest.TestCase):
             "bank_service.review_question",
         ):
             self.assertIn(marker, self.adapter)
-        self.assertIn("assessment_repository.get_category", self.adapter)
+        self.assertIn("scope_filter.scoped", self.adapter)
         self.assertNotIn("base.get_quiz_category", self.adapter)
 
     def test_blueprint_selection_and_snapshot_ownership_is_canonical(self):
@@ -120,7 +123,9 @@ class QuestionBankConvergenceStage5Tests(unittest.TestCase):
         self.assertNotIn("Counter(", self.adapter)
 
     def test_root_is_http_rbac_compatibility_adapter(self):
-        self.assertIn("HTTP/RBAC compatibility adapter", self.adapter)
+        self.assertIn("Compatibility module alias", self.root_adapter)
+        self.assertIn("question_bank_routes", self.root_adapter)
+        self.assertIn("Canonical Question Bank 2.0 HTTP/RBAC routes", self.adapter)
         self.assertNotIn("base._db_conn", self.adapter)
 
 

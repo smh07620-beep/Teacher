@@ -151,20 +151,6 @@
     question.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>question.focus(),250);
   }
 
-  async function openQuestionEditor(preset){
-    const catId=document.getElementById('composer-question-exam-72')?.value;if(!catId)return;
-    const imageKind=document.querySelector('input[name="composer-image-kind"]:checked')?.value||'';
-    state.question={preset,catId,imageKind,...scope()};
-    window.teacherContentStudioClose?.();
-    await window.openAdminWorkspace?.('assessment');
-    const area=document.getElementById('admin-quiz-area'),group=document.getElementById('admin-quiz-group');
-    if(area)area.value=state.question.area;if(group)group.value=state.question.group;
-    await window.renderAdminQuizCategories?.(true);
-    const panel=document.getElementById(`qpanel-${catId}`);if(panel?.classList.contains('hidden'))await window.toggleQuizQuestionsPanel?.(catId);
-    const type=document.getElementById(`qform-${catId}-type`);setSelect(type,preset==='image'?'image':preset==='video'?'video':'choice');window.updateManualQuestionType?.(catId);
-    decorateQuestionEditor(catId,preset,imageKind);
-  }
-
   function courseOptions(selected=''){
     const source=document.getElementById('admin-material-course');
     const options=source?[...source.options]:[];
@@ -225,12 +211,12 @@
     const draft=state.external;if(!draft)return;
     window.teacherContentStudioClose?.();await window.openAdminWorkspace?.('course-materials');
     const area=document.getElementById('admin-material-area'),group=document.getElementById('admin-material-group');if(area)area.value=draft.area;if(group)group.value=draft.group;
-    const opener=window.openExternalMaterialCreateDrawer||window.openExternalMaterialDrawer;await opener?.();
+    const opener=window.openExternalMaterialCreateDrawer;await opener?.();
     const set=(id,value)=>{const el=document.getElementById(id);if(el)el.value=value||'';};set('external-material-title',draft.title);set('external-material-description',draft.desc);set('external-material-url',draft.url);set('external-material-area',draft.area);set('external-material-group',draft.group);set('external-material-course',draft.courseId);
-    const create=window.createExternalMaterialFromDrawer||window.saveExternalMaterialLink;if(typeof create==='function')await create();
+    const create=window.createExternalMaterialFromDrawer;if(typeof create==='function')await create();
     const result=(document.getElementById('external-material-preview')?.textContent||'').trim();
-    const again=()=>{window.closeExternalMaterialDrawer?.();window.teacherContentStudioOpen?.();renderExternalEdit();};
-    if(result.startsWith('✅'))showOutcome('success','外部教材已建立',result,[{label:'完成',run:()=>window.closeExternalMaterialDrawer?.()},{label:'再新增一筆',primary:true,run:again}]);
+    const again=()=>{window.closeExternalMaterialCreateDrawer?.();window.teacherContentStudioOpen?.();renderExternalEdit();};
+    if(result.startsWith('✅'))showOutcome('success','外部教材已建立',result,[{label:'完成',run:()=>window.closeExternalMaterialCreateDrawer?.()},{label:'再新增一筆',primary:true,run:again}]);
     else if(result.startsWith('❌'))showOutcome('error','外部教材建立失敗',result,[{label:'返回修正',primary:true}]);
   }
 
@@ -248,7 +234,6 @@
     const root=studio();if(!root||!root.contains(event.target))return;
     const action=event.target.closest('[data-studio-action]')?.dataset.studioAction;
     if(['question','image-question','video-question','material','video-material','external'].includes(action)){event.preventDefault();event.stopImmediatePropagation();handleStudioAction(action);return;}
-    const qnext=event.target.closest('[data-composer-question-next]');if(qnext){event.preventDefault();event.stopImmediatePropagation();openQuestionEditor(qnext.dataset.preset||'choice');return;}
     if(event.target.closest('[data-composer-material-pick]')){event.preventDefault();event.stopImmediatePropagation();pickMaterialFiles();return;}
     if(event.target.closest('[data-composer-material-preview]')){event.preventDefault();event.stopImmediatePropagation();renderMaterialPreview();return;}
     if(event.target.closest('[data-composer-material-edit]')){event.preventDefault();event.stopImmediatePropagation();renderMaterialEdit(state.material?.kind||'standard');return;}

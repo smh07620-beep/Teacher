@@ -28,7 +28,8 @@ class RoleBasedWorkspace69Tests(unittest.TestCase):
         }
         for marker in expected:
             self.assertIn(marker, self.source)
-        self.assertIn("if (!canOpenWorkspace(name))", self.source)
+        self.assertIn("adminShell.addWorkspaceGuard", self.source)
+        self.assertIn("!canOpenWorkspace(requested) && !canOpenWorkspace(workspace)", self.source)
 
     def test_group_scoped_roles_are_locked_to_preferred_group(self):
         self.assertIn("roles.has('clinical_teacher') || roles.has('group_leader')", self.source)
@@ -83,11 +84,12 @@ class RoleBasedWorkspace69Tests(unittest.TestCase):
 
     def test_profile_titles_remain_presentation_only(self):
         self.assertIn("const title = user.professionalTitle || roleSummary();", self.source)
-        permission_block = self.source[self.source.index('const ROLE_PERMISSIONS'):self.source.index('const ROLE_LABELS')]
-        self.assertNotIn('professionalTitle', permission_block)
-        self.assertNotIn('responsibilityTags', permission_block)
-        self.assertNotIn('professional_title', permission_block)
-        self.assertNotIn('responsibility_tags', permission_block)
+        self.assertNotIn('ROLE_PERMISSIONS', self.source)
+        self.assertIn('new Set(Array.isArray(user.permissions) ? user.permissions : [])', self.source)
+
+    def test_rbac_readiness_is_published_for_dependent_shells(self):
+        self.assertIn('window.TeacherRBAC681Ready = (async function ()', self.source)
+        self.assertIn('return window.TeacherRBAC681;', self.source)
 
 
 if __name__ == '__main__':

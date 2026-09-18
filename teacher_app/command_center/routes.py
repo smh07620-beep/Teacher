@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from flask import jsonify
+from flask import g, jsonify
 
 from teacher_app.command_center import analytics, audience, competency, service
 from teacher_app.common.errors import ApiError
@@ -65,29 +65,40 @@ def _suppress_pgy_analytics(data):
     return result
 
 
-def register_training_command_center(base):
-    app = base.app
+def _app(owner):
+    return getattr(owner, "app", owner)
+
+
+def _current_user(owner=None):
+    if hasattr(g, "teacher_user"):
+        return g.teacher_user
+    resolver = getattr(owner, "_current_user", None)
+    return resolver() if callable(resolver) else None
+
+
+def register_training_command_center(owner):
+    app = _app(owner)
     if app.extensions.get("teacher_training_command_center_71_registered"):
         return app
 
     @app.get("/api/training-command-center/profile")
     def training_command_center_profile():
         try:
-            return jsonify(audience.current_profile(base._current_user()))
+            return jsonify(audience.current_profile(_current_user(owner)))
         except ApiError as exc:
             return _error(exc)
 
     @app.get("/api/training-command-center")
     def training_command_center():
         try:
-            return jsonify(service.build_summary(base._current_user()))
+            return jsonify(service.build_summary(_current_user(owner)))
         except ApiError as exc:
             return _error(exc)
 
     @app.get("/api/training-command-center/pgy-matrix")
     def training_command_center_pgy_matrix():
         try:
-            user = base._current_user()
+            user = _current_user(owner)
             profile = audience.current_profile(user)
             if not profile["pgyLearner"]:
                 return jsonify(_online_matrix(profile))
@@ -101,7 +112,7 @@ def register_training_command_center(base):
     @app.get("/api/training-command-center/learning-analytics")
     def training_command_center_learning_analytics():
         try:
-            user = base._current_user()
+            user = _current_user(owner)
             profile = audience.current_profile(user)
             data = analytics.build_learning_analytics(user)
             if not profile["pgyLearner"]:

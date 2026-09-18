@@ -9,8 +9,8 @@ ROOT = Path(__file__).parents[1]
 class FeatureExposureUi681Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.assessment_compat = ROOT.joinpath("static", "assessment-681.js").read_text(encoding="utf-8")
         cls.advanced = ROOT.joinpath("static", "assessment-advanced-74.js").read_text(encoding="utf-8")
+        cls.system = ROOT.joinpath("static", "system.html").read_text(encoding="utf-8")
         cls.question_bank = ROOT.joinpath("static", "admin-question-bank.js").read_text(encoding="utf-8")
         cls.question_actions = ROOT.joinpath("static", "admin-question-actions.js").read_text(encoding="utf-8")
         cls.exam_settings = ROOT.joinpath("static", "admin-exam-settings.js").read_text(encoding="utf-8")
@@ -19,23 +19,9 @@ class FeatureExposureUi681Tests(unittest.TestCase):
         cls.external = ROOT.joinpath("static", "external-material-681.js").read_text(encoding="utf-8")
         cls.media = ROOT.joinpath("static", "smart-learning-67.js").read_text(encoding="utf-8")
 
-    def test_assessment_compatibility_file_no_longer_owns_second_ui_or_mutations(self):
-        self.assertIn("Compatibility router after Teacher runtime convergence", self.assessment_compat)
-        self.assertIn("admin-question-bank.js", self.assessment_compat)
-        self.assertIn("admin-question-actions.js", self.assessment_compat)
-        self.assertIn("admin-ai-questions.js", self.assessment_compat)
-        for forbidden in (
-            "assessment-681-body",
-            "question-bank-drawer",
-            "function examsHTML",
-            "function bankHTML",
-            "function createAiDrafts",
-            "/api/question-bank/drafts",
-            "/api/ai-questions/generate",
-            "method:'PATCH'",
-            "method:'DELETE'",
-        ):
-            self.assertNotIn(forbidden, self.assessment_compat)
+    def test_assessment_compatibility_file_is_removed_and_advanced_owner_loads_directly(self):
+        self.assertFalse(ROOT.joinpath("static", "assessment-681.js").exists())
+        self.assertIn('/assessment-advanced-74.js?v=7400', self.system)
 
     def test_unique_blueprint_and_analytics_capabilities_have_one_advanced_owner(self):
         self.assertIn("Advanced assessment tools only", self.advanced)

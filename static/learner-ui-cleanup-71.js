@@ -1,6 +1,6 @@
 /* Teacher 7.1/7.3: keep learner pages focused on the next useful action.
  * Presentation-only compatibility cleanup; first-paint hiding is owned by
- * learner-layout-stability-73.css, so this script runs once and never observes DOM.
+ * canonical learner.css, so this script runs once and never observes DOM.
  */
 (function () {
   'use strict';

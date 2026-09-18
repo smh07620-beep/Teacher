@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -9,7 +11,6 @@ class Phase3WLearnerExamControlsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "static" / "learner-exam-controls.js").read_text(encoding="utf-8")
-        cls.frontend = (ROOT / "pgy_frontend.py").read_text(encoding="utf-8")
         cls.workflow = (ROOT / ".github" / "workflows" / "phase3-pgy-checks.yml").read_text(encoding="utf-8")
 
     def test_preserves_learner_html_and_runtime_globals(self):
@@ -18,13 +19,10 @@ class Phase3WLearnerExamControlsTests(unittest.TestCase):
 
     def test_reset_preserves_learner_draft_and_progress_contracts(self):
         for contract in (
-            "isSubmittedMap[currentCatKey] = false",
-            "userAnswersMap[currentCatKey]",
-            "flaggedQuestionsMap[currentCatKey]",
-            "clearExamDraft(currentCatKey)",
-            "saveExamDraft(currentCatKey)",
-            "renderQuestions()",
-            "updateProgressStats()",
+            "resetExamAttemptState(catId)",
+            "await ensureDynamicCategoryLoaded(catId)",
+            "currentCatKey=catId",
+            "updateUIForActiveKey()",
         ):
             self.assertIn(contract, self.source)
 
@@ -33,9 +31,8 @@ class Phase3WLearnerExamControlsTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.source)
 
     def test_asset_is_injected_and_syntax_checked(self):
-        marker = '<script defer src="/learner-exam-controls.js?v=7122"></script>'
-        self.assertIn(marker, self.frontend)
-        self.assertIn("node --check static/learner-exam-controls.js", self.workflow)
+        self.assertIn('/learner-exam-controls.js', ASSET_MANIFEST["system"]["body"])
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
 
 
 if __name__ == "__main__":

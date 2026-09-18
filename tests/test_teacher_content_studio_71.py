@@ -2,6 +2,8 @@ import subprocess
 import unittest
 from pathlib import Path
 
+from pgy_frontend import ASSET_MANIFEST
+
 ROOT = Path(__file__).parents[1]
 
 
@@ -11,7 +13,6 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         cls.source = ROOT.joinpath('static/teacher-content-studio-71.js').read_text(encoding='utf-8')
         cls.composer = ROOT.joinpath('static/teacher-content-composer-72.js').read_text(encoding='utf-8')
         cls.convergence = ROOT.joinpath('static/teacher-ux-convergence-72.js').read_text(encoding='utf-8')
-        cls.authoring = ROOT.joinpath('static/question-authoring-ux-71.js').read_text(encoding='utf-8')
         cls.external = ROOT.joinpath('static/external-material-681.js').read_text(encoding='utf-8')
         cls.frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
         cls.matrix = ROOT.joinpath('RC_FEATURE_UI_COVERAGE_MATRIX.md').read_text(encoding='utf-8')
@@ -37,7 +38,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
     def test_studio_routes_to_existing_canonical_ui_owners(self):
         for marker in (
             'openAdminWorkspace', 'renderAdminQuizCategories', 'toggleQuizQuestionsPanel',
-            'updateManualQuestionType', 'openExternalMaterialDrawer', 'switchLearningModule',
+            'updateManualQuestionType', 'openExternalMaterialCreateDrawer', 'switchLearningModule',
             'renderFormalAtlas', 'openAtlasCreate',
         ):
             self.assertIn(marker, self.source)
@@ -73,10 +74,8 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertNotIn("method:'DELETE'", self.convergence)
 
     def test_convergence_reduces_duplicate_authoring_surfaces(self):
-        self.assertIn('考卷管理', self.convergence)
-        self.assertIn('已建立題目', self.convergence)
-        self.assertIn("assessment681Tab('ai')", self.convergence)
-        self.assertIn("assessment681Tab('blueprint')", self.convergence)
+        self.assertNotIn('assessment681Tab', self.convergence)
+        self.assertNotIn('assessment681OpenQuestion', self.convergence)
         self.assertIn("classList.add('hidden')", self.convergence)
         self.assertIn("details.dataset.teacher72CourseWizard='1'", self.convergence)
         self.assertIn("details.className='hidden", self.convergence)
@@ -84,12 +83,11 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn("card('materials-manager'", self.source)
         self.assertIn('mountMaterialManagerInStudio', self.source)
         self.assertNotIn('進階：一次建立整套課程', self.convergence)
-        self.assertNotIn('simplifyTabs', self.authoring)
-        self.assertNotIn('new MutationObserver', self.authoring)
+        self.assertFalse(ROOT.joinpath('static/question-authoring-ux-71.js').exists())
 
-    def test_convergence_reconciles_existing_assessment_rerenders(self):
+    def test_convergence_reconciles_legacy_course_wizard_rerenders(self):
         self.assertIn('mutation.target', self.convergence)
-        self.assertIn("target.closest?.('#assessment-681')", self.convergence)
+        self.assertNotIn("#assessment-681", self.convergence)
         self.assertIn('reconcileScheduled', self.convergence)
         self.assertIn('mutations.some(mutationNeedsReconcile)', self.convergence)
 
@@ -128,23 +126,23 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertNotIn("method:'DELETE'", self.composer)
 
     def test_external_direct_create_owner_exposes_stable_aliases(self):
-        self.assertIn('window.openExternalMaterialCreateDrawer=window.openExternalMaterialDrawer', self.external)
-        self.assertIn('window.createExternalMaterialFromDrawer=window.saveExternalMaterialLink', self.external)
+        self.assertIn('window.openExternalMaterialCreateDrawer=', self.external)
+        self.assertIn('window.createExternalMaterialFromDrawer=', self.external)
+        self.assertIn('window.closeExternalMaterialCreateDrawer=', self.external)
+        self.assertNotIn('window.openExternalMaterialDrawer=', self.external)
+        self.assertNotIn('window.saveExternalMaterialLink=', self.external)
 
     def test_frontend_owns_authoring_asset_order(self):
-        self.assertNotIn('function load(src, marker)', self.authoring)
         markers = (
-            'body_assets.append(\'<script defer src="/question-authoring-ux-71.js?v=7133"></script>\')',
-            'body_assets.append(\'<script defer src="/teacher-content-studio-71.js?v=7116"></script>\')',
-            'body_assets.append(\'<script defer data-teacher-tool-panels-710 src="/teacher-content-tool-panels-710.js?v=7110"></script>\')',
-            'body_assets.append(\'<script defer src="/teacher-content-latency-712.js?v=7120"></script>\')',
-            'body_assets.append(\'<script defer src="/teacher-content-composer-72.js?v=7200"></script>\')',
-            'body_assets.append(\'<script defer src="/teacher-ux-convergence-72.js?v=7205"></script>\')',
+            '/teacher-content-studio-71.js',
+            '/teacher-content-tool-panels-710.js',
+            '/teacher-content-latency-712.js',
+            '/teacher-content-composer-72.js',
+            '/teacher-ux-convergence-72.js',
         )
-        for marker in markers:
-            self.assertIn(marker, self.frontend)
+        body = ASSET_MANIFEST["system"]["body"]
         for before, after in zip(markers, markers[1:]):
-            self.assertLess(self.frontend.index(before), self.frontend.index(after))
+            self.assertLess(body.index(before), body.index(after))
 
     def test_release_matrix_records_studio(self):
         self.assertIn('Teacher content authoring studio (7.1/7.2)', self.matrix)
@@ -156,7 +154,8 @@ class TeacherContentStudio71Tests(unittest.TestCase):
 
     def test_exam_action_cards_use_one_delegated_runtime_owner(self):
         self.assertIn("dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId)", self.source)
-        self.assertIn("const handler=window.teacherContentStudioExamAction", self.source)
+        self.assertIn("const handler=examActionHandlers.get(String(action))", self.source)
+        self.assertIn("registerExamActions", self.source)
         self.assertIn("Promise.resolve(result).catch(error=>showExamActionFailure(catId,error))", self.source)
         self.assertNotIn('onclick="event.stopPropagation();window.teacherContentStudioExamAction', self.source)
         for action in ("question", "image", "video", "ai", "questions", "settings"):

@@ -12,6 +12,7 @@ class StorageMaterialHotPathConvergenceTests(unittest.TestCase):
         cls.entrypoint = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
         cls.storage = ROOT.joinpath("teacher_app/materials/storage.py").read_text(encoding="utf-8")
         cls.provider_storage = ROOT.joinpath("teacher_app/storage/providers.py").read_text(encoding="utf-8")
+        cls.web_storage = ROOT.joinpath("teacher_app/storage/web_runtime.py").read_text(encoding="utf-8")
 
     def test_storage_pagination_patch_layer_is_retired(self):
         self.assertFalse(ROOT.joinpath("storage_pagination_hardening.py").exists())
@@ -19,9 +20,8 @@ class StorageMaterialHotPathConvergenceTests(unittest.TestCase):
         self.assertNotIn("storage_pagination_hardening", self.entrypoint)
 
     def test_r2_and_oci_use_canonical_bounded_storage_primitives(self):
-        self.assertIn("from teacher_app.materials import storage as material_storage", self.app)
-        self.assertIn("material_storage.delete_prefix(", self.app)
-        self.assertIn("material_storage.bucket_usage_bytes(", self.app)
+        self.assertIn("from teacher_app.materials import storage as material_storage", self.web_storage)
+        self.assertIn("material_storage.delete_prefix(", self.web_storage)
         for marker in (
             "MAX_STORAGE_PAGES",
             "NextContinuationToken",
@@ -56,13 +56,12 @@ class StorageMaterialHotPathConvergenceTests(unittest.TestCase):
             self.assertIn(marker, self.provider_storage)
             self.assertNotIn(marker, self.app)
         for delegate in (
-            "canonical_storage.r2_client(",
-            "canonical_storage.oci_client(",
-            "canonical_storage.gdrive_credentials(",
-            "canonical_storage.gdrive_service(",
-            "canonical_storage.mega_login_if_needed(",
+            "providers.r2_client(",
+            "providers.oci_client(",
+            "providers.gdrive_service(",
+            "providers.mega_login_if_needed(",
         ):
-            self.assertIn(delegate, self.app)
+            self.assertIn(delegate, self.web_storage)
 
     def test_mega_session_cache_owner_is_canonical_and_does_not_probe_whoami_on_each_hit(self):
         self.assertNotIn('_MEGA_AUTH_CACHE = {"ok": False, "at": 0.0}', self.app)
@@ -77,31 +76,30 @@ class StorageMaterialHotPathConvergenceTests(unittest.TestCase):
         self.assertNotIn("mega-whoami", cache_branch)
 
     def test_preview_cache_is_size_evicted_not_time_expired(self):
-        start = self.app.index("def _mega_cached_preview")
-        end = self.app.index("def _mega_send_file", start)
-        source = self.app[start:end]
+        start = self.web_storage.index("def mega_cached_preview")
+        end = self.web_storage.index("def gdrive_find_file_in_folder", start)
+        source = self.web_storage[start:end]
         self.assertIn("valid = target.exists() and target.stat().st_size > 0", source)
         self.assertNotIn("MATERIAL_PREVIEW_CACHE_TTL_SECONDS", source)
         self.assertIn("_preview_cache_cleanup(protect=target)", source)
 
     def test_web_reads_have_total_budget_below_gunicorn_timeout(self):
-        app = self.app
         render = ROOT.joinpath("render.yaml").read_text(encoding="utf-8")
         run_web = ROOT.joinpath("run_web.sh").read_text(encoding="utf-8")
         self.assertIn('MEGA_WEB_READ_TIMEOUT_SECONDS", "120"', self.provider_storage)
-        self.assertIn("MEGA_WEB_READ_TIMEOUT_SECONDS = canonical_storage.MEGA_WEB_READ_TIMEOUT_SECONDS", app)
-        self.assertIn("timeout_seconds=MEGA_WEB_READ_TIMEOUT_SECONDS", app)
+        self.assertIn("providers.MEGA_WEB_READ_TIMEOUT_SECONDS", self.web_storage)
         self.assertIn('key: MEGA_WEB_READ_TIMEOUT_SECONDS', render)
         self.assertIn('value: "120"', render)
         self.assertIn('key: GUNICORN_TIMEOUT', render)
         self.assertIn('value: "180"', render)
         self.assertIn('GUNICORN_TIMEOUT:-180', run_web)
     def test_mega_read_reauthenticates_once_only_after_real_failure(self):
-        start = self.app.index("def mega_download_file")
-        end = self.app.index("def mega_destroy", start)
-        source = self.app[start:end]
-        self.assertIn("canonical_storage.invalidate_mega_auth_cache()", source)
-        self.assertIn("_mega_login_if_needed(force=True, deadline=deadline)", source)
+        start = self.web_storage.index("def mega_download_file")
+        end = self.web_storage.index("def mega_send_file", start)
+        source = self.web_storage[start:end]
+        self.assertIn("providers.invalidate_mega_auth_cache()", source)
+        self.assertIn("force=True", source)
+        self.assertEqual(source.count("providers.invalidate_mega_auth_cache()"), 1)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import unittest
 
+import schema_migrations
 from multi_role_66 import (
     register_multi_role_66,
 )
@@ -11,6 +12,12 @@ class MultiRoleApi66Tests(
 ):
     def setUp(self):
         super().setUp()
+
+        conn, kind = self.connect()
+        try:
+            schema_migrations._additive_rbac_pgy_signing_66(conn, kind)
+        finally:
+            conn.close()
 
         register_multi_role_66(
             self.base

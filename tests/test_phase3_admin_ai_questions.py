@@ -1,13 +1,15 @@
 import unittest
 from pathlib import Path
 
+from pgy_frontend import ASSET_MANIFEST
+
 ROOT = Path(__file__).parents[1]
 
 
 class Phase3AdminAiQuestionsTests(unittest.TestCase):
     def test_module_loads_after_existing_phase3_overrides(self):
-        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
-        self.assertLess(frontend.index('/admin-material-upload.js?v=7108'), frontend.index('/admin-ai-questions.js?v=7109'))
+        body = ASSET_MANIFEST["system"]["body"]
+        self.assertLess(body.index('/admin-material-upload.js'), body.index('/admin-ai-questions.js'))
 
     def test_ai_picker_generation_and_candidate_contracts_are_global(self):
         source = ROOT.joinpath('static/admin-ai-questions.js').read_text(encoding='utf-8')

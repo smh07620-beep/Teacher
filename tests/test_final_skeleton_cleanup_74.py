@@ -35,10 +35,12 @@ class FinalSkeletonCleanup74Tests(unittest.TestCase):
             self.assertNotIn(route, app)
         for route in ('/api/docx-atlas-preview/', '/api/learning-analytics', '/api/media-processing/capability'):
             self.assertNotIn(route, smart)
-        self.assertIn('def preview_docx_atlas(', smart)
-        self.assertIn('/api/atlas/import-docx/', self.source('atlas_70.py'))
+        self.assertNotIn('def preview_docx_atlas(', smart)
+        self.assertIn('preview_docx_atlas,', smart)
+        self.assertIn('def preview_docx_atlas(', self.source('teacher_app/learning/content.py'))
+        self.assertIn('/api/atlas/import-docx/', self.source('teacher_app/atlas/routes.py'))
         self.assertIn('/api/training-command-center/learning-analytics', self.source('teacher_app/command_center/routes.py'))
-        self.assertIn('/api/material-jobs', app)
+        self.assertIn('/api/material-jobs', self.source('teacher_app/materials/job_routes.py'))
 
     def test_completed_backend_features_have_canonical_frontend_consumers(self):
         actions = self.source('static/admin-question-actions.js')
@@ -49,10 +51,10 @@ class FinalSkeletonCleanup74Tests(unittest.TestCase):
 
     def test_review_links_wrap_canonical_question_payload_owner(self):
         review = self.source('static/review-links-66.js')
-        frontend = self.source('pgy_frontend.py')
+        frontend = self.source('teacher_app/frontend/assets.py')
         self.assertIn('window.adminBuildQuestionPayload', review)
         self.assertNotIn('adminPayloadFromQuestionEditor', review)
-        self.assertGreater(frontend.index('/review-links-66.js?v=7400'), frontend.index('/admin-question-actions.js?v=7120'))
+        self.assertGreater(frontend.index('/review-links-66.js'), frontend.index('/admin-question-actions.js'))
 
     def test_legacy_admin_ownership_moved_to_canonical_modules(self):
         legacy = self.source('static/system-admin.js')

@@ -26,7 +26,10 @@ class PortalInformationArchitecture73Tests(unittest.TestCase):
             self.assertIn(marker, self.index)
         self.assertNotIn('class="v575-manage-direct"', self.index)
         self.assertNotIn('v56-panel v56-reminder', self.index)
-        self.assertIn('/phase3.css?v=7300', self.index)
+        self.assertNotIn('/phase3.css', self.index)
+        self.assertFalse(ROOT.joinpath('static', 'phase3.css').exists())
+        portal_css = ROOT.joinpath('static', 'portal.css').read_text(encoding='utf-8')
+        self.assertIn('.phase3-home', portal_css)
 
     def test_internal_area_is_selection_surface_only(self):
         self.assertIn('一個組別，一個學習中心', self.internal)
@@ -44,8 +47,9 @@ class PortalInformationArchitecture73Tests(unittest.TestCase):
         self.assertNotIn("setInterval", self.navigation)
 
     def test_navigation_asset_is_composed_and_syntax_checked(self):
-        self.assertIn('/portal-navigation-73.js?v=7300', self.frontend)
-        self.assertIn('node --check static/portal-navigation-73.js', self.workflow)
+        from pgy_frontend import ASSET_MANIFEST
+        self.assertIn('/portal-navigation-73.js', ASSET_MANIFEST['portal']['body'])
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
 
 
 if __name__ == '__main__':

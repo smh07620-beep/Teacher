@@ -1,0 +1,10 @@
+*.md text
+*.html text
+*.js text
+*.json text
+*.py text
+*.yml text
+*.yaml text
+*.sh text
+*.cmd text
+

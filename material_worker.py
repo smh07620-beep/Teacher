@@ -4,17 +4,24 @@ import datetime as dt
 import hashlib, json, os, re, socket, subprocess, sys, tempfile, time
 from pathlib import Path
 import requests
-from upload_hardening import ZIP_EXT, _magic_ok, _validate_zip_bytes
+from teacher_app.materials.validation import (
+    ALLOWED_MATERIAL_EXTENSIONS,
+    ZIP_EXT,
+    magic_ok,
+    validate_zip_bytes,
+)
+from teacher_app.storage.worker_runtime import OFFICE_EXT, WorkerMaterialStorageAdapter
 
 BASE_URL=os.environ.get("TEACHER_BASE_URL", "").rstrip("/")
 TOKEN=os.environ.get("MATERIAL_WORKER_TOKEN", "")
 WORKER_ID=os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{socket.gethostname()}:{os.getpid()}"
 POLL_SECONDS=max(2,min(60,int(os.environ.get("MATERIAL_WORKER_POLL_SECONDS","5"))))
 REQUEST_TIMEOUT=max(10,min(600,int(os.environ.get("MATERIAL_WORKER_HTTP_TIMEOUT","120"))))
-ALLOWED_EXT={".pptx",".ppt",".pdf",".doc",".docx",".xls",".xlsx",".odp",".odt",".ods",".png",".jpg",".jpeg",".gif",".webp",".mp4",".webm",".mov",".m4v",".mp3",".wav",".m4a",".ogg",".txt",".csv",".srt",".vtt",".zip"}
+ALLOWED_EXT=ALLOWED_MATERIAL_EXTENSIONS
 VIDEO_EXT={".mp4",".webm",".mov",".m4v"}; AUDIO_EXT={".mp3",".wav",".m4a",".ogg"}
 RESTART_FOR_UPDATE=75
 ROOT=Path(__file__).resolve().parent
+STORAGE=WorkerMaterialStorageAdapter()
 
 def _env_true(name, default=False):
     value=os.environ.get(name, "true" if default else "false").strip().lower()
@@ -147,8 +154,8 @@ def validate_download(source,job):
     if source.stat().st_size!=int(job.get("sourceBytes",0) or 0):raise RuntimeError("Worker 下載檔案大小不符。")
     if _sha256(source)!=str(job.get("sourceSha256") or "").lower():raise RuntimeError("Worker 下載檔案 SHA256 不符。")
     with source.open("rb") as fh:head=fh.read(8192)
-    if not _magic_ok(ext,head):raise RuntimeError("Worker 檔案內容與副檔名不符。")
-    if ext in ZIP_EXT:_validate_zip_bytes(source.read_bytes(),ext)
+    if not magic_ok(ext,head):raise RuntimeError("Worker 檔案內容與副檔名不符。")
+    if ext in ZIP_EXT:validate_zip_bytes(source.read_bytes(),ext)
     return original
 def download(url,target,headers=None):
     if not str(url).startswith("https://"):raise RuntimeError("Worker download URL 必須是 HTTPS。")
@@ -172,26 +179,25 @@ def _transcode_if_needed(source,original,temp):
     return output,name,{"transcoded":True,"sourceOriginalName":original}
 
 def publish_to_storage(source,original,job,temp):
-    """Use existing MEGA-primary/GDrive-fallback helpers with local env only."""
-    import app as storage
+    """Publish through the Flask-free canonical worker storage adapter."""
     material_id=str(job["materialId"]); source,stored_name,media_meta=_transcode_if_needed(source,original,temp)
-    backend=storage.active_material_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
-    single=bool(backend=="mega" and storage.MATERIAL_SINGLE_PREVIEW and (ext==".pdf" or ext in storage.OFFICE_EXT))
+    backend=STORAGE.active_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
+    single=bool(backend=="mega" and STORAGE.single_preview and (ext==".pdf" or ext in OFFICE_EXT))
     if single:
-        pages=storage.build_single_preview_pdf(source,preview)
+        pages=STORAGE.build_single_preview_pdf(source,preview)
         if pages<=0 or not preview.is_file() or preview.stat().st_size<=0: raise RuntimeError("Office/PDF preview 產生失敗，不能完成工作。")
-        key,prefix,remote=storage.upload_material_preview_to_mega(material_id,source,preview,pages); meta={"previewMode":"single_pdf","previewFilename":"preview.pdf","slideFormat":"pdf",**(remote or {}),**media_meta}
-    elif ext==".pdf" or ext in storage.OFFICE_EXT:
-        pages=storage.convert_pdf_to_images(source,slides) if ext==".pdf" else storage.convert_office_to_images(source,slides)
+        key,prefix,remote=STORAGE.upload_material_preview_to_mega(material_id,source,preview,pages); meta={"previewMode":"single_pdf","previewFilename":"preview.pdf","slideFormat":"pdf",**(remote or {}),**media_meta}
+    elif ext==".pdf" or ext in OFFICE_EXT:
+        pages=STORAGE.convert_pdf_to_images(source,slides) if ext==".pdf" else STORAGE.convert_office_to_images(source,slides)
         if pages<=0: raise RuntimeError("Office/PDF 頁面數為零，不能完成工作。")
-        if backend=="mega":key,prefix,remote=storage.upload_material_tree_to_mega(material_id,source,slides,pages)
-        elif backend=="gdrive":key,prefix,remote=storage.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name)
+        if backend=="mega":key,prefix,remote=STORAGE.upload_material_tree_to_mega(material_id,source,slides,pages)
+        elif backend=="gdrive":key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name)
         else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
-        meta={"slideFormat":storage._slide_format(slides,pages),**(remote or {}),**media_meta}
+        meta={"slideFormat":STORAGE.slide_format(slides,pages),**(remote or {}),**media_meta}
     elif backend=="mega":
-        folder=storage._mega_remote_join(storage._mega_root_id(),material_id); key=storage._mega_upload_file(source,folder,f"source{source.suffix.lower()}"); prefix=""; meta=media_meta
+        key=STORAGE.upload_source_to_mega(material_id,source); prefix=""; meta=media_meta
     elif backend=="gdrive":
-        key,prefix,remote=storage.upload_material_tree_to_gdrive(material_id,source,slides,0,original_name=stored_name); meta={**(remote or {}),**media_meta}
+        key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,0,original_name=stored_name); meta={**(remote or {}),**media_meta}
     else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
     return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta}
 

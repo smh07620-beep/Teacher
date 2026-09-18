@@ -10,7 +10,7 @@ ROOT = Path(__file__).parents[1]
 
 class ExamFrontendConcurrencyContractTests(unittest.TestCase):
     def test_exam_attempt_loader_has_inflight_deduplication(self):
-        source = ROOT.joinpath("static", "exam-integrity.js").read_text(encoding="utf-8")
+        source = ROOT.joinpath("static", "system-exam.js").read_text(encoding="utf-8")
         self.assertIn("secureAttemptLoadMap", source)
         self.assertIn("secureAttemptLoadMap[catId]", source)
         self.assertIn("delete secureAttemptLoadMap[catId]", source)

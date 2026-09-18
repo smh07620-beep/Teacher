@@ -6,6 +6,7 @@ from flask import Blueprint, g, jsonify, request
 
 from teacher_app.common.errors import ApiError
 from teacher_app.pgy import service as pgy_service
+from teacher_app.pgy import signing_facade
 
 bp = Blueprint("pgy", __name__)
 
@@ -28,18 +29,18 @@ def _pgy_api_error(exc: ApiError):
 
 @bp.get("/api/pgy/workflow/meta")
 def pgy_workflow_meta():
-    return jsonify(pgy_service.workflow_meta(_actor()))
+    return jsonify(signing_facade.workflow_meta(_actor()))
 
 
 @bp.get("/api/pgy/assignment-candidates")
 def pgy_assignment_candidates():
-    return jsonify(pgy_service.list_assignment_candidates(_actor(), request.args.get("group") or ""))
+    return jsonify(signing_facade.list_candidates(_actor(), request.args.get("group") or ""))
 
 
 @bp.get("/api/pgy/assignments")
 def pgy_assignments_list():
     return jsonify(
-        pgy_service.list_assignments(
+        signing_facade.list_assignments(
             _actor(),
             status=request.args.get("status") or "",
             group=request.args.get("group") or "",
@@ -49,18 +50,18 @@ def pgy_assignments_list():
 
 @bp.get("/api/pgy/assignments/<assignment_id>")
 def pgy_assignment_get(assignment_id):
-    return jsonify(pgy_service.get_assignment(_actor(), assignment_id))
+    return jsonify(signing_facade.get_assignment(_actor(), assignment_id))
 
 
 @bp.post("/api/pgy/assignments")
 def pgy_assignment_create():
-    assignment = pgy_service.create_assignment(_actor(), _payload())
+    assignment = signing_facade.create_assignment(_actor(), _payload())
     return jsonify({"ok": True, "assignment": assignment}), 201
 
 
 @bp.patch("/api/pgy/assignments/<assignment_id>")
 def pgy_assignment_update(assignment_id):
-    assignment = pgy_service.update_assignment(_actor(), assignment_id, _payload())
+    assignment = signing_facade.update_assignment(_actor(), assignment_id, _payload())
     return jsonify({"ok": True, "assignment": assignment})
 
 
@@ -72,13 +73,13 @@ def pgy_assignment_submit(assignment_id):
 
 @bp.post("/api/pgy/assignments/<assignment_id>/teacher-sign")
 def pgy_assignment_teacher_sign(assignment_id):
-    assignment = pgy_service.teacher_sign_assignment(_actor(), assignment_id, _payload())
+    assignment = signing_facade.teacher_sign_assignment(_actor(), assignment_id, _payload())
     return jsonify({"ok": True, "assignment": assignment})
 
 
 @bp.post("/api/pgy/assignments/<assignment_id>/countersign")
 def pgy_assignment_countersign(assignment_id):
-    assignment = pgy_service.group_countersign_assignment(_actor(), assignment_id, _payload())
+    assignment = signing_facade.countersign_assignment(_actor(), assignment_id, _payload())
     return jsonify({"ok": True, "assignment": assignment})
 
 
@@ -90,7 +91,7 @@ def pgy_assignment_finalize(assignment_id):
 
 @bp.post("/api/pgy/assignments/<assignment_id>/reopen")
 def pgy_assignment_reopen(assignment_id):
-    assignment = pgy_service.reopen_assignment(_actor(), assignment_id, _payload())
+    assignment = signing_facade.reopen_assignment(_actor(), assignment_id, _payload())
     return jsonify({"ok": True, "assignment": assignment})
 
 

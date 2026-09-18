@@ -2,6 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
+import schema_migrations
 from multi_role_66 import register_multi_role_66
 from tests.auth_support import AuthFixture
 
@@ -38,6 +39,7 @@ class UserProfileEditorApi681Tests(AuthFixture):
         super().setUp()
         conn, _ = self.connect()
         try:
+            schema_migrations._additive_rbac_pgy_signing_66(conn, "sqlite")
             conn.execute("ALTER TABLE user_accounts ADD COLUMN professional_title TEXT NOT NULL DEFAULT ''")
             conn.execute("ALTER TABLE user_accounts ADD COLUMN responsibility_tags TEXT NOT NULL DEFAULT '[]'")
         finally:

@@ -17,12 +17,8 @@ class SessionRbacFrontend69Tests(unittest.TestCase):
         self.assertNotIn("getAdminKey", source)
         self.assertNotIn("X-Admin-Key", source)
 
-    def test_retired_assessment_compatibility_router_owns_no_authorization(self):
-        source = self.source("assessment-681.js")
-        self.assertNotIn("fetch(", source)
-        self.assertNotIn("getAdminKey", source)
-        self.assertNotIn("X-Admin-Key", source)
-        self.assertNotIn("/api/", source)
+    def test_retired_assessment_compatibility_router_is_removed(self):
+        self.assertFalse(ROOT.joinpath("static", "assessment-681.js").exists())
 
     def test_teaching_editor_uses_session_rbac_without_admin_key(self):
         source = self.source("teaching.js")

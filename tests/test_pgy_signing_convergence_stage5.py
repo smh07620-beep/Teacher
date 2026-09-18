@@ -9,6 +9,7 @@ class PgySigningConvergenceStage5Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.adapter = ROOT.joinpath("pgy_signing_66.py").read_text(encoding="utf-8")
+        cls.routes = ROOT.joinpath("teacher_app/pgy/routes_signing.py").read_text(encoding="utf-8")
         cls.facade = ROOT.joinpath("teacher_app/pgy/signing_facade.py").read_text(encoding="utf-8")
         cls.repo = ROOT.joinpath("teacher_app/pgy/signing_repository.py").read_text(encoding="utf-8")
 
@@ -20,11 +21,13 @@ class PgySigningConvergenceStage5Tests(unittest.TestCase):
             "FROM user_accounts",
         ):
             self.assertNotIn(token, self.adapter)
-        self.assertIn("signing_facade.list_candidates", self.adapter)
-        self.assertIn("signing_facade.list_assignments", self.adapter)
-        self.assertIn("signing_facade.get_assignment", self.adapter)
-        self.assertIn("signing_facade.create_assignment", self.adapter)
-        self.assertIn("signing_facade.update_assignment", self.adapter)
+        self.assertIn("teacher_app.pgy.routes_signing", self.adapter)
+        self.assertNotIn("@app", self.adapter)
+        self.assertIn("signing_facade.list_candidates", self.routes)
+        self.assertIn("signing_facade.list_assignments", self.routes)
+        self.assertIn("signing_facade.get_assignment", self.routes)
+        self.assertIn("signing_facade.create_assignment", self.routes)
+        self.assertIn("signing_facade.update_assignment", self.routes)
 
     def test_multi_role_scope_is_canonical(self):
         self.assertIn("user_roles(actor)", self.facade)
@@ -51,7 +54,7 @@ class PgySigningConvergenceStage5Tests(unittest.TestCase):
             "signing.countersign_assignment",
             "signing.reopen_assignment",
         ):
-            self.assertNotIn(retired_root_marker, self.adapter)
+            self.assertNotIn(retired_root_marker, self.routes)
 
         for canonical_call in (
             "signing_facade.update_assignment",
@@ -59,7 +62,7 @@ class PgySigningConvergenceStage5Tests(unittest.TestCase):
             "signing_facade.countersign_assignment",
             "signing_facade.reopen_assignment",
         ):
-            self.assertIn(canonical_call, self.adapter)
+            self.assertIn(canonical_call, self.routes)
 
         for facade_marker in (
             'get_sign_mode(assignment_id) == "legacy"',

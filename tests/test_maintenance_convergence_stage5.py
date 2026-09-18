@@ -14,6 +14,7 @@ class MaintenanceConvergenceStage5Tests(unittest.TestCase):
     def setUpClass(cls):
         cls.adapter = ROOT.joinpath("backup_restore.py").read_text(encoding="utf-8")
         cls.canonical = ROOT.joinpath("teacher_app/maintenance/backup.py").read_text(encoding="utf-8")
+        cls.routes = ROOT.joinpath("teacher_app/maintenance/backup_routes.py").read_text(encoding="utf-8")
 
     def test_backup_runtime_ownership_is_canonical(self):
         self.assertIn("def build_backup(", self.canonical)
@@ -30,9 +31,11 @@ class MaintenanceConvergenceStage5Tests(unittest.TestCase):
             self.assertNotIn(marker, self.adapter)
 
     def test_legacy_backup_module_is_thin_adapter(self):
-        self.assertIn("maintenance_backup.build_backup", self.adapter)
-        self.assertIn("maintenance_backup.parse_backup_zip", self.adapter)
-        self.assertIn("maintenance_backup.restore_backup", self.adapter)
+        self.assertIn("teacher_app.maintenance", self.adapter)
+        self.assertIn("sys.modules[__name__]", self.adapter)
+        self.assertIn("maintenance_backup.build_backup", self.routes)
+        self.assertIn("maintenance_backup.parse_backup_zip", self.routes)
+        self.assertIn("maintenance_backup.restore_backup", self.routes)
         self.assertNotIn("hashlib", self.adapter)
         self.assertNotIn("zipfile", self.adapter)
 
@@ -59,7 +62,7 @@ class MaintenanceConvergenceStage5Tests(unittest.TestCase):
             "POST", "/api/maintenance/storage/mega/purge-root"
         )
         self.assertEqual(required, ("system.manage",))
-        self.assertIn('"PURGE-MEGA"', self.adapter)
+        self.assertIn('"PURGE-MEGA"', self.routes)
 
 
 if __name__ == "__main__":

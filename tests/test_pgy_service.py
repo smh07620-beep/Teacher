@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
+import schema_migrations
 from teacher_app.common.db import execute, fetch_one, transaction
 from teacher_app.common.errors import ApiError
 from teacher_app.pgy import repository as repo
@@ -21,6 +22,7 @@ class PgyServiceTests(unittest.TestCase):
         self.previous_sqlite_path = os.environ.get("TEACHER_SQLITE_PATH")
         os.environ["TEACHER_SQLITE_PATH"] = str(self.db_path)
         with transaction() as (conn, kind):
+            schema_migrations._baseline(conn, kind)
             repo.init_schema(conn, kind)
             self._insert_user(conn, "student1", "學員一", "S001", "student", "grpBio")
             self._insert_user(conn, "teacher1", "教師一", "T001", "clinical_teacher", "grpBio")
@@ -53,8 +55,10 @@ class PgyServiceTests(unittest.TestCase):
     def _insert_user(conn, username, display_name, emp_id, role, group):
         execute(
             conn,
-            "INSERT INTO user_accounts (username,display_name,emp_id,role,preferred_group,active) VALUES (?,?,?,?,?,1)",
-            (username, display_name, emp_id, role, group),
+            "INSERT INTO user_accounts "
+            "(username,password_hash,display_name,emp_id,role,preferred_area,preferred_group,active,session_version,created_at,updated_at,last_login_at) "
+            "VALUES (?,?,?,?,?,?,?,1,1,?,?,?)",
+            (username, "", display_name, emp_id, role, "pgy", group, "test", "test", ""),
         )
 
     def _seed_assignment(self, status: str, *, group="grpBio", teacher="teacher1") -> str:

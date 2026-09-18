@@ -1,14 +1,16 @@
 import unittest
 from pathlib import Path
 
+from pgy_frontend import ASSET_MANIFEST
+
 ROOT = Path(__file__).parents[1]
 
 
 class Phase3AdminMaterialUploadTests(unittest.TestCase):
     def test_upload_module_loads_after_jobs_override(self):
-        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
-        jobs_pos = frontend.index('/admin-jobs.js?v=7107')
-        upload_pos = frontend.index('/admin-material-upload.js?v=7108')
+        body = ASSET_MANIFEST["system"]["body"]
+        jobs_pos = body.index('/admin-jobs.js')
+        upload_pos = body.index('/admin-material-upload.js')
         self.assertLess(jobs_pos, upload_pos)
 
     def test_upload_module_preserves_global_contracts(self):

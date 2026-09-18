@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
+import schema_migrations
 from teacher_app.common.db import (
     execute,
     fetch_one,
@@ -55,6 +56,10 @@ class PgySigning66Tests(
             conn,
             kind,
         ):
+            schema_migrations._baseline(
+                conn,
+                kind,
+            )
             repo.init_schema(
                 conn,
                 kind,
@@ -223,20 +228,31 @@ class PgySigning66Tests(
             INSERT INTO user_accounts
             (
                 username,
+                password_hash,
                 display_name,
                 emp_id,
                 role,
+                preferred_area,
                 preferred_group,
-                active
+                active,
+                session_version,
+                created_at,
+                updated_at,
+                last_login_at
             )
-            VALUES (?,?,?,?,?,1)
+            VALUES (?,?,?,?,?,?,?,1,1,?,?,?)
             """,
             (
                 username,
+                "",
                 name,
                 emp_id,
                 role,
+                "pgy",
                 group,
+                "test",
+                "test",
+                "",
             ),
         )
 

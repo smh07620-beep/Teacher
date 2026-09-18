@@ -19,7 +19,7 @@ def module_functions(path):
 
 class RootMirrorPolicyTests(unittest.TestCase):
     def test_ownership_matrix_records_canonical_and_deferred_domains(self):
-        document = ROOT.joinpath("ARCHITECTURE_ROOT_MIRROR_CLEANUP.md").read_text(encoding="utf-8")
+        document = ROOT.joinpath("ARCHITECTURE.md").read_text(encoding="utf-8")
         for marker in (
             "pgy_app:app",
             "teacher_app.auth.service",
@@ -30,7 +30,9 @@ class RootMirrorPolicyTests(unittest.TestCase):
             "teacher_app.courses.service",
             "teacher_app.assessments.service",
             "Converged read/data ownership",
-            "Deferred storage debt",
+            "teacher_app.storage.providers",
+            "teacher_app.worker.repository",
+            "teacher_app.worker.routes",
             "Frozen / converged",
             "professional_title",
             "responsibility_tags",
@@ -38,7 +40,7 @@ class RootMirrorPolicyTests(unittest.TestCase):
             self.assertIn(marker, document)
 
     def test_live_auth_routes_are_thin_canonical_delegates_without_duplicate_legacy_impls(self):
-        functions = module_functions(ROOT / "app.py")
+        functions = module_functions(ROOT / "teacher_app" / "legacy_host.py")
         expected_calls = {
             "api_auth_me": "auth_routes.me",
             "api_auth_login": "auth_routes.login",
@@ -73,7 +75,10 @@ class RootMirrorPolicyTests(unittest.TestCase):
         self.assertNotIn("@app.", source)
 
     def test_pgy_controller_is_thin_canonical_service_adapter(self):
-        source = (ROOT / "pgy_workflow.py").read_text(encoding="utf-8")
+        adapter = (ROOT / "pgy_workflow.py").read_text(encoding="utf-8")
+        source = (ROOT / "teacher_app" / "pgy" / "routes_legacy.py").read_text(encoding="utf-8")
+        self.assertIn("teacher_app.pgy", adapter)
+        self.assertNotIn("@app.", adapter)
         self.assertIn("from teacher_app.pgy import repository as pgy_repo", source)
         self.assertIn("from teacher_app.pgy import service as pgy_service", source)
         self.assertIn("pgy_repo.init_schema(conn, kind)", source)
@@ -106,17 +111,22 @@ class RootMirrorPolicyTests(unittest.TestCase):
 
     def test_redundant_pgy_atomic_patch_layer_is_retired(self):
         self.assertFalse((ROOT / "pgy_atomic.py").exists())
-        source = (ROOT / "pgy_app.py").read_text(encoding="utf-8")
-        self.assertNotIn("register_pgy_atomic_workflow", source)
-        self.assertNotIn("from pgy_atomic import", source)
-        self.assertIn("app = register_pgy_workflow(legacy_app)", source)
-        self.assertIn("app = register_pgy_signing_66(legacy_app)", source)
+        entrypoint = (ROOT / "pgy_app.py").read_text(encoding="utf-8")
+        factory = (ROOT / "teacher_app" / "factory.py").read_text(encoding="utf-8")
+        self.assertNotIn("register_pgy_atomic_workflow", entrypoint + factory)
+        self.assertNotIn("from pgy_atomic import", entrypoint + factory)
+        self.assertIn("from teacher_app import create_app", entrypoint)
+        self.assertIn("app = create_app()", entrypoint)
 
     def test_production_entrypoint_stays_composition_only(self):
         source = (ROOT / "pgy_app.py").read_text(encoding="utf-8")
-        self.assertIn("import app as legacy_app", source)
-        self.assertIn("app = register_rbac_681(legacy_app)", source)
-        self.assertIn("app = register_sensitive_elevation_69(legacy_app)", source)
+        factory = (ROOT / "teacher_app" / "factory.py").read_text(encoding="utf-8")
+        self.assertIn("from teacher_app import create_app", source)
+        self.assertIn("app = create_app()", source)
+        self.assertNotIn("legacy_app", source)
+        self.assertNotIn("legacy_host", factory)
+        self.assertIn("app = register_rbac_681(app)", factory)
+        self.assertIn("app = register_sensitive_elevation(app)", factory)
         for name in (
             "register_legacy_material_routes",
             "register_legacy_course_routes",
@@ -136,10 +146,11 @@ class RootMirrorPolicyTests(unittest.TestCase):
         root_mirrors = {path.name for path in ROOT.iterdir() if path.is_file()} & mirror_names
         self.assertEqual(root_mirrors, set())
 
-        app_source = (ROOT / "app.py").read_text(encoding="utf-8")
-        self.assertIn('STATIC_DIR = BASE_DIR / "static"', app_source)
+        config_source = (ROOT / "teacher_app" / "config.py").read_text(encoding="utf-8")
+        page_source = (ROOT / "teacher_app" / "frontend" / "pages.py").read_text(encoding="utf-8")
+        self.assertIn('STATIC_DIR = BASE_DIR / "static"', config_source)
         for route in ("index.html", "area-internal.html", "area-pgy.html", "login.html", "system.html"):
-            self.assertIn(f'send_from_directory(STATIC_DIR, "{route}")', app_source)
+            self.assertIn(f'send_from_directory(static_dir, "{route}")', page_source)
 
 
 if __name__ == "__main__":

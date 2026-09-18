@@ -2,10 +2,9 @@
 import datetime as dt
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
-from flask import Flask
+from flask import Flask, g
 
 from teacher_app.command_center import service
 from teacher_app.command_center.routes import register_training_command_center
@@ -91,8 +90,12 @@ class TrainingCommandCenterRouteTests(unittest.TestCase):
     def make_client(self, user):
         app = Flask(__name__)
         app.config.update(TESTING=True, SECRET_KEY="test")
-        base = SimpleNamespace(app=app, _current_user=lambda: user)
-        register_training_command_center(base)
+
+        @app.before_request
+        def bind_actor():
+            g.teacher_user = user
+
+        register_training_command_center(app)
         return app.test_client()
 
     def test_route_is_read_only_and_returns_summary(self):
@@ -115,8 +118,8 @@ class TrainingCommandCenterFrontendTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.ui = ROOT.joinpath("static", "training-command-center-71.js").read_text(encoding="utf-8")
-        cls.frontend = ROOT.joinpath("pgy_frontend.py").read_text(encoding="utf-8")
-        cls.entrypoint = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
+        cls.frontend = ROOT.joinpath("teacher_app", "frontend", "assets.py").read_text(encoding="utf-8")
+        cls.entrypoint = ROOT.joinpath("teacher_app", "factory.py").read_text(encoding="utf-8")
         cls.matrix = ROOT.joinpath("RC_FEATURE_UI_COVERAGE_MATRIX.md").read_text(encoding="utf-8")
 
     def test_ui_is_compact_read_only_and_audience_aware(self):
@@ -133,10 +136,10 @@ class TrainingCommandCenterFrontendTests(unittest.TestCase):
     def test_asset_and_backend_are_composed_with_fresh_cache_key(self):
         self.assertIn("register_training_command_center", self.entrypoint)
         self.assertIn("register_training_audience_71", self.entrypoint)
-        self.assertIn("/training-command-center-71.js?v=7113", self.frontend)
+        self.assertIn('"/training-command-center-71.js"', self.frontend)
         self.assertLess(
-            self.frontend.index("/workspace-shell-70.js?v=7114"),
-            self.frontend.index("/training-command-center-71.js?v=7113"),
+            self.frontend.index('"/workspace-shell-70.js"'),
+            self.frontend.index('"/training-command-center-71.js"'),
         )
 
     def test_rc_matrix_records_71_m1(self):

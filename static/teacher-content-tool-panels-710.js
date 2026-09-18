@@ -7,7 +7,6 @@
 
   const STUDIO_ID='teacher-content-studio-71';
   const BODY_ID='teacher-content-studio-body-71';
-  const originalExamAction=window.teacherContentStudioExamAction;
   const originalToggleQuizPanel=window.toggleQuizQuestionsPanel;
   const mountState={node:null,placeholder:null,catId:'',kind:''};
 
@@ -161,12 +160,8 @@
   }
   removeLegacyCloseControls();
 
-  window.teacherContentStudioExamAction=function(action,catId){
-    if(action==='ai')return openAiTool(catId);
-    if(action==='questions')return openQuestionManager(catId);
-    restoreMountedTool();
-    return typeof originalExamAction==='function'?originalExamAction(action,catId):undefined;
-  };
+  window.TeacherContentStudio71?.registerExamActions?.(['ai'],(_action,catId)=>openAiTool(catId));
+  window.TeacherContentStudio71?.registerExamActions?.(['questions'],(_action,catId)=>openQuestionManager(catId));
 
   window.TeacherContentToolPanels710={
     restore:restoreMountedTool,

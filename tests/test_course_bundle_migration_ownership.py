@@ -8,7 +8,7 @@ ROOT = Path(__file__).parents[1]
 class CourseBundleMigrationOwnershipTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.schema = ROOT.joinpath("schema_migrations.py").read_text(encoding="utf-8")
+        cls.schema = ROOT.joinpath("teacher_app/maintenance/migrations.py").read_text(encoding="utf-8")
         cls.bundle = ROOT.joinpath("course_bundle_72.py").read_text(encoding="utf-8")
         cls.followup = ROOT.joinpath("course_bundle_followup_73.py").read_text(encoding="utf-8")
         cls.canonical_followup = ROOT.joinpath(

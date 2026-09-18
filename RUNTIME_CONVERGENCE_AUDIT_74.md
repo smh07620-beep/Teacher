@@ -25,7 +25,7 @@ This audit distinguishes real duplicate implementations from intentionally separ
 | DOCX templates/results | document template backend + `static/admin-doc-templates.js` / results export | local DOCX fallback state in `system-admin.js` | Compatibility fallback still required | Keep until separately migrated/tested |
 | Worker/jobs | worker backend + `static/worker-status-70.js`, `static/admin-jobs.js` | material upload status | Operations vs authoring | Keep |
 | `system-admin.js` | no new product ownership | shared compatibility state/helpers and not-yet-retired fallbacks | Compatibility shell | Delete only functions proven ownerless; keep `getAdminKey()` seam and DOCX fallback until migrated |
-| `admin-compat-facade.js` | none | cached/old global routing | Compatibility shell | Keep thin and business-logic free for one cycle |
+| `admin-compat-facade.js` | none | historical Course Wizard aliases | Removed | Raw HTML now calls `courseWizard681*` directly |
 
 ## 7.4 convergence decisions
 
@@ -34,18 +34,17 @@ This audit distinguishes real duplicate implementations from intentionally separ
 3. Question CRUD, delete, bulk delete, filters and inline editing are canonical only in `admin-question-editor-ui.js`, `admin-question-actions.js`, and `admin-question-panel.js`.
 4. AI candidate generation/import is canonical only in `admin-ai-questions.js`.
 5. Blueprint snapshots and item analytics move to `assessment-advanced-74.js` because those capabilities had no other frontend owner.
-6. `assessment-681.js` remains temporarily as a no-API compatibility router for cached callers. `question-authoring-ux-71.js` remains temporarily as a no-op retirement marker. Neither may regain UI or mutation ownership.
+6. Retired compatibility assets are physically removed once all live callers are canonicalized: `assessment-681.js`, `question-authoring-ux-71.js`, `admin-compat-facade.js`, and `runtime-escape-guard-7111.js` no longer ship in the runtime.
 7. The next physical cleanup target is dead fallback implementation inside `system-admin.js`; deletion must preserve the tested session-RBAC compatibility seam and local DOCX fallback state until their ownership is separately migrated.
 
 ## Release gate added by this audit
 
 A release candidate fails convergence if:
 
-- `assessment-681.js` contains assessment UI rendering or mutation API paths;
-- `question-authoring-ux-71.js` contains the retired `qb681-*` drawer contract or question APIs;
+- a removed compatibility asset is reintroduced instead of calling its canonical owner directly;
 - `assessment-advanced-74.js` calls AI generation or exam/question CRUD mutation endpoints;
 - canonical question/exam/AI owner files lose their expected management functions;
-- a new product workflow is implemented in `system-admin.js` or `admin-compat-facade.js`.
+- a new product workflow is implemented in `system-admin.js` or another compatibility shim.
 
 ## Final skeleton cleanup result
 

@@ -8,6 +8,7 @@ import uuid
 from typing import Any, Mapping
 
 from teacher_app.assessments import repository as assessment_repository
+from teacher_app.common.auth import normalize_role
 from teacher_app.common.errors import ApiError
 from teacher_app.exams import grading
 from teacher_app.exams import repository as repo
@@ -28,8 +29,8 @@ def _username(user: Mapping[str, Any]) -> str:
     return _text(user.get("username"), 100).lower()
 
 
-def _role(base, user: Mapping[str, Any]) -> str:
-    return base.normalize_role(user.get("role", "student"))
+def _role(user: Mapping[str, Any]) -> str:
+    return normalize_role(user.get("role", "student"))
 
 
 def require_user(user: Mapping[str, Any] | None) -> Mapping[str, Any]:
@@ -38,7 +39,7 @@ def require_user(user: Mapping[str, Any] | None) -> Mapping[str, Any]:
     return user
 
 
-def _draw_questions(_base, category: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _draw_questions(category: Mapping[str, Any]) -> list[dict[str, Any]]:
     category_id = str(category.get("id") or "")
     questions = [
         dict(question)
@@ -93,7 +94,14 @@ def attempt_response(attempt: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def start_attempt(base, user: Mapping[str, Any] | None, data: Mapping[str, Any]) -> dict[str, Any]:
+def start_attempt(base_or_user, user_or_data, data: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    if data is None:
+        base = None
+        user = base_or_user
+        data = user_or_data
+    else:
+        base = base_or_user
+        user = user_or_data
     actor = require_user(user)
     category_id = _text(data.get("quizCategoryId") or data.get("categoryId"), 100)
     if not category_id:
@@ -101,7 +109,7 @@ def start_attempt(base, user: Mapping[str, Any] | None, data: Mapping[str, Any])
     category = assessment_repository.get_category_full(category_id)
     if not category or not category.get("active", True):
         raise ApiError("CATEGORY_NOT_FOUND", "找不到可使用的考卷。", 404)
-    questions = _draw_questions(base, category)
+    questions = _draw_questions(category)
     if not questions:
         raise ApiError("NO_ACTIVE_QUESTIONS", "此考卷目前沒有可作答的啟用題目。", 409)
     try:
@@ -137,23 +145,39 @@ def _owned_started_attempt(conn, kind: str, user: Mapping[str, Any], attempt_id:
     return attempt
 
 
-def resume_attempt(base, user: Mapping[str, Any] | None, attempt_id: str) -> dict[str, Any]:
+def resume_attempt(base_or_user, user_or_attempt_id, attempt_id: str | None = None) -> dict[str, Any]:
+    if attempt_id is None:
+        base = None
+        user = base_or_user
+        attempt_id = user_or_attempt_id
+    else:
+        base = base_or_user
+        user = user_or_attempt_id
     actor = require_user(user)
-    conn, kind = base._db_conn()
+    conn, kind = repo._connect(base)
     try:
         return attempt_response(_owned_started_attempt(conn, kind, actor, attempt_id))
     finally:
         conn.close()
 
 
-def submit_attempt(base, user: Mapping[str, Any] | None, attempt_id: str, data: Mapping[str, Any]) -> dict[str, Any]:
+def submit_attempt(base_or_user, user_or_attempt_id, attempt_id_or_data, data: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    if data is None:
+        base = None
+        user = base_or_user
+        attempt_id = user_or_attempt_id
+        data = attempt_id_or_data
+    else:
+        base = base_or_user
+        user = user_or_attempt_id
+        attempt_id = attempt_id_or_data
     actor = require_user(user)
     answers = data.get("answers")
     if not isinstance(answers, list):
         raise ApiError("INVALID_ANSWERS", "作答資料格式不正確。", 400)
     evaluator_name = _text(data.get("evaluatorName"), 100)
     evaluator_title = _text(data.get("evaluatorTitle"), 100)
-    examinee_role = _text(data.get("examineeRole"), 100) or _text(_role(base, actor), 100)
+    examinee_role = _text(data.get("examineeRole"), 100) or _text(_role(actor), 100)
     if not evaluator_name or not evaluator_title:
         raise ApiError("EVALUATOR_REQUIRED", "請填寫考核人員姓名與職稱。", 400)
     try:

@@ -2,6 +2,8 @@
 import unittest
 from pathlib import Path
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).parents[1]
 
@@ -9,13 +11,12 @@ ROOT = Path(__file__).parents[1]
 class QuestionAuthoringUx71Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.retired_overlay = ROOT.joinpath("static", "question-authoring-ux-71.js").read_text(encoding="utf-8")
         cls.editor = ROOT.joinpath("static", "admin-question-editor-ui.js").read_text(encoding="utf-8")
         cls.actions = ROOT.joinpath("static", "admin-question-actions.js").read_text(encoding="utf-8")
         cls.panel = ROOT.joinpath("static", "admin-question-panel.js").read_text(encoding="utf-8")
-        cls.assessment_compat = ROOT.joinpath("static", "assessment-681.js").read_text(encoding="utf-8")
+        cls.advanced = ROOT.joinpath("static", "assessment-advanced-74.js").read_text(encoding="utf-8")
         cls.learner = ROOT.joinpath("static", "learner-ui-cleanup-71.js").read_text(encoding="utf-8")
-        cls.learner_css = ROOT.joinpath("static", "learner-layout-stability-73.css").read_text(encoding="utf-8")
+        cls.learner_css = ROOT.joinpath("static", "learner.css").read_text(encoding="utf-8")
         cls.frontend = ROOT.joinpath("pgy_frontend.py").read_text(encoding="utf-8")
         cls.workflow = ROOT.joinpath(".github", "workflows", "phase3-pgy-checks.yml").read_text(encoding="utf-8")
 
@@ -36,21 +37,12 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
         self.assertIn("adminDeleteQuizCategory", self.panel)
         self.assertIn("頁籤內所有題目也會一併刪除", self.panel)
 
-    def test_old_question_drawer_overlay_is_physically_retired(self):
-        self.assertIn("Retired by Teacher runtime convergence", self.retired_overlay)
-        self.assertIn("canonicalOwner", self.retired_overlay)
-        for forbidden in (
-            "qb681-", "assessment681SaveQuestion", "assessment681Delete",
-            "fetch(", "/api/question-bank", "question-bank-drawer",
-        ):
-            self.assertNotIn(forbidden, self.retired_overlay)
+    def test_old_question_drawer_overlay_is_physically_removed(self):
+        self.assertFalse(ROOT.joinpath("static", "question-authoring-ux-71.js").exists())
 
-    def test_old_assessment_router_no_longer_creates_second_management_surface(self):
-        self.assertIn("Compatibility router after Teacher runtime convergence", self.assessment_compat)
-        self.assertIn("openCanonicalAssessment", self.assessment_compat)
-        self.assertNotIn("insertAdjacentHTML", self.assessment_compat)
-        self.assertNotIn("assessment-681-body", self.assessment_compat)
-        self.assertNotIn("question-bank-drawer", self.assessment_compat)
+    def test_old_assessment_router_is_removed_and_advanced_tools_remain(self):
+        self.assertFalse(ROOT.joinpath("static", "assessment-681.js").exists())
+        self.assertIn("AssessmentAdvanced74", self.advanced)
 
     def test_learner_page_removes_redundant_instruction_blocks_without_observer(self):
         self.assertIn("const intro = slidesPanel.querySelector(':scope > section.edu-card')", self.learner)
@@ -63,13 +55,17 @@ class QuestionAuthoringUx71Tests(unittest.TestCase):
         self.assertIn('#learning-start', self.learner_css)
         self.assertIn('#course-overview > .edu-card .edu-kicker', self.learner_css)
 
-    def test_compatibility_assets_remain_syntax_checked_for_one_cycle(self):
-        self.assertIn('/question-authoring-ux-71.js?v=7133', self.frontend)
-        self.assertIn('/learner-layout-stability-73.css?v=7300', self.frontend)
-        self.assertIn('/learner-ui-cleanup-71.js?v=7132', self.frontend)
-        self.assertIn('node --check static/question-authoring-ux-71.js', self.workflow)
-        self.assertIn('node --check static/assessment-681.js', self.workflow)
-        self.assertIn('node --check static/assessment-advanced-74.js', self.workflow)
+    def test_retired_compatibility_assets_are_absent_from_runtime(self):
+        body = ASSET_MANIFEST["system"]["body"]
+        head = ASSET_MANIFEST["system"]["head"]
+        self.assertNotIn('/question-authoring-ux-71.js', body)
+        self.assertNotIn('/learner-layout-stability-73.css', head)
+        self.assertIn('/learner-ui-cleanup-71.js', body)
+        self.assertFalse(ROOT.joinpath("static", "learner-layout-stability-73.css").exists())
+        self.assertFalse(ROOT.joinpath("static", "question-authoring-ux-71.js").exists())
+        self.assertFalse(ROOT.joinpath("static", "assessment-681.js").exists())
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
+        self.assertIn("node --check", self.workflow)
 
 
 if __name__ == "__main__":

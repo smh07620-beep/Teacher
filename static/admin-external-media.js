@@ -11,7 +11,7 @@
     return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   }
 
-  window.openExternalMaterialDrawer = async function(){
+  window.openExternalMaterialLinkDrawer = async function(){
     const getKey = window.getAdminKey;
     if (typeof getKey !== 'function') return;
     const key = await getKey();
@@ -36,11 +36,11 @@
     }
   };
 
-  window.closeExternalMaterialDrawer = function(){
+  window.closeExternalMaterialLinkDrawer = function(){
     document.getElementById('external-material-drawer')?.classList.add('hidden');
   };
 
-  window.saveExternalMaterialLink = async function(){
+  window.saveExternalMaterialLinkToExisting = async function(){
     const getKey = window.getAdminKey;
     if (typeof getKey !== 'function') return;
     const key = await getKey();

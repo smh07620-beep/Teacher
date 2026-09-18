@@ -2,6 +2,7 @@ import datetime as dt
 import hashlib
 import io
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -12,6 +13,8 @@ import app as appmod
 import material_worker
 import pgy_app
 import schema_migrations
+from teacher_app.auth import service as auth_service
+from teacher_app.storage import providers
 
 
 ROOT = Path(__file__).parents[1]
@@ -22,6 +25,10 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.db_path = Path(self.temp.name) / "jobs.sqlite"
+        self.worker_runtime = pgy_app.app.extensions["teacher_worker_web_runtime"]
+        connection_patch = patch.object(self.worker_runtime, "connection_factory", self.connect)
+        connection_patch.start()
+        self.addCleanup(connection_patch.stop)
 
     def connect(self):
         conn = sqlite3.connect(self.db_path)
@@ -146,7 +153,7 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
 
     def test_worker_token_required_and_invalid_rejected(self):
         client = pgy_app.app.test_client()
-        with patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"):
+        with patch.dict(os.environ, {"MATERIAL_WORKER_TOKEN": "worker-secret"}):
             self.assertEqual(client.post("/api/material-worker/claim", json={"workerId": "w1"}).status_code, 401)
             self.assertEqual(client.post("/api/material-worker/claim", json={"workerId": "w1"}, headers={"Authorization": "Bearer wrong"}).status_code, 401)
 
@@ -154,7 +161,9 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         self.with_queue()
         appmod.create_material_job(job_id="claim-once", payload={"originalName": "lesson.txt"}, staging_backend="local", staging_key="", staging_path=str(Path(self.temp.name) / "missing"), source_sha256="a" * 64, source_bytes=1, material_id="m-claim", original_name="lesson.txt")
         client = pgy_app.app.test_client(); headers = {"Authorization": "Bearer worker-secret"}
-        with patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"):
+        with patch.dict(os.environ, {"MATERIAL_WORKER_TOKEN": "worker-secret"}), patch.object(
+            self.worker_runtime, "cleanup_budget_state", return_value=None
+        ):
             first = client.post("/api/material-worker/claim", json={"workerId": "worker-a", "capabilities": {}}, headers=headers)
             second = client.post("/api/material-worker/claim", json={"workerId": "worker-b", "capabilities": {}}, headers=headers)
             self.assertEqual(first.status_code, 200); self.assertEqual(second.status_code, 200)
@@ -169,7 +178,9 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         source.parent.mkdir(); source.write_text("small compatible upload", encoding="utf-8")
         appmod.create_material_job(job_id="small-source", payload={"originalName": "lesson.txt"}, staging_backend="local", staging_key="", staging_path=str(source), source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(), source_bytes=source.stat().st_size, material_id="m-small", original_name="lesson.txt")
         client = pgy_app.app.test_client(); headers = {"Authorization": "Bearer worker-secret"}
-        with patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"):
+        with patch.dict(os.environ, {"MATERIAL_WORKER_TOKEN": "worker-secret"}), patch.object(
+            self.worker_runtime, "cleanup_budget_state", return_value=None
+        ):
             claim = client.post("/api/material-worker/claim", json={"workerId": "worker-a"}, headers=headers)
             self.assertEqual(claim.status_code, 200)
             self.assertEqual(claim.get_json()["job"]["downloadPath"], "/api/material-worker/small-source/source")
@@ -185,14 +196,21 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         appmod.create_material_job(job_id="complete-job", payload={"originalName": "lesson.txt", "materialId": "m-complete"}, staging_backend="r2", staging_key="_staging/material-jobs/complete-job/source.txt", staging_path="", source_sha256="a" * 64, source_bytes=1, material_id="m-complete", original_name="lesson.txt")
         appmod._update_material_job("complete-job", status="processing", worker_id="worker-a")
         client = pgy_app.app.test_client(); headers = {"Authorization": "Bearer worker-secret"}
-        with patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"), patch.object(appmod, "commit_material_job_result", return_value={"id": "m-complete"}), patch.object(appmod, "delete_material_job_staging") as deleted:
+        with patch.dict(os.environ, {"MATERIAL_WORKER_TOKEN": "worker-secret"}), patch.object(
+            self.worker_runtime, "commit_result", return_value={"id": "m-complete"}
+        ), patch.object(self.worker_runtime, "delete_staging") as deleted, patch.object(
+            self.worker_runtime, "sync_media_processing_metadata", return_value=None
+        ):
             complete = client.post("/api/material-worker/complete-job/complete", json={"workerId": "worker-a", "result": {"storageBackend": "mega", "storageKey": "/materials/m-complete/source.txt"}}, headers=headers)
         self.assertEqual(complete.status_code, 200, complete.get_data(as_text=True)); deleted.assert_called_once()
         self.assertEqual(appmod.get_material_job("complete-job")["status"], "completed")
 
     def test_direct_upload_missing_r2_is_graceful(self):
         client = pgy_app.app.test_client()
-        with patch.object(appmod, "require_admin", return_value=None), patch.object(appmod, "MATERIAL_DIRECT_UPLOAD_ENABLED", True), patch.object(appmod, "r2_is_configured", return_value=False):
+        actor = {"username": "admin", "role": "system_admin", "roles": ["system_admin"], "preferredGroup": "grpBio"}
+        with patch.object(auth_service, "current_user", return_value=actor), patch.dict(
+            os.environ, {"MATERIAL_DIRECT_UPLOAD_ENABLED": "true"}
+        ), patch.object(providers, "r2_is_configured", return_value=False):
             response = client.post("/api/material-upload/init", json={"filename": "movie.mp4", "size": 100, "sha256": "a" * 64}, headers={"Origin": "http://localhost"})
         self.assertEqual(response.status_code, 409)
 
@@ -206,7 +224,18 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
             def abort_multipart_upload(self, **_kwargs): return {}
             def delete_object(self, **_kwargs): return {}
         client = pgy_app.app.test_client(); headers = {"Origin": "http://localhost"}
-        with patch.object(appmod, "require_admin", return_value=None), patch.object(appmod, "MATERIAL_DIRECT_UPLOAD_ENABLED", True), patch.object(appmod, "MATERIAL_DIRECT_UPLOAD_MAX_MB", 2048), patch.object(appmod, "r2_is_configured", return_value=True), patch.object(appmod, "r2_client", return_value=FakeR2()), patch.object(appmod, "R2_BUCKET_NAME", "bucket"):
+        actor = {"username": "admin", "role": "system_admin", "roles": ["system_admin"], "preferredGroup": "grpBio"}
+        r2 = FakeR2()
+        with patch.object(auth_service, "current_user", return_value=actor), patch.dict(
+            os.environ,
+            {"MATERIAL_DIRECT_UPLOAD_ENABLED": "true", "MATERIAL_DIRECT_UPLOAD_MAX_MB": "2048"},
+        ), patch.object(providers, "r2_is_configured", return_value=True), patch.object(
+            providers, "r2_client", return_value=r2
+        ), patch.object(providers, "R2_BUCKET_NAME", "bucket"), patch.object(
+            self.worker_runtime, "release_reservation", return_value=None
+        ), patch.object(self.worker_runtime, "record_r2_object", return_value=None), patch.object(
+            self.worker_runtime, "record_r2_deleted", return_value=None
+        ), patch.object(self.worker_runtime, "sync_media_processing_metadata", return_value=None):
             init = client.post("/api/material-upload/init", json={"filename": "movie.mp4", "size": 20 * 1024 * 1024, "sha256": "a" * 64, "partSizeMb": 8}, headers=headers)
             self.assertEqual(init.status_code, 201, init.get_data(as_text=True))
             data = init.get_json(); self.assertEqual(len(data["parts"]), 3)
@@ -300,7 +329,17 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         r2 = FakeR2()
         client = pgy_app.app.test_client()
         headers = {"Origin": "http://localhost"}
-        with patch.object(appmod, "require_admin", return_value=None), patch.object(appmod, "MATERIAL_DIRECT_UPLOAD_ENABLED", True), patch.object(appmod, "MATERIAL_DIRECT_UPLOAD_MAX_MB", 2048), patch.object(appmod, "r2_is_configured", return_value=True), patch.object(appmod, "r2_client", return_value=r2), patch.object(appmod, "R2_BUCKET_NAME", "bucket"):
+        actor = {"username": "admin", "role": "system_admin", "roles": ["system_admin"], "preferredGroup": "grpBio"}
+        with patch.object(auth_service, "current_user", return_value=actor), patch.dict(
+            os.environ,
+            {"MATERIAL_DIRECT_UPLOAD_ENABLED": "true", "MATERIAL_DIRECT_UPLOAD_MAX_MB": "2048"},
+        ), patch.object(providers, "r2_is_configured", return_value=True), patch.object(
+            providers, "r2_client", return_value=r2
+        ), patch.object(providers, "R2_BUCKET_NAME", "bucket"), patch.object(
+            self.worker_runtime, "release_reservation", return_value=None
+        ), patch.object(self.worker_runtime, "record_r2_object", return_value=None), patch.object(
+            self.worker_runtime, "record_r2_deleted", return_value=None
+        ), patch.object(self.worker_runtime, "sync_media_processing_metadata", return_value=None):
             for filename in filenames:
                 init = client.post("/api/material-upload/init", json={"filename": filename, "size": size, "sha256": "a" * 64, "partSizeMb": 8}, headers=headers)
                 self.assertEqual(init.status_code, 201, init.get_data(as_text=True))
@@ -321,7 +360,9 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
                 job = appmod.get_material_job(data["jobId"], include_payload=True)
                 self.assertEqual(job["originalName"], filename)
                 self.assertEqual(job["payload"]["originalName"], filename)
-            with patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"):
+            with patch.dict(os.environ, {"MATERIAL_WORKER_TOKEN": "worker-secret"}), patch.object(
+                self.worker_runtime, "cleanup_budget_state", return_value=None
+            ):
                 claimed = client.post("/api/material-worker/claim", json={"workerId": "unicode-worker"}, headers={"Authorization": "Bearer worker-secret"})
         self.assertEqual(claimed.status_code, 200, claimed.get_data(as_text=True))
         self.assertEqual(claimed.get_json()["job"]["originalName"], filenames[0])

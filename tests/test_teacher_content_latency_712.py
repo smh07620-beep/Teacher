@@ -2,6 +2,8 @@ import subprocess
 import unittest
 from pathlib import Path
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).parents[1]
 
@@ -13,18 +15,15 @@ class TeacherContentLatency712Tests(unittest.TestCase):
         cls.frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
         cls.assessments = ROOT.joinpath('teacher_app/assessments/service.py').read_text(encoding='utf-8')
         cls.auth_service = ROOT.joinpath('teacher_app/auth/service.py').read_text(encoding='utf-8')
-        cls.migrations = ROOT.joinpath('schema_migrations.py').read_text(encoding='utf-8')
-        cls.legacy_app = ROOT.joinpath('app.py').read_text(encoding='utf-8')
+        cls.migrations = ROOT.joinpath('teacher_app/maintenance/migrations.py').read_text(encoding='utf-8')
+        cls.legacy_app = ROOT.joinpath('teacher_app/legacy_host.py').read_text(encoding='utf-8')
         cls.common_db = ROOT.joinpath('teacher_app/common/db.py').read_text(encoding='utf-8')
         cls.entrypoint = ROOT.joinpath('pgy_app.py').read_text(encoding='utf-8')
         cls.requirements = ROOT.joinpath('requirements.txt').read_text(encoding='utf-8')
 
     def test_latency_guard_is_injected_after_dedicated_panels(self):
-        self.assertIn('/teacher-content-latency-712.js?v=7120', self.frontend)
-        self.assertLess(
-            self.frontend.index('/teacher-content-tool-panels-710.js?v=7110'),
-            self.frontend.index('/teacher-content-latency-712.js?v=7120'),
-        )
+        body = ASSET_MANIFEST["system"]["body"]
+        self.assertLess(body.index('/teacher-content-tool-panels-710.js'), body.index('/teacher-content-latency-712.js'))
 
     def test_exam_lists_use_abort_and_dedup_cache(self):
         for marker in ('AbortController', 'FETCH_TIMEOUT_MS=15000', 'sessionStorage', 'inflight', 'warmCurrentScope'):
@@ -38,8 +37,9 @@ class TeacherContentLatency712Tests(unittest.TestCase):
     def test_exam_actions_do_not_use_legacy_force_refresh_path(self):
         for marker in ('openManualQuestion', 'openSettings', 'showSkeleton', 'waitForPanel'):
             self.assertIn(marker, self.latency)
-        self.assertIn("action==='question'||action==='image'||action==='video'", self.latency)
-        self.assertIn("action==='settings'", self.latency)
+        self.assertIn("['question','image','video']", self.latency)
+        self.assertIn("['settings']", self.latency)
+        self.assertIn('registerExamActions', self.latency)
 
     def test_assessment_list_cache_bridges_public_and_admin_reads(self):
         self.assertIn('_CATEGORY_LIST_CACHE_TTL_SECONDS = 15.0', self.assessments)

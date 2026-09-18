@@ -8,7 +8,7 @@ class RC79ContainerRuntimeRegressions(unittest.TestCase):
     def src(self,path): return (ROOT/path).read_text(encoding="utf-8")
 
     def test_home_outer_surface_is_flat(self):
-        css=self.src("static/portal-v56.css")
+        css=self.src("static/portal.css")
         self.assertIn(".v56-shell{width:100%;margin:0;background:transparent;border:0;border-radius:0;box-shadow:none",css)
         self.assertNotIn(".v56-shell{width:min(1380px,calc(100% - 36px));margin:18px auto 0",css)
 
@@ -19,9 +19,9 @@ class RC79ContainerRuntimeRegressions(unittest.TestCase):
 
     def test_exam_container_cards_have_single_delegated_handler(self):
         studio=self.src("static/teacher-content-studio-71.js")
-        self.assertIn("window.teacherContentStudioExamAction=(action,catId)=>runExamAction(action,catId)",studio)
+        self.assertIn("window.teacherContentStudioExamAction=(action,catId)=>dispatchExamAction(action,catId)",studio)
         self.assertIn("dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId)",studio)
-        self.assertIn("const handler=window.teacherContentStudioExamAction",studio)
+        self.assertIn("const handler=examActionHandlers.get(String(action))",studio)
         self.assertNotIn('onclick="event.stopPropagation();window.teacherContentStudioExamAction',studio)
         for action in ("question","image","video","ai","questions","settings"):
             self.assertIn(f'data-exam-action="{action}"',studio)

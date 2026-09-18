@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from teacher_app.common.auth import (
     has_permission,
@@ -12,6 +13,24 @@ from teacher_app.common.errors import ApiError
 class MultiRole66Tests(
     unittest.TestCase
 ):
+    def test_root_adapter_no_longer_owns_account_sql_or_schema(self):
+        root = Path(__file__).parents[1]
+        adapter = root.joinpath("multi_role_66.py").read_text(encoding="utf-8")
+        routes = root.joinpath("teacher_app/auth/account_routes.py").read_text(encoding="utf-8")
+        accounts = root.joinpath("teacher_app/auth/accounts.py").read_text(encoding="utf-8")
+        repository = root.joinpath("teacher_app/auth/repository.py").read_text(encoding="utf-8")
+        self.assertIn("from teacher_app.auth.account_routes import register_multi_role_66", adapter)
+        self.assertIn("from teacher_app.auth import accounts", routes)
+        self.assertNotIn("from flask", adapter)
+        self.assertNotIn("ALTER TABLE user_accounts", adapter)
+        self.assertNotIn("SELECT *", adapter)
+        self.assertNotIn("INSERT INTO user_accounts", adapter)
+        self.assertNotIn("UPDATE user_accounts", adapter)
+        self.assertIn("def create_account", accounts)
+        self.assertIn("def update_account", accounts)
+        self.assertIn("def create_user", repository)
+        self.assertIn("def update_user", repository)
+
     def test_legacy_single_role_still_works(self):
         user = {
             "role": "teacher"

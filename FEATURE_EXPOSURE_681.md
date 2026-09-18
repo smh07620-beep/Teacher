@@ -20,9 +20,9 @@ a supported hand-entered URL surface.
 | Exam workspace | legacy category/question APIs | unified assessment workspace | session RBAC mutation | UI contract | Usable |
 | Admin elevation | elevation API | automatic retry only for account/storage/backup/destructive system actions | privileged role + 15 min TTL | elevation boundary tests | Usable |
 | Worker/jobs/retry | worker APIs | material jobs panel | worker token / session RBAC | worker tests | Usable |
-| Question Bank 2.0 drafts | `/api/question-bank/*` | `assessment-681.js` 題庫／AI 出題／Review queue | session RBAC | question-bank integration + UI contract | Usable |
-| Blueprint snapshots | `/api/exam-blueprints/*` | `assessment-681.js` 出題藍圖 tab | session RBAC | quota + UI payload tests | Usable |
-| Item analytics | `/api/questions/<id>/analytics` | `assessment-681.js` 題目分析 tab | session RBAC | analytics contract tests | Usable |
+| Question Bank 2.0 drafts | `/api/question-bank/*` | `admin-question-bank.js` + `admin-ai-questions.js` canonical 題庫／AI flow | session RBAC | question-bank integration + UI contract | Usable |
+| Blueprint snapshots | `/api/exam-blueprints/*` | `assessment-advanced-74.js` 出題藍圖 | session RBAC | quota + UI payload tests | Usable |
+| Item analytics | `/api/questions/<id>/analytics` | `assessment-advanced-74.js` 題目分析 | session RBAC | analytics contract tests | Usable |
 
 ## Deliberate internal surfaces
 

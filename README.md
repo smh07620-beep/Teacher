@@ -29,7 +29,7 @@ bash run_web.sh
 
 教材建立從後台的「＋ 建立教學內容」統一入口開始。舊教材上傳 DOM 仍保留作 canonical executor，但不是第二套一般使用者建立入口。
 
-Render Web 不執行 LibreOffice / FFmpeg 轉檔 worker，也不 fork `material_worker.py`。教材背景處理由另外運行的本機／院內 Worker 經 HTTPS worker API 處理：
+Render Web 不 fork `material_worker.py`；教材的背景轉檔、最佳化與正式儲存由另外運行的本機／院內 Worker 經 HTTPS worker API 處理：
 
 ```text
 python -u material_worker.py
@@ -37,7 +37,9 @@ python -u material_worker.py
 
 Worker 使用獨立的 `MATERIAL_WORKER_TOKEN`，不需要 production `DATABASE_URL`，也不持有學員 session。
 
-大型檔案採 Browser → Cloudflare R2 multipart direct upload。R2 是 shared staging；Worker claim job 後再下載、驗證 byte count / SHA-256 / 檔案格式並處理。小型檔案保留 Web compatible upload path，但轉檔仍由 Worker 負責。正式內容儲存沿用目前 provider policy；相關細節請見 `ARCHITECTURE_6_7.md` 與 `LOCAL_WORKER_6_7.md`。
+目前 Web image 仍不能移除全部媒體工具。`/api/slides/upload` 的同步相容路徑仍可用 LibreOffice / qpdf 處理 Office/PDF；Groq 影片 AI 出題仍在 Web process 以 FFmpeg/ffprobe 擷取音訊與代表畫面；舊 Office 格式的 AI 文字擷取也會使用 LibreOffice。MEGAcmd 則同時服務 Web 端的 MEGA 教材讀取、下載、刪除與容量狀態查詢。等這些 Web caller 全部遷移後，才可把 LibreOffice / FFmpeg 從 Web Docker image 拆到 Worker-only 安裝流程。
+
+大型檔案採 Browser → Cloudflare R2 multipart direct upload。R2 是 shared staging；Worker claim job 後再下載、驗證 byte count / SHA-256 / 檔案格式並處理。小型檔案保留 Web compatible upload path，但轉檔仍由 Worker 負責。正式內容儲存沿用目前 provider policy；相關細節請見 `ARCHITECTURE.md` 與 `LOCAL_WORKER_6_7.md`。
 
 ## 考試與成績
 
@@ -59,7 +61,7 @@ Worker 使用獨立的 `MATERIAL_WORKER_TOKEN`，不需要 production `DATABASE_
 - 外部影音／連結
 - 顯微鏡／血球 Atlas
 
-Course Wizard 的 canonical frontend owner 是 `static/course-wizard-681.js`；Course Bundle backend 由 `course_bundle_72.py` 與 `course_bundle_followup_73.py` 負責。`static/system-admin.js` 僅保留 legacy compatibility，不應新增產品邏輯。詳見 `ARCHITECTURE_FINAL_CONVERGENCE.md`。
+Course Wizard 的 canonical frontend owner 是 `static/course-wizard-681.js`；Course Bundle backend 由 `course_bundle_72.py` 與 `course_bundle_followup_73.py` 負責。`static/system-admin.js` 僅保留 legacy compatibility，不應新增產品邏輯。詳見 `ARCHITECTURE.md`。
 
 ## 本機開發
 
@@ -71,6 +73,18 @@ python -m flask --app pgy_app:app run --debug
 ```
 
 本機若不設定 `DATABASE_URL`，系統會使用 SQLite fallback。要測試正式 PostgreSQL 行為，請使用獨立測試資料庫，不要把 production credentials 寫入 repository。
+
+### 資料庫 migration 與帳號角色維運
+
+正式 Web entrypoint `pgy_app:app` 由 `teacher_app.create_app()` 建立應用；`teacher_app.maintenance.bootstrap` 先建立各 domain 的 pre-migration base schema，再由 `teacher_app.maintenance.migrations` 套用一次性 release migrations。`0064-baseline` 正式擁有 `user_accounts` 基礎表，R2 免費額度保護表由 `0067-r2-free-budget-guard` 建立；啟動流程不再另外重跑 R2 相容 DDL。
+
+帳號角色不會在 Web 啟動時自動變更。若維運人員需要明確授予既有帳號 `system_admin`，使用：
+
+```bash
+python -m teacher_app.maintenance.account_roles grant-system-admin USERNAME
+```
+
+此命令只更新已存在帳號的角色欄位，不建立帳號，也不修改密碼與個人資料。
 
 ## Render 部署必要設定
 
@@ -107,9 +121,8 @@ GitHub Actions 的 `Teacher release checks` 會執行 Python compile、完整 re
 ## 重要文件
 
 - `RC_FEATURE_UI_COVERAGE_MATRIX.md`：目前 RC 功能與 UI 覆蓋契約
-- `ARCHITECTURE_FINAL_CONVERGENCE.md`：Frontend/runtime ownership freeze
-- `ARCHITECTURE_ROOT_MIRROR_CLEANUP.md`：root adapter ownership policy
-- `ARCHITECTURE_6_7.md`：教材背景處理與 Render Scheme B-Free
+- `ARCHITECTURE.md`：目前 canonical architecture、runtime ownership 與 root freeze policy
+- `docs/archive/ARCHITECTURE_HISTORY.md`：6.5 / 6.6 / 6.7 歷史架構與 release contract
 - `LOCAL_WORKER_6_7.md`：院內／本機 Worker 設定
 - `VERSION` / `release_contract.py`：目前正式 release contract
 

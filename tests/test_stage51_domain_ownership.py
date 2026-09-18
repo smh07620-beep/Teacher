@@ -7,16 +7,16 @@ ROOT = Path(__file__).parents[1]
 
 class Stage51DomainOwnershipTests(unittest.TestCase):
     def test_production_composition_has_no_redundant_stage51_route_replacement(self):
-        source = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
+        source = ROOT.joinpath("teacher_app/factory.py").read_text(encoding="utf-8")
         for name in (
             "register_legacy_material_routes",
             "register_legacy_course_routes",
             "register_legacy_assessment_routes",
         ):
             self.assertNotIn(name, source)
-        self.assertIn("app = register_rbac_681(legacy_app)", source)
+        self.assertIn("app = register_rbac_681(app)", source)
 
-        compatibility_host = ROOT.joinpath("app.py").read_text(encoding="utf-8")
+        compatibility_host = ROOT.joinpath("teacher_app/legacy_host.py").read_text(encoding="utf-8")
         self.assertIn("canonical_materials.list_materials", compatibility_host)
         self.assertIn("canonical_courses.list_courses", compatibility_host)
         self.assertIn("canonical_assessments.list_categories", compatibility_host)

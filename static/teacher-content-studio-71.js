@@ -201,10 +201,17 @@
     host.innerHTML=`<div class="mx-auto max-w-4xl rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700"><div class="font-black">❌ 考卷功能暫時無法開啟</div><div class="mt-1">${esc(error?.message||String(error||'未知錯誤'))}</div><div class="mt-4 flex gap-2 flex-wrap"><button type="button" data-exam-open="${esc(catId)}" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 返回此考卷</button><button type="button" data-studio-action="exam" class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回考卷管理</button></div></div>`;
   }
 
+  const examActionHandlers=new Map();
+
+  function registerExamActions(actions,handler){
+    if(typeof handler!=='function')return;
+    (Array.isArray(actions)?actions:[actions]).forEach(action=>examActionHandlers.set(String(action),handler));
+  }
+
   function dispatchExamAction(action,catId){
-    const handler=window.teacherContentStudioExamAction;
+    const handler=examActionHandlers.get(String(action));
     try{
-      const result=typeof handler==='function'?handler(action,catId):runExamAction(action,catId);
+      const result=handler?handler(action,catId):runExamAction(action,catId);
       Promise.resolve(result).catch(error=>showExamActionFailure(catId,error));
     }catch(error){
       showExamActionFailure(catId,error);
@@ -445,11 +452,12 @@
     if(action==='materials-manager')return mountMaterialManagerInStudio();
     if(action==='material')return openMaterialUpload('standard');
     if(action==='video-material')return openMaterialUpload('video');
-    if(action==='external'){closeStudio();await window.openAdminWorkspace?.('course-materials');await window.openExternalMaterialDrawer?.();return;}
+    if(action==='external'){closeStudio();await window.openAdminWorkspace?.('course-materials');await window.openExternalMaterialCreateDrawer?.();return;}
     if(action==='atlas')return openAtlas();
   }
 
-  window.teacherContentStudioExamAction=(action,catId)=>runExamAction(action,catId);
+  window.teacherContentStudioExamAction=(action,catId)=>dispatchExamAction(action,catId);
+  window.TeacherContentStudio71=Object.freeze({registerExamActions});
   window.openTeacherContentExam=async function(catId){openStudio();await renderExamContainer(catId);};
 
   function hideMaterialExecutorNode(node){
@@ -473,7 +481,7 @@
     hideMaterialExecutorNode(document.getElementById('admin-atlas-fields'));
     hideMaterialExecutorNode(document.getElementById('admin-upload-btn')?.parentElement);
 
-    const external=[...root.querySelectorAll('button')].find(button=>(button.getAttribute('onclick')||'').includes('openExternalMaterialDrawer'));
+    const external=[...root.querySelectorAll('button')].find(button=>(button.getAttribute('onclick')||'').includes('openExternalMaterialCreateDrawer'));
     hideMaterialExecutorNode(external);
   }
 

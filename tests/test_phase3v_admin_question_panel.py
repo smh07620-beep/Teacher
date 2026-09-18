@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -9,7 +11,6 @@ class Phase3VAdminQuestionPanelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "static" / "admin-question-panel.js").read_text(encoding="utf-8")
-        cls.frontend = (ROOT / "pgy_frontend.py").read_text(encoding="utf-8")
         cls.workflow = (ROOT / ".github" / "workflows" / "phase3-pgy-checks.yml").read_text(encoding="utf-8")
 
     def test_preserves_question_panel_globals(self):
@@ -49,12 +50,9 @@ class Phase3VAdminQuestionPanelTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.source)
 
     def test_asset_loads_after_ai_runtime_and_is_syntax_checked(self):
-        ai_marker = '<script defer src="/admin-ai-questions.js?v=7109"></script>'
-        panel_marker = '<script defer src="/admin-question-panel.js?v=7121"></script>'
-        self.assertIn(ai_marker, self.frontend)
-        self.assertIn(panel_marker, self.frontend)
-        self.assertLess(self.frontend.index(ai_marker), self.frontend.index(panel_marker))
-        self.assertIn("node --check static/admin-question-panel.js", self.workflow)
+        body = ASSET_MANIFEST["system"]["body"]
+        self.assertLess(body.index('/admin-ai-questions.js'), body.index('/admin-question-panel.js'))
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
 
 
 if __name__ == "__main__":

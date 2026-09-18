@@ -14,7 +14,7 @@
 (function(){
   'use strict';
 
-  const NATIVE_FETCH=window.fetch.bind(window);
+  const apiClient=window.AppApiClient;
   const PUBLIC_PATH='/api/quiz-categories';
   const ADMIN_PATH='/api/quiz-categories/admin';
   const CATEGORY_PATHS=new Set([PUBLIC_PATH,ADMIN_PATH]);
@@ -22,7 +22,6 @@
   const FETCH_TIMEOUT_MS=15000;
   const memoryCache=new Map();
   const inflight=new Map();
-  const previousExamAction=window.teacherContentStudioExamAction;
 
   const esc=value=>(window.escapeHtml?window.escapeHtml(String(value??'')):String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
 
@@ -31,16 +30,6 @@
       area:document.getElementById('admin-quiz-area')?.value||document.getElementById('admin-material-area')?.value||window.currentTrainingArea||'internal',
       group:document.getElementById('admin-quiz-group')?.value||document.getElementById('admin-material-group')?.value||window.currentGroupKey||'grpBio'
     };
-  }
-
-  function requestMeta(input,init){
-    try{
-      const url=new URL(typeof input==='string'?input:input?.url||'',window.location.href);
-      const method=String(init?.method||(typeof input!=='string'&&input?.method)||'GET').toUpperCase();
-      return {url,method};
-    }catch(_error){
-      return null;
-    }
   }
 
   function isCategoryList(meta){
@@ -94,9 +83,10 @@
     return new Response(entry.body,{status:entry.status,statusText:entry.statusText,headers:entry.headers});
   }
 
-  async function networkEntry(input,init={}){
+  async function networkEntry(context,next,init={}){
     // Never reuse an AbortController: once aborted it remains aborted forever.
     const controller=new AbortController();
+    const input=context.input;
     const externalSignal=init?.signal||(typeof Request!=='undefined'&&input instanceof Request?input.signal:null);
     const abortFromCaller=()=>controller.abort(externalSignal?.reason);
     if(externalSignal){
@@ -105,7 +95,7 @@
     }
     const timer=setTimeout(()=>controller.abort(new DOMException('Exam list timeout','AbortError')),FETCH_TIMEOUT_MS);
     try{
-      const response=await NATIVE_FETCH(input,{...init,signal:controller.signal});
+      const response=await next({init:{...init,signal:controller.signal}});
       const body=await response.text();
       return {
         status:response.status,
@@ -122,14 +112,16 @@
     }
   }
 
-  function fetchCategoryList(input,init,meta){
+  function fetchCategoryList(context,next,meta){
+    const input=context.input;
+    const init=context.init||{};
     const key=cacheKey(meta.url);
     const cached=readCached(key);
     if(cached){
       // Stale-while-revalidate: show the usable list now, refresh it once in
       // the background. Repeated callers share the same in-flight request.
       if(!inflight.has(key)){
-        const refresh=networkEntry(input,init)
+        const refresh=networkEntry(context,next,init)
           .then(entry=>{if(entry.status>=200&&entry.status<300)writeCached(key,entry);return entry;})
           .catch(()=>null)
           .finally(()=>inflight.delete(key));
@@ -141,7 +133,7 @@
       if(!entry)throw new Error('考卷清單背景同步失敗，請重新嘗試。');
       return responseFrom(entry);
     });
-    const request=networkEntry(input,init)
+    const request=networkEntry(context,next,init)
       .then(entry=>{
         if(entry.status>=200&&entry.status<300)writeCached(key,entry);
         return entry;
@@ -151,18 +143,20 @@
     return request.then(responseFrom);
   }
 
-  window.fetch=function(input,init){
-    const meta=requestMeta(input,init);
+  function latencyMiddleware(context,next){
+    const meta=context.url?{url:context.url,method:context.method}:null;
     if(invalidatesExamList(meta)){
       clearCachedLists();
-      return NATIVE_FETCH(input,init).then(response=>{
+      return next().then(response=>{
         if(response.ok)clearCachedLists();
         return response;
       });
     }
-    if(isCategoryList(meta))return fetchCategoryList(input,init||{},meta);
-    return NATIVE_FETCH(input,init);
-  };
+    if(isCategoryList(meta))return fetchCategoryList(context,next,meta);
+    return next();
+  }
+
+  apiClient?.use('teacher-content-latency-712',latencyMiddleware,100);
 
   function showSkeleton(title='正在準備考卷功能…',detail='畫面先保持可用，資料在背景同步。'){
     const host=document.getElementById('teacher-content-studio-body-71');
@@ -251,11 +245,14 @@
     }catch(error){showActionError(catId,error);}
   }
 
-  window.teacherContentStudioExamAction=function(action,catId){
-    if(action==='question'||action==='image'||action==='video')return openManualQuestion(action,catId);
-    if(action==='settings')return openSettings(catId);
-    return typeof previousExamAction==='function'?previousExamAction(action,catId):undefined;
-  };
+  window.TeacherContentStudio71?.registerExamActions?.(
+    ['question','image','video'],
+    (action,catId)=>openManualQuestion(action,catId)
+  );
+  window.TeacherContentStudio71?.registerExamActions?.(
+    ['settings'],
+    (_action,catId)=>openSettings(catId)
+  );
 
   function warmCurrentScope(){
     const {area,group}=currentScope();

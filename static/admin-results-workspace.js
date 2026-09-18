@@ -105,14 +105,14 @@
     }
   }
 
+  const adminShell = window.AdminWorkspaceShell;
+  adminShell?.registerWorkspace('teacher', switchWorkspace);
+  adminShell?.registerWorkspace('results', switchWorkspace);
+
   window.fetchAdminRecords = filteredFetchAdminRecords;
   window.renderAdminTable = renderAdminTableWithMode;
   window.renderResultsAnalytics = renderResultsAnalyticsWithMode;
   window.paintTeacherMode = paintTeacherMode;
   window.updateResultsWorkspacePresentation = updateResultsWorkspacePresentation;
   window.switchTeacherMode = switchTeacherMode;
-  window.__teacherAdminResultsWorkspace = {
-    switchWorkspace,
-    getState: () => ({...state})
-  };
 })();

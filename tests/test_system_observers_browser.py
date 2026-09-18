@@ -51,25 +51,16 @@ class SystemObserverBrowserRegressionTests(unittest.TestCase):
               };
             }
 
-            const root = element('assessment-681');
-            const tabs = element('assessment-681-tabs');
-            const assessmentBody = element('assessment-681-body');
+            const courseWizardRoot = element('course-wizard-host');
             const pageBody = element('document-body');
 
-            root.closest = selector => selector === '#assessment-681' ? root : null;
-            tabs.closest = selector => selector === '#assessment-681' ? root : null;
-            assessmentBody.closest = selector => selector === '#assessment-681' ? root : null;
+            courseWizardRoot.matches = selector => selector.includes('[data-course-wizard-root]');
 
             global.window = global;
             global.document = {
               readyState: 'complete',
               body: pageBody,
-              getElementById(id) {
-                if (id === 'assessment-681') return root;
-                if (id === 'assessment-681-tabs') return tabs;
-                if (id === 'assessment-681-body') return assessmentBody;
-                return null;
-              },
+              getElementById() { return null; },
               querySelector() { return null; },
               querySelectorAll() { return []; },
               createElement() { return element(); },
@@ -104,7 +95,7 @@ class SystemObserverBrowserRegressionTests(unittest.TestCase):
 
             const rerenderedRow = element('rerendered-row');
             for (let i = 0; i < 100; i += 1) {
-              observerCallback([{target: assessmentBody, addedNodes: [rerenderedRow]}]);
+              observerCallback([{target: courseWizardRoot, addedNodes: [rerenderedRow]}]);
             }
             if (rafQueue.length !== 1 || rafCalls !== 1) {
               throw new Error(`expected one coalesced reconcile frame, got queue=${rafQueue.length}, calls=${rafCalls}`);
@@ -124,11 +115,10 @@ class SystemObserverBrowserRegressionTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
 
-    def test_question_overlay_no_longer_owns_surface_observer_or_dynamic_loader(self):
-        source = ROOT.joinpath('static/question-authoring-ux-71.js').read_text(encoding='utf-8')
-        self.assertNotIn('new MutationObserver', source)
-        self.assertNotIn('function load(src, marker)', source)
-        self.assertNotIn('/teacher-ux-convergence-72.js?', source)
+    def test_retired_question_overlay_is_physically_removed(self):
+        self.assertFalse(ROOT.joinpath('static/question-authoring-ux-71.js').exists())
+        source = ROOT.joinpath('static/teacher-ux-convergence-72.js').read_text(encoding='utf-8')
+        self.assertIn("interceptQuestionNext", source)
 
 
 if __name__ == '__main__':

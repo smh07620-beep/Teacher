@@ -6,6 +6,8 @@ import json
 from contextlib import contextmanager
 from typing import Any, Iterator, Mapping
 
+from teacher_app.common import db as common_db
+
 
 class AttemptConflict(RuntimeError):
     pass
@@ -30,9 +32,18 @@ def json_dump(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def _connect(base=None):
+    return base._db_conn() if base is not None else common_db.get_connection()
+
+
 @contextmanager
-def transaction(base) -> Iterator[tuple[Any, str]]:
-    conn, kind = base._db_conn()
+def transaction(base=None) -> Iterator[tuple[Any, str]]:
+    """Open an atomic attempt transaction through the canonical DB seam.
+
+    ``base`` remains an optional compatibility injection for isolated legacy
+    tests; production callers use :mod:`teacher_app.common.db` directly.
+    """
+    conn, kind = _connect(base)
     try:
         if kind == "postgres":
             with conn.transaction():
@@ -50,8 +61,8 @@ def transaction(base) -> Iterator[tuple[Any, str]]:
         conn.close()
 
 
-def init_schema(base) -> None:
-    conn, _kind = base._db_conn()
+def init_schema(base=None) -> None:
+    conn, _kind = _connect(base)
     try:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS exam_attempts (

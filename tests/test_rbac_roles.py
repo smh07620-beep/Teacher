@@ -1,27 +1,20 @@
-import ast
 import unittest
-from pathlib import Path
+from teacher_app.common.auth import (
+    CANONICAL_ROLES,
+    LEGACY_ROLE_ALIASES,
+    ROLE_PERMISSIONS,
+    has_permission,
+    normalize_role,
+)
 
 
-def load_rbac_namespace():
-    source = Path(__file__).parents[1].joinpath("app.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    selected = []
-    names = {"LEGACY_ROLE_ALIASES", "CANONICAL_ROLES", "ROLE_PERMISSIONS"}
-    functions = {"normalize_role", "has_permission"}
-    for node in tree.body:
-        if isinstance(node, ast.ImportFrom) and node.module == "teacher_app.common.auth":
-            selected.append(node)
-        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id in names for t in node.targets):
-            selected.append(node)
-        elif isinstance(node, ast.FunctionDef) and node.name in functions:
-            selected.append(node)
-    namespace = {}
-    exec(compile(ast.Module(body=selected, type_ignores=[]), "app.py", "exec"), namespace)
-    return namespace
-
-
-RBAC = load_rbac_namespace()
+RBAC = {
+    "CANONICAL_ROLES": CANONICAL_ROLES,
+    "LEGACY_ROLE_ALIASES": LEGACY_ROLE_ALIASES,
+    "ROLE_PERMISSIONS": ROLE_PERMISSIONS,
+    "has_permission": has_permission,
+    "normalize_role": normalize_role,
+}
 
 
 class RoleNormalizationTests(unittest.TestCase):

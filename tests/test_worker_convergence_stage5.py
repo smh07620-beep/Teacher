@@ -13,6 +13,9 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.adapter = ROOT.joinpath("free_worker_67.py").read_text(encoding="utf-8")
+        cls.routes = ROOT.joinpath(
+            "teacher_app", "worker", "routes.py"
+        ).read_text(encoding="utf-8")
         cls.local_worker = ROOT.joinpath("material_worker.py").read_text(encoding="utf-8")
         cls.protocol = ROOT.joinpath(
             "teacher_app", "worker", "protocol.py"
@@ -20,12 +23,15 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
         cls.repository = ROOT.joinpath(
             "teacher_app", "worker", "repository.py"
         ).read_text(encoding="utf-8")
+        cls.web_runtime = ROOT.joinpath(
+            "teacher_app", "worker", "web_runtime.py"
+        ).read_text(encoding="utf-8")
 
     def test_heartbeat_sql_is_owned_by_canonical_repository(self):
         self.assertIn("def upsert_heartbeat(", self.repository)
         self.assertIn("INSERT INTO material_worker_heartbeats", self.repository)
-        self.assertNotIn("INSERT INTO material_worker_heartbeats", self.adapter)
-        self.assertNotIn("ON CONFLICT(worker_id)", self.adapter)
+        self.assertNotIn("INSERT INTO material_worker_heartbeats", self.routes)
+        self.assertNotIn("ON CONFLICT(worker_id)", self.routes)
 
     def test_worker_identity_metadata_and_heartbeat_are_canonical(self):
         for marker in (
@@ -38,7 +44,7 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
         self.assertNotIn("from flask", self.protocol)
         self.assertNotIn("import app", self.protocol)
         self.assertNotIn("base.", self.protocol)
-        self.assertIn("worker_protocol.record_heartbeat", self.adapter)
+        self.assertIn("worker_protocol.record_heartbeat", self.routes)
 
     def test_canonical_worker_domain_does_not_create_second_executor(self):
         combined = self.protocol + self.repository
@@ -54,11 +60,37 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
         self.assertIn("def process_one(", self.local_worker)
         self.assertIn("def publish_to_storage(", self.local_worker)
 
-    def test_remaining_worker_debt_stays_explicit_and_bounded(self):
-        self.assertIn("material_upload_sessions", self.adapter)
-        self.assertIn("def terminal(", self.adapter)
-        self.assertIn("base.claim_next_material_job", self.adapter)
-        self.assertIn("base.commit_material_job_result", self.adapter)
+    def test_worker_adapter_no_longer_owns_queue_or_upload_session_sql(self):
+        self.assertIn("def terminal(", self.routes)
+        self.assertIn("runtime.commit_result", self.routes)
+        self.assertNotIn("base.", self.routes)
+        self.assertNotIn("material_upload_sessions", self.routes)
+        self.assertNotIn("base.claim_next_material_job", self.routes)
+        self.assertNotIn("base._update_material_job", self.routes)
+        self.assertIn("worker_repository.claim_next_material_job", self.routes)
+        self.assertIn("worker_repository.create_upload_session", self.routes)
+        self.assertIn("worker_repository.finalize_upload_session_with_job", self.routes)
+        self.assertIn("worker_repository.transition_owned_material_job", self.routes)
+
+    def test_worker_http_boundary_has_narrow_runtime_and_canonical_storage_owners(self):
+        self.assertIn("class WorkerWebRuntime", self.web_runtime)
+        self.assertIn("from teacher_app.storage import providers, r2_ledger", self.web_runtime)
+        self.assertIn("scope_filter.require_permission(app, \"material.manage\")", self.routes)
+        self.assertIn("scope.normalize_group", self.routes)
+        self.assertNotIn("r2_upload_reservations", self.routes + self.web_runtime)
+        self.assertNotIn("r2_usage_ledger", self.routes + self.web_runtime)
+        self.assertNotIn("from teacher_app.legacy_host", self.routes + self.web_runtime)
+
+    def test_root_worker_module_is_thin_compatibility_adapter(self):
+        self.assertIn("from teacher_app.worker.routes import register_free_worker", self.adapter)
+        for marker in ("@app.", "from flask", "worker_repository", "r2_client"):
+            self.assertNotIn(marker, self.adapter)
+
+    def test_local_worker_is_flask_and_legacy_app_independent(self):
+        self.assertNotIn("from upload_hardening", self.local_worker)
+        self.assertNotIn("import app", self.local_worker)
+        self.assertIn("teacher_app.materials.validation", self.local_worker)
+        self.assertIn("teacher_app.storage.worker_runtime", self.local_worker)
 
     def test_phase4_groundwork_owns_queue_and_upload_session_persistence(self):
         for marker in (

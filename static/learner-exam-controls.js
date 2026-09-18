@@ -6,17 +6,15 @@
 (function(){
   'use strict';
 
-  window.resetCurrentQuiz = function(){
+  window.resetCurrentQuiz = async function(){
     if(!confirm('確定要重置本分頁試卷並清空已選答案與解鎖填答限制嗎？')) return;
-    isSubmittedMap[currentCatKey] = false;
-    const qCount = allQuizData[currentCatKey].questions.length;
-    userAnswersMap[currentCatKey] = new Array(qCount).fill(null);
-    flaggedQuestionsMap[currentCatKey] = new Array(qCount).fill(false);
-    clearExamDraft(currentCatKey);
-    saveExamDraft(currentCatKey);
+    const catId=currentCatKey;
+    if(!catId)return;
+    resetExamAttemptState(catId);
+    await ensureDynamicCategoryLoaded(catId);
+    currentCatKey=catId;
     document.getElementById('result-dashboard').classList.add('hidden');
-    renderQuestions();
-    updateProgressStats();
+    updateUIForActiveKey();
     window.scrollTo({top:0,behavior:'smooth'});
   };
 

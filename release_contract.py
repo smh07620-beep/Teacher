@@ -26,6 +26,7 @@ REQUIRED_MIGRATIONS = (
     "0067-smart-learning-content",
     "0067-render-worker-shared-staging",
     "0067-b-free-local-worker",
+    "0067-r2-free-budget-guard",
     "0068-external-interactive-media",
     "0069-user-profile-titles",
     "0070-material-search-and-atlas",

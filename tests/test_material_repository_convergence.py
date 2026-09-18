@@ -10,6 +10,8 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = ROOT.joinpath("app.py").read_text(encoding="utf-8")
+        cls.sync_upload = ROOT.joinpath("teacher_app/materials/sync_upload.py").read_text(encoding="utf-8")
+        cls.storage_admin = ROOT.joinpath("teacher_app/storage/admin_service.py").read_text(encoding="utf-8")
         cls.repo = ROOT.joinpath("teacher_app/materials/repository.py").read_text(encoding="utf-8")
         cls.db = ROOT.joinpath("teacher_app/common/db.py").read_text(encoding="utf-8")
         cls.scope = ROOT.joinpath("teacher_app/common/scope.py").read_text(encoding="utf-8")
@@ -21,25 +23,22 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         cls.assessments = ROOT.joinpath("teacher_app/assessments/service.py").read_text(encoding="utf-8")
         cls.external = ROOT.joinpath("teacher_app/materials/external_media.py").read_text(encoding="utf-8")
         cls.external_adapter = ROOT.joinpath("external_media_68.py").read_text(encoding="utf-8")
-        cls.hardening = ROOT.joinpath("production_hardening.py").read_text(encoding="utf-8")
+        cls.hardening = ROOT.joinpath("teacher_app/common/security.py").read_text(encoding="utf-8")
 
     def test_material_read_sql_is_owned_by_repository(self):
         self.assertIn("SELECT * FROM materials", self.repo)
         self.assertNotRegex(self.app, re.compile(r"SELECT\s+\*\s+FROM\s+materials", re.I))
 
     def test_legacy_material_read_functions_are_thin_delegates(self):
-        for name, target in (
-            ("material_row_to_dict", "material_repository.material_row_to_dict"),
-            ("list_uploaded_materials", "material_repository.list_uploaded_materials"),
-            ("get_material", "material_repository.get_material"),
-        ):
-            start = self.app.index(f"def {name}(")
-            next_def = self.app.find("\ndef ", start + 5)
-            end = next_def if next_def >= 0 else len(self.app)
-            source = self.app[start:end]
-            self.assertIn(target, source, name)
-            for sql in ("SELECT ", "UPDATE ", "INSERT ", "DELETE "):
-                self.assertNotIn(sql, source)
+        # Root ``app.py`` is now intentionally only a compatibility alias.  The
+        # material read implementation is package-owned and must not be copied
+        # back into the root module merely to satisfy a source-shape assertion.
+        self.assertIn("teacher_app import legacy_host as _legacy_host", self.app)
+        self.assertIn("def material_row_to_dict(", self.repo)
+        self.assertIn("def list_uploaded_materials(", self.repo)
+        self.assertIn("def get_material(", self.repo)
+        for sql in ("SELECT ", "UPDATE ", "INSERT ", "DELETE "):
+            self.assertNotIn(sql, self.app)
 
     def test_repository_uses_only_shared_read_connection_scope(self):
         self.assertIn("from teacher_app.common import db as common_db", self.repo)
@@ -90,14 +89,13 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         self.assertIn("def insert_material(", self.repo)
         self.assertIn("with common_db.transaction()", self.repo)
         self.assertNotIn("INSERT INTO materials", self.app)
-        self.assertIn("material_repository.insert_material(entry, ignore_conflict=True)", self.app)
-        self.assertIn("material_repository.insert_material(entry)", self.app)
+        self.assertIn("material_repository.insert_material(entry)", self.sync_upload)
 
     def test_storage_pointer_updates_are_transactional_repository_writes(self):
         self.assertIn("def update_material_storage(", self.repo)
         self.assertIn("UPDATE materials SET storage_backend=", self.repo)
         self.assertNotIn("UPDATE materials SET storage_backend=", self.app)
-        self.assertIn("material_repository.update_material_storage(", self.app)
+        self.assertIn("material_repository.update_material_storage(", self.storage_admin)
 
     def test_material_metadata_update_and_delete_are_repository_writes(self):
         self.assertIn("def update_material_metadata(", self.repo)
@@ -138,7 +136,7 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
 
     def test_material_and_course_hot_paths_emit_latency_metrics(self):
         self.assertIn('{"api_list_slides", "api_courses"}', self.hardening)
-        self.assertIn("time.perf_counter()", self.hardening)
+        self.assertIn("clock.perf_counter()", self.hardening)
         self.assertIn("teacher_stage2 endpoint=%s status=%s duration_ms=%.1f", self.hardening)
 
     def test_repository_has_no_provider_credentials_or_storage_clients(self):

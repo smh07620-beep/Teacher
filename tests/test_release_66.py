@@ -35,6 +35,7 @@ class ReleaseContractTests(unittest.TestCase):
         )
         for version in (
             "0066-additive-rbac-pgy-signing",
+            "0067-r2-free-budget-guard",
             "0070-material-search-and-atlas",
             "0071-pgy-learner-audience",
             "0072-course-bundle-idempotency",
@@ -48,7 +49,7 @@ class ReleaseContractTests(unittest.TestCase):
             self.assertIn(version, registered)
 
     def test_release_document_records_security_and_operational_invariants(self):
-        document = ROOT.joinpath("ARCHITECTURE_6_6.md").read_text(encoding="utf-8")
+        document = ROOT.joinpath("docs", "archive", "ARCHITECTURE_HISTORY.md").read_text(encoding="utf-8")
         for marker in (
             "multi-role",
             "primary legacy role",
