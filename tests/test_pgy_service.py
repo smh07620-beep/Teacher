@@ -9,7 +9,7 @@ from teacher_app.common.db import execute, fetch_one, transaction
 from teacher_app.common.errors import ApiError
 from teacher_app.pgy import repository as repo
 from teacher_app.pgy import service
-from pgy_atomic import _legacy_error_body
+from pgy_workflow import _legacy_error_body
 
 
 class PgyServiceTests(unittest.TestCase):
