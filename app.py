@@ -783,7 +783,11 @@ def _mega_cached_preview(entry):
     target = PREVIEW_CACHE_DIR / cache_name
     # V5.7：不同教材可同時暖快取；只有同一份 preview.pdf 互斥，避免全站被單一大檔拖住。
     with _preview_cache_lock(cache_name):
-        valid = target.exists() and target.stat().st_size > 0 and (time.time() - target.stat().st_mtime) < MATERIAL_PREVIEW_CACHE_TTL_SECONDS
+        # A material preview is immutable for its material id. Deletion already
+        # removes this cache entry, and the size-bounded cache cleanup owns
+        # eviction. Time-based expiry caused healthy previews to synchronously
+        # re-download from MEGA every few hours and block a Render worker.
+        valid = target.exists() and target.stat().st_size > 0
         if not valid:
             tmp = target.with_suffix(".part")
             try:
