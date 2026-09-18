@@ -35,6 +35,7 @@ These are not ordinary domain implementations and should not be removed merely t
 - `register_pgy_workflow` — surviving thin PGY legacy URL/JSON adapter over `teacher_app.pgy`; no independent schema/business ownership.
 - `register_legacy_office_69` — compatibility route; must stay thin and defer authorization to canonical RBAC.
 - `register_atlas_70` — Atlas HTTP compatibility adapter; CRUD/search/local-image/DOCX import runtime ownership is canonical and the adapter retains only established HTTP/RBAC/config seams.
+- `register_question_bank` — Question Bank HTTP/RBAC compatibility adapter; CRUD/review/blueprint/snapshot/analytics runtime ownership is canonical in `teacher_app.assessments`.
 
 ### D. Runtime domain owners still pending convergence
 
@@ -48,7 +49,6 @@ These modules still own meaningful runtime behavior and must be migrated domain-
 - `register_external_media`
 - `register_course_bundle_72`
 - `register_course_bundle_followup_73`
-- `register_question_bank`
 
 `register_pgy_atomic_workflow` is **retired**. It only replaced six existing PGY mutation endpoints with the same canonical `teacher_app.pgy.service` handlers and had no unique runtime ownership.
 
@@ -138,7 +138,7 @@ Source cleanup note:
 
 - `smart_learning_67.py` still contains the old `preview_docx_atlas` helper as dead compatibility source, but Atlas runtime no longer imports or calls it. Remove or convert it to a re-export when the Smart Learning domain is converged, rather than reopening Atlas ownership.
 
-### Question Bank — CRUD/review/blueprint canonical; analytics pending
+### Question Bank — runtime ownership canonical; HTTP compatibility only
 
 Completed:
 
@@ -146,15 +146,13 @@ Completed:
 - `teacher_app.assessments.question_bank` owns Bank metadata validation, payload projection, duplicate detection, draft creation, editing, deletion and review transitions.
 - `teacher_app.assessments.repository` also owns `exam_blueprints` / `exam_blueprint_snapshots` persistence and reviewed-question/recent-snapshot reads.
 - `teacher_app.assessments.blueprints` owns blueprint payload validation, exact multi-dimension quota selection, recent-question exclusion and immutable snapshot publication.
-- `question_bank_68.py` keeps the existing Question Bank / Blueprint HTTP and RBAC surface but delegates CRUD/review/blueprint behavior to canonical assessment modules.
+- `teacher_app.assessments.repository` owns `question_attempt_analytics` reads and the narrow answer-key lookup needed by item analytics.
+- `teacher_app.assessments.analytics` owns the 10-attempt sufficiency threshold, correct-rate aggregation, option-selection counts and distractor distribution.
+- `question_bank_68.py` keeps the established Question Bank / Blueprint / Analytics HTTP and RBAC routes but delegates all domain behavior to canonical assessment modules.
 - `_draw` remains only as a compatibility re-export from `teacher_app.assessments.blueprints`; there is no root implementation.
-- Structural regression coverage prevents Question Bank CRUD/review and blueprint/snapshot ownership from returning to the root adapter.
+- Structural and behavior regression coverage prevents Question Bank CRUD/review/blueprint/snapshot/analytics ownership from returning to the root adapter.
 
-Remaining:
-
-- item analytics aggregation (`question_attempt_analytics`) and its answer-key lookup remain the final Question Bank runtime debt in `question_bank_68.py`.
-
-Move that final analytics behavior into assessment-owned canonical modules without creating a second assessment publication or grading owner.
+No Question Bank domain implementation remains in the root adapter; keep `register_question_bank` only until the final app-factory/route-composition cutover.
 
 ## Storage / MEGA ownership
 
@@ -173,7 +171,7 @@ Do **not** add a second MEGA client or second connection/session implementation 
 5. Move external-media validation/persistence ownership.
 6. Move course-bundle and follow-up workflow ownership while preserving idempotency.
 7. Atlas runtime convergence is complete; keep `register_atlas_70` only as the established HTTP compatibility adapter until app-factory cutover.
-8. Finish Question Bank by moving the remaining item analytics ownership into `teacher_app.assessments` without duplicating assessment publication or grading logic.
+8. Question Bank runtime convergence is complete; keep `register_question_bank` only as the established HTTP/RBAC compatibility adapter until app-factory cutover.
 9. Continue course/assessment repository migration and provider/storage extraction in bounded slices.
 10. Only after the runtime ownership map has no domain implementation in `app.py`, replace `pgy_app.py` with `app = create_app()`.
 
