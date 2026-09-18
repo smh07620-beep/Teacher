@@ -8,6 +8,7 @@ from unittest.mock import patch
 from flask import Flask, jsonify
 
 import course_bundle_followup_73 as followup
+import release_contract
 from schema_migrations import MIGRATIONS
 
 
@@ -180,7 +181,6 @@ class CourseBundleFollowup73Contracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.entry = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
-        cls.health = ROOT.joinpath("health_65.py").read_text(encoding="utf-8")
         cls.wizard = ROOT.joinpath("static", "course-wizard-681.js").read_text(encoding="utf-8")
         cls.adapter = ROOT.joinpath("course_bundle_followup_73.py").read_text(encoding="utf-8")
         cls.canonical = ROOT.joinpath("teacher_app", "courses", "bundle_followup.py").read_text(encoding="utf-8")
@@ -188,7 +188,7 @@ class CourseBundleFollowup73Contracts(unittest.TestCase):
     def test_migration_imports_before_runner_and_adapter_registers_after_rbac(self):
         self.assertLess(self.entry.index("from course_bundle_followup_73"), self.entry.index("from schema_migrations"))
         self.assertLess(self.entry.index("register_rbac_681(legacy_app)"), self.entry.index("register_course_bundle_followup_73(legacy_app)"))
-        self.assertIn("0073-course-bundle-followups", self.health)
+        self.assertIn("0073-course-bundle-followups", release_contract.REQUIRED_MIGRATIONS)
 
     def test_wizard_sends_stable_keys_for_link_and_upload_followups(self):
         for marker in (
