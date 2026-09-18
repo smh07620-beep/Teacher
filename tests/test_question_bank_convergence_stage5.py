@@ -16,6 +16,9 @@ class QuestionBankConvergenceStage5Tests(unittest.TestCase):
         cls.blueprints = ROOT.joinpath(
             "teacher_app", "assessments", "blueprints.py"
         ).read_text(encoding="utf-8")
+        cls.analytics = ROOT.joinpath(
+            "teacher_app", "assessments", "analytics.py"
+        ).read_text(encoding="utf-8")
         cls.repository = ROOT.joinpath(
             "teacher_app", "assessments", "repository.py"
         ).read_text(encoding="utf-8")
@@ -92,10 +95,31 @@ class QuestionBankConvergenceStage5Tests(unittest.TestCase):
         self.assertIn("blueprint_service.create_blueprint", self.adapter)
         self.assertIn("blueprint_service.publish_blueprint", self.adapter)
 
-    def test_analytics_debt_remains_explicit(self):
-        self.assertIn("question_attempt_analytics", self.adapter)
-        self.assertIn("SELECT correct FROM quiz_questions", self.adapter)
-        self.assertNotIn("question_attempt_analytics", self.blueprints)
+    def test_question_analytics_ownership_is_canonical(self):
+        for marker in (
+            "def list_question_attempt_analytics(",
+            "def get_bank_question_correct(",
+            "question_attempt_analytics",
+            "SELECT correct FROM quiz_questions",
+        ):
+            self.assertIn(marker, self.repository)
+        for marker in (
+            "MIN_SUFFICIENT_ATTEMPTS = 10",
+            "def get_question_analytics(",
+            "Counter(",
+            '"correctRate"',
+            '"optionSelectionCounts"',
+            '"distractorDistribution"',
+        ):
+            self.assertIn(marker, self.analytics)
+        self.assertIn("analytics_service.get_question_analytics", self.adapter)
+        self.assertNotIn("question_attempt_analytics", self.adapter)
+        self.assertNotIn("SELECT correct FROM quiz_questions", self.adapter)
+        self.assertNotIn("Counter(", self.adapter)
+
+    def test_root_is_http_rbac_compatibility_adapter(self):
+        self.assertIn("HTTP/RBAC compatibility adapter", self.adapter)
+        self.assertNotIn("base._db_conn", self.adapter)
 
 
 if __name__ == "__main__":
