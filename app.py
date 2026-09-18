@@ -264,6 +264,7 @@ MEGA_SESSION_CACHE_SECONDS = max(60, min(86400, int(os.environ.get("MEGA_SESSION
 _DEFAULT_MEGACMD_HOME = str(Path(tempfile.gettempdir()) / "megacmd-home")
 MEGACMD_HOME = os.environ.get("MEGACMD_HOME", _DEFAULT_MEGACMD_HOME).strip() or _DEFAULT_MEGACMD_HOME
 MEGACMD_TIMEOUT_SECONDS = max(30, min(1800, int(os.environ.get("MEGACMD_TIMEOUT_SECONDS", "300"))))
+MEGA_WEB_READ_TIMEOUT_SECONDS = max(20, min(150, int(os.environ.get("MEGA_WEB_READ_TIMEOUT_SECONDS", "120"))))
 Path(MEGACMD_HOME).mkdir(parents=True, exist_ok=True)
 _MEGA_AUTH_CACHE = {"ok": False, "at": 0.0}
 _MEGA_LOCK = threading.RLock()
@@ -543,22 +544,31 @@ def mega_is_configured():
     return bool(MEGA_EMAIL and MEGA_PASSWORD and _megacmd_find("mega-whoami") and _megacmd_find("mega-put"))
 
 
-def _mega_login_if_needed(force=False):
-    if not mega_is_configured():
+def _mega_timeout_for_deadline(deadline, default_seconds):
+    """Clamp one MEGAcmd call to the remaining request budget."""
+    if deadline is None:
+        return default_seconds
+    remaining = float(deadline) - time.monotonic()
+    if remaining <= 0:
+        raise RuntimeError("MEGA 讀取逾時，請稍後重試。")
+    return max(1, min(int(default_seconds), int(max(1, remaining))))
+
+
+def _mega_login_if_needed(force=False, deadline=None):    if not mega_is_configured():
         raise RuntimeError("MEGA 尚未完成設定。請設定 MEGA_EMAIL、MEGA_PASSWORD，並確認官方 MEGAcmd 已安裝。")
     now = time.time()
     with _MEGA_LOCK:
         if (not force) and _MEGA_AUTH_CACHE.get("ok") and now - float(_MEGA_AUTH_CACHE.get("at", 0) or 0) < MEGA_SESSION_CACHE_SECONDS:
             return
-        probe = _mega_run(["mega-whoami"], check=False, timeout=30)
+        probe = _mega_run(["mega-whoami"], check=False, timeout=_mega_timeout_for_deadline(deadline, 30))
         if probe.returncode != 0:
             # 殘留 session 可能屬於舊帳號，先安全登出再登入。
-            _mega_run(["mega-logout"], check=False, timeout=30)
-            login = _mega_run(["mega-login", MEGA_EMAIL, MEGA_PASSWORD], check=False, timeout=120)
+            _mega_run(["mega-logout"], check=False, timeout=_mega_timeout_for_deadline(deadline, 30))
+            login = _mega_run(["mega-login", MEGA_EMAIL, MEGA_PASSWORD], check=False, timeout=_mega_timeout_for_deadline(deadline, 120))
             if login.returncode != 0:
                 detail = (login.stderr or login.stdout or "login failed").strip()
                 raise RuntimeError(f"MEGA 登入失敗：{detail[-600:]}")
-        verify = _mega_run(["mega-whoami"], check=False, timeout=30)
+        verify = _mega_run(["mega-whoami"], check=False, timeout=_mega_timeout_for_deadline(deadline, 30))
         if verify.returncode != 0:
             raise RuntimeError("MEGA 登入後仍無法驗證帳號 session。")
         _MEGA_AUTH_CACHE.update({"ok": True, "at": now})
@@ -625,22 +635,41 @@ def _mega_upload_file(local_path: Path, folder_id: str, remote_name: str):
     return remote_path
 
 
-def mega_download_file(file_id: str, target: Path):
-    _mega_login_if_needed()
+def mega_download_file(file_id: str, target: Path, *, timeout_seconds=None, retry_auth=True):
+    deadline = (
+        time.monotonic() + float(timeout_seconds)
+        if timeout_seconds is not None
+        else None
+    )
+    _mega_login_if_needed(deadline=deadline)
     target.parent.mkdir(parents=True, exist_ok=True)
     # mega-get 的 localpath 使用目錄時會保留遠端檔名，因此先下載到暫存目錄再改名。
     tempdir = target.parent / f".mega-get-{uuid.uuid4().hex[:8]}"
     tempdir.mkdir(parents=True, exist_ok=True)
     try:
         try:
-            _mega_run(["mega-get", str(file_id), str(tempdir)], timeout=max(MEGACMD_TIMEOUT_SECONDS, 600))
+            _mega_run(
+                ["mega-get", str(file_id), str(tempdir)],
+                timeout=_mega_timeout_for_deadline(
+                    deadline,
+                    max(MEGACMD_TIMEOUT_SECONDS, 600),
+                ),
+            )
         except RuntimeError:
             # Cached authentication deliberately avoids a per-request whoami
             # subprocess. If the provider-side session really expired, refresh
-            # it once and retry the actual read instead of probing every hit.
+            # it once and retry the actual read inside the same total budget.
             _MEGA_AUTH_CACHE.update({"ok": False, "at": 0.0})
-            _mega_login_if_needed(force=True)
-            _mega_run(["mega-get", str(file_id), str(tempdir)], timeout=max(MEGACMD_TIMEOUT_SECONDS, 600))
+            if not retry_auth:
+                raise
+            _mega_login_if_needed(force=True, deadline=deadline)
+            _mega_run(
+                ["mega-get", str(file_id), str(tempdir)],
+                timeout=_mega_timeout_for_deadline(
+                    deadline,
+                    max(MEGACMD_TIMEOUT_SECONDS, 600),
+                ),
+            )
         files = [x for x in tempdir.iterdir() if x.is_file()]
         if not files:
             raise RuntimeError(f"MEGA 下載完成但找不到檔案：{file_id}")
@@ -792,7 +821,7 @@ def _mega_cached_preview(entry):
             tmp = target.with_suffix(".part")
             try:
                 if tmp.exists(): tmp.unlink()
-                mega_download_file(preview_id, tmp)
+                mega_download_file(preview_id, tmp, timeout_seconds=MEGA_WEB_READ_TIMEOUT_SECONDS)
                 os.replace(tmp, target)
             finally:
                 if tmp.exists():
@@ -804,11 +833,15 @@ def _mega_cached_preview(entry):
     return target
 
 
+def _mega_web_status(exc) -> int:
+    text = str(exc or "").lower()
+    return 504 if ("逾時" in text or "timeout" in text) else 502
+
 def _mega_send_file(file_id: str, filename: str, inline=True):
     temp_root = TMP_DIR / f"mega-read-{uuid.uuid4().hex[:10]}"; temp_root.mkdir(parents=True, exist_ok=True)
     target = temp_root / (Path(filename).name or "file.bin")
     try:
-        mega_download_file(file_id, target)
+        mega_download_file(file_id, target, timeout_seconds=MEGA_WEB_READ_TIMEOUT_SECONDS)
     except Exception:
         shutil.rmtree(temp_root, ignore_errors=True); raise
     resp = send_file(target, as_attachment=not inline, download_name=filename, conditional=True)
@@ -3418,7 +3451,7 @@ def download_slide(slide_id):
         abort(404)
     if entry.get("storageBackend") == "mega":
         try: return _mega_send_file(entry.get("storageKey", ""),entry["filename"],inline=False)
-        except Exception as e: return jsonify({"error":f"MEGA 下載失敗：{e}"}),502
+        except Exception as e: return jsonify({"error":f"MEGA 下載失敗：{e}","retryable":True}),_mega_web_status(e)
     if entry.get("storageBackend") == "gdrive":
         try:
             return gdrive_proxy_file(entry.get("storageKey", ""), entry["filename"], inline=False)
@@ -3466,7 +3499,7 @@ def material_preview(material_id):
         resp.headers["X-Teaching-Use-Notice"] = quote(TEACHING_USAGE_NOTICE, safe="")
         return resp
     except Exception as e:
-        return jsonify({"error": f"教材預覽讀取失敗：{e}"}), 502
+        return jsonify({"error": f"教材預覽讀取失敗：{e}", "retryable": True}), _mega_web_status(e)
 
 
 @app.get("/view/<material_id>")
@@ -3481,7 +3514,7 @@ def view_material(material_id):
         abort(403)
     if entry.get("storageBackend") == "mega":
         try: return _mega_send_file(entry.get("storageKey", ""),entry["filename"],inline=True)
-        except Exception as e: return jsonify({"error":f"MEGA 檢視失敗：{e}"}),502
+        except Exception as e: return jsonify({"error":f"MEGA 檢視失敗：{e}","retryable":True}),_mega_web_status(e)
     if entry.get("storageBackend") == "gdrive":
         try:
             return gdrive_proxy_file(entry.get("storageKey", ""), entry["filename"], inline=True)
