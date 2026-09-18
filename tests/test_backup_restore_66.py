@@ -45,6 +45,18 @@ def create_65_tables(base):
         conn.close()
 
 
+class MultiRoleAuthBase:
+    def __init__(self, user):
+        self.user = user
+
+    def _current_user(self):
+        return self.user
+
+    def normalize_role(self, value):
+        from teacher_app.common.auth import normalize_role
+        return normalize_role(value)
+
+
 class BackupRestore66Tests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -52,6 +64,19 @@ class BackupRestore66Tests(unittest.TestCase):
         directory = Path(self.temp.name)
         self.source = DatabaseBase(directory / "legacy-backup.db")
         self.destination = DatabaseBase(directory / "upgraded.db")
+
+    def test_multi_role_system_admin_can_authorize_backup_restore(self):
+        user = {
+            "username": "teacher1",
+            "role": "clinical_teacher",
+            "roles": ["clinical_teacher", "system_admin", "auditor"],
+        }
+        actor, denied = backup_restore._auth(
+            MultiRoleAuthBase(user),
+            {"education_admin", "system_admin"},
+        )
+        self.assertIsNone(denied)
+        self.assertIs(actor, user)
 
     def test_65_backup_restores_to_0066_without_overwriting_live_rows(self):
         create_65_tables(self.source)
