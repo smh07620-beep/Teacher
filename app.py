@@ -1968,15 +1968,7 @@ def commit_material_job_result(job: dict, result: dict):
         "atlas_meta": json.dumps(result.get("atlasMeta") if isinstance(result.get("atlasMeta"), dict) else {}, ensure_ascii=False),
         "active": True,
     }
-    conn, kind = _db_conn()
-    try:
-        vals = tuple(entry[k] for k in ("id", "filename", "title", "description", "category", "group_key", "training_area", "course_id", "folder", "page_count", "date_added", "storage_filename", "storage_backend", "storage_key", "slides_prefix", "storage_meta", "material_type", "atlas_meta", "active"))
-        if kind == "postgres":
-            conn.execute("INSERT INTO materials (id,filename,title,description,category,group_key,training_area,course_id,folder,page_count,date_added,storage_filename,storage_backend,storage_key,slides_prefix,storage_meta,material_type,atlas_meta,active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(id) DO NOTHING", vals)
-        else:
-            conn.execute("INSERT OR IGNORE INTO materials (id,filename,title,description,category,group_key,training_area,course_id,folder,page_count,date_added,storage_filename,storage_backend,storage_key,slides_prefix,storage_meta,material_type,atlas_meta,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", vals)
-    finally:
-        conn.close()
+    material_repository.insert_material(entry, ignore_conflict=True)
     return get_material(material_id) or entry
 
 
@@ -4013,15 +4005,7 @@ def api_upload_slide():
             "atlas_meta": json.dumps(atlas_meta, ensure_ascii=False),
             "active": True,
         }
-        conn, kind = _db_conn()
-        try:
-            vals = (entry["id"], entry["filename"], entry["title"], entry["description"], entry["category"], entry["group_key"], entry["training_area"], entry["course_id"], entry["folder"], entry["page_count"], entry["date_added"], entry["storage_filename"], entry["storage_backend"], entry["storage_key"], entry["slides_prefix"], entry["storage_meta"], entry["material_type"], entry["atlas_meta"], entry["active"])
-            if kind == "postgres":
-                conn.execute("""INSERT INTO materials (id,filename,title,description,category,group_key,training_area,course_id,folder,page_count,date_added,storage_filename,storage_backend,storage_key,slides_prefix,storage_meta,material_type,atlas_meta,active) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", vals)
-            else:
-                conn.execute("""INSERT INTO materials (id,filename,title,description,category,group_key,training_area,course_id,folder,page_count,date_added,storage_filename,storage_backend,storage_key,slides_prefix,storage_meta,material_type,atlas_meta,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", vals)
-        finally:
-            conn.close()
+        material_repository.insert_material(entry)
 
         # V5.7：MEGA 單一預覽在剛上傳完成時直接暖入 Render cache，第一次學員開啟不必再從 MEGA 整份抓一次。
         if backend == "mega" and single_preview and preview_path.exists():
