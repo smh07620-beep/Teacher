@@ -12,6 +12,7 @@ import shutil
 from typing import Any, Mapping
 
 from teacher_app.common.errors import ApiError
+from teacher_app.materials import repository
 
 
 MATERIAL_TYPES = {"standard", "atlas", "infographic", "video", "troubleshooting", "sop", "case"}
@@ -45,7 +46,7 @@ def list_materials(base, requested_area: str) -> list[dict]:
             }
         )
     uploaded: list[dict] = []
-    for material in base.list_uploaded_materials(False):
+    for material in repository.list_uploaded_materials(base, False):
         if material.get("area") != area_filter:
             continue
         category = material.get("category", "")
@@ -83,7 +84,7 @@ def list_admin_materials(base) -> list[dict]:
                     "categoryLabel": labels.get(category, base.CATEGORY_LABELS.get(category, base.CATEGORY_LABELS[""])),
                 }
             )
-    for material in base.list_uploaded_materials(True):
+    for material in repository.list_uploaded_materials(base, True):
         category = material.get("category", "")
         items.append(
             {
@@ -95,7 +96,7 @@ def list_admin_materials(base) -> list[dict]:
 
 
 def update_material(base, material_id: str, data: Mapping[str, Any]) -> dict:
-    entry = base.get_material(material_id)
+    entry = repository.get_material(base, material_id)
     if not entry:
         raise _fail("MATERIAL_NOT_FOUND", "找不到可編輯的上傳教材", 404)
     title = str(data.get("title", entry["title"])).strip()[:255]
