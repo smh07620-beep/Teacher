@@ -59,6 +59,11 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         self.assertNotIn("INSERT INTO materials", self.app)
         self.assertIn("material_repository.insert_material(entry, ignore_conflict=True)", self.app)
         self.assertIn("material_repository.insert_material(entry)", self.app)
+    def test_storage_pointer_updates_are_transactional_repository_writes(self):
+        self.assertIn("def update_material_storage(", self.repo)
+        self.assertIn("UPDATE materials SET storage_backend=", self.repo)
+        self.assertNotIn("UPDATE materials SET storage_backend=", self.app)
+        self.assertIn("material_repository.update_material_storage(", self.app)
     def test_repository_has_no_provider_credentials_or_storage_clients(self):
         for forbidden in (
             "R2_SECRET_ACCESS_KEY",
