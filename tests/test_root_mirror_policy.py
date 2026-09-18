@@ -102,19 +102,15 @@ class RootMirrorPolicyTests(unittest.TestCase):
             self.assertNotIn(legacy_sql, source)
         self.assertIn("_assignment_dict = pgy_repo.assignment_dict", source)
         self.assertIn("pgy_repo.write_audit", source)
+        self.assertIn("def _legacy_error_body", source)
 
-    def test_pgy_atomic_actions_delegate_to_canonical_service(self):
-        source = (ROOT / "pgy_atomic.py").read_text(encoding="utf-8")
-        self.assertIn("from teacher_app.pgy import service as pgy_service", source)
-        for action in (
-            "submit_assignment",
-            "teacher_sign_assignment",
-            "group_countersign_assignment",
-            "finalize_assignment",
-            "reopen_assignment",
-            "cancel_assignment",
-        ):
-            self.assertIn(f"pgy_service.{action}", source)
+    def test_redundant_pgy_atomic_patch_layer_is_retired(self):
+        self.assertFalse((ROOT / "pgy_atomic.py").exists())
+        source = (ROOT / "pgy_app.py").read_text(encoding="utf-8")
+        self.assertNotIn("register_pgy_atomic_workflow", source)
+        self.assertNotIn("from pgy_atomic import", source)
+        self.assertIn("app = register_pgy_workflow(legacy_app)", source)
+        self.assertIn("app = register_pgy_signing_66(legacy_app)", source)
 
     def test_production_entrypoint_stays_composition_only(self):
         source = (ROOT / "pgy_app.py").read_text(encoding="utf-8")
@@ -126,6 +122,7 @@ class RootMirrorPolicyTests(unittest.TestCase):
             "register_legacy_course_routes",
             "register_legacy_assessment_routes",
             "register_assessment_performance_712",
+            "register_pgy_atomic_workflow",
         ):
             self.assertNotIn(name, source)
         self.assertNotIn("@app.", source)
