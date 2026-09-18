@@ -12,7 +12,6 @@ from exam_integrity import register_exam_integrity
 from free_worker_67 import register_free_worker
 from health_65 import register_health
 from multi_role_66 import register_multi_role_66
-from pgy_atomic import register_pgy_atomic_workflow
 from pgy_signing_66 import register_pgy_signing_66
 from pgy_frontend import register_pgy_frontend
 from pgy_workflow import register_pgy_workflow
@@ -38,7 +37,8 @@ app = register_multi_role_66(legacy_app)
 # RBAC, signing, or administrative authority.
 app = register_training_audience_71(legacy_app)
 app = register_health(legacy_app)
-app = register_pgy_atomic_workflow(legacy_app)
+# The former pgy_atomic patch layer duplicated the same six canonical service
+# mutations already registered by register_pgy_workflow and is retired.
 app = register_pgy_signing_66(legacy_app)
 # Teacher 7.1 command center is a read-only aggregation surface over canonical
 # domains. It owns no mutation rules and never replaces professional signers.
