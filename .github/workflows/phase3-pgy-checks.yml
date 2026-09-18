@@ -121,6 +121,8 @@ jobs:
           assert data['ok'] is True
           assert data['status'] == 'healthy'
           assert data['version'] == RELEASE_VERSION
+          assert data['deployment']['provider'] in {'local', 'render'}
+          assert set(data['deployment']) == {'provider', 'branch', 'commit'}
           assert data['database']['ok'] is True
           assert data['migrations']['ok'] is True
           assert data['migrations']['missing'] == []
@@ -134,6 +136,8 @@ jobs:
         run: |
           grep -q 'SECRET_KEY' render.yaml
           grep -q 'SESSION_COOKIE_SECURE' render.yaml
+          grep -q 'autoDeployTrigger: checksPass' render.yaml
+          ! grep -q 'autoDeployTrigger: commit' render.yaml
           grep -q 'AI_DEIDENTIFICATION_ENABLED' render.yaml
           grep -q 'AI_EXTERNAL_MEDIA_ALLOWED' render.yaml
           grep -q 'UPLOAD_ZIP_MAX_RATIO' render.yaml
