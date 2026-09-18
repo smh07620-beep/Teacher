@@ -34,6 +34,7 @@ These are not ordinary domain implementations and should not be removed merely t
 
 - `register_pgy_workflow` — surviving thin PGY legacy URL/JSON adapter over `teacher_app.pgy`; no independent schema/business ownership.
 - `register_legacy_office_69` — compatibility route; must stay thin and defer authorization to canonical RBAC.
+- `register_atlas_70` — Atlas HTTP compatibility adapter; CRUD/search ownership is canonical while local image/DOCX transport remains bounded legacy debt.
 
 ### D. Runtime domain owners still pending convergence
 
@@ -47,7 +48,6 @@ These modules still own meaningful runtime behavior and must be migrated domain-
 - `register_external_media`
 - `register_course_bundle_72`
 - `register_course_bundle_followup_73`
-- `register_atlas_70`
 - `register_question_bank`
 
 `register_pgy_atomic_workflow` is **retired**. It only replaced six existing PGY mutation endpoints with the same canonical `teacher_app.pgy.service` handlers and had no unique runtime ownership.
@@ -120,9 +120,22 @@ Remaining:
 
 `course_bundle_72.py` and `course_bundle_followup_73.py` own idempotent course/exam creation and material follow-up workflow state. Converge together only at the service/repository boundary while preserving the two-stage HTTP contract and idempotency migrations.
 
-### Atlas — pending
+### Atlas — CRUD/search canonical; local transport pending
 
-`atlas_70.py` still owns Atlas read/write/import/search behavior. Move to a canonical Atlas domain without duplicating material storage/provider behavior.
+Completed:
+
+- `teacher_app.atlas.repository` owns Atlas row projection plus `atlas_items` reads and writes.
+- `teacher_app.atlas.service` owns group scope, read/manage visibility, draft/published filtering and CRUD validation.
+- `teacher_app.atlas.search` owns `/api/teaching-resource-search` aggregation across readable materials and Atlas records.
+- `teacher_app.learning.repository` remains the sole `material_text_index` SQL owner; Atlas search reuses `get_material_text_rows()` instead of creating a parallel search-index repository.
+- `atlas_70.py` contains no Atlas-table CRUD SQL and no `material_text_index` SQL; its teaching-resource route delegates to the canonical search service.
+
+Remaining:
+
+- local Atlas image filesystem transport and thumbnail generation;
+- DOCX source-file lookup, embedded-image extraction and compatibility import flow.
+
+Do not move those file/provider concerns into Atlas CRUD/search modules. They should converge with the eventual storage/provider seam or a dedicated import transport without duplicating storage ownership.
 
 ### Question Bank — pending
 
@@ -144,7 +157,7 @@ Do **not** add a second MEGA client or second connection/session implementation 
 4. Move worker queue/protocol ownership without creating a second worker implementation.
 5. Move external-media validation/persistence ownership.
 6. Move course-bundle and follow-up workflow ownership while preserving idempotency.
-7. Move Atlas ownership.
+7. Move the remaining Atlas image/DOCX transport ownership without duplicating storage/provider behavior.
 8. Move Question Bank ownership without duplicating assessment publication logic.
 9. Continue course/assessment repository migration and provider/storage extraction in bounded slices.
 10. Only after the runtime ownership map has no domain implementation in `app.py`, replace `pgy_app.py` with `app = create_app()`.
