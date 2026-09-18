@@ -123,3 +123,26 @@ def insert_material(entry: dict, *, ignore_conflict: bool = False) -> None:
             if kind == "postgres" and ignore_conflict:
                 sql += " ON CONFLICT(id) DO NOTHING"
         conn.execute(sql, values)
+
+
+def update_material_storage(
+    material_id: str,
+    *,
+    backend: str,
+    storage_key: str,
+    slides_prefix: str,
+    storage_meta_json: str | None = None,
+) -> None:
+    """Update material storage pointers inside an explicit transaction."""
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        if storage_meta_json is None:
+            conn.execute(
+                f"UPDATE materials SET storage_backend={ph}, storage_key={ph}, slides_prefix={ph} WHERE id={ph}",
+                (backend, storage_key, slides_prefix, material_id),
+            )
+        else:
+            conn.execute(
+                f"UPDATE materials SET storage_backend={ph}, storage_key={ph}, slides_prefix={ph}, storage_meta={ph} WHERE id={ph}",
+                (backend, storage_key, slides_prefix, storage_meta_json, material_id),
+            )
