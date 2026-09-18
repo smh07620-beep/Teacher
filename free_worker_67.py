@@ -81,6 +81,7 @@ def _heartbeat(base, worker_id: str, capabilities=None, current_job_id="", metad
             job_id,
             worker_last_seen=seen,
         ),
+        connection_factory=base._db_conn,
     )
 
 
