@@ -1,8 +1,8 @@
-"""Canonical material catalog and metadata behavior for Stage 5.1.
+"""Canonical material catalog, metadata behavior and deletion orchestration.
 
-Cloud/object-storage engines remain compatibility services on ``app.py``.  This
-module owns catalog projection, metadata validation/persistence and deletion
-orchestration without importing provider credentials or SDK clients.
+Ordinary material catalog/validation rules are independent from the legacy
+Flask host. Cloud/object-storage deletion remains a temporary provider seam
+until storage providers move under ``teacher_app.storage``.
 """
 from __future__ import annotations
 
@@ -11,8 +11,11 @@ import re
 import shutil
 from typing import Any, Mapping
 
+from teacher_app.assessments import repository as assessment_repository
+from teacher_app.common import scope
 from teacher_app.common.errors import ApiError
-from teacher_app.materials import repository
+from teacher_app.courses import repository as course_repository
+from teacher_app.materials import catalog, repository
 
 
 MATERIAL_TYPES = {"standard", "atlas", "infographic", "video", "troubleshooting", "sop", "case"}
@@ -22,15 +25,26 @@ def _fail(code: str, message: str, status: int = 400) -> ApiError:
     return ApiError(code, message, status=status)
 
 
-def list_materials(base, requested_area: str) -> list[dict]:
-    area_filter = base.normalize_area(requested_area or base.DEFAULT_TRAINING_AREA)
-    labels = base.category_label_map()
+def _category_labels() -> dict[str, str]:
+    labels = dict(catalog.CATEGORY_LABELS)
+    try:
+        for category_id, title in assessment_repository.category_labels().items():
+            labels[category_id] = title or labels.get(category_id, catalog.CATEGORY_LABELS[""])
+    except Exception:
+        # Material catalog remains usable if assessment labels are temporarily unavailable.
+        pass
+    return labels
+
+
+def list_materials(_legacy_base, requested_area: str) -> list[dict]:
+    area_filter = scope.normalize_area(requested_area or scope.DEFAULT_TRAINING_AREA)
+    labels = _category_labels()
     builtin: list[dict] = []
-    for material in base.load_meta():
+    for material in catalog.load_builtin_meta():
         if not material.get("isBuiltin"):
             continue
-        group = base.normalize_group(material.get("group", base.DEFAULT_GROUP))
-        area = base.normalize_area(material.get("area", base.DEFAULT_TRAINING_AREA))
+        group = scope.normalize_group(material.get("group", scope.DEFAULT_GROUP))
+        area = scope.normalize_area(material.get("area", scope.DEFAULT_TRAINING_AREA))
         if area != area_filter:
             continue
         category = material.get("category", "")
@@ -40,20 +54,20 @@ def list_materials(base, requested_area: str) -> list[dict]:
                 "group": group,
                 "area": area,
                 "viewerMode": "slides",
-                "categoryLabel": labels.get(category, base.CATEGORY_LABELS.get(category, base.CATEGORY_LABELS[""])),
+                "categoryLabel": labels.get(category, catalog.CATEGORY_LABELS.get(category, catalog.CATEGORY_LABELS[""])),
                 "imageFolder": f"slides/{material['folder']}",
                 "viewUrl": "",
             }
         )
     uploaded: list[dict] = []
-    for material in repository.list_uploaded_materials(base, False):
+    for material in repository.list_uploaded_materials(include_inactive=False):
         if material.get("area") != area_filter:
             continue
         category = material.get("category", "")
         uploaded.append(
             {
                 **material,
-                "categoryLabel": labels.get(category, base.CATEGORY_LABELS.get(category, base.CATEGORY_LABELS[""])),
+                "categoryLabel": labels.get(category, catalog.CATEGORY_LABELS.get(category, catalog.CATEGORY_LABELS[""])),
                 "imageFolder": f"uploaded-slides/{material['folder']}",
                 "previewUrl": (
                     f"/material-preview/{material['id']}"
@@ -70,33 +84,33 @@ def list_materials(base, requested_area: str) -> list[dict]:
     return builtin + uploaded
 
 
-def list_admin_materials(base) -> list[dict]:
-    labels = base.category_label_map()
+def list_admin_materials(_legacy_base) -> list[dict]:
+    labels = _category_labels()
     items: list[dict] = []
-    for material in base.load_meta():
+    for material in catalog.load_builtin_meta():
         if material.get("isBuiltin"):
-            group = base.normalize_group(material.get("group", base.DEFAULT_GROUP))
+            group = scope.normalize_group(material.get("group", scope.DEFAULT_GROUP))
             category = material.get("category", "")
             items.append(
                 {
                     **material,
                     "group": group,
-                    "categoryLabel": labels.get(category, base.CATEGORY_LABELS.get(category, base.CATEGORY_LABELS[""])),
+                    "categoryLabel": labels.get(category, catalog.CATEGORY_LABELS.get(category, catalog.CATEGORY_LABELS[""])),
                 }
             )
-    for material in repository.list_uploaded_materials(base, True):
+    for material in repository.list_uploaded_materials(include_inactive=True):
         category = material.get("category", "")
         items.append(
             {
                 **material,
-                "categoryLabel": labels.get(category, base.CATEGORY_LABELS.get(category, base.CATEGORY_LABELS[""])),
+                "categoryLabel": labels.get(category, catalog.CATEGORY_LABELS.get(category, catalog.CATEGORY_LABELS[""])),
             }
         )
     return items
 
 
-def update_material(base, material_id: str, data: Mapping[str, Any]) -> dict:
-    entry = repository.get_material(base, material_id)
+def update_material(_legacy_base, material_id: str, data: Mapping[str, Any]) -> dict:
+    entry = repository.get_material(material_id)
     if not entry:
         raise _fail("MATERIAL_NOT_FOUND", "找不到可編輯的上傳教材", 404)
     title = str(data.get("title", entry["title"])).strip()[:255]
@@ -115,15 +129,15 @@ def update_material(base, material_id: str, data: Mapping[str, Any]) -> dict:
         if material_type == "atlas"
         else {}
     )
-    group = base.normalize_group(str(data.get("group", entry.get("group", base.DEFAULT_GROUP))))
-    area = base.normalize_area(str(data.get("area", entry.get("area", base.DEFAULT_TRAINING_AREA))))
+    group = scope.normalize_group(str(data.get("group", entry.get("group", scope.DEFAULT_GROUP))))
+    area = scope.normalize_area(str(data.get("area", entry.get("area", scope.DEFAULT_TRAINING_AREA))))
     category = str(data.get("category", entry.get("category", "")))
     course_id = str(data.get("courseId", entry.get("courseId", ""))).strip()
-    course = base.get_course(course_id) if course_id else None
+    course = course_repository.get_course(course_id) if course_id else None
     if not course or course.get("group") != group or course.get("area") != area:
         course_id = ""
     active = bool(data.get("active", entry.get("active", True)))
-    quiz_category = base.get_quiz_category(category) if category else None
+    quiz_category = assessment_repository.get_category(category) if category else None
     if category and (
         not quiz_category
         or quiz_category["group"] != group
@@ -146,7 +160,8 @@ def update_material(base, material_id: str, data: Mapping[str, Any]) -> dict:
 
 
 def delete_material(base, material_id: str) -> dict:
-    entry = repository.get_material(base, material_id)
+    """Delete storage object + row; provider seam remains legacy until storage convergence."""
+    entry = repository.get_material(material_id)
     if not entry:
         raise _fail("MATERIAL_NOT_FOUND", "內建教材不能從後台刪除，或找不到此教材", 404)
 
