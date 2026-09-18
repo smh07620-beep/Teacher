@@ -1,10 +1,10 @@
 """Thin legacy HTTP adapter for the canonical PGY domain.
 
 The public ``/api/pgy/*`` URLs and legacy JSON error shape remain stable for
-cached/older clients and for the 6.6 signing overlay.  PGY schema, repository
+cached/older clients and for the 6.6 signing overlay. PGY schema, repository
 queries, state transitions, validation and audit writes are canonical in
-``teacher_app.pgy``; this module only keeps the compatibility seams consumed by
-``pgy_atomic.py`` and ``pgy_signing_66.py``.
+``teacher_app.pgy``; this module only keeps the compatibility seams still
+consumed by ``pgy_signing_66.py``.
 """
 from __future__ import annotations
 
@@ -114,11 +114,16 @@ def _audit(
     )
 
 
-def _legacy_error(exc: ApiError):
+def _legacy_error_body(exc: ApiError) -> dict:
+    """Stable legacy PGY error projection used by compatibility adapters."""
     body = {"error": exc.message}
     if exc.extra.get("loginRequired"):
         body["loginRequired"] = True
-    return jsonify(body), exc.status
+    return body
+
+
+def _legacy_error(exc: ApiError):
+    return jsonify(_legacy_error_body(exc)), exc.status
 
 
 def _assignment_response(handler, user, assignment_id: str, data: Dict[str, Any]):
