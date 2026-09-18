@@ -3,6 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from flask import Flask, jsonify
 
@@ -83,6 +84,14 @@ class CourseBundleFollowup73Tests(unittest.TestCase):
             followup._course_bundle_followups_73(conn, kind)
         finally:
             conn.close()
+
+        self.canonical_db = patch(
+            "teacher_app.common.db.get_connection",
+            side_effect=self.base._db_conn,
+        )
+        self.canonical_db.start()
+        self.addCleanup(self.canonical_db.stop)
+
         followup.register_course_bundle_followup_73(self.base)
         self.client = self.base.app.test_client()
 
@@ -174,6 +183,7 @@ class CourseBundleFollowup73Contracts(unittest.TestCase):
         cls.health = ROOT.joinpath("health_65.py").read_text(encoding="utf-8")
         cls.wizard = ROOT.joinpath("static", "course-wizard-681.js").read_text(encoding="utf-8")
         cls.adapter = ROOT.joinpath("course_bundle_followup_73.py").read_text(encoding="utf-8")
+        cls.canonical = ROOT.joinpath("teacher_app", "courses", "bundle_followup.py").read_text(encoding="utf-8")
 
     def test_migration_imports_before_runner_and_adapter_registers_after_rbac(self):
         self.assertLess(self.entry.index("from course_bundle_followup_73"), self.entry.index("from schema_migrations"))
@@ -195,6 +205,27 @@ class CourseBundleFollowup73Contracts(unittest.TestCase):
         self.assertNotIn("X-Admin-Key", self.adapter)
         self.assertNotIn("getAdminKey", self.adapter)
         self.assertNotIn("elevation", self.adapter.lower())
+
+    def test_followup_state_and_scope_are_canonical(self):
+        for marker in (
+            "followup_service.workflow_context",
+            "followup_service.validate_bundle_target",
+            "followup_service.upload_claim",
+            "followup_service.link_claim",
+            "followup_service.claim",
+            "followup_service.complete",
+        ):
+            self.assertIn(marker, self.adapter)
+        for runtime_sql in (
+            "SELECT status,course_id,quiz_category_id",
+            "INSERT INTO course_bundle_followups",
+            "UPDATE course_bundle_followups SET",
+            "DELETE FROM course_bundle_followups",
+        ):
+            self.assertNotIn(runtime_sql, self.adapter)
+            self.assertIn(runtime_sql, self.canonical)
+        self.assertNotIn("hashlib", self.adapter)
+        self.assertIn("hashlib.sha256", self.canonical)
 
 
 if __name__ == "__main__":
