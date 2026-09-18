@@ -85,6 +85,19 @@ behavior.
 - Canonical material, course and assessment services read material data directly through `teacher_app.materials.repository` rather than bouncing through the legacy host.
 
 
+## Production runtime validation stage 3
+
+- Render auto-deploy is gated by passing GitHub checks via `autoDeployTrigger: checksPass`; an unverified branch commit must not become the production release.
+- `/health` exposes only non-secret deployment identity (`provider`, branch and short commit) so operators can prove which Git commit is actually serving traffic.
+- Material/course hot paths emit bounded operational timing logs for `api_list_slides` and `api_courses` without logging user identity or credentials.
+- Web MEGA reads use a 120-second total budget while Gunicorn keeps a 180-second request timeout. Long upload/worker operations retain their separate background budgets.
+- Cold MEGA preview/read timeouts return a retryable 504 before the Gunicorn worker timeout instead of allowing provider work to outlive the web request budget.
+- Same-origin JavaScript and CSS cache keys are rewritten to the deployed Render commit. Browser cache lifetime may remain long, but a new deployment always receives a new asset URL.
+- The six exam-container actions (question, image, video, AI, question management and settings) use one delegated runtime path that resolves the current canonical `window.teacherContentStudioExamAction`; inline duplicate handlers are prohibited.
+- Exam-action failures return to a visible Studio error state instead of disappearing into a hidden workspace or unhandled promise rejection.
+
+
+
 ## Follow-up sequence
 
 1. Extract storage/provider ownership one bounded backend at a time; do not combine cloud credentials, upload jobs, conversion and material metadata into one rewrite.
