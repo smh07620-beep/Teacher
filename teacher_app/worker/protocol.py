@@ -63,12 +63,13 @@ def record_heartbeat(
     metadata: Any = None,
     stamp: str | None = None,
     touch_job: Callable[[str, str], None] | None = None,
+    connection_factory: Callable[[], tuple[Any, str]] | None = None,
 ) -> str:
     """Persist heartbeat state and optionally touch the current legacy job row.
 
-    ``touch_job`` is a narrow transition seam while material job persistence is
-    still legacy-owned.  The canonical worker protocol never imports the legacy
-    host object directly.
+    ``touch_job`` and ``connection_factory`` are narrow transition seams while
+    material-job persistence remains legacy-owned.  The canonical worker
+    protocol never imports the legacy host object directly.
     """
     seen = stamp or now()
     repository.upsert_heartbeat(
@@ -76,6 +77,7 @@ def record_heartbeat(
         last_seen=seen,
         capabilities=heartbeat_capabilities(capabilities, metadata),
         current_job_id=current_job_id,
+        connection_factory=connection_factory,
     )
     if current_job_id and touch_job is not None:
         touch_job(current_job_id, seen)
