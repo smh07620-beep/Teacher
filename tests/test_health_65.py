@@ -2,6 +2,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from flask import Flask
@@ -112,6 +113,29 @@ class Health65Tests(
             [],
         )
 
+    def test_health_exposes_non_secret_render_deployment_identity(self):
+        base = HealthBase()
+        self.addCleanup(base.close)
+        schema_migrations.apply_migrations(base)
+        health_65.register_health(base)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "RENDER": "true",
+                "RENDER_GIT_BRANCH": "feature/teacher-content-authoring-studio-72",
+                "RENDER_GIT_COMMIT": "1234567890abcdef1234567890abcdef12345678",
+            },
+            clear=False,
+        ):
+            body = base.app.test_client().get("/health").get_json()
+
+        self.assertEqual(body["deployment"]["provider"], "render")
+        self.assertEqual(body["deployment"]["branch"], "feature/teacher-content-authoring-studio-72")
+        self.assertEqual(body["deployment"]["commit"], "1234567890ab")
+        serialized = json.dumps(body, ensure_ascii=False)
+        self.assertNotIn("DATABASE_URL", serialized)
+        self.assertNotIn("SECRET_KEY", serialized)
     def test_missing_0066_returns_degraded_503(self):
         base = HealthBase()
         self.addCleanup(base.close)
