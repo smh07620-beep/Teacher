@@ -117,9 +117,7 @@ def _add_columns(
                 f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {definition}"
             )
         else:
-            conn.execute(
-                f"ALTER TABLE {table} ADD COLUMN {definition}"
-            )
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
         added.add(name)
 
     return added
@@ -140,9 +138,7 @@ def _backfill_legacy_user_roles(conn, kind: str) -> None:
     if "roles_json" not in _columns(conn, kind, "user_accounts"):
         return
 
-    rows = conn.execute(
-        "SELECT username, role, roles_json FROM user_accounts"
-    ).fetchall()
+    rows = conn.execute("SELECT username, role, roles_json FROM user_accounts").fetchall()
     ph = "%s" if kind == "postgres" else "?"
 
     for row in rows:
@@ -159,31 +155,31 @@ def _backfill_legacy_user_roles(conn, kind: str) -> None:
             WHERE username={ph}
               AND (roles_json IS NULL OR TRIM(roles_json) IN ('', '[]'))
             """,
-            (
-                _roles_json(None, _row_value(row, "role", 1)),
-                username,
-            ),
+            (_roles_json(None, _row_value(row, "role", 1)), username),
         )
 
 
 @migration("0066-additive-rbac-pgy-signing")
 def _additive_rbac_pgy_signing_66(conn, kind: str) -> None:
-    """Formal 6.6 schema source for the additive M1 signing/RBAC fields.
-
-    The migration deliberately leaves legacy columns and rows in place.  Old
-    assignments get the ``legacy`` default and keep the 6.5 transition flow;
-    the 6.6 create route explicitly selects ``single`` for new assignments.
-    """
+    """Formal 6.6 schema source for the additive M1 signing/RBAC fields."""
     _add_columns(
         conn,
         kind,
         "user_accounts",
-        {
-            "roles_json": "roles_json TEXT NOT NULL DEFAULT '[]'",
-        },
+        {"roles_json": "roles_json TEXT NOT NULL DEFAULT '[]'"},
     )
     _backfill_legacy_user_roles(conn, kind)
-    _add_columns(conn, kind, "pgy_assignments", {"sign_mode": "sign_mode TEXT NOT NULL DEFAULT 'legacy'", "first_signature": "first_signature TEXT NOT NULL DEFAULT '{}'", "second_signature": "second_signature TEXT NOT NULL DEFAULT '{}'"})
+    _add_columns(
+        conn,
+        kind,
+        "pgy_assignments",
+        {
+            "sign_mode": "sign_mode TEXT NOT NULL DEFAULT 'legacy'",
+            "first_signature": "first_signature TEXT NOT NULL DEFAULT '{}'",
+            "second_signature": "second_signature TEXT NOT NULL DEFAULT '{}'",
+        },
+    )
+
 
 @migration("0067-smart-learning-content")
 def _smart_learning_67(conn, kind: str) -> None:
@@ -198,12 +194,7 @@ def _smart_learning_67(conn, kind: str) -> None:
 
 @migration("0067-render-worker-shared-staging")
 def _render_worker_shared_staging_67(conn, kind: str) -> None:
-    """Add Scheme B metadata without re-running or overwriting the original 0067.
-
-    Existing 6.7 databases may already have recorded 0067, so this separate
-    additive marker upgrades them safely.  `material_jobs` remains the only
-    queue; media_processing_jobs is linked supporting metadata for media jobs.
-    """
+    """Add Scheme B metadata without re-running or overwriting the original 0067."""
     _add_columns(conn, kind, "material_jobs", {
         "staging_backend": "staging_backend TEXT NOT NULL DEFAULT 'local'",
         "staging_key": "staging_key TEXT NOT NULL DEFAULT ''",
@@ -230,11 +221,7 @@ def _b_free_local_worker_67(conn, kind: str) -> None:
 
 @migration("0068-external-interactive-media")
 def _external_interactive_media_68(conn, kind: str) -> None:
-    """6.8 additive media, elevation and question-bank schema.
-
-    This intentionally extends the established learning_progress and
-    quiz_questions tables rather than creating competing stores.
-    """
+    """6.8 additive media, elevation and question-bank schema."""
     boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
     default_false = "FALSE" if kind == "postgres" else "0"
     payload = "JSONB" if kind == "postgres" else "TEXT"
@@ -246,17 +233,24 @@ def _external_interactive_media_68(conn, kind: str) -> None:
         "updated_at": "updated_at TEXT NOT NULL DEFAULT ''",
     })
     _add_columns(conn, kind, "quiz_questions", {
-        "domain": "domain TEXT NOT NULL DEFAULT ''", "topic": "topic TEXT NOT NULL DEFAULT ''",
-        "subtopic": "subtopic TEXT NOT NULL DEFAULT ''", "learning_objective": "learning_objective TEXT NOT NULL DEFAULT ''",
-        "cognitive_level": "cognitive_level TEXT NOT NULL DEFAULT 'understand'", "tags": "tags TEXT NOT NULL DEFAULT '[]'",
-        "source_material_id": "source_material_id TEXT NOT NULL DEFAULT ''", "review_source": "review_source TEXT NOT NULL DEFAULT '{}'",
-        "status": "status TEXT NOT NULL DEFAULT 'published'", "origin": "origin TEXT NOT NULL DEFAULT 'manual'",
-        "version": "version INTEGER NOT NULL DEFAULT 1", "reviewed_by": "reviewed_by TEXT NOT NULL DEFAULT ''",
-        "reviewed_at": "reviewed_at TEXT NOT NULL DEFAULT ''", "updated_at": "updated_at TEXT NOT NULL DEFAULT ''",
+        "domain": "domain TEXT NOT NULL DEFAULT ''",
+        "topic": "topic TEXT NOT NULL DEFAULT ''",
+        "subtopic": "subtopic TEXT NOT NULL DEFAULT ''",
+        "learning_objective": "learning_objective TEXT NOT NULL DEFAULT ''",
+        "cognitive_level": "cognitive_level TEXT NOT NULL DEFAULT 'understand'",
+        "tags": "tags TEXT NOT NULL DEFAULT '[]'",
+        "source_material_id": "source_material_id TEXT NOT NULL DEFAULT ''",
+        "review_source": "review_source TEXT NOT NULL DEFAULT '{}'",
+        "status": "status TEXT NOT NULL DEFAULT 'published'",
+        "origin": "origin TEXT NOT NULL DEFAULT 'manual'",
+        "version": "version INTEGER NOT NULL DEFAULT 1",
+        "reviewed_by": "reviewed_by TEXT NOT NULL DEFAULT ''",
+        "reviewed_at": "reviewed_at TEXT NOT NULL DEFAULT ''",
+        "updated_at": "updated_at TEXT NOT NULL DEFAULT ''",
         "normalized_hash": "normalized_hash TEXT NOT NULL DEFAULT ''",
     })
     conn.execute(f"CREATE TABLE IF NOT EXISTS external_media (id TEXT PRIMARY KEY,material_id TEXT NOT NULL,provider TEXT NOT NULL,canonical_url TEXT NOT NULL,video_id TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(material_id))")
-    conn.execute(f"CREATE TABLE IF NOT EXISTS admin_elevations (username TEXT PRIMARY KEY,elevated_at TEXT NOT NULL,expires_at TEXT NOT NULL,session_version INTEGER NOT NULL DEFAULT 0)")
+    conn.execute("CREATE TABLE IF NOT EXISTS admin_elevations (username TEXT PRIMARY KEY,elevated_at TEXT NOT NULL,expires_at TEXT NOT NULL,session_version INTEGER NOT NULL DEFAULT 0)")
     conn.execute(f"CREATE TABLE IF NOT EXISTS exam_blueprints (id TEXT PRIMARY KEY,quiz_category_id TEXT NOT NULL,question_count INTEGER NOT NULL,quotas {payload} NOT NULL DEFAULT '{{}}',exclude_recent INTEGER NOT NULL DEFAULT 0,created_by TEXT NOT NULL,created_at TEXT NOT NULL)")
     conn.execute(f"CREATE TABLE IF NOT EXISTS exam_blueprint_snapshots (id TEXT PRIMARY KEY,blueprint_id TEXT NOT NULL,quiz_category_id TEXT NOT NULL,questions {payload} NOT NULL,created_at TEXT NOT NULL,UNIQUE(blueprint_id))")
     conn.execute(f"CREATE TABLE IF NOT EXISTS question_attempt_analytics (question_id TEXT NOT NULL,attempt_id TEXT NOT NULL,selected_option TEXT NOT NULL DEFAULT '',is_correct {boolean} NOT NULL DEFAULT {default_false},created_at TEXT NOT NULL,PRIMARY KEY(question_id,attempt_id))")
@@ -273,17 +267,12 @@ def _user_profile_titles_69(conn, kind: str) -> None:
 
 @migration("0070-material-search-and-atlas")
 def _material_search_and_atlas_70(conn, kind: str) -> None:
-    """Formal, additive resource search and Atlas records.
-
-    Images remain in the configured material storage.  The database holds only
-    a storage URL/key and metadata, never image bytes.  This migration is safe
-    to apply repeatedly on both supported database engines.
-    """
+    """Formal, additive resource search and Atlas records."""
     boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
     default_false = "FALSE" if kind == "postgres" else "0"
     payload = "JSONB" if kind == "postgres" else "TEXT"
     conn.execute(
-        f"CREATE TABLE IF NOT EXISTS material_search_status ("
+        "CREATE TABLE IF NOT EXISTS material_search_status ("
         "material_id TEXT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'not_indexed',"
         "page_count INTEGER NOT NULL DEFAULT 0,last_indexed_at TEXT NOT NULL DEFAULT '',"
         "failure_reason TEXT NOT NULL DEFAULT '',source_kind TEXT NOT NULL DEFAULT '')"
@@ -303,6 +292,40 @@ def _material_search_and_atlas_70(conn, kind: str) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atlas_items_visibility ON atlas_items(group_key,published,category,sort_order)")
 
 
+@migration("0072-course-bundle-idempotency")
+def _course_bundle_idempotency_72(conn, kind: str) -> None:
+    """Own Course Wizard idempotency schema in the central registry."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS course_bundle_requests ("
+        "username TEXT NOT NULL,workflow_id TEXT NOT NULL,request_hash TEXT NOT NULL,"
+        "training_area TEXT NOT NULL,group_key TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'creating',"
+        "course_id TEXT NOT NULL DEFAULT '',quiz_category_id TEXT NOT NULL DEFAULT '',"
+        "result_json TEXT NOT NULL DEFAULT '{}',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,"
+        "PRIMARY KEY(username,workflow_id))"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_course_bundle_requests_status "
+        "ON course_bundle_requests(status,updated_at)"
+    )
+
+
+@migration("0073-course-bundle-followups")
+def _course_bundle_followups_73(conn, kind: str) -> None:
+    """Own retry-safe Course Wizard follow-up schema in the central registry."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS course_bundle_followups ("
+        "username TEXT NOT NULL,workflow_id TEXT NOT NULL,item_key TEXT NOT NULL,"
+        "kind TEXT NOT NULL,request_hash TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'processing',"
+        "response_status INTEGER NOT NULL DEFAULT 0,response_json TEXT NOT NULL DEFAULT '{}',"
+        "created_at TEXT NOT NULL,updated_at TEXT NOT NULL,"
+        "PRIMARY KEY(username,workflow_id,item_key))"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_course_bundle_followups_status "
+        "ON course_bundle_followups(status,updated_at)"
+    )
+
+
 @migration("0074-assessment-list-indexes")
 def _assessment_list_indexes_74(conn, kind: str) -> None:
     """Keep assessment list queries bounded on PostgreSQL and SQLite."""
@@ -319,18 +342,13 @@ def _assessment_list_indexes_74(conn, kind: str) -> None:
 
 
 def ensure_r2_free_budget_guard_67(base) -> None:
-    """Backfill 6.7 R2 guard tables even when the 0067 marker already exists.
-
-    This deliberately is not a new migration marker and is called at every
-    startup.  It makes a database stamped with the original 0067 release safe
-    to run the additive B-Free budget guard on SQLite and PostgreSQL.
-    """
+    """Backfill 6.7 R2 guard tables even when the 0067 marker already exists."""
     conn, kind = base._db_conn()
     try:
         boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
         default_bool = "TRUE" if kind == "postgres" else "1"
         conn.execute(
-            f"CREATE TABLE IF NOT EXISTS r2_upload_reservations ("
+            "CREATE TABLE IF NOT EXISTS r2_upload_reservations ("
             "id TEXT PRIMARY KEY,upload_id TEXT NOT NULL UNIQUE,object_key TEXT NOT NULL UNIQUE,"
             "reserved_bytes BIGINT NOT NULL,status TEXT NOT NULL DEFAULT 'active',"
             "created_at TEXT NOT NULL,expires_at TEXT NOT NULL,released_at TEXT NOT NULL DEFAULT '',"
@@ -375,9 +393,6 @@ def apply_migrations(base) -> list[str]:
         for version, fn in MIGRATIONS:
             if version in applied:
                 continue
-            # Postgres/SQLite connectors in the legacy app use autocommit; migration
-            # bodies therefore need to be idempotent. Each marker is inserted only
-            # after the migration body succeeds.
             fn(conn, kind)
             conn.execute(
                 f"INSERT INTO schema_migrations (version, applied_at) VALUES ({ph},{ph})",
