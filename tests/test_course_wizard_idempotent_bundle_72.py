@@ -9,7 +9,8 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.wizard = ROOT.joinpath("static", "course-wizard-681.js").read_text(encoding="utf-8")
-        cls.bundle = ROOT.joinpath("course_bundle_72.py").read_text(encoding="utf-8")
+        cls.adapter = ROOT.joinpath("course_bundle_72.py").read_text(encoding="utf-8")
+        cls.bundle = ROOT.joinpath("teacher_app", "courses", "bundle.py").read_text(encoding="utf-8")
         cls.entry = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
         cls.health = ROOT.joinpath("health_65.py").read_text(encoding="utf-8")
 
@@ -28,17 +29,26 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
         self.assertIn("bundleWorkflowId", self.wizard)
         self.assertIn("pending-background", self.bundle)
 
-    def test_bundle_route_uses_capability_rbac_and_atomic_transaction(self):
-        self.assertIn('base.require_permission("course.manage")', self.bundle)
-        self.assertIn('base.require_permission("question.manage")', self.bundle)
-        self.assertIn('"BEGIN" if kind == "postgres" else "BEGIN IMMEDIATE"', self.bundle)
-        self.assertNotIn("X-Admin-Key", self.bundle)
-        self.assertNotIn("getAdminKey", self.bundle)
+    def test_bundle_route_uses_capability_rbac_and_canonical_transaction(self):
+        self.assertIn('base.require_permission("course.manage")', self.adapter)
+        self.assertIn('base.require_permission("question.manage")', self.adapter)
+        self.assertIn("bundle_service.create_bundle", self.adapter)
+        self.assertIn("with common_db.transaction()", self.bundle)
+        self.assertNotIn("X-Admin-Key", self.adapter)
+        self.assertNotIn("getAdminKey", self.adapter)
         self.assertIn("IDEMPOTENCY_KEY_REUSED", self.bundle)
+        for runtime_sql in (
+            "INSERT INTO courses",
+            "INSERT INTO quiz_categories",
+            "SELECT * FROM course_bundle_requests",
+            "UPDATE course_bundle_requests SET",
+        ):
+            self.assertNotIn(runtime_sql, self.adapter)
+            self.assertIn(runtime_sql, self.bundle)
 
-    def test_migration_is_registered_before_runner_and_route_after_rbac(self):
-        self.assertIn("0072-course-bundle-idempotency", self.bundle)
+    def test_migration_and_route_registration_order_remain_stable(self):
         self.assertIn("0072-course-bundle-idempotency", self.health)
+        self.assertIn("migration(MIGRATION_ID)(_course_bundle_idempotency_72)", self.adapter)
         self.assertLess(self.entry.index("from course_bundle_72 import"), self.entry.index("app = register_schema_migrations"))
         self.assertLess(self.entry.index("app = register_rbac_681"), self.entry.index("app = register_course_bundle_72"))
 
