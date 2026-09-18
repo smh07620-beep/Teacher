@@ -303,6 +303,21 @@ def _material_search_and_atlas_70(conn, kind: str) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atlas_items_visibility ON atlas_items(group_key,published,category,sort_order)")
 
 
+@migration("0074-assessment-list-indexes")
+def _assessment_list_indexes_74(conn, kind: str) -> None:
+    """Keep assessment list queries bounded on PostgreSQL and SQLite."""
+    if _table_exists(conn, kind, "quiz_categories"):
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_quiz_categories_scope_list "
+            "ON quiz_categories(group_key, training_area, active, sort_order, date_added)"
+        )
+    if _table_exists(conn, kind, "quiz_questions"):
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_quiz_questions_category_active "
+            "ON quiz_questions(quiz_category_id, active)"
+        )
+
+
 def ensure_r2_free_budget_guard_67(base) -> None:
     """Backfill 6.7 R2 guard tables even when the 0067 marker already exists.
 
