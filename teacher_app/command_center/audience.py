@@ -10,22 +10,9 @@ from typing import Any, Mapping, Optional, Sequence
 
 from flask import jsonify, request
 
-from schema_migrations import _add_columns, migration
 from teacher_app.common.auth import has_permission, normalize_role, user_roles
 from teacher_app.common.db import get_connection, placeholder
 from teacher_app.common.errors import ApiError
-
-
-@migration("0071-pgy-learner-audience")
-def _pgy_learner_audience_71(conn, kind: str) -> None:
-    boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
-    default_false = "FALSE" if kind == "postgres" else "0"
-    _add_columns(
-        conn,
-        kind,
-        "user_accounts",
-        {"pgy_learner": f"pgy_learner {boolean} NOT NULL DEFAULT {default_false}"},
-    )
 
 
 def _username(value: Any) -> str:
