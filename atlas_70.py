@@ -86,6 +86,7 @@ def register_atlas_70(base):
                 user,
                 material_id,
                 base.UPLOADED_SLIDES_DIR,
+                legacy_material_getter=base.get_material,
             )
         except ApiError as exc:
             return _error(exc)
@@ -104,6 +105,7 @@ def register_atlas_70(base):
                 body,
                 uploaded_slides_dir=base.UPLOADED_SLIDES_DIR,
                 material_storage=base.MATERIAL_STORAGE,
+                legacy_material_getter=base.get_material,
             )
         except ApiError as exc:
             return _error(exc)
