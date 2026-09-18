@@ -64,6 +64,13 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         self.assertIn("UPDATE materials SET storage_backend=", self.repo)
         self.assertNotIn("UPDATE materials SET storage_backend=", self.app)
         self.assertIn("material_repository.update_material_storage(", self.app)
+    def test_material_metadata_update_and_delete_are_repository_writes(self):
+        self.assertIn("def update_material_metadata(", self.repo)
+        self.assertIn("def delete_material_record(", self.repo)
+        self.assertNotIn("UPDATE materials SET title=", self.materials)
+        self.assertNotIn("DELETE FROM materials", self.materials)
+        self.assertIn("repository.update_material_metadata(", self.materials)
+        self.assertIn("repository.delete_material_record(", self.materials)
     def test_repository_has_no_provider_credentials_or_storage_clients(self):
         for forbidden in (
             "R2_SECRET_ACCESS_KEY",
