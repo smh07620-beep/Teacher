@@ -25,6 +25,12 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         self.db_patch = patch.object(legacy_app, "_db_conn", self.connect)
         self.db_patch.start()
         self.addCleanup(self.db_patch.stop)
+        self.canonical_db_patch = patch(
+            "teacher_app.common.db.get_connection",
+            side_effect=self.connect,
+        )
+        self.canonical_db_patch.start()
+        self.addCleanup(self.canonical_db_patch.stop)
         legacy_app.init_user_accounts_db()
         legacy_app.init_exam_db()
         legacy_app.init_materials_db()
