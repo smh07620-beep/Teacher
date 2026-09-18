@@ -2,6 +2,8 @@
 import unittest
 from pathlib import Path
 
+import release_contract
+
 ROOT = Path(__file__).parents[1]
 
 
@@ -13,7 +15,6 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
         cls.bundle = ROOT.joinpath("teacher_app", "courses", "bundle.py").read_text(encoding="utf-8")
         cls.schema = ROOT.joinpath("schema_migrations.py").read_text(encoding="utf-8")
         cls.entry = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
-        cls.health = ROOT.joinpath("health_65.py").read_text(encoding="utf-8")
 
     def test_wizard_uses_one_session_scoped_bundle_endpoint(self):
         self.assertIn("/api/course-bundles", self.wizard)
@@ -48,7 +49,7 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
             self.assertIn(runtime_sql, self.bundle)
 
     def test_migration_and_route_registration_order_remain_stable(self):
-        self.assertIn("0072-course-bundle-idempotency", self.health)
+        self.assertIn("0072-course-bundle-idempotency", release_contract.REQUIRED_MIGRATIONS)
         self.assertIn('@migration("0072-course-bundle-idempotency")', self.schema)
         self.assertNotIn("migration(MIGRATION_ID)", self.adapter)
         self.assertLess(
