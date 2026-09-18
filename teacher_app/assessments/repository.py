@@ -212,3 +212,23 @@ def insert_blueprint_snapshot(values: Mapping[str, Any]) -> None:
             f"INSERT INTO exam_blueprint_snapshots({','.join(columns)}) VALUES({','.join([ph] * len(columns))})",
             tuple(values.get(column) for column in columns),
         )
+
+
+def list_question_attempt_analytics(question_id: str) -> list[dict]:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        rows = conn.execute(
+            f"SELECT selected_option,is_correct FROM question_attempt_analytics WHERE question_id={ph}",
+            (question_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_bank_question_correct(question_id: str) -> Any:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT correct FROM quiz_questions WHERE id={ph}",
+            (question_id,),
+        ).fetchone()
+    return dict(row).get("correct") if row else None
