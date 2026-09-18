@@ -1,6 +1,7 @@
 """Legacy route compatibility helpers.
 
-Milestone 1 does not move endpoints. Existing Flask views in ``app.py``,
-``pgy_workflow.py``, ``pgy_atomic.py``, and ``exam_integrity.py`` stay registered
-on the legacy application object.
+The production compatibility host still mounts selected root adapters while
+canonical domains are converged incrementally. Existing Flask views in
+``app.py``, ``pgy_workflow.py`` and ``exam_integrity.py`` remain compatibility
+surfaces; the redundant ``pgy_atomic.py`` replacement layer has been retired.
 """
