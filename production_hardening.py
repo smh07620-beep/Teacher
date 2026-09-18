@@ -7,7 +7,7 @@ import threading
 import time
 from urllib.parse import urlsplit
 
-from flask import jsonify, request
+from flask import g, jsonify, request
 
 
 _RATE_LOCK = threading.Lock()
@@ -78,6 +78,8 @@ def register_production_hardening(base):
 
     @app.before_request
     def security_preflight():
+        if request.endpoint in {"api_list_slides", "api_courses"}:
+            g._teacher_material_hot_path_started = time.perf_counter()
         if request.path == "/api/auth/login" and request.method == "POST":
             key = _login_key()
             now = time.time()
@@ -101,6 +103,15 @@ def register_production_hardening(base):
 
     @app.after_request
     def security_postprocess(response):
+        started = getattr(g, "_teacher_material_hot_path_started", None)
+        if started is not None and request.endpoint in {"api_list_slides", "api_courses"}:
+            duration_ms = (time.perf_counter() - started) * 1000
+            app.logger.info(
+                "teacher_stage2 endpoint=%s status=%s duration_ms=%.1f",
+                request.endpoint,
+                response.status_code,
+                duration_ms,
+            )
         if request.path == "/api/auth/login" and request.method == "POST":
             key = _login_key()
             now = time.time()
