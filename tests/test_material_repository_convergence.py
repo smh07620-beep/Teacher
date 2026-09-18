@@ -16,6 +16,7 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         cls.courses = ROOT.joinpath("teacher_app/courses/service.py").read_text(encoding="utf-8")
         cls.assessments = ROOT.joinpath("teacher_app/assessments/service.py").read_text(encoding="utf-8")
         cls.external = ROOT.joinpath("external_media_68.py").read_text(encoding="utf-8")
+        cls.hardening = ROOT.joinpath("production_hardening.py").read_text(encoding="utf-8")
 
     def test_material_read_sql_is_owned_by_repository(self):
         self.assertIn("SELECT * FROM materials", self.repo)
@@ -96,6 +97,11 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         self.assertIsNotNone(material_dml.search(self.repo))
         self.assertIn("material_repository.insert_material_on_connection(", self.external)
         self.assertIn("with common_db.transaction()", self.external)
+    def test_material_and_course_hot_paths_emit_latency_metrics(self):
+        self.assertIn('{"api_list_slides", "api_courses"}', self.hardening)
+        self.assertIn("time.perf_counter()", self.hardening)
+        self.assertIn("teacher_stage2 endpoint=%s status=%s duration_ms=%.1f", self.hardening)
+        self.assertNotIn("_current_user", self.hardening[self.hardening.index("teacher_stage2 endpoint=")-500:self.hardening.index("teacher_stage2 endpoint=")+500])
     def test_repository_has_no_provider_credentials_or_storage_clients(self):
         for forbidden in (
             "R2_SECRET_ACCESS_KEY",
