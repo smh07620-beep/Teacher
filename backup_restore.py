@@ -19,7 +19,7 @@ from typing import Any
 
 from flask import jsonify, request, send_file
 
-from teacher_app.common.auth import normalize_roles
+from teacher_app.common.auth import normalize_roles, user_roles
 
 BACKUP_FORMAT = "teacher-backup-v1"
 DEFAULT_TABLES = (
@@ -46,16 +46,21 @@ def app_version() -> str:
         return "unknown"
 
 
-def _role(base, user) -> str:
-    return base.normalize_role((user or {}).get("role", "student"))
-
-
 def _auth(base, allowed):
     user = base._current_user()
     if not user:
         return None, (jsonify({"error": "請先登入。"}), 401)
-    if _role(base, user) not in {base.normalize_role(r) for r in allowed}:
+
+    allowed_roles = {
+        base.normalize_role(role)
+        for role in allowed
+    }
+    if not any(
+        role in allowed_roles
+        for role in user_roles(user)
+    ):
         return None, (jsonify({"error": "權限不足。"}), 403)
+
     return user, None
 
 
