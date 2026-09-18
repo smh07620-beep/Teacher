@@ -95,3 +95,31 @@ def get_material(base, material_id: str) -> dict | None:
         ph = common_db.placeholder(kind)
         row = conn.execute(f"SELECT * FROM materials WHERE id = {ph}", (material_id,)).fetchone()
     return material_row_to_dict(base, row) if row else None
+
+
+MATERIAL_DB_COLUMNS = (
+    "id", "filename", "title", "description", "category", "group_key",
+    "training_area", "course_id", "folder", "page_count", "date_added",
+    "storage_filename", "storage_backend", "storage_key", "slides_prefix",
+    "storage_meta", "material_type", "atlas_meta", "active",
+)
+
+
+def insert_material(entry: dict, *, ignore_conflict: bool = False) -> None:
+    """Insert one material inside an explicit transaction."""
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        columns = ",".join(MATERIAL_DB_COLUMNS)
+        marks = ",".join([ph] * len(MATERIAL_DB_COLUMNS))
+        values = tuple(
+            (bool(entry.get(name)) if name == "active" and kind == "postgres" else
+             int(bool(entry.get(name))) if name == "active" else entry.get(name))
+            for name in MATERIAL_DB_COLUMNS
+        )
+        if kind == "sqlite" and ignore_conflict:
+            sql = f"INSERT OR IGNORE INTO materials ({columns}) VALUES ({marks})"
+        else:
+            sql = f"INSERT INTO materials ({columns}) VALUES ({marks})"
+            if kind == "postgres" and ignore_conflict:
+                sql += " ON CONFLICT(id) DO NOTHING"
+        conn.execute(sql, values)
