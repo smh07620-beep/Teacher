@@ -554,7 +554,8 @@ def _mega_timeout_for_deadline(deadline, default_seconds):
     return max(1, min(int(default_seconds), int(max(1, remaining))))
 
 
-def _mega_login_if_needed(force=False, deadline=None):    if not mega_is_configured():
+def _mega_login_if_needed(force=False, deadline=None):
+    if not mega_is_configured():
         raise RuntimeError("MEGA 尚未完成設定。請設定 MEGA_EMAIL、MEGA_PASSWORD，並確認官方 MEGAcmd 已安裝。")
     now = time.time()
     with _MEGA_LOCK:
