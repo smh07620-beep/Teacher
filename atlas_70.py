@@ -1,8 +1,8 @@
 """Formal Atlas HTTP compatibility adapter.
 
-Atlas CRUD, row projection, scope, visibility and teaching-resource search live
-in ``teacher_app.atlas``. This root module keeps the established URLs plus the
-legacy local-image/DOCX transport seams.
+Atlas CRUD, row projection, scope, visibility, teaching-resource search and
+local image storage live in ``teacher_app.atlas``. This root module keeps the
+established URLs plus the legacy DOCX import seam.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from pathlib import Path
 
 from flask import jsonify, request, send_from_directory
 
+from teacher_app.atlas import image_store as atlas_image_store
 from teacher_app.atlas import repository as atlas_repository
 from teacher_app.atlas import search as atlas_search
 from teacher_app.atlas import service as atlas_service
@@ -40,11 +41,6 @@ def register_atlas_70(base):
             return None, (jsonify({"error": "請先登入。", "loginRequired": True}), 401)
         return user, None
 
-    def image_dir():
-        directory = Path(base.MATERIAL_STORAGE) / "atlas_images"
-        directory.mkdir(parents=True, exist_ok=True)
-        return directory
-
     def docx_source(material_id):
         material = base.get_material(material_id)
         if not material:
@@ -67,33 +63,18 @@ def register_atlas_70(base):
         uploaded = request.files.get("file")
         if not uploaded or not uploaded.filename:
             return jsonify({"error": "缺少圖片檔案。"}), 400
-        ext = Path(uploaded.filename).suffix.lower()
-        if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
-            return jsonify({"error": "僅接受 JPG、PNG、WEBP 圖片。"}), 400
         raw = uploaded.read()
-        if not raw or len(raw) > 15 * 1024 * 1024:
-            return jsonify({"error": "圖片不可為空且不得超過 15 MB。"}), 400
         try:
-            from io import BytesIO
-            from PIL import Image
-
-            image = Image.open(BytesIO(raw))
-            image.verify()
-            image = Image.open(BytesIO(raw))
-            image.load()
-            if image.format not in {"JPEG", "PNG", "WEBP"}:
-                raise ValueError("format")
-            name = f"{uuid.uuid4().hex}{ext}"
-            target = image_dir() / name
-            target.write_bytes(raw)
-            thumb = image.copy()
-            thumb.thumbnail((640, 640))
-            thumb.save(image_dir() / f"thumb-{name}", format=image.format)
-        except Exception:
-            return jsonify({"error": "圖片內容或 MIME 驗證失敗。"}), 400
+            stored = atlas_image_store.store_image_bytes(
+                base.MATERIAL_STORAGE,
+                raw,
+                uploaded.filename,
+            )
+        except atlas_image_store.AtlasImageError as exc:
+            return jsonify({"error": str(exc)}), 400
         return jsonify({
-            "imageUrl": f"/api/atlas/images/{name}",
-            "thumbnailUrl": f"/api/atlas/images/thumb-{name}",
+            "imageUrl": stored["imageUrl"],
+            "thumbnailUrl": stored["thumbnailUrl"],
         }), 201
 
     @app.get("/api/atlas/images/<path:name>")
@@ -101,12 +82,16 @@ def register_atlas_70(base):
         user, denied = user_or_denied()
         if denied:
             return denied
-        safe = Path(name).name
-        original = safe[6:] if safe.startswith("thumb-") else safe
-        image_url = f"/api/atlas/images/{original}"
+        try:
+            directory, safe, image_url = atlas_image_store.requested_image(
+                base.MATERIAL_STORAGE,
+                name,
+            )
+        except atlas_image_store.AtlasImageError:
+            return jsonify({"error": "找不到圖譜圖片。"}), 404
         if not atlas_service.image_visible(user, image_url):
             return jsonify({"error": "找不到圖譜圖片。"}), 404
-        return send_from_directory(str(image_dir()), safe)
+        return send_from_directory(str(directory), safe)
 
     @app.post("/api/atlas/import-docx/<material_id>/preview")
     def atlas_docx_preview(material_id):
@@ -165,25 +150,14 @@ def register_atlas_70(base):
                 if index < 0 or index >= len(media):
                     continue
                 raw = archive.read(media[index])
-                ext = Path(media[index]).suffix.lower()
-                if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
-                    continue
                 try:
-                    from io import BytesIO
-                    from PIL import Image
-
-                    image = Image.open(BytesIO(raw))
-                    image.verify()
-                    image = Image.open(BytesIO(raw))
-                    image.load()
-                    if image.format not in {"JPEG", "PNG", "WEBP"}:
-                        continue
-                    name = f"{uuid.uuid4().hex}{ext}"
-                    image_dir().joinpath(name).write_bytes(raw)
-                    thumb = image.copy()
-                    thumb.thumbnail((640, 640))
-                    thumb.save(image_dir() / f"thumb-{name}", format=image.format)
-                except Exception:
+                    stored = atlas_image_store.store_image_bytes(
+                        base.MATERIAL_STORAGE,
+                        raw,
+                        Path(media[index]).suffix,
+                        max_bytes=None,
+                    )
+                except atlas_image_store.AtlasImageError:
                     continue
 
                 group = str(values.get("group") or source_group).strip()
@@ -201,7 +175,7 @@ def register_atlas_70(base):
                     "category": category,
                     "group_key": group,
                     "title": title,
-                    "image_url": f"/api/atlas/images/{name}",
+                    "image_url": stored["imageUrl"],
                     "description": str(values.get("description") or "")[:6000],
                     "tags": json.dumps(_tags(values.get("tags")), ensure_ascii=False),
                     "differential_points": str(values.get("differentialPoints") or "")[:6000],
