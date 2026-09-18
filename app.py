@@ -1099,6 +1099,7 @@ DEFAULT_GROUP = "grpBio"
 TRAINING_AREAS = {"internal": "內部教育訓練區", "pgy": "PGY訓練區"}
 # Milestone 4: one live RBAC policy for legacy and modular code.
 from teacher_app.common.auth import CANONICAL_ROLES, LEGACY_ROLE_ALIASES, ROLE_PERMISSIONS
+from teacher_app.common import db as common_db
 from teacher_app.auth import service as auth_service, routes as auth_routes
 import sys
 
@@ -1153,26 +1154,7 @@ def set_browser_cache_policy(response):
 # 考核成績資料庫
 # ---------------------------------------------------------------------------
 def _db_conn():
-    """有 DATABASE_URL 時強制使用 PostgreSQL；本機未設定時才使用 SQLite。
-
-    這樣 Render 若 PostgreSQL 暫時連線失敗，會直接顯示錯誤，避免悄悄寫進
-    Render 的暫存 SQLite，造成「看起來有存檔、實際成績沒有進中央資料庫」的問題。
-    """
-    if DATABASE_URL:
-        import psycopg
-        from psycopg.rows import dict_row
-        conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=10)
-        conn.autocommit = True
-        return conn, "postgres"
-    conn = sqlite3.connect(str(SQLITE_DB), timeout=30)
-    conn.row_factory = sqlite3.Row
-    # 與 Postgres 分支的 conn.autocommit = True 對齊：SQLite 預設每個
-    # INSERT/UPDATE/DELETE 需要顯式 commit() 才會真正寫入，若忘記 commit
-    # 又直接 close()，寫入會被靜默 rollback。isolation_level=None 讓每個
-    # SQL 陳述式即時自動提交，行為與 Postgres 分支一致。
-    conn.isolation_level = None
-    return conn, "sqlite"
-
+    """Return the canonical pooled database connection seam.\n\n    PostgreSQL connection ownership lives in teacher_app.common.db so the\n    legacy compatibility host and canonical modules share one bounded pool.\n    SQLite remains the local-development fallback through the same seam.\n    """\n    return common_db.get_connection()\n
 
 
 # ---------------------------------------------------------------------------
