@@ -5,6 +5,7 @@ database URLs, credentials, API keys, stack traces, or exception details.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from flask import jsonify
@@ -36,6 +37,16 @@ def app_version() -> str:
     except Exception:
         return "unknown"
 
+
+def deployment_identity() -> dict:
+    """Return non-secret deploy identity for runtime verification."""
+    raw_commit = str(os.environ.get("RENDER_GIT_COMMIT") or "").strip()
+    branch = str(os.environ.get("RENDER_GIT_BRANCH") or "").strip()
+    return {
+        "provider": "render" if str(os.environ.get("RENDER") or "").lower() == "true" else "local",
+        "branch": branch or None,
+        "commit": raw_commit[:12] if raw_commit else None,
+    }
 
 def health_state(base):
     database = {
@@ -136,6 +147,7 @@ def health_state(base):
             else "degraded"
         ),
         "version": app_version(),
+        "deployment": deployment_identity(),
         "database": database,
         "migrations": migrations,
     }
