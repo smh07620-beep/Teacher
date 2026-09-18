@@ -4,10 +4,27 @@
  * authoritative. professional_title / responsibility_tags never participate
  * in authorization decisions.
  */
-(function () {
+(async function () {
   'use strict';
 
-  const R = window.TeacherRBAC681 || {};
+  async function waitForCanonicalRbac(timeoutMs = 4000) {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const current = window.TeacherRBAC681;
+      if (
+        current
+        && current.roles instanceof Set
+        && typeof current.hasPermission === 'function'
+        && current.surface
+      ) {
+        return current;
+      }
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    return window.TeacherRBAC681 || {};
+  }
+
+  const R = await waitForCanonicalRbac();
   const roles = R.roles instanceof Set ? R.roles : new Set();
   const has = permission => typeof R.hasPermission === 'function' && R.hasPermission(permission);
   // Multi-role accounts must have exactly one presentation surface. Prefer the
@@ -221,7 +238,7 @@
       const securityResponse = await fetch('/api/security/status', {credentials: 'same-origin', cache: 'no-store'});
       const security = await securityResponse.json().catch(() => ({}));
       if (!securityResponse.ok) throw new Error(security.error || `讀取失敗（${securityResponse.status}）`);
-      const chip = (label, value, good=true) => `<div class="rounded-xl border ${good?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50'} p-3"><div class="text-[11px] font-bold text-slate-500">${esc(label)}</div><div class="mt-1 text-sm font-black text-slate-900">${esc(value)}</div></div>`;
+      const chip = (label, value, good=true) => `<div class="rounded-xl border ${good?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50'} p-3"><div class="text-[11px] font-bold text-slate-500">${escapeHtml(label)}</div><div class="mt-1 text-sm font-black text-slate-900">${escapeHtml(value)}</div></div>`;
       securityHost.innerHTML = [
         chip('Session 期限', `${Number(security.sessionHours||0)} 小時`, Number(security.sessionHours||0)>0),
         chip('Secure Cookie', security.secureCookie?'已啟用':'未啟用', !!security.secureCookie),
@@ -231,7 +248,7 @@
         chip('Production Secret', security.productionSecretRequired?'正式環境必填':'非強制', !!security.productionSecretRequired),
       ].join('');
     } catch (securityError) {
-      if (securityHost) securityHost.innerHTML = `<div class="sm:col-span-2 lg:col-span-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">⚠️ ${esc(securityError.message)}</div>`;
+      if (securityHost) securityHost.innerHTML = `<div class="sm:col-span-2 lg:col-span-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">⚠️ ${escapeHtml(securityError.message)}</div>`;
     }
     try {
       const response = await fetch('/api/pgy/audit', {credentials: 'same-origin', cache: 'no-store'});
