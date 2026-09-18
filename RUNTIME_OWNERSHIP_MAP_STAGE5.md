@@ -34,7 +34,7 @@ These are not ordinary domain implementations and should not be removed merely t
 
 - `register_pgy_workflow` — surviving thin PGY legacy URL/JSON adapter over `teacher_app.pgy`; no independent schema/business ownership.
 - `register_legacy_office_69` — compatibility route; must stay thin and defer authorization to canonical RBAC.
-- `register_atlas_70` — Atlas HTTP compatibility adapter; CRUD/search/local-image ownership is canonical while the DOCX import flow remains bounded legacy debt.
+- `register_atlas_70` — Atlas HTTP compatibility adapter; CRUD/search/local-image/DOCX import runtime ownership is canonical and the adapter retains only established HTTP/RBAC/config seams.
 
 ### D. Runtime domain owners still pending convergence
 
@@ -120,7 +120,7 @@ Remaining:
 
 `course_bundle_72.py` and `course_bundle_followup_73.py` own idempotent course/exam creation and material follow-up workflow state. Converge together only at the service/repository boundary while preserving the two-stage HTTP contract and idempotency migrations.
 
-### Atlas — CRUD/search/local image canonical; DOCX import pending
+### Atlas — runtime ownership canonical; HTTP compatibility only
 
 Completed:
 
@@ -129,14 +129,14 @@ Completed:
 - `teacher_app.atlas.search` owns `/api/teaching-resource-search` aggregation across readable materials and Atlas records.
 - `teacher_app.learning.repository` remains the sole `material_text_index` SQL owner; Atlas search reuses `get_material_text_rows()` instead of creating a parallel search-index repository.
 - `teacher_app.atlas.image_store` owns local `atlas_images` directory creation, extension/content validation, image persistence, thumbnail generation and safe request-name projection.
+- `teacher_app.atlas.importer` owns canonical-first material lookup, DOCX source-path resolution, preview parsing, embedded-image selection, metadata merge, image persistence delegation and draft Atlas item creation.
 - Manual Atlas image upload and DOCX-selected embedded images both use the same canonical image writer; `atlas_70.py` no longer imports Pillow/BytesIO or creates thumbnails itself.
-- `atlas_70.py` contains no Atlas-table CRUD SQL and no `material_text_index` SQL; its CRUD/search/image HTTP routes delegate to canonical Atlas modules.
+- `atlas_70.py` contains no Atlas-table CRUD SQL, no `material_text_index` SQL, no ZIP parser and no DOCX item-creation implementation; routes delegate to canonical Atlas modules.
+- A narrow `legacy_material_getter` fallback remains only for isolated legacy-host/test fixtures after canonical material lookup returns no record. It owns no SQL, path rules or import behavior.
 
-Remaining:
+Source cleanup note:
 
-- DOCX source-file lookup, ZIP embedded-image selection/parsing, metadata merge and compatibility import orchestration.
-
-Do not move DOCX file/provider concerns into Atlas CRUD/search/image modules. The remaining import flow should converge into a dedicated import transport without duplicating material/storage ownership.
+- `smart_learning_67.py` still contains the old `preview_docx_atlas` helper as dead compatibility source, but Atlas runtime no longer imports or calls it. Remove or convert it to a re-export when the Smart Learning domain is converged, rather than reopening Atlas ownership.
 
 ### Question Bank — pending
 
@@ -154,11 +154,11 @@ Do **not** add a second MEGA client or second connection/session implementation 
 
 1. Finish PGY by moving unique multi-role/sign-mode behavior out of `pgy_signing_66.py` into `teacher_app.pgy`.
 2. Move backup/restore ownership into a canonical maintenance domain.
-3. Move smart-learning state/data ownership into a canonical domain.
+3. Move smart-learning state/data ownership into a canonical domain; retire its dead Atlas preview helper during that cleanup.
 4. Move worker queue/protocol ownership without creating a second worker implementation.
 5. Move external-media validation/persistence ownership.
 6. Move course-bundle and follow-up workflow ownership while preserving idempotency.
-7. Move the remaining Atlas DOCX import ownership without duplicating material/storage-provider behavior.
+7. Atlas runtime convergence is complete; keep `register_atlas_70` only as the established HTTP compatibility adapter until app-factory cutover.
 8. Move Question Bank ownership without duplicating assessment publication logic.
 9. Continue course/assessment repository migration and provider/storage extraction in bounded slices.
 10. Only after the runtime ownership map has no domain implementation in `app.py`, replace `pgy_app.py` with `app = create_app()`.
