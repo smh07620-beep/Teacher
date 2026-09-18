@@ -1,9 +1,9 @@
 """Teacher 6.6 PGY signing HTTP compatibility adapter.
 
-Canonical multi-role scope/read/create/sign-mode behavior lives in
-``teacher_app.pgy.signing_facade`` and signature transactions live in
-``teacher_app.pgy.signing``. Public URLs remain unchanged and pre-6.6
-``sign_mode=legacy`` rows continue to delegate to the retained 6.5 handlers.
+Canonical multi-role scope/read/create/sign-mode behavior and legacy/new mode
+dispatch live in ``teacher_app.pgy.signing_facade``. Signature transactions
+live in ``teacher_app.pgy.signing``. This root module preserves public URLs,
+legacy JSON error shape and startup schema registration only.
 """
 from __future__ import annotations
 
@@ -44,15 +44,9 @@ def register_pgy_signing_66(base):
     with common_db.transaction() as (conn, kind):
         signing.ensure_schema_connection(conn, kind)
 
-    # Legacy 6.5 handlers still serialize through pgy_workflow. Preserve their
-    # public payload while adding the 6.6 signing fields from the canonical
-    # projection owner.
+    # Preserve the historical assignment projection symbol still consumed by
+    # the 6.5 compatibility surface. Projection ownership is canonical.
     wf._assignment_dict = signing_facade.assignment_dict
-
-    legacy_teacher_sign = app.view_functions["pgy_assignment_teacher_sign"]
-    legacy_countersign = app.view_functions["pgy_assignment_countersign"]
-    legacy_reopen = app.view_functions["pgy_assignment_reopen"]
-    legacy_update = app.view_functions["pgy_assignment_update"]
 
     def workflow_meta():
         try:
@@ -108,30 +102,11 @@ def register_pgy_signing_66(base):
     app.view_functions["pgy_assignment_create"] = create_assignment
 
     def update_assignment(assignment_id):
-        data = request.get_json(silent=True) or {}
-        if "signMode" not in data:
-            return legacy_update(assignment_id)
-
-        # Existing editable fields remain owned by the established 6.5 handler
-        # for this bounded convergence slice. The additive sign-mode field is
-        # persisted canonically after that handler succeeds.
-        legacy_fields = {"teacherUsername", "title", "instructions", "dueAt"}
-        if legacy_fields.intersection(data):
-            result = legacy_update(assignment_id)
-            response = result[0] if isinstance(result, tuple) else result
-            status_code = (
-                result[1]
-                if isinstance(result, tuple)
-                else getattr(response, "status_code", 200)
-            )
-            if status_code >= 400:
-                return result
-
         try:
-            assignment = signing_facade.update_sign_mode(
+            assignment = signing_facade.update_assignment(
                 _current_user(base),
                 assignment_id,
-                data.get("signMode"),
+                request.get_json(silent=True) or {},
             )
             return jsonify({"ok": True, "assignment": assignment})
         except ApiError as exc:
@@ -141,13 +116,7 @@ def register_pgy_signing_66(base):
 
     def teacher_sign(assignment_id):
         try:
-            mode = signing_facade.get_sign_mode(assignment_id)
-        except ApiError as exc:
-            return _error(exc)
-        if mode == "legacy":
-            return legacy_teacher_sign(assignment_id)
-        try:
-            assignment = signing.sign_assignment(
+            assignment = signing_facade.teacher_sign_assignment(
                 _current_user(base),
                 assignment_id,
                 request.get_json(silent=True) or {},
@@ -160,13 +129,7 @@ def register_pgy_signing_66(base):
 
     def countersign(assignment_id):
         try:
-            mode = signing_facade.get_sign_mode(assignment_id)
-        except ApiError as exc:
-            return _error(exc)
-        if mode == "legacy":
-            return legacy_countersign(assignment_id)
-        try:
-            assignment = signing.countersign_assignment(
+            assignment = signing_facade.countersign_assignment(
                 _current_user(base),
                 assignment_id,
                 request.get_json(silent=True) or {},
@@ -179,13 +142,7 @@ def register_pgy_signing_66(base):
 
     def reopen(assignment_id):
         try:
-            mode = signing_facade.get_sign_mode(assignment_id)
-        except ApiError as exc:
-            return _error(exc)
-        if mode == "legacy":
-            return legacy_reopen(assignment_id)
-        try:
-            assignment = signing.reopen_assignment(
+            assignment = signing_facade.reopen_assignment(
                 _current_user(base),
                 assignment_id,
                 request.get_json(silent=True) or {},
