@@ -182,3 +182,42 @@ def delete_material_record(material_id: str) -> None:
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
         conn.execute(f"DELETE FROM materials WHERE id={ph}", (material_id,))
+
+
+def clear_course_assignment(conn, kind: str, course_id: str) -> None:
+    """Clear one course link using the caller-owned transaction."""
+    ph = common_db.placeholder(kind)
+    conn.execute(f"UPDATE materials SET course_id='' WHERE course_id={ph}", (course_id,))
+
+
+def material_ids_for_course(conn, kind: str, course_id: str) -> set[str]:
+    """Read material ids inside the caller-owned course transaction."""
+    ph = common_db.placeholder(kind)
+    rows = conn.execute(f"SELECT id FROM materials WHERE course_id={ph}", (course_id,)).fetchall()
+    return {str(dict(row).get("id") or "") for row in rows if dict(row).get("id")}
+
+
+def replace_category_assignments(
+    category_id: str,
+    material_ids: list[str],
+    *,
+    group_key: str,
+    training_area: str,
+) -> None:
+    """Replace assessment-material links in one explicit transaction."""
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        conn.execute(f"UPDATE materials SET category='' WHERE category={ph}", (category_id,))
+        if material_ids:
+            placeholders = ",".join([ph] * len(material_ids))
+            conn.execute(
+                f"UPDATE materials SET category={ph} WHERE id IN ({placeholders}) "
+                f"AND group_key={ph} AND training_area={ph}",
+                tuple([category_id] + list(material_ids) + [group_key, training_area]),
+            )
+
+
+def clear_category_assignment(conn, kind: str, category_id: str) -> None:
+    """Clear one assessment link using the caller-owned transaction."""
+    ph = common_db.placeholder(kind)
+    conn.execute(f"UPDATE materials SET category='' WHERE category={ph}", (category_id,))
