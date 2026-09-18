@@ -153,6 +153,8 @@ jobs:
           grep -q '0068-external-interactive-media' schema_migrations.py
           ! grep -q 'type: worker' render.yaml
           grep -q 'MATERIAL_DIRECT_UPLOAD_ENABLED' render.yaml
+          grep -q 'MEGA_WEB_READ_TIMEOUT_SECONDS' render.yaml
+          grep -q 'GUNICORN_TIMEOUT' render.yaml
           grep -q 'MATERIAL_WORKER_TOKEN' render.yaml
           ! grep -q 'material_worker.py' run_web.sh
           grep -q 'Teacher 6.7' ARCHITECTURE_6_7.md
