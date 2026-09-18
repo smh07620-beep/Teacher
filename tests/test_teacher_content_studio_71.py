@@ -154,6 +154,13 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn('繼續出下一題／回題庫', self.matrix)
         self.assertIn('unified success/warning/error outcomes', self.matrix)
 
+    def test_exam_action_cards_use_one_delegated_runtime_owner(self):
+        self.assertIn("dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId)", self.source)
+        self.assertIn("const handler=window.teacherContentStudioExamAction", self.source)
+        self.assertIn("Promise.resolve(result).catch(error=>showExamActionFailure(catId,error))", self.source)
+        self.assertNotIn('onclick="event.stopPropagation();window.teacherContentStudioExamAction', self.source)
+        for action in ("question", "image", "video", "ai", "questions", "settings"):
+            self.assertIn(f'data-exam-action="{action}"', self.source)
     def test_browser_javascript_syntax(self):
         for asset in ('teacher-content-studio-71.js', 'teacher-content-composer-72.js', 'teacher-ux-convergence-72.js'):
             completed = subprocess.run(
