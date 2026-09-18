@@ -12,7 +12,9 @@ class TeacherContentLatency712Tests(unittest.TestCase):
         cls.latency = ROOT.joinpath('static/teacher-content-latency-712.js').read_text(encoding='utf-8')
         cls.frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
         cls.assessments = ROOT.joinpath('teacher_app/assessments/service.py').read_text(encoding='utf-8')
-        cls.backend_perf = ROOT.joinpath('assessment_performance_712.py').read_text(encoding='utf-8')
+        cls.auth_service = ROOT.joinpath('teacher_app/auth/service.py').read_text(encoding='utf-8')
+        cls.migrations = ROOT.joinpath('schema_migrations.py').read_text(encoding='utf-8')
+        cls.legacy_app = ROOT.joinpath('app.py').read_text(encoding='utf-8')
         cls.common_db = ROOT.joinpath('teacher_app/common/db.py').read_text(encoding='utf-8')
         cls.entrypoint = ROOT.joinpath('pgy_app.py').read_text(encoding='utf-8')
         cls.requirements = ROOT.joinpath('requirements.txt').read_text(encoding='utf-8')
@@ -46,12 +48,14 @@ class TeacherContentLatency712Tests(unittest.TestCase):
         self.assertIn('_clear_category_list_cache', self.assessments)
 
     def test_backend_avoids_duplicate_auth_lookup_and_adds_query_indexes(self):
-        self.assertIn('@migration("0074-assessment-list-indexes")', self.backend_perf)
-        self.assertIn('idx_quiz_categories_scope_list', self.backend_perf)
-        self.assertIn('idx_quiz_questions_category_active', self.backend_perf)
-        self.assertIn('has_request_context()', self.backend_perf)
-        self.assertIn('_teacher712_current_user', self.backend_perf)
-        self.assertIn('register_assessment_performance_712', self.entrypoint)
+        self.assertIn('@migration("0074-assessment-list-indexes")', self.migrations)
+        self.assertIn('idx_quiz_categories_scope_list', self.migrations)
+        self.assertIn('idx_quiz_questions_category_active', self.migrations)
+        self.assertIn('has_request_context()', self.auth_service)
+        self.assertIn('_teacher_current_user_row', self.auth_service)
+        self.assertIn('never across requests', self.auth_service)
+        self.assertNotIn('register_assessment_performance_712', self.entrypoint)
+        self.assertFalse(ROOT.joinpath('assessment_performance_712.py').exists())
 
     def test_backend_reuses_postgres_connections_across_legacy_and_canonical_code(self):
         for marker in (
@@ -63,13 +67,12 @@ class TeacherContentLatency712Tests(unittest.TestCase):
             'ensure_postgres_pool',
         ):
             self.assertIn(marker, self.common_db)
-        self.assertIn('base._db_conn = common_db.get_connection', self.backend_perf)
-        self.assertIn('teacher_db_pool_712', self.backend_perf)
+        self.assertIn('from teacher_app.common import db as common_db', self.legacy_app)
+        self.assertIn('return common_db.get_connection()', self.legacy_app)
         self.assertIn('psycopg[binary,pool]', self.requirements)
-        self.assertIn('never across requests', self.backend_perf)
-        self.assertNotIn('Flask-Caching', self.backend_perf)
-        self.assertNotIn('Redis', self.backend_perf)
-        self.assertNotIn('JWT', self.backend_perf)
+        self.assertNotIn('Flask-Caching', self.auth_service)
+        self.assertNotIn('Redis', self.auth_service)
+        self.assertNotIn('JWT', self.auth_service)
 
     def test_browser_javascript_syntax(self):
         completed = subprocess.run(
