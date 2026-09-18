@@ -5,7 +5,6 @@ modules own the converged domains and compatibility adapters preserve routes.
 """
 import app as legacy_app
 from ai_privacy import register_ai_privacy
-from assessment_performance_712 import register_assessment_performance_712
 from backup_restore import register_backup_restore
 from course_bundle_72 import register_course_bundle_72
 from course_bundle_followup_73 import register_course_bundle_followup_73
@@ -43,9 +42,6 @@ install_storage_pagination_hardening(legacy_app)
 app = register_pgy_workflow(legacy_app)
 # Importing the adapters above registers additive migrations before the runner.
 app = register_schema_migrations(legacy_app)
-# Teacher 7.12 keeps canonical auth semantics but avoids repeating the same
-# Supabase user lookup inside one request and adds assessment-list indexes.
-app = register_assessment_performance_712(legacy_app)
 app = register_multi_role_66(legacy_app)
 # Teacher 7.1 audience is an explicit training-track flag. It does not grant
 # RBAC, signing, or administrative authority.
