@@ -3,7 +3,7 @@
   'use strict';
 
   const C=window.AppCore||{};
-  const allowed=new Set([
+  const fallbackAllowed=new Set([
     'education_admin',
     'system_admin'
   ]);
@@ -66,13 +66,23 @@
   }
 
   function canMaintain(auth){
+    const rbac=window.TeacherRBAC681;
+    if(typeof rbac?.hasPermission==='function'){
+      return !!(
+        rbac.hasPermission('backup.manage')
+        ||rbac.hasPermission('education.cross_group.manage')
+      );
+    }
+
+    // Compatibility only for isolated/legacy pages that do not load the
+    // canonical RBAC bridge. Production visibility is capability-driven above.
     const user=auth?.user||{};
     const roles=Array.isArray(user.roles)&&user.roles.length
       ?user.roles
       :[user.role||''];
 
     return roles.some(
-      role=>allowed.has(
+      role=>fallbackAllowed.has(
         role==='manager'
           ?'education_admin'
           :role
