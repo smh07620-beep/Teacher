@@ -80,7 +80,7 @@
       if(event.target.closest('[data-exam-create-open]')){ renderCreateExam(); return; }
       if(event.target.closest('[data-exam-create-submit]')){ createExamFromStudio(); return; }
       const examAction = event.target.closest('[data-exam-action]');
-      if(examAction){ runExamAction(examAction.dataset.examAction, examAction.dataset.examId); return; }
+      if(examAction){ dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId); return; }
       if(event.target.closest('[data-course-studio-back]')){ restoreCourseWizard(); renderHome(); return; }
       const back = event.target.closest('[data-studio-back]');
       if(back) renderHome();
@@ -188,10 +188,28 @@
     try{
       const categories=await loadCategories(); const exam=categories.find(c=>String(c.id)===String(catId));
       if(!exam)throw new Error('找不到此考卷，可能已被移除。');
-      host.innerHTML=`<div class="mx-auto max-w-4xl"><button type="button" data-studio-action="exam" class="text-sm font-bold text-slate-500">← 返回考卷管理</button><div class="mt-4 rounded-2xl border border-indigo-200 bg-white p-5"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-indigo-700">目前考卷</div><h4 class="mt-1 text-xl font-black text-slate-950">${esc(exam.title||catId)}</h4><p class="mt-1 text-xs text-slate-500">所有出題動作都直接加入這份考卷，不需要再次選考卷。</p></div><span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">題庫 ${Number(exam.questionCount||0)} 題</span></div><div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><button type="button" onclick="event.stopPropagation();window.teacherContentStudioExamAction?.('question','${esc(catId)}')" data-exam-action="question" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-indigo-300"><b>✏️ 一般考題</b><span class="mt-1 block text-xs text-slate-500">手動建立一般題目。</span></button><button type="button" onclick="event.stopPropagation();window.teacherContentStudioExamAction?.('image','${esc(catId)}')" data-exam-action="image" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-rose-300"><b>🖼️ 圖片判讀題</b><span class="mt-1 block text-xs text-slate-500">圖片、顯微鏡或血球判讀。</span></button><button type="button" onclick="event.stopPropagation();window.teacherContentStudioExamAction?.('video','${esc(catId)}')" data-exam-action="video" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-violet-300"><b>🎬 影片互動題</b><span class="mt-1 block text-xs text-slate-500">依影片流程建立互動題。</span></button><button type="button" onclick="event.stopPropagation();window.teacherContentStudioExamAction?.('ai','${esc(catId)}')" data-exam-action="ai" data-exam-id="${esc(catId)}" class="rounded-xl border border-violet-200 bg-violet-50/40 p-4 text-left hover:border-violet-400"><b>✨ AI 輔助出題</b><span class="mt-1 block text-xs text-slate-500">自動讀取本考卷關聯教材，再選用途與題數。</span></button><button type="button" onclick="event.stopPropagation();window.teacherContentStudioExamAction?.('questions','${esc(catId)}')" data-exam-action="questions" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-teal-300"><b>🧠 題目管理</b><span class="mt-1 block text-xs text-slate-500">搜尋、編輯與批次管理既有題目。</span></button><button type="button" onclick="event.stopPropagation();window.teacherContentStudioExamAction?.('settings','${esc(catId)}')" data-exam-action="settings" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-slate-400"><b>⚙️ 考卷設定</b><span class="mt-1 block text-xs text-slate-500">抽題、及格分數、審核與發布。</span></button></div></div></div>`;
+      host.innerHTML=`<div class="mx-auto max-w-4xl"><button type="button" data-studio-action="exam" class="text-sm font-bold text-slate-500">← 返回考卷管理</button><div class="mt-4 rounded-2xl border border-indigo-200 bg-white p-5"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-indigo-700">目前考卷</div><h4 class="mt-1 text-xl font-black text-slate-950">${esc(exam.title||catId)}</h4><p class="mt-1 text-xs text-slate-500">所有出題動作都直接加入這份考卷，不需要再次選考卷。</p></div><span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">題庫 ${Number(exam.questionCount||0)} 題</span></div><div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><button type="button" data-exam-action="question" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-indigo-300"><b>✏️ 一般考題</b><span class="mt-1 block text-xs text-slate-500">手動建立一般題目。</span></button><button type="button" data-exam-action="image" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-rose-300"><b>🖼️ 圖片判讀題</b><span class="mt-1 block text-xs text-slate-500">圖片、顯微鏡或血球判讀。</span></button><button type="button" data-exam-action="video" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-violet-300"><b>🎬 影片互動題</b><span class="mt-1 block text-xs text-slate-500">依影片流程建立互動題。</span></button><button type="button" data-exam-action="ai" data-exam-id="${esc(catId)}" class="rounded-xl border border-violet-200 bg-violet-50/40 p-4 text-left hover:border-violet-400"><b>✨ AI 輔助出題</b><span class="mt-1 block text-xs text-slate-500">自動讀取本考卷關聯教材，再選用途與題數。</span></button><button type="button" data-exam-action="questions" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-teal-300"><b>🧠 題目管理</b><span class="mt-1 block text-xs text-slate-500">搜尋、編輯與批次管理既有題目。</span></button><button type="button" data-exam-action="settings" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-slate-400"><b>⚙️ 考卷設定</b><span class="mt-1 block text-xs text-slate-500">抽題、及格分數、審核與發布。</span></button></div></div></div>`;
     }catch(error){host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3"><button type="button" data-studio-action="exam" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">返回考卷管理</button></div></div>`;}
   }
 
+  function showExamActionFailure(catId,error){
+    const root=ensureStudio();
+    const host=document.getElementById('teacher-content-studio-body-71');
+    root?.classList.remove('hidden');
+    if(root)document.body.dataset.teacherContentStudioOpen='1';
+    if(!host)return;
+    host.innerHTML=`<div class="mx-auto max-w-4xl rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700"><div class="font-black">❌ 考卷功能暫時無法開啟</div><div class="mt-1">${esc(error?.message||String(error||'未知錯誤'))}</div><div class="mt-4 flex gap-2 flex-wrap"><button type="button" data-exam-open="${esc(catId)}" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 返回此考卷</button><button type="button" data-studio-action="exam" class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回考卷管理</button></div></div>`;
+  }
+
+  function dispatchExamAction(action,catId){
+    const handler=window.teacherContentStudioExamAction;
+    try{
+      const result=typeof handler==='function'?handler(action,catId):runExamAction(action,catId);
+      Promise.resolve(result).catch(error=>showExamActionFailure(catId,error));
+    }catch(error){
+      showExamActionFailure(catId,error);
+    }
+  }
   async function runExamAction(action,catId){
     if(action==='question')return confirmQuestionPreset('choice',catId);
     if(action==='image')return confirmQuestionPreset('image',catId);
