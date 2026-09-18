@@ -27,14 +27,8 @@ from rbac_681 import register_rbac_681
 from legacy_office_69 import register_legacy_office_69
 from sensitive_elevation_69 import register_sensitive_elevation_69
 from atlas_70 import register_atlas_70
-from storage_pagination_hardening import install_storage_pagination_hardening
 from teacher_app.command_center.audience import register_training_audience_71
 from teacher_app.command_center.routes import register_training_command_center
-
-# Keep legacy storage ownership in app.py, but replace its S3-compatible
-# pagination loops before any route can invoke them. The wrappers fail closed
-# on missing/repeated continuation tokens instead of spinning forever.
-install_storage_pagination_hardening(legacy_app)
 
 app = register_pgy_workflow(legacy_app)
 # Importing the adapters above registers additive migrations before the runner.
