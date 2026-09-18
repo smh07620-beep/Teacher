@@ -32,15 +32,14 @@ These are not ordinary domain implementations and should not be removed merely t
 
 ### C. Compatibility adapters — keep only while the original URL/shell contract exists
 
+- `register_pgy_workflow` — surviving thin PGY legacy URL/JSON adapter over `teacher_app.pgy`; no independent schema/business ownership.
 - `register_legacy_office_69` — compatibility route; must stay thin and defer authorization to canonical RBAC.
 
 ### D. Runtime domain owners still pending convergence
 
 These modules still own meaningful runtime behavior and must be migrated domain-by-domain before they can disappear from `pgy_app.py`:
 
-- `register_pgy_workflow`
 - `register_multi_role_66`
-- `register_pgy_atomic_workflow`
 - `register_pgy_signing_66`
 - `register_backup_restore`
 - `register_smart_learning`
@@ -51,11 +50,13 @@ These modules still own meaningful runtime behavior and must be migrated domain-
 - `register_atlas_70`
 - `register_question_bank`
 
-Removing any of these by name alone would be cosmetic convergence and risks deleting real runtime behavior.
+`register_pgy_atomic_workflow` is **retired**. It only replaced six existing PGY mutation endpoints with the same canonical `teacher_app.pgy.service` handlers and had no unique runtime ownership.
+
+Removing any remaining runtime owner by name alone would be cosmetic convergence and risks deleting real behavior.
 
 ## Domain status
 
-### Materials — data-access convergence complete; host dependency convergence incomplete
+### Materials — ordinary host dependency removed; storage seam deferred
 
 Completed:
 
@@ -63,22 +64,21 @@ Completed:
 - Repository reads/writes use `teacher_app.common.db` pooled connection/transaction seams.
 - `app.py` material SQL was removed.
 - Course/assessment/external-media material relation writes join explicit transactions.
+- Group/area normalization is canonical in `teacher_app.common.scope`.
+- Built-in catalog loading/basic labels are canonical in `teacher_app.materials.catalog`.
+- Course/category validation reads use `teacher_app.courses.repository` and `teacher_app.assessments.repository`.
+- `teacher_app.materials.repository` no longer consults the legacy `base` object; its legacy first argument is compatibility-only.
 
 Remaining legacy dependency:
 
-`teacher_app.materials.service` and `teacher_app.materials.repository` still accept a `base` legacy host for:
+- physical provider deletion (`mega_destroy`, GDrive/R2/OCI delete);
+- legacy local upload/cache filesystem paths used during deletion.
 
-- group/area normalization and defaults;
-- built-in `slides_meta.json` loading;
-- category label projection;
-- course/category lookup validation;
-- provider deletion orchestration and legacy filesystem paths.
-
-This is the next materials convergence target. Canonical services must not depend on a legacy application object for ordinary domain rules.
+Those are storage-provider responsibilities and should move only when one canonical `teacher_app.storage` seam is established.
 
 ### Courses — next data-access owner to converge
 
-`teacher_app.courses.service` still calls legacy host methods such as `base.list_courses`, `base.get_course`, `base._db_conn`, `base.normalize_area` and `base.normalize_group`. It also still contains direct course SQL. The safe target is:
+`teacher_app.courses.service` still calls legacy host methods such as `base.list_courses`, `base.get_course`, `base._db_conn`, `base.normalize_area` and `base.normalize_group`. `teacher_app.courses.repository` now exists as the canonical read seam, but create/update and teaching-plan paths are not fully migrated yet. The target is:
 
 `legacy URL -> thin adapter -> teacher_app.courses.service -> teacher_app.courses.repository -> teacher_app.common.db`
 
@@ -86,7 +86,47 @@ Material relation SQL already delegates to `teacher_app.materials.repository` an
 
 ### Assessments — follow courses
 
-`teacher_app.assessments.service` still depends heavily on `base` for category/question reads, normalization and several DB writes. Do not migrate it in the same commit as courses. First create an assessment repository and move category data access behind the canonical DB seam, then remove `base` calls incrementally.
+`teacher_app.assessments.repository` now owns the first category read/label seam, but `teacher_app.assessments.service` still depends on `base` for list-with-counts, question reads and several writes. Do not migrate it in the same commit as courses. Move each read/write family to the canonical DB seam separately and preserve the short category-list cache behavior.
+
+### PGY workflow — canonical business owner established; signing overlay pending
+
+Completed:
+
+- PGY schema, repository queries, transitions, validation and audit writes are canonical in `teacher_app.pgy`.
+- `pgy_workflow.py` is a compatibility HTTP/JSON adapter only.
+- The redundant `pgy_atomic.py` view-function replacement layer is retired.
+
+Remaining:
+
+- `pgy_signing_66.py` still owns unique multi-role and single/dual sign-mode route behavior, candidate/list/get projections and some DB access. Move those rules into `teacher_app.pgy.service/repository/signing` before shrinking the adapter.
+
+### Backup / restore — pending
+
+`backup_restore.py` still owns archive creation, manifest/hash validation and conservative restore orchestration. Security/elevation behavior must remain unchanged while persistence/archive implementation moves to a canonical maintenance package.
+
+### Smart learning — pending
+
+`smart_learning_67.py` still owns reader progress, coverage, preview/indexing integration and API behavior. Converge the state/repository logic before touching the frontend adapter.
+
+### Worker — pending
+
+`free_worker_67.py` and `material_worker.py` still own unique queue/worker protocol behavior. Preserve the existing single-worker protocol and server-side token boundary; do not create a second queue implementation.
+
+### External media — pending
+
+`external_media_68.py` still owns URL normalization/validation and external material creation orchestration. Move validation/persistence into a canonical external-media domain while keeping current public contracts.
+
+### Course bundle — pending
+
+`course_bundle_72.py` and `course_bundle_followup_73.py` own idempotent course/exam creation and material follow-up workflow state. Converge together only at the service/repository boundary while preserving the two-stage HTTP contract and idempotency migrations.
+
+### Atlas — pending
+
+`atlas_70.py` still owns Atlas read/write/import/search behavior. Move to a canonical Atlas domain without duplicating material storage/provider behavior.
+
+### Question Bank — pending
+
+`question_bank_68.py` still owns Bank 2.0 draft/review/blueprint/analytics behavior. Category publication ownership already belongs to `teacher_app.assessments`; the Question Bank migration must not recreate a second assessment owner.
 
 ## Storage / MEGA ownership
 
@@ -98,12 +138,16 @@ Do **not** add a second MEGA client or second connection/session implementation 
 
 ## Ordered convergence plan
 
-1. Remove materials read/projection dependency on legacy `base` (normalization, built-in catalog, category/course lookup).
-2. Introduce `teacher_app.courses.repository` and move course SQL/read ownership out of the legacy host.
-3. Introduce `teacher_app.assessments.repository` and migrate assessment/category SQL in small verified groups.
-4. Move provider engines (MEGA/GDrive/R2/OCI) behind canonical `teacher_app.storage` interfaces; keep one MEGAcmd session path.
-5. Migrate backup/restore, question-bank, external-media, Atlas and PGY workflow owners into their canonical packages.
-6. Only after the runtime ownership map has no domain implementation in `app.py`, replace `pgy_app.py` with `app = create_app()`.
+1. Finish PGY by moving unique multi-role/sign-mode behavior out of `pgy_signing_66.py` into `teacher_app.pgy`.
+2. Move backup/restore ownership into a canonical maintenance domain.
+3. Move smart-learning state/data ownership into a canonical domain.
+4. Move worker queue/protocol ownership without creating a second worker implementation.
+5. Move external-media validation/persistence ownership.
+6. Move course-bundle and follow-up workflow ownership while preserving idempotency.
+7. Move Atlas ownership.
+8. Move Question Bank ownership without duplicating assessment publication logic.
+9. Continue course/assessment repository migration and provider/storage extraction in bounded slices.
+10. Only after the runtime ownership map has no domain implementation in `app.py`, replace `pgy_app.py` with `app = create_app()`.
 
 ## Deletion rule
 
