@@ -38,11 +38,11 @@ behavior.
 | Auth and session lifecycle | `teacher_app.auth.service`, `repository`, `routes` | `app.py` exposes only thin live delegates needed by legacy route names | **Frozen / converged.** Pre-extraction `_legacy_*` auth implementations have been retired; keep old URLs and JSON contracts through canonical delegates only. |
 | RBAC, canonical roles, permissions | `teacher_app.common.auth`; public account serialization in `teacher_app.auth.service` | `app.py` exposes thin `normalize_role`, `has_permission`, `_current_user`, and `require_roles` seams; `rbac_681.py` adapts legacy endpoints and group scoping | **Frozen / converged.** Professional title and responsibility tags are presentation-only and never authorization input. |
 | Exam attempt grading and integrity | `teacher_app.exams.grading`, `repository`, `service`, `routes` | `exam_integrity.py` only re-exports canonical helpers and mounts the unchanged legacy URLs | **Frozen / converged.** New exam attempt logic belongs in `teacher_app.exams`. |
-| PGY workflow, atomic transitions and signing | `teacher_app.pgy.service`, `repository`, `workflow`, `signing` | `pgy_workflow.py` is now a thin legacy URL/JSON adapter; `pgy_atomic.py` and `pgy_signing_66.py` remain compatibility overlays | **Frozen / converged controller ownership.** Schema, reads, create/edit rules, transitions and audit writes belong to `teacher_app.pgy`; compatibility modules may only adapt old HTTP/signing contracts. |
-| Materials catalog and metadata controller | `teacher_app.materials.service` | Existing `/api/slides*` endpoint names remain in `app.py` as thin canonical delegates; `pgy_app.py` no longer replaces them at runtime | **Converged runtime and source ownership.** Catalog projection, metadata update and delete orchestration belong to `teacher_app.materials`; provider SDK/credential/storage primitives remain legacy seams for now. |
-| Courses and teaching-plan controller | `teacher_app.courses.service` | Existing `/api/courses*` URL rules remain in `app.py` as thin canonical delegates; no runtime view-function replacement remains in `pgy_app.py` | **Converged runtime and source ownership.** Course CRUD, teaching-plan validation and persistence orchestration belong to `teacher_app.courses`. |
-| Assessment configuration/review/publication | `teacher_app.assessments.service` | Existing `/api/quiz-categories*` URL rules remain in `app.py` as thin canonical delegates; Question Bank/RBAC adapters may still wrap those handlers | **Converged runtime and source ownership.** Category CRUD, review, publication snapshot orchestration and material-link rules belong to `teacher_app.assessments`. |
-| Material storage/conversion providers | legacy storage helpers in `app.py` plus worker adapters | `teacher_app.materials` calls narrow `base` seams such as `gdrive_delete_material`, `mega_destroy`, `r2_delete_prefix` and `oci_delete_prefix` | **Deferred storage debt.** Credentials, provider SDK clients, upload/preview conversion and worker protocol are intentionally not moved in Stage 5.1. |
+| PGY workflow, atomic transitions and signing | `teacher_app.pgy.service`, `repository`, `workflow`, `signing` | `pgy_workflow.py` is the surviving thin legacy URL/JSON adapter; redundant `pgy_atomic.py` is retired; `pgy_signing_66.py` remains the only signing compatibility overlay | **Converging.** Schema, reads, create/edit rules, atomic transitions and audit writes belong to `teacher_app.pgy`. Multi-role/sign-mode route behavior still in `pgy_signing_66.py` is the next PGY ownership target. |
+| Materials catalog and metadata controller | `teacher_app.materials.service`, `repository`, `catalog`; shared scope in `teacher_app.common.scope` | Existing `/api/slides*` endpoint names remain in `app.py` as thin canonical delegates; provider deletion still calls narrow legacy storage seams | **Converged read/data ownership.** Repository and normal catalog/update validation no longer consult the legacy host. Provider delete/filesystem cleanup remains deferred until storage ownership moves. |
+| Courses and teaching-plan controller | `teacher_app.courses.service` plus incremental `teacher_app.courses.repository` | Existing `/api/courses*` URL rules remain in `app.py` as thin canonical delegates; no runtime view-function replacement remains in `pgy_app.py` | **Converged controller, data-access migration pending.** Course CRUD/plan rules are canonical, but several reads/writes still depend on legacy host seams. |
+| Assessment configuration/review/publication | `teacher_app.assessments.service` plus incremental `teacher_app.assessments.repository` | Existing `/api/quiz-categories*` URL rules remain in `app.py` as thin canonical delegates; Question Bank/RBAC adapters may still wrap those handlers | **Converged controller, data-access migration pending.** Review/publication rules are canonical while some category/question reads and writes still depend on legacy host seams. |
+| Material storage/conversion providers | legacy storage helpers in `app.py` plus worker adapters | `teacher_app.materials` calls narrow seams such as `gdrive_delete_material`, `mega_destroy`, `r2_delete_prefix` and `oci_delete_prefix` only for physical provider cleanup | **Deferred storage debt.** Credentials, provider SDK clients, upload/preview conversion and worker protocol are intentionally not duplicated in canonical modules yet. |
 | Worker queue and local-worker HTTP adapter | `free_worker_67.py` plus `material_worker.py`; queue/storage helpers remain in `app.py` | `pgy_app.py` registers `register_free_worker`; `health_65.py` reports status | **Deferred debt.** The adapter has unique queue/upload protocol logic. Keep local tokens server-side and do not introduce a second worker. |
 | Smart learning / material progress | `smart_learning_67.py` | `pgy_app.py` registration only; material storage remains in `app.py` | **Deferred debt.** Unique reader, media-coverage, and preview behavior remains here. |
 | Question Bank 2.0 | `question_bank_68.py` | `rbac_681.py` scopes legacy and Bank 2.0 endpoints | **Deferred compatibility overlay.** Do not duplicate category/review/publication rules back into this adapter. |
@@ -51,16 +51,16 @@ behavior.
 
 ## Root freeze policy
 
-1. `pgy_app.py` is composition only. It may register compatibility modules that still own unique runtime behavior, but it must not reintroduce `register_legacy_material_routes`, `register_legacy_course_routes`, `register_legacy_assessment_routes`, or other redundant view-function replacement layers.
+1. `pgy_app.py` is composition only. It may register compatibility modules that still own unique runtime behavior, but it must not reintroduce `register_legacy_material_routes`, `register_legacy_course_routes`, `register_legacy_assessment_routes`, `register_pgy_atomic_workflow`, or other redundant view-function replacement layers.
 2. `app.py` auth/RBAC seams must delegate to `teacher_app`; duplicate pre-extraction `_legacy_*` auth implementations must not return to production source.
 3. `exam_integrity.py` remains a thin adapter. New exam-attempt behavior goes in `teacher_app.exams`.
-4. `pgy_workflow.py` must remain a thin HTTP compatibility adapter: no independent PGY schema SQL, assignment query implementation, create/edit business rules, transition rules, or audit persistence may return to it. Compatibility symbols used by `pgy_signing_66.py` must delegate to `teacher_app.pgy`.
-5. Materials catalog/metadata, course/teaching-plan, and assessment category/review/publication rules belong to their Stage 5.1 `teacher_app` services. The corresponding `app.py` route bodies are thin canonical delegates only and must not regain SQL, provider branching, validation policy or independent business rules.
-6. Provider credentials, cloud SDK setup, upload/conversion engines and worker protocol remain outside the Stage 5.1 extraction. Canonical material code may call narrow compatibility seams but must not import or duplicate credentials.
+4. `pgy_workflow.py` must remain a thin HTTP compatibility adapter: no independent PGY schema SQL, assignment query implementation, create/edit business rules, transition rules, or audit persistence may return to it. Compatibility symbols used by `pgy_signing_66.py` must delegate to `teacher_app.pgy`. The retired `pgy_atomic.py` must not return.
+5. Materials catalog/metadata, course/teaching-plan, and assessment category/review/publication rules belong to their `teacher_app` services/repositories. The corresponding `app.py` route bodies are thin canonical delegates only and must not regain SQL, provider branching, validation policy or independent business rules.
+6. Provider credentials, cloud SDK setup, upload/conversion engines and worker protocol remain outside the current extraction. Canonical material code may call narrow compatibility seams but must not import or duplicate credentials.
 7. Do not use `professional_title` or `responsibility_tags` in roles, permissions, scope, elevation, or query filters.
 8. Student management access, auditor immutability, group scope, cross-group education-admin access, system-admin limits on clinical signing, elevation, and worker-secret boundaries remain governed by their existing security tests.
 
-`tests/test_root_mirror_policy.py` and `tests/test_stage51_domain_ownership.py` are CI enforcement points. They verify live canonical ownership, compatibility composition order, the unchanged production entrypoint, and that storage/provider implementation has not been accidentally pulled into the Stage 5.1 domain services.
+`tests/test_root_mirror_policy.py` and `tests/test_stage51_domain_ownership.py` are CI enforcement points. They verify live canonical ownership, compatibility composition order, the unchanged production entrypoint, and that storage/provider implementation has not been accidentally duplicated in canonical domain services.
 
 ## Backend convergence stage 1
 
@@ -79,11 +79,11 @@ behavior.
 - Material preview files are immutable for a material id. A non-empty local preview cache entry remains valid until size-based eviction or explicit material deletion; the former time-based expiry that periodically forced a synchronous MEGA re-download has been removed.
 - Provider health/capacity probes remain operational/admin concerns and must not be introduced into normal material catalog reads.
 - Material row projection and all runtime material SELECT/INSERT/UPDATE/DELETE statements now live in `teacher_app.materials.repository`.
-- `app.py` keeps only `material_row_to_dict`, `list_uploaded_materials`, and `get_material` compatibility delegates; it contains no runtime material DML.
+- `app.py` keeps only compatibility delegates; it contains no runtime material DML.
 - Read-only repository work uses `teacher_app.common.db.read_connection()`, which always checks out from the shared process-local pool and returns/closes the handle at scope exit.
 - Repository-owned writes use `teacher_app.common.db.transaction()`. Cross-domain course/assessment/external-media workflows pass the same caller-owned connection into material repository helpers so commit/rollback stays atomic across all affected tables.
 - Canonical material, course and assessment services read material data directly through `teacher_app.materials.repository` rather than bouncing through the legacy host.
-
+- Material row projection, group/area normalization, built-in catalog loading and course/category validation now use canonical `teacher_app` modules rather than consulting the legacy `app` object. Physical provider deletion remains the only intentional material-service legacy seam.
 
 ## Production runtime validation stage 3
 
@@ -96,10 +96,17 @@ behavior.
 - The six exam-container actions (question, image, video, AI, question management and settings) use one delegated runtime path that resolves the current canonical `window.teacherContentStudioExamAction`; inline duplicate handlers are prohibited.
 - Exam-action failures return to a visible Studio error state instead of disappearing into a hidden workspace or unhandled promise rejection.
 
+## Backend convergence stage 5 — runtime owner retirement
 
+- `teacher_app.common.scope`, `teacher_app.materials.catalog`, and incremental course/assessment repositories remove ordinary material catalog/update logic from the legacy host dependency chain.
+- The historical `pgy_atomic.py` layer is retired. It only replaced six PGY mutation view functions with the same `teacher_app.pgy.service` handlers already registered by `pgy_workflow.py`, so it had no unique runtime ownership.
+- `pgy_workflow.py` remains the single legacy PGY URL/JSON adapter while `teacher_app.pgy.service/repository/workflow` remain the canonical business/data owners.
+- `pgy_signing_66.py` is intentionally not removed yet because it still owns unique multi-role and sign-mode route behavior. That behavior must move into `teacher_app.pgy` before the adapter can shrink or disappear.
 
 ## Follow-up sequence
 
-1. Extract storage/provider ownership one bounded backend at a time; do not combine cloud credentials, upload jobs, conversion and material metadata into one rewrite.
-2. Retire remaining root compatibility logic only after the matching canonical domain owns every live caller and release checks cover the old contract.
-3. Only after each domain has no unique legacy logic should `app.py` shrink from compatibility host to a true shim.
+1. Finish PGY convergence by moving the remaining multi-role/sign-mode runtime behavior from `pgy_signing_66.py` into `teacher_app.pgy`, then leave only a thin compatibility registration surface.
+2. Converge backup/restore, smart learning, worker, external media, course bundle, Atlas and Question Bank one domain at a time; run the full release gate after every domain.
+3. Extract storage/provider ownership one bounded backend at a time; do not combine cloud credentials, upload jobs, conversion and material metadata into one rewrite.
+4. Retire remaining root compatibility logic only after the matching canonical domain owns every live caller and release checks cover the old contract.
+5. Only after each domain has no unique legacy logic should `app.py` shrink from compatibility host to a true shim and `pgy_app.py` move to `app = create_app()`.
