@@ -1,10 +1,9 @@
-"""Question Bank 2.0 HTTP adapter plus deferred analytics runtime."""
+"""Question Bank 2.0 HTTP/RBAC compatibility adapter."""
 from __future__ import annotations
-
-from collections import Counter
 
 from flask import jsonify, request
 
+from teacher_app.assessments import analytics as analytics_service
 from teacher_app.assessments import blueprints as blueprint_service
 from teacher_app.assessments import question_bank as bank_service
 from teacher_app.common.errors import ApiError
@@ -121,7 +120,6 @@ def register_question_bank(base):
             return _error(exc)
         return jsonify(payload), 201
 
-    # Item analytics remains the final bounded Question Bank runtime owner.
     @app.get("/api/questions/<question_id>/analytics")
     def analytics(question_id):
         denied = (
@@ -131,46 +129,7 @@ def register_question_bank(base):
         )
         if denied:
             return denied
-        conn, kind = base._db_conn()
-        ph = "%s" if kind == "postgres" else "?"
-        try:
-            rows = conn.execute(
-                f"SELECT selected_option,is_correct FROM question_attempt_analytics WHERE question_id={ph}",
-                (question_id,),
-            ).fetchall()
-        finally:
-            conn.close()
-        attempt_count = len(rows)
-        if attempt_count < 10:
-            return jsonify({
-                "attemptCount": attempt_count,
-                "sufficientData": False,
-                "message": "資料不足",
-            })
-        values = [dict(row) for row in rows]
-        counts = dict(Counter(row["selected_option"] for row in values))
-        conn, kind = base._db_conn()
-        ph = "%s" if kind == "postgres" else "?"
-        try:
-            question = conn.execute(
-                f"SELECT correct FROM quiz_questions WHERE id={ph}",
-                (question_id,),
-            ).fetchone()
-        finally:
-            conn.close()
-        correct = str(dict(question).get("correct", "") if question else "")
-        return jsonify({
-            "attemptCount": attempt_count,
-            "sufficientData": True,
-            "correctRate": round(
-                sum(bool(row["is_correct"]) for row in values) / attempt_count,
-                3,
-            ),
-            "optionSelectionCounts": counts,
-            "distractorDistribution": {
-                key: value for key, value in counts.items() if str(key) != correct
-            },
-        })
+        return jsonify(analytics_service.get_question_analytics(question_id))
 
     @app.post("/api/exam-blueprints/<blueprint_id>/publish")
     def publish_blueprint(blueprint_id):
