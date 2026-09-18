@@ -71,7 +71,7 @@ class WorkspaceShell70Tests(unittest.TestCase):
         self.assertNotIn("responsibility_tags", auth_block)
 
     def test_workspace_shell_is_loaded_after_maintenance_bridge(self):
-        maintenance = self.frontend.index('/maintenance-64.js?v=6605')
+        maintenance = self.frontend.index('/maintenance-64.js?v=6606')
         shell = self.frontend.index('/workspace-shell-70.js?v=7114')
         self.assertLess(maintenance, shell)
         self.assertIn('if "/workspace-shell-70.js" not in html', self.frontend)
