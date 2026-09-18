@@ -13,6 +13,9 @@ class QuestionBankConvergenceStage5Tests(unittest.TestCase):
         cls.service = ROOT.joinpath(
             "teacher_app", "assessments", "question_bank.py"
         ).read_text(encoding="utf-8")
+        cls.blueprints = ROOT.joinpath(
+            "teacher_app", "assessments", "blueprints.py"
+        ).read_text(encoding="utf-8")
         cls.repository = ROOT.joinpath(
             "teacher_app", "assessments", "repository.py"
         ).read_text(encoding="utf-8")
@@ -62,11 +65,37 @@ class QuestionBankConvergenceStage5Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.adapter)
 
-    def test_blueprint_and_analytics_debt_remains_explicit(self):
-        self.assertIn("def _draw(", self.adapter)
-        self.assertIn("INSERT INTO exam_blueprints", self.adapter)
+    def test_blueprint_selection_and_snapshot_ownership_is_canonical(self):
+        for marker in (
+            "def _draw(",
+            "def create_blueprint(",
+            "def publish_blueprint(",
+            "repository.insert_blueprint",
+            "repository.get_blueprint_snapshot",
+            "repository.list_blueprint_questions",
+            "repository.list_recent_blueprint_snapshots",
+            "repository.insert_blueprint_snapshot",
+        ):
+            self.assertIn(marker, self.blueprints)
+        for marker in (
+            "def insert_blueprint(",
+            "def get_blueprint(",
+            "def get_blueprint_snapshot(",
+            "def list_blueprint_questions(",
+            "def list_recent_blueprint_snapshots(",
+            "def insert_blueprint_snapshot(",
+        ):
+            self.assertIn(marker, self.repository)
+        self.assertNotIn("def _draw(", self.adapter)
+        self.assertNotIn("INSERT INTO exam_blueprints", self.adapter)
+        self.assertNotIn("exam_blueprint_snapshots", self.adapter)
+        self.assertIn("blueprint_service.create_blueprint", self.adapter)
+        self.assertIn("blueprint_service.publish_blueprint", self.adapter)
+
+    def test_analytics_debt_remains_explicit(self):
         self.assertIn("question_attempt_analytics", self.adapter)
-        self.assertIn("exam_blueprint_snapshots", self.adapter)
+        self.assertIn("SELECT correct FROM quiz_questions", self.adapter)
+        self.assertNotIn("question_attempt_analytics", self.blueprints)
 
 
 if __name__ == "__main__":
