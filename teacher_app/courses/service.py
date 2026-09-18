@@ -13,6 +13,7 @@ import uuid
 from typing import Any, Mapping
 
 from teacher_app.common.errors import ApiError
+from teacher_app.materials import repository as materials_repository
 
 
 def _fail(code: str, message: str, status: int = 400) -> ApiError:
@@ -102,7 +103,7 @@ def get_teaching_plan(base, course_id: str) -> dict:
         raise _fail("COURSE_NOT_FOUND", "找不到課程", 404)
     materials = [
         material
-        for material in base.list_uploaded_materials(True)
+        for material in materials_repository.list_uploaded_materials(base, True)
         if material.get("courseId") == course_id
     ]
     return {"course": course, "materials": materials}
