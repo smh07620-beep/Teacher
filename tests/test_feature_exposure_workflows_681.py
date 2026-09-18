@@ -4,6 +4,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from flask import Flask
 
@@ -88,11 +89,17 @@ class _Base:
 class FeatureExposureWorkflow681Tests(unittest.TestCase):
     def setUp(self):
         self.base = _Base()
+        self.canonical_db = patch(
+            "teacher_app.common.db.get_connection",
+            side_effect=self.base._db_conn,
+        )
+        self.canonical_db.start()
         register_question_bank(self.base)
         register_external_media(self.base)
         self.client = self.base.app.test_client()
 
     def tearDown(self):
+        self.canonical_db.stop()
         self.base.close()
 
     def draft(self, question="題目一"):
