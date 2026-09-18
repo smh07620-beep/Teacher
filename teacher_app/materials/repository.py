@@ -1,7 +1,7 @@
-"""Canonical material read repository.
+"""Canonical material data access.
 
-SQL and row projection for uploaded-material reads live here.  Provider
-credentials and storage SDK client construction remain outside this module.
+SQL and row projection for uploaded materials live here. Provider credentials
+and storage SDK/process ownership remain outside this module.
 """
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from teacher_app.common import db as common_db
+from teacher_app.common import scope
 
 
 MATERIAL_TYPES = {
@@ -25,8 +26,8 @@ AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 
-def material_row_to_dict(base, row) -> dict:
-    """Project a DB row to the stable legacy material response contract."""
+def material_row_to_dict(row) -> dict:
+    """Project a DB row to the stable material response contract."""
     r = dict(row)
     r["isBuiltin"] = False
     r["is_builtin"] = False
@@ -56,8 +57,8 @@ def material_row_to_dict(base, row) -> dict:
 
     r["active"] = bool(r.get("active", True))
     r["blindMode"] = bool(r.pop("blind_mode", False))
-    r["group"] = base.normalize_group(r.pop("group_key", base.DEFAULT_GROUP))
-    r["area"] = base.normalize_area(r.pop("training_area", base.DEFAULT_TRAINING_AREA))
+    r["group"] = scope.normalize_group(r.pop("group_key", scope.DEFAULT_GROUP))
+    r["area"] = scope.normalize_area(r.pop("training_area", scope.DEFAULT_TRAINING_AREA))
     r["courseId"] = r.pop("course_id", "") or ""
 
     ext = Path(r.get("filename", "")).suffix.lower()
@@ -78,7 +79,7 @@ def material_row_to_dict(base, row) -> dict:
     return r
 
 
-def list_uploaded_materials(base, include_inactive: bool = False) -> list[dict]:
+def list_uploaded_materials(include_inactive: bool = False) -> list[dict]:
     """Read uploaded materials using the shared pooled connection path."""
     with common_db.read_connection() as (conn, kind):
         sql = "SELECT * FROM materials"
@@ -86,15 +87,15 @@ def list_uploaded_materials(base, include_inactive: bool = False) -> list[dict]:
             sql += " WHERE active = " + ("TRUE" if kind == "postgres" else "1")
         sql += " ORDER BY date_added DESC"
         rows = conn.execute(sql).fetchall()
-    return [material_row_to_dict(base, row) for row in rows]
+    return [material_row_to_dict(row) for row in rows]
 
 
-def get_material(base, material_id: str) -> dict | None:
+def get_material(material_id: str) -> dict | None:
     """Read one material using the shared pooled connection path."""
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
         row = conn.execute(f"SELECT * FROM materials WHERE id = {ph}", (material_id,)).fetchone()
-    return material_row_to_dict(base, row) if row else None
+    return material_row_to_dict(row) if row else None
 
 
 MATERIAL_DB_COLUMNS = (
