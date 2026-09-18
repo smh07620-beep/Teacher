@@ -15,6 +15,7 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         cls.materials = ROOT.joinpath("teacher_app/materials/service.py").read_text(encoding="utf-8")
         cls.courses = ROOT.joinpath("teacher_app/courses/service.py").read_text(encoding="utf-8")
         cls.assessments = ROOT.joinpath("teacher_app/assessments/service.py").read_text(encoding="utf-8")
+        cls.external = ROOT.joinpath("external_media_68.py").read_text(encoding="utf-8")
 
     def test_material_read_sql_is_owned_by_repository(self):
         self.assertIn("SELECT * FROM materials", self.repo)
@@ -84,6 +85,17 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         self.assertIn("materials_repository.clear_category_assignment(", self.assessments)
         self.assertIn("with common_db.transaction()", self.courses)
         self.assertIn("with common_db.transaction()", self.assessments)
+    def test_runtime_material_dml_exists_only_in_repository(self):
+        material_dml = re.compile(
+            r"(SELECT\\s+.*FROM\\s+materials|INSERT\\s+.*INTO\\s+materials|"
+            r"UPDATE\\s+materials|DELETE\\s+FROM\\s+materials)",
+            re.I,
+        )
+        for source in (self.app, self.materials, self.courses, self.assessments, self.external):
+            self.assertIsNone(material_dml.search(source))
+        self.assertIsNotNone(material_dml.search(self.repo))
+        self.assertIn("material_repository.insert_material_on_connection(", self.external)
+        self.assertIn("with common_db.transaction()", self.external)
     def test_repository_has_no_provider_credentials_or_storage_clients(self):
         for forbidden in (
             "R2_SECRET_ACCESS_KEY",
