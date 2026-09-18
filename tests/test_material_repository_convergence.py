@@ -53,6 +53,12 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         self.assertIn("materials_repository.list_uploaded_materials(base", self.courses)
         self.assertIn("materials_repository.list_uploaded_materials(base", self.assessments)
 
+    def test_material_inserts_use_repository_transaction_boundary(self):
+        self.assertIn("def insert_material(", self.repo)
+        self.assertIn("with common_db.transaction()", self.repo)
+        self.assertNotIn("INSERT INTO materials", self.app)
+        self.assertIn("material_repository.insert_material(entry, ignore_conflict=True)", self.app)
+        self.assertIn("material_repository.insert_material(entry)", self.app)
     def test_repository_has_no_provider_credentials_or_storage_clients(self):
         for forbidden in (
             "R2_SECRET_ACCESS_KEY",
