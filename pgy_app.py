@@ -28,11 +28,8 @@ from legacy_office_69 import register_legacy_office_69
 from sensitive_elevation_69 import register_sensitive_elevation_69
 from atlas_70 import register_atlas_70
 from storage_pagination_hardening import install_storage_pagination_hardening
-from teacher_app.assessments.routes import register_legacy_assessment_routes
 from teacher_app.command_center.audience import register_training_audience_71
 from teacher_app.command_center.routes import register_training_command_center
-from teacher_app.courses.routes import register_legacy_course_routes
-from teacher_app.materials.routes import register_legacy_material_routes
 
 # Keep legacy storage ownership in app.py, but replace its S3-compatible
 # pagination loops before any route can invoke them. The wrappers fail closed
@@ -53,13 +50,9 @@ app = register_pgy_signing_66(legacy_app)
 # domains. It owns no mutation rules and never replaces professional signers.
 app = register_training_command_center(legacy_app)
 app = register_exam_integrity(legacy_app)
-# Stage 5.1 moves the live materials/course/assessment controller behavior to
-# canonical teacher_app modules while retaining every legacy URL rule. Register
-# before RBAC and later compatibility overlays so those wrappers protect the
-# canonical handlers rather than the retired app.py implementations.
-app = register_legacy_material_routes(legacy_app)
-app = register_legacy_course_routes(legacy_app)
-app = register_legacy_assessment_routes(legacy_app)
+# Materials, courses and assessment category routes now delegate directly from
+# the compatibility host to canonical teacher_app services. No runtime
+# view-function replacement layer is needed here.
 # Register same-origin/rate-limit checks before upload parsing/validation.
 app = register_production_hardening(legacy_app)
 app = register_upload_hardening(legacy_app)
