@@ -24,7 +24,7 @@ jobs:
       - name: Python compile checks
         run: |
           python -m py_compile \
-            app.py pgy_app.py pgy_frontend.py pgy_workflow.py pgy_atomic.py \
+            app.py pgy_app.py pgy_frontend.py pgy_workflow.py \
             pgy_signing_66.py multi_role_66.py exam_integrity.py \
             production_hardening.py schema_migrations.py backup_restore.py \
             upload_hardening.py ai_privacy.py health_65.py material_worker.py \
@@ -146,6 +146,8 @@ jobs:
           grep -q 'register_training_audience_71' pgy_app.py
           grep -q 'register_sensitive_elevation_69' pgy_app.py
           grep -q 'register_course_bundle_followup_73' pgy_app.py
+          ! grep -q 'register_pgy_atomic_workflow' pgy_app.py
+          test ! -f pgy_atomic.py
           grep -q '0066-additive-rbac-pgy-signing' schema_migrations.py
           grep -q '0067-smart-learning-content' schema_migrations.py
           grep -q '0067-render-worker-shared-staging' schema_migrations.py
