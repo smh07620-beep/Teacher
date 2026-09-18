@@ -130,32 +130,18 @@ def update_material(base, material_id: str, data: Mapping[str, Any]) -> dict:
         or quiz_category.get("area") != area
     ):
         category = ""
-    conn, kind = base._db_conn()
-    try:
-        values = (
-            title,
-            desc,
-            category,
-            group,
-            area,
-            course_id,
-            material_type,
-            json.dumps(atlas_meta, ensure_ascii=False),
-            active if kind == "postgres" else int(active),
-            material_id,
-        )
-        if kind == "postgres":
-            conn.execute(
-                "UPDATE materials SET title=%s, description=%s, category=%s, group_key=%s, training_area=%s, course_id=%s, material_type=%s, atlas_meta=%s, active=%s WHERE id=%s",
-                values,
-            )
-        else:
-            conn.execute(
-                "UPDATE materials SET title=?, description=?, category=?, group_key=?, training_area=?, course_id=?, material_type=?, atlas_meta=?, active=? WHERE id=?",
-                values,
-            )
-    finally:
-        conn.close()
+    repository.update_material_metadata(
+        material_id,
+        title=title,
+        description=desc,
+        category=category,
+        group_key=group,
+        training_area=area,
+        course_id=course_id,
+        material_type=material_type,
+        atlas_meta_json=json.dumps(atlas_meta, ensure_ascii=False),
+        active=active,
+    )
     return {"ok": True}
 
 
@@ -193,12 +179,5 @@ def delete_material(base, material_id: str) -> dict:
     except OSError:
         pass
 
-    conn, kind = base._db_conn()
-    try:
-        if kind == "postgres":
-            conn.execute("DELETE FROM materials WHERE id=%s", (material_id,))
-        else:
-            conn.execute("DELETE FROM materials WHERE id=?", (material_id,))
-    finally:
-        conn.close()
+    repository.delete_material_record(material_id)
     return {"ok": True}
