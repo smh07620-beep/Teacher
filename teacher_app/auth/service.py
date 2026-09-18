@@ -1,8 +1,12 @@
 """Authentication and session lifecycle, independent of HTTP responses."""
 
 import datetime
+import logging
 import re
 import json
+import time
+
+from flask import g, has_request_context
 
 from werkzeug.security import check_password_hash
 
@@ -13,6 +17,11 @@ from teacher_app.common.auth import (
     normalize_roles,
 )
 from teacher_app.common.errors import ApiError
+
+
+_LOG = logging.getLogger(__name__)
+_REQUEST_USER_CACHE_ATTR = "_teacher_current_user_row"
+_SLOW_AUTH_MS = 250.0
 
 
 def normalize_username(value):
@@ -62,20 +71,45 @@ def _profile_tags(value):
     return [str(tag).strip()[:50] for tag in parsed if str(tag).strip()][:12]
 
 
-def current_user(base, session, *, include_roles=False):
+def _load_current_user_row(base, session):
     username = normalize_username(session.get("username", ""))
     if not username:
         return None
+
+    session_version = session.get("session_version", 0)
+    cache_key = (username, str(session_version))
+    if has_request_context():
+        cached = getattr(g, _REQUEST_USER_CACHE_ATTR, None)
+        if cached and cached.get("key") == cache_key:
+            return cached.get("row")
+
+    started = time.perf_counter()
     raw = repository.find_user(base, username)
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    if elapsed_ms >= _SLOW_AUTH_MS:
+        _LOG.warning("slow auth lookup: %.0fms", elapsed_ms)
+
     if not raw or not bool(raw.get("active", True)):
         session.clear()
-        return None
-    try:
-        valid = int(raw.get("session_version", 1) or 1) == int(session.get("session_version", 0) or 0)
-    except (TypeError, ValueError):
-        valid = False
-    if not valid:
-        session.clear()
+        raw = None
+    else:
+        try:
+            valid = int(raw.get("session_version", 1) or 1) == int(session_version or 0)
+        except (TypeError, ValueError):
+            valid = False
+        if not valid:
+            session.clear()
+            raw = None
+
+    if has_request_context():
+        setattr(g, _REQUEST_USER_CACHE_ATTR, {"key": cache_key, "row": raw})
+    return raw
+
+
+def current_user(base, session, *, include_roles=False):
+    """Resolve the authenticated user once per request, never across requests."""
+    raw = _load_current_user_row(base, session)
+    if not raw:
         return None
     return public_user(
         base,
