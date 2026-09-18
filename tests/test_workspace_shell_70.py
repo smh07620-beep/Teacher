@@ -24,6 +24,19 @@ class WorkspaceShell70Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
+    def test_workspace_waits_for_canonical_rbac_before_projecting_multirole_surface(self):
+        self.assertIn("(async function ()", self.source)
+        self.assertIn("async function waitForCanonicalRbac", self.source)
+        self.assertIn("const R = await waitForCanonicalRbac()", self.source)
+        self.assertIn("current.roles instanceof Set", self.source)
+        self.assertIn("typeof current.hasPermission === 'function'", self.source)
+        self.assertIn("current.surface", self.source)
+        rbac_wait = self.source[
+            self.source.index("async function waitForCanonicalRbac"):
+            self.source.index("const roles = R.roles")
+        ]
+        self.assertNotIn("const surfaceKey", rbac_wait)
+
     def test_multirole_accounts_follow_one_canonical_surface(self):
         self.assertIn("const surfaceKey = String(R.surface?.key", self.source)
         self.assertIn("roles.has('system_admin') ? 'system'", self.source)
