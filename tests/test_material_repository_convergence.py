@@ -19,7 +19,8 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
         cls.assessment_repo = ROOT.joinpath("teacher_app/assessments/repository.py").read_text(encoding="utf-8")
         cls.courses = ROOT.joinpath("teacher_app/courses/service.py").read_text(encoding="utf-8")
         cls.assessments = ROOT.joinpath("teacher_app/assessments/service.py").read_text(encoding="utf-8")
-        cls.external = ROOT.joinpath("external_media_68.py").read_text(encoding="utf-8")
+        cls.external = ROOT.joinpath("teacher_app/materials/external_media.py").read_text(encoding="utf-8")
+        cls.external_adapter = ROOT.joinpath("external_media_68.py").read_text(encoding="utf-8")
         cls.hardening = ROOT.joinpath("production_hardening.py").read_text(encoding="utf-8")
 
     def test_material_read_sql_is_owned_by_repository(self):
@@ -36,7 +37,7 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
             next_def = self.app.find("\ndef ", start + 5)
             end = next_def if next_def >= 0 else len(self.app)
             source = self.app[start:end]
-            self.assertIn(target, source)
+            self.assertIn(target, source, name)
             for sql in ("SELECT ", "UPDATE ", "INSERT ", "DELETE "):
                 self.assertNotIn(sql, source)
 
@@ -121,7 +122,14 @@ class MaterialRepositoryConvergenceTests(unittest.TestCase):
             r"(SELECT\s+.*FROM\s+materials|INSERT\s+.*INTO\s+materials|UPDATE\s+materials|DELETE\s+FROM\s+materials)",
             re.I,
         )
-        for source in (self.app, self.materials, self.courses, self.assessments, self.external):
+        for source in (
+            self.app,
+            self.materials,
+            self.courses,
+            self.assessments,
+            self.external,
+            self.external_adapter,
+        ):
             self.assertIsNone(material_dml.search(source))
         self.assertIsNotNone(material_dml.search(self.repo))
         self.assertIn("material_repository.insert_material_on_connection(", self.external)
