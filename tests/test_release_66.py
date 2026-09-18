@@ -15,20 +15,37 @@ class ReleaseContractTests(unittest.TestCase):
             release_contract.version_file_value(),
             release_contract.RELEASE_VERSION,
         )
+        self.assertEqual(
+            health_65.app_version(),
+            release_contract.RELEASE_VERSION,
+        )
         self.assertRegex(release_contract.RELEASE_VERSION, r"^\d+\.\d+\.\d+$")
         self.assertIn(
             release_contract.ENTRYPOINT,
             ROOT.joinpath("run_web.sh").read_text(encoding="utf-8"),
         )
-        self.assertIn(
-            "0066-additive-rbac-pgy-signing",
-            health_65.REQUIRED_MIGRATIONS,
+
+        self.assertEqual(
+            tuple(health_65.REQUIRED_MIGRATIONS),
+            release_contract.REQUIRED_MIGRATIONS,
         )
-        self.assertIn(
+        self.assertEqual(
             release_contract.REQUIRED_RELEASE_MIGRATION,
-            [version for version, _fn in schema_migrations.MIGRATIONS],
+            release_contract.REQUIRED_MIGRATIONS[-1],
         )
-        self.assertIn(release_contract.REQUIRED_RELEASE_MIGRATION, health_65.REQUIRED_MIGRATIONS)
+        for version in (
+            "0066-additive-rbac-pgy-signing",
+            "0070-material-search-and-atlas",
+            "0071-pgy-learner-audience",
+            "0072-course-bundle-idempotency",
+            "0073-course-bundle-followups",
+            "0074-assessment-list-indexes",
+        ):
+            self.assertIn(version, release_contract.REQUIRED_MIGRATIONS)
+
+        registered = [version for version, _fn in schema_migrations.MIGRATIONS]
+        for version in release_contract.REQUIRED_MIGRATIONS:
+            self.assertIn(version, registered)
 
     def test_release_document_records_security_and_operational_invariants(self):
         document = ROOT.joinpath("ARCHITECTURE_6_6.md").read_text(encoding="utf-8")
