@@ -4208,15 +4208,13 @@ def api_migrate_materials_to_gdrive():
             key, prefix, meta = upload_material_tree_to_gdrive(
                 entry["id"], source, slides, entry.get("pageCount", 0), original_name=entry.get("filename")
             )
-            conn, kind = _db_conn()
-            try:
-                meta_json = json.dumps(meta, ensure_ascii=False)
-                if kind == "postgres":
-                    conn.execute("UPDATE materials SET storage_backend=%s, storage_key=%s, slides_prefix=%s, storage_meta=%s WHERE id=%s", ("gdrive", key, prefix, meta_json, entry["id"]))
-                else:
-                    conn.execute("UPDATE materials SET storage_backend=?, storage_key=?, slides_prefix=?, storage_meta=? WHERE id=?", ("gdrive", key, prefix, meta_json, entry["id"]))
-            finally:
-                conn.close()
+            material_repository.update_material_storage(
+                entry["id"],
+                backend="gdrive",
+                storage_key=key,
+                slides_prefix=prefix,
+                storage_meta_json=json.dumps(meta, ensure_ascii=False),
+            )
 
             if old_backend == "r2":
                 r2_delete_prefix(f"materials/{entry['id']}/")
@@ -4253,14 +4251,12 @@ def api_migrate_materials_to_r2():
             continue
         try:
             key, prefix = upload_material_tree_to_r2(entry["id"], source, slides, entry.get("pageCount", 0))
-            conn, kind = _db_conn()
-            try:
-                if kind == "postgres":
-                    conn.execute("UPDATE materials SET storage_backend=%s, storage_key=%s, slides_prefix=%s WHERE id=%s", ("r2", key, prefix, entry["id"]))
-                else:
-                    conn.execute("UPDATE materials SET storage_backend=?, storage_key=?, slides_prefix=? WHERE id=?", ("r2", key, prefix, entry["id"]))
-            finally:
-                conn.close()
+            material_repository.update_material_storage(
+                entry["id"],
+                backend="r2",
+                storage_key=key,
+                slides_prefix=prefix,
+            )
             shutil.rmtree(UPLOAD_DIR / entry["id"], ignore_errors=True)
             shutil.rmtree(slides, ignore_errors=True)
             migrated += 1
