@@ -66,6 +66,7 @@ def register_external_media(base):
             result = external_media_service.create_external_material(
                 body,
                 app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+                material_loader=base.get_material,
             )
         except ApiError as exc:
             return _error(exc)
