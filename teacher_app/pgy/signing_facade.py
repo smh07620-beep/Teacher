@@ -1,8 +1,8 @@
 """Canonical multi-role PGY signing facade.
 
-This module owns the 6.6 additive read/scope rules and new-assignment sign-mode
-configuration. The root pgy_signing_66 module is only an HTTP compatibility
-adapter after convergence.
+This module owns the 6.6 additive read/scope rules, sign-mode configuration,
+and legacy/new signing dispatch. The root pgy_signing_66 module is only an
+HTTP compatibility adapter after convergence.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from teacher_app.common.auth import has_role, normalize_role, user_roles
 from teacher_app.common.errors import ApiError
 from teacher_app.common.scope import normalize_group
 from teacher_app.pgy import repository as repo
+from teacher_app.pgy import service as pgy_service
 from teacher_app.pgy import signing
 from teacher_app.pgy import signing_repository
 from teacher_app.pgy.workflow import ASSIGNMENT_STATUSES, utcnow
@@ -267,3 +268,52 @@ def get_sign_mode(assignment_id: str) -> str:
     if not row:
         raise ApiError("ASSIGNMENT_NOT_FOUND", "找不到指派。", status=404)
     return signing.normalize_sign_mode(dict(row).get("sign_mode"), "legacy")
+
+
+def update_assignment(
+    user: Optional[Mapping[str, Any]],
+    assignment_id: str,
+    data: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Preserve the established patch contract while owning dispatch canonically."""
+    if "signMode" not in data:
+        return pgy_service.update_assignment(user, assignment_id, data)
+
+    legacy_fields = {"teacherUsername", "title", "instructions", "dueAt"}
+    if legacy_fields.intersection(data):
+        pgy_service.update_assignment(user, assignment_id, data)
+
+    return update_sign_mode(user, assignment_id, data.get("signMode"))
+
+
+def teacher_sign_assignment(
+    user: Optional[Mapping[str, Any]],
+    assignment_id: str,
+    data: Optional[Mapping[str, Any]] = None,
+) -> dict[str, Any]:
+    """Dispatch pre-6.6 rows to the established workflow and newer rows to 6.6 signing."""
+    if get_sign_mode(assignment_id) == "legacy":
+        return pgy_service.teacher_sign_assignment(user, assignment_id, data or {})
+    return signing.sign_assignment(user, assignment_id, data or {})
+
+
+def countersign_assignment(
+    user: Optional[Mapping[str, Any]],
+    assignment_id: str,
+    data: Optional[Mapping[str, Any]] = None,
+) -> dict[str, Any]:
+    """Dispatch legacy group countersign and new dual-mode countersign canonically."""
+    if get_sign_mode(assignment_id) == "legacy":
+        return pgy_service.group_countersign_assignment(user, assignment_id, data or {})
+    return signing.countersign_assignment(user, assignment_id, data or {})
+
+
+def reopen_assignment(
+    user: Optional[Mapping[str, Any]],
+    assignment_id: str,
+    data: Optional[Mapping[str, Any]] = None,
+) -> dict[str, Any]:
+    """Preserve legacy reopen semantics while canonicalizing mode dispatch."""
+    if get_sign_mode(assignment_id) == "legacy":
+        return pgy_service.reopen_assignment(user, assignment_id, data or {})
+    return signing.reopen_assignment(user, assignment_id, data or {})
