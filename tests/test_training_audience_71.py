@@ -19,9 +19,12 @@ class TrainingAudienceProfileTests(unittest.TestCase):
     def test_migration_is_additive_and_registered(self):
         versions = [version for version, _fn in schema_migrations.MIGRATIONS]
         self.assertIn("0071-pgy-learner-audience", versions)
-        source = ROOT.joinpath("teacher_app", "command_center", "audience.py").read_text(encoding="utf-8")
-        self.assertIn("pgy_learner", source)
-        self.assertIn("NOT NULL DEFAULT", source)
+        migration_source = ROOT.joinpath("schema_migrations.py").read_text(encoding="utf-8")
+        audience_source = ROOT.joinpath("teacher_app", "command_center", "audience.py").read_text(encoding="utf-8")
+        self.assertIn('@migration("0071-pgy-learner-audience")', migration_source)
+        self.assertIn("pgy_learner", migration_source)
+        self.assertIn("NOT NULL DEFAULT", migration_source)
+        self.assertNotIn('@migration("0071-pgy-learner-audience")', audience_source)
 
     def test_profile_uses_explicit_flag_and_title_without_changing_role(self):
         user = {
