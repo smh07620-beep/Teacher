@@ -160,7 +160,7 @@ def update_material(base, material_id: str, data: Mapping[str, Any]) -> dict:
 
 
 def delete_material(base, material_id: str) -> dict:
-    entry = base.get_material(material_id)
+    entry = repository.get_material(base, material_id)
     if not entry:
         raise _fail("MATERIAL_NOT_FOUND", "內建教材不能從後台刪除，或找不到此教材", 404)
 
