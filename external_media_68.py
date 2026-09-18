@@ -14,6 +14,9 @@ from urllib.parse import parse_qs, urlparse
 
 from flask import jsonify, request
 
+from teacher_app.common import db as common_db
+from teacher_app.materials import repository as material_repository
+
 DIRECT_HOSTS = {"media.example.edu"}  # deployment may add comma-separated hosts
 VIDEO_TYPES = {".mp4", ".webm"}
 
@@ -52,14 +55,14 @@ def register_external_media(base):
     def put_external_media(material_id):
         denied=(base.require_permission("material.manage") if hasattr(base,"require_permission") else base.require_admin())
         if denied: return denied
-        if not base.get_material(material_id): return jsonify({"error":"找不到教材"}),404
+        if not material_repository.get_material(base, material_id): return jsonify({"error":"找不到教材"}),404
         try: data=validate_external_url((request.get_json(silent=True) or {}).get("url"), app.config.get("DIRECT_MEDIA_ALLOWLIST", []))
         except ValueError as exc: return jsonify({"error":str(exc)}),400
-        conn,kind=base._db_conn(); ph="%s" if kind=="postgres" else "?"; stamp=now()
-        try:
+        stamp=now()
+        with common_db.transaction() as (conn,kind):
+            ph=common_db.placeholder(kind)
             if kind=="postgres": conn.execute("INSERT INTO external_media(id,material_id,provider,canonical_url,video_id,created_at,updated_at) VALUES(%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(material_id) DO UPDATE SET provider=EXCLUDED.provider,canonical_url=EXCLUDED.canonical_url,video_id=EXCLUDED.video_id,updated_at=EXCLUDED.updated_at", (material_id,material_id,data["provider"],data["canonicalUrl"],data["videoId"],stamp,stamp))
             else: conn.execute("INSERT INTO external_media(id,material_id,provider,canonical_url,video_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(material_id) DO UPDATE SET provider=excluded.provider,canonical_url=excluded.canonical_url,video_id=excluded.video_id,updated_at=excluded.updated_at", (material_id,material_id,data["provider"],data["canonicalUrl"],data["videoId"],stamp,stamp))
-        finally: conn.close()
         return jsonify({"ok":True,"materialId":material_id,**data})
     @app.post("/api/materials/external")
     def create_external_material():
@@ -89,21 +92,40 @@ def register_external_media(base):
         extension=".webm" if data["provider"]=="direct" and data["canonicalUrl"].lower().split("?")[0].endswith(".webm") else ".mp4"
         filename=f"external{extension}"
         meta=json.dumps({"external":True,"provider":data["provider"],"canonicalUrl":data["canonicalUrl"]},ensure_ascii=False)
-        conn,kind=base._db_conn();ph="%s" if kind=="postgres" else "?"
-        try:
-            values=(material_id,filename,title,str(body.get("description") or "")[:1000],category,group,area,material_id,0,stamp,filename,"external","","",meta,"video","{}",True if kind=="postgres" else 1,course_id)
-            conn.execute(f"INSERT INTO materials(id,filename,title,description,category,group_key,training_area,folder,page_count,date_added,storage_filename,storage_backend,storage_key,slides_prefix,storage_meta,material_type,atlas_meta,active,course_id) VALUES({','.join([ph]*19)})",values)
+        entry={
+            "id":material_id,
+            "filename":filename,
+            "title":title,
+            "description":str(body.get("description") or "")[:1000],
+            "category":category,
+            "group_key":group,
+            "training_area":area,
+            "course_id":course_id,
+            "folder":material_id,
+            "page_count":0,
+            "date_added":stamp,
+            "storage_filename":filename,
+            "storage_backend":"external",
+            "storage_key":"",
+            "slides_prefix":"",
+            "storage_meta":meta,
+            "material_type":"video",
+            "atlas_meta":"{}",
+            "active":True,
+        }
+        with common_db.transaction() as (conn,kind):
+            ph=common_db.placeholder(kind)
+            material_repository.insert_material_on_connection(conn,kind,entry)
             media_values=(material_id,material_id,data["provider"],data["canonicalUrl"],data["videoId"],stamp,stamp)
             conn.execute(f"INSERT INTO external_media(id,material_id,provider,canonical_url,video_id,created_at,updated_at) VALUES({','.join([ph]*7)})",media_values)
-        finally:conn.close()
-        item=base.get_material(material_id)
+        item=material_repository.get_material(base, material_id)
         return jsonify({"ok":True,"material":item,"externalMedia":data}),201
     @app.get("/api/materials/<material_id>/external-media")
     def get_external_media(material_id):
         if not base._current_user(): return jsonify({"error":"請先登入。","loginRequired":True}),401
-        conn,kind=base._db_conn(); ph="%s" if kind=="postgres" else "?"
-        try: row=conn.execute(f"SELECT provider,canonical_url,video_id FROM external_media WHERE material_id={ph}",(material_id,)).fetchone()
-        finally: conn.close()
+        with common_db.read_connection() as (conn,kind):
+            ph=common_db.placeholder(kind)
+            row=conn.execute(f"SELECT provider,canonical_url,video_id FROM external_media WHERE material_id={ph}",(material_id,)).fetchone()
         if not row:return jsonify({"externalMedia":None})
         d=dict(row);return jsonify({"externalMedia":{"provider":d["provider"],"canonicalUrl":d["canonical_url"],"videoId":d["video_id"]}})
     app.extensions["teacher_external_media_68_registered"]=True
