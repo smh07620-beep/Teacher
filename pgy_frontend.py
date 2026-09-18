@@ -111,7 +111,7 @@ def register_pgy_frontend(app):
             if "/exam-integrity.js" not in html:
                 body_assets.append('<script defer src="/exam-integrity.js?v=6604"></script>')
             if "/maintenance-64.js" not in html:
-                body_assets.append('<script defer src="/maintenance-64.js?v=6605"></script>')
+                body_assets.append('<script defer src="/maintenance-64.js?v=6606"></script>')
             if "/workspace-shell-70.js" not in html:
                 body_assets.append('<script defer src="/workspace-shell-70.js?v=7114"></script>')
             if "/training-command-center-71.js" not in html:
