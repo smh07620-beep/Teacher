@@ -193,6 +193,21 @@ def get_connection() -> ConnectionPair:
     return conn, "sqlite"
 
 
+@contextmanager
+def read_connection() -> Iterator[ConnectionPair]:
+    """Yield one read connection and always return/close it at scope exit.
+
+    Repositories use this helper for read-only work so PostgreSQL always checks
+    out from the process-local pool while SQLite keeps the same explicit close
+    semantics. Write units of work must use transaction() instead.
+    """
+    conn, kind = get_connection()
+    try:
+        yield conn, kind
+    finally:
+        conn.close()
+
+
 def placeholder(kind: Optional[str] = None) -> str:
     if kind is None:
         kind = "postgres" if database_url() else "sqlite"
