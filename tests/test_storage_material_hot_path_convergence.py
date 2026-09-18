@@ -59,12 +59,23 @@ class StorageMaterialHotPathConvergenceTests(unittest.TestCase):
         self.assertNotIn("MATERIAL_PREVIEW_CACHE_TTL_SECONDS", source)
         self.assertIn("_preview_cache_cleanup(protect=target)", source)
 
+    def test_web_reads_have_total_budget_below_gunicorn_timeout(self):
+        app = self.app
+        render = ROOT.joinpath("render.yaml").read_text(encoding="utf-8")
+        run_web = ROOT.joinpath("run_web.sh").read_text(encoding="utf-8")
+        self.assertIn('MEGA_WEB_READ_TIMEOUT_SECONDS", "120"', app)
+        self.assertIn("timeout_seconds=MEGA_WEB_READ_TIMEOUT_SECONDS", app)
+        self.assertIn('key: MEGA_WEB_READ_TIMEOUT_SECONDS', render)
+        self.assertIn('value: "120"', render)
+        self.assertIn('key: GUNICORN_TIMEOUT', render)
+        self.assertIn('value: "180"', render)
+        self.assertIn('GUNICORN_TIMEOUT:-180', run_web)
     def test_mega_read_reauthenticates_once_only_after_real_failure(self):
         start = self.app.index("def mega_download_file")
         end = self.app.index("def mega_destroy", start)
         source = self.app[start:end]
         self.assertIn('_MEGA_AUTH_CACHE.update({"ok": False, "at": 0.0})', source)
-        self.assertIn("_mega_login_if_needed(force=True)", source)
+        self.assertIn("_mega_login_if_needed(force=True, deadline=deadline)", source)
 
 
 if __name__ == "__main__":
