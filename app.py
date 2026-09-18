@@ -1083,6 +1083,7 @@ TRAINING_AREAS = {"internal": "內部教育訓練區", "pgy": "PGY訓練區"}
 from teacher_app.common.auth import CANONICAL_ROLES, LEGACY_ROLE_ALIASES, ROLE_PERMISSIONS
 from teacher_app.common import db as common_db
 from teacher_app.materials import storage as material_storage
+from teacher_app.materials import repository as material_repository
 from teacher_app.auth import service as auth_service, routes as auth_routes
 import sys
 
@@ -2318,64 +2319,18 @@ def init_quiz_db():
 
 
 def material_row_to_dict(row):
-    r = dict(row)
-    r["isBuiltin"] = False
-    r["is_builtin"] = False
-    r["desc"] = r.pop("description", "")
-    r["dateAdded"] = r.pop("date_added", "")
-    r["pageCount"] = int(r.pop("page_count", 0) or 0)
-    r["storageFilename"] = r.pop("storage_filename", "")
-    r["storageBackend"] = (r.pop("storage_backend", "local") or "local").lower()
-    r["storageKey"] = r.pop("storage_key", "") or ""
-    r["slidesPrefix"] = r.pop("slides_prefix", "") or ""
-    raw_storage_meta = r.pop("storage_meta", "{}") or "{}"
-    try:
-        r["storageMeta"] = json.loads(raw_storage_meta) if isinstance(raw_storage_meta, str) else (raw_storage_meta or {})
-    except Exception:
-        r["storageMeta"] = {}
-    r["slideFormat"] = str((r["storageMeta"] or {}).get("slideFormat", "png") or "png").lower()
-    material_type = str(r.pop("material_type", "standard") or "standard").lower()
-    r["materialType"] = material_type if material_type in {"standard", "atlas", "infographic", "video", "troubleshooting", "sop", "case"} else "standard"
-    raw_atlas_meta = r.pop("atlas_meta", "{}") or "{}"
-    try:
-        r["atlasMeta"] = json.loads(raw_atlas_meta) if isinstance(raw_atlas_meta, str) else (raw_atlas_meta or {})
-    except Exception:
-        r["atlasMeta"] = {}
-    r["active"] = bool(r.get("active", True))
-    r["blindMode"] = bool(r.pop("blind_mode", False))
-    r["group"] = normalize_group(r.pop("group_key", DEFAULT_GROUP))
-    r["area"] = normalize_area(r.pop("training_area", DEFAULT_TRAINING_AREA))
-    r["courseId"] = r.pop("course_id", "") or ""
-    ext = Path(r.get("filename", "")).suffix.lower()
-    if ext in {".mp4", ".webm", ".mov", ".m4v"}: r["viewerMode"] = "video"
-    elif ext in {".mp3", ".wav", ".m4a", ".ogg"}: r["viewerMode"] = "audio"
-    elif ext in {".png", ".jpg", ".jpeg", ".gif", ".webp"}: r["viewerMode"] = "image"
-    elif (r.get("storageMeta") or {}).get("previewMode") == "single_pdf": r["viewerMode"] = "preview_pdf"
-    elif r["pageCount"] > 0: r["viewerMode"] = "slides"
-    else: r["viewerMode"] = "download"
-    r["previewUrl"] = f"/material-preview/{r.get('id','')}" if r["viewerMode"] == "preview_pdf" else ""
-    return r
+    return material_repository.material_row_to_dict(sys.modules[__name__], row)
 
 
 def list_uploaded_materials(include_inactive=False):
-    conn, kind = _db_conn()
-    try:
-        sql = "SELECT * FROM materials"
-        if not include_inactive:
-            sql += " WHERE active = " + ("TRUE" if kind == "postgres" else "1")
-        sql += " ORDER BY date_added DESC"
-        return [material_row_to_dict(r) for r in conn.execute(sql).fetchall()]
-    finally:
-        conn.close()
+    return material_repository.list_uploaded_materials(
+        sys.modules[__name__],
+        include_inactive=include_inactive,
+    )
 
 
 def get_material(material_id):
-    conn, _ = _db_conn()
-    try:
-        row = conn.execute("SELECT * FROM materials WHERE id = %s" % ("%s" if DATABASE_URL else "?"), (material_id,)).fetchone()
-        return material_row_to_dict(row) if row else None
-    finally:
-        conn.close()
+    return material_repository.get_material(sys.modules[__name__], material_id)
 
 
 init_materials_db()
