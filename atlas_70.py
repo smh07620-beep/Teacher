@@ -1,9 +1,8 @@
 """Formal Atlas HTTP compatibility adapter.
 
-Atlas CRUD, row projection, scope and visibility rules live in
-``teacher_app.atlas``.  This root module keeps the established URLs plus the
-legacy local-image/DOCX transport seams.  Teaching-resource text search remains
-an explicit compatibility slice until material-text search ownership moves.
+Atlas CRUD, row projection, scope, visibility and teaching-resource search live
+in ``teacher_app.atlas``. This root module keeps the established URLs plus the
+legacy local-image/DOCX transport seams.
 """
 from __future__ import annotations
 
@@ -15,13 +14,12 @@ from pathlib import Path
 from flask import jsonify, request, send_from_directory
 
 from teacher_app.atlas import repository as atlas_repository
+from teacher_app.atlas import search as atlas_search
 from teacher_app.atlas import service as atlas_service
 from teacher_app.common.errors import ApiError
 
 
 ATLAS_CATEGORIES = atlas_service.ATLAS_CATEGORIES
-MAX_QUERY = atlas_service.MAX_QUERY
-_normalise = atlas_service.normalise
 _tags = atlas_service.tags
 
 
@@ -262,67 +260,14 @@ def register_atlas_70(base):
 
     @app.get("/api/teaching-resource-search")
     def teaching_resource_search():
-        """Compatibility search over existing material text plus canonical Atlas rows."""
         user, denied = user_or_denied()
         if denied:
             return denied
-        if not atlas_service.can_read(user):
-            return jsonify({"error": "權限不足。"}), 403
-        query = _normalise(request.args.get("q", ""))[:MAX_QUERY]
-        if not query:
-            return jsonify({"items": []})
-        groups = atlas_service.readable_groups(user)
-        items = []
-        conn, kind = base._db_conn()
-        ph = "%s" if kind == "postgres" else "?"
         try:
-            for material in base.list_uploaded_materials(False):
-                if not atlas_service.material_visible(user, material):
-                    continue
-                rows = conn.execute(
-                    f"SELECT page_no,title,text FROM material_text_index WHERE material_id={ph} ORDER BY page_no LIMIT 100",
-                    (str(material.get("id")),),
-                ).fetchall()
-                for row in rows:
-                    data = dict(row) if row else {}
-                    text = str(data.get("text") or "")
-                    if query not in _normalise(" ".join([str(data.get("title") or ""), text])):
-                        continue
-                    start = max(0, _normalise(text).find(query) - 80)
-                    items.append({
-                        "type": "material",
-                        "materialId": str(material.get("id")),
-                        "title": material.get("title") or material.get("filename"),
-                        "group": material.get("group") or material.get("groupKey"),
-                        "page": int(data.get("page_no") or 0),
-                        "excerpt": text[start:start + 240],
-                    })
-        finally:
-            conn.close()
-
-        for item in atlas_repository.list_items()[:300]:
-            group = str(item.get("group") or "")
-            if groups is not None and group not in groups:
-                continue
-            if not item.get("published") and not atlas_service.can_manage(user, group):
-                continue
-            text = " ".join([
-                str(item.get("title") or ""),
-                str(item.get("description") or ""),
-                " ".join(item.get("tags") or []),
-                str(item.get("differentialPoints") or ""),
-            ])
-            if query in _normalise(text):
-                items.append({
-                    "type": "atlas",
-                    "atlasItemId": item["id"],
-                    "title": item["title"],
-                    "group": item["group"],
-                    "category": item["category"],
-                    "excerpt": item["description"] or item["differentialPoints"],
-                    "imageUrl": item["imageUrl"],
-                })
-        return jsonify({"items": items[:100]})
+            items = atlas_search.search_resources(user, str(request.args.get("q", "")))
+        except ApiError as exc:
+            return _error(exc)
+        return jsonify({"items": items})
 
     @app.post("/api/atlas")
     def atlas_create():
