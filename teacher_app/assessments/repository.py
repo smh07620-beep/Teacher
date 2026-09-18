@@ -146,3 +146,69 @@ def review_bank_question(
                 ("retired", stamp, question_id),
             )
         return bool(getattr(cursor, "rowcount", 0))
+
+
+def insert_blueprint(values: Mapping[str, Any]) -> None:
+    columns = (
+        "id", "quiz_category_id", "question_count", "quotas", "exclude_recent",
+        "created_by", "created_at",
+    )
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        conn.execute(
+            f"INSERT INTO exam_blueprints({','.join(columns)}) VALUES({','.join([ph] * len(columns))})",
+            tuple(values.get(column) for column in columns),
+        )
+
+
+def get_blueprint(blueprint_id: str) -> dict | None:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT * FROM exam_blueprints WHERE id={ph}",
+            (blueprint_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_blueprint_snapshot(blueprint_id: str) -> dict | None:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT id,blueprint_id,quiz_category_id,questions,created_at FROM exam_blueprint_snapshots WHERE blueprint_id={ph}",
+            (blueprint_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def list_blueprint_questions(category_id: str) -> list[dict]:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        active = "TRUE" if kind == "postgres" else "1"
+        rows = conn.execute(
+            f"SELECT * FROM quiz_questions WHERE quiz_category_id={ph} AND status IN ('reviewed','published') AND active={active}",
+            (category_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_recent_blueprint_snapshots(category_id: str, limit: int) -> list[dict]:
+    if limit <= 0:
+        return []
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        rows = conn.execute(
+            f"SELECT questions FROM exam_blueprint_snapshots WHERE quiz_category_id={ph} ORDER BY created_at DESC LIMIT {ph}",
+            (category_id, int(limit)),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def insert_blueprint_snapshot(values: Mapping[str, Any]) -> None:
+    columns = ("id", "blueprint_id", "quiz_category_id", "questions", "created_at")
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        conn.execute(
+            f"INSERT INTO exam_blueprint_snapshots({','.join(columns)}) VALUES({','.join([ph] * len(columns))})",
+            tuple(values.get(column) for column in columns),
+        )
