@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from flask import Flask
+from flask import Flask, g
 
 import schema_migrations
 from teacher_app.command_center import audience
@@ -19,9 +19,12 @@ class TrainingAudienceProfileTests(unittest.TestCase):
     def test_migration_is_additive_and_registered(self):
         versions = [version for version, _fn in schema_migrations.MIGRATIONS]
         self.assertIn("0071-pgy-learner-audience", versions)
-        source = ROOT.joinpath("teacher_app", "command_center", "audience.py").read_text(encoding="utf-8")
-        self.assertIn("pgy_learner", source)
-        self.assertIn("NOT NULL DEFAULT", source)
+        migration_source = ROOT.joinpath("teacher_app", "maintenance", "migrations.py").read_text(encoding="utf-8")
+        audience_source = ROOT.joinpath("teacher_app", "command_center", "audience.py").read_text(encoding="utf-8")
+        self.assertIn('@migration("0071-pgy-learner-audience")', migration_source)
+        self.assertIn("pgy_learner", migration_source)
+        self.assertIn("NOT NULL DEFAULT", migration_source)
+        self.assertNotIn('@migration("0071-pgy-learner-audience")', audience_source)
 
     def test_profile_uses_explicit_flag_and_title_without_changing_role(self):
         user = {
@@ -67,8 +70,15 @@ class TrainingAudienceAdminApiTests(unittest.TestCase):
             c.isolation_level = None
             return c, "sqlite"
 
-        self.base = SimpleNamespace(app=self.app, _current_user=lambda: self.actor, _db_conn=connect)
-        audience.register_training_audience_71(self.base)
+        connection_patch = patch("teacher_app.common.db.get_connection", side_effect=connect)
+        connection_patch.start()
+        self.addCleanup(connection_patch.stop)
+
+        @self.app.before_request
+        def bind_actor():
+            g.teacher_user = self.actor
+
+        audience.register_training_audience_71(self.app)
         self.client = self.app.test_client()
 
     def test_admin_can_toggle_explicit_pgy_learner_without_role_mutation(self):
@@ -83,14 +93,23 @@ class TrainingAudienceAdminApiTests(unittest.TestCase):
         self.actor = {"username":"student","role":"student"}
         self.assertEqual(self.client.get('/api/users/learner1/training-audience').status_code, 403)
 
+    def test_owner_app_fixture_remains_compatible(self):
+        app = Flask("audience-owner-compat")
+        app.config.update(TESTING=True, SECRET_KEY="test")
+        owner = SimpleNamespace(app=app, _current_user=lambda: self.actor)
+        audience.register_training_audience_71(owner)
+        response = app.test_client().get('/api/users/learner1/training-audience')
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.get_json()['pgyLearner'])
+
 
 class TrainingAudienceFrontendTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.people = ROOT.joinpath('static','admin-people.js').read_text(encoding='utf-8')
         cls.home_badge = ROOT.joinpath('static','home-profile-title-71.js').read_text(encoding='utf-8')
-        cls.frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
-        cls.entrypoint = ROOT.joinpath('pgy_app.py').read_text(encoding='utf-8')
+        cls.frontend = ROOT.joinpath('teacher_app','frontend','assets.py').read_text(encoding='utf-8')
+        cls.entrypoint = ROOT.joinpath('teacher_app','factory.py').read_text(encoding='utf-8')
 
     def test_people_editor_exposes_explicit_pgy_checkbox(self):
         self.assertIn('admin-user-editor-pgy-learner', self.people)
@@ -100,13 +119,16 @@ class TrainingAudienceFrontendTests(unittest.TestCase):
 
     def test_signed_in_header_uses_professional_title_then_role_fallback(self):
         self.assertIn('/api/training-command-center/profile', self.home_badge)
-        self.assertIn('profile.professionalTitle||ROLE_LABELS[profile.role]', self.home_badge)
+        self.assertIn('function displayTitle(profile)', self.home_badge)
+        self.assertIn("profile?.professionalTitle", self.home_badge)
+        self.assertIn("priority=['system_admin','education_admin','group_leader','clinical_teacher','auditor','student']", self.home_badge)
+        self.assertIn('data-teacher-title-badge', self.home_badge)
         self.assertIn('工號 ${emp}', self.home_badge)
-        self.assertIn('/home-profile-title-71.js?v=7113', self.frontend)
+        self.assertIn('"/home-profile-title-71.js"', self.frontend)
 
     def test_entrypoint_registers_audience_after_migration_runner(self):
         self.assertIn('register_training_audience_71', self.entrypoint)
-        self.assertLess(self.entrypoint.index('register_schema_migrations(legacy_app)'), self.entrypoint.index('register_training_audience_71(legacy_app)'))
+        self.assertLess(self.entrypoint.index('register_schema_migrations(app)'), self.entrypoint.index('register_training_audience_71(app)'))
 
 
 if __name__ == '__main__':

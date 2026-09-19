@@ -1,5 +1,7 @@
 # Teacher 6.5 Milestone 4: Auth and centralized RBAC
 
+> **Historical milestone record.** This document describes the repository at the 6.5 Milestone 4 point. Its `VERSION` and `app.py` ownership statements are intentionally historical. For the current production composition and release contract, use `ARCHITECTURE.md`, `VERSION`, and `release_contract.py`.
+
 The production entrypoint remains `pgy_app:app` and `VERSION` remains `6.4.0`.
 No migration or production data update is part of this milestone.
 

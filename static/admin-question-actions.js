@@ -198,10 +198,8 @@
     const key=await getAdminKey(); if(!key) return;
     window.setQuestionBulkBusy(catId,true,`刪除 ${ids.length} 題中…`);
     try{
-      for(const id of ids){
-        const r=await fetch(`/api/quiz-questions/${encodeURIComponent(id)}`,{method:'DELETE',headers:{'X-Admin-Key':key}});
-        const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'批次刪除失敗');
-      }
+      const r=await fetch('/api/quiz-questions/batch-delete',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({ids})});
+      const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'批次刪除失敗');
       window.updateQuestionCacheAndPaint(catId,[],{removeIds:ids});
     }catch(e){ alert(e.message); }
     finally{ window.setQuestionBulkBusy(catId,false); }

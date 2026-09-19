@@ -4,8 +4,9 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from flask import Flask
+from flask import Flask, g
 
 from external_media_68 import register_external_media
 from question_bank_68 import register_question_bank
@@ -60,7 +61,7 @@ class _Base:
         return None
 
     def _current_user(self):
-        return {"username": "admin"}
+        return {"username": "admin", "role": "system_admin"}
 
     @staticmethod
     def normalize_group(value):
@@ -88,11 +89,20 @@ class _Base:
 class FeatureExposureWorkflow681Tests(unittest.TestCase):
     def setUp(self):
         self.base = _Base()
+        self.canonical_db = patch(
+            "teacher_app.common.db.get_connection",
+            side_effect=self.base._db_conn,
+        )
+        self.canonical_db.start()
+        @self.base.app.before_request
+        def bind_teacher_user():
+            g.teacher_user = self.base._current_user()
         register_question_bank(self.base)
         register_external_media(self.base)
         self.client = self.base.app.test_client()
 
     def tearDown(self):
+        self.canonical_db.stop()
         self.base.close()
 
     def draft(self, question="題目一"):
@@ -152,7 +162,7 @@ class FeatureExposureWorkflow681Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
         data = response.get_json()
         self.assertEqual(data["externalMedia"]["provider"], "youtube")
-        self.assertEqual(data["material"]["storage_backend"], "external")
+        self.assertEqual(data["material"]["storageBackend"], "external")
         conn, _ = self.base._db_conn()
         try:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM external_media").fetchone()[0], 1)

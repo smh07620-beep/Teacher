@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from flask import jsonify
 
+from teacher_app.assessments import repository as assessment_repo
 from teacher_app.exams import repository as exam_repo
 from teacher_app.exams.routes import (
     register_legacy_exam_routes,
@@ -66,6 +67,21 @@ def assert_no_answer_secret(
 class ExamApiIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.base = ExamBase()
+
+        self.category_repository = patch.object(
+            assessment_repo,
+            "get_category_full",
+            side_effect=self.base.get_quiz_category,
+        )
+        self.question_repository = patch.object(
+            assessment_repo,
+            "list_questions",
+            side_effect=lambda category_id, include_inactive=False: self.base.list_quiz_questions(category_id),
+        )
+        self.category_repository.start()
+        self.question_repository.start()
+        self.addCleanup(self.category_repository.stop)
+        self.addCleanup(self.question_repository.stop)
 
         self.base.app.config.update(
             TESTING=True,

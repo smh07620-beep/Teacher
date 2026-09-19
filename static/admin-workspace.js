@@ -12,6 +12,29 @@
     section: 'content',
     loaded: {content:false, quiz:false, word:false, pgy:false, results:false}
   };
+  const workspaceHandlers = new Map();
+  const workspaceGuards = [];
+  const beforeWorkspaceHooks = [];
+  const afterWorkspaceHooks = [];
+  const modalOpenOverrides = [];
+  const modalGuards = [];
+  const afterModalHooks = [];
+
+  function addHook(list, handler) {
+    if (typeof handler !== 'function') return () => {};
+    list.push(handler);
+    return () => {
+      const index = list.indexOf(handler);
+      if (index >= 0) list.splice(index, 1);
+    };
+  }
+
+  function registerWorkspace(name, handler) {
+    const key = String(name || '').trim();
+    if (!key || typeof handler !== 'function') return () => {};
+    workspaceHandlers.set(key, handler);
+    return () => workspaceHandlers.delete(key);
+  }
 
   function normalizeWorkspace(name) {
     if (name === 'courses' || name === 'materials') return 'course-materials';
@@ -55,14 +78,25 @@
     state.loaded[name] = true;
 
     if (name === 'content') {
-      await Promise.allSettled([
-        Promise.resolve(window.refreshAdminMaterialCategoryOptions?.()),
-        Promise.resolve(window.renderAdminCourses?.()),
-        Promise.resolve(window.renderAdminMaterials?.(force))
-      ]);
-      await window.renderAdminCourseMaterialHub?.(force);
+      // RC 7.10: the daily course/material hub paints progressively. Do not
+      // wait for the legacy hidden material list or per-material search-index
+      // probes before allowing the workspace to open.
+      const jobs = [
+        Promise.resolve().then(() => window.renderAdminCourseMaterialHub?.(force)),
+        Promise.resolve().then(() => window.renderAdminCourses?.(force)),
+        Promise.resolve().then(() => window.refreshAdminMaterialCategoryOptions?.())
+      ];
+      void Promise.allSettled(jobs);
+      return;
     }
-    if (name === 'quiz') await window.renderAdminQuizCategories?.(force);
+    if (name === 'quiz') {
+      // The assessment shell should become usable immediately; the category
+      // renderer already knows how to paint cache/skeleton state while its API
+      // request finishes. Callers that need fresh category DOM explicitly call
+      // renderAdminQuizCategories again after setting their scope.
+      void Promise.resolve().then(() => window.renderAdminQuizCategories?.(force));
+      return;
+    }
     if (name === 'word') await window.renderAdminDocTemplates?.();
     if (name === 'pgy') {
       await Promise.allSettled([
@@ -73,17 +107,18 @@
     if (name === 'results') await window.renderAdminTable?.();
   }
 
-  async function switchWorkspace(name, force=false) {
-    const requested = name;
-    name = normalizeWorkspace(name);
+  async function switchCoreWorkspace({requested, workspace:name, force}) {
     state.workspace = name;
     paintWorkspaceNav(name);
 
     if (name === 'course-materials') {
       await switchSection('content', force);
       document.getElementById('admin-course-workspace')?.classList.remove('hidden');
-      document.getElementById('admin-material-workspace')?.classList.remove('hidden');
+      const materialExecutor = document.getElementById('admin-material-workspace');
+      materialExecutor?.classList.add('hidden');
+      materialExecutor?.setAttribute('aria-hidden', 'true');
       document.getElementById('admin-material-advanced')?.classList.remove('hidden');
+      // RC 7.5 mobile stability: the canonical upload executor stays mounted but is never promoted into the daily workspace.
       // Storage/worker probes remain intentionally deferred until their panels open.
       return;
     }
@@ -93,14 +128,11 @@
       return;
     }
 
-    if (name === 'teacher' || name === 'results') {
-      const modeRouter = window.__teacherAdminResultsWorkspace;
-      if (modeRouter && typeof modeRouter.switchWorkspace === 'function') {
-        return modeRouter.switchWorkspace({requested, workspace:name, force, switchSection});
-      }
-      if (name === 'teacher' && requested === 'pgy') return switchSection('pgy', true);
+    if (name === 'teacher') {
+      if (requested === 'pgy') return switchSection('pgy', true);
       return switchSection('results', true);
     }
+    if (name === 'results') return switchSection('results', force || true);
 
     if (name === 'word') return switchSection('word', force);
     if (name === 'people') {
@@ -117,7 +149,23 @@
     }
   }
 
-  async function toggleModal(show) {
+  async function switchWorkspace(name, force=false) {
+    const requested = String(name || '');
+    const workspace = normalizeWorkspace(requested);
+    const context = {requested, workspace, force:Boolean(force), switchSection};
+    for (const hook of beforeWorkspaceHooks) await hook(context);
+    for (const guard of workspaceGuards) {
+      if (await guard(context) === false) return false;
+    }
+    const extension = workspaceHandlers.get(requested) || workspaceHandlers.get(workspace);
+    const result = extension
+      ? await extension(context)
+      : await switchCoreWorkspace(context);
+    for (const hook of afterWorkspaceHooks) await hook({...context, result});
+    return result;
+  }
+
+  async function toggleCoreModal(show) {
     const modal = document.getElementById('admin-modal');
     if (!modal) return false;
     if (show) {
@@ -136,6 +184,25 @@
     return true;
   }
 
+  async function toggleModal(show) {
+    const context = {show:Boolean(show)};
+    for (const guard of modalGuards) {
+      if (await guard(context) === false) return false;
+    }
+    if (context.show) {
+      for (const override of modalOpenOverrides) {
+        const outcome = await override(context);
+        if (outcome?.handled) {
+          for (const hook of afterModalHooks) await hook({...context, result:outcome.result});
+          return outcome.result;
+        }
+      }
+    }
+    const result = await toggleCoreModal(context.show);
+    for (const hook of afterModalHooks) await hook({...context, result});
+    return result;
+  }
+
   async function openWorkspace(name) {
     const opened = await window.toggleAdminModal?.(true);
     if (opened === false) return false;
@@ -150,6 +217,17 @@
   window.toggleAdminModal = toggleModal;
   window.openAdminWorkspace = openWorkspace;
   window.openTeacherAssessment = () => openWorkspace('teacher');
+  window.AdminWorkspaceShell = Object.freeze({
+    registerWorkspace,
+    addWorkspaceGuard: handler => addHook(workspaceGuards, handler),
+    addBeforeWorkspace: handler => addHook(beforeWorkspaceHooks, handler),
+    addAfterWorkspace: handler => addHook(afterWorkspaceHooks, handler),
+    addModalOpenOverride: handler => addHook(modalOpenOverrides, handler),
+    addModalGuard: handler => addHook(modalGuards, handler),
+    addAfterModal: handler => addHook(afterModalHooks, handler),
+    hasWorkspace: name => workspaceHandlers.has(String(name || '')),
+    getState: () => ({workspace:state.workspace, section:state.section, loaded:{...state.loaded}})
+  });
   window.__teacherAdminWorkspaceRouter = {
     getState: () => ({workspace:state.workspace, section:state.section, loaded:{...state.loaded}})
   };

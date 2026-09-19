@@ -1,10 +1,10 @@
-"""Load the 6.4 Flask app without replacing its routes."""
+"""Compatibility accessor for the canonical production WSGI application."""
 
 from __future__ import annotations
 
 
 def load_legacy_app():
-    """Return ``pgy_app.app`` — the current Render / run_web.sh entrypoint."""
+    """Return ``pgy_app.app`` for historical callers using the old helper name."""
     import pgy_app
 
     return pgy_app.app

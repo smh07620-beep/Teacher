@@ -1,19 +1,10 @@
-"""Auth HTTP adapters preserving the exact legacy URL and JSON contract.
+"""Auth HTTP adapters preserving the exact legacy URL and JSON contract."""
 
-The factory supplies AUTH_BASE (the connection and area/group normalizers).
-Production app.py passes itself explicitly. Rate limiting stays in
-production_hardening, ahead of these handlers.
-"""
-
-from flask import current_app, jsonify, request, session
+from flask import jsonify, request, session
 
 from teacher_app.auth import bp, service
 from teacher_app.common.auth import require_role
 from teacher_app.common.errors import ApiError
-
-
-def _base(base):
-    return base if base is not None else current_app.config["AUTH_BASE"]
 
 
 def legacy_error(exc):
@@ -25,15 +16,15 @@ def legacy_error(exc):
 
 
 @bp.get("/api/auth/me")
-def me(base=None):
-    user = service.current_user(_base(base), session)
+def me():
+    user = service.current_user(session)
     return jsonify({"authenticated": bool(user), "user": user})
 
 
 @bp.post("/api/auth/login")
-def login(base=None):
+def login():
     try:
-        return jsonify(service.login(_base(base), request.get_json(silent=True) or {}, session))
+        return jsonify(service.login(request.get_json(silent=True) or {}, session))
     except ApiError as exc:
         return legacy_error(exc)
 

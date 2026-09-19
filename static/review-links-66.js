@@ -536,7 +536,7 @@
 
 
     if (
-        typeof adminPayloadFromQuestionEditor
+        typeof window.adminBuildQuestionPayload
         === 'function'
         && !window.__teacher66ReviewPayloadWrapped
     ) {
@@ -544,9 +544,9 @@
             true;
 
         const original =
-            adminPayloadFromQuestionEditor;
+            window.adminBuildQuestionPayload;
 
-        adminPayloadFromQuestionEditor =
+        window.adminBuildQuestionPayload =
             function (qId, catId) {
                 const payload =
                     original.apply(
@@ -685,49 +685,17 @@
     }
 
 
-    // The old create function is retained unchanged.
-    // We only enrich its JSON body before it is sent.
-    if (
-        !window.__teacher66ReviewFetchWrapped
-    ) {
-        window.__teacher66ReviewFetchWrapped =
-            true;
-
-        const originalFetch =
-            window.fetch.bind(
-                window
-            );
-
-        window.fetch =
-            function (
-                input,
-                options = {},
+    // Add review-source metadata inside the canonical request pipeline.
+    window.AppApiClient?.use(
+        'review-source-66',
+        function (context, next) {
+            const options = context.init || {};
+            if (
+                context.sameOrigin
+                && context.url?.pathname === '/api/quiz-questions'
+                && context.method === 'POST'
+                && typeof options.body === 'string'
             ) {
-                const url =
-                    typeof input === 'string'
-                        ? input
-                        : (
-                            input?.url
-                            || ''
-                        );
-
-                const method =
-                    String(
-                        options?.method
-                        || (
-                            typeof input !== 'string'
-                                ? input?.method
-                                : ''
-                        )
-                        || 'GET'
-                    ).toUpperCase();
-
-                if (
-                    url === '/api/quiz-questions'
-                    && method === 'POST'
-                    && typeof options.body
-                        === 'string'
-                ) {
                     try {
                         const payload =
                             JSON.parse(
@@ -759,25 +727,22 @@
                                     source,
                             };
 
-                            options = {
+                            return next({init: {
                                 ...options,
                                 body:
                                     JSON.stringify(
                                         payload
                                     ),
-                            };
+                            }});
                         }
                     } catch (_) {
                         // Preserve legacy request unchanged.
                     }
-                }
-
-                return originalFetch(
-                    input,
-                    options,
-                );
-            };
-    }
+            }
+            return next();
+        },
+        200,
+    );
 
 
     // --------------------------------------------------------

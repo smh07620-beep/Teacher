@@ -1,15 +1,35 @@
 """Canonical assessment configuration, review and publication behavior."""
 from __future__ import annotations
 
+import copy
 import datetime
+import hashlib
 import json
+import threading
+import time
 import uuid
 from typing import Any, Mapping
 
+from teacher_app.common import db as common_db
+from teacher_app.common import scope
 from teacher_app.common.errors import ApiError
+from teacher_app.courses import repository as course_repository
+from teacher_app.materials import repository as materials_repository
+from teacher_app.assessments import repository
 
 
 QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video")
+
+# Render currently runs one Gunicorn worker with multiple threads.  Opening the
+# Teacher Content Studio first reads the public exam list and then the admin
+# workspace used to read the same rows again through a second Supabase
+# connection.  Keep a very short, process-local snapshot of the *full* list so
+# the public read can warm the immediately-following admin read.  All mutations
+# below invalidate this cache; question counts can be at most this TTL stale and
+# are refreshed automatically on the next read.
+_CATEGORY_LIST_CACHE_TTL_SECONDS = 15.0
+_CATEGORY_LIST_CACHE: dict[tuple[int, str, str], tuple[float, list[dict]]] = {}
+_CATEGORY_LIST_CACHE_LOCK = threading.Lock()
 
 
 def _fail(code: str, message: str, status: int = 400, extra: dict | None = None) -> ApiError:
@@ -25,19 +45,59 @@ def _draw_rules(value: Any) -> dict:
     return {"mode": "type_quota", "quotas": quotas} if sum(quotas.values()) > 0 else {}
 
 
+def _category_cache_key(base, group: str | None, area: str) -> tuple[int, str, str]:
+    return (id(base), str(group or ""), str(area or ""))
+
+
+def _clear_category_list_cache(base=None, group: str | None = None, area: str | None = None) -> None:
+    with _CATEGORY_LIST_CACHE_LOCK:
+        if base is None and group is None and area is None:
+            _CATEGORY_LIST_CACHE.clear()
+            return
+        base_id = id(base) if base is not None else None
+        wanted_group = None if group is None else str(group)
+        wanted_area = None if area is None else str(area)
+        for key in list(_CATEGORY_LIST_CACHE):
+            key_base, key_group, key_area = key
+            if base_id is not None and key_base != base_id:
+                continue
+            if wanted_group is not None and key_group != wanted_group:
+                continue
+            if wanted_area is not None and key_area != wanted_area:
+                continue
+            _CATEGORY_LIST_CACHE.pop(key, None)
+
+
 def list_categories(base, group: str | None, area: str, include_inactive: bool) -> list[dict]:
-    safe_group = group if group in base.GROUPS else None
-    safe_area = base.normalize_area(area or base.DEFAULT_TRAINING_AREA)
-    return base.list_quiz_categories_with_counts(
-        group_key=safe_group,
-        training_area=safe_area,
-        include_inactive=include_inactive,
-    )
+    safe_group = scope.normalize_group(group) if group else None
+    safe_area = scope.normalize_area(area or scope.DEFAULT_TRAINING_AREA)
+    key = _category_cache_key(base, safe_group, safe_area)
+    now = time.monotonic()
+
+    with _CATEGORY_LIST_CACHE_LOCK:
+        cached = _CATEGORY_LIST_CACHE.get(key)
+        full_list = copy.deepcopy(cached[1]) if cached and now - cached[0] < _CATEGORY_LIST_CACHE_TTL_SECONDS else None
+
+    if full_list is None:
+        # Always fetch the full list once.  The public endpoint filters inactive
+        # rows below, while the admin endpoint can reuse the same DB result a
+        # moment later instead of opening another Supabase connection.
+        full_list = repository.list_categories_with_counts(
+            group_key=safe_group,
+            training_area=safe_area,
+            include_inactive=True,
+        )
+        with _CATEGORY_LIST_CACHE_LOCK:
+            _CATEGORY_LIST_CACHE[key] = (time.monotonic(), copy.deepcopy(full_list))
+
+    if include_inactive:
+        return full_list
+    return [item for item in full_list if bool(item.get("active"))]
 
 
 def create_category(base, data: Mapping[str, Any]) -> dict:
-    group = base.normalize_group(str(data.get("group", base.DEFAULT_GROUP)))
-    area = base.normalize_area(str(data.get("area", base.DEFAULT_TRAINING_AREA)))
+    group = scope.normalize_group(str(data.get("group", scope.DEFAULT_GROUP)))
+    area = scope.normalize_area(str(data.get("area", scope.DEFAULT_TRAINING_AREA)))
     title = str(data.get("title", "")).strip()[:255]
     desc = str(data.get("desc", "")).strip()[:1000]
     audience = str(data.get("audience", "")).strip()[:200]
@@ -54,58 +114,37 @@ def create_category(base, data: Mapping[str, Any]) -> dict:
     except (TypeError, ValueError):
         draw_rules = {}
     course_id = str(data.get("courseId", "")).strip()
-    course = base.get_course(course_id) if course_id else None
+    course = course_repository.get_course(course_id) if course_id else None
     if not course or course.get("group") != group or course.get("area") != area:
         course_id = ""
     if not title:
         raise _fail("ASSESSMENT_TITLE_REQUIRED", "請輸入頁籤名稱")
 
     category_id = f"cat-{uuid.uuid4().hex[:12]}"
-    conn, kind = base._db_conn()
-    ph = "%s" if kind == "postgres" else "?"
-    try:
-        existing = conn.execute(
-            f"SELECT COALESCE(MAX(sort_order), -1) AS m FROM quiz_categories WHERE group_key = {ph}",
-            (group,),
-        ).fetchone()
-        next_order = (existing["m"] if isinstance(existing, dict) else existing[0]) + 1
-        date_added = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        values = (
-            category_id,
-            group,
-            area,
-            course_id,
-            title,
-            desc,
-            next_order,
-            date_added,
-            False if kind == "postgres" else 0,
-            draw_count,
-            passing_score,
-            audience,
-            json.dumps(draw_rules, ensure_ascii=False),
-            "draft",
-            "",
-            "",
-            "",
-        )
-        if kind == "postgres":
-            conn.execute(
-                "INSERT INTO quiz_categories (id,group_key,training_area,course_id,title,description,sort_order,date_added,active,draw_count,passing_score,audience,draw_rules,review_status,reviewer_name,reviewed_at,published_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)",
-                values,
-            )
-        else:
-            conn.execute(
-                "INSERT INTO quiz_categories (id,group_key,training_area,course_id,title,description,sort_order,date_added,active,draw_count,passing_score,audience,draw_rules,review_status,reviewer_name,reviewed_at,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                values,
-            )
-    finally:
-        conn.close()
-    return base.get_quiz_category(category_id)
+    created = repository.create_category({
+        "id": category_id,
+        "group_key": group,
+        "training_area": area,
+        "course_id": course_id,
+        "title": title,
+        "description": desc,
+        "date_added": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "active": False,
+        "draw_count": draw_count,
+        "passing_score": passing_score,
+        "audience": audience,
+        "draw_rules": json.dumps(draw_rules, ensure_ascii=False),
+        "review_status": "draft",
+        "reviewer_name": "",
+        "reviewed_at": "",
+        "published_at": "",
+    })
+    _clear_category_list_cache(base, group, area)
+    return created or repository.get_category_full(category_id)
 
 
 def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
-    entry = base.get_quiz_category(category_id)
+    entry = repository.get_category_full(category_id)
     if not entry:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考題頁籤", 404)
 
@@ -121,7 +160,7 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
     blind_mode = bool(data.get("blindMode", entry.get("blindMode", False)))
     audience = str(data.get("audience", entry.get("audience", ""))).strip()[:200]
     course_id = str(data.get("courseId", entry.get("courseId", ""))).strip()[:100]
-    course = base.get_course(course_id) if course_id else None
+    course = course_repository.get_course(course_id) if course_id else None
     if not course or course.get("group") != entry.get("group") or course.get("area") != entry.get("area"):
         course_id = ""
     try:
@@ -154,53 +193,33 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
     elif active and review_status != "approved":
         raise _fail("ASSESSMENT_NOT_REVIEWED", "此考卷尚未完成審核，請先執行『審核』再發布。", 409)
 
-    conn, kind = base._db_conn()
-    try:
-        values = (
-            title,
-            desc,
-            active if kind == "postgres" else int(active),
-            blind_mode if kind == "postgres" else int(blind_mode),
-            draw_count,
-            passing_score,
-            audience,
-            course_id,
-            json.dumps(draw_rules, ensure_ascii=False),
-            review_status,
-            reviewer_name,
-            reviewed_at,
-            published_at,
-            category_id,
-        )
-        if kind == "postgres":
-            conn.execute(
-                "UPDATE quiz_categories SET title=%s, description=%s, active=%s, blind_mode=%s, draw_count=%s, passing_score=%s, audience=%s, course_id=%s, draw_rules=%s::jsonb, review_status=%s, reviewer_name=%s, reviewed_at=%s, published_at=%s WHERE id=%s",
-                values,
-            )
-        else:
-            conn.execute(
-                "UPDATE quiz_categories SET title=?, description=?, active=?, blind_mode=?, draw_count=?, passing_score=?, audience=?, course_id=?, draw_rules=?, review_status=?, reviewer_name=?, reviewed_at=?, published_at=? WHERE id=?",
-                values,
-            )
-        if config_changed:
-            ph = "%s" if kind == "postgres" else "?"
-            conn.execute(
-                f"UPDATE quiz_categories SET publication_id='', publication_hash='' WHERE id={ph}",
-                (category_id,),
-            )
-    finally:
-        conn.close()
+    repository.update_category(category_id, {
+        "title": title,
+        "description": desc,
+        "active": active,
+        "blind_mode": blind_mode,
+        "draw_count": draw_count,
+        "passing_score": passing_score,
+        "audience": audience,
+        "course_id": course_id,
+        "draw_rules": json.dumps(draw_rules, ensure_ascii=False),
+        "review_status": review_status,
+        "reviewer_name": reviewer_name,
+        "reviewed_at": reviewed_at,
+        "published_at": published_at,
+    }, reset_publication=config_changed)
+    _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
     return {"ok": True}
 
 
 def review_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
-    entry = base.get_quiz_category(category_id)
+    entry = repository.get_category_full(category_id)
     if not entry:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考卷", 404)
     reviewer = str(data.get("reviewerName", "")).strip()[:100]
     if not reviewer:
         raise _fail("REVIEWER_REQUIRED", "審核前請填寫審核者姓名")
-    questions = base.list_quiz_questions(category_id, include_inactive=False)
+    questions = repository.list_questions(category_id, include_inactive=False)
     if not questions:
         raise _fail("ASSESSMENT_EMPTY", "此考卷沒有啟用中的題目，無法完成審核", 409)
     invalid: list[str] = []
@@ -214,15 +233,8 @@ def review_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
     if invalid:
         raise _fail("ASSESSMENT_REVIEW_FAILED", "題目審核未通過", 409, {"issues": invalid[:20]})
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    conn, kind = base._db_conn()
-    ph = "%s" if kind == "postgres" else "?"
-    try:
-        conn.execute(
-            f"UPDATE quiz_categories SET review_status={ph}, reviewer_name={ph}, reviewed_at={ph}, active={ph} WHERE id={ph}",
-            ("approved", reviewer, now, False if kind == "postgres" else 0, category_id),
-        )
-    finally:
-        conn.close()
+    repository.mark_category_reviewed(category_id, reviewer=reviewer, reviewed_at=now)
+    _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
     return {
         "ok": True,
         "reviewStatus": "approved",
@@ -233,70 +245,83 @@ def review_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
 
 
 def list_publications(base, category_id: str) -> list[dict]:
-    if not base.get_quiz_category(category_id):
+    if not repository.get_category_full(category_id):
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考卷", 404)
-    conn, kind = base._db_conn()
-    ph = "%s" if kind == "postgres" else "?"
-    try:
-        rows = conn.execute(
-            f"SELECT id,created_at,reviewer_name,snapshot_hash FROM quiz_publications WHERE quiz_category_id={ph} ORDER BY created_at DESC LIMIT 30",
-            (category_id,),
-        ).fetchall()
-        return [
+    return [
+        {
+            "id": row.get("id", ""),
+            "createdAt": row.get("created_at", ""),
+            "reviewerName": row.get("reviewer_name", ""),
+            "snapshotHash": row.get("snapshot_hash", ""),
+        }
+        for row in repository.list_publications(category_id)
+    ]
+
+
+def publication_snapshot(category_id: str) -> tuple[dict, str, str]:
+    category = repository.get_category_full(category_id)
+    if not category:
+        raise ValueError("找不到此考卷")
+    questions = repository.list_questions(category_id, include_inactive=False)
+    snapshot = {
+        "schemaVersion": 1,
+        "category": {
+            "id": category.get("id"),
+            "title": category.get("title"),
+            "desc": category.get("desc", ""),
+            "group": category.get("group"),
+            "area": category.get("area"),
+            "courseId": category.get("courseId", ""),
+            "blindMode": bool(category.get("blindMode", False)),
+            "drawCount": int(category.get("drawCount", 0) or 0),
+            "passingScore": int(category.get("passingScore", 80) or 80),
+            "audience": category.get("audience", ""),
+            "drawRules": category.get("drawRules", {}) or {},
+            "reviewerName": category.get("reviewerName", ""),
+            "reviewedAt": category.get("reviewedAt", ""),
+        },
+        "questions": [
             {
-                "id": dict(row).get("id", ""),
-                "createdAt": dict(row).get("created_at", ""),
-                "reviewerName": dict(row).get("reviewer_name", ""),
-                "snapshotHash": dict(row).get("snapshot_hash", ""),
+                "id": question.get("id"),
+                "tag": question.get("tag", ""),
+                "question": question.get("question", ""),
+                "questionType": question.get("questionType", "choice"),
+                "imageUrl": question.get("imageUrl", ""),
+                "options": question.get("options", []) or [],
+                "correct": question.get("correct", 0),
+                "answerConfig": question.get("answerConfig", {}) or {},
+                "explanation": question.get("explanation", ""),
+                "difficulty": question.get("difficulty", "standard"),
+                "sortOrder": int(question.get("sortOrder", 0) or 0),
             }
-            for row in rows
-        ]
-    finally:
-        conn.close()
+            for question in questions
+        ],
+    }
+    canonical = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    publication_id = f"pub-{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d%H%M%S')}-{digest[:10]}"
+    return snapshot, digest, publication_id
 
 
 def publish_category(base, category_id: str) -> dict:
-    entry = base.get_quiz_category(category_id)
+    entry = repository.get_category_full(category_id)
     if not entry:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考卷", 404)
     if entry.get("reviewStatus") != "approved":
         raise _fail("ASSESSMENT_NOT_REVIEWED", "此考卷尚未完成審核，不能發布", 409)
-    if not base.list_quiz_questions(category_id, include_inactive=False):
+    if not repository.list_questions(category_id, include_inactive=False):
         raise _fail("ASSESSMENT_EMPTY", "此考卷沒有啟用中的題目，不能發布", 409)
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    snapshot, snapshot_hash, publication_id = base._quiz_publication_snapshot(category_id)
-    conn, kind = base._db_conn()
-    try:
-        if kind == "postgres":
-            with conn.transaction():
-                conn.execute(
-                    "INSERT INTO quiz_publications (id,quiz_category_id,created_at,reviewer_name,snapshot_hash,snapshot) VALUES (%s,%s,%s,%s,%s,%s::jsonb)",
-                    (publication_id, category_id, now, entry.get("reviewerName", ""), snapshot_hash, json.dumps(snapshot, ensure_ascii=False)),
-                )
-                conn.execute(
-                    "UPDATE quiz_categories SET active=TRUE, published_at=%s, publication_id=%s, publication_hash=%s WHERE id=%s",
-                    (now, publication_id, snapshot_hash, category_id),
-                )
-        else:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                "INSERT INTO quiz_publications (id,quiz_category_id,created_at,reviewer_name,snapshot_hash,snapshot) VALUES (?,?,?,?,?,?)",
-                (publication_id, category_id, now, entry.get("reviewerName", ""), snapshot_hash, json.dumps(snapshot, ensure_ascii=False)),
-            )
-            conn.execute(
-                "UPDATE quiz_categories SET active=1, published_at=?, publication_id=?, publication_hash=? WHERE id=?",
-                (now, publication_id, snapshot_hash, category_id),
-            )
-            conn.execute("COMMIT")
-    except Exception:
-        if kind != "postgres":
-            try:
-                conn.execute("ROLLBACK")
-            except Exception:
-                pass
-        raise
-    finally:
-        conn.close()
+    snapshot, snapshot_hash, publication_id = publication_snapshot(category_id)
+    repository.publish_category(
+        category_id,
+        publication_id=publication_id,
+        created_at=now,
+        reviewer_name=entry.get("reviewerName", ""),
+        snapshot_hash=snapshot_hash,
+        snapshot=snapshot,
+    )
+    _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
     return {
         "ok": True,
         "active": True,
@@ -308,11 +333,11 @@ def publish_category(base, category_id: str) -> dict:
 
 
 def category_materials(base, category_id: str) -> dict:
-    category = base.get_quiz_category(category_id)
+    category = repository.get_category_full(category_id)
     if not category:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考卷", 404)
     items = []
-    for material in base.list_uploaded_materials(include_inactive=True):
+    for material in materials_repository.list_uploaded_materials(base, include_inactive=True):
         if material.get("group") == category.get("group") and material.get("area") == category.get("area"):
             items.append(
                 {
@@ -331,7 +356,7 @@ def category_materials(base, category_id: str) -> dict:
 
 
 def update_category_materials(base, category_id: str, data: Mapping[str, Any]) -> dict:
-    category = base.get_quiz_category(category_id)
+    category = repository.get_category_full(category_id)
     if not category:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考卷", 404)
     raw = data.get("materialIds") or []
@@ -339,7 +364,7 @@ def update_category_materials(base, category_id: str, data: Mapping[str, Any]) -
         raise _fail("MATERIAL_IDS_INVALID", "materialIds 必須是陣列")
     allowed = {
         material.get("id")
-        for material in base.list_uploaded_materials(include_inactive=True)
+        for material in materials_repository.list_uploaded_materials(base, include_inactive=True)
         if material.get("group") == category.get("group") and material.get("area") == category.get("area")
     }
     selected: list[str] = []
@@ -347,42 +372,21 @@ def update_category_materials(base, category_id: str, data: Mapping[str, Any]) -
         material_id = str(value).strip()
         if material_id in allowed and material_id not in selected:
             selected.append(material_id)
-    conn, kind = base._db_conn()
-    try:
-        if kind == "postgres":
-            conn.execute("UPDATE materials SET category='' WHERE category=%s", (category_id,))
-            if selected:
-                placeholders = ",".join(["%s"] * len(selected))
-                conn.execute(
-                    f"UPDATE materials SET category=%s WHERE id IN ({placeholders}) AND group_key=%s AND training_area=%s",
-                    tuple([category_id] + selected + [category.get("group"), category.get("area")]),
-                )
-        else:
-            conn.execute("UPDATE materials SET category='' WHERE category=?", (category_id,))
-            if selected:
-                placeholders = ",".join(["?"] * len(selected))
-                conn.execute(
-                    f"UPDATE materials SET category=? WHERE id IN ({placeholders}) AND group_key=? AND training_area=?",
-                    tuple([category_id] + selected + [category.get("group"), category.get("area")]),
-                )
-    finally:
-        conn.close()
+    materials_repository.replace_category_assignments(
+        category_id,
+        selected,
+        group_key=category.get("group"),
+        training_area=category.get("area"),
+    )
     return {"ok": True, "linkedIds": selected, "linked": len(selected)}
 
 
 def delete_category(base, category_id: str) -> dict:
-    if not base.get_quiz_category(category_id):
+    entry = repository.get_category_full(category_id)
+    if not entry:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考題頁籤", 404)
-    conn, kind = base._db_conn()
-    try:
-        if kind == "postgres":
-            conn.execute("DELETE FROM quiz_questions WHERE quiz_category_id=%s", (category_id,))
-            conn.execute("DELETE FROM quiz_categories WHERE id=%s", (category_id,))
-            conn.execute("UPDATE materials SET category='' WHERE category=%s", (category_id,))
-        else:
-            conn.execute("DELETE FROM quiz_questions WHERE quiz_category_id=?", (category_id,))
-            conn.execute("DELETE FROM quiz_categories WHERE id=?", (category_id,))
-            conn.execute("UPDATE materials SET category='' WHERE category=?", (category_id,))
-    finally:
-        conn.close()
+    with common_db.transaction() as (conn, kind):
+        repository.delete_category_on_connection(conn, kind, category_id)
+        materials_repository.clear_category_assignment(conn, kind, category_id)
+    _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
     return {"ok": True}

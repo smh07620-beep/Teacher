@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -14,9 +16,10 @@ class Phase3LAdminResultsWorkspaceTests(unittest.TestCase):
 
     def test_workspace_router_no_longer_delegates_teacher_results_to_legacy_switch(self):
         self.assertNotIn("legacySwitchWorkspace", self.router)
-        self.assertIn("window.__teacherAdminResultsWorkspace", self.router)
-        self.assertIn("modeRouter.switchWorkspace", self.router)
-        self.assertIn("requested, workspace:name, force, switchSection", self.router)
+        self.assertNotIn("window.__teacherAdminResultsWorkspace", self.router)
+        self.assertNotIn("modeRouter.switchWorkspace", self.router)
+        self.assertIn("registerWorkspace('teacher', switchWorkspace)", self.results)
+        self.assertIn("registerWorkspace('results', switchWorkspace)", self.results)
 
     def test_results_mode_owns_scoring_filter_and_teacher_mode(self):
         self.assertIn("teacherMode: 'scoring'", self.results)
@@ -25,7 +28,7 @@ class Phase3LAdminResultsWorkspaceTests(unittest.TestCase):
         self.assertIn("answer?.questionType === 'essay'", self.results)
         self.assertIn("window.fetchAdminRecords = filteredFetchAdminRecords", self.results)
         self.assertIn("window.switchTeacherMode = switchTeacherMode", self.results)
-        self.assertIn("window.__teacherAdminResultsWorkspace", self.results)
+        self.assertNotIn("window.__teacherAdminResultsWorkspace", self.results)
 
     def test_scoring_mode_hides_analytics_and_preserves_empty_state(self):
         self.assertIn("admin-results-analytics", self.results)
@@ -34,10 +37,10 @@ class Phase3LAdminResultsWorkspaceTests(unittest.TestCase):
         self.assertIn("📊 歷次考核成績", self.results)
 
     def test_router_and_mode_state_load_before_rbac_wrappers(self):
-        self.assertIn('workspace_marker = \'<script defer src="/admin-workspace.js?v=7110"></script>\'', self.frontend)
-        self.assertIn('results_mode_marker = \'<script defer src="/admin-results-workspace.js?v=7111"></script>\'', self.frontend)
-        self.assertIn("replacement = legacy_admin_marker + \"\\n\" + workspace_marker", self.frontend)
-        self.assertIn("replacement += \"\\n\" + results_mode_marker", self.frontend)
+        ordered = dict(ASSET_MANIFEST["system"]["ordered"])["/system-admin.js"]
+        self.assertLess(ordered.index("/admin-workspace.js"), ordered.index("/admin-results-workspace.js"))
+        self.assertNotIn("workspace_marker =", self.frontend)
+        self.assertNotIn("results_mode_marker =", self.frontend)
 
     def test_results_mode_does_not_introduce_authorization_logic(self):
         self.assertNotIn("professionalTitle", self.results)

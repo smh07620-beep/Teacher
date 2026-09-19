@@ -1,8 +1,4 @@
-/* Phase 3 · Admin results/review module.
- * Loaded after the legacy admin bundle so these functions become the
- * canonical runtime implementation while the old bundle remains a
- * compatibility fallback during the incremental split.
- */
+/* Phase 3 · Canonical admin results/review module. */
 (function(){
   'use strict';
 

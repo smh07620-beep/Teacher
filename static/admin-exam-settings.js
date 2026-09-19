@@ -1,5 +1,4 @@
-/* Phase 3M: exam settings, preview, review, and publication runtime.
- * The legacy system-admin.js bundle remains the compatibility fallback. */
+/* Phase 3M: canonical exam settings, preview, review, and publication runtime. */
 (() => {
   'use strict';
 
@@ -107,4 +106,9 @@
   window.reviewCurrentExam = review;
   window.publishCurrentExam = publish;
   window.adminToggleBlindMode = toggleBlindMode;
+
+  // Final convergence: canonical owner migrated from system-admin.js.
+  function difficultyLabel(d){return ({basic:'基礎',standard:'一般',advanced:'進階'})[d||'standard']||'一般';}
+
+  window.difficultyLabel=difficultyLabel;
 })();

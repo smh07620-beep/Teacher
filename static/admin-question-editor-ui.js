@@ -61,13 +61,16 @@
   };
 
   window.adminQuestionRowHTML = function(q,i,catId){
-    return `<div id="qrow-${q.id}" class="border ${q.active===false?'border-amber-200 bg-amber-50/50':'border-slate-200 bg-white'} rounded-xl p-3">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0 flex-1 text-xs flex items-start gap-2.5">
-          <input type="checkbox" class="qselect-${catId} mt-1 rounded" data-qid="${q.id}" onchange="adminUpdateQuestionSelection('${catId}')">
-          <div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-slate-800">${i+1}. ${escapeHtml(q.question)}</span><span class="text-[10px] px-2 py-0.5 rounded-full ${q.active===false?'bg-amber-100 text-amber-800':'bg-emerald-50 text-emerald-700'}">${q.active===false?'停用':'啟用'}</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${questionTypeLabel(q.questionType||'choice')}</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">${({basic:'基礎',standard:'一般',advanced:'進階'})[q.difficulty||'standard']||'一般'}</span></div><div class="text-slate-500 mt-1">${window.adminAnswerSummary(q)}${q.tag?' · 分類：'+escapeHtml(q.tag):''}</div></div>
+    return `<div id="qrow-${q.id}" class="border ${q.active===false?'border-amber-200 bg-amber-50/50':'border-slate-200 bg-white'} rounded-xl p-3 overflow-visible">
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div class="w-full min-w-0 flex-1 text-xs flex items-start gap-2.5">
+          <input type="checkbox" class="qselect-${catId} mt-1 rounded shrink-0" data-qid="${q.id}" onchange="adminUpdateQuestionSelection('${catId}')">
+          <div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-slate-800 break-words">${i+1}. ${escapeHtml(q.question)}</span><span class="text-[10px] px-2 py-0.5 rounded-full ${q.active===false?'bg-amber-100 text-amber-800':'bg-emerald-50 text-emerald-700'}">${q.active===false?'停用':'啟用'}</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${questionTypeLabel(q.questionType||'choice')}</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">${({basic:'基礎',standard:'一般',advanced:'進階'})[q.difficulty||'standard']||'一般'}</span></div><div class="text-slate-500 mt-1 break-words">${window.adminAnswerSummary(q)}${q.tag?' · 分類：'+escapeHtml(q.tag):''}</div></div>
         </div>
-        <div class="flex gap-1.5 shrink-0 flex-wrap justify-end"><button onclick="adminToggleQuizQuestion('${q.id}','${catId}',${q.active===false?'true':'false'})" class="text-[11px] ${q.active===false?'bg-emerald-600 hover:bg-emerald-500':'bg-amber-500 hover:bg-amber-400'} text-white px-2.5 py-1.5 rounded-lg">${q.active===false?'▶ 啟用':'⏸ 停用'}</button><button onclick="adminToggleInlineQuestionEditor('${q.id}','${catId}',true)" class="text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg">✏️ 快速編輯</button><button onclick="adminDeleteQuizQuestion('${q.id}','${catId}')" class="text-[11px] bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1.5 rounded-lg">🗑️</button></div>
+        <div class="w-full sm:w-auto flex items-center justify-end gap-2 shrink-0">
+          <button onclick="adminToggleInlineQuestionEditor('${q.id}','${catId}',true)" class="text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg font-bold">✏️ 編輯</button>
+          <details class="relative"><summary class="list-none cursor-pointer text-lg leading-none bg-white border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg" aria-label="更多題目操作">⋯</summary><div class="absolute right-0 z-40 mt-1 w-36 rounded-xl border border-slate-200 bg-white p-2 shadow-xl space-y-1"><button onclick="adminToggleQuizQuestion('${q.id}','${catId}',${q.active===false?'true':'false'})" class="w-full text-left text-[11px] ${q.active===false?'text-emerald-700 hover:bg-emerald-50':'text-amber-700 hover:bg-amber-50'} px-2 py-2 rounded-lg">${q.active===false?'▶ 啟用':'⏸ 停用'}</button><button onclick="adminDeleteQuizQuestion('${q.id}','${catId}')" class="w-full text-left text-[11px] text-rose-700 hover:bg-rose-50 px-2 py-2 rounded-lg">🗑️ 刪除</button></div></details>
+        </div>
       </div>${window.adminQuestionEditFormHTML(q,catId)}
     </div>`;
   };
@@ -81,6 +84,7 @@
     const selected=all.filter(x=>x.checked);
     const badge=document.getElementById(`qselected-${catId}`);
     if(badge) badge.textContent=`已選 ${selected.length} 題`;
+    document.getElementById(`qbulk-actions-${catId}`)?.classList.toggle('hidden',selected.length===0);
     const master=document.getElementById(`qselect-all-${catId}`);
     if(master){
       master.checked=all.length>0&&selected.length===all.length;

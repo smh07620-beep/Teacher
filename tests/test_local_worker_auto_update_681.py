@@ -7,14 +7,19 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from flask import Flask
+
 ROOT = Path(__file__).parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import app as appmod
 import material_worker
-import pgy_app
 import schema_migrations
+from teacher_app.worker import operations as worker_operations
+from teacher_app.worker.routes import register_free_worker
+from teacher_app.worker.schema import init_schema as init_worker_schema
+from teacher_app.worker.web_runtime import WorkerWebRuntime
 
 
 class LocalWorkerAutoUpdateTests(unittest.TestCase):
@@ -91,14 +96,31 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         def connect():
             conn = sqlite3.connect(db); conn.row_factory = sqlite3.Row; conn.isolation_level = None
             return conn, "sqlite"
-        with patch.object(appmod, "_db_conn", connect), patch.object(appmod, "MATERIAL_WORKER_TOKEN", "worker-secret"):
-            appmod.init_material_jobs_db()
-            conn, kind = connect()
-            try: schema_migrations._b_free_local_worker_67(conn, kind)
-            finally: conn.close()
-            response = pgy_app.app.test_client().post("/api/material-worker/heartbeat", json={"workerId": "worker-a", "capabilities": {"ffmpeg": {"available": True}, "libreOffice": {"available": True}}, "workerVersion": "6.8.1", "workerSha": "d78069c", "workerBranch": "main", "updateAvailable": True, "lastUpdateCheckAt": "2026-09-15T12:00:00+00:00", "MEGA_PASSWORD": "must-not-store"}, headers={"Authorization": "Bearer worker-secret"})
-            self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
-            worker = appmod.material_job_operations_status()["workers"][0]
+        conn, kind = connect()
+        try:
+            init_worker_schema(conn, kind)
+            schema_migrations._b_free_local_worker_67(conn, kind)
+        finally:
+            conn.close()
+        runtime = WorkerWebRuntime(
+            cleanup_budget_state=lambda: None,
+            enforce_large_upload_budget=lambda *_args: None,
+            release_reservation=lambda *_args: None,
+            budget_status=lambda: {},
+            download_staging=lambda *_args: None,
+            delete_staging=lambda *_args: None,
+            commit_result=lambda _job, result: result,
+            sync_media_processing_metadata=lambda *_args: None,
+            connection_factory=connect,
+            worker_token="worker-secret",
+        )
+        web = Flask("worker-build-metadata")
+        web.config.update(TESTING=True, SECRET_KEY="test")
+        register_free_worker(web, runtime=runtime)
+        response = web.test_client().post("/api/material-worker/heartbeat", json={"workerId": "worker-a", "capabilities": {"ffmpeg": {"available": True}, "libreOffice": {"available": True}}, "workerVersion": "6.8.1", "workerSha": "d78069c", "workerBranch": "main", "updateAvailable": True, "lastUpdateCheckAt": "2026-09-15T12:00:00+00:00", "MEGA_PASSWORD": "must-not-store"}, headers={"Authorization": "Bearer worker-secret"})
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        with patch("teacher_app.worker.operations.r2_budget.status", return_value={}):
+            worker = worker_operations.status(lambda: {}, connection_factory=connect)["workers"][0]
         self.assertEqual(worker["workerVersion"], "6.8.1")
         self.assertEqual(worker["workerSha"], "d78069c")
         self.assertEqual(worker["workerBranch"], "main")

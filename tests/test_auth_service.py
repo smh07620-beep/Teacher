@@ -54,6 +54,14 @@ class AuthServiceTests(AuthFixture):
         self.sql("UPDATE user_accounts SET role='auditor'")
         self.assertEqual(service.current_user(self.base, session)['role'], 'auditor')
 
+    def test_profile_roles_include_canonical_permissions(self):
+        session = SecureCookieSession({'username': 'teacher1', 'session_version': 1})
+        user = service.current_user(self.base, session, include_roles=True)
+        self.assertIn('clinical_teacher', user['roles'])
+        self.assertIn('course.manage', user['permissions'])
+        self.assertIn('question.manage', user['permissions'])
+        self.assertNotIn('system.manage', user['permissions'])
+
     def test_logout_is_idempotent(self):
         session = SecureCookieSession({'username': 'teacher1', 'session_version': 1})
         self.assertEqual(service.logout(session), {'ok': True})

@@ -58,12 +58,31 @@ class RcFeatureUiCoverageMatrixTests(unittest.TestCase):
             "Raw provider credentials / SDK clients",
             "Worker token / local worker protocol secret",
             "Background media conversion primitives",
-            "Storage/provider ownership extraction",
+            "Remaining storage compatibility call-site cleanup",
             "Internal",
             "Deferred",
             "Compatibility",
         ):
             self.assertIn(marker, self.source)
+
+    def test_living_matrix_uses_current_canonical_runtime_owners(self):
+        for marker in (
+            "`teacher_app.courses.bundle_routes`",
+            "`teacher_app.assessments.question_bank_routes`",
+            "`teacher_app.storage.providers`",
+            "`teacher_app.worker.protocol`",
+            "`teacher_app.maintenance.backup_routes`",
+            "`teacher_app.materials.external_media_routes`",
+            "`teacher_app.frontend.assets`",
+            "root `question_bank_68.py` is a compatibility module alias",
+            "root `free_worker_67.py` / `health_65.py` are compatibility adapters",
+            "root `external_media_68.py` is a compatibility alias only",
+            "root `pgy_frontend.py` is a compatibility alias only",
+            "root `exam_integrity.py` is a compatibility adapter only",
+        ):
+            self.assertIn(marker, self.source)
+        self.assertNotIn("`pgy_atomic.py` compatibility overlays", self.source)
+        self.assertNotIn("currently legacy provider helpers in `app.py`", self.source)
 
 
 if __name__ == "__main__":

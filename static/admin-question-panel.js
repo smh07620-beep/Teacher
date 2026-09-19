@@ -33,15 +33,33 @@
     }
   };
 
-  window.toggleQuizQuestionsPanel = async function(catId){
+  window.toggleQuizQuestionsPanel = function(catId){
     const panel=document.getElementById(`qpanel-${catId}`);
-    if(!panel) return;
+    if(!panel) return Promise.resolve(null);
     const wasHidden=panel.classList.contains('hidden');
-    panel.classList.toggle('hidden');
-    if(!wasHidden) return;
-    await window.loadQuizQuestionsIntoPanel(catId);
-    if(typeof window.loadAiMaterialOptions==='function') await window.loadAiMaterialOptions(catId);
-    if(typeof window.refreshAiQuestionStatus==='function') await window.refreshAiQuestionStatus(catId);
+    if(!wasHidden){
+      panel.classList.add('hidden');
+      return Promise.resolve(panel);
+    }
+
+    // Only one exam editor is allowed to own the visible workspace. This
+    // prevents previously-opened qpanels from leaking back into the page.
+    document.querySelectorAll('#admin-quiz-categories-list [id^="qpanel-"]').forEach(other=>{
+      if(other!==panel)other.classList.add('hidden');
+    });
+    panel.querySelectorAll('details[open]').forEach(details=>details.removeAttribute('open'));
+    panel.classList.remove('hidden');
+
+    // RC 7.10: opening the panel must be immediate. Question rows, linked
+    // materials and AI provider status are independent secondary hydrations;
+    // waiting for them serially caused 2–5 minute apparent freezes on Render.
+    const jobs=[
+      Promise.resolve().then(()=>window.loadQuizQuestionsIntoPanel(catId)),
+      Promise.resolve().then(()=>typeof window.loadAiMaterialOptions==='function' ? window.loadAiMaterialOptions(catId) : null),
+      Promise.resolve().then(()=>typeof window.refreshAiQuestionStatus==='function' ? window.refreshAiQuestionStatus(catId) : null)
+    ];
+    panel._questionPanelHydration=Promise.allSettled(jobs);
+    return Promise.resolve(panel);
   };
 
   window.adminCreateQuizCategory = async function(){

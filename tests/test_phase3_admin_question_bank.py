@@ -1,14 +1,16 @@
 import unittest
 from pathlib import Path
 
+from pgy_frontend import ASSET_MANIFEST
+
 ROOT = Path(__file__).parents[1]
 
 
 class Phase3AdminQuestionBankTests(unittest.TestCase):
     def test_question_bank_module_loads_after_materials_override(self):
-        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
-        materials_pos = frontend.index('/admin-materials.js?v=7105')
-        question_pos = frontend.index('/admin-question-bank.js?v=7106')
+        body = ASSET_MANIFEST["system"]["body"]
+        materials_pos = body.index('/admin-materials.js')
+        question_pos = body.index('/admin-question-bank.js')
         self.assertLess(materials_pos, question_pos)
 
     def test_question_bank_module_preserves_global_contracts(self):

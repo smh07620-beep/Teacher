@@ -9,13 +9,16 @@ class SessionRbacFrontend69Tests(unittest.TestCase):
     def source(self, name):
         return ROOT.joinpath("static", name).read_text(encoding="utf-8")
 
-    def test_active_assessment_uses_session_rbac_without_admin_key(self):
-        source = self.source("assessment-681.js")
+    def test_active_assessment_advanced_tools_use_session_rbac_without_admin_key(self):
+        source = self.source("assessment-advanced-74.js")
         self.assertIn("credentials:'same-origin'", source)
         self.assertIn("登入已逾時，請重新登入", source)
         self.assertIn("此帳號沒有這項操作權限", source)
         self.assertNotIn("getAdminKey", source)
         self.assertNotIn("X-Admin-Key", source)
+
+    def test_retired_assessment_compatibility_router_is_removed(self):
+        self.assertFalse(ROOT.joinpath("static", "assessment-681.js").exists())
 
     def test_teaching_editor_uses_session_rbac_without_admin_key(self):
         source = self.source("teaching.js")

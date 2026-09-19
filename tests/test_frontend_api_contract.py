@@ -49,22 +49,22 @@ class FrontendApiContractTests(
 
     def test_exam_frontend_uses_shared_api(self):
         source = self.source(
-            "static/exam-integrity.js"
+            "static/system-exam.js"
         )
 
         self.assertIn(
-            "if(typeof C.api==='function')",
+            "if(typeof core.api==='function')",
             source,
         )
 
         self.assertIn(
-            "return C.api(path,options)",
+            "return core.api(path,options)",
             source,
         )
 
     def test_exam_frontend_does_not_expect_answer_key(self):
         source = self.source(
-            "static/exam-integrity.js"
+            "static/system-exam.js"
         )
 
         self.assertNotIn(

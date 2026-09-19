@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - codex/phase-3-pgy-architecture
+      - feature/teacher-content-authoring-studio-72
   pull_request:
 
 permissions:
@@ -19,60 +20,24 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install test dependencies
-        run: python -m pip install 'Flask>=3,<4' 'requests>=2.32,<3' 'Pillow>=10.4,<12.0'
+        run: python -m pip install -r requirements.txt
       - name: Python compile checks
         run: |
-          python -m py_compile \
-            app.py pgy_app.py pgy_frontend.py pgy_workflow.py pgy_atomic.py \
-            pgy_signing_66.py multi_role_66.py exam_integrity.py \
-            production_hardening.py schema_migrations.py backup_restore.py \
-            upload_hardening.py ai_privacy.py health_65.py material_worker.py \
-            media_processing_67.py smart_learning_67.py free_worker_67.py atlas_70.py \
-            external_media_68.py admin_elevation_68.py sensitive_elevation_69.py \
-            question_bank_68.py course_bundle_72.py course_bundle_followup_73.py \
-            release_contract.py
+          python -m py_compile *.py
           python -m compileall -q teacher_app tests
       - name: Full Teacher regression and integration suite
         run: python -m unittest discover -s tests -v
+      - name: Release, schema and ownership contract tests
+        run: |
+          python -m unittest discover -s tests -p 'test_release_66.py' -v
+          python -m unittest discover -s tests -p 'test_schema_migrations.py' -v
+          python -m unittest discover -s tests -p 'test_pre_migration_schema_owners.py' -v
+          python -m unittest discover -s tests -p 'test_root_mirror_policy.py' -v
+          python -m unittest discover -s tests -p 'test_runtime_question_routes.py' -v
       - name: Browser JavaScript syntax
         run: |
-          node --check static/shared-core.js
-          node --check static/home-profile-title-71.js
-          node --check static/pgy-workflow.js
-          node --check static/roles-signing-66.js
-          node --check static/exam-integrity.js
-          node --check static/review-links-66.js
-          node --check static/maintenance-64.js
-          node --check static/smart-learning-67.js
-          node --check static/assessment-681.js
-          node --check static/course-wizard-681.js
-          node --check static/material-upload-client.js
-          node --check static/external-material-681.js
-          node --check static/sensitive-elevation-69.js
-          node --check static/workspace-shell-70.js
-          node --check static/training-command-center-71.js
-          node --check static/pgy-competency-matrix-71.js
-          node --check static/learning-analytics-71.js
-          node --check static/notification-center-71.js
-          node --check static/worker-status-70.js
-          node --check static/atlas-70.js
-          node --check static/atlas-docx-wizard-70.js
-          node --check static/admin-ai-questions.js
-          node --check static/admin-exam-settings.js
-          node --check static/admin-doc-templates.js
-          node --check static/admin-pgy-assessments.js
-          node --check static/admin-external-media.js
-          node --check static/admin-results-export.js
-          node --check static/admin-results-data.js
-          node --check static/admin-quiz-materials.js
-          node --check static/admin-question-editor-ui.js
-          node --check static/admin-question-actions.js
-          node --check static/admin-question-panel.js
-          node --check static/learner-exam-controls.js
-          node --check static/learner-result-chart.js
-          node --check static/question-authoring-ux-71.js
-          node --check static/learner-ui-cleanup-71.js
-          node --check static/admin-compat-facade.js
+          find static -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
+          find tests -maxdepth 1 -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
           node tests/test_external_media_behavior_681.js
       - name: Web and worker shell contracts
         run: |
@@ -84,12 +49,18 @@ jobs:
           from pathlib import Path
 
           import pgy_app
-          from health_65 import REQUIRED_MIGRATIONS
-          from release_contract import ENTRYPOINT, RELEASE_VERSION, REQUIRED_RELEASE_MIGRATION, version_file_value
+          from release_contract import ENTRYPOINT, INTERNAL_GENERATION, RELEASE_VERSION, REQUIRED_MIGRATIONS, REQUIRED_RELEASE_MIGRATION, version_file_value
           from teacher_app.common.auth import ROLE_PERMISSIONS
+          from teacher_app.factory import create_app
+          from teacher_app.maintenance.migrations import MIGRATIONS
 
-          assert pgy_app.app.view_functions['exam_attempt_start'].__module__ == 'teacher_app.exams.routes'
-          assert pgy_app.legacy_app.auth_routes.login.__module__ == 'teacher_app.auth.routes'
+          assert pgy_app.create_app is create_app
+          assert pgy_app.app.import_name == 'teacher_app.factory'
+          assert pgy_app.app.view_functions['teacher_exams.exam_attempt_start'].__module__ == 'teacher_app.exams.routes'
+          assert pgy_app.app.view_functions['teacher_auth.login'].__module__ == 'teacher_app.auth.routes'
+          assert pgy_app.app.view_functions['training_system'].__module__ == 'teacher_app.frontend.system_page'
+          assert pgy_app.app.view_functions['health'].__module__ == 'teacher_app.maintenance.health'
+          assert pgy_app.app.extensions.get('pgy_frontend_registered') is True
           assert pgy_app.app.test_client().get('/api/auth/me').get_json() == {'authenticated': False, 'user': None}
           assert 'evaluation.sign' in ROLE_PERMISSIONS['clinical_teacher']
           assert 'evaluation.sign' not in ROLE_PERMISSIONS['education_admin']
@@ -101,12 +72,15 @@ jobs:
           assert '0072-course-bundle-idempotency' in REQUIRED_MIGRATIONS
           assert '0073-course-bundle-followups' in REQUIRED_MIGRATIONS
           assert REQUIRED_RELEASE_MIGRATION in REQUIRED_MIGRATIONS
-          migrations = [version for version, _fn in __import__('schema_migrations').MIGRATIONS]
+          migrations = [version for version, _fn in MIGRATIONS]
+          assert tuple(migrations) == REQUIRED_MIGRATIONS
           assert '0066-additive-rbac-pgy-signing' in migrations
           assert '0071-pgy-learner-audience' in migrations
           assert '0072-course-bundle-idempotency' in migrations
           assert '0073-course-bundle-followups' in migrations
           assert version_file_value() == RELEASE_VERSION
+          assert RELEASE_VERSION == '6.8.1'
+          assert INTERNAL_GENERATION == '7.9 / RC79'
           assert ENTRYPOINT in Path('run_web.sh').read_text(encoding='utf-8')
 
           response = pgy_app.app.test_client().get('/health')
@@ -115,6 +89,8 @@ jobs:
           assert data['ok'] is True
           assert data['status'] == 'healthy'
           assert data['version'] == RELEASE_VERSION
+          assert data['deployment']['provider'] in {'local', 'render'}
+          assert set(data['deployment']) == {'provider', 'branch', 'commit'}
           assert data['database']['ok'] is True
           assert data['migrations']['ok'] is True
           assert data['migrations']['missing'] == []
@@ -128,25 +104,39 @@ jobs:
         run: |
           grep -q 'SECRET_KEY' render.yaml
           grep -q 'SESSION_COOKIE_SECURE' render.yaml
+          grep -q 'autoDeployTrigger: checksPass' render.yaml
+          ! grep -q 'autoDeployTrigger: commit' render.yaml
           grep -q 'AI_DEIDENTIFICATION_ENABLED' render.yaml
           grep -q 'AI_EXTERNAL_MEDIA_ALLOWED' render.yaml
           grep -q 'UPLOAD_ZIP_MAX_RATIO' render.yaml
           grep -q 'GROQ_API_KEY' render.yaml
-          grep -q 'register_health' pgy_app.py
-          grep -q 'register_training_audience_71' pgy_app.py
-          grep -q 'register_sensitive_elevation_69' pgy_app.py
-          grep -q 'register_course_bundle_followup_73' pgy_app.py
-          grep -q '0066-additive-rbac-pgy-signing' schema_migrations.py
-          grep -q '0067-smart-learning-content' schema_migrations.py
-          grep -q '0067-render-worker-shared-staging' schema_migrations.py
-          grep -q '0067-b-free-local-worker' schema_migrations.py
-          grep -q '0068-external-interactive-media' schema_migrations.py
+          grep -q 'from teacher_app import create_app' pgy_app.py
+          grep -q 'app = create_app()' pgy_app.py
+          ! grep -q 'legacy_app' pgy_app.py
+          ! grep -q 'from app import' pgy_app.py
+          grep -q 'register_health' teacher_app/factory.py
+          grep -q 'register_training_audience_71' teacher_app/factory.py
+          grep -q 'register_sensitive_elevation' teacher_app/factory.py
+          grep -q 'register_course_bundle_followup_73' teacher_app/factory.py
+          ! grep -q 'register_pgy_atomic_workflow' pgy_app.py
+          test ! -f pgy_atomic.py
+          grep -q 'from teacher_app.maintenance import migrations as _migrations' schema_migrations.py
+          grep -q '0066-additive-rbac-pgy-signing' teacher_app/maintenance/migrations.py
+          grep -q '0067-smart-learning-content' teacher_app/maintenance/migrations.py
+          grep -q '0067-render-worker-shared-staging' teacher_app/maintenance/migrations.py
+          grep -q '0067-b-free-local-worker' teacher_app/maintenance/migrations.py
+          grep -q '0068-external-interactive-media' teacher_app/maintenance/migrations.py
+          grep -q 'from teacher_app.frontend import assets as _assets' pgy_frontend.py
+          grep -q 'ASSET_MANIFEST' teacher_app/frontend/assets.py
+          grep -q 'register_pgy_frontend' teacher_app/frontend/assets.py
           ! grep -q 'type: worker' render.yaml
           grep -q 'MATERIAL_DIRECT_UPLOAD_ENABLED' render.yaml
+          grep -q 'MEGA_WEB_READ_TIMEOUT_SECONDS' render.yaml
+          grep -q 'GUNICORN_TIMEOUT' render.yaml
           grep -q 'MATERIAL_WORKER_TOKEN' render.yaml
           ! grep -q 'material_worker.py' run_web.sh
-          grep -q 'Teacher 6.7' ARCHITECTURE_6_7.md
-          test -f ARCHITECTURE_ROOT_MIRROR_CLEANUP.md
-          grep -q 'Root freeze policy' ARCHITECTURE_ROOT_MIRROR_CLEANUP.md
-          test -f ARCHITECTURE_FINAL_CONVERGENCE.md
-          grep -q 'system-admin.js.*legacy compatibility bundle' ARCHITECTURE_FINAL_CONVERGENCE.md
+          test -f ARCHITECTURE.md
+          test -f docs/archive/ARCHITECTURE_HISTORY.md
+          grep -q 'Teacher 6.7' docs/archive/ARCHITECTURE_HISTORY.md
+          grep -q 'Root freeze policy' ARCHITECTURE.md
+          grep -q 'system-admin.js.*legacy compatibility bundle' ARCHITECTURE.md

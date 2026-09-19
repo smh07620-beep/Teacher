@@ -106,9 +106,9 @@ class LegacyOfficeDownload69Tests(unittest.TestCase):
         self.assertEqual(self.base.original_calls, [])
 
     def test_adapter_is_registered_after_rbac_in_deployment_entrypoint(self):
-        source = ROOT.joinpath("pgy_app.py").read_text(encoding="utf-8")
-        self.assertIn("from legacy_office_69 import register_legacy_office_69", source)
-        self.assertLess(source.index("register_rbac_681(legacy_app)"), source.index("register_legacy_office_69(legacy_app)"))
+        source = ROOT.joinpath("teacher_app", "factory.py").read_text(encoding="utf-8")
+        self.assertIn("from teacher_app.materials.legacy_office import register_legacy_office_69", source)
+        self.assertLess(source.index("app = register_rbac_681(app)"), source.index("app = register_legacy_office_69(app)"))
 
 
 if __name__ == "__main__":

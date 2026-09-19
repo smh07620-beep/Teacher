@@ -8,24 +8,11 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Optional, Sequence
 
-from flask import jsonify, request
+from flask import g, jsonify, request
 
-from schema_migrations import _add_columns, migration
+from teacher_app.common import db as common_db
 from teacher_app.common.auth import has_permission, normalize_role, user_roles
-from teacher_app.common.db import get_connection, placeholder
 from teacher_app.common.errors import ApiError
-
-
-@migration("0071-pgy-learner-audience")
-def _pgy_learner_audience_71(conn, kind: str) -> None:
-    boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
-    default_false = "FALSE" if kind == "postgres" else "0"
-    _add_columns(
-        conn,
-        kind,
-        "user_accounts",
-        {"pgy_learner": f"pgy_learner {boolean} NOT NULL DEFAULT {default_false}"},
-    )
 
 
 def _username(value: Any) -> str:
@@ -42,39 +29,36 @@ def _row_for_username(username: str) -> dict[str, Any]:
     if not username:
         return {}
     try:
-        conn, kind = get_connection()
-    except Exception:
-        return {}
-    ph = placeholder(kind)
-    try:
-        try:
-            row = conn.execute(
-                f"""
-                SELECT username,display_name,emp_id,role,roles_json,
-                       preferred_group,professional_title,pgy_learner
-                FROM user_accounts
-                WHERE username={ph}
-                """,
-                (username,),
-            ).fetchone()
-        except Exception:
-            # Pre-0071/isolated test databases fail closed to ordinary online
-            # training rather than guessing a PGY identity.
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
             try:
                 row = conn.execute(
                     f"""
                     SELECT username,display_name,emp_id,role,roles_json,
-                           preferred_group,professional_title
+                           preferred_group,professional_title,pgy_learner
                     FROM user_accounts
                     WHERE username={ph}
                     """,
                     (username,),
                 ).fetchone()
             except Exception:
-                return {}
-        return dict(row) if row else {}
-    finally:
-        conn.close()
+                # Pre-0071/isolated test databases fail closed to ordinary online
+                # training rather than guessing a PGY identity.
+                try:
+                    row = conn.execute(
+                        f"""
+                        SELECT username,display_name,emp_id,role,roles_json,
+                               preferred_group,professional_title
+                        FROM user_accounts
+                        WHERE username={ph}
+                        """,
+                        (username,),
+                    ).fetchone()
+                except Exception:
+                    return {}
+            return dict(row) if row else {}
+    except Exception:
+        return {}
 
 
 def current_profile(user: Optional[Mapping[str, Any]]) -> dict[str, Any]:
@@ -125,13 +109,8 @@ def annotate_learners(learners: Sequence[Mapping[str, Any]]) -> list[dict[str, A
     flags: dict[str, bool] = {}
     if usernames:
         try:
-            conn, kind = get_connection()
-        except Exception:
-            conn = None
-            kind = "sqlite"
-        if conn is not None:
-            try:
-                ph = placeholder(kind)
+            with common_db.read_connection() as (conn, kind):
+                ph = common_db.placeholder(kind)
                 marks = ",".join(ph for _ in usernames)
                 try:
                     rows = conn.execute(
@@ -144,8 +123,8 @@ def annotate_learners(learners: Sequence[Mapping[str, Any]]) -> list[dict[str, A
                     }
                 except Exception:
                     flags = {}
-            finally:
-                conn.close()
+        except Exception:
+            flags = {}
 
     for item in output:
         username = _username(item.get("username"))
@@ -156,14 +135,25 @@ def annotate_learners(learners: Sequence[Mapping[str, Any]]) -> list[dict[str, A
     return output
 
 
-def register_training_audience_71(base):
+def _app(owner):
+    return getattr(owner, "app", owner)
+
+
+def _current_user(owner=None):
+    if hasattr(g, "teacher_user"):
+        return g.teacher_user
+    resolver = getattr(owner, "_current_user", None)
+    return resolver() if callable(resolver) else None
+
+
+def register_training_audience_71(owner):
     """Admin management API for the explicit PGY learner audience flag."""
-    app = base.app
+    app = _app(owner)
     if app.extensions.get("teacher_training_audience_71_registered"):
         return app
 
     def authorized():
-        actor = base._current_user()
+        actor = _current_user(owner)
         if not actor:
             return None, (jsonify({"error": "請先登入。", "loginRequired": True}), 401)
         if not has_permission(actor, "user.manage"):
@@ -172,19 +162,16 @@ def register_training_audience_71(base):
 
     def read_flag(username: str):
         key = _username(username)
-        conn, kind = base._db_conn()
-        ph = "%s" if kind == "postgres" else "?"
-        try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
             row = conn.execute(
                 f"SELECT username,pgy_learner FROM user_accounts WHERE username={ph}",
                 (key,),
             ).fetchone()
-            if not row:
-                return None
-            data = dict(row)
-            return {"username": key, "pgyLearner": _bool(data.get("pgy_learner"))}
-        finally:
-            conn.close()
+        if not row:
+            return None
+        data = dict(row)
+        return {"username": key, "pgyLearner": _bool(data.get("pgy_learner"))}
 
     @app.get("/api/users/<username>/training-audience")
     def training_audience_get(username):
@@ -206,9 +193,8 @@ def register_training_audience_71(base):
         if type(value) is not bool:
             return jsonify({"error": "PGY 學員狀態必須為布林值。"}), 400
         key = _username(username)
-        conn, kind = base._db_conn()
-        ph = "%s" if kind == "postgres" else "?"
-        try:
+        with common_db.transaction() as (conn, kind):
+            ph = common_db.placeholder(kind)
             row = conn.execute(f"SELECT username FROM user_accounts WHERE username={ph}", (key,)).fetchone()
             if not row:
                 return jsonify({"error": "找不到帳號。"}), 404
@@ -217,8 +203,6 @@ def register_training_audience_71(base):
                 f"UPDATE user_accounts SET pgy_learner={ph} WHERE username={ph}",
                 (stored, key),
             )
-        finally:
-            conn.close()
         return jsonify({"ok": True, "username": key, "pgyLearner": value})
 
     app.extensions["teacher_training_audience_71_registered"] = True

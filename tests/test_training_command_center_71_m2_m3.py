@@ -151,7 +151,7 @@ class CommandCenterM2M3FrontendTests(unittest.TestCase):
     def setUpClass(cls):
         cls.matrix_ui = ROOT.joinpath('static','pgy-competency-matrix-71.js').read_text(encoding='utf-8')
         cls.analytics_ui = ROOT.joinpath('static','learning-analytics-71.js').read_text(encoding='utf-8')
-        cls.frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
+        cls.frontend = ROOT.joinpath('teacher_app','frontend','assets.py').read_text(encoding='utf-8')
         cls.workflow = ROOT.joinpath('.github','workflows','phase3-pgy-checks.yml').read_text(encoding='utf-8')
         cls.coverage = ROOT.joinpath('RC_FEATURE_UI_COVERAGE_MATRIX.md').read_text(encoding='utf-8')
 
@@ -176,10 +176,9 @@ class CommandCenterM2M3FrontendTests(unittest.TestCase):
             self.assertNotIn(mutation, self.analytics_ui)
 
     def test_m1_m2_m3_assets_load_in_order_and_are_syntax_checked(self):
-        self.assertLess(self.frontend.index('/training-command-center-71.js?v=7113'), self.frontend.index('/pgy-competency-matrix-71.js?v=7113'))
-        self.assertLess(self.frontend.index('/pgy-competency-matrix-71.js?v=7113'), self.frontend.index('/learning-analytics-71.js?v=7113'))
-        self.assertIn('node --check static/pgy-competency-matrix-71.js', self.workflow)
-        self.assertIn('node --check static/learning-analytics-71.js', self.workflow)
+        self.assertLess(self.frontend.index('/training-command-center-71.js'), self.frontend.index('/pgy-competency-matrix-71.js'))
+        self.assertLess(self.frontend.index('/pgy-competency-matrix-71.js'), self.frontend.index('/learning-analytics-71.js'))
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
 
     def test_rc_matrix_records_audience_split_and_compact_m3(self):
         self.assertIn('PGY competency matrix / online training progress (7.1 M2)', self.coverage)

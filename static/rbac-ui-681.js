@@ -10,32 +10,7 @@
  * System workspaces according to canonical RBAC. professional_title and
  * responsibility_tags remain presentation metadata and never grant access.
  */
-(async function () {
-  const ROLE_PERMISSIONS = {
-    student: new Set(['material.read','course.view','exam.take','progress.self.read','result.self.read','student.view_self']),
-    clinical_teacher: new Set([
-      'material.read','course.view','course.manage','material.manage','question.manage','exam.manage',
-      'result.group.read','document.export','evaluation.submit','evaluation.review','evaluation.sign',
-      'teacher.assessment.sign','student.view_assigned'
-    ]),
-    group_leader: new Set([
-      'material.read','course.view','course.manage','course.edit','material.manage','question.manage','question.review',
-      'exam.manage','exam.publish','result.group.read','group.member.read','group.content.manage','group.result.read',
-      'document.export','evaluation.submit','evaluation.review','teacher.assessment.sign','evaluation.countersign',
-      'student.view_assigned','student.view_group'
-    ]),
-    education_admin: new Set([
-      'material.read','course.view','course.manage','course.edit','material.manage','question.manage','question.review',
-      'exam.manage','result.group.read','document.export','education.cross_group.manage','evaluation.finalize','student.view_all'
-    ]),
-    system_admin: new Set([
-      'material.read','course.view','course.manage','course.edit','material.manage','question.manage','question.review',
-      'exam.manage','exam.publish','result.group.read','document.export','education.cross_group.manage','group.member.read',
-      'group.content.manage','group.result.read','user.manage','role.manage','audit.read','audit.view','system.manage',
-      'storage.manage','backup.manage','template.manage'
-    ]),
-    auditor: new Set(['audit.read','audit.view'])
-  };
+window.TeacherRBAC681Ready = (async function () {
   const ROLE_LABELS = {
     student:'學員', clinical_teacher:'臨床教師', group_leader:'組長', education_admin:'教學管理者',
     system_admin:'系統管理者', auditor:'稽核／唯讀', learner:'學員', teacher:'臨床教師', manager:'教學管理者'
@@ -57,6 +32,11 @@
     people: ['user.manage'],
     system: ['system.manage']
   };
+  const EXTENSION_WORKSPACE_RULES = {
+    audit: ['audit.read','audit.view'],
+    maintenance: ['backup.manage','education.cross_group.manage'],
+    worker: ['system.manage']
+  };
   const NAV_RULES = {
     'admin-nav-course-materials': WORKSPACE_RULES['course-materials'],
     'admin-nav-assessment': WORKSPACE_RULES.assessment,
@@ -74,15 +54,14 @@
   const user = auth.user || {};
   const rawRoles = Array.isArray(user.roles) && user.roles.length ? user.roles : [user.role || 'student'];
   const roles = new Set(rawRoles.map(role => LEGACY_ROLE[role] || role));
-  const permissions = new Set();
-  roles.forEach(role => (ROLE_PERMISSIONS[role] || new Set()).forEach(permission => permissions.add(permission)));
+  const permissions = new Set(Array.isArray(user.permissions) ? user.permissions : []);
   const has = permission => permissions.has(permission);
   const hasAny = rules => (rules || []).some(has);
   const systemAdmin = roles.has('system_admin');
   const crossGroup = systemAdmin || roles.has('education_admin') || has('education.cross_group.manage');
   const scopedTeacher = !crossGroup && (roles.has('clinical_teacher') || roles.has('group_leader'));
-  const workspaceAccess = Object.values(WORKSPACE_RULES).some(hasAny);
-  const canOpenWorkspace = name => hasAny(WORKSPACE_RULES[name] || []);
+  const workspaceAccess = [...Object.values(WORKSPACE_RULES), ...Object.values(EXTENSION_WORKSPACE_RULES)].some(hasAny);
+  const canOpenWorkspace = name => hasAny(WORKSPACE_RULES[name] || EXTENSION_WORKSPACE_RULES[name] || []);
   const groupCatalog = typeof GROUPS !== 'undefined' ? GROUPS : (window.GROUPS || {});
 
   function workspaceSurface() {
@@ -302,50 +281,36 @@
   }
 
   setWorkspaceEntry();
-  if (!workspaceAccess) return;
+  if (!workspaceAccess) return window.TeacherRBAC681;
   renderAccessBadge();
   renderWorkspaceBanner();
   applyNavVisibility();
   applyGroupScope();
   guardSensitiveGeneratedActions();
 
-  const legacyPopulateGroups = window.populateAdminGroupSelects;
-  if (typeof legacyPopulateGroups === 'function') {
-    window.populateAdminGroupSelects = function () {
-      const result = legacyPopulateGroups.apply(this, arguments);
-      applyGroupScope();
-      return result;
-    };
-  }
-
-  const legacySwitch = window.switchAdminWorkspace;
-  if (typeof legacySwitch === 'function') {
-    window.switchAdminWorkspace = async function (name, force) {
-      if (!canOpenWorkspace(name)) {
+  const adminShell = window.AdminWorkspaceShell;
+  if (adminShell) {
+    adminShell.addWorkspaceGuard(({requested, workspace}) => {
+      if (!canOpenWorkspace(requested) && !canOpenWorkspace(workspace)) {
         const status = document.getElementById('admin-workspace-status');
         if (status) status.textContent = '此帳號沒有此工作區權限。';
         return false;
       }
-      const result = await legacySwitch(name, force);
+      return true;
+    });
+    adminShell.addAfterWorkspace(() => {
       applyGroupScope();
       guardSensitiveGeneratedActions();
-      return result;
-    };
-  }
-
-  const legacyToggle = window.toggleAdminModal;
-  if (typeof legacyToggle === 'function') {
-    window.toggleAdminModal = async function (show) {
-      if (show && !workspaceAccess) return false;
-      const result = await legacyToggle(show);
+    });
+    adminShell.addModalGuard(({show}) => !(show && !workspaceAccess));
+    adminShell.addAfterModal(({show}) => {
       if (show) {
         renderWorkspaceBanner();
         applyNavVisibility();
         applyGroupScope();
         guardSensitiveGeneratedActions();
       }
-      return result;
-    };
+    });
   }
 
   // Replace the final remaining ADMIN_KEY-era error text in the material list.
@@ -383,4 +348,8 @@
     applyGroupScope();
   });
   observer.observe(document.body, {childList: true, subtree: true});
-})();
+  return window.TeacherRBAC681;
+})().catch(error => {
+  console.error('RBAC UI initialization failed', error);
+  return window.TeacherRBAC681 || {};
+});

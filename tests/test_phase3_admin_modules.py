@@ -1,13 +1,18 @@
 import unittest
 from pathlib import Path
 
+from pgy_frontend import ASSET_MANIFEST
+
 ROOT = Path(__file__).parents[1]
 
 
 class Phase3AdminModuleSplitTests(unittest.TestCase):
+    @staticmethod
+    def body_assets():
+        return ASSET_MANIFEST["system"]["body"]
+
     def test_results_module_is_loaded_as_phase3_override(self):
-        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
-        self.assertIn('/admin-results.js?v=7100', frontend)
+        self.assertIn('/admin-results.js', self.body_assets())
         self.assertIn('/system-admin.js', ROOT.joinpath('static/system.html').read_text(encoding='utf-8'))
 
     def test_results_module_preserves_legacy_global_contracts(self):
@@ -24,9 +29,9 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
         self.assertIn('let currentReviewRecordIndex = null;', source)
 
     def test_course_material_module_is_loaded_after_results_override(self):
-        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
-        results_pos = frontend.index('/admin-results.js?v=7100')
-        course_pos = frontend.index('/admin-course-material.js?v=7101')
+        frontend = self.body_assets()
+        results_pos = frontend.index('/admin-results.js')
+        course_pos = frontend.index('/admin-course-material.js')
         self.assertLess(results_pos, course_pos)
 
     def test_course_material_module_preserves_course_global_contracts(self):
@@ -47,9 +52,9 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
         self.assertNotIn('sessionStorage.setItem', source)
 
     def test_people_module_is_loaded_after_course_material_override(self):
-        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
-        course_pos = frontend.index('/admin-course-material.js?v=7101')
-        people_pos = frontend.index('/admin-people.js?v=7113')
+        frontend = self.body_assets()
+        course_pos = frontend.index('/admin-course-material.js')
+        people_pos = frontend.index('/admin-people.js')
         self.assertLess(course_pos, people_pos)
 
     def test_people_module_preserves_profile_editor_contracts(self):
@@ -74,9 +79,9 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
         self.assertNotIn('sessionStorage.setItem', source)
 
     def test_announcements_module_is_loaded_after_people_override(self):
-        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
-        people_pos = frontend.index('/admin-people.js?v=7113')
-        announcements_pos = frontend.index('/admin-announcements.js?v=7103')
+        frontend = self.body_assets()
+        people_pos = frontend.index('/admin-people.js')
+        announcements_pos = frontend.index('/admin-announcements.js')
         self.assertLess(people_pos, announcements_pos)
 
     def test_announcements_module_preserves_admin_global_contracts(self):
@@ -90,9 +95,9 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
         self.assertIn('X-Admin-Key', source)
 
     def test_system_module_is_loaded_after_announcements_override(self):
-        frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
-        announcements_pos = frontend.index('/admin-announcements.js?v=7103')
-        system_pos = frontend.index('/admin-system.js?v=7104')
+        frontend = self.body_assets()
+        announcements_pos = frontend.index('/admin-announcements.js')
+        system_pos = frontend.index('/admin-system.js')
         self.assertLess(announcements_pos, system_pos)
 
     def test_system_module_preserves_storage_global_contracts(self):

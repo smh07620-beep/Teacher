@@ -4,21 +4,13 @@
  * authoritative. professional_title / responsibility_tags never participate
  * in authorization decisions.
  */
-(function () {
+(async function () {
   'use strict';
 
-  const R = window.TeacherRBAC681 || {};
+  const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));
   const roles = R.roles instanceof Set ? R.roles : new Set();
   const has = permission => typeof R.hasPermission === 'function' && R.hasPermission(permission);
-  // Multi-role accounts must have exactly one presentation surface. Prefer the
-  // canonical surface already resolved by rbac-ui-681; the fallback mirrors its
-  // precedence so an auxiliary auditor role can never redraw a teacher/admin UI.
-  const surfaceKey = String(R.surface?.key || (
-    roles.has('system_admin') ? 'system' :
-    roles.has('education_admin') || has('education.cross_group.manage') ? 'education' :
-    roles.has('group_leader') || roles.has('clinical_teacher') ? 'teacher' :
-    roles.has('auditor') ? 'audit' : 'learner'
-  ));
+  const surfaceKey = String(R.surface?.key || 'learner');
   const isSystemAdmin = surfaceKey === 'system';
   const isEducationAdmin = surfaceKey === 'education';
   const isAuditor = surfaceKey === 'audit';
@@ -55,6 +47,30 @@
   moveMaintenanceCard();
   const maintenanceObserver = new MutationObserver(moveMaintenanceCard);
   maintenanceObserver.observe(workspaceHost, {childList: true, subtree: true});
+
+  function ensureSystemAdvancedMaintenance(){
+    if(!isSystemAdmin)return;
+    const systemPanel=document.getElementById('admin-section-system');
+    if(!systemPanel)return;
+    let details=document.getElementById('system-advanced-maintenance-75');
+    if(!details){
+      details=document.createElement('details');
+      details.id='system-advanced-maintenance-75';
+      details.className='bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden';
+      details.innerHTML=`<summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3"><div><h4 class="font-black text-slate-950">🧰 進階維護</h4><p class="mt-1 text-xs text-slate-500">只在儲存搬移或背景工作異常時使用；日常教學不需要展開。</p></div><span class="text-xs font-bold text-slate-500">需要時展開</span></summary><div class="border-t border-slate-100 p-5 space-y-4"><div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">僅 system_admin 顯示。教材建立請使用「＋ 建立教學內容」；這裡只保留高風險維運工具。</div><div class="flex flex-wrap gap-2"><button id="system75-refresh-status" type="button" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold">🔄 重新檢查系統狀態</button><button id="system75-migrate-mega" type="button" class="rounded-xl bg-fuchsia-700 px-3 py-2 text-xs font-bold text-white">☁️ 搬移既有教材到 MEGA</button><button id="system75-migrate-r2" type="button" class="rounded-xl border border-cyan-300 bg-white px-3 py-2 text-xs font-bold text-cyan-800">☁️ R2 舊備援搬移</button></div><div data-system75-jobs></div></div>`;
+      systemPanel.appendChild(details);
+      details.querySelector('#system75-refresh-status').onclick=()=>window.renderAdminSystemStatus?.(true);
+      details.querySelector('#system75-migrate-mega').onclick=async()=>{await window.migrateMaterialsToMega?.();await window.renderAdminSystemStatus?.(true);};
+      details.querySelector('#system75-migrate-r2').onclick=async()=>{await window.migrateLocalMaterialsToR2?.();await window.renderAdminSystemStatus?.(true);};
+    }
+    const jobs=document.getElementById('admin-material-jobs-panel');
+    const host=details.querySelector('[data-system75-jobs]');
+    if(jobs&&host&&jobs.parentElement!==host){
+      jobs.classList.remove('hidden');
+      jobs.removeAttribute('aria-hidden');
+      host.appendChild(jobs);
+    }
+  }
 
   function button(id, label, workspace) {
     let item = document.getElementById(id);
@@ -171,6 +187,10 @@
     if (!canAudit) return false;
     if (auditPanel.dataset.loaded === '1' && !force) return true;
     auditPanel.innerHTML = `
+      <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+        <div><h4 class="font-black text-slate-900">🛡️ 安全狀態</h4><p class="mt-1 text-xs text-slate-500">只顯示安全策略是否啟用，不回傳或顯示任何密鑰。</p></div>
+        <div id="security-status-70" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2"><div class="text-xs text-slate-400">讀取安全狀態中…</div></div>
+      </section>
       <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div><h4 class="font-black text-slate-950 text-lg">🔎 稽核／唯讀紀錄</h4>
@@ -188,6 +208,23 @@
     document.getElementById('audit-refresh-70').onclick = () => renderAudit(true);
     const status = document.getElementById('audit-status-70');
     const body = document.getElementById('audit-body-70');
+    const securityHost = document.getElementById('security-status-70');
+    try {
+      const securityResponse = await fetch('/api/security/status', {credentials: 'same-origin', cache: 'no-store'});
+      const security = await securityResponse.json().catch(() => ({}));
+      if (!securityResponse.ok) throw new Error(security.error || `讀取失敗（${securityResponse.status}）`);
+      const chip = (label, value, good=true) => `<div class="rounded-xl border ${good?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50'} p-3"><div class="text-[11px] font-bold text-slate-500">${escapeHtml(label)}</div><div class="mt-1 text-sm font-black text-slate-900">${escapeHtml(value)}</div></div>`;
+      securityHost.innerHTML = [
+        chip('Session 期限', `${Number(security.sessionHours||0)} 小時`, Number(security.sessionHours||0)>0),
+        chip('Secure Cookie', security.secureCookie?'已啟用':'未啟用', !!security.secureCookie),
+        chip('CSRF Origin 檢查', security.csrfOriginCheck?'已啟用':'未啟用', !!security.csrfOriginCheck),
+        chip('登入失敗限制', `${Number(security.loginRateLimitMaxAttempts||0)} 次`, Number(security.loginRateLimitMaxAttempts||0)>0),
+        chip('CSP', security.cspEnforced?'強制模式':'Report-Only', !!security.cspEnforced),
+        chip('Production Secret', security.productionSecretRequired?'正式環境必填':'非強制', !!security.productionSecretRequired),
+      ].join('');
+    } catch (securityError) {
+      if (securityHost) securityHost.innerHTML = `<div class="sm:col-span-2 lg:col-span-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">⚠️ ${escapeHtml(securityError.message)}</div>`;
+    }
     try {
       const response = await fetch('/api/pgy/audit', {credentials: 'same-origin', cache: 'no-store'});
       const data = await response.json().catch(() => []);
@@ -212,41 +249,39 @@
     }
   }
 
-  const previousSwitch = window.switchAdminWorkspace;
-  window.switchAdminWorkspace = async function (name, force) {
-    if (name === 'maintenance') {
+  const adminShell = window.AdminWorkspaceShell;
+  adminShell?.registerWorkspace('maintenance', async ({force}) => {
       if (!canMaintenance) return false;
       moveMaintenanceCard();
       showOnlyPanel(maintenancePanel, 'maintenance', 'admin-nav-maintenance');
       return true;
-    }
-    if (name === 'audit') {
+  });
+  adminShell?.registerWorkspace('audit', async ({force}) => {
       if (!canAudit) return false;
       showOnlyPanel(auditPanel, 'audit', 'admin-nav-audit');
       await renderAudit(Boolean(force));
       return true;
-    }
-    return typeof previousSwitch === 'function' ? previousSwitch(name, force) : false;
-  };
-
-  const previousToggle = window.toggleAdminModal;
-  window.toggleAdminModal = async function (show) {
-    if (show && isAuditor && canAudit && !R.workspaceAccess) {
+  });
+  adminShell?.addModalOpenOverride(async ({show}) => {
+    if (show && isAuditor && canAudit) {
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       document.body?.classList.add('overflow-hidden');
       await window.switchAdminWorkspace('audit', true);
-      return true;
+      return {handled:true, result:true};
     }
-    const result = typeof previousToggle === 'function' ? await previousToggle(show) : false;
+    return null;
+  });
+  adminShell?.addAfterModal(({show}) => {
     if (show) {
       moveMaintenanceCard();
+      ensureSystemAdvancedMaintenance();
       if (isSystemAdmin) buildSystemNavigation();
       else addEducationMaintenanceNavigation();
     }
-    return result;
-  };
+  });
 
+  ensureSystemAdvancedMaintenance();
   buildSystemNavigation();
   addEducationMaintenanceNavigation();
   exposeAuditorEntry();

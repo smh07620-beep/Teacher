@@ -1,8 +1,4 @@
-/* Phase 3H · Admin material jobs/Worker queue runtime.
- * Loaded after the legacy admin bundle so these functions become the
- * canonical runtime implementation while system-admin.js remains a
- * compatibility fallback during the incremental split.
- */
+/* Phase 3H · Canonical admin material jobs/Worker queue runtime. */
 (function(){
   'use strict';
 

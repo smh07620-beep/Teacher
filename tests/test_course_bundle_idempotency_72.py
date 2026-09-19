@@ -6,9 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from flask import Flask
+from flask import Flask, g
 
-import course_bundle_72
 import schema_migrations
 from course_bundle_72 import (
     MIGRATION_ID,
@@ -16,6 +15,7 @@ from course_bundle_72 import (
     register_course_bundle_72,
 )
 from rbac_681 import _require_permission
+from teacher_app.courses import bundle as canonical_bundle
 
 
 class CourseBundle72Tests(unittest.TestCase):
@@ -38,7 +38,16 @@ class CourseBundle72Tests(unittest.TestCase):
         self.base.require_permission = lambda permission: _require_permission(self.base, permission)
         self.base.get_course = self.get_course
         self.base.get_quiz_category = self.get_quiz_category
+        @self.app.before_request
+        def bind_teacher_user():
+            g.teacher_user = self.current_user
         self._create_schema()
+        self.canonical_db = patch(
+            "teacher_app.common.db.get_connection",
+            side_effect=self.connect,
+        )
+        self.canonical_db.start()
+        self.addCleanup(self.canonical_db.stop)
         register_course_bundle_72(self.base)
         self.client = self.app.test_client()
 
@@ -203,7 +212,7 @@ class CourseBundle72Tests(unittest.TestCase):
     def test_failed_atomic_bundle_rolls_back_and_same_workflow_can_retry(self):
         self.set_user("clinical_teacher")
         data = self.payload(workflow="cw-rollback-1234567890")
-        with patch.object(course_bundle_72, "_create_exam", side_effect=RuntimeError("simulated")):
+        with patch.object(canonical_bundle, "_create_exam", side_effect=RuntimeError("simulated")):
             failed = self.client.post("/api/course-bundles", json=data)
         self.assertEqual(failed.status_code, 500)
         self.assertEqual(self.counts(), (0, 0, 0))

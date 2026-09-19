@@ -1,6 +1,4 @@
-/* Phase 3N: document-template administration runtime.
- * system-admin.js remains the compatibility fallback; this module owns the
- * canonical onclick entry points once it loads after that bundle. */
+/* Phase 3N: canonical document-template administration runtime. */
 (() => {
   'use strict';
 
@@ -68,9 +66,7 @@
     await renderTemplates();
   }
 
-  // The legacy fallback already observes this input. Capture first so the
-  // extracted handler consumes the file before the no-longer-active fallback.
-  document.getElementById('admin-doc-template-upload-input')?.addEventListener('change', uploadTemplate, true);
+  document.getElementById('admin-doc-template-upload-input')?.addEventListener('change', uploadTemplate);
 
   // Keep the existing HTML onclick contract; authorization remains getAdminKey.
   window.renderAdminDocTemplates = renderTemplates;

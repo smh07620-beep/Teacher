@@ -1,5 +1,7 @@
 # Teacher 6.4.0 — Data Protection & Recovery
 
+> **歷史 release record。** 本文件記錄 6.4.0 當時的 migration / legacy init 狀態；目前 production composition、schema ownership 與 release contract 請以 `ARCHITECTURE.md`、`VERSION`、`release_contract.py` 為準。
+
 6.4 延續 6.3 的伺服器計分、PGY 原子簽核與正式站安全設定，新增四個維運層級能力。
 
 ## 1. 邏輯備份與保守還原

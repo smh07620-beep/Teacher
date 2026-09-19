@@ -8,7 +8,7 @@ from pathlib import Path
 
 import health_65
 import schema_migrations
-from rbac_681 import _ensure_07620
+from rbac_681 import _category_group, _ensure_07620, _question_group
 from teacher_app.auth.service import public_user
 from teacher_app.common.auth import has_permission
 
@@ -92,7 +92,8 @@ class ProfileMigration681Tests(unittest.TestCase):
         conn, _ = self.base._db_conn()
         conn.execute("INSERT INTO user_accounts(username,password_hash,display_name,emp_id,role,roles_json) VALUES(?,?,?,?,?,?)", ("07620", "unchanged-admin-hash", "評雪誠", "07620-admin", "clinical_teacher", '["clinical_teacher","auditor"]'))
         conn.close()
-        self.assertTrue(_ensure_07620(self.base))
+        with patch("teacher_app.common.db.get_connection", side_effect=self.base._db_conn):
+            self.assertTrue(_ensure_07620(self.base))
         conn, _ = self.base._db_conn()
         user = dict(conn.execute("SELECT role,roles_json,password_hash FROM user_accounts WHERE username='07620'").fetchone())
         conn.close()
@@ -102,16 +103,65 @@ class ProfileMigration681Tests(unittest.TestCase):
 
 
 class WorkspaceContract681Tests(unittest.TestCase):
+    def test_question_scope_resolves_through_canonical_assessment_repository(self):
+        handle = tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False)
+        handle.close()
+        path = handle.name
+        base = _Base(path)
+        conn, _ = base._db_conn()
+        try:
+            conn.execute(
+                "CREATE TABLE quiz_categories (id TEXT PRIMARY KEY,title TEXT,group_key TEXT,training_area TEXT,active INTEGER)"
+            )
+            conn.execute(
+                "CREATE TABLE quiz_questions (id TEXT PRIMARY KEY,quiz_category_id TEXT)"
+            )
+            conn.execute(
+                "INSERT INTO quiz_categories(id,title,group_key,training_area,active) VALUES(?,?,?,?,?)",
+                ("exam-hema", "血液考卷", "grpHema", "pgy", 1),
+            )
+            conn.execute(
+                "INSERT INTO quiz_questions(id,quiz_category_id) VALUES(?,?)",
+                ("question-1", "exam-hema"),
+            )
+        finally:
+            conn.close()
+        try:
+            with patch("teacher_app.common.db.get_connection", side_effect=base._db_conn):
+                self.assertEqual(_category_group(base, "exam-hema"), "grpHema")
+                self.assertEqual(_question_group(base, "question-1"), "grpHema")
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+    def test_course_and_assessment_scope_reads_use_canonical_repositories(self):
+        source = Path(__file__).parents[1].joinpath("teacher_app", "common", "scope_filter.py").read_text(encoding="utf-8")
+        self.assertIn("assessment_repository.get_category", source)
+        self.assertIn("assessment_repository.get_question", source)
+        self.assertIn("course_repository.get_course", source)
+        for forbidden in (
+            "base.get_quiz_category",
+            "base.get_quiz_question",
+            "base.get_course",
+            "SELECT quiz_category_id FROM quiz_questions",
+        ):
+            self.assertNotIn(forbidden, source)
+
     def test_normal_ui_does_not_prompt_or_persist_admin_key(self):
         source = Path(__file__).parents[1].joinpath("static", "system-admin.js").read_text(encoding="utf-8")
         self.assertNotIn("/api/admin/elevation", source)
         self.assertIn("return 'rbac-session'", source)
 
     def test_learner_office_guard_is_server_side(self):
-        source = Path(__file__).parents[1].joinpath("rbac_681.py").read_text(encoding="utf-8")
+        source = Path(__file__).parents[1].joinpath("teacher_app", "frontend", "system_page.py").read_text(encoding="utf-8")
         self.assertIn("OFFICE_EXTENSIONS", source)
         self.assertIn("previewRequired", source)
-        self.assertIn("return jsonify({\"error\": \"教材預覽尚未完成", source)
+        self.assertIn("教材預覽尚未完成", source)
+
+    def test_rbac_registration_does_not_mutate_account_roles_at_startup(self):
+        source = Path(__file__).parents[1].joinpath("teacher_app", "auth", "rbac_legacy_adapter.py").read_text(encoding="utf-8")
+        register_body = source.split("def register_legacy_rbac(base):", 1)[1]
+        self.assertNotIn("ensure_07620(base)", register_body)
+        self.assertIn("account_roles.grant_system_admin", source)
 
 
 if __name__ == "__main__":

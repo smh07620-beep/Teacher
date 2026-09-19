@@ -9,7 +9,7 @@ class NotificationCenter71Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.ui = ROOT.joinpath("static", "notification-center-71.js").read_text(encoding="utf-8")
-        cls.frontend = ROOT.joinpath("pgy_frontend.py").read_text(encoding="utf-8")
+        cls.frontend = ROOT.joinpath("teacher_app", "frontend", "assets.py").read_text(encoding="utf-8")
         cls.workflow = ROOT.joinpath(".github", "workflows", "phase3-pgy-checks.yml").read_text(encoding="utf-8")
         cls.coverage = ROOT.joinpath("RC_FEATURE_UI_COVERAGE_MATRIX.md").read_text(encoding="utf-8")
 
@@ -34,9 +34,9 @@ class NotificationCenter71Tests(unittest.TestCase):
 
     def test_m4_sits_after_course_grid_and_asset_loads_after_m3(self):
         self.assertIn("document.getElementById('course-overview-grid')", self.ui)
-        self.assertIn('/notification-center-71.js?v=7113', self.frontend)
-        self.assertLess(self.frontend.index('/learning-analytics-71.js?v=7113'), self.frontend.index('/notification-center-71.js?v=7113'))
-        self.assertIn("node --check static/notification-center-71.js", self.workflow)
+        self.assertIn('/notification-center-71.js', self.frontend)
+        self.assertLess(self.frontend.index('/learning-analytics-71.js'), self.frontend.index('/notification-center-71.js'))
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
 
     def test_rc_matrix_records_m4(self):
         self.assertIn("Notification Center (7.1 M4)", self.coverage)

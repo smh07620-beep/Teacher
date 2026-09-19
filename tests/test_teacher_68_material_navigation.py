@@ -25,6 +25,12 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         self.db_patch = patch.object(legacy_app, "_db_conn", self.connect)
         self.db_patch.start()
         self.addCleanup(self.db_patch.stop)
+        self.canonical_db_patch = patch(
+            "teacher_app.common.db.get_connection",
+            side_effect=self.connect,
+        )
+        self.canonical_db_patch.start()
+        self.addCleanup(self.canonical_db_patch.stop)
         legacy_app.init_user_accounts_db()
         legacy_app.init_exam_db()
         legacy_app.init_materials_db()
@@ -181,7 +187,7 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         self.assertEqual(self.client.patch(f"/api/atlas/{published_id}", json={"title":"Nope"}, headers={"Origin": "http://localhost"}).status_code, 403)
 
     def test_atlas_is_presented_as_formal_resource_ui(self):
-        self.assertIn("/api/teaching-resource-search", ROOT.joinpath("atlas_70.py").read_text(encoding="utf-8"))
+        self.assertIn("/api/teaching-resource-search", ROOT.joinpath("teacher_app/atlas/routes.py").read_text(encoding="utf-8"))
         self.assertIn("搜尋本教材內容", ROOT.joinpath("static/system.html").read_text(encoding="utf-8"))
         self.assertIn("搜尋教學資源", ROOT.joinpath("static/system.html").read_text(encoding="utf-8"))
 
@@ -221,7 +227,15 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         with zipfile.ZipFile(docx, "w") as archive:
             archive.writestr("word/media/image1.png", png); archive.writestr("word/media/image2.png", png)
         material = {"id":"docx-1","group":"grpHema","folder":"docx-1","storageFilename":"atlas.docx","filename":"atlas.docx"}
-        with patch.object(legacy_app, "get_material", return_value=material), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", source.parent), patch.object(legacy_app, "MATERIAL_STORAGE", Path(self.temp.name) / "storage"):
+        old_paths = pgy_app.app.config["STORAGE_PATHS"]
+        test_paths = old_paths.with_runtime_overrides(
+            uploaded_slides_dir=source.parent,
+            material_storage=Path(self.temp.name) / "storage",
+        )
+        with patch(
+            "teacher_app.materials.repository.get_material",
+            return_value=material,
+        ), patch.dict(pgy_app.app.config, {"STORAGE_PATHS": test_paths}):
             self.login("education-admin")
             result = self.client.post("/api/atlas/import-docx/docx-1/confirm", json={"metadata":{"title":"Shared title","group":"grpHema","category":"blood_cell","description":"Shared description","tags":["shared"],"differentialPoints":"Shared differential","teachingNotes":"Shared notes","difficulty":"basic","sortOrder":3},"items":[{"index":1},{"index":2,"title":"Override title","tags":["override"],"sortOrder":9}]}, headers={"Origin":"http://localhost"})
         self.assertEqual(result.status_code, 201, result.get_data(as_text=True))
@@ -247,7 +261,12 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         (source / "scan.pdf").write_bytes(b"scan")
         material = {"id":"manual-scan","group":"grpHema","folder":"manual","storageFilename":"scan.pdf","filename":"scan.pdf","storageBackend":"local"}
         self.login("education-admin")
-        with patch.object(legacy_app, "get_material", return_value=material), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", source.parent), patch("smart_learning_67.extract_slide_text", return_value=[]):
+        old_paths = pgy_app.app.config["STORAGE_PATHS"]
+        test_paths = old_paths.with_runtime_overrides(uploaded_slides_dir=source.parent)
+        with patch(
+            "teacher_app.materials.repository.get_material",
+            return_value=material,
+        ), patch.dict(pgy_app.app.config, {"STORAGE_PATHS": test_paths}), patch("smart_learning_67.extract_slide_text", return_value=[]):
             response = self.client.post("/api/material-search/manual-scan/index", headers={"Origin":"http://localhost"})
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(response.get_json()["status"], "no_text")
@@ -272,10 +291,10 @@ class MaterialNavigationFrontend68Tests(unittest.TestCase):
         self.assertIn("switchLearningModule('materials')", core)
         self.assertIn('onclick="toggleAdminModal(true)"', html)
 
-    def test_portal_navigation_uses_area_catalog_without_group_hardcoding(self):
+    def test_portal_navigation_has_no_dead_public_management_handler(self):
         portal = self.source("static/portal-v56.js")
-        self.assertIn("$$('.v575-manage-direct')", portal)
-        self.assertIn("location.pathname==='/pgy'?'/pgy':'/internal'", portal)
+        self.assertNotIn("$$('.v575-manage-direct')", portal)
+        self.assertNotIn("location.pathname==='/pgy'?'/pgy':'/internal'", portal)
         self.assertIn("['教材','/internal']", portal)
 
     def test_reader_error_contract_is_specific_and_login_is_safe(self):

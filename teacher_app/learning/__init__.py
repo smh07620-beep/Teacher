@@ -1,0 +1,1 @@
+"""Canonical smart-learning domain."""

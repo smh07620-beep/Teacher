@@ -47,7 +47,8 @@ class AuthRouteTests(AuthFixture):
     def test_adapter_calls_service(self):
         with patch.object(service, 'login', return_value={'ok': True, 'user': {'username': 'probe'}}) as login:
             self.assertEqual(self.login().get_json()['user']['username'], 'probe')
-            self.assertIs(login.call_args.args[0], self.base)
+            self.assertEqual(login.call_args.args[0]['username'], 'teacher1')
+            self.assertEqual(len(login.call_args.args), 2)
         with patch.object(service, 'current_user', return_value=None) as current:
             self.assertFalse(self.client.get('/api/auth/me').get_json()['authenticated'])
             current.assert_called_once()
@@ -57,8 +58,10 @@ class AuthRouteTests(AuthFixture):
 
     def test_factory_blueprint_uses_same_contract(self):
         app = create_app()
-        app.config.update(TESTING=True, AUTH_BASE=self.base)
+        app.config.update(TESTING=True)
+        self.assertNotIn('AUTH_BASE', app.config)
         client = app.test_client()
+        client.environ_base["HTTP_ORIGIN"] = "http://localhost"
         self.assertEqual(client.get('/api/auth/me').get_json(), {'authenticated': False, 'user': None})
         response = client.post('/api/auth/login', json={'username': 'teacher1', 'password': self.password})
         self.assertEqual(response.status_code, 200)

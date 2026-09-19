@@ -2,6 +2,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from flask import Flask
@@ -112,6 +113,76 @@ class Health65Tests(
             [],
         )
 
+    def test_health_exposes_non_secret_render_deployment_identity(self):
+        base = HealthBase()
+        self.addCleanup(base.close)
+        schema_migrations.apply_migrations(base)
+        health_65.register_health(base)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "RENDER": "true",
+                "RENDER_GIT_BRANCH": "feature/teacher-content-authoring-studio-72",
+                "RENDER_GIT_COMMIT": "1234567890abcdef1234567890abcdef12345678",
+                "DATABASE_URL": "postgresql://user:db-secret@example.invalid/teacher",
+                "SECRET_KEY": "secret-key-value-that-is-long-enough-123456789",
+                "ADMIN_KEY": "admin-secret-value",
+                "GROQ_API_KEY": "groq-secret-value",
+                "MATERIAL_WORKER_TOKEN": "worker-secret-value",
+                "MATERIAL_BACKGROUND_JOBS": "false",
+                "MATERIAL_WORKER_ENABLED": "false",
+                "MATERIAL_STORAGE_BACKEND": "local",
+                "MATERIAL_SHARED_STAGING_BACKEND": "local",
+            },
+            clear=False,
+        ):
+            body = base.app.test_client().get("/health").get_json()
+
+        self.assertEqual(body["deployment"]["provider"], "render")
+        self.assertEqual(body["deployment"]["branch"], "feature/teacher-content-authoring-studio-72")
+        self.assertEqual(body["deployment"]["commit"], "1234567890ab")
+        self.assertTrue(body["configuration"]["ok"])
+        serialized = json.dumps(body, ensure_ascii=False)
+        for secret in (
+            "db-secret",
+            "secret-key-value-that-is-long-enough-123456789",
+            "admin-secret-value",
+            "groq-secret-value",
+            "worker-secret-value",
+        ):
+            self.assertNotIn(secret, serialized)
+
+    def test_configuration_errors_are_diagnostic_while_db_and_migrations_drive_http_status(self):
+        base = HealthBase()
+        self.addCleanup(base.close)
+        schema_migrations.apply_migrations(base)
+        health_65.register_health(base)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "RENDER": "true",
+                "DATABASE_URL": "",
+                "SECRET_KEY": "short",
+                "MATERIAL_STORAGE_BACKEND": "local",
+                "MATERIAL_SHARED_STAGING_BACKEND": "local",
+                "AI_EXTERNAL_PROCESSING_ENABLED": "false",
+                "MATERIAL_BACKGROUND_JOBS": "false",
+                "MATERIAL_WORKER_ENABLED": "false",
+            },
+            clear=True,
+        ):
+            response = base.app.test_client().get("/health")
+
+        body = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["status"], "healthy")
+        self.assertFalse(body["configuration"]["ok"])
+        codes = {item["code"] for item in body["configuration"]["warnings"]}
+        self.assertIn("database_url_missing", codes)
+        self.assertIn("secret_key_invalid", codes)
     def test_missing_0066_returns_degraded_503(self):
         base = HealthBase()
         self.addCleanup(base.close)

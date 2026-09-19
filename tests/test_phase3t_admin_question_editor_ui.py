@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -9,7 +11,6 @@ class Phase3TAdminQuestionEditorUiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "static" / "admin-question-editor-ui.js").read_text(encoding="utf-8")
-        cls.frontend = (ROOT / "pgy_frontend.py").read_text(encoding="utf-8")
         cls.workflow = (ROOT / ".github" / "workflows" / "phase3-pgy-checks.yml").read_text(encoding="utf-8")
 
     def test_preserves_question_editor_ui_globals(self):
@@ -56,9 +57,8 @@ class Phase3TAdminQuestionEditorUiTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.source)
 
     def test_asset_is_injected_and_checked_by_release_workflow(self):
-        marker = '<script defer src="/admin-question-editor-ui.js?v=7119"></script>'
-        self.assertIn(marker, self.frontend)
-        self.assertIn("node --check static/admin-question-editor-ui.js", self.workflow)
+        self.assertIn('/admin-question-editor-ui.js', ASSET_MANIFEST["system"]["body"])
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
 
 
 if __name__ == "__main__":

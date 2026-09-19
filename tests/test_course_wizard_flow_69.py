@@ -9,7 +9,7 @@ class CourseWizardFlow69Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8')
-        cls.bundle = ROOT.joinpath('course_bundle_72.py').read_text(encoding='utf-8')
+        cls.bundle = ROOT.joinpath('teacher_app', 'courses', 'bundle.py').read_text(encoding='utf-8')
 
     def test_wizard_uses_session_rbac_not_admin_key_header(self):
         self.assertIn("credentials:'same-origin'", self.source)
@@ -46,7 +46,7 @@ class CourseWizardFlow69Tests(unittest.TestCase):
         self.assertIn("api('/api/course-bundles'", create)
         self.assertIn('examMode:state.examMode', create)
         self.assertIn('"draft"', self.bundle)
-        self.assertIn('False if kind == "postgres" else 0', self.bundle)
+        self.assertIn('"active": False', self.bundle)
         self.assertNotIn('/publish', create)
         self.assertNotIn('publishExam', create)
         self.assertNotIn('publishQuiz', create)

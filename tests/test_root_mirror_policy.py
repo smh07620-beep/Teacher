@@ -19,7 +19,7 @@ def module_functions(path):
 
 class RootMirrorPolicyTests(unittest.TestCase):
     def test_ownership_matrix_records_canonical_and_deferred_domains(self):
-        document = ROOT.joinpath("ARCHITECTURE_ROOT_MIRROR_CLEANUP.md").read_text(encoding="utf-8")
+        document = ROOT.joinpath("ARCHITECTURE.md").read_text(encoding="utf-8")
         for marker in (
             "pgy_app:app",
             "teacher_app.auth.service",
@@ -29,16 +29,68 @@ class RootMirrorPolicyTests(unittest.TestCase):
             "teacher_app.materials.service",
             "teacher_app.courses.service",
             "teacher_app.assessments.service",
-            "Stage 5.1 converged runtime and source ownership",
-            "Deferred storage debt",
+            "Converged read/data ownership",
+            "Converged data/rule ownership",
+            "teacher_app.materials.external_media_routes",
+            "teacher_app.storage.providers",
+            "teacher_app.worker.repository",
+            "teacher_app.worker.routes",
             "Frozen / converged",
             "professional_title",
             "responsibility_tags",
         ):
             self.assertIn(marker, document)
+        self.assertNotIn("data-access migration continues where still required", document)
+
+    def test_root_compatibility_inventory_is_explicit_and_bounded(self):
+        document = ROOT.joinpath("ARCHITECTURE.md").read_text(encoding="utf-8")
+        compatibility = {
+            "admin_elevation_68.py",
+            "ai_privacy.py",
+            "app.py",
+            "atlas_70.py",
+            "backup_restore.py",
+            "course_bundle_72.py",
+            "course_bundle_followup_73.py",
+            "exam_integrity.py",
+            "external_media_68.py",
+            "free_worker_67.py",
+            "health_65.py",
+            "legacy_office_69.py",
+            "media_processing_67.py",
+            "multi_role_66.py",
+            "pgy_frontend.py",
+            "pgy_signing_66.py",
+            "pgy_workflow.py",
+            "production_hardening.py",
+            "question_bank_68.py",
+            "rbac_681.py",
+            "schema_migrations.py",
+            "sensitive_elevation_69.py",
+            "smart_learning_67.py",
+            "upload_hardening.py",
+        }
+        for marker in (
+            "### Retained root compatibility inventory",
+            *(f"`{name}`" for name in sorted(compatibility)),
+            "`teacher_app.compatibility`",
+            "`legacy_app.py`",
+            "`legacy_routes.py`",
+            "`teacher_app.maintenance.migrations`",
+            "`teacher_app.auth.elevation`",
+            "`teacher_app.atlas.routes`",
+            "Production `teacher_app.factory.create_app()` imports canonical package owners directly",
+        ):
+            self.assertIn(marker, document)
+        root_python = {path.name for path in ROOT.glob("*.py")}
+        canonical_root = {"pgy_app.py", "material_worker.py", "release_contract.py"}
+        self.assertEqual(root_python - compatibility - canonical_root, set())
+        factory = ROOT.joinpath("teacher_app/factory.py").read_text(encoding="utf-8")
+        self.assertNotIn("teacher_app.compatibility", factory)
+        self.assertNotIn("load_legacy_app", factory)
 
     def test_live_auth_routes_are_thin_canonical_delegates_without_duplicate_legacy_impls(self):
-        functions = module_functions(ROOT / "app.py")
+        functions = module_functions(ROOT / "teacher_app" / "legacy_host.py")
         expected_calls = {
             "api_auth_me": "auth_routes.me",
             "api_auth_login": "auth_routes.login",
@@ -73,7 +125,10 @@ class RootMirrorPolicyTests(unittest.TestCase):
         self.assertNotIn("@app.", source)
 
     def test_pgy_controller_is_thin_canonical_service_adapter(self):
-        source = (ROOT / "pgy_workflow.py").read_text(encoding="utf-8")
+        adapter = (ROOT / "pgy_workflow.py").read_text(encoding="utf-8")
+        source = (ROOT / "teacher_app" / "pgy" / "routes_legacy.py").read_text(encoding="utf-8")
+        self.assertIn("teacher_app.pgy", adapter)
+        self.assertNotIn("@app.", adapter)
         self.assertIn("from teacher_app.pgy import repository as pgy_repo", source)
         self.assertIn("from teacher_app.pgy import service as pgy_service", source)
         self.assertIn("pgy_repo.init_schema(conn, kind)", source)
@@ -102,31 +157,34 @@ class RootMirrorPolicyTests(unittest.TestCase):
             self.assertNotIn(legacy_sql, source)
         self.assertIn("_assignment_dict = pgy_repo.assignment_dict", source)
         self.assertIn("pgy_repo.write_audit", source)
+        self.assertIn("def _legacy_error_body", source)
 
-    def test_pgy_atomic_actions_delegate_to_canonical_service(self):
-        source = (ROOT / "pgy_atomic.py").read_text(encoding="utf-8")
-        self.assertIn("from teacher_app.pgy import service as pgy_service", source)
-        for action in (
-            "submit_assignment",
-            "teacher_sign_assignment",
-            "group_countersign_assignment",
-            "finalize_assignment",
-            "reopen_assignment",
-            "cancel_assignment",
-        ):
-            self.assertIn(f"pgy_service.{action}", source)
+    def test_redundant_pgy_atomic_patch_layer_is_retired(self):
+        self.assertFalse((ROOT / "pgy_atomic.py").exists())
+        entrypoint = (ROOT / "pgy_app.py").read_text(encoding="utf-8")
+        factory = (ROOT / "teacher_app" / "factory.py").read_text(encoding="utf-8")
+        self.assertNotIn("register_pgy_atomic_workflow", entrypoint + factory)
+        self.assertNotIn("from pgy_atomic import", entrypoint + factory)
+        self.assertIn("from teacher_app import create_app", entrypoint)
+        self.assertIn("app = create_app()", entrypoint)
 
     def test_production_entrypoint_stays_composition_only(self):
         source = (ROOT / "pgy_app.py").read_text(encoding="utf-8")
-        self.assertIn("import app as legacy_app", source)
-        self.assertIn("app = register_rbac_681(legacy_app)", source)
-        self.assertIn("app = register_sensitive_elevation_69(legacy_app)", source)
+        factory = (ROOT / "teacher_app" / "factory.py").read_text(encoding="utf-8")
+        self.assertIn("from teacher_app import create_app", source)
+        self.assertIn("app = create_app()", source)
+        self.assertNotIn("legacy_app", source)
+        self.assertNotIn("legacy_host", factory)
+        self.assertIn("app = register_rbac_681(app)", factory)
+        self.assertIn("app = register_sensitive_elevation(app)", factory)
         for name in (
             "register_legacy_material_routes",
             "register_legacy_course_routes",
             "register_legacy_assessment_routes",
+            "register_assessment_performance_712",
+            "register_pgy_atomic_workflow",
         ):
-            self.assertIn(f"app = {name}(legacy_app)", source)
+            self.assertNotIn(name, source)
         self.assertNotIn("@app.", source)
         self.assertNotIn("CREATE TABLE", source)
 
@@ -138,10 +196,11 @@ class RootMirrorPolicyTests(unittest.TestCase):
         root_mirrors = {path.name for path in ROOT.iterdir() if path.is_file()} & mirror_names
         self.assertEqual(root_mirrors, set())
 
-        app_source = (ROOT / "app.py").read_text(encoding="utf-8")
-        self.assertIn('STATIC_DIR = BASE_DIR / "static"', app_source)
+        config_source = (ROOT / "teacher_app" / "config.py").read_text(encoding="utf-8")
+        page_source = (ROOT / "teacher_app" / "frontend" / "pages.py").read_text(encoding="utf-8")
+        self.assertIn('STATIC_DIR = BASE_DIR / "static"', config_source)
         for route in ("index.html", "area-internal.html", "area-pgy.html", "login.html", "system.html"):
-            self.assertIn(f'send_from_directory(STATIC_DIR, "{route}")', app_source)
+            self.assertIn(f'send_from_directory(static_dir, "{route}")', page_source)
 
 
 if __name__ == "__main__":

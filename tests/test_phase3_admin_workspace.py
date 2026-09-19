@@ -3,7 +3,7 @@ from pathlib import Path
 
 from flask import Flask
 
-from pgy_frontend import register_pgy_frontend
+from pgy_frontend import ASSET_MANIFEST, register_pgy_frontend
 
 
 ROOT = Path(__file__).parents[1]
@@ -12,7 +12,7 @@ ROOT = Path(__file__).parents[1]
 class Phase3AdminWorkspaceRouterTests(unittest.TestCase):
     def setUp(self):
         self.router = ROOT.joinpath('static/admin-workspace.js').read_text(encoding='utf-8')
-        self.frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
+        self.results_mode = ROOT.joinpath('static/admin-results-workspace.js').read_text(encoding='utf-8')
 
     def test_router_preserves_public_workspace_contracts(self):
         for name in (
@@ -31,7 +31,8 @@ class Phase3AdminWorkspaceRouterTests(unittest.TestCase):
         self.assertIn("name === 'scoring' || name === 'pgy'", self.router)
 
     def test_router_loads_before_rbac_wrapper(self):
-        self.assertIn('/admin-workspace.js?v=7110', self.frontend)
+        ordered = dict(ASSET_MANIFEST["system"]["ordered"])["/system-admin.js"]
+        self.assertLess(ordered.index('/admin-workspace.js'), ordered.index('/admin-results-workspace.js'))
         app = Flask(__name__)
         register_pgy_frontend(app)
 
@@ -45,15 +46,17 @@ class Phase3AdminWorkspaceRouterTests(unittest.TestCase):
             )
 
         html = app.test_client().get('/system').get_data(as_text=True)
-        self.assertLess(html.index('/system-admin.js?v=6502'), html.index('/admin-workspace.js?v=7110'))
-        self.assertLess(html.index('/admin-workspace.js?v=7110'), html.index('/admin-results-workspace.js?v=7111'))
-        self.assertLess(html.index('/admin-results-workspace.js?v=7111'), html.index('/rbac-ui-681.js?v=6811'))
+        self.assertLess(html.index('/system-admin.js?v='), html.index('/admin-workspace.js?v='))
+        self.assertLess(html.index('/admin-workspace.js?v='), html.index('/admin-results-workspace.js?v='))
+        self.assertLess(html.index('/admin-results-workspace.js?v='), html.index('/rbac-ui-681.js?v='))
+        self.assertNotIn('/system-admin.js?v=6502', html)
+        self.assertNotIn('/admin-workspace.js?v=7110', html)
 
     def test_teacher_and_results_use_extracted_mode_router(self):
         self.assertNotIn('const legacySwitchWorkspace = window.switchAdminWorkspace;', self.router)
-        self.assertIn("name === 'teacher' || name === 'results'", self.router)
-        self.assertIn('window.__teacherAdminResultsWorkspace', self.router)
-        self.assertIn('modeRouter.switchWorkspace({requested, workspace:name, force, switchSection})', self.router)
+        self.assertNotIn('window.__teacherAdminResultsWorkspace', self.router)
+        self.assertIn("registerWorkspace('teacher', switchWorkspace)", self.results_mode)
+        self.assertIn("registerWorkspace('results', switchWorkspace)", self.results_mode)
         self.assertNotIn('legacySwitchWorkspace(requested, force)', self.router)
 
     def test_section_cache_and_worker_probe_policy_are_preserved(self):

@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -9,7 +11,6 @@ class Phase3RAdminResultsDataTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "static" / "admin-results-data.js").read_text(encoding="utf-8")
-        cls.frontend = (ROOT / "pgy_frontend.py").read_text(encoding="utf-8")
         cls.workflow = (ROOT / ".github" / "workflows" / "phase3-pgy-checks.yml").read_text(encoding="utf-8")
 
     def test_preserves_results_data_globals(self):
@@ -48,14 +49,9 @@ class Phase3RAdminResultsDataTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.source)
 
     def test_load_order_allows_results_mode_to_wrap_extracted_data_runtime(self):
-        data_marker = 'results_data_marker = \'<script defer src="/admin-results-data.js?v=7117"></script>\''
-        mode_marker = 'results_mode_marker = \'<script defer src="/admin-results-workspace.js?v=7111"></script>\''
-        self.assertIn(data_marker, self.frontend)
-        self.assertIn(mode_marker, self.frontend)
-        self.assertLess(self.frontend.index("results_data_marker ="), self.frontend.index("results_mode_marker ="))
-        self.assertIn('replacement += "\\n" + results_data_marker', self.frontend)
-        self.assertIn('replacement += "\\n" + results_mode_marker', self.frontend)
-        self.assertIn("node --check static/admin-results-data.js", self.workflow)
+        ordered = dict(ASSET_MANIFEST["system"]["ordered"])["/system-admin.js"]
+        self.assertLess(ordered.index("/admin-results-data.js"), ordered.index("/admin-results-workspace.js"))
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
 
 
 if __name__ == "__main__":

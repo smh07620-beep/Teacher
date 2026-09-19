@@ -24,12 +24,17 @@ class WorkspaceShell70Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
+    def test_workspace_waits_for_canonical_rbac_before_projecting_multirole_surface(self):
+        self.assertIn("(async function ()", self.source)
+        self.assertIn("window.TeacherRBAC681Ready", self.source)
+        self.assertIn("const R = await", self.source)
+        self.assertNotIn("waitForCanonicalRbac", self.source)
+        self.assertNotIn("setTimeout(resolve, 25)", self.source)
+
     def test_multirole_accounts_follow_one_canonical_surface(self):
-        self.assertIn("const surfaceKey = String(R.surface?.key", self.source)
-        self.assertIn("roles.has('system_admin') ? 'system'", self.source)
-        self.assertIn("roles.has('education_admin') || has('education.cross_group.manage') ? 'education'", self.source)
-        self.assertIn("roles.has('group_leader') || roles.has('clinical_teacher') ? 'teacher'", self.source)
-        self.assertIn("roles.has('auditor') ? 'audit' : 'learner'", self.source)
+        self.assertIn("const surfaceKey = String(R.surface?.key || 'learner')", self.source)
+        self.assertNotIn("roles.has('system_admin') ? 'system'", self.source)
+        self.assertNotIn("roles.has('auditor') ? 'audit'", self.source)
         self.assertIn("const isSystemAdmin = surfaceKey === 'system'", self.source)
         self.assertIn("const isEducationAdmin = surfaceKey === 'education'", self.source)
         self.assertIn("const isAuditor = surfaceKey === 'audit'", self.source)
@@ -55,7 +60,10 @@ class WorkspaceShell70Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
         # The dedicated audit loader is GET-only and never sends a mutation method.
-        audit_block = self.source[self.source.index("async function renderAudit"):self.source.index("const previousSwitch")]
+        audit_block = self.source[
+            self.source.index("async function renderAudit"):
+            self.source.index("const adminShell = window.AdminWorkspaceShell")
+        ]
         self.assertNotIn("method:", audit_block)
 
     def test_auditor_entry_does_not_unlock_teacher_panels(self):
@@ -71,10 +79,9 @@ class WorkspaceShell70Tests(unittest.TestCase):
         self.assertNotIn("responsibility_tags", auth_block)
 
     def test_workspace_shell_is_loaded_after_maintenance_bridge(self):
-        maintenance = self.frontend.index('/maintenance-64.js?v=6605')
-        shell = self.frontend.index('/workspace-shell-70.js?v=7114')
-        self.assertLess(maintenance, shell)
-        self.assertIn('if "/workspace-shell-70.js" not in html', self.frontend)
+        from pgy_frontend import ASSET_MANIFEST
+        body = ASSET_MANIFEST["system"]["body"]
+        self.assertLess(body.index('/maintenance-64.js'), body.index('/workspace-shell-70.js'))
 
 
 if __name__ == "__main__":

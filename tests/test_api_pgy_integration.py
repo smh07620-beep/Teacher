@@ -3,8 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from flask import g
-
+import schema_migrations
 from teacher_app import create_app
 from teacher_app.common.db import (
     execute,
@@ -45,6 +44,10 @@ class PgyApiIntegrationTests(
             conn,
             kind,
         ):
+            schema_migrations._baseline(
+                conn,
+                kind,
+            )
             repo.init_schema(
                 conn,
                 kind,
@@ -173,20 +176,15 @@ class PgyApiIntegrationTests(
             },
         }
 
-        self.actor = None
-
         self.app = create_app()
         self.app.config.update(
             TESTING=True
         )
 
-        @self.app.before_request
-        def bind_pgy_actor():
-            g.pgy_user = self.actor
-
         self.client = (
             self.app.test_client()
         )
+        self.client.environ_base["HTTP_ORIGIN"] = "http://localhost"
 
     def tearDown(self):
         if self.old_database_url is None:
@@ -228,27 +226,39 @@ class PgyApiIntegrationTests(
             INSERT INTO user_accounts
             (
                 username,
+                password_hash,
                 display_name,
                 emp_id,
                 role,
+                preferred_area,
                 preferred_group,
-                active
+                active,
+                session_version,
+                created_at,
+                updated_at,
+                last_login_at
             )
-            VALUES (?,?,?,?,?,1)
+            VALUES (?,?,?,?,?,?,?,1,1,?,?,?)
             """,
             (
                 username,
+                "",
                 display_name,
                 emp_id,
                 role,
+                "pgy",
                 group,
+                "test",
+                "test",
+                "",
             ),
         )
 
     def as_user(self, username):
-        self.actor = self.users[
-            username
-        ]
+        with self.client.session_transaction() as session:
+            session.clear()
+            session["username"] = username
+            session["session_version"] = 1
 
     def create_assignment(self):
         self.as_user("admin1")
@@ -263,6 +273,7 @@ class PgyApiIntegrationTests(
                 "group": "grpBio",
                 "title":
                     "PGY HTTP integration",
+                "signMode": "dual",
             },
         )
 
@@ -406,7 +417,7 @@ class PgyApiIntegrationTests(
             countersigned.get_json()[
                 "assignment"
             ]["status"],
-            "group_countersigned",
+            "finalized",
         )
 
         duplicate_counter = (
@@ -422,40 +433,7 @@ class PgyApiIntegrationTests(
             409,
         )
 
-        # Finalize
         self.as_user("admin1")
-
-        finalized = self.client.post(
-            f"/api/pgy/assignments/"
-            f"{assignment_id}/finalize",
-            json={"comment": "done"},
-        )
-
-        self.assertEqual(
-            finalized.status_code,
-            200,
-        )
-
-        self.assertEqual(
-            finalized.get_json()[
-                "assignment"
-            ]["status"],
-            "finalized",
-        )
-
-        duplicate_final = (
-            self.client.post(
-                f"/api/pgy/assignments/"
-                f"{assignment_id}/finalize",
-                json={"comment": "again"},
-            )
-        )
-
-        self.assertEqual(
-            duplicate_final.status_code,
-            409,
-        )
-
         audit_response = self.client.get(
             "/api/pgy/audit",
             query_string={
@@ -480,23 +458,17 @@ class PgyApiIntegrationTests(
                 "student1",
                 "student",
             ),
-            "teacher_sign": (
+            "sign": (
                 "submitted",
                 "teacher_signed",
                 "teacher1",
                 "clinical_teacher",
             ),
-            "group_countersign": (
+            "countersign": (
                 "teacher_signed",
-                "group_countersigned",
+                "finalized",
                 "leader1",
                 "group_leader",
-            ),
-            "finalize": (
-                "group_countersigned",
-                "finalized",
-                "admin1",
-                "education_admin",
             ),
         }
 

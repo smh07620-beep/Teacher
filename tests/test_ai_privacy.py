@@ -1,8 +1,7 @@
 import unittest
 
-from flask import request
-
-from ai_privacy import _code_contains_marker, deidentify_text
+from ai_privacy import deidentify_text
+from teacher_app.assessments import ai_runtime
 
 
 class AiPrivacyTests(unittest.TestCase):
@@ -20,8 +19,13 @@ class AiPrivacyTests(unittest.TestCase):
         self.assertEqual(masked, text)
         self.assertEqual(count, 0)
 
-    def test_startup_scan_skips_unbound_flask_proxies(self):
-        self.assertFalse(_code_contains_marker(request))
+    def test_privacy_targets_are_explicit_public_ai_runtime_functions(self):
+        self.assertEqual(
+            ai_runtime.EXTERNAL_AI_TEXT_EXTRACTOR_TARGETS,
+            ("extract_material_text_for_ai", "groq_transcribe"),
+        )
+        for name in ai_runtime.EXTERNAL_AI_TEXT_EXTRACTOR_TARGETS:
+            self.assertTrue(callable(getattr(ai_runtime, name, None)), name)
 
 
 if __name__ == "__main__":

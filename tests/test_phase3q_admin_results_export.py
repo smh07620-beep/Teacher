@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -9,7 +11,6 @@ class Phase3QAdminResultsExportTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "static" / "admin-results-export.js").read_text(encoding="utf-8")
-        cls.frontend = (ROOT / "pgy_frontend.py").read_text(encoding="utf-8")
         cls.workflow = (ROOT / ".github" / "workflows" / "phase3-pgy-checks.yml").read_text(encoding="utf-8")
 
     def test_preserves_results_export_global_contracts(self):
@@ -20,6 +21,7 @@ class Phase3QAdminResultsExportTests(unittest.TestCase):
             "buildRecordDocPayload",
             "renderDocxFromBuffer",
             "exportWithServerTemplate",
+            "exportRecordToWord",
             "exportToCSV",
         ):
             self.assertIn(f"window.{name}", self.source)
@@ -37,12 +39,14 @@ class Phase3QAdminResultsExportTests(unittest.TestCase):
         self.assertIn("考核時間,組別,姓名,工號", self.source)
         self.assertIn("教育訓練考核成績表_", self.source)
 
-    def test_local_docx_fallback_state_remains_in_legacy_bundle(self):
-        # The legacy input listener owns cachedTemplateBuffer/pendingExportRecordIndex.
-        # Phase 3Q deliberately does not duplicate that state yet.
-        self.assertNotIn("docx-template-input", self.source)
-        self.assertNotIn("cachedTemplateBuffer", self.source)
-        self.assertNotIn("pendingExportRecordIndex", self.source)
+    def test_local_docx_fallback_is_owned_by_export_runtime(self):
+        self.assertIn("docx-template-input", self.source)
+        self.assertIn("cachedTemplateBuffer", self.source)
+        self.assertIn("pendingExportRecordIndex", self.source)
+        legacy = (ROOT / "static" / "system-admin.js").read_text(encoding="utf-8")
+        self.assertNotIn("docx-template-input", legacy)
+        self.assertNotIn("cachedTemplateBuffer", legacy)
+        self.assertNotIn("pendingExportRecordIndex", legacy)
 
     def test_module_does_not_redefine_rbac_or_profile_metadata_as_policy(self):
         for forbidden in (
@@ -57,9 +61,8 @@ class Phase3QAdminResultsExportTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.source)
 
     def test_asset_is_injected_and_checked_by_release_workflow(self):
-        marker = '<script defer src="/admin-results-export.js?v=7116"></script>'
-        self.assertIn(marker, self.frontend)
-        self.assertIn("node --check static/admin-results-export.js", self.workflow)
+        self.assertIn('/admin-results-export.js', ASSET_MANIFEST["system"]["body"])
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
 
 
 if __name__ == "__main__":

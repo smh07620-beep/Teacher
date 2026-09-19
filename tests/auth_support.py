@@ -1,5 +1,4 @@
 """Execute the live app.py auth adapters against a disposable database only."""
-import ast
 import datetime
 import re
 import sqlite3
@@ -8,11 +7,15 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import schema_migrations
 
 from flask import Flask, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from teacher_app.auth import routes as auth_routes, service as auth_service
+from teacher_app.auth import bp as auth_bp
+from teacher_app.auth import account_routes, accounts as auth_accounts, routes as auth_routes, service as auth_service
 from teacher_app.common.auth import CANONICAL_ROLES, LEGACY_ROLE_ALIASES, ROLE_PERMISSIONS, normalize_role
 
 
@@ -29,7 +32,8 @@ class AuthFixture(unittest.TestCase):
         self.base.__dict__.update(
             app=self.app, _db_conn=self.connect, sys=sys, re=re,
             datetime=datetime, jsonify=jsonify, request=request, session=session,
-            auth_routes=auth_routes, auth_service=auth_service,
+            auth_accounts=auth_accounts, auth_routes=auth_routes, auth_service=auth_service,
+            schema_migrations=schema_migrations,
             check_password_hash=check_password_hash, generate_password_hash=generate_password_hash,
             CANONICAL_ROLES=CANONICAL_ROLES, LEGACY_ROLE_ALIASES=LEGACY_ROLE_ALIASES,
             ROLE_PERMISSIONS=ROLE_PERMISSIONS, normalize_role=normalize_role,
@@ -38,19 +42,36 @@ class AuthFixture(unittest.TestCase):
             normalize_group=lambda x: x if x in {'grpBio', 'grpHema'} else 'grpBio',
             require_admin=lambda: None,
         )
-        names = {
-            'init_user_accounts_db', '_normalize_username', '_user_public', '_current_user',
-            'require_roles', 'api_auth_me', 'api_auth_login', 'api_auth_logout',
-            'api_user_create', 'api_user_update'
-        }
-        tree = ast.parse(Path(__file__).parents[1].joinpath('app.py').read_text(encoding='utf-8'))
-        selected = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
-        exec(compile(ast.Module(body=selected, type_ignores=[]), 'app.py', 'exec'), self.base.__dict__)
+        common_db_patch = patch("teacher_app.common.db.get_connection", side_effect=self.connect)
+        common_db_patch.start()
+        self.addCleanup(common_db_patch.stop)
+        self.base.init_user_accounts_db = lambda: schema_migrations.ensure_user_accounts_base(self.base)
+        self.base._normalize_username = auth_service.normalize_username
+        self.base._user_public = lambda row: auth_service.public_user(self.base, row)
+        self.base._current_user = lambda: auth_service.current_user(
+            self.base,
+            session,
+            include_roles=True,
+        )
+        self.base.require_roles = lambda *roles: auth_routes.require_roles(
+            self.base._current_user(),
+            *roles,
+        )
         self.base.init_user_accounts_db()
+        conn, kind = self.connect()
+        try:
+            schema_migrations._additive_rbac_pgy_signing_66(conn, kind)
+        finally:
+            conn.close()
         self.password = 'valid-password'
-        self.sql('INSERT INTO user_accounts VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+        self.sql('INSERT INTO user_accounts '
+                 '(username,password_hash,display_name,emp_id,role,preferred_area,preferred_group,active,session_version,created_at,updated_at,last_login_at) '
+                 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                  ('teacher1', generate_password_hash(self.password, method='pbkdf2:sha256:1000'),
                   'Teacher One', 'E001', 'teacher', 'pgy', 'grpHema', 1, 1, 'created', 'updated', ''))
+        self.app.config['AUTH_BASE'] = self.base
+        self.app.register_blueprint(auth_bp)
+        account_routes.register_multi_role_66(self.base)
         self.client = self.app.test_client()
 
     def connect(self):

@@ -1,0 +1,22 @@
+SMH Teaching Portal V5.3 — Windows 最簡單 Google Drive 設定
+
+1. 解壓縮 V5.3。
+2. 把 Google Cloud 下載的 client_secret....json 複製到本資料夾（和 GOOGLE_DRIVE_SETUP_WINDOWS.bat 同一層）。
+3. 雙擊 GOOGLE_DRIVE_SETUP_WINDOWS.bat。
+4. 第一次會自動建立 Python 專用環境並安裝 Google 套件。
+5. 瀏覽器跳出後，登入「教材專用 Google 帳號」並允許權限。
+6. 成功後，本資料夾會產生 GOOGLE_DRIVE_RENDER_ENV.txt。
+7. 將該 TXT 內容逐項填入 Render → Environment。
+
+若雙擊後直接消失：
+- 右鍵 GOOGLE_DRIVE_SETUP_WINDOWS.bat → 以終端機執行；或
+- 在檔案總管位址列輸入 cmd，按 Enter，再輸入：
+  GOOGLE_DRIVE_SETUP_WINDOWS.bat
+
+若顯示「找不到 Python」：
+- 安裝 Python 3.11 或更新版本。
+- Windows 安裝 Python 時務必勾選「Add Python to PATH」。
+
+安全：
+- client_secret JSON、GOOGLE_DRIVE_RENDER_ENV.txt 都不要上傳 GitHub。
+- 若 Refresh Token 外洩，應撤銷 Google 帳號中的 App 存取並重新產生。

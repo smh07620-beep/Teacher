@@ -1,8 +1,4 @@
-/* Phase 3P · Admin external interactive media runtime.
- * Loaded after the legacy admin bundle so these functions become the
- * canonical implementation while system-admin.js remains a compatibility
- * fallback during the incremental split.
- */
+/* Phase 3P · Canonical admin external interactive media runtime. */
 (function(){
   'use strict';
 
@@ -11,7 +7,7 @@
     return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   }
 
-  window.openExternalMaterialDrawer = async function(){
+  window.openExternalMaterialLinkDrawer = async function(){
     const getKey = window.getAdminKey;
     if (typeof getKey !== 'function') return;
     const key = await getKey();
@@ -36,11 +32,11 @@
     }
   };
 
-  window.closeExternalMaterialDrawer = function(){
+  window.closeExternalMaterialLinkDrawer = function(){
     document.getElementById('external-material-drawer')?.classList.add('hidden');
   };
 
-  window.saveExternalMaterialLink = async function(){
+  window.saveExternalMaterialLinkToExisting = async function(){
     const getKey = window.getAdminKey;
     if (typeof getKey !== 'function') return;
     const key = await getKey();

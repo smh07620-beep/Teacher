@@ -3,7 +3,7 @@
   'use strict';
 
   const C=window.AppCore||{};
-  const allowed=new Set([
+  const fallbackAllowed=new Set([
     'education_admin',
     'system_admin'
   ]);
@@ -54,15 +54,52 @@
     return error?.message||fallback;
   }
 
-  async function me(){
+  async function profile(){
     try{
       return await api(
-        '/api/auth/me',
+        '/api/auth/profile',
         {cache:'no-store'}
       );
     }catch(_error){
       return null;
     }
+  }
+
+  function canMaintain(auth){
+    const rbac=window.TeacherRBAC681;
+    if(typeof rbac?.hasPermission==='function'){
+      return !!(
+        rbac.hasPermission('backup.manage')
+        ||rbac.hasPermission('education.cross_group.manage')
+      );
+    }
+
+    // Compatibility only for isolated/legacy pages that do not load the
+    // canonical RBAC bridge. Production visibility is capability-driven above.
+    const user=auth?.user||{};
+    const roles=Array.isArray(user.roles)&&user.roles.length
+      ?user.roles
+      :[user.role||''];
+
+    return roles.some(
+      role=>fallbackAllowed.has(
+        role==='manager'
+          ?'education_admin'
+          :role
+      )
+    );
+  }
+
+  function canPurgeMega(auth){
+    const rbac=window.TeacherRBAC681;
+    if(typeof rbac?.hasPermission==='function'){
+      return !!rbac.hasPermission('system.manage');
+    }
+    const user=auth?.user||{};
+    const roles=Array.isArray(user.roles)&&user.roles.length
+      ?user.roles
+      :[user.role||''];
+    return roles.includes('system_admin');
   }
 
   async function ensureSensitive(){
@@ -172,11 +209,45 @@
     }
   }
 
-  async function init(){
-    const auth=await me();
-    const role=auth?.user?.role||'';
+  async function purgeMegaRoot(){
+    if(!confirm(
+      '這會永久刪除 Teacher 專用 MEGA 根目錄內的所有測試檔案。\n\n不會刪除 MEGA 帳號其他目錄，也不會刪除資料庫紀錄。確定清空？'
+    )) return;
+    if(!(await ensureSensitive())) return;
 
-    if(!allowed.has(role)){
+    const button=document.getElementById('teacher64-purge-mega');
+    const oldText=button?.textContent||'清空 Teacher MEGA 測試資料';
+    if(button){
+      button.disabled=true;
+      button.textContent='清空中…';
+    }
+    try{
+      const data=await api('/api/maintenance/storage/mega/purge-root',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({confirm:'PURGE-MEGA'})
+      });
+      alert(`MEGA 測試資料已清空：${data.purgedRoot||'Teacher root'}`);
+      if(typeof window.renderAdminSystemStatus==='function'){
+        await window.renderAdminSystemStatus(true);
+      }
+      if(typeof window.renderStorageStatus==='function'){
+        await window.renderStorageStatus(true);
+      }
+    }catch(error){
+      alert(message(error,'MEGA 測試資料清空失敗。'));
+    }finally{
+      if(button){
+        button.disabled=false;
+        button.textContent=oldText;
+      }
+    }
+  }
+
+  async function init(){
+    const auth=await profile();
+
+    if(!canMaintain(auth)){
       return;
     }
 
@@ -194,6 +265,10 @@
     box.id='teacher64-maintenance';
     box.className=
       'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm my-5';
+
+    const purgeControl=canPurgeMega(auth)
+      ?`<button id="teacher64-purge-mega" class="px-4 py-2 rounded-xl border border-rose-300 text-rose-700 text-sm font-bold">清空 Teacher MEGA 測試資料</button>`
+      :'';
 
     box.innerHTML=`
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -229,6 +304,13 @@
           只補入缺少資料，不覆蓋現有紀錄；敏感操作會要求 15 分鐘有效的再次驗證。
         </span>
       </div>
+
+      ${purgeControl
+        ?`<div class="mt-4 pt-4 border-t border-rose-100 flex flex-wrap items-center gap-3">
+            ${purgeControl}
+            <span class="text-[11px] text-rose-600">僅 system_admin；只刪除設定的 Teacher MEGA root，並要求再次驗證。</span>
+          </div>`
+        :''}
     `;
 
     host.prepend(box);
@@ -240,6 +322,9 @@
     document.getElementById(
       'teacher64-restore'
     ).onclick=restoreBackup;
+
+    const purgeButton=document.getElementById('teacher64-purge-mega');
+    if(purgeButton) purgeButton.onclick=purgeMegaRoot;
   }
 
   if(document.readyState==='loading'){

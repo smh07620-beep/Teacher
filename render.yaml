@@ -6,7 +6,7 @@ services:
     region: singapore
     numInstances: 1
     healthCheckPath: /health
-    autoDeployTrigger: commit
+    autoDeployTrigger: checksPass
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -58,6 +58,10 @@ services:
         value: /tmp/megacmd-home
       - key: MEGACMD_TIMEOUT_SECONDS
         value: "300"
+      - key: MEGA_WEB_READ_TIMEOUT_SECONDS
+        value: "120"
+      - key: GUNICORN_TIMEOUT
+        value: "180"
       - key: FREE_ONLY_MODE
         value: "true"
       - key: MAX_UPLOAD_MB

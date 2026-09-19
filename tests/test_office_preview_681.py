@@ -13,11 +13,10 @@ class OfficePreview681Tests(unittest.TestCase):
         self.assertIn("Office/PDF preview 產生失敗，不能完成工作",source)
 
     def test_zero_page_office_cannot_be_committed(self):
-        source=ROOT.joinpath("app.py").read_text(encoding="utf-8")
+        source=ROOT.joinpath("teacher_app/materials/job_commit.py").read_text(encoding="utf-8")
         self.assertIn("Office/PDF 必須有有效 preview.pdf 與 pageCount 才能完成",source)
 
     def test_learner_office_view_does_not_fallback_to_original(self):
-        source=ROOT.joinpath("app.py").read_text(encoding="utf-8")
+        source=ROOT.joinpath("teacher_app/materials/delivery_routes.py").read_text(encoding="utf-8")
         self.assertIn('if entry.get("viewerMode") == "slides" or int(entry.get("pageCount", 0) or 0) > 0:',source)
         self.assertIn("abort(403)",source)
-

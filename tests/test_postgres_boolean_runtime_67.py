@@ -4,8 +4,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from flask import Flask
+
 import app as appmod
-import pgy_app
+from teacher_app.materials import job_routes
+from teacher_app.materials.job_runtime import MaterialJobRuntime
+from teacher_app.worker import repository as worker_repository
 
 
 BOOLEAN_INTEGER_COMPARISON = re.compile(
@@ -136,7 +140,7 @@ class PostgreSQLBooleanRuntime67Tests(unittest.TestCase):
 
     def test_postgres_material_active_queries_do_not_use_integer_literals(self):
         connection = RecordingConnection()
-        with patch.object(appmod, "_db_conn", return_value=(connection, "postgres")):
+        with patch.object(appmod.common_db, "get_connection", return_value=(connection, "postgres")):
             appmod.list_uploaded_materials(False)
             appmod.list_courses(include_inactive=False)
             appmod.list_quiz_categories(include_inactive=False)
@@ -148,7 +152,7 @@ class PostgreSQLBooleanRuntime67Tests(unittest.TestCase):
         self.assert_no_boolean_integer_comparisons(connection)
 
     def test_learning_progress_postgres_sql_uses_boolean_expression(self):
-        source = Path("smart_learning_67.py").read_text(encoding="utf-8")
+        source = Path("teacher_app/learning/repository.py").read_text(encoding="utf-8")
         postgres_sql = source.split('if kind == "postgres":', 1)[1].split("else:", 1)[0]
         self.assertIn("learning_progress.completed OR EXCLUDED.completed", postgres_sql)
         self.assertIn("CASE WHEN EXCLUDED.completed THEN", postgres_sql)
@@ -156,10 +160,36 @@ class PostgreSQLBooleanRuntime67Tests(unittest.TestCase):
 
     def test_material_jobs_api_postgres_recorder_path_succeeds(self):
         connection = RecordingConnection()
-        with patch.object(appmod, "_db_conn", return_value=(connection, "postgres")), patch.object(
-            appmod, "require_admin", return_value=None
-        ):
-            response = pgy_app.app.test_client().get("/api/material-jobs")
+        connect = lambda: (connection, "postgres")
+        runtime = MaterialJobRuntime(
+            upload_staging=lambda *_args: ("local", "", ""),
+            staging_exists=lambda _job: False,
+            delete_staging=lambda _job: None,
+            cleanup_budget_state=lambda: None,
+            operations_status=lambda: {
+                "workers": [],
+                "pendingJobs": 0,
+                "processingJobs": 0,
+                "retryJobs": 0,
+                "failedJobs": 0,
+                "r2Budget": {
+                    "cleanupPending": worker_repository.count_cleanup_pending_jobs(
+                        connection_factory=connect
+                    )
+                },
+            },
+            staging_capability=lambda: {},
+            progress_path=lambda _progress_id: Path("missing-progress.json"),
+            clear_progress=lambda _progress_id: None,
+            set_progress=lambda *_args: None,
+            sync_media_processing_metadata=lambda *_args: None,
+            connection_factory=connect,
+        )
+        web = Flask("postgres-material-jobs")
+        web.config.update(TESTING=True, SECRET_KEY="test")
+        job_routes.register_material_job_routes(web, runtime=runtime)
+        with patch.object(job_routes, "_guard", return_value=None):
+            response = web.test_client().get("/api/material-jobs")
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertIn("r2Budget", response.get_json())
         self.assertTrue(any("cleanup_pending=TRUE" in query for query in self.sql(connection)))

@@ -1,4 +1,4 @@
-V5.4.1 GitHub Safe 版
+V6.8.1 GitHub Safe 版（內部世代 7.9 / RC79）
 
 可直接上傳 GitHub → Render。
 正式帳密 / API Key 請只放 Render Environment Variables，不要提交到 GitHub。

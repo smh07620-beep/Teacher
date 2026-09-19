@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from pgy_frontend import ASSET_MANIFEST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -13,7 +15,7 @@ class Phase3PAdminExternalMediaTests(unittest.TestCase):
         cls.workflow = (ROOT / ".github" / "workflows" / "phase3-pgy-checks.yml").read_text(encoding="utf-8")
 
     def test_preserves_external_media_global_contracts(self):
-        for name in ("openExternalMaterialDrawer", "closeExternalMaterialDrawer", "saveExternalMaterialLink"):
+        for name in ("openExternalMaterialLinkDrawer", "closeExternalMaterialLinkDrawer", "saveExternalMaterialLinkToExisting"):
             self.assertIn(f"window.{name}", self.source)
         for element_id in ("external-material-drawer", "external-material-id", "external-material-url", "external-material-preview"):
             self.assertIn(element_id, self.source)
@@ -38,9 +40,9 @@ class Phase3PAdminExternalMediaTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.source)
 
     def test_asset_is_injected_and_checked_by_release_workflow(self):
-        marker = '<script defer src="/admin-external-media.js?v=7115"></script>'
-        self.assertIn(marker, self.frontend)
-        self.assertIn("node --check static/admin-external-media.js", self.workflow)
+        self.assertIn('/admin-external-media.js', ASSET_MANIFEST['system']['body'])
+        self.assertIn("find static -type f -name '*.js'", self.workflow)
+        self.assertIn("node --check", self.workflow)
 
 
 if __name__ == "__main__":

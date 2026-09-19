@@ -15,23 +15,52 @@ class ReleaseContractTests(unittest.TestCase):
             release_contract.version_file_value(),
             release_contract.RELEASE_VERSION,
         )
+        self.assertEqual(
+            health_65.app_version(),
+            release_contract.RELEASE_VERSION,
+        )
         self.assertRegex(release_contract.RELEASE_VERSION, r"^\d+\.\d+\.\d+$")
         self.assertIn(
             release_contract.ENTRYPOINT,
             ROOT.joinpath("run_web.sh").read_text(encoding="utf-8"),
         )
-        self.assertIn(
-            "0066-additive-rbac-pgy-signing",
-            health_65.REQUIRED_MIGRATIONS,
+
+        self.assertEqual(
+            tuple(health_65.REQUIRED_MIGRATIONS),
+            release_contract.REQUIRED_MIGRATIONS,
         )
-        self.assertIn(
+        self.assertEqual(
             release_contract.REQUIRED_RELEASE_MIGRATION,
-            [version for version, _fn in schema_migrations.MIGRATIONS],
+            release_contract.REQUIRED_MIGRATIONS[-1],
         )
-        self.assertIn(release_contract.REQUIRED_RELEASE_MIGRATION, health_65.REQUIRED_MIGRATIONS)
+        for version in (
+            "0066-additive-rbac-pgy-signing",
+            "0067-r2-free-budget-guard",
+            "0070-material-search-and-atlas",
+            "0071-pgy-learner-audience",
+            "0072-course-bundle-idempotency",
+            "0073-course-bundle-followups",
+            "0074-assessment-list-indexes",
+        ):
+            self.assertIn(version, release_contract.REQUIRED_MIGRATIONS)
+
+        registered = [version for version, _fn in schema_migrations.MIGRATIONS]
+        self.assertEqual(tuple(registered), release_contract.REQUIRED_MIGRATIONS)
+        for version in release_contract.REQUIRED_MIGRATIONS:
+            self.assertIn(version, registered)
+
+    def test_formal_release_and_internal_generation_are_deliberately_distinct(self):
+        self.assertEqual(release_contract.RELEASE_VERSION, "6.8.1")
+        self.assertEqual(release_contract.INTERNAL_GENERATION, "7.9 / RC79")
+        readme = ROOT.joinpath("README.md").read_text(encoding="utf-8")
+        architecture = ROOT.joinpath("ARCHITECTURE.md").read_text(encoding="utf-8")
+        for document in (readme, architecture):
+            self.assertIn("6.8.1", document)
+            self.assertIn("7.9 / RC79", document)
+        self.assertIn("Formal release SemVer remains `6.8.1`", ROOT.joinpath("RUNTIME_OWNERSHIP_MAP_STAGE5.md").read_text(encoding="utf-8"))
 
     def test_release_document_records_security_and_operational_invariants(self):
-        document = ROOT.joinpath("ARCHITECTURE_6_6.md").read_text(encoding="utf-8")
+        document = ROOT.joinpath("docs", "archive", "ARCHITECTURE_HISTORY.md").read_text(encoding="utf-8")
         for marker in (
             "multi-role",
             "primary legacy role",

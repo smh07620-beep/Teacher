@@ -1,8 +1,8 @@
-"""Teacher 6.5 application package.
+"""Canonical Teacher application package.
 
-This package is the incremental modular architecture. Legacy ``app.py`` and
-``pgy_app:app`` remain the production entrypoints until later milestones
-switch Render over after the full test suite is green.
+``teacher_app.factory.create_app`` is the production composition root and
+``pgy_app:app`` is its thin WSGI entrypoint. Root ``app.py`` remains an import
+compatibility alias only.
 """
 
 from teacher_app.factory import create_app

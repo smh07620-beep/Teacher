@@ -39,7 +39,7 @@
             </nav>
             <div class="v56-system-actions">
                 <input id="global-learning-search" class="v56-system-search" type="search" aria-label="搜尋本組課程與教材" placeholder="搜尋本組課程、教材…" oninput="syncGlobalLearningSearch(this.value)" onkeydown="handleGlobalLearningSearchKey(event)">
-                <div class="v573-system-user" title="由首頁個人資料自動連動"><strong id="v573-system-user-name">未設定個人資料</strong><small id="v573-system-user-id">請回首頁設定</small></div>
+                <div class="v573-system-user" title="由首頁個人資料自動連動"><strong id="v573-system-user-name">未設定個人資料</strong><small id="v573-system-user-id" aria-live="polite">載入身分…</small></div>
             </div>
         </div>
     </header>
@@ -408,13 +408,7 @@
             <div id="admin-workspace-content" class="p-4 sm:p-6 overflow-y-auto min-h-0">
                 <!-- ① Content -->
                 <div id="admin-section-content" class="admin-section-panel space-y-5">
-                    <div class="grid md:grid-cols-4 gap-3">
-                        <div class="bg-white border border-slate-200 rounded-2xl p-4"><p class="text-xs font-bold text-teal-700">STEP 1</p><p class="font-black mt-1">建立課程</p><p class="text-xs text-slate-500 mt-1">先決定訓練區、組別與課程名稱。</p></div>
-                        <div class="bg-white border border-slate-200 rounded-2xl p-4"><p class="text-xs font-bold text-teal-700">STEP 2</p><p class="font-black mt-1">上傳教材</p><p class="text-xs text-slate-500 mt-1">PPT、PDF、Office、圖片、影音皆可。</p></div>
-                        <div class="bg-white border border-slate-200 rounded-2xl p-4"><p class="text-xs font-bold text-indigo-700">STEP 3</p><p class="font-black mt-1">建立考卷</p><p class="text-xs text-slate-500 mt-1">考卷可連結課程與教材。</p></div>
-                        <div class="bg-white border border-slate-200 rounded-2xl p-4"><p class="text-xs font-bold text-violet-700">STEP 4</p><p class="font-black mt-1">AI / 手動建題</p><p class="text-xs text-slate-500 mt-1">AI 候選題需人工確認後才匯入。</p></div>
-                    </div>
-
+                    <!-- RC75_WORKSPACE_SIMPLIFIED: persistent teaching instructions removed; creation begins from Teacher Content Studio. -->
                     <section id="admin-course-workspace" class="bg-white border border-violet-200 rounded-2xl p-5 shadow-sm space-y-4">
                         <div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-violet-950 text-lg">🪄 快速建立整套課程</h4><p class="text-xs text-violet-700 mt-1">一次完成「課程 → 多份教材 → 一張考卷」。適合新增一套完整訓練內容。</p></div><span class="text-xs px-3 py-1 rounded-full bg-violet-50 text-violet-700 font-bold">推薦流程</span></div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -432,7 +426,7 @@
                                 <div id="wizard-material-classifier-list" class="space-y-2"></div>
                             </div>
                         </div>
-                        <div class="flex items-center gap-3 flex-wrap"><button id="wizard-create-btn" onclick="adminCreateCourseBundle()" class="bg-violet-700 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all">✨ 建立整套課程</button><button id="wizard-clear-btn" type="button" onclick="resetCourseWizardForm(true)" class="bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-300 text-slate-700 text-sm font-bold px-4 py-2.5 rounded-xl transition-all">🧹 清空表單</button><span id="wizard-status" class="text-xs text-violet-800"></span></div>
+                        <div class="flex items-center gap-3 flex-wrap"><button id="wizard-create-btn" onclick="courseWizard681Create()" class="bg-violet-700 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all">✨ 建立整套課程</button><button id="wizard-clear-btn" type="button" onclick="courseWizard681Reset()" class="bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-300 text-slate-700 text-sm font-bold px-4 py-2.5 rounded-xl transition-all">🧹 清空表單</button><span id="wizard-status" class="text-xs text-violet-800"></span></div>
                         <div id="wizard-progress-wrap" class="hidden mt-3 rounded-2xl border border-violet-100 bg-violet-50/60 p-3">
                             <div class="flex items-center justify-between gap-3 text-xs"><span id="wizard-progress-label" class="font-bold text-violet-800">準備建立…</span><span id="wizard-progress-percent" class="font-black text-violet-700">0%</span></div>
                             <div class="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-violet-100" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="wizard-progress-bar-wrap"><div id="wizard-progress-bar" class="h-full w-0 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 transition-[width] duration-500 ease-out"></div></div>
@@ -442,8 +436,8 @@
                         <div id="admin-courses-list" class="hidden"></div><div id="admin-course-material-hub" class="space-y-3"></div>
                     </section>
 
-                    <section id="admin-material-workspace" class="bg-white border border-teal-200 rounded-2xl p-5 shadow-sm space-y-4">
-                        <div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-teal-950 text-lg">📚 ＋ 新增單一教材</h4><p class="text-xs text-teal-700 mt-1">若課程已存在，可直接把新教材補到指定課程／考卷。支援 PPT/PDF/Office/圖片/影音/ZIP。</p></div><div class="flex gap-2"><button onclick="openExternalMaterialDrawer()" class="rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-bold text-teal-700">🔗 外部連結</button><div id="admin-storage-status" class="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-slate-600">按需要檢查儲存狀態</div></div></div>
+                    <section id="admin-material-workspace" class="hidden bg-white border border-teal-200 rounded-2xl p-5 shadow-sm space-y-4" aria-hidden="true">
+                        <div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-teal-950 text-lg">📚 ＋ 新增單一教材</h4><p class="text-xs text-teal-700 mt-1">若課程已存在，可直接把新教材補到指定課程／考卷。支援 PPT/PDF/Office/圖片/影音/ZIP。</p></div><div class="flex gap-2"><button onclick="openExternalMaterialCreateDrawer()" class="rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-bold text-teal-700">🔗 外部連結</button><div id="admin-storage-status" class="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-slate-600">按需要檢查儲存狀態</div></div></div>
                         <div class="flex flex-wrap items-center gap-2"><button onclick="renderStorageStatus(true)" class="text-xs bg-white border border-teal-300 hover:bg-teal-50 text-teal-800 px-3 py-1.5 rounded-lg">🔄 檢查儲存狀態</button><button id="migrate-mega-btn" onclick="migrateMaterialsToMega()" class="text-xs bg-fuchsia-700 hover:bg-fuchsia-600 text-white px-3 py-1.5 rounded-lg">☁️ 搬移既有教材到 MEGA</button><button id="migrate-r2-btn" onclick="migrateLocalMaterialsToR2()" class="text-xs bg-white border border-cyan-300 hover:bg-cyan-50 text-cyan-800 px-3 py-1.5 rounded-lg">☁️ 搬移本機教材到 R2（舊備援）</button></div>
                         <div class="rounded-xl border-2 border-dashed border-teal-200 bg-teal-50/40 p-4"><label class="block text-xs font-bold text-teal-900 mb-2">① 選擇教材檔案（可多選）</label><input type="file" id="admin-pptx-upload-input" accept=".ppt,.pptx,.pdf,.doc,.docx,.xls,.xlsx,.odp,.odt,.ods,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov,.m4v,.mp3,.wav,.m4a,.ogg,.txt,.csv,.srt,.vtt,.zip" multiple class="w-full text-xs"></div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -476,24 +470,11 @@
 
                 <!-- ② Quiz & AI -->
                 <div id="admin-section-quiz" class="admin-section-panel hidden space-y-5">
-                    <section id="admin-quiz-guide" class="bg-gradient-to-r from-indigo-950 to-violet-900 text-white rounded-2xl p-5 shadow-sm">
-                        <div class="flex items-start justify-between gap-3 flex-wrap"><div><p class="text-xs font-black tracking-[.16em] text-indigo-200">V5.7.0 EXAM FLOW</p><h4 class="font-black text-lg mt-1">出題流程固定為「選考卷 → 選方式 → 設定 → 審核 → 發布」</h4><p class="text-xs text-indigo-100 mt-1">新考卷預設為草稿，不會直接出現在考生前台；審核完成後才可發布。</p></div><span class="text-[11px] px-3 py-1.5 rounded-full bg-white/10 ring-1 ring-white/20">避免未審題目直接上線</span></div>
-                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4">
-                          <div class="v561-flow-step"><b>1</b><span>選考卷</span><small>先決定要管理哪一份考卷</small></div>
-                          <div class="v561-flow-step"><b>2</b><span>選方式</span><small>全部／指定題數／題型配額</small></div>
-                          <div class="v561-flow-step"><b>3</b><span>設定</span><small>課程、對象、及格分數與盲測</small></div>
-                          <div class="v561-flow-step"><b>4</b><span>審核</span><small>預覽題目並留下審核者</small></div>
-                          <div class="v561-flow-step"><b>5</b><span>發布</span><small>審核通過後才開放考生</small></div>
-                        </div>
-                    </section>
                     <section id="admin-quiz-workspace" class="bg-white border border-indigo-200 rounded-2xl p-5 shadow-sm space-y-4">
-                        <div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-indigo-950 text-lg">📝 動態考卷與智慧題庫</h4><p class="text-xs text-indigo-700 mt-1">六組考卷統一由資料庫管理，可新增、修改、停用；每題也可停用而不必刪除。</p></div><div class="flex items-center gap-2"><span id="admin-quiz-sync-status" class="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold">待同步</span><button type="button" onclick="renderAdminQuizCategories(true)" class="text-xs bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg font-bold">↻ 背景同步</button></div></div>
-                        <div class="grid md:grid-cols-[1fr_1fr_1.5fr] gap-3">
-                            <div><label class="block text-xs font-bold text-slate-600 mb-1">訓練區</label><select id="admin-quiz-area" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></div>
-                            <div><label class="block text-xs font-bold text-slate-600 mb-1">組別</label><select id="admin-quiz-group" onchange="onAdminQuizGroupChange()" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"></select></div>
-                            <div><label class="block text-xs font-bold text-slate-600 mb-1">新增考卷</label><div class="flex gap-2"><input id="admin-new-category-title" type="text" maxlength="255" placeholder="例如：血液抹片鏡檢課後評量" class="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm"><button onclick="adminCreateQuizCategory()" class="bg-indigo-700 hover:bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-xl whitespace-nowrap">＋ 建立</button></div></div>
-                        </div>
-                        <div id="admin-quiz-categories-list" class="space-y-4"></div>
+                        <div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-indigo-950 text-lg">📋 考卷管理</h4><p class="text-xs text-indigo-700 mt-1">清單只負責搜尋與開啟考卷；出題、AI、教材、設定與發布都在考卷內完成。</p></div><div class="flex items-center gap-2"><span id="admin-quiz-sync-status" class="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold">待同步</span><details class="relative"><summary class="list-none cursor-pointer text-xs bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold">⋯</summary><div class="absolute right-0 mt-1 z-30 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-xl"><button type="button" onclick="renderAdminQuizCategories(true)" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">↻ 重新同步</button></div></details></div></div>
+                        <details id="admin-quiz-scope-78" class="rounded-xl border border-slate-200 bg-slate-50/60"><summary class="cursor-pointer list-none px-3 py-2 text-xs font-bold text-slate-600">目前範圍 · 需要時切換訓練區／組別</summary><div class="grid md:grid-cols-2 gap-3 border-t border-slate-200 p-3"><div><label class="block text-xs font-bold text-slate-600 mb-1">訓練區</label><select id="admin-quiz-area" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></div><div><label class="block text-xs font-bold text-slate-600 mb-1">組別</label><select id="admin-quiz-group" onchange="onAdminQuizGroupChange()" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"></select></div></div></details>
+                        <div data-teacher78-canonical-create-executor class="hidden" aria-hidden="true"><input id="admin-new-category-title" type="text" maxlength="255"><button type="button" onclick="adminCreateQuizCategory()">建立</button></div>
+                        <div id="admin-quiz-categories-list" class="space-y-3"></div>
                     </section>
                 </div>
 
@@ -596,7 +577,7 @@
                 </div>
 
                 <div id="admin-section-system" class="admin-section-panel hidden space-y-5">
-                    <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4"><div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-slate-950 text-lg">⚙️ 系統設定與服務狀態</h4><p class="text-xs text-slate-500 mt-1">快速確認 Render、資料庫、MEGA、Google Drive 備援與 Groq AI 設定。</p></div><button onclick="renderAdminSystemStatus(true)" class="text-xs border border-slate-300 bg-white px-3 py-2 rounded-xl">🔄 重新檢查</button></div><div id="admin-system-health" class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"></div><div id="admin-system-storage" class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">讀取中…</div><div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"><b>安全設定：</b> ADMIN_KEY、MEGA 帳密、Google OAuth、Supabase 密碼與 Groq API Key 請只放 Render Environment Variables，不要寫入 GitHub。</div></section>
+                    <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4"><div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-slate-950 text-lg">⚙️ 系統設定與服務狀態</h4><p class="text-xs text-slate-500 mt-1">快速確認 Render、資料庫、MEGA、Google Drive 備援與 Groq AI 設定。</p></div><button onclick="renderAdminSystemStatus(true)" class="text-xs border border-slate-300 bg-white px-3 py-2 rounded-xl">🔄 重新檢查</button></div><div id="admin-system-health" class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"></div><div id="admin-system-storage" class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">讀取中…</div><div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"><b>安全設定：</b> MEGA 帳密、Google OAuth、Supabase 密碼與 Groq API Key 請只放 Render Environment Variables；後台權限以登入 Session 與 RBAC 為準。</div></section>
                     <section class="bg-white border border-sky-200 rounded-2xl p-5 shadow-sm space-y-4"><div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-sky-950 text-lg">📣 首頁公告管理</h4><p class="text-xs text-sky-700 mt-1">公告會顯示在首頁「最新公告」與右上角通知鈴鐺；可停用而不刪除歷史內容。</p></div><button onclick="renderAdminAnnouncements()" class="text-xs border border-sky-200 bg-white px-3 py-2 rounded-xl">🔄 更新</button></div><div class="grid lg:grid-cols-[1fr_1.6fr_auto] gap-2"><input id="admin-announcement-title" class="px-3 py-2 border border-slate-300 rounded-xl text-sm" placeholder="公告標題"><textarea id="admin-announcement-body" rows="2" class="px-3 py-2 border border-slate-300 rounded-xl text-sm" placeholder="公告內容"></textarea><button onclick="createAdminAnnouncement()" class="bg-sky-700 hover:bg-sky-600 text-white font-bold px-4 py-2 rounded-xl text-sm">＋ 發布公告</button></div><div id="admin-announcement-status" class="text-xs text-slate-500"></div><div id="admin-announcement-list" class="space-y-2"></div></section>
                 </div>
             </div>
@@ -685,8 +666,8 @@
 
     <div id="external-material-drawer" class="hidden fixed inset-0 z-[90] bg-slate-950/50 p-4 sm:p-8">
         <section class="ml-auto h-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
-            <div class="flex items-start justify-between gap-3"><div><h3 class="font-black text-slate-900">＋ 外部連結教材</h3><p class="mt-1 text-xs text-slate-500">YouTube、Shorts 或允許的 HTTPS MP4/WebM；不會經過 Worker、R2、MEGA 或 Google Drive。</p></div><button onclick="closeExternalMaterialDrawer()">✕</button></div>
-            <div class="mt-5 space-y-3"><p class="text-xs text-teal-700">YouTube、Shorts 與 allowlisted HTTPS MP4/WebM 僅儲存經驗證的 metadata；不會經過 Worker、R2、MEGA、Google Drive 或任意第三方嵌入。</p><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block text-xs font-bold">名稱<input id="external-material-title" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="例如：儀器操作示範"></label><label class="block text-xs font-bold">訓練區<select id="external-material-area" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></label><label class="block text-xs font-bold">組別<select id="external-material-group" class="mt-1 w-full rounded-xl border p-2 text-sm"></select></label><label class="block text-xs font-bold">所屬課程<select id="external-material-course" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="">未指定課程</option></select></label><label class="block text-xs font-bold">相關考卷<select id="external-material-category" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="">未指定考卷</option></select></label><label class="block text-xs font-bold">URL<input id="external-material-url" type="url" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="https://youtube.com/watch?v=..."></label></div><label class="block text-xs font-bold">說明<textarea id="external-material-description" class="mt-1 w-full rounded-xl border p-2 text-sm" rows="2"></textarea></label><div id="external-material-preview" class="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">貼上網址後會先安全驗證及標準化。</div><button onclick="saveExternalMaterialLink()" class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white">建立外部教材</button></div>
+            <div class="flex items-start justify-between gap-3"><div><h3 class="font-black text-slate-900">＋ 外部連結教材</h3><p class="mt-1 text-xs text-slate-500">YouTube、Shorts 或允許的 HTTPS MP4/WebM；不會經過 Worker、R2、MEGA 或 Google Drive。</p></div><button onclick="closeExternalMaterialCreateDrawer()">✕</button></div>
+            <div class="mt-5 space-y-3"><p class="text-xs text-teal-700">YouTube、Shorts 與 allowlisted HTTPS MP4/WebM 僅儲存經驗證的 metadata；不會經過 Worker、R2、MEGA、Google Drive 或任意第三方嵌入。</p><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block text-xs font-bold">名稱<input id="external-material-title" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="例如：儀器操作示範"></label><label class="block text-xs font-bold">訓練區<select id="external-material-area" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></label><label class="block text-xs font-bold">組別<select id="external-material-group" class="mt-1 w-full rounded-xl border p-2 text-sm"></select></label><label class="block text-xs font-bold">所屬課程<select id="external-material-course" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="">未指定課程</option></select></label><label class="block text-xs font-bold">相關考卷<select id="external-material-category" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="">未指定考卷</option></select></label><label class="block text-xs font-bold">URL<input id="external-material-url" type="url" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="https://youtube.com/watch?v=..."></label></div><label class="block text-xs font-bold">說明<textarea id="external-material-description" class="mt-1 w-full rounded-xl border p-2 text-sm" rows="2"></textarea></label><div id="external-material-preview" class="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">貼上網址後會先安全驗證及標準化。</div><button onclick="createExternalMaterialFromDrawer()" class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white">建立外部教材</button></div>
         </section>
     </div>
     <!-- Footer -->
@@ -708,6 +689,7 @@
 
 <button id="back-to-top" type="button" aria-label="回到頁首" title="回到頁首" class="fixed right-4 sm:right-6 bottom-4 sm:bottom-6 z-50 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-slate-900/90 hover:bg-teal-700 text-white shadow-xl border border-white/20 backdrop-blur flex items-center justify-center text-xl opacity-0 pointer-events-none translate-y-3 transition-all duration-200">↑</button>
 <script defer src="/shared-core.js?v=6500"></script>
+<script defer src="/api-client.js?v=7500"></script>
 <script defer src="/system-core.js?v=6801"></script>
 <script defer src="/atlas-70.js?v=7000"></script>
 <script defer src="/atlas-docx-wizard-70.js?v=7000"></script>
@@ -717,7 +699,7 @@
 <script defer src="/system-admin.js?v=6502"></script>
 <script defer src="/sensitive-elevation-69.js?v=6900"></script>
 <script defer src="/rbac-ui-681.js?v=6811"></script>
-<script defer src="/assessment-681.js?v=6810"></script>
+<script defer src="/assessment-advanced-74.js?v=7400"></script>
 <script defer src="/course-wizard-681.js?v=6810"></script>
 <script defer src="/external-material-681.js?v=6810"></script>
 <script defer src="/system-bootstrap.js?v=5900"></script>
