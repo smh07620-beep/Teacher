@@ -17,8 +17,9 @@ class FinalConvergenceFacadeTests(unittest.TestCase):
     def test_course_wizard_entrypoints_are_canonical(self):
         self.assertIn("window.courseWizard681Create=create", self.wizard)
         self.assertIn("window.courseWizard681Reset=reset", self.wizard)
-        self.assertIn('data-csp-click="courseWizard681Create()"', self.system)
-        self.assertIn('data-csp-click="courseWizard681Reset()"', self.system)
+        self.assertIn('data-csp-click="courseWizard681Create()"', self.wizard)
+        self.assertIn('data-csp-click="courseWizard681Reset()"', self.wizard)
+        self.assertIn('/course-wizard-681.js', self.system)
 
     def test_runtime_no_longer_rewrites_legacy_course_wizard_entrypoints(self):
         self.assertNotIn("adminCreateCourseBundle", self.frontend)

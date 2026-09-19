@@ -12,7 +12,8 @@ class ManagementSurfaceSimplification78Tests(unittest.TestCase):
         self.assertNotIn('V5.7.0 EXAM FLOW',html)
         self.assertNotIn('id="admin-quiz-guide"',html)
         self.assertIn('data-teacher78-canonical-create-executor',html)
-        self.assertIn('清單只負責搜尋與開啟考卷',html)
+        self.assertIn('先從考卷清單進入工作',html)
+        self.assertIn('建立新考卷請使用「＋ 建立教學內容」',html)
 
     def test_exam_list_is_compact_searchable_and_paged(self):
         bank=self.src('static/admin-question-bank.js')
