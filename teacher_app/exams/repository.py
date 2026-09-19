@@ -92,8 +92,16 @@ def create_attempt(conn, kind: str, attempt: Mapping[str, Any]) -> None:
     columns = ("id", "username", "emp_id", "quiz_category_id", "quiz_title", "group_key", "training_area",
                "course_id", "passing_score", "publication_id", "publication_hash", "evaluator_name", "evaluator_title", "questions_json", "status",
                "record_id", "started_at", "submitted_at")
-    conn.execute(f"INSERT INTO exam_attempts ({','.join(columns)}) VALUES ({','.join([ph] * len(columns))})",
-                 tuple(attempt[column] for column in columns))
+    compatibility_defaults = {"evaluator_name": "", "evaluator_title": ""}
+    conn.execute(
+        f"INSERT INTO exam_attempts ({','.join(columns)}) VALUES ({','.join([ph] * len(columns))})",
+        tuple(
+            attempt.get(column, compatibility_defaults[column])
+            if column in compatibility_defaults
+            else attempt[column]
+            for column in columns
+        ),
+    )
 
 
 def mark_submitted(conn, kind: str, attempt_id: str, record_id: str, submitted_at: str) -> None:

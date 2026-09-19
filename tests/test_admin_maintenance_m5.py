@@ -116,7 +116,7 @@ setImmediate(() => {
         css = self.source('static/admin.css').split('/* Teacher 6.6 M5:', 1)[1]
         rules = css.split('}', 1)
         self.assertIn(f'#admin-modal[data-section="{section.removeprefix("admin-section-")}"] > div', rules[0])
-        for declaration in ('display: block;', 'height: auto !important;', 'max-height: 94dvh;', 'overflow-y: auto;'):
+        for declaration in ('display: block;', 'height: auto !important;', 'max-height: 88dvh;', 'overflow-y: auto;'):
             self.assertIn(declaration, rules[0])
         self.assertIn('overflow: visible;', rules[1])
         self.assertNotIn('data-section="teacher"', css)

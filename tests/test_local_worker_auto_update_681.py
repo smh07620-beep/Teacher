@@ -68,17 +68,35 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
             "-RestartCount 5",
             "-RestartInterval (New-TimeSpan -Minutes 1)",
             "-StartWhenAvailable",
-            "-LogonType Password",
             "-LogonType ServiceAccount",
+            "-Principal $taskPrincipal",
+            "-User $TaskUser",
+            "-Password $plainPassword",
+            "-RunLevel Highest",
             "Normalize-ServiceAccount",
             "Get-Credential",
             "Register-ScheduledTask",
         ):
             self.assertIn(marker, source)
         self.assertNotIn("-AtLogOn", source)
+        self.assertNotIn("-InputObject $task", source)
         self.assertIn("NT AUTHORITY\\SYSTEM", source)
         self.assertNotIn("DOMAIN\\teacher-worker$", source)
         self.assertNotIn("material_worker.py\"", source)
+
+        service_start = source.index("if ($ServiceAccount) {")
+        password_start = source.index("} else {", service_start)
+        footer_start = source.index("if ($registered) {", password_start)
+        service_block = source[service_start:password_start]
+        password_block = source[password_start:footer_start]
+        self.assertIn("-Principal $taskPrincipal", service_block)
+        self.assertNotIn("-User $TaskUser", service_block)
+        self.assertNotIn("-Password $plainPassword", service_block)
+        self.assertIn("-User $TaskUser", password_block)
+        self.assertIn("-Password $plainPassword", password_block)
+        self.assertNotIn("-Principal $taskPrincipal", password_block)
+        self.assertNotIn("-InputObject $task", password_block)
+
         for secret in (
             "MATERIAL_WORKER_TOKEN",
             "MEGA_PASSWORD",
