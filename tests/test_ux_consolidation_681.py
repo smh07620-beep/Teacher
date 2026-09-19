@@ -36,7 +36,7 @@ class UxConsolidation681Tests(unittest.TestCase):
         self.assertNotIn('renderMaterialJobs(false)',self.workspace)
 
     def test_external_material_drawer_uses_safe_backend_only(self):
-        for marker in ('external-material-drawer','YouTube、Shorts','openExternalMaterialCreateDrawer'):
+        for marker in ('external-material-drawer','YouTube、Vimeo','openExternalMaterialCreateDrawer'):
             self.assertIn(marker,self.html)
         self.assertIn('ExternalMediaClient',self.external)
         self.assertIn('/external-media',self.external_client)
