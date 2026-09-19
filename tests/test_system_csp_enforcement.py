@@ -58,7 +58,9 @@ class SystemCspEnforcementTests(unittest.TestCase):
         runtime = (STATIC / "portal-v56.js").read_text(encoding="utf-8")
 
         self.assertIn('id="v561-progress-open"', index)
-        self.assertIn("progressOpen?.addEventListener('click',open)", runtime)
+        self.assertIn("function setupProgressEntry()", runtime)
+        self.assertIn("module:'progress'", runtime)
+        self.assertNotIn("progressOpen?.addEventListener('click',open)", runtime)
         self.assertIn("data-pgy-management-only", pgy)
         self.assertIn("function syncPgyManagementVisibility()", runtime)
         self.assertIn("syncPgyManagementVisibility();", runtime)

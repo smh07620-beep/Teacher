@@ -30,6 +30,17 @@ class HomeDashboardRefresh681Tests(unittest.TestCase):
         self.assertIn('id="v681-announcement-open"', self.html)
         self.assertIn("strip.hidden=!rows.length", self.runtime)
 
+    def test_progress_card_is_real_area_aware_training_progress_entry(self):
+        self.assertIn('id="v561-progress-open" data-home-progress-link', self.html)
+        self.assertIn('個人訓練進度', self.html)
+        self.assertIn('module=progress&amp;from=home', self.html)
+        self.assertGreaterEqual(self.html.count('data-home-progress-link'), 2)
+        self.assertIn("progressLinks=$$('[data-home-progress-link]')", self.runtime)
+        self.assertIn("module:'progress'", self.runtime)
+        self.assertIn("progressGroup=next==='pgy'?'grpNew':'grpBio'", self.runtime)
+        self.assertIn("function setupProgressEntry()", self.runtime)
+        self.assertIn("/login?next=${encodeURIComponent(href)}", self.runtime)
+
     def test_learning_centres_keep_all_six_canonical_links(self):
         for group in ("grpBio", "grpMicro", "grpSero", "grpBB", "grpBact", "grpHema"):
             self.assertIn(f'group={group}&amp;module=materials&amp;from=home', self.html)

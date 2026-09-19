@@ -148,7 +148,7 @@
   }
 
   function setupPhase3AreaSwitch(){
-    const buttons=$$('[data-phase3-area]'), groups=$$('[data-phase3-group]'), all=$('#phase3-area-all'), pendingAll=$('#v66-pending-all');
+    const buttons=$$('[data-phase3-area]'), groups=$$('[data-phase3-group]'), all=$('#phase3-area-all'), pendingAll=$('#v66-pending-all'), progressLinks=$$('[data-home-progress-link]');
     if(!buttons.length||!groups.length)return;
     const saved=readLocal('smh_home_training_area');
     const apply=area=>{
@@ -172,6 +172,9 @@
 
         pendingAll.href=`/system?${qs.toString()}`;
       }
+      const progressGroup=next==='pgy'?'grpNew':'grpBio';
+      const progressQs=new URLSearchParams({area:next,group:progressGroup,module:'progress',from:'home'});
+      progressLinks.forEach(link=>{link.href=`/system?${progressQs.toString()}`;});
     };
     buttons.forEach(button=>button.addEventListener('click',()=>apply(button.dataset.phase3Area)));
     apply(saved);
@@ -227,17 +230,28 @@
 
   function setupProfileDialog(){
     const dialog=$('#v561-profile-dialog'), trigger=$('#v561-profile-trigger'), form=$('#v561-profile-form');
-    const name=$('#v561-profile-name'), emp=$('#v561-profile-empid'), status=$('#v561-profile-status'), clear=$('#v561-profile-clear'), close=$('#v561-profile-close'), cancel=$('#v561-profile-cancel'), progressOpen=$('#v561-progress-open');
+    const name=$('#v561-profile-name'), emp=$('#v561-profile-empid'), status=$('#v561-profile-status'), clear=$('#v561-profile-clear'), close=$('#v561-profile-close'), cancel=$('#v561-profile-cancel');
     if(!dialog||!trigger||!form)return;
     const shut=()=>{try{dialog.close();}catch(_){dialog.removeAttribute('open');}};
     const open=()=>{if(!authUser){location.href='/login?next=%2F';return;}if(name){name.value=authUser.name||'';name.readOnly=true;}if(emp){emp.value=authUser.empId||'';emp.readOnly=true;}if(status)status.textContent=`已登入 ${authUser.username}；個人資料由管理者維護。`;if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();else dialog.setAttribute('open','');};
     trigger.addEventListener('click',open);
     trigger.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
-    progressOpen?.addEventListener('click',open);
     close?.addEventListener('click',shut); cancel?.addEventListener('click',shut);
     dialog.addEventListener('click',e=>{if(e.target===dialog)shut();});
     form.addEventListener('submit',e=>{e.preventDefault();shut();});
     clear?.addEventListener('click',async()=>{await fetch('/api/auth/logout',{method:'POST'}).catch(()=>{});authUser=null;clearHomeCache();writeLocal(LEARNER_NAME_KEY,'');writeLocal(LEARNER_EMPID_KEY,'');shut();location.href='/';});
+  }
+
+  function setupProgressEntry(){
+    const links=$$('[data-home-progress-link]');
+    links.forEach(link=>link.addEventListener('click',async event=>{
+      if(authUser)return;
+      event.preventDefault();
+      const href=link.getAttribute('href')||'/';
+      const user=await loadAuthState();
+      if(user){location.href=href;return;}
+      location.href=`/login?next=${encodeURIComponent(href)}`;
+    }));
   }
 
   async function loadAnnouncements(){
@@ -311,6 +325,7 @@
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   setupPhase3AreaSwitch();
   setupProfileDialog();
+  setupProgressEntry();
 
   // Non-blocking data begins immediately instead of waiting for auth.
   loadAnnouncements();
