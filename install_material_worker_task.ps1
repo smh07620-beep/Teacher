@@ -98,14 +98,15 @@ if ($ServiceAccount) {
     -UserId $TaskUser `
     -LogonType ServiceAccount `
     -RunLevel Highest
-  $task = New-ScheduledTask `
-    -Action $action `
-    -Trigger $trigger `
-    -Settings $settings `
-    -Principal $taskPrincipal `
-    -Description "Teacher local material Worker; canonical startup supervisor."
   if ($PSCmdlet.ShouldProcess($TaskName, "Register At-startup material Worker task for service account $TaskUser")) {
-    $registered = Register-ScheduledTask -TaskName $TaskName -InputObject $task -Force
+    $registered = Register-ScheduledTask `
+      -TaskName $TaskName `
+      -Action $action `
+      -Trigger $trigger `
+      -Settings $settings `
+      -Principal $taskPrincipal `
+      -Description "Teacher local material Worker; canonical startup supervisor." `
+      -Force
   }
 } else {
   if (-not $TaskUser) {
@@ -123,24 +124,18 @@ if ($ServiceAccount) {
     throw "-TaskUser must match the supplied credential username."
   }
   $TaskUser = $Credential.UserName
-  $taskPrincipal = New-ScheduledTaskPrincipal `
-    -UserId $TaskUser `
-    -LogonType Password `
-    -RunLevel Highest
-  $task = New-ScheduledTask `
-    -Action $action `
-    -Trigger $trigger `
-    -Settings $settings `
-    -Principal $taskPrincipal `
-    -Description "Teacher local material Worker; canonical startup supervisor."
   $plainPassword = $Credential.GetNetworkCredential().Password
   try {
     if ($PSCmdlet.ShouldProcess($TaskName, "Register At-startup material Worker task for password logon $TaskUser")) {
       $registered = Register-ScheduledTask `
         -TaskName $TaskName `
-        -InputObject $task `
+        -Action $action `
+        -Trigger $trigger `
+        -Settings $settings `
+        -Description "Teacher local material Worker; canonical startup supervisor." `
         -User $TaskUser `
         -Password $plainPassword `
+        -RunLevel Highest `
         -Force
     }
   } finally {
