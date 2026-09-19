@@ -1,5 +1,13 @@
 /* V5.9.0 · 頁面初始化與全域事件 */
 window.addEventListener('DOMContentLoaded', () => {
+    // Learner exam identity still needs the hidden inputs, but the visible
+    // "考核紀錄資訊" card is intentionally omitted from the assessment page.
+    const examRecordInfo=document.getElementById('exam-evaluator-summary')?.closest('section');
+    if(examRecordInfo){
+        const identityInputs=['examinee-name','examinee-id'].map(id=>document.getElementById(id)).filter(Boolean);
+        examRecordInfo.before(...identityInputs);
+        examRecordInfo.remove();
+    }
     const areaLabelEl=document.getElementById("area-banner-label"); if(areaLabelEl) areaLabelEl.textContent=trainingAreaLabel;
     loadRememberedLearnerFields();
     syncLinkedLearnerUI();
