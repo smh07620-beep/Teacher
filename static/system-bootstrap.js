@@ -35,7 +35,7 @@ window.addEventListener('DOMContentLoaded', () => {
     switchGroup(GROUPS[initialGroupFromUrl] ? initialGroupFromUrl : 'grpBio');
     const initialModule=(LEARNING_MODULES[initialModuleFromUrl] && !(initialModuleFromUrl==='assessment' && currentTrainingArea!=='pgy')) ? initialModuleFromUrl : 'materials';
     switchLearningModule(initialModule);
-    if(urlParams.get('admin')==='1') setTimeout(async()=>{await toggleAdminModal(true);const ws=urlParams.get('workspace');if(['course-materials','courses','materials','questions','exams','teacher','scoring','results','pgy','word','people','system'].includes(ws))await switchAdminWorkspace(ws,true);},0);
+    if(urlParams.get('admin')==='1') setTimeout(async()=>{await toggleAdminModal(true);const ws=urlParams.get('workspace');if(['course-materials','courses','materials','assessment','questions','exams','teacher','scoring','results','pgy','word','people','system','maintenance','audit','worker'].includes(ws))await switchAdminWorkspace(ws,true);},0);
 });
 document.addEventListener('change', (e) => {
     if (e.target?.id === 'admin-material-area') { refreshAdminMaterialCategoryOptions(); refreshAdminMaterialCourses(); }

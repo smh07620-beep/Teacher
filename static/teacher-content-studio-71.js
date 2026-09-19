@@ -440,6 +440,12 @@
 
   async function openAtlas(){
     closeStudio();
+    if(window.isAdminWorkspacePage?.()){
+      const target=new URL(window.adminWorkspaceLearningUrl?.()||window.location.href, window.location.origin);
+      target.searchParams.set('module','atlas');
+      window.location.assign(`${target.pathname}${target.search}${target.hash}`);
+      return;
+    }
     await window.toggleAdminModal?.(false);
     window.switchLearningModule?.('atlas');
     if(typeof window.renderFormalAtlas === 'function') await window.renderFormalAtlas();
@@ -495,7 +501,7 @@
     bar.className = 'mb-4 flex items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-white p-3 sm:p-4';
     bar.innerHTML = `<div class="min-w-0"><div class="font-black text-teal-950">＋ 建立教學內容</div><div class="text-xs text-teal-700 mt-0.5">考題、教材、影音與圖譜從同一入口開始。</div></div><button type="button" class="shrink-0 rounded-xl bg-teal-700 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-teal-600">開始建立</button>`;
     bar.querySelector('button').addEventListener('click', openStudio);
-    workspace.parentNode?.insertBefore(bar, workspace);
+    workspace.prepend(bar);
   }
 
   function mount(){

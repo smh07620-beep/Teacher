@@ -124,10 +124,11 @@ setImmediate(() => {
     def test_system_settings_scroll_includes_announcements(self):
         self.check_scroll('admin-section-system', 'admin-announcement-list')
 
-    def test_people_scroll_includes_accounts_and_summary(self):
-        self.check_scroll('admin-section-people', 'admin-people-body')
+    def test_people_scroll_includes_account_management(self):
+        self.check_scroll('admin-section-people', 'admin-user-accounts-body')
         tree = Tree(self.source('static/system.html'))
         self.assertIn(('div', 'admin-section-people'), tree.parents['admin-user-accounts-body'])
+        self.assertIn(('div', 'admin-section-results'), tree.parents['admin-people-body'])
 
     def test_version_file_and_production_entrypoint_remain_explicit(self):
         self.assertRegex(
@@ -139,4 +140,4 @@ setImmediate(() => {
     def test_updated_assets_have_fresh_cache_versions(self):
         from pgy_frontend import ASSET_MANIFEST
         self.assertIn('/maintenance-64.js', ASSET_MANIFEST['system']['body'])
-        self.assertIn('/admin.css?v=6605', self.source('static/system.html'))
+        self.assertIn('/admin.css?v=6606', self.source('static/system.html'))

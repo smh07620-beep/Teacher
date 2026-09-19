@@ -42,7 +42,7 @@
     'courseWizard681SelectExisting','courseWizard681SetFileMeta','courseWizard681SetMode','createAdminAnnouncement',
     'createAdminUserAccount','createExternalMaterialFromDrawer','deleteAdminAnnouncement','deleteAdminMaterial',
     'deleteUploadedSlide','editAdminMaterial','exportCurrentPgyAssessmentWord','exportRecordToWord','exportToCSV',
-    'filterAiMaterials','filterQuizMaterialLinker','goBackLearning','goToExamModule','goToSlidePage',
+    'filterAdminUserAccounts','filterAiMaterials','filterQuizMaterialLinker','goBackLearning','goToExamModule','goToSlidePage',
     'handleGlobalLearningSearchKey','jumpToAdminQuiz','loadMoreAiMaterials','loadMyPgyAssessments',
     'markMaterialComplete','migrateLocalMaterialsToR2','migrateMaterialsToMega','onAdminMaterialGroupChange',
     'onAdminQuizGroupChange','openAdminUserEditor','openAtlas','openAtlasCreate','openAtlasDocxWizard','openCourseExam',

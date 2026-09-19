@@ -19,6 +19,36 @@
   const modalOpenOverrides = [];
   const modalGuards = [];
   const afterModalHooks = [];
+  const PAGE_MODE_PARAM = 'admin';
+
+  function isPageMode() {
+    return new URLSearchParams(window.location.search).get(PAGE_MODE_PARAM) === '1';
+  }
+
+  function workspaceUrl(workspace = state.workspace || 'course-materials') {
+    const url = new URL(window.location.href);
+    url.searchParams.set(PAGE_MODE_PARAM, '1');
+    url.searchParams.set('workspace', String(workspace || 'course-materials'));
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
+
+  function learningUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete(PAGE_MODE_PARAM);
+    url.searchParams.delete('workspace');
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
+
+  function syncPageModeClass(active = isPageMode()) {
+    document.body?.classList.toggle('admin-page-mode', Boolean(active));
+    const modal = document.getElementById('admin-modal');
+    if (modal) modal.dataset.pageMode = active ? '1' : '0';
+  }
+
+  function syncWorkspaceUrl(workspace) {
+    if (!isPageMode() || !window.history?.replaceState) return;
+    window.history.replaceState(window.history.state, '', workspaceUrl(workspace));
+  }
 
   function addHook(list, handler) {
     if (typeof handler !== 'function') return () => {};
@@ -171,6 +201,7 @@
     const result = extension
       ? await extension(context)
       : await switchCoreWorkspace(context);
+    syncWorkspaceUrl(requested || workspace);
     for (const hook of afterWorkspaceHooks) await hook({...context, result});
     return result;
   }
@@ -179,6 +210,11 @@
     const modal = document.getElementById('admin-modal');
     if (!modal) return false;
     if (show) {
+      if (!isPageMode()) {
+        window.location.assign(workspaceUrl(state.workspace || 'course-materials'));
+        return true;
+      }
+      syncPageModeClass(true);
       window.populateAdminGroupSelects?.();
       const materialSelect = document.getElementById('admin-material-group');
       const quizSelect = document.getElementById('admin-quiz-group');
@@ -186,6 +222,10 @@
       if (quizSelect) quizSelect.value = window.currentGroupKey || quizSelect.value;
       modal.classList.remove('hidden');
       await window.switchAdminWorkspace?.('course-materials', false);
+      return true;
+    }
+    if (isPageMode()) {
+      window.location.assign(learningUrl());
       return true;
     }
     modal.classList.add('hidden');
@@ -212,6 +252,10 @@
   }
 
   async function openWorkspace(name) {
+    if (!isPageMode()) {
+      window.location.assign(workspaceUrl(name || 'course-materials'));
+      return true;
+    }
     const opened = await window.toggleAdminModal?.(true);
     if (opened === false) return false;
     return window.switchAdminWorkspace?.(name, true);
@@ -225,6 +269,8 @@
   window.toggleAdminModal = toggleModal;
   window.openAdminWorkspace = openWorkspace;
   window.openTeacherAssessment = () => openWorkspace('teacher');
+  window.isAdminWorkspacePage = isPageMode;
+  window.adminWorkspaceLearningUrl = learningUrl;
   window.AdminWorkspaceShell = Object.freeze({
     registerWorkspace,
     addWorkspaceGuard: handler => addHook(workspaceGuards, handler),
@@ -234,9 +280,13 @@
     addModalGuard: handler => addHook(modalGuards, handler),
     addAfterModal: handler => addHook(afterModalHooks, handler),
     hasWorkspace: name => workspaceHandlers.has(String(name || '')),
+    isPageMode,
+    workspaceUrl,
+    learningUrl,
     getState: () => ({workspace:state.workspace, section:state.section, loaded:{...state.loaded}})
   });
   window.__teacherAdminWorkspaceRouter = {
     getState: () => ({workspace:state.workspace, section:state.section, loaded:{...state.loaded}})
   };
+  syncPageModeClass();
 })();

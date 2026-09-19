@@ -191,6 +191,10 @@ window.TeacherRBAC681Ready = (async function () {
       modal.dataset.workspaceSurface = surface.key;
       modal.setAttribute('aria-label', surface.heading);
     }
+    const title = document.getElementById('admin-workspace-title');
+    const summary = document.getElementById('admin-workspace-summary');
+    if (title) title.textContent = `檢驗科教學平台｜${surface.heading}`;
+    if (summary) summary.textContent = surface.summary;
     let banner = document.getElementById('rbac-workspace-banner');
     if (!banner) {
       banner = document.createElement('div');
@@ -200,6 +204,17 @@ window.TeacherRBAC681Ready = (async function () {
     }
     const group = scopedTeacher ? ((groupCatalog[user.preferredGroup] || {}).name || user.preferredGroup || '所屬組別') : '';
     const scopeText = scopedTeacher && group ? `目前管理範圍：${group}` : (crossGroup ? '管理範圍：跨組教學' : '');
+    if (window.isAdminWorkspacePage?.()) {
+      banner.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-black text-slate-800">${surface.entryIcon} ${surface.entryLabel}</span>
+            <span class="text-[11px] text-slate-400">從左側選擇工作項目</span>
+          </div>
+          ${scopeText ? `<span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">${scopeText}</span>` : ''}
+        </div>`;
+      return;
+    }
     banner.innerHTML = `
       <div class="flex flex-wrap items-start justify-between gap-2">
         <div>

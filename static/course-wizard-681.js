@@ -68,7 +68,7 @@ function clearWorkflowId(){
 }
 
 function mount(){
-  const old=el('wizard-area')?.closest('.grid'),actions=el('wizard-create-btn')?.parentElement,host=el('admin-courses-list');
+  const old=el('course-wizard-legacy-fields'),actions=el('wizard-create-btn')?.parentElement,host=el('admin-courses-list');
   if(!old||!host||el('course-wizard-681'))return;
   old.classList.add('hidden');actions?.classList.add('hidden');
   host.insertAdjacentHTML('beforebegin','<div id="course-wizard-681" class="space-y-4"></div>');

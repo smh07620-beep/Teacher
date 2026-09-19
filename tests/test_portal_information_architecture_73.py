@@ -16,26 +16,31 @@ class PortalInformationArchitecture73Tests(unittest.TestCase):
 
     def test_home_is_task_first_dashboard_not_duplicate_management_surface(self):
         for marker in (
-            '今天要做什麼？',
-            '進行中課程',
-            '待完成考核',
+            '今天的學習，從這裡開始',
+            '我的課程',
+            '我的待辦',
             '學習進度',
-            '我的學習區域',
+            '選擇學習中心',
             'phase3-lower-focused',
         ):
             self.assertIn(marker, self.index)
         self.assertNotIn('class="v575-manage-direct"', self.index)
         self.assertNotIn('v56-panel v56-reminder', self.index)
+        self.assertNotIn('placeholder="搜尋課程、教材或考核…"', self.index)
+        self.assertNotIn('href="#pending-exams">考核</a>', self.index)
+        self.assertNotIn('href="#groups">課程</a>', self.index)
         self.assertNotIn('/phase3.css', self.index)
         self.assertFalse(ROOT.joinpath('static', 'phase3.css').exists())
         portal_css = ROOT.joinpath('static', 'portal.css').read_text(encoding='utf-8')
         self.assertIn('.phase3-home', portal_css)
 
     def test_internal_area_is_selection_surface_only(self):
-        self.assertIn('一個組別，一個學習中心', self.internal)
+        self.assertIn('快速開始', self.internal)
+        self.assertIn('依專業組別瀏覽', self.internal)
         self.assertIn('院內課程', self.internal)
         self.assertNotIn('class="v575-manage-direct"', self.internal)
         self.assertNotIn('>PGY 專區<', self.internal)
+        self.assertNotIn('href="/#pending-exams"', self.internal)
         self.assertIn('from=area', self.internal)
 
     def test_navigation_convergence_is_one_shot_and_has_no_observer(self):

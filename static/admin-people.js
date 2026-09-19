@@ -123,11 +123,51 @@
   window.saveAdminUserEditor=saveAdminUserEditor;
 
   // Final convergence: canonical owner migrated from system-admin.js.
+  function canonicalUserRole(role){
+      return ({learner:'student',teacher:'clinical_teacher',manager:'education_admin'}[role]||role||'student');
+  }
+
+  function updateAdminUserSummary(){
+      const rows=Array.isArray(adminUserAccountsCache)?adminUserAccountsCache:[];
+      const staffRoles=new Set(['clinical_teacher','group_leader','education_admin','system_admin']);
+      const active=rows.filter(u=>u.active).length;
+      const staff=rows.filter(u=>staffRoles.has(canonicalUserRole(u.role))).length;
+      const values={
+          'admin-user-total-count':rows.length,
+          'admin-user-active-count':active,
+          'admin-user-staff-count':staff,
+          'admin-user-disabled-count':Math.max(0,rows.length-active),
+      };
+      Object.entries(values).forEach(([id,value])=>{const node=document.getElementById(id);if(node)node.textContent=String(value);});
+  }
+
+  function filteredAdminUserAccounts(){
+      const query=String(document.getElementById('admin-user-search')?.value||'').trim().toLowerCase();
+      const role=String(document.getElementById('admin-user-role-filter')?.value||'all');
+      const state=String(document.getElementById('admin-user-state-filter')?.value||'all');
+      return adminUserAccountsCache.filter(u=>{
+          const roleCode=canonicalUserRole(u.role);
+          if(role!=='all'&&roleCode!==role)return false;
+          if(state==='active'&&!u.active)return false;
+          if(state==='disabled'&&u.active)return false;
+          if(!query)return true;
+          const haystack=[u.username,u.name,u.empId,u.professionalTitle,adminUserRoleSummary(u),(GROUPS[u.preferredGroup]||GROUPS.grpBio).name].join(' ').toLowerCase();
+          return haystack.includes(query);
+      });
+  }
+
+  function paintAdminUserAccounts(){
+      const body=document.getElementById('admin-user-accounts-body'),status=document.getElementById('admin-user-status');if(!body)return;
+      updateAdminUserSummary();
+      const rows=filteredAdminUserAccounts();
+      body.innerHTML=rows.length?rows.map(u=>{const tags=adminProfileTags(u.responsibilityTags),profile=`<div class="mt-1 text-[11px] text-slate-500">${u.professionalTitle?`職稱：${escapeHtml(u.professionalTitle)}`:'職稱：未設定'}</div>${tags.length?`<div class="mt-1 flex flex-wrap gap-1">${tags.map(tag=>`<span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">${escapeHtml(tag)}</span>`).join('')}</div>`:''}`;return `<tr class="${u.active?'':'opacity-55'}"><td class="p-3"><b>${escapeHtml(u.username)}</b><div class="text-slate-500 mt-1">${escapeHtml(u.name)}</div></td><td class="p-3 font-mono">${escapeHtml(u.empId)}</td><td class="p-3"><div>${escapeHtml(adminUserRoleSummary(u))}</div>${profile}</td><td class="p-3">${ADMIN_USER_AREA_LABELS[u.preferredArea]||''} · ${escapeHtml((GROUPS[u.preferredGroup]||GROUPS.grpBio).name)}</td><td class="p-3 text-slate-500">${escapeHtml((u.lastLoginAt||'尚未登入').slice(0,16).replace('T',' '))}</td><td class="p-3"><div class="flex flex-wrap gap-1.5"><button data-username="${escapeHtml(u.username)}" data-csp-click="openAdminUserEditor(this.dataset.username)" class="text-[11px] border border-teal-200 bg-teal-50 text-teal-800 px-2.5 py-1.5 rounded-lg font-bold">編輯人員資料</button><button data-username="${escapeHtml(u.username)}" data-csp-click="resetAdminUserPassword(this.dataset.username)" class="text-[11px] border border-slate-300 bg-white px-2.5 py-1.5 rounded-lg">重設密碼</button><button data-username="${escapeHtml(u.username)}" data-csp-click="toggleAdminUserAccount(this.dataset.username,${u.active?'false':'true'})" class="text-[11px] ${u.active?'text-rose-600 border-rose-200':'text-emerald-700 border-emerald-200'} border bg-white px-2.5 py-1.5 rounded-lg">${u.active?'停用':'啟用'}</button></div></td></tr>`;}).join(''):'<tr><td colspan="6" class="p-5 text-center text-slate-400">沒有符合目前條件的人員。</td></tr>';
+      if(status){const filtered=rows.length!==adminUserAccountsCache.length?`；目前顯示 ${rows.length} 人`:'';status.textContent=`共 ${adminUserAccountsCache.length} 個帳號${filtered}；職稱／職責與系統角色權限分開管理。`;}
+  }
+
   async function renderAdminUserAccounts(){
       const body=document.getElementById('admin-user-accounts-body'),status=document.getElementById('admin-user-status');if(!body)return;body.innerHTML='<tr><td colspan="6" class="p-5 text-center text-slate-400">讀取帳號中…</td></tr>';
-      try{const r=await fetch('/api/users',{cache:'no-store'}),rows=await r.json().catch(()=>[]);if(!r.ok)throw new Error(rows.error||'帳號讀取失敗');adminUserAccountsCache=Array.isArray(rows)?rows:[];
-          body.innerHTML=adminUserAccountsCache.length?adminUserAccountsCache.map(u=>{const tags=adminProfileTags(u.responsibilityTags),profile=`<div class="mt-1 text-[11px] text-slate-500">${u.professionalTitle?`職稱：${escapeHtml(u.professionalTitle)}`:'職稱：未設定'}</div>${tags.length?`<div class="mt-1 flex flex-wrap gap-1">${tags.map(tag=>`<span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">${escapeHtml(tag)}</span>`).join('')}</div>`:''}`;return `<tr class="${u.active?'':'opacity-55'}"><td class="p-3"><b>${escapeHtml(u.username)}</b><div class="text-slate-500 mt-1">${escapeHtml(u.name)}</div></td><td class="p-3 font-mono">${escapeHtml(u.empId)}</td><td class="p-3"><div>${escapeHtml(adminUserRoleSummary(u))}</div>${profile}</td><td class="p-3">${ADMIN_USER_AREA_LABELS[u.preferredArea]||''} · ${escapeHtml((GROUPS[u.preferredGroup]||GROUPS.grpBio).name)}</td><td class="p-3 text-slate-500">${escapeHtml((u.lastLoginAt||'尚未登入').slice(0,16).replace('T',' '))}</td><td class="p-3"><div class="flex flex-wrap gap-1.5"><button data-username="${escapeHtml(u.username)}" data-csp-click="openAdminUserEditor(this.dataset.username)" class="text-[11px] border border-teal-200 bg-teal-50 text-teal-800 px-2.5 py-1.5 rounded-lg font-bold">編輯人員資料</button><button data-username="${escapeHtml(u.username)}" data-csp-click="resetAdminUserPassword(this.dataset.username)" class="text-[11px] border border-slate-300 bg-white px-2.5 py-1.5 rounded-lg">重設密碼</button><button data-username="${escapeHtml(u.username)}" data-csp-click="toggleAdminUserAccount(this.dataset.username,${u.active?'false':'true'})" class="text-[11px] ${u.active?'text-rose-600 border-rose-200':'text-emerald-700 border-emerald-200'} border bg-white px-2.5 py-1.5 rounded-lg">${u.active?'停用':'啟用'}</button></div></td></tr>`;}).join(''):'<tr><td colspan="6" class="p-5 text-center text-slate-400">尚未建立登入帳號。請使用上方表單建立第一個帳號。</td></tr>';if(status)status.textContent=`共 ${adminUserAccountsCache.length} 個帳號；「主要職稱／額外職責」與系統角色權限分開管理。`;
-      }catch(e){adminUserAccountsCache=[];body.innerHTML=`<tr><td colspan="6" class="p-5 text-center text-rose-600">❌ ${escapeHtml(e.message)}</td></tr>`;}
+      try{const r=await fetch('/api/users',{cache:'no-store'}),rows=await r.json().catch(()=>[]);if(!r.ok)throw new Error(rows.error||'帳號讀取失敗');adminUserAccountsCache=Array.isArray(rows)?rows:[];paintAdminUserAccounts();
+      }catch(e){adminUserAccountsCache=[];updateAdminUserSummary();body.innerHTML=`<tr><td colspan="6" class="p-5 text-center text-rose-600">❌ ${escapeHtml(e.message)}</td></tr>`;if(status)status.textContent='人員清單讀取失敗。';}
   }
 
   async function createAdminUserAccount(){
@@ -135,14 +175,20 @@
       const r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),d=await r.json().catch(()=>({}));if(!r.ok){status.textContent='❌ '+(d.error||'建立失敗');return;}['admin-user-username','admin-user-password','admin-user-name','admin-user-empid','admin-user-professional-title','admin-user-responsibility-tags'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});status.textContent=`✅ 已建立 ${d.user.name}（${d.user.username}）`;await renderAdminUserAccounts();
   }
 
+  function renderAdminActivitySummary(records){
+      const body=document.getElementById('admin-people-body'),sum=document.getElementById('admin-people-summary');if(!body||!sum)return;
+      const rows=Array.isArray(records)?records:[];const map=new Map();for(const r of rows){const k=(r.empId||'')+'|'+(r.name||'');if(!k.replace('|',''))continue;const old=map.get(k)||{name:r.name||'',empId:r.empId||'',role:r.role||'',count:0,last:r.timestamp||''};old.count++;if((r.timestamp||'')>=(old.last||'')){old.last=r.timestamp||'';old.role=r.role||old.role;}map.set(k,old);}const list=[...map.values()].sort((a,b)=>(b.last||'').localeCompare(a.last||''));const roles=new Set(list.map(x=>x.role).filter(Boolean));sum.innerHTML=`<div class="rounded-lg bg-sky-50 border border-sky-100 px-3 py-2"><span class="text-[11px] text-sky-700">近期人員</span><b class="block text-xl text-sky-950 leading-tight mt-0.5">${list.length}</b></div><div class="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2"><span class="text-[11px] text-slate-500">身份類型</span><b class="block text-xl text-slate-900 leading-tight mt-0.5">${roles.size}</b></div><div class="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2"><span class="text-[11px] text-emerald-700">考核紀錄</span><b class="block text-xl text-emerald-950 leading-tight mt-0.5">${rows.length}</b></div>`;body.innerHTML=list.length?list.map(x=>`<tr><td class="p-2.5 font-bold">${escapeHtml(x.name)}</td><td class="p-2.5 font-mono">${escapeHtml(x.empId)}</td><td class="p-2.5">${escapeHtml(USER_ROLE_LABELS[x.role]||x.role||'—')}</td><td class="p-2.5">${x.count}</td><td class="p-2.5 text-slate-500">${escapeHtml(x.last||'')}</td></tr>`).join(''):'<tr><td colspan="5" class="p-4 text-center text-slate-400">尚無考核人員資料</td></tr>';
+  }
+
   async function renderAdminPeople(force=false){
       await renderAdminUserAccounts();
-      const body=document.getElementById('admin-people-body'),sum=document.getElementById('admin-people-summary');if(!body||!sum)return;body.innerHTML='<tr><td colspan="5" class="p-5 text-center text-slate-400">讀取中…</td></tr>';
-      try{const records=await fetchAdminRecords();if(!records)return;const map=new Map();for(const r of records){const k=(r.empId||'')+'|'+(r.name||'');if(!k.replace('|',''))continue;const old=map.get(k)||{name:r.name||'',empId:r.empId||'',role:r.role||'',count:0,last:r.timestamp||''};old.count++;if((r.timestamp||'')>=(old.last||'')){old.last=r.timestamp||'';old.role=r.role||old.role;}map.set(k,old);}const list=[...map.values()].sort((a,b)=>(b.last||'').localeCompare(a.last||''));const roles=new Set(list.map(x=>x.role).filter(Boolean));sum.innerHTML=`<div class="rounded-xl bg-sky-50 border border-sky-100 p-4"><span class="text-xs text-sky-700">近期人員</span><b class="block text-2xl text-sky-950 mt-1">${list.length}</b></div><div class="rounded-xl bg-slate-50 border border-slate-200 p-4"><span class="text-xs text-slate-500">身份類型</span><b class="block text-2xl text-slate-900 mt-1">${roles.size}</b></div><div class="rounded-xl bg-emerald-50 border border-emerald-100 p-4"><span class="text-xs text-emerald-700">考核紀錄</span><b class="block text-2xl text-emerald-950 mt-1">${records.length}</b></div>`;body.innerHTML=list.length?list.map(x=>`<tr><td class="p-3 font-bold">${escapeHtml(x.name)}</td><td class="p-3 font-mono">${escapeHtml(x.empId)}</td><td class="p-3">${escapeHtml(x.role||'—')}</td><td class="p-3">${x.count}</td><td class="p-3 text-slate-500">${escapeHtml(x.last||'')}</td></tr>`).join(''):'<tr><td colspan="5" class="p-5 text-center text-slate-400">尚無考核人員資料</td></tr>';}
-      catch(e){body.innerHTML=`<tr><td colspan="5" class="p-5 text-center text-rose-500">❌ ${escapeHtml(e.message)}</td></tr>`;}
   }
 
   window.renderAdminUserAccounts=renderAdminUserAccounts;
+  window.filterAdminUserAccounts=paintAdminUserAccounts;
+  window.paintAdminUserAccounts=paintAdminUserAccounts;
+  window.updateAdminUserSummary=updateAdminUserSummary;
   window.createAdminUserAccount=createAdminUserAccount;
+  window.renderAdminActivitySummary=renderAdminActivitySummary;
   window.renderAdminPeople=renderAdminPeople;
 })();

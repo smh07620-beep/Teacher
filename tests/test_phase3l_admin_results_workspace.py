@@ -33,8 +33,14 @@ class Phase3LAdminResultsWorkspaceTests(unittest.TestCase):
     def test_scoring_mode_hides_analytics_and_preserves_empty_state(self):
         self.assertIn("admin-results-analytics", self.results)
         self.assertIn("目前沒有待人工評分的考核。", self.results)
-        self.assertIn("🎯 待人工評分", self.results)
+        self.assertIn("🎯 教師評核｜待人工評分", self.results)
         self.assertIn("📊 歷次考核成績", self.results)
+
+    def test_teacher_scoring_reuses_raw_records_for_activity_and_keeps_action_indexes_aligned(self):
+        self.assertIn("window.renderAdminActivitySummary?.(records)", self.results)
+        self.assertIn("const filtered = records.filter(isScoringRecord)", self.results)
+        self.assertIn("adminRecords = filtered", self.results)
+        self.assertIn("document.getElementById('admin-table-body')", self.results)
 
     def test_router_and_mode_state_load_before_rbac_wrappers(self):
         ordered = dict(ASSET_MANIFEST["system"]["ordered"])["/system-admin.js"]

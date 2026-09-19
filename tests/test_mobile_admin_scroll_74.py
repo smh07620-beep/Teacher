@@ -26,6 +26,14 @@ class MobileAdminScrollTests(unittest.TestCase):
         self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr)) !important", mobile)
         self.assertIn("writing-mode: horizontal-tb !important", mobile)
 
+    def test_desktop_admin_navigation_is_compact_and_single_row(self):
+        desktop = self.css.split("@media (min-width: 1100px)", 1)[1].split("@media (min-width: 821px)", 1)[0]
+        self.assertIn("minmax(0, 2.4fr)", desktop)
+        self.assertIn("minmax(190px, 1.15fr)", desktop)
+        self.assertIn("grid-template-columns: repeat(5, minmax(0, 1fr))", desktop)
+        self.assertIn("padding: 8px 14px", desktop)
+        self.assertIn("min-height: 36px !important", self.css)
+
     def test_mobile_rbac_badge_cannot_become_sixth_fixed_nav_item(self):
         mobile = self.css.split("@media (max-width: 820px)", 1)[1]
         self.assertIn(".v56-system-mobile-nav #rbac-profile-badge", mobile)

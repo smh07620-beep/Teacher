@@ -192,10 +192,11 @@
     targets.forEach(target=>target.classList.toggle('hidden',!visible));
   }
 
-  function renderPendingExams(rows){
+  function renderPendingExams(rows,materialsPending=0){
     const box=$('#v571-pending-exams');if(!box)return;const groups={grpBio:'生化組',grpMicro:'鏡檢組',grpSero:'血清組',grpBB:'血庫組',grpBact:'細菌組',grpHema:'血液組',grpNew:'新進醫檢師',grpPgyDocs:'PGY'};
     const list=Array.isArray(rows)?rows.slice(0,3):[];
-    box.innerHTML=list.length?list.map(x=>{
+    const materialTask=Number(materialsPending||0)>0?`<a class="v56-assessment-row phase3-home-task-row" href="#groups"><span class="v56-assessment-badge material">教材</span><span><strong>尚有 ${Number(materialsPending)} 份教材待完成</strong><span>前往學習中心繼續目前進度</span></span><b aria-hidden="true">›</b></a>`:'';
+    const examTasks=list.map(x=>{
       const area=x.area==='pgy'?'PGY':'院內';
       const g=groups[x.group]||'';
       const examId=String(x.id||x.examId||x.quizId||'');
@@ -213,13 +214,15 @@
 
       const href=`/system?${qs.toString()}`;
 
-      return `<div class="v56-assessment-row"><span class="v56-assessment-badge">${area}測驗</span><span><strong>${escapeHtml(x.title||'未命名考核')}</strong><span>${escapeHtml(g)} · 及格 ${Number(x.passingScore||80)} 分</span></span><a href="${href}">前往考核</a></div>`;
-    }).join(''):'<div class="v56-empty">目前沒有待完成考核。</div>';
+      return `<a class="v56-assessment-row phase3-home-task-row" href="${href}"><span class="v56-assessment-badge">${area}考核</span><span><strong>${escapeHtml(x.title||'未命名考核')}</strong><span>${escapeHtml(g)} · 及格 ${Number(x.passingScore||80)} 分</span></span><b aria-hidden="true">›</b></a>`;
+    }).join('');
+    box.innerHTML=materialTask||examTasks?materialTask+examTasks:'<div class="v56-empty">目前沒有待辦，今天可以依自己的節奏繼續學習。</div>';
   }
 
   function resetPersonalDashboard(){
     setText('#v561-course-count','—'); setText('#v561-exam-pending','—'); setText('#v561-progress-percent','—');
-    const bar=$('#v561-progress-bar'); if(bar)bar.style.width='0%';renderPendingExams([]);
+    setText('#v681-home-todo-count','—');setText('#v681-home-materials-pending','—');setText('#v681-home-exams-pending','—');
+    const bar=$('#v561-progress-bar'); if(bar)bar.style.width='0%';renderPendingExams([],0);
   }
 
   function setupProfileDialog(){
@@ -239,7 +242,8 @@
 
   async function loadAnnouncements(){
     const dialog=$('#v571-announcement-dialog'), list=$('#v571-announcement-list'), count=$('#v571-announcement-count');
-    const openBtns=[$('#v571-notice-trigger'),$('#v571-announcement-open'),$('#v573-nav-announcement')].filter(Boolean), close=$('#v571-announcement-close');
+    const strip=$('#v681-announcement-strip'), stripTitle=$('#v681-announcement-title'), stripMeta=$('#v681-announcement-meta');
+    const openBtns=[$('#v571-notice-trigger'),$('#v571-announcement-open'),$('#v573-nav-announcement'),$('#v681-announcement-open')].filter(Boolean), close=$('#v571-announcement-close');
     if(!dialog||!list)return;
     const shut=()=>{try{dialog.close();}catch(_){dialog.removeAttribute('open');}};
     const open=()=>{if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();else dialog.setAttribute('open','');};
@@ -251,8 +255,9 @@
       );
       const rows=Array.isArray(data)?data:[]; if(count)count.textContent=String(rows.length);
       const dot=$('.v56-dot'); if(dot)dot.style.display=rows.length?'block':'none';
+      if(strip){strip.hidden=!rows.length;if(rows.length){const latest=rows[0]||{};if(stripTitle)stripTitle.textContent=latest.title||'平台公告';if(stripMeta)stripMeta.textContent=fmtDate(latest.publishedAt||latest.createdAt||'');}}
       list.innerHTML=rows.length?rows.map(a=>`<article class="v571-announcement-item"><h4>${escapeHtml(a.title||'平台公告')}</h4>${a.body?`<p>${escapeHtml(a.body)}</p>`:''}<time>${fmtDate(a.publishedAt||a.createdAt||'')}</time></article>`).join(''):'<div class="v571-announcement-empty">目前沒有新的公告。</div>';
-    }catch(err){if(count)count.textContent='0';list.innerHTML=`<div class="v571-announcement-empty">公告暫時無法讀取：${escapeHtml(err.message)}</div>`;}
+    }catch(err){if(count)count.textContent='0';if(strip)strip.hidden=true;list.innerHTML=`<div class="v571-announcement-empty">公告暫時無法讀取：${escapeHtml(err.message)}</div>`;}
   }
 
   async function loadPersonalDashboard(){
@@ -269,7 +274,10 @@
       setText('#v561-header-id',`工號 ${d.empId||empId}`);
       setText('#v561-course-count',Number(d.activeCourses||0));
       setText('#v561-exam-pending',Number(d.examsPending||0));
-      renderPendingExams(d.pendingExams||[]);
+      const materialsPending=Math.max(0,Number(d.materialsPending||0));
+      const examsPending=Math.max(0,Number(d.examsPending||0));
+      setText('#v681-home-materials-pending',materialsPending);setText('#v681-home-exams-pending',examsPending);setText('#v681-home-todo-count',materialsPending+examsPending);
+      renderPendingExams(d.pendingExams||[],materialsPending);
       const pct=Math.max(0,Math.min(100,Number(d.progressPercent||0)));setText('#v561-progress-percent',pct);const bar=$('#v561-progress-bar');if(bar)bar.style.width=`${pct}%`;
       if(welcome)welcome.textContent=`早安，${d.name||name||'同仁'}｜教材完成 ${Number(d.materialsCompleted||0)}/${Number(d.materialsTotal||0)}・考核通過 ${Number(d.examsPassed||0)}/${Number(d.examsTotal||0)}・教師評核 ${Number(d.teacherAssessmentsCompleted||0)} 次${Number(d.essayReviewsPending||0)?`・待人工批改 ${Number(d.essayReviewsPending)} 份`:''}`;
     }catch(err){resetPersonalDashboard();if(welcome)welcome.textContent=`個人紀錄暫時無法讀取：${err.message}`;}
