@@ -8,6 +8,24 @@ window.addEventListener('DOMContentLoaded', () => {
         examRecordInfo.before(...identityInputs);
         examRecordInfo.remove();
     }
+
+    // Exam draw rules and "create this in admin" guidance belong to the
+    // teacher/admin workflow, not the learner-facing assessment page.
+    const learnerExamTabs=document.getElementById('dynamic-exam-tabs');
+    const examAdminHint=learnerExamTabs?.querySelector(':scope > .mb-3.rounded-xl');
+    if(examAdminHint) examAdminHint.remove();
+    const examEmptyAdminHint=document.getElementById('dynamic-exam-tabs-empty');
+    if(examEmptyAdminHint){
+        examEmptyAdminHint.textContent='';
+        examEmptyAdminHint.setAttribute('aria-hidden','true');
+        const syncLearnerExamTabsVisibility=()=>{
+            const noAvailableExams=!examEmptyAdminHint.classList.contains('hidden');
+            if(learnerExamTabs) learnerExamTabs.style.display=noAvailableExams?'none':'';
+        };
+        new MutationObserver(syncLearnerExamTabsVisibility).observe(examEmptyAdminHint,{attributes:true,attributeFilter:['class']});
+        syncLearnerExamTabsVisibility();
+    }
+
     const areaLabelEl=document.getElementById("area-banner-label"); if(areaLabelEl) areaLabelEl.textContent=trainingAreaLabel;
     loadRememberedLearnerFields();
     syncLinkedLearnerUI();
