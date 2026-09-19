@@ -31,11 +31,9 @@ class SessionRbacFrontend69Tests(unittest.TestCase):
         self.assertIn("credentials:'same-origin'", source)
         self.assertNotIn("'X-Admin-Key': 'rbac-session'", source)
 
-    def test_sensitive_bridge_strips_legacy_fake_header_and_retries_428(self):
+    def test_sensitive_bridge_uses_session_credentials_and_retries_428(self):
         source = self.source("sensitive-elevation-69.js")
         for marker in (
-            "headers.has('X-Admin-Key')",
-            "headers.delete('X-Admin-Key')",
             "response.status !== 428",
             "contract.elevationRequired",
             "ensureElevation()",
@@ -43,6 +41,8 @@ class SessionRbacFrontend69Tests(unittest.TestCase):
             "credentials:'same-origin'",
         ):
             self.assertIn(marker, source)
+        self.assertNotIn('X-Admin-Key', source)
+        self.assertNotIn('getAdminKey', source)
 
     def test_maintenance_explicitly_elevates_browser_download_and_restore(self):
         source = self.source("maintenance-64.js")

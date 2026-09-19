@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping
@@ -114,6 +115,36 @@ def secret_key() -> str:
 def admin_key() -> str:
     """Return the optional compatibility administrator key from live config."""
     return os.environ.get("ADMIN_KEY", "").strip()
+
+
+def external_media_hospital_cdn_hosts(
+    env: Mapping[str, str] | None = None,
+) -> tuple[str, ...]:
+    """Return the explicit exact-host allowlist for hospital CDN media.
+
+    The setting intentionally accepts hostnames/IP literals only: no schemes,
+    paths, ports or wildcards.  YouTube/Vimeo are fixed providers and are not
+    configured through this list.
+    """
+
+    source = os.environ if env is None else env
+    raw = str(source.get("EXTERNAL_MEDIA_HOSPITAL_CDN_HOSTS", "") or "")
+    hosts: list[str] = []
+    for token in re.split(r"[,;\s]+", raw):
+        host = token.strip().lower().rstrip(".")
+        if host.startswith("[") and host.endswith("]"):
+            host = host[1:-1]
+        if (
+            not host
+            or "://" in host
+            or "/" in host
+            or "*" in host
+            or host.count(":") == 1
+        ):
+            continue
+        if host not in hosts:
+            hosts.append(host)
+    return tuple(hosts)
 
 
 def _env_value(env: Mapping[str, str], name: str) -> str:
@@ -312,6 +343,11 @@ def configure_app(app) -> None:
     app.config["SQL_DATABASE_URL"] = database_url()
     app.config["SQLITE_PATH"] = str(sqlite_path())
     app.config["STORAGE_PATHS"] = storage_paths()
+    hospital_cdn_hosts = external_media_hospital_cdn_hosts()
+    app.config["EXTERNAL_MEDIA_HOSPITAL_CDN_HOSTS"] = hospital_cdn_hosts
+    # Compatibility seam for existing question/media validators.  Production
+    # ownership is the EXTERNAL_MEDIA_HOSPITAL_CDN_HOSTS environment setting.
+    app.config["DIRECT_MEDIA_ALLOWLIST"] = hospital_cdn_hosts
     app.config["DEPLOYMENT_CONFIGURATION"] = deployment_config_status()
     for item in app.config["DEPLOYMENT_CONFIGURATION"]["warnings"]:
         log = app.logger.error if item.get("level") == "error" else app.logger.warning

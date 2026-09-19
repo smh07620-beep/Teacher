@@ -114,6 +114,11 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             "processingJobs": ops.get("processingJobs", 0),
             "retryJobs": ops.get("retryJobs", 0),
             "failedJobs": ops.get("failedJobs", 0),
+            "oldestPendingAt": ops.get("oldestPendingAt", ""),
+            "oldestPendingAgeSeconds": ops.get("oldestPendingAgeSeconds", 0),
+            "recentTerminalJobs": ops.get("recentTerminalJobs", 0),
+            "recentFailureRate": ops.get("recentFailureRate", 0),
+            "averageCompletedDurationSeconds": ops.get("averageCompletedDurationSeconds", 0),
             "r2Budget": ops.get("r2Budget", {}),
         })
 

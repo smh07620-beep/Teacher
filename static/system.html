@@ -142,16 +142,6 @@
                 <!-- Dynamically filled: 內建 3 份簡報 + 使用者自行上傳之簡報 -->
             </section>
 
-            <!-- 教材新增改由管理後台執行，避免一般考生誤上傳或刪除教材 -->
-            <section class="bg-slate-50 p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div>
-                        <h3 class="text-base font-bold text-slate-800">🔒 教材管理</h3>
-                        <p class="text-xs text-slate-500 mt-1">新增、修改、啟用/停用與刪除教材請由管理者後台操作；新增後所有同事重新整理即可看到。</p>
-                    </div>
-                    <button data-csp-click="toggleAdminModal(true)" class="bg-indigo-700 hover:bg-indigo-600 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm">⚙️ 開啟管理後台</button>
-                </div>
-            </section>
         </section>
 
         <section id="panel-progress" class="space-y-5 hidden">
@@ -220,11 +210,8 @@
         <!-- Learner identity comes from the authenticated/profile-linked fields below. -->
         <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <input type="hidden" id="examinee-name"><input type="hidden" id="examinee-id">
-            <div><h3 class="text-sm font-bold text-slate-800">考核紀錄資訊</h3><p class="text-xs text-slate-500 mt-1">考生姓名、工號與角色由登入資料帶入；此處只需填寫考核人員資料。</p></div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label for="evaluator-name" class="block text-sm font-semibold text-slate-600 mb-1">考核人員姓名 <span class="text-red-500">*</span></label><input type="text" id="evaluator-name" list="evaluator-name-history" placeholder="由考核者輸入姓名" autocomplete="name" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-teal-500"><datalist id="evaluator-name-history"></datalist></div>
-                <div><label for="evaluator-title" class="block text-sm font-semibold text-slate-600 mb-1">考核人員職稱 <span class="text-red-500">*</span></label><select id="evaluator-title" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-teal-500"><option value="">請選擇職稱</option><option value="組長">組長</option><option value="資深醫檢師">資深醫檢師</option></select></div>
-            </div>
+            <div><h3 class="text-sm font-bold text-slate-800">考核紀錄資訊</h3><p class="text-xs text-slate-500 mt-1">考生姓名、工號與角色由登入資料帶入；考核人員則由教師完成考卷審核時的登入身分自動帶入。</p></div>
+            <div id="exam-evaluator-summary" class="rounded-xl border border-teal-100 bg-teal-50/60 px-3.5 py-3 text-sm text-teal-900">選擇考卷後顯示考核審核人員。</div>
         </section>
 
         <!-- 舊版生化考卷 DOM 相容占位；V5.3.7 起六組皆使用下方動態考卷列 -->
@@ -365,7 +352,7 @@
 
     <!-- Admin Backend Modal -->
     <div id="admin-modal" class="fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2 sm:p-4">
-        <div class="bg-slate-50 rounded-2xl max-w-7xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden border border-slate-300">
+        <div class="bg-slate-50 rounded-2xl max-w-6xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-300">
             <div class="bg-slate-900 text-white px-5 sm:px-6 py-4 flex justify-between items-center border-b border-slate-800">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-teal-700 flex items-center justify-center text-xl">⚙️</div>
@@ -574,7 +561,7 @@
                     <section class="bg-white border border-sky-200 rounded-2xl p-5 shadow-sm space-y-4"><div class="flex items-start justify-between gap-3 flex-wrap"><div><h4 class="font-black text-sky-950 text-lg">📣 首頁公告管理</h4><p class="text-xs text-sky-700 mt-1">公告會顯示在首頁「最新公告」與右上角通知鈴鐺；可停用而不刪除歷史內容。</p></div><button data-csp-click="renderAdminAnnouncements()" class="text-xs border border-sky-200 bg-white px-3 py-2 rounded-xl">🔄 更新</button></div><div class="grid lg:grid-cols-[1fr_1.6fr_auto] gap-2"><input id="admin-announcement-title" class="px-3 py-2 border border-slate-300 rounded-xl text-sm" placeholder="公告標題"><textarea id="admin-announcement-body" rows="2" class="px-3 py-2 border border-slate-300 rounded-xl text-sm" placeholder="公告內容"></textarea><button data-csp-click="createAdminAnnouncement()" class="bg-sky-700 hover:bg-sky-600 text-white font-bold px-4 py-2 rounded-xl text-sm">＋ 發布公告</button></div><div id="admin-announcement-status" class="text-xs text-slate-500"></div><div id="admin-announcement-list" class="space-y-2"></div></section>
                 </div>
             </div>
-            <div class="bg-white px-5 sm:px-6 py-3 border-t border-slate-200 flex justify-between items-center"><span class="text-[11px] text-slate-400">V5.7.2｜教師工作台＋課程教材整併版</span><button data-csp-click="toggleAdminModal(false)" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-5 py-2 rounded-lg text-xs">關閉後台</button></div>
+            <div class="bg-white px-5 sm:px-6 py-3 border-t border-slate-200 flex justify-between items-center"><span class="text-[11px] text-slate-400">V6.8.1｜教師工作台＋課程教材整併版</span><button data-csp-click="toggleAdminModal(false)" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-5 py-2 rounded-lg text-xs">關閉後台</button></div>
         </div>
     </div>
 
@@ -659,8 +646,8 @@
 
     <div id="external-material-drawer" class="hidden fixed inset-0 z-[90] bg-slate-950/50 p-4 sm:p-8">
         <section class="ml-auto h-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
-            <div class="flex items-start justify-between gap-3"><div><h3 class="font-black text-slate-900">＋ 外部連結教材</h3><p class="mt-1 text-xs text-slate-500">YouTube、Shorts 或允許的 HTTPS MP4/WebM；不會經過 Worker、R2、MEGA 或 Google Drive。</p></div><button data-csp-click="closeExternalMaterialCreateDrawer()">✕</button></div>
-            <div class="mt-5 space-y-3"><p class="text-xs text-teal-700">YouTube、Shorts 與 allowlisted HTTPS MP4/WebM 僅儲存經驗證的 metadata；不會經過 Worker、R2、MEGA、Google Drive 或任意第三方嵌入。</p><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block text-xs font-bold">名稱<input id="external-material-title" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="例如：儀器操作示範"></label><label class="block text-xs font-bold">訓練區<select id="external-material-area" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></label><label class="block text-xs font-bold">組別<select id="external-material-group" class="mt-1 w-full rounded-xl border p-2 text-sm"></select></label><label class="block text-xs font-bold">所屬課程<select id="external-material-course" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="">未指定課程</option></select></label><label class="block text-xs font-bold">相關考卷<select id="external-material-category" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="">未指定考卷</option></select></label><label class="block text-xs font-bold">URL<input id="external-material-url" type="url" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="https://youtube.com/watch?v=..."></label></div><label class="block text-xs font-bold">說明<textarea id="external-material-description" class="mt-1 w-full rounded-xl border p-2 text-sm" rows="2"></textarea></label><div id="external-material-preview" class="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">貼上網址後會先安全驗證及標準化。</div><button data-csp-click="createExternalMaterialFromDrawer()" class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white">建立外部教材</button></div>
+                    <div class="flex items-start justify-between gap-3"><div><h3 class="font-black text-slate-900">＋ 外部連結教材</h3><p class="mt-1 text-xs text-slate-500">YouTube、Vimeo，或系統明確允許的院內 CDN HTTPS MP4/WebM；不會經過 Worker、R2、MEGA 或 Google Drive。</p></div><button data-csp-click="closeExternalMaterialCreateDrawer()">✕</button></div>
+            <div class="mt-5 space-y-3"><p class="text-xs text-teal-700">YouTube 使用 privacy-enhanced 播放、Vimeo 使用固定 provider；院內 CDN 必須是伺服器 allowlist 的精確主機名稱。僅儲存經驗證 metadata，不接受任意 iframe/直連網域。</p><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block text-xs font-bold">名稱<input id="external-material-title" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="例如：儀器操作示範"></label><label class="block text-xs font-bold">訓練區<select id="external-material-area" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></label><label class="block text-xs font-bold">組別<select id="external-material-group" class="mt-1 w-full rounded-xl border p-2 text-sm"></select></label><label class="block text-xs font-bold">所屬課程<select id="external-material-course" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="">未指定課程</option></select></label><label class="block text-xs font-bold">相關考卷<select id="external-material-category" class="mt-1 w-full rounded-xl border p-2 text-sm"><option value="">未指定考卷</option></select></label><label class="block text-xs font-bold">URL<input id="external-material-url" type="url" class="mt-1 w-full rounded-xl border p-2 text-sm" placeholder="https://youtube.com/watch?v=..."></label></div><label class="block text-xs font-bold">說明<textarea id="external-material-description" class="mt-1 w-full rounded-xl border p-2 text-sm" rows="2"></textarea></label><div id="external-material-preview" class="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">貼上網址後會由伺服器 provider/allowlist 安全驗證及標準化。</div><button data-csp-click="createExternalMaterialFromDrawer()" class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white">建立外部教材</button></div>
         </section>
     </div>
     <!-- Footer -->

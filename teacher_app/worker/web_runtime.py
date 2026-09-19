@@ -58,6 +58,10 @@ class WorkerWebRuntime:
     delete_staging: Callable[[dict], Any]
     commit_result: Callable[[dict, dict], dict]
     sync_media_processing_metadata: Callable[..., Any]
+    staging_exists: Callable[[dict], bool] = lambda _job: False
+    stale_seconds: int | Callable[[], int] = lambda: _env_int(
+        "MATERIAL_JOB_STALE_SECONDS", 1800, 300, 21600
+    )
     connection_factory: ConnectionFactory | None = None
     worker_token: str | Callable[[], str] = ""
     direct_upload_enabled: bool | Callable[[], bool] = False
@@ -83,6 +87,8 @@ class WorkerWebRuntime:
             delete_staging=_missing("delete_staging"),
             commit_result=_missing("commit_result"),
             sync_media_processing_metadata=_missing("sync_media_processing_metadata"),
+            staging_exists=lambda _job: False,
+            stale_seconds=lambda: _env_int("MATERIAL_JOB_STALE_SECONDS", 1800, 300, 21600),
             worker_token=lambda: os.environ.get("MATERIAL_WORKER_TOKEN", "").strip(),
             direct_upload_enabled=lambda: _env_true("MATERIAL_DIRECT_UPLOAD_ENABLED", False),
             direct_upload_max_mb=lambda: _env_int("MATERIAL_DIRECT_UPLOAD_MAX_MB", 2048, 1, 4096),
@@ -116,6 +122,8 @@ def build_canonical_runtime(*, paths_provider=storage_paths) -> WorkerWebRuntime
         delete_staging=staging.delete,
         commit_result=job_commit.commit,
         sync_media_processing_metadata=media_metadata.sync,
+        staging_exists=staging.exists,
+        stale_seconds=lambda: _env_int("MATERIAL_JOB_STALE_SECONDS", 1800, 300, 21600),
         connection_factory=None,
         worker_token=lambda: os.environ.get("MATERIAL_WORKER_TOKEN", "").strip(),
         direct_upload_enabled=lambda: _env_true("MATERIAL_DIRECT_UPLOAD_ENABLED", False),
@@ -139,6 +147,8 @@ def runtime_from_owner(owner) -> WorkerWebRuntime:
         delete_staging=lambda *args: getattr(owner, "delete_material_job_staging", _missing("delete_staging"))(*args),
         commit_result=lambda *args: getattr(owner, "commit_material_job_result", _missing("commit_result"))(*args),
         sync_media_processing_metadata=lambda *args: getattr(owner, "sync_media_processing_metadata", _missing("sync_media_processing_metadata"))(*args),
+        staging_exists=lambda job: bool(getattr(owner, "material_job_staging_exists", _missing("staging_exists"))(job)),
+        stale_seconds=lambda: max(300, min(21600, int(getattr(owner, "MATERIAL_JOB_STALE_SECONDS", _env_int("MATERIAL_JOB_STALE_SECONDS", 1800, 300, 21600)) or 1800))),
         connection_factory=(lambda: owner._db_conn()) if callable(getattr(owner, "_db_conn", None)) else None,
         worker_token=lambda: str(getattr(owner, "MATERIAL_WORKER_TOKEN", "") or ""),
         direct_upload_enabled=lambda: bool(getattr(owner, "MATERIAL_DIRECT_UPLOAD_ENABLED", _env_true("MATERIAL_DIRECT_UPLOAD_ENABLED", False))),

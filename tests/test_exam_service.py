@@ -64,6 +64,68 @@ class ExamServiceTests(unittest.TestCase):
         self.assertEqual(result["correctCount"], 0)
         self.assertEqual(result["status"], "待人工批改")
 
+    def test_evaluator_identity_is_snapshotted_from_reviewed_category(self):
+        self.base.category.update({"reviewerName": "審核教師", "reviewerTitle": "資深醫檢師"})
+        started = self._start()
+        self.assertEqual(started["evaluatorName"], "審核教師")
+        self.assertEqual(started["evaluatorTitle"], "資深醫檢師")
+        payload = {"answers": [1, "essay response"], "evaluatorName": "Browser Fake", "evaluatorTitle": "Browser Fake"}
+        service.submit_attempt(self.base, self.base.user, started["attemptId"], payload)
+        conn, _ = self.base._db_conn()
+        try:
+            row = conn.execute("SELECT evaluator_name,evaluator_title FROM exam_records").fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(tuple(row), ("審核教師", "資深醫檢師"))
+
+    def test_submission_records_item_analytics_without_trusting_timing_for_score(self):
+        conn, _ = self.base._db_conn()
+        try:
+            conn.execute("""
+                CREATE TABLE question_attempt_analytics (
+                    question_id TEXT NOT NULL,
+                    attempt_id TEXT NOT NULL,
+                    selected_option TEXT NOT NULL DEFAULT '',
+                    is_correct INTEGER NOT NULL DEFAULT 0,
+                    attempt_score REAL NOT NULL DEFAULT 0,
+                    response_seconds REAL NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY(question_id, attempt_id)
+                )
+            """)
+        finally:
+            conn.close()
+        started = self._start()
+        answers = [
+            1 if question.get("id") == "q1" else "essay response"
+            for question in started["questions"]
+        ]
+        timings = [
+            12.5 if question.get("id") == "q1" else 999999
+            for question in started["questions"]
+        ]
+        result = service.submit_attempt(
+            self.base,
+            self.base.user,
+            started["attemptId"],
+            {"answers": answers, "responseTimings": timings},
+        )
+        self.assertEqual(result["score"], 50)
+        conn, _ = self.base._db_conn()
+        try:
+            rows = conn.execute(
+                "SELECT question_id,selected_option,is_correct,attempt_score,response_seconds "
+                "FROM question_attempt_analytics ORDER BY question_id"
+            ).fetchall()
+        finally:
+            conn.close()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["question_id"], "q1")
+        self.assertEqual(rows[0]["selected_option"], "1")
+        self.assertEqual(rows[0]["is_correct"], 1)
+        self.assertEqual(rows[0]["attempt_score"], 50.0)
+        self.assertEqual(rows[0]["response_seconds"], 12.5)
+
     def test_essay_submission_is_pending_human_review(self):
         started = self._start()
         result = service.submit_attempt(self.base, self.base.user, started["attemptId"], submit_payload())

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import hmac
 import re
 from typing import Any, Callable, Mapping, Sequence
@@ -10,6 +11,8 @@ from teacher_app.worker import repository
 
 
 CLIENT_FINGERPRINT_STRATEGY = "sha256-part-tree-v1"
+PUBLISH_KEY_VERSION = "material-publish-v1"
+PUBLISH_BACKENDS = frozenset({"mega", "gdrive"})
 
 
 def now() -> str:
@@ -27,6 +30,32 @@ def bearer_token_matches(configured_token: Any, authorization_header: Any) -> bo
     if not token:
         return False
     return hmac.compare_digest(supplied, f"Bearer {token}")
+
+
+def material_publish_key(
+    job_id: Any,
+    material_id: Any,
+    source_sha256: Any,
+    backend: Any,
+) -> str:
+    """Return the deterministic provider publish identity for one job/source.
+
+    The key deliberately includes the queue job, material identity, verified
+    source hash and selected final provider. It is safe metadata, not a secret.
+    """
+
+    job = str(job_id or "").strip()
+    material = str(material_id or "").strip()
+    source_hash = str(source_sha256 or "").strip().lower()
+    provider = str(backend or "").strip().lower()
+    if not job or not material:
+        raise ValueError("publish identity 缺少 job/material ID。")
+    if not re.fullmatch(r"[a-f0-9]{64}", source_hash):
+        raise ValueError("publish identity 的 source SHA256 不合法。")
+    if provider not in PUBLISH_BACKENDS:
+        raise ValueError("publish identity 的 storage backend 不受支援。")
+    raw = "\0".join((PUBLISH_KEY_VERSION, job, material, source_hash, provider))
+    return "pub-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def sanitize_metadata(body: Any) -> dict[str, Any]:

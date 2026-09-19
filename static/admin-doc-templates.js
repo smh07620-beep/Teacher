@@ -41,12 +41,10 @@
     const groupKey = pendingUploadGroup;
     pendingUploadGroup = null;
     if (!file || !groupKey) return;
-    const key = await getAdminKey();
-    if (!key) return;
     const data = new FormData();
     data.append('file', file);
     try {
-      const response = await fetch(`/api/doc-templates/${groupKey}`, {method:'POST', headers:{'X-Admin-Key':key}, body:data});
+      const response = await fetch(`/api/doc-templates/${groupKey}`, {method:'POST',  body:data});
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || '上傳失敗');
       alert(`✅ Word 範本格式檢查通過並已上傳（${Math.round((result.validation?.sizeBytes || 0) / 1024)} KB）`);
@@ -58,9 +56,7 @@
 
   async function deleteTemplate(groupKey) {
     if (!confirm('確定刪除此組別的 Word 匯出範本？')) return;
-    const key = await getAdminKey();
-    if (!key) return;
-    const response = await fetch(`/api/doc-templates/${groupKey}`, {method:'DELETE', headers:{'X-Admin-Key':key}});
+    const response = await fetch(`/api/doc-templates/${groupKey}`, {method:'DELETE', });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) { alert(result.error || '刪除失敗'); return; }
     await renderTemplates();
@@ -68,7 +64,7 @@
 
   document.getElementById('admin-doc-template-upload-input')?.addEventListener('change', uploadTemplate);
 
-  // Keep the existing HTML onclick contract; authorization remains getAdminKey.
+  // Keep the existing HTML action contract; server-side session RBAC authorizes requests.
   window.renderAdminDocTemplates = renderTemplates;
   window.adminTriggerDocTemplateUpload = triggerUpload;
   window.adminDeleteDocTemplate = deleteTemplate;

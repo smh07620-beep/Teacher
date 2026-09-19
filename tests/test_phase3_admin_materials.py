@@ -30,8 +30,9 @@ class Phase3AdminMaterialsTests(unittest.TestCase):
 
     def test_materials_module_keeps_existing_security_and_rbac_boundary(self):
         source = ROOT.joinpath('static/admin-materials.js').read_text(encoding='utf-8')
-        self.assertIn('getAdminKey', source)
-        self.assertIn('X-Admin-Key', source)
+        self.assertNotIn('getAdminKey', source)
+        self.assertNotIn('X-Admin-Key', source)
+        self.assertIn("credentials:'same-origin'", source)
         self.assertNotIn('professional_title', source)
         self.assertNotIn('responsibility_tags', source)
         self.assertNotIn('localStorage.setItem', source)

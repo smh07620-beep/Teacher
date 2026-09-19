@@ -46,6 +46,9 @@ def _draw_questions(category: Mapping[str, Any]) -> list[dict[str, Any]]:
         for question in assessment_repository.list_questions(category_id, include_inactive=False)
         if question.get("active", True)
     ]
+    for question in questions:
+        question["version"] = max(1, int(question.get("version", 1) or 1))
+        question["questionHash"] = assessment_repository.question_content_hash(question)
     draw_rules = category.get("drawRules") if isinstance(category.get("drawRules"), dict) else {}
     if draw_rules.get("mode") == "type_quota":
         quotas = draw_rules.get("quotas") if isinstance(draw_rules.get("quotas"), dict) else {}
@@ -89,6 +92,8 @@ def attempt_response(attempt: Mapping[str, Any]) -> dict[str, Any]:
         "quizCategoryId": str(attempt.get("quiz_category_id", "")), "quizTitle": str(attempt.get("quiz_title", "")),
         "group": str(attempt.get("group_key", "")), "area": str(attempt.get("training_area", "")),
         "courseId": str(attempt.get("course_id", "")), "passingScore": int(attempt.get("passing_score", 80) or 80),
+        "evaluatorName": str(attempt.get("evaluator_name", "")),
+        "evaluatorTitle": str(attempt.get("evaluator_title", "")),
         "startedAt": str(attempt.get("started_at", "")),
         "questions": [grading.sanitize_question(q) for q in questions if isinstance(q, dict)],
     }
@@ -122,7 +127,10 @@ def start_attempt(base_or_user, user_or_data, data: Mapping[str, Any] | None = N
         "quiz_title": _text(category.get("title") or "考卷", 255), "group_key": _text(category.get("group") or "grpBio", 100),
         "training_area": _text(category.get("area") or "internal", 30), "course_id": _text(category.get("courseId"), 100),
         "passing_score": passing_score, "publication_id": _text(category.get("publicationId"), 100),
-        "publication_hash": _text(category.get("publicationHash"), 64), "questions_json": repo.json_dump(questions),
+        "publication_hash": _text(category.get("publicationHash"), 64),
+        "evaluator_name": _text(category.get("reviewerName"), 100),
+        "evaluator_title": _text(category.get("reviewerTitle"), 100),
+        "questions_json": repo.json_dump(questions),
         "status": "started", "record_id": "", "started_at": utcnow(), "submitted_at": "",
     }
     with repo.transaction(base) as (conn, kind):
@@ -175,14 +183,15 @@ def submit_attempt(base_or_user, user_or_attempt_id, attempt_id_or_data, data: M
     answers = data.get("answers")
     if not isinstance(answers, list):
         raise ApiError("INVALID_ANSWERS", "作答資料格式不正確。", 400)
-    evaluator_name = _text(data.get("evaluatorName"), 100)
-    evaluator_title = _text(data.get("evaluatorTitle"), 100)
     examinee_role = _text(data.get("examineeRole"), 100) or _text(_role(actor), 100)
-    if not evaluator_name or not evaluator_title:
-        raise ApiError("EVALUATOR_REQUIRED", "請填寫考核人員姓名與職稱。", 400)
+    response_timings = data.get("responseTimings")
+    if not isinstance(response_timings, list):
+        response_timings = []
     try:
         with repo.transaction(base) as (conn, kind):
             attempt = _owned_started_attempt(conn, kind, actor, attempt_id, submitting=True)
+            evaluator_name = _text(attempt.get("evaluator_name"), 100)
+            evaluator_title = _text(attempt.get("evaluator_title"), 100)
             questions = [dict(q) for q in repo.json_load(attempt.get("questions_json"), []) if isinstance(q, dict)]
             if len(answers) != len(questions):
                 raise ApiError("ANSWER_COUNT_MISMATCH", "作答題數與伺服器考卷不一致，請重新整理。", 409)
@@ -197,6 +206,17 @@ def submit_attempt(base_or_user, user_or_attempt_id, attempt_id_or_data, data: M
                 correct_count=result["correctCount"], wrong_count=result["wrongCount"],
                 evaluator_name=evaluator_name, evaluator_title=evaluator_title, examinee_role=examinee_role,
                 submitted_at=submitted_at,
+            )
+            assessment_repository.record_question_attempt_analytics_on_connection(
+                conn,
+                kind,
+                attempt_id=str(attempt["id"]),
+                questions=questions,
+                answers=answers,
+                answer_details=result["answersDetail"],
+                attempt_score=float(result["score"]),
+                response_timings=response_timings,
+                created_at=submitted_at,
             )
     except repo.AttemptConflict as exc:
         raise ApiError("ATTEMPT_CONFLICT", str(exc), 409) from exc

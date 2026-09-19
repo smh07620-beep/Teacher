@@ -1,6 +1,7 @@
 """Focused regressions for the Flask-free local-worker storage adapter."""
 import tempfile
 import unittest
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -38,6 +39,70 @@ class _DriveFiles:
 class _DriveService:
     def __init__(self):
         self.files_api = _DriveFiles()
+
+    def files(self):
+        return self.files_api
+
+
+class _IdempotentDriveFiles:
+    def __init__(self):
+        self.created = []
+        self.updated = []
+        self.items = {}
+        self.folder_count = 0
+        self.file_count = 0
+
+    def create(self, *, body, media_body=None, fields=""):
+        is_folder = body.get("mimeType") == "application/vnd.google-apps.folder"
+        if is_folder:
+            self.folder_count += 1
+            item_id = f"folder-{self.folder_count}"
+        else:
+            self.file_count += 1
+            item_id = f"file-{self.file_count}"
+        item = {
+            "id": item_id,
+            "name": body.get("name", ""),
+            "mimeType": body.get("mimeType", "application/octet-stream"),
+            "parents": list(body.get("parents") or []),
+            "appProperties": dict(body.get("appProperties") or {}),
+        }
+        self.items[item_id] = item
+        self.created.append((dict(body), media_body, fields, item_id))
+        return _Request(dict(item))
+
+    def list(self, *, q, spaces, fields, pageSize):
+        parent_match = re.search(r"'([^']*)' in parents", q)
+        parent = parent_match.group(1) if parent_match else ""
+        properties = dict(re.findall(r"key='([^']+)' and value='([^']*)'", q))
+        mime_match = re.search(r"mimeType = '([^']+)'", q)
+        mime_type = mime_match.group(1) if mime_match else ""
+        matches = []
+        for item in self.items.values():
+            if parent and parent not in item.get("parents", []):
+                continue
+            if mime_type and item.get("mimeType") != mime_type:
+                continue
+            if any(item.get("appProperties", {}).get(key) != value for key, value in properties.items()):
+                continue
+            matches.append(dict(item))
+        return _Request({"files": matches})
+
+    def update(self, *, fileId, body, media_body=None, fields=""):
+        item = self.items[fileId]
+        item["name"] = body.get("name", item.get("name", ""))
+        item["appProperties"] = dict(body.get("appProperties") or item.get("appProperties") or {})
+        self.updated.append((fileId, dict(body), media_body, fields))
+        return _Request(dict(item))
+
+    def delete(self, *, fileId):
+        self.items.pop(fileId, None)
+        return _Request({})
+
+
+class _IdempotentDriveService:
+    def __init__(self):
+        self.files_api = _IdempotentDriveFiles()
 
     def files(self):
         return self.files_api
@@ -173,6 +238,54 @@ class WorkerStorageRuntimeTests(unittest.TestCase):
         self.assertEqual(meta["derivedFiles"]["index.txt"], "source-1")
         names = [body["name"] for body, _media, _fields in service.files_api.created]
         self.assertIn("index.txt", names)
+
+    def test_gdrive_provider_lookup_recovers_after_success_before_published_ack(self):
+        adapter = WorkerMaterialStorageAdapter()
+        service = _IdempotentDriveService()
+        publish_key = "pub-" + "a" * 64
+        source_sha256 = "b" * 64
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.txt"
+            source.write_text("same provider payload", encoding="utf-8")
+            slides = temp / "slides"
+            slides.mkdir()
+            with (
+                patch("teacher_app.storage.worker_runtime.providers.gdrive_service", return_value=service),
+                patch("teacher_app.storage.worker_runtime.providers.gdrive_media_file_upload", return_value=object()),
+                patch("teacher_app.storage.worker_runtime.providers.GDRIVE_FOLDER_ID", "root"),
+            ):
+                first = adapter.upload_material_tree_to_gdrive(
+                    "material-1",
+                    source,
+                    slides,
+                    0,
+                    original_name="lesson.txt",
+                    publish_key=publish_key,
+                    source_sha256=source_sha256,
+                )
+                create_count = len(service.files_api.created)
+                # Simulate: provider returned success, process died before /published.
+                # The next Worker process has only deterministic identity + provider state.
+                second = adapter.upload_material_tree_to_gdrive(
+                    "material-1",
+                    source,
+                    slides,
+                    0,
+                    original_name="lesson.txt",
+                    publish_key=publish_key,
+                    source_sha256=source_sha256,
+                )
+        self.assertEqual(first[0], second[0])
+        self.assertEqual(first[2]["materialFolderId"], second[2]["materialFolderId"])
+        self.assertEqual(len(service.files_api.created), create_count)
+        self.assertTrue(service.files_api.updated)
+        material_folders = [
+            item for item in service.files_api.items.values()
+            if item.get("appProperties", {}).get("smh_kind") == "material"
+        ]
+        self.assertEqual(len(material_folders), 1)
+        self.assertEqual(material_folders[0]["appProperties"]["smh_publish_key"], publish_key)
 
 
 if __name__ == "__main__":

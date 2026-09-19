@@ -34,9 +34,7 @@
   };
 
   window.fetchAdminRecords = async function(){
-    const key=await getAdminKey();
-    if(!key) return null;
-    const res=await fetch('/api/records',{headers:{'X-Admin-Key':key}});
+    const res=await fetch('/api/records',{credentials:'same-origin'});
     if(res.status===401){
       alert('登入狀態已失效，請重新登入後再試。');
       return null;
@@ -108,10 +106,8 @@
 
   window.clearAllRecords = async function(){
     if(!confirm('確定要清空伺服器後台所有歷史考核成績紀錄嗎？此操作無法復原。')) return;
-    const key=await getAdminKey();
-    if(!key) return;
     try{
-      const res=await fetch('/api/records',{method:'DELETE',headers:{'X-Admin-Key':key}});
+      const res=await fetch('/api/records',{method:'DELETE',credentials:'same-origin'});
       const data=await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(data.error||'清空失敗');
       adminRecords=[];

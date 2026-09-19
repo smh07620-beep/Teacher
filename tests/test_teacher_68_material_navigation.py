@@ -283,14 +283,14 @@ class MaterialNavigationFrontend68Tests(unittest.TestCase):
     def source(self, relative_path):
         return ROOT.joinpath(relative_path).read_text(encoding="utf-8")
 
-    def test_system_navigation_opens_materials_not_admin_workspace(self):
+    def test_system_management_entry_opens_the_canonical_admin_workspace(self):
         html = self.source("static/system.html")
         core = self.source("static/system-core.js")
         self.assertIn('data-csp-click="openTeachingMaterials()"', html)
-        self.assertNotIn("data-csp-click=\"openAdminWorkspace('course-materials')\"", html)
         self.assertIn("function openTeachingMaterials()", core)
-        self.assertIn("switchLearningModule('materials')", core)
-        self.assertIn('data-csp-click="toggleAdminModal(true)"', html)
+        self.assertIn("window.openAdminWorkspace('course-materials')", core)
+        self.assertNotIn('🔒 教材管理', html)
+        self.assertNotIn('⚙️ 開啟管理後台', html)
 
     def test_portal_navigation_has_no_dead_public_management_handler(self):
         portal = self.source("static/portal-v56.js")

@@ -2,9 +2,12 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from flask import Flask, g
 
+from teacher_app.maintenance import migrations
+from teacher_app.worker import protocol as worker_protocol
 from teacher_app.worker import repository as worker_repository
 from teacher_app.worker.routes import register_free_worker
 from teacher_app.worker.schema import init_schema
@@ -112,6 +115,7 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
                 )
                 """
             )
+            migrations._provider_publish_receipts_79(conn, kind)
         finally:
             conn.close()
 
@@ -212,6 +216,7 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
             ("/api/material-worker/<job_id>/source", "material_worker_source", "GET"),
             ("/api/material-worker/heartbeat", "material_worker_heartbeat", "POST"),
             ("/api/material-worker/<job_id>/heartbeat", "material_worker_heartbeat", "POST"),
+            ("/api/material-worker/<job_id>/published", "material_worker_published", "POST"),
             ("/api/material-worker/<job_id>/complete", "material_worker_complete", "POST"),
             ("/api/material-worker/<job_id>/retry", "material_worker_retry", "POST"),
             ("/api/material-worker/<job_id>/fail", "material_worker_fail", "POST"),
@@ -248,13 +253,88 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(wrong_owner.status_code, 409)
 
+        publish_key = worker_protocol.material_publish_key(
+            "job-1", "material-1", "a" * 64, "mega"
+        )
+        publish_result = {
+            "storageBackend": "mega",
+            "storageKey": "/smh-teaching-materials/material-1/source.txt",
+            "slidesPrefix": "",
+            "storageFilename": "source.txt",
+            "pageCount": 0,
+            "storageMeta": {},
+            "publishKey": publish_key,
+            "publishSourceSha256": "a" * 64,
+        }
+
+        wrong_worker_publish = self.client.post(
+            "/api/material-worker/job-1/published",
+            json={
+                "workerId": "worker-b",
+                "publishKey": publish_key,
+                "backend": "mega",
+                "sourceSha256": "a" * 64,
+                "result": publish_result,
+            },
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(wrong_worker_publish.status_code, 409)
+
+        wrong_key_publish = self.client.post(
+            "/api/material-worker/job-1/published",
+            json={
+                "workerId": "worker-a",
+                "publishKey": "pub-" + "0" * 64,
+                "backend": "mega",
+                "sourceSha256": "a" * 64,
+                "result": {**publish_result, "publishKey": "pub-" + "0" * 64},
+            },
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(wrong_key_publish.status_code, 409)
+
+        published = self.client.post(
+            "/api/material-worker/job-1/published",
+            json={
+                "workerId": "worker-a",
+                "publishKey": publish_key,
+                "backend": "mega",
+                "sourceSha256": "a" * 64,
+                "result": publish_result,
+            },
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(published.status_code, 200, published.get_data(as_text=True))
+        self.assertFalse(published.get_json()["replayed"])
+        published_replay = self.client.post(
+            "/api/material-worker/job-1/published",
+            json={
+                "workerId": "worker-a",
+                "publishKey": publish_key,
+                "backend": "mega",
+                "sourceSha256": "a" * 64,
+                "result": publish_result,
+            },
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(published_replay.status_code, 200, published_replay.get_data(as_text=True))
+        self.assertTrue(published_replay.get_json()["replayed"])
+
+        wrong_complete_key = self.client.post(
+            "/api/material-worker/job-1/complete",
+            json={"workerId": "worker-a", "publishKey": "pub-" + "f" * 64, "result": publish_result},
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(wrong_complete_key.status_code, 409)
+
         completed = self.client.post(
             "/api/material-worker/job-1/complete",
-            json={"workerId": "worker-a", "result": {}},
+            json={"workerId": "worker-a", "publishKey": publish_key, "result": publish_result},
             headers=self.worker_headers(),
         )
         self.assertEqual(completed.status_code, 200, completed.get_data(as_text=True))
-        self.assertEqual(completed.get_json(), {"cleanupPending": False, "ok": True, "status": "completed"})
+        self.assertEqual(completed.get_json()["publishKey"], publish_key)
+        self.assertEqual(completed.get_json()["status"], "completed")
         job = worker_repository.get_material_job("job-1", connection_factory=self.connect)
         self.assertEqual(job["status"], "completed")
         self.assertLess(self.events.index(("commit", "job-1")), self.events.index(("staging.delete", "job-1")))
@@ -262,6 +342,33 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
             self.events.index(("staging.delete", "job-1")),
             self.events.index(("media.sync", "job-1", "completed")),
         )
+
+        replayed = self.client.post(
+            "/api/material-worker/job-1/complete",
+            json={"workerId": "worker-a", "publishKey": publish_key, "result": publish_result},
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(replayed.status_code, 200, replayed.get_data(as_text=True))
+        self.assertTrue(replayed.get_json()["replayed"])
+        self.assertEqual(self.events.count(("commit", "job-1")), 1)
+        self.assertEqual(self.events.count(("staging.delete", "job-1")), 1)
+        self.assertEqual(self.events.count(("media.sync", "job-1", "completed")), 1)
+
+    def test_claim_runs_canonical_stale_recovery_before_queue_claim(self):
+        self.seed_job("queued-for-claim")
+        self.runtime.staging_exists = lambda _job: True
+        with patch("teacher_app.worker.routes.worker_operations.recover_stale_processing_jobs", return_value={"requeued": 0, "failed": 0, "lostRace": 0}) as recover:
+            response = self.client.post(
+                "/api/material-worker/claim",
+                json={"workerId": "worker-a", "capabilities": {}},
+                headers=self.worker_headers(),
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()["job"]["id"], "queued-for-claim")
+        recover.assert_called_once()
+        args, kwargs = recover.call_args
+        self.assertIs(args[0], self.runtime.staging_exists)
+        self.assertEqual(kwargs["connection_factory"], self.runtime.connection_factory)
 
     def test_direct_upload_init_uses_canonical_endpoint_scope(self):
         self.actor = {

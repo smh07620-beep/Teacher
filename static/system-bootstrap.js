@@ -3,17 +3,9 @@ window.addEventListener('DOMContentLoaded', () => {
     const areaLabelEl=document.getElementById("area-banner-label"); if(areaLabelEl) areaLabelEl.textContent=trainingAreaLabel;
     loadRememberedLearnerFields();
     syncLinkedLearnerUI();
-    loadRememberedEvaluatorFields();
     ['examinee-name','examinee-id','progress-name','progress-empid','pgy-assess-name','pgy-assess-empid'].forEach(id=>{
         const el=document.getElementById(id); if(el) el.addEventListener('change',rememberLearnerFields);
     });
-    const evaluatorNameEl = document.getElementById('evaluator-name');
-    const evaluatorTitleEl = document.getElementById('evaluator-title');
-    if (evaluatorNameEl) {
-        evaluatorNameEl.addEventListener('input', applyRememberedEvaluatorTitle);
-        evaluatorNameEl.addEventListener('change', () => { applyRememberedEvaluatorTitle(); rememberEvaluatorFields(); });
-    }
-    if (evaluatorTitleEl) evaluatorTitleEl.addEventListener('change', rememberEvaluatorFields);
     switchGroup(GROUPS[initialGroupFromUrl] ? initialGroupFromUrl : 'grpBio');
     const initialModule=(LEARNING_MODULES[initialModuleFromUrl] && !(initialModuleFromUrl==='assessment' && currentTrainingArea!=='pgy')) ? initialModuleFromUrl : 'materials';
     switchLearningModule(initialModule);

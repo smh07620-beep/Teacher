@@ -16,6 +16,7 @@
   const isAuditor = surfaceKey === 'audit';
   const canMaintenance = has('backup.manage') || has('education.cross_group.manage');
   const canAudit = has('audit.read') || has('audit.view');
+  const canVerifyExternalMedia = has('material.manage');
   const workspaceHost = document.getElementById('admin-workspace-content');
   const navHost = document.querySelector('.v580-admin-groups');
   const modal = document.getElementById('admin-modal');
@@ -115,6 +116,7 @@
       item.className = 'admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200';
     }
     item.textContent = label;
+    item.dataset.adminWorkspace = workspace;
     item.onclick = () => window.switchAdminWorkspace?.(workspace, true);
     item.classList.remove('hidden');
     item.disabled = false;
@@ -224,7 +226,7 @@
       <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div><h4 class="font-black text-slate-950 text-lg">🔎 稽核／唯讀紀錄</h4>
-          <p class="text-xs text-slate-500 mt-1">目前顯示 PGY 指派、送審與簽核流程紀錄。所有資料皆為唯讀。</p></div>
+          <p class="text-xs text-slate-500 mt-1">顯示 PGY 流程與帳號、考卷、題目、教材、AI、備份還原等系統管理事件。所有資料皆為唯讀。</p></div>
           <button id="audit-refresh-70" type="button" class="text-xs border border-slate-300 bg-white px-3 py-2 rounded-xl">🔄 更新</button>
         </div>
         <div id="audit-status-70" class="text-xs text-slate-500">讀取中…</div>
@@ -234,25 +236,87 @@
             <tbody id="audit-body-70" class="divide-y divide-slate-100"></tbody>
           </table>
         </div>
+        <div class="border-t border-slate-100 pt-4 space-y-2">
+          <div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-slate-900">🎞️ 外部影音可用性</h5><p class="mt-1 text-[11px] text-slate-500">YouTube/Vimeo 以固定 provider 驗證；院內 CDN 僅檢查明確 allowlist 主機。驗證結果不會刪除或停用教材。</p></div><span id="external-media-report-status-80" class="text-[11px] text-slate-500">讀取中…</span></div>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs"><thead class="bg-slate-50"><tr><th class="p-3">教材</th><th class="p-3">Provider</th><th class="p-3">狀態</th><th class="p-3">最後驗證</th><th class="p-3">訊息</th><th class="p-3">操作</th></tr></thead><tbody id="external-media-report-body-80" class="divide-y divide-slate-100"></tbody></table></div>
+        </div>
       </section>`;
     document.getElementById('audit-refresh-70').onclick = () => renderAudit(true);
     const status = document.getElementById('audit-status-70');
     const body = document.getElementById('audit-body-70');
     try {
-      const response = await fetch('/api/pgy/audit', {credentials: 'same-origin', cache: 'no-store'});
-      const data = await response.json().catch(() => []);
-      if (!response.ok) throw new Error((data && data.error) || `讀取失敗（${response.status}）`);
-      const rows = Array.isArray(data) ? data : [];
+      const [generalResponse, pgyResponse, externalResponse] = await Promise.all([
+        fetch('/api/audit/events?limit=300', {credentials: 'same-origin', cache: 'no-store'}),
+        fetch('/api/pgy/audit', {credentials: 'same-origin', cache: 'no-store'}),
+        fetch('/api/external-media/report?limit=100', {credentials: 'same-origin', cache: 'no-store'}),
+      ]);
+      const generalData = await generalResponse.json().catch(() => ({}));
+      const pgyData = await pgyResponse.json().catch(() => []);
+      const externalData = await externalResponse.json().catch(() => ({}));
+      if (!generalResponse.ok) throw new Error((generalData && generalData.error) || `系統稽核讀取失敗（${generalResponse.status}）`);
+      if (!pgyResponse.ok) throw new Error((pgyData && pgyData.error) || `PGY 稽核讀取失敗（${pgyResponse.status}）`);
+      if (!externalResponse.ok) throw new Error((externalData && externalData.error) || `外部影音報告讀取失敗（${externalResponse.status}）`);
+      const generalRows = Array.isArray(generalData?.items) ? generalData.items.map(row => ({
+        ...row,
+        auditSource: '系統',
+        itemTitle: [row.targetType, row.targetId].filter(Boolean).join(' · ') || '—',
+        statusText: (() => {
+          const before = row.before || {};
+          const after = row.after || {};
+          const fromValue = before.reviewStatus ?? before.status ?? before.active;
+          const toValue = after.reviewStatus ?? after.status ?? after.active;
+          if (fromValue !== undefined || toValue !== undefined) return [fromValue, toValue].filter(value => value !== undefined && value !== '').map(String).join(' → ');
+          const detail = row.detail || {};
+          if (detail.decision) return String(detail.decision);
+          if (detail.count !== undefined) return `${Number(detail.count)||0} 筆`;
+          if (detail.imported !== undefined) return `匯入 ${Number(detail.imported)||0} 題`;
+          return '—';
+        })(),
+      })) : [];
+      const pgyRows = Array.isArray(pgyData) ? pgyData.map(row => ({
+        ...row,
+        auditSource: 'PGY',
+        targetType: 'pgy_assignment',
+        targetId: row.assignmentId || '',
+        itemTitle: row.title || row.assignmentId || '—',
+        statusText: [row.fromStatus, row.toStatus].filter(Boolean).join(' → ') || '—',
+      })) : [];
+      const rows = [...generalRows, ...pgyRows].sort((left, right) => String(right.createdAt || '').localeCompare(String(left.createdAt || '')));
       body.innerHTML = rows.length ? rows.map(row => `
         <tr>
           <td class="p-3 whitespace-nowrap text-slate-500">${escapeHtml(row.createdAt || '')}</td>
-          <td class="p-3 font-bold text-slate-800">${escapeHtml(row.action || '—')}</td>
+          <td class="p-3"><div class="font-bold text-slate-800">${escapeHtml(row.action || '—')}</div><div class="text-[10px] text-slate-400">${escapeHtml(row.auditSource || '')}</div></td>
           <td class="p-3"><div class="font-semibold">${escapeHtml(row.actorUsername || '—')}</div><div class="text-[10px] text-slate-400">${escapeHtml(row.actorRole || '')}</div></td>
           <td class="p-3 whitespace-nowrap">${escapeHtml(groupLabel(row.group))}</td>
-          <td class="p-3"><div class="font-semibold">${escapeHtml(row.title || row.assignmentId || '—')}</div><div class="text-[10px] text-slate-400">${escapeHtml(row.assignmentId || '')}</div></td>
-          <td class="p-3 whitespace-nowrap">${escapeHtml([row.fromStatus, row.toStatus].filter(Boolean).join(' → ') || '—')}</td>
+          <td class="p-3"><div class="font-semibold">${escapeHtml(row.itemTitle || '—')}</div><div class="text-[10px] text-slate-400">${escapeHtml(row.targetId || '')}</div></td>
+          <td class="p-3 whitespace-nowrap">${escapeHtml(row.statusText || '—')}</td>
         </tr>`).join('') : '<tr><td colspan="6" class="p-6 text-center text-slate-400">目前沒有稽核紀錄。</td></tr>';
-      status.textContent = `共 ${rows.length} 筆紀錄 · 唯讀`;
+      status.textContent = `共 ${rows.length} 筆紀錄 · 系統 ${generalRows.length} · PGY ${pgyRows.length} · 唯讀`;
+      const externalRows = Array.isArray(externalData?.items) ? externalData.items : [];
+      const externalStatus = document.getElementById('external-media-report-status-80');
+      const externalBody = document.getElementById('external-media-report-body-80');
+      const availabilityLabel = value => ({available:'可用',unavailable:'不可用',error:'驗證錯誤',unverified:'待驗證'}[String(value||'')] || String(value||'待驗證'));
+      if (externalStatus) externalStatus.textContent = `${externalRows.length} 筆 · 報告唯讀${canVerifyExternalMedia?' · 管理者可手動驗證':''}`;
+      if (externalBody) {
+        externalBody.innerHTML = externalRows.length ? externalRows.map(item => `<tr><td class="p-3"><div class="font-semibold text-slate-800">${escapeHtml(item.title||item.materialId||'—')}</div><div class="text-[10px] text-slate-400">${escapeHtml(groupLabel(item.group))}</div></td><td class="p-3">${escapeHtml(item.provider||'—')}</td><td class="p-3 font-bold">${escapeHtml(availabilityLabel(item.availabilityStatus))}</td><td class="p-3 whitespace-nowrap text-slate-500">${escapeHtml(item.lastVerifiedAt||'尚未驗證')}</td><td class="p-3 max-w-xs break-words text-slate-500">${escapeHtml(item.lastError||'—')}</td><td class="p-3">${canVerifyExternalMedia?`<button type="button" data-external-media-verify="${escapeHtml(item.materialId||'')}" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold">重新驗證</button>`:'—'}</td></tr>`).join('') : '<tr><td colspan="6" class="p-5 text-center text-slate-400">目前沒有外部影音教材。</td></tr>';
+        externalBody.querySelectorAll('[data-external-media-verify]').forEach(button => button.addEventListener('click', async () => {
+          const materialId = String(button.dataset.externalMediaVerify || '');
+          if (!materialId || button.disabled) return;
+          button.disabled = true;
+          button.textContent = '驗證中…';
+          try {
+            const response = await fetch(`/api/materials/${encodeURIComponent(materialId)}/external-media/verify`, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:'{}'});
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.error || `驗證失敗（${response.status}）`);
+            auditPanel.dataset.loaded = '0';
+            await renderAudit(true);
+          } catch (error) {
+            button.disabled = false;
+            button.textContent = '重新驗證';
+            if (externalStatus) externalStatus.textContent = `❌ ${error.message || '驗證失敗'}`;
+          }
+        }));
+      }
       auditPanel.dataset.loaded = '1';
       return true;
     } catch (error) {

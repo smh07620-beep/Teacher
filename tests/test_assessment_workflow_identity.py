@@ -27,6 +27,9 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         try:
             schema.init_schema(conn, kind)
             conn.execute(
+                "CREATE TABLE materials (id TEXT PRIMARY KEY, category TEXT NOT NULL DEFAULT '')"
+            )
+            conn.execute(
                 "INSERT INTO quiz_categories(id,group_key,training_area,title,date_added,active,review_status) "
                 "VALUES(?,?,?,?,?,?,?)",
                 ("cat-1", "grpBio", "internal", "考卷", "now", 0, "draft"),
@@ -49,6 +52,7 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
             "username": "root",
             "name": "Server Admin",
             "role": "system_admin",
+            "professionalTitle": "教學行政管理師",
             "preferredGroup": "grpBio",
         }
 
@@ -92,7 +96,9 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         )
         self.assertEqual(reviewed.status_code, 200, reviewed.get_data(as_text=True))
         self.assertEqual(reviewed.get_json()["reviewerName"], "Server Admin")
+        self.assertEqual(reviewed.get_json()["reviewerTitle"], "教學行政管理師")
         self.assertEqual(self.category()["reviewer_name"], "Server Admin")
+        self.assertEqual(self.category()["reviewer_title"], "教學行政管理師")
 
         published = self.client.post("/api/quiz-categories/cat-1/publish")
         self.assertEqual(published.status_code, 200, published.get_data(as_text=True))
@@ -106,7 +112,32 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         finally:
             conn.close()
         snapshot = json.loads(row["snapshot"])
+        self.assertEqual(snapshot["schemaVersion"], 2)
         self.assertEqual(snapshot["category"]["publishedBy"], "Server Admin")
+        self.assertEqual(snapshot["category"]["reviewerTitle"], "教學行政管理師")
+        self.assertEqual(snapshot["questions"][0]["version"], 1)
+        self.assertRegex(snapshot["questions"][0]["questionHash"], r"^[0-9a-f]{64}$")
+
+    def test_category_delete_resolves_scope_from_target_category(self):
+        self.actor = {
+            "username": "teacher",
+            "name": "Bio Teacher",
+            "role": "clinical_teacher",
+            "preferredGroup": "grpMicro",
+        }
+        denied = self.client.delete("/api/quiz-categories/cat-1")
+        self.assertEqual(denied.status_code, 403, denied.get_data(as_text=True))
+        self.assertEqual(denied.get_json(), {"error": "此資源不在你的授權範圍。"})
+        self.assertEqual(self.category()["group_key"], "grpBio")
+
+        self.actor = {**self.actor, "preferredGroup": "grpBio"}
+        own = self.client.delete("/api/quiz-categories/cat-1")
+        self.assertEqual(own.status_code, 200, own.get_data(as_text=True))
+        conn, _ = self.connect()
+        try:
+            self.assertIsNone(conn.execute("SELECT id FROM quiz_categories WHERE id='cat-1'").fetchone())
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":

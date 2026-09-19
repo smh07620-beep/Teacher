@@ -31,7 +31,7 @@ class AdminKeySessionBoundaryTests(unittest.TestCase):
     def _status(denied):
         return denied[1] if denied is not None else None
 
-    def test_matching_header_cannot_authorize_anonymous_admin_guards(self):
+    def test_forged_legacy_header_cannot_authorize_anonymous_admin_guards(self):
         guards = (
             ("records", lambda: record_routes._require_admin(self.app)),
             ("announcements", lambda: announcement_routes._require_admin(self.app)),
@@ -42,13 +42,14 @@ class AdminKeySessionBoundaryTests(unittest.TestCase):
             ("rbac-compat", lambda: rbac_legacy_adapter.require_admin(self.app)),
         )
         with patch.dict(os.environ, {"ADMIN_KEY": "compat-secret"}, clear=False):
-            for name, guard in guards:
-                with self.subTest(guard=name), self.app.test_request_context(
-                    "/probe",
-                    headers={"X-Admin-Key": "compat-secret"},
-                ):
-                    g.teacher_user = None
-                    self.assertEqual(self._status(guard()), 401)
+            for forged in ("compat-secret", "rbac-session", "arbitrary-forged-value"):
+                for name, guard in guards:
+                    with self.subTest(header=forged, guard=name), self.app.test_request_context(
+                        "/probe",
+                        headers={"X-Admin-Key": forged},
+                    ):
+                        g.teacher_user = None
+                        self.assertEqual(self._status(guard()), 401)
 
     def test_valid_system_admin_session_authorizes_admin_guards_without_header(self):
         guards = (
@@ -64,6 +65,26 @@ class AdminKeySessionBoundaryTests(unittest.TestCase):
             with self.subTest(guard=name), self.app.test_request_context("/probe"):
                 g.teacher_user = SYSTEM_ADMIN
                 self.assertIsNone(guard())
+
+    def test_valid_system_admin_session_ignores_forged_legacy_header(self):
+        guards = (
+            ("records", lambda: record_routes._require_admin(self.app)),
+            ("announcements", lambda: announcement_routes._require_admin(self.app)),
+            ("storage", lambda: admin_routes._require_admin(self.app)),
+            ("document-templates", lambda: template_routes._require_admin(self.app)),
+            ("pgy-templates", assessment_routes._require_admin),
+            ("runtime-question-strict", lambda: runtime_question_routes._strict_admin(self.app)),
+            ("rbac-compat", lambda: rbac_legacy_adapter.require_admin(self.app)),
+        )
+        with patch.dict(os.environ, {"ADMIN_KEY": "compat-secret"}, clear=False):
+            for forged in ("compat-secret", "rbac-session", "arbitrary-forged-value"):
+                for name, guard in guards:
+                    with self.subTest(header=forged, guard=name), self.app.test_request_context(
+                        "/probe",
+                        headers={"X-Admin-Key": forged},
+                    ):
+                        g.teacher_user = SYSTEM_ADMIN
+                        self.assertIsNone(guard())
 
     def test_matching_header_cannot_upgrade_insufficient_session_role(self):
         guards = (
@@ -89,20 +110,6 @@ class AdminKeySessionBoundaryTests(unittest.TestCase):
                 ):
                     g.teacher_user = student
                     self.assertEqual(self._status(guard()), 403)
-
-    def test_unknown_compat_endpoint_header_does_not_upgrade_non_admin_session(self):
-        teacher = {
-            "username": "teacher",
-            "role": "clinical_teacher",
-            "roles": ["clinical_teacher"],
-            "preferredGroup": "grpBio",
-        }
-        with patch.dict(os.environ, {"ADMIN_KEY": "compat-secret"}, clear=False), self.app.test_request_context(
-            "/probe",
-            headers={"X-Admin-Key": "compat-secret"},
-        ):
-            g.teacher_user = teacher
-            self.assertFalse(rbac_legacy_adapter.admin_key_override(self.app))
 
     def test_account_admin_guard_ignores_matching_header_for_insufficient_role(self):
         student = {
@@ -156,7 +163,6 @@ class AdminKeySessionBoundaryTests(unittest.TestCase):
                 headers={"X-Admin-Key": "compat-secret"},
             ):
                 g.teacher_user = teacher
-                self.assertFalse(rbac_legacy_adapter.admin_key_override(self.app))
                 denied = runtime_question_routes._question_guard(self.app, scoped=True)
                 self.assertEqual(self._status(denied), 403)
 
@@ -165,7 +171,6 @@ class AdminKeySessionBoundaryTests(unittest.TestCase):
                 headers={"X-Admin-Key": "compat-secret"},
             ):
                 g.teacher_user = teacher
-                self.assertTrue(rbac_legacy_adapter.admin_key_override(self.app))
                 self.assertIsNone(runtime_question_routes._question_guard(self.app, scoped=True))
 
     def test_domain_route_sources_do_not_read_admin_header_directly(self):
@@ -182,14 +187,20 @@ class AdminKeySessionBoundaryTests(unittest.TestCase):
                 source = Path(module.__file__).read_text(encoding="utf-8")
                 self.assertNotIn("X-Admin-Key", source)
 
-    def test_backend_admin_header_read_has_one_safe_canonical_owner(self):
+    def test_backend_has_no_admin_header_or_override_owner(self):
         package_root = Path(rbac_legacy_adapter.__file__).resolve().parents[1]
-        owners = sorted(
+        header_owners = sorted(
             str(path.relative_to(package_root)).replace("\\", "/")
             for path in package_root.rglob("*.py")
             if "X-Admin-Key" in path.read_text(encoding="utf-8")
         )
-        self.assertEqual(owners, ["auth/rbac_legacy_adapter.py"])
+        override_owners = sorted(
+            str(path.relative_to(package_root)).replace("\\", "/")
+            for path in package_root.rglob("*.py")
+            if "admin_key_override" in path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(header_owners, [])
+        self.assertEqual(override_owners, [])
 
 
 if __name__ == "__main__":

@@ -13,10 +13,8 @@
     const status=document.getElementById(`qmaterial-status-${catId}`);
     if(list) list.innerHTML='<p class="text-xs text-slate-400">讀取教材中…</p>';
     if(status) status.textContent='';
-    const key=await getAdminKey();
-    if(!key) return;
     try{
-      const r=await fetch(`/api/quiz-categories/${catId}/materials`,{headers:{'X-Admin-Key':key}});
+      const r=await fetch(`/api/quiz-categories/${catId}/materials`,{});
       const d=await r.json().catch(()=>({}));
       if(!r.ok) throw new Error(d.error||'讀取教材失敗');
       state[catId]=Array.isArray(d.items)?d.items:[];
@@ -46,12 +44,10 @@
     const ids=[...document.querySelectorAll(`.qmaterial-check-${catId}:checked`)].map(x=>x.dataset.mid).filter(Boolean);
     const status=document.getElementById(`qmaterial-status-${catId}`);
     if(status) status.textContent=`⏳ 正在儲存 ${ids.length} 份教材關聯…`;
-    const key=await getAdminKey();
-    if(!key) return;
     try{
       const r=await fetch(`/api/quiz-categories/${catId}/materials`,{
         method:'PUT',
-        headers:{'Content-Type':'application/json','X-Admin-Key':key},
+        headers:{'Content-Type':'application/json'},
         body:JSON.stringify({materialIds:ids})
       });
       const d=await r.json().catch(()=>({}));

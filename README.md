@@ -21,7 +21,7 @@ bash run_web.sh
 
 ### 認證與權限
 
-一般教學與管理流程使用登入 session + server-side RBAC。瀏覽器不再要求使用者輸入或保存公開的固定 `ADMIN_KEY`。部分舊模組仍會呼叫 `getAdminKey()` 並送出相容 header，但目前它只是 session-RBAC compatibility seam，不是額外的授權來源。
+一般教學與管理流程使用登入 session + server-side RBAC。舊版瀏覽器 `getAdminKey()` / `X-Admin-Key` RBAC 相容 seam 已移除；管理 API 僅依登入 session、server-side RBAC／scope、CSRF-origin 與必要的敏感操作 elevation 授權。
 
 敏感系統操作仍依既有 elevation / RBAC 規則處理；前端顯示角色、職稱或 responsibility metadata 都不能取代 server-side authorization。
 

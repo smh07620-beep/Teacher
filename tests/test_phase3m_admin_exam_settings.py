@@ -20,7 +20,8 @@ class Phase3MAdminExamSettingsTests(unittest.TestCase):
     def test_review_publish_and_settings_remain_server_authorized(self):
         for endpoint in ("/api/quiz-categories/${catId}", "/api/quiz-categories/${catId}/review", "/api/quiz-categories/${catId}/publish"):
             self.assertIn(endpoint, self.source)
-        self.assertIn("'X-Admin-Key':key", self.source)
+        self.assertNotIn("X-Admin-Key", self.source)
+        self.assertNotIn("getAdminKey", self.source)
         self.assertIn("method:'POST'", self.source)
         self.assertIn("method:'PATCH'", self.source)
 

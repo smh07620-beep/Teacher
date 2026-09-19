@@ -55,6 +55,43 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         self.assertIn("-m pip install -r", source)
         self.assertIn("FFmpeg=$ffmpeg", source)
         self.assertIn("MEGAcmd=$mega", source)
+        batch = ROOT.joinpath("run_material_worker.bat").read_text(encoding="utf-8")
+        self.assertIn("run_material_worker_autostart.ps1", batch)
+        self.assertNotIn("python -u material_worker.py", batch)
+
+    def test_windows_task_installer_serviceizes_worker_without_embedding_secrets(self):
+        source = ROOT.joinpath("install_material_worker_task.ps1").read_text(encoding="utf-8")
+        for marker in (
+            "New-ScheduledTaskTrigger -AtStartup",
+            "run_material_worker_autostart.ps1",
+            "-WorkingDirectory $root",
+            "-RestartCount 5",
+            "-RestartInterval (New-TimeSpan -Minutes 1)",
+            "-StartWhenAvailable",
+            "-LogonType Password",
+            "-LogonType ServiceAccount",
+            "Normalize-ServiceAccount",
+            "Get-Credential",
+            "Register-ScheduledTask",
+        ):
+            self.assertIn(marker, source)
+        self.assertNotIn("-AtLogOn", source)
+        self.assertIn("NT AUTHORITY\\SYSTEM", source)
+        self.assertNotIn("DOMAIN\\teacher-worker$", source)
+        self.assertNotIn("material_worker.py\"", source)
+        for secret in (
+            "MATERIAL_WORKER_TOKEN",
+            "MEGA_PASSWORD",
+            "GDRIVE_CLIENT_SECRET",
+            "GDRIVE_REFRESH_TOKEN",
+            "R2_SECRET",
+        ):
+            self.assertNotIn(secret, source)
+
+        docs = ROOT.joinpath("LOCAL_WORKER_6_7.md").read_text(encoding="utf-8")
+        self.assertIn("install_material_worker_task.ps1", docs)
+        self.assertIn("**At startup**", docs)
+        self.assertIn("Run whether", docs)
 
     def test_idle_check_respects_minimum_interval_and_requests_restart_after_update(self):
         state = Path(self.temp.name) / "state.json"
@@ -72,6 +109,72 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
             controller = material_worker.AutoUpdateController(root=self.temp.name, runner=Mock())
         self.assertFalse(controller.enabled)
         self.assertFalse(controller.due())
+
+    def test_job_heartbeat_loop_reuses_cached_capabilities(self):
+        api = Mock()
+        caps = {"ffmpeg": {"available": True}, "libreOffice": {"available": True}}
+        heartbeat = material_worker.JobHeartbeat(api, "job-long", capabilities=caps, interval_seconds=5)
+
+        class StopAfterOnePulse:
+            def __init__(self): self.calls = 0
+            def wait(self, _seconds):
+                self.calls += 1
+                return self.calls > 1
+
+        heartbeat._stop = StopAfterOnePulse()
+        heartbeat._run()
+        api.heartbeat.assert_called_once_with("job-long", capabilities=caps)
+
+    def test_job_heartbeat_requires_initial_ownership_pulse(self):
+        api = Mock()
+        api.heartbeat.side_effect = RuntimeError("Worker API 409: ownership mismatch")
+        with self.assertRaisesRegex(RuntimeError, "409"):
+            with material_worker.JobHeartbeat(api, "job-lost", capabilities={}):
+                self.fail("lost job must not enter processing context")
+
+    def test_completion_ack_retries_transient_failure_without_republish(self):
+        api = Mock()
+        api.post.side_effect = [RuntimeError("Worker API 503: unavailable"), {"ok": True, "status": "completed"}]
+        with patch.object(material_worker.time, "sleep") as sleep:
+            result = material_worker.complete_job(api, "job-1", {"storageKey": "remote"})
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(api.post.call_count, 2)
+        sleep.assert_called_once_with(1)
+
+    def test_completion_ack_does_not_retry_nontransient_worker_api_error(self):
+        api = Mock()
+        api.post.side_effect = RuntimeError("Worker API 409: ownership mismatch")
+        with patch.object(material_worker.time, "sleep") as sleep:
+            with self.assertRaisesRegex(RuntimeError, "409"):
+                material_worker.complete_job(api, "job-1", {})
+        api.post.assert_called_once()
+        sleep.assert_not_called()
+
+    def test_worker_documented_env_has_heartbeat_and_pinned_release_settings(self):
+        docs = ROOT.joinpath("LOCAL_WORKER_6_7.md").read_text(encoding="utf-8")
+        self.assertIn("MATERIAL_WORKER_HEARTBEAT_SECONDS=30", docs)
+        self.assertIn("MATERIAL_WORKER_AUTO_UPDATE=false", docs)
+        self.assertIn("MATERIAL_WORKER_RELEASE_REF=v6.8.1", docs)
+        self.assertIn("MATERIAL_WORKER_REQUIRE_SIGNED_TAG=true", docs)
+        self.assertIn(".local-worker.env.example", docs)
+
+        example = ROOT.joinpath(".local-worker.env.example").read_text(encoding="utf-8")
+        for marker in (
+            "TEACHER_BASE_URL=https://teacher.example.invalid",
+            "MATERIAL_WORKER_TOKEN=REPLACE_WITH_RENDER_WORKER_TOKEN",
+            "MATERIAL_WORKER_HEARTBEAT_SECONDS=30",
+            "MATERIAL_WORKER_AUTO_UPDATE=false",
+            "MATERIAL_WORKER_UPDATE_INTERVAL_HOURS=6",
+            "MATERIAL_WORKER_RELEASE_REF=v6.8.1",
+            "MATERIAL_WORKER_RELEASE_COMMIT=",
+            "MATERIAL_WORKER_REQUIRE_SIGNED_TAG=true",
+        ):
+            self.assertIn(marker, example)
+        self.assertNotIn("long-random-secret-from-Render", example)
+
+        gitignore = ROOT.joinpath(".gitignore").read_text(encoding="utf-8")
+        self.assertIn(".local-worker.env", gitignore)
+        self.assertIn("!.local-worker.env.example", gitignore)
 
     def test_processing_job_never_invokes_auto_update(self):
         api = Mock()

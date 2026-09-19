@@ -9,10 +9,10 @@ from __future__ import annotations
 from flask import g, jsonify, request
 
 from teacher_app.auth import rbac_legacy_adapter
-from teacher_app.common import scope
+from teacher_app.common import audit, scope
 from teacher_app.common.errors import ApiError
 from teacher_app.materials import bp
-from teacher_app.materials import service
+from teacher_app.materials import repository, service
 from teacher_app.storage.web_runtime import WebStorageRuntime
 
 
@@ -42,6 +42,27 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
         raise RuntimeError("StoragePaths is required for material catalog routes")
     runtime = storage_runtime or WebStorageRuntime(paths)
 
+    def actor():
+        user = getattr(g, "teacher_user", None)
+        if user is not None:
+            return user
+        resolver = getattr(owner, "_current_user", None)
+        return resolver() if callable(resolver) else None
+
+    def snapshot(item):
+        item = item or {}
+        return {
+            "id": str(item.get("id") or ""),
+            "title": str(item.get("title") or ""),
+            "group": str(item.get("group") or ""),
+            "area": str(item.get("area") or ""),
+            "category": str(item.get("category") or ""),
+            "courseId": str(item.get("courseId") or ""),
+            "materialType": str(item.get("materialType") or ""),
+            "active": bool(item.get("active", True)),
+            "storageBackend": str(item.get("storageBackend") or ""),
+        }
+
     def require_admin():
         if not app.extensions.get("teacher_rbac_681_registered"):
             compat = getattr(owner, "require_admin", None)
@@ -65,19 +86,42 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
         denied = require_admin()
         if denied:
             return denied
+        before = repository.get_material(slide_id)
         try:
-            return jsonify(service.update_material(slide_id, request.get_json(silent=True) or {}))
+            payload = service.update_material(slide_id, request.get_json(silent=True) or {})
         except ApiError as exc:
             return _legacy_error(exc)
+        after = repository.get_material(slide_id)
+        if before and after and bool(before.get("active", True)) != bool(after.get("active", True)):
+            audit.record_event(
+                actor=actor(),
+                action="material.publish" if after.get("active", True) else "material.unpublish",
+                target_type="material",
+                target_id=slide_id,
+                group=str(after.get("group") or before.get("group") or ""),
+                before=snapshot(before),
+                after=snapshot(after),
+            )
+        return jsonify(payload)
 
     def api_delete_slide(slide_id):
         denied = require_admin()
         if denied:
             return denied
+        before = repository.get_material(slide_id)
         try:
-            return jsonify(service.delete_material(slide_id, paths=paths, storage_runtime=runtime))
+            payload = service.delete_material(slide_id, paths=paths, storage_runtime=runtime)
         except ApiError as exc:
             return _legacy_error(exc)
+        audit.record_event(
+            actor=actor(),
+            action="material.delete",
+            target_type="material",
+            target_id=slide_id,
+            group=str((before or {}).get("group") or ""),
+            before=snapshot(before),
+        )
+        return jsonify(payload)
 
     app.add_url_rule("/api/slides", endpoint="api_list_slides", view_func=api_list_slides, methods=["GET"])
     app.add_url_rule("/api/slides/admin", endpoint="api_admin_slides", view_func=api_admin_slides, methods=["GET"])

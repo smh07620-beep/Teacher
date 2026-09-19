@@ -138,6 +138,65 @@ class R2BudgetRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(client.calls[0]["Key"], "_staging/expired")
 
+    def test_cleanup_deletes_stale_single_put_object_without_multipart_abort(self):
+        policy = self.policy(multipart_abandon_hours=6)
+        old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=7)).isoformat()
+        worker_repository.create_upload_session(
+            {
+                "id": "expired-single",
+                "job_id": "job-expired-single",
+                "material_id": "m-single",
+                "staging_key": "_staging/expired-single",
+                "original_name": "notes.pdf",
+                "source_sha256": "",
+                "source_bytes": 200,
+                "r2_upload_id": "",
+                "part_size": 200,
+                "expected_parts": 1,
+                "payload": {"uploadMode": "single"},
+                "completed_parts": [],
+                "status": "uploading",
+                "created_at": old,
+                "updated_at": old,
+            }
+        )
+        r2_budget.reserve_upload(
+            "expired-single",
+            "_staging/expired-single",
+            200,
+            policy=policy,
+        )
+
+        class R2:
+            deleted = []
+            aborted = []
+
+            def delete_object(self, **kwargs):
+                self.deleted.append(kwargs)
+                return {}
+
+            def abort_multipart_upload(self, **kwargs):
+                self.aborted.append(kwargs)
+                return {}
+
+        client = R2()
+        with patch.object(r2_budget.providers, "r2_client", return_value=client), patch.object(
+            r2_budget.providers, "R2_BUCKET_NAME", "bucket"
+        ):
+            self.assertEqual(r2_budget.cleanup_budget_state(policy=policy), 1)
+        self.assertEqual(
+            worker_repository.get_upload_session("expired-single")["status"],
+            "expired",
+        )
+        self.assertEqual(client.aborted, [])
+        self.assertEqual(client.deleted[0]["Key"], "_staging/expired-single")
+        self.assertEqual(
+            self.scalar(
+                "SELECT release_reason FROM r2_upload_reservations WHERE upload_id='expired-single'"
+            ),
+            "single_put_expired",
+        )
+
     def test_level_thresholds_match_60_80_90_contract(self):
         policy = self.policy(free_only=True)
         self.assertEqual(r2_budget.budget_level(59.9, policy=policy), "green")

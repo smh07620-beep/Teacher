@@ -37,9 +37,10 @@ class FinalUiRuntimeCleanup72Tests(unittest.TestCase):
         self.assertNotIn('window.courseWizard681Create', self.system_admin)
         self.assertNotIn('course-wizard-681', self.system_admin)
 
-    def test_session_rbac_compatibility_glue_is_intentionally_retained(self):
-        self.assertIn('async function getAdminKey()', self.system_admin)
-        self.assertIn("return 'rbac-session'", self.system_admin)
+    def test_session_rbac_no_longer_needs_admin_key_compatibility_glue(self):
+        self.assertNotIn('getAdminKey', self.system_admin)
+        self.assertNotIn('X-Admin-Key', self.system_admin)
+        self.assertNotIn('rbac-session', self.system_admin)
 
     def test_studio_javascript_syntax(self):
         completed = subprocess.run(

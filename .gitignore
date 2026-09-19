@@ -6,6 +6,7 @@
 *.env
 *.env.*
 !.env.example
+!.local-worker.env.example
 .pytest_cache/
 __pycache__/
 .venv/

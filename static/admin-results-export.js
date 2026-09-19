@@ -25,8 +25,8 @@
     // Leave legacy duty/member checkboxes blank here; persisted-record exports use
     // the server-owned role value through buildRecordDocPayload().
     const roleInput = '';
-    const evaluatorNameInput = document.getElementById('evaluator-name').value.trim();
-    const evaluatorTitleInput = document.getElementById('evaluator-title').value;
+    const evaluatorNameInput = allQuizData[currentCatKey]?.evaluatorName || '';
+    const evaluatorTitleInput = allQuizData[currentCatKey]?.evaluatorTitle || '';
     const quizList = allQuizData[currentCatKey].questions;
     const userAnswers = userAnswersMap[currentCatKey];
     const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];

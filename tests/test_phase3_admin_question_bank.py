@@ -29,11 +29,11 @@ class Phase3AdminQuestionBankTests(unittest.TestCase):
             self.assertIn(f'window.{name}', source)
         self.assertIn('/api/quiz-categories?group=', source)
         self.assertIn('/api/quiz-categories/admin?group=', source)
-        self.assertIn('X-Admin-Key', source)
+        self.assertNotIn('X-Admin-Key', source)
 
     def test_question_bank_module_keeps_existing_rbac_boundary(self):
         source = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
-        self.assertIn('getAdminKey', source)
+        self.assertNotIn('getAdminKey', source)
         self.assertNotIn('professional_title', source)
         self.assertNotIn('responsibility_tags', source)
         self.assertNotIn('localStorage.setItem', source)

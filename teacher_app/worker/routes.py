@@ -23,6 +23,7 @@ from teacher_app.learning.routes import auto_index_material
 from teacher_app.materials.validation import normalize_material_filename
 from teacher_app.worker import protocol as worker_protocol
 from teacher_app.worker import repository as worker_repository
+from teacher_app.worker import operations as worker_operations
 from teacher_app.worker.web_runtime import WorkerWebRuntime, runtime_from_owner
 
 
@@ -97,6 +98,45 @@ def _heartbeat(runtime: WorkerWebRuntime, worker_id: str, capabilities=None, cur
         ),
         connection_factory=runtime.connection_factory,
     )
+
+
+def _published_identity(job: dict, body: dict) -> tuple[str, str, str, dict]:
+    backend = str(body.get("backend") or "").strip().lower()
+    source_sha256 = str(body.get("sourceSha256") or "").strip().lower()
+    publish_key = str(body.get("publishKey") or "").strip()
+    result = body.get("result") if isinstance(body.get("result"), dict) else {}
+    expected_key = worker_protocol.material_publish_key(
+        job.get("id"),
+        job.get("materialId"),
+        source_sha256,
+        backend,
+    )
+    stored_source = str(job.get("sourceSha256") or "").strip().lower()
+    if stored_source and not hmac.compare_digest(stored_source, source_sha256):
+        raise ValueError("publish source SHA256 與工作不符。")
+    if not publish_key or not hmac.compare_digest(expected_key, publish_key):
+        raise ValueError("publish identity 與工作不符。")
+    if str(result.get("storageBackend") or "").strip().lower() != backend:
+        raise ValueError("publish result storage backend 不符。")
+    if not hmac.compare_digest(str(result.get("publishKey") or ""), publish_key):
+        raise ValueError("publish result key 不符。")
+    if not hmac.compare_digest(str(result.get("publishSourceSha256") or "").lower(), source_sha256):
+        raise ValueError("publish result source SHA256 不符。")
+    if not str(result.get("storageKey") or "").strip():
+        raise ValueError("publish result 缺少 storage key。")
+    return publish_key, backend, source_sha256, result
+
+
+def _receipt_matches_complete(receipt: dict, worker_id: str, body: dict) -> tuple[bool, str]:
+    publish_key = str(body.get("publishKey") or "").strip()
+    result = body.get("result") if isinstance(body.get("result"), dict) else {}
+    if not worker_id or not hmac.compare_digest(str(receipt.get("workerId") or ""), worker_id):
+        return False, "工作狀態或 Worker ownership 不符。"
+    if not publish_key or not hmac.compare_digest(str(receipt.get("publishKey") or ""), publish_key):
+        return False, "publish receipt identity 不符。"
+    if dict(receipt.get("result") or {}) != dict(result):
+        return False, "publish receipt result 不符。"
+    return True, ""
 
 
 def _safe_upload_filename(value) -> tuple[str, str]:
@@ -292,6 +332,11 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         if not worker_id: return jsonify({"error": "workerId 不合法。"}), 400
         runtime.cleanup_budget_state()
         _heartbeat(runtime, worker_id, body.get("capabilities"), metadata=body)
+        worker_operations.recover_stale_processing_jobs(
+            runtime.staging_exists,
+            stale_seconds=int(_runtime_value(runtime.stale_seconds) or 1800),
+            connection_factory=runtime.connection_factory,
+        )
         job = worker_repository.claim_next_material_job(
             worker_id,
             now=_now(),
@@ -347,17 +392,82 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
             if error: return error
         return jsonify({"ok": True, "lastSeen": _heartbeat(runtime, worker_id, body.get("capabilities"), job_id, body)})
 
+    @app.post("/api/material-worker/<job_id>/published")
+    def material_worker_published(job_id):
+        denied = _worker_auth(runtime)
+        if denied: return denied
+        body = request.get_json(silent=True) or {}
+        worker_id = _worker_id(body.get("workerId"))
+        if not worker_id:
+            return jsonify({"error": "workerId 不合法。"}), 400
+        job, error = _worker_owned(runtime, job_id, worker_id)
+        if error: return error
+        try:
+            publish_key, backend, source_sha256, result = _published_identity(job, body)
+            receipt, replayed = worker_repository.record_publish_receipt(
+                job_id=job_id,
+                publish_key=publish_key,
+                material_id=str(job.get("materialId") or ""),
+                source_sha256=source_sha256,
+                backend=backend,
+                worker_id=worker_id,
+                result=result,
+                provider_ref=str(result.get("storageKey") or ""),
+                stamp=_now(),
+                connection_factory=runtime.connection_factory,
+            )
+        except ValueError as exc:
+            return jsonify({"error": str(exc)[:300]}), 409
+        return jsonify({
+            "ok": True,
+            "status": "published",
+            "publishKey": receipt.get("publishKey", ""),
+            "replayed": bool(replayed),
+        })
+
     def terminal(job_id, action):
         denied = _worker_auth(runtime)
         if denied: return denied
         body = request.get_json(silent=True) or {}; worker_id = _worker_id(body.get("workerId"))
+        if action == "complete":
+            existing = worker_repository.get_material_job(
+                job_id,
+                include_payload=True,
+                connection_factory=runtime.connection_factory,
+            )
+            if existing and existing.get("status") == "completed":
+                receipt = worker_repository.get_publish_receipt(
+                    job_id,
+                    connection_factory=runtime.connection_factory,
+                )
+                if not receipt:
+                    return jsonify({"error": "找不到 provider publish receipt。"}), 409
+                matched, reason = _receipt_matches_complete(receipt, worker_id, body)
+                if not matched or not hmac.compare_digest(str(existing.get("workerId") or ""), worker_id):
+                    return jsonify({"error": reason or "工作狀態或 Worker ownership 不符。"}), 409
+                return jsonify({
+                    "ok": True,
+                    "status": "completed",
+                    "cleanupPending": bool(existing.get("cleanupPending", False)),
+                    "replayed": True,
+                    "publishKey": receipt.get("publishKey", ""),
+                })
         job, error = _worker_owned(runtime, job_id, worker_id)
         if error: return error
         detail = str(body.get("error") or "")[:1200]
         now = _now()
         if action == "complete":
+            receipt = worker_repository.get_publish_receipt(
+                job_id,
+                connection_factory=runtime.connection_factory,
+            )
+            if not receipt:
+                return jsonify({"error": "尚未確認 provider publish receipt。"}), 409
+            matched, reason = _receipt_matches_complete(receipt, worker_id, body)
+            if not matched:
+                return jsonify({"error": reason}), 409
             try:
-                result = runtime.commit_result(job, body.get("result") if isinstance(body.get("result"), dict) else {})
+                result = runtime.commit_result(job, dict(receipt.get("result") or {}))
             except (ValueError, TypeError) as exc:
                 return jsonify({"error": str(exc)[:300]}), 400
             cleanup_pending = False
@@ -389,7 +499,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
                 auto_index_material(app, str(result.get("id") or job.get("materialId") or ""))
             except Exception:
                 pass
-            return jsonify({"ok": True, "status": "completed", "cleanupPending": cleanup_pending})
+            return jsonify({"ok": True, "status": "completed", "cleanupPending": cleanup_pending, "publishKey": receipt.get("publishKey", "")})
         if action == "retry":
             retry = worker_protocol.retry_plan(
                 job.get("attempts", 0),

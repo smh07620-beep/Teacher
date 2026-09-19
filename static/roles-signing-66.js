@@ -95,8 +95,6 @@
 
     window.createAdminUserAccount = async function () {
       const status = document.getElementById('admin-user-status');
-      const key = typeof getAdminKey === 'function' ? await getAdminKey() : null;
-      if (!key) return;
 
       const mainRole = canonical(
         document.getElementById('admin-user-role')?.value || 'student'
@@ -121,8 +119,7 @@
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Key': key
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
       });
@@ -237,11 +234,8 @@
     const status = document.getElementById('role66-status');
     if (status) status.textContent = '讀取帳號中…';
 
-    const key = typeof getAdminKey === 'function' ? await getAdminKey() : null;
-    if (!key) return;
-
     const response = await fetch('/api/users', {
-      headers: { 'X-Admin-Key': key },
+
       cache: 'no-store'
     });
 
@@ -286,16 +280,12 @@
     const roles = checkedRoles('manage');
     if (!roles.includes(primary)) roles.unshift(primary);
 
-    const key = typeof getAdminKey === 'function' ? await getAdminKey() : null;
-    if (!key) return;
-
     if (status) status.textContent = '儲存身分中…';
 
     const response = await fetch(`/api/users/${encodeURIComponent(username)}`, {
       method: 'PATCH',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Admin-Key': key
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         role: primary,

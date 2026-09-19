@@ -11,7 +11,7 @@ import os
 
 from flask import g, has_request_context, jsonify, request, send_file
 
-from teacher_app.common import db as common_db
+from teacher_app.common import audit, db as common_db
 from teacher_app.common.auth import has_permission, normalize_role, user_roles
 from teacher_app.maintenance import backup as maintenance_backup
 from teacher_app.storage import providers
@@ -117,10 +117,22 @@ def register_backup_restore(owner, *, connection_factory=_DEFAULT_CONNECTION_FAC
 
     @app.get("/api/maintenance/backup")
     def teacher_backup_download():
-        _user, denied = _auth(owner, {"education_admin", "system_admin"})
+        user, denied = _auth(owner, {"education_admin", "system_admin"})
         if denied:
             return denied
         payload = build_backup(connection_factory)
+        audit.record_event(
+            actor=user,
+            action="backup.export",
+            target_type="backup",
+            target_id=str(payload.get("createdAt") or ""),
+            detail={
+                "format": payload.get("format", ""),
+                "createdAt": payload.get("createdAt", ""),
+                "tableCount": len(payload.get("tables") or {}),
+                "tables": sorted((payload.get("tables") or {}).keys()),
+            },
+        )
         data = _zip_payload(payload)
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
         return send_file(
@@ -132,7 +144,7 @@ def register_backup_restore(owner, *, connection_factory=_DEFAULT_CONNECTION_FAC
 
     @app.post("/api/maintenance/restore")
     def teacher_backup_restore():
-        _user, denied = _auth(owner, {"education_admin", "system_admin"})
+        user, denied = _auth(owner, {"education_admin", "system_admin"})
         if denied:
             return denied
         if str(request.form.get("confirm", "")) != "RESTORE":
@@ -140,6 +152,17 @@ def register_backup_restore(owner, *, connection_factory=_DEFAULT_CONNECTION_FAC
         try:
             payload = _read_backup_upload()
             restored = maintenance_backup.restore_backup(payload, connection_factory)
+            audit.record_event(
+                actor=user,
+                action="backup.restore",
+                target_type="backup",
+                target_id=str(payload.get("createdAt") or ""),
+                detail={
+                    "format": payload.get("format", ""),
+                    "backupCreatedAt": payload.get("createdAt", ""),
+                    "restored": restored,
+                },
+            )
             return jsonify({
                 "ok": True,
                 "restored": restored,

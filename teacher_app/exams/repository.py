@@ -71,6 +71,7 @@ def init_schema(base=None) -> None:
                 group_key TEXT NOT NULL DEFAULT 'grpBio', training_area TEXT NOT NULL DEFAULT 'internal',
                 course_id TEXT NOT NULL DEFAULT '', passing_score INTEGER NOT NULL DEFAULT 80,
                 publication_id TEXT NOT NULL DEFAULT '', publication_hash TEXT NOT NULL DEFAULT '',
+                evaluator_name TEXT NOT NULL DEFAULT '', evaluator_title TEXT NOT NULL DEFAULT '',
                 questions_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'started',
                 record_id TEXT NOT NULL DEFAULT '', started_at TEXT NOT NULL, submitted_at TEXT NOT NULL DEFAULT ''
             )
@@ -89,7 +90,7 @@ def get_attempt(conn, kind: str, attempt_id: str) -> dict[str, Any] | None:
 def create_attempt(conn, kind: str, attempt: Mapping[str, Any]) -> None:
     ph = placeholder(kind)
     columns = ("id", "username", "emp_id", "quiz_category_id", "quiz_title", "group_key", "training_area",
-               "course_id", "passing_score", "publication_id", "publication_hash", "questions_json", "status",
+               "course_id", "passing_score", "publication_id", "publication_hash", "evaluator_name", "evaluator_title", "questions_json", "status",
                "record_id", "started_at", "submitted_at")
     conn.execute(f"INSERT INTO exam_attempts ({','.join(columns)}) VALUES ({','.join([ph] * len(columns))})",
                  tuple(attempt[column] for column in columns))

@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import concurrent.futures
+import datetime as dt
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
+from teacher_app.maintenance import migrations
 from teacher_app.worker import protocol
 from teacher_app.worker import repository
+from teacher_app.worker import operations
 
 
 class WorkerRepositoryPhase4Tests(unittest.TestCase):
@@ -215,6 +218,81 @@ class WorkerRepositoryPhase4Tests(unittest.TestCase):
                 connection_factory=self.connect,
             )
         )
+
+    def test_canonical_stale_recovery_requeues_or_fails_and_clears_owner(self):
+        stale = self.job("stale-ok", created="2026-09-18T09:00:00+00:00")
+        stale.update({"status": "processing", "worker_id": "worker-a", "worker_last_seen": "2026-09-18T09:05:00+00:00"})
+        repository.create_material_job(stale, connection_factory=self.connect)
+        missing = self.job("stale-missing", created="2026-09-18T09:00:00+00:00")
+        missing.update({"status": "processing", "worker_id": "worker-b", "worker_last_seen": "2026-09-18T09:05:00+00:00"})
+        repository.create_material_job(missing, connection_factory=self.connect)
+
+        recovered = operations.recover_stale_processing_jobs(
+            lambda job: job["id"] == "stale-ok",
+            stale_seconds=300,
+            now=dt.datetime(2026, 9, 18, 11, 0, tzinfo=dt.timezone.utc),
+            connection_factory=self.connect,
+        )
+        self.assertEqual(recovered, {"requeued": 1, "failed": 1, "lostRace": 0})
+        queued = repository.get_material_job("stale-ok", include_payload=True, connection_factory=self.connect)
+        failed = repository.get_material_job("stale-missing", include_payload=True, connection_factory=self.connect)
+        self.assertEqual(queued["status"], "queued")
+        self.assertEqual(queued["workerId"], "")
+        self.assertEqual(queued["workerLastSeen"], "")
+        self.assertEqual(failed["status"], "failed")
+        self.assertEqual(failed["workerId"], "")
+
+    def test_canonical_stale_recovery_loses_to_fresh_heartbeat(self):
+        stale = self.job("stale-race", created="2026-09-18T09:00:00+00:00")
+        stale.update({"status": "processing", "worker_id": "worker-a", "worker_last_seen": "2026-09-18T09:05:00+00:00"})
+        repository.create_material_job(stale, connection_factory=self.connect)
+
+        def staging_exists(job):
+            self.assertEqual(job["workerId"], "worker-a")
+            self.assertTrue(
+                repository.touch_owned_material_job(
+                    "stale-race",
+                    "worker-a",
+                    seen_at="2026-09-18T10:59:59+00:00",
+                    connection_factory=self.connect,
+                )
+            )
+            return True
+
+        recovered = operations.recover_stale_processing_jobs(
+            staging_exists,
+            stale_seconds=300,
+            now=dt.datetime(2026, 9, 18, 11, 0, tzinfo=dt.timezone.utc),
+            connection_factory=self.connect,
+        )
+        self.assertEqual(recovered, {"requeued": 0, "failed": 0, "lostRace": 1})
+        current = repository.get_material_job("stale-race", include_payload=True, connection_factory=self.connect)
+        self.assertEqual(current["status"], "processing")
+        self.assertEqual(current["workerId"], "worker-a")
+        self.assertEqual(current["updatedAt"], "2026-09-18T10:59:59+00:00")
+
+    def test_0079_publish_receipt_migration_is_additive_on_sqlite_and_postgres(self):
+        conn, kind = self.connect()
+        try:
+            migrations._provider_publish_receipts_79(conn, kind)
+            migrations._provider_publish_receipts_79(conn, kind)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(material_publish_receipts)").fetchall()}
+        finally:
+            conn.close()
+        self.assertTrue({"job_id", "publish_key", "source_sha256", "backend", "worker_id", "result", "published_at"}.issubset(columns))
+
+        class Recorder:
+            def __init__(self): self.calls = []
+            def execute(self, sql, params=()):
+                self.calls.append((sql, tuple(params)))
+                return self
+            def fetchall(self): return []
+
+        recorder = Recorder()
+        migrations._provider_publish_receipts_79(recorder, "postgres")
+        sql = "\n".join(statement for statement, _params in recorder.calls)
+        self.assertIn("material_publish_receipts", sql)
+        self.assertIn("result JSONB NOT NULL DEFAULT '{}'::jsonb", sql)
 
     def test_admin_cancel_snapshot_cannot_overwrite_a_concurrent_claim(self):
         repository.create_material_job(self.job(), connection_factory=self.connect)

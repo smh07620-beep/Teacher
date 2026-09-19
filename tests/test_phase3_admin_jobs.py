@@ -27,12 +27,12 @@ class Phase3AdminJobsTests(unittest.TestCase):
         self.assertIn('/api/material-jobs?limit=20', source)
         self.assertIn('/retry', source)
         self.assertIn('/cancel', source)
-        self.assertIn('X-Admin-Key', source)
+        self.assertNotIn('X-Admin-Key', source)
 
     def test_jobs_module_keeps_refresh_state_private_and_security_boundary(self):
         source = ROOT.joinpath('static/admin-jobs.js').read_text(encoding='utf-8')
         self.assertIn('let materialJobsRefreshTimer = null;', source)
-        self.assertIn('getAdminKey', source)
+        self.assertNotIn('getAdminKey', source)
         self.assertNotIn('professional_title', source)
         self.assertNotIn('responsibility_tags', source)
         self.assertNotIn('localStorage.setItem', source)

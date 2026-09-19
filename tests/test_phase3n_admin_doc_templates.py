@@ -21,10 +21,11 @@ class Phase3NAdminDocTemplatesTests(unittest.TestCase):
         self.assertIn("data-csp-click=\"adminTriggerDocTemplateUpload", self.source)
         self.assertIn("data-csp-click=\"adminDeleteDocTemplate", self.source)
 
-    def test_template_api_and_admin_key_contract_stay_intact(self):
+    def test_template_api_uses_session_rbac_without_admin_key(self):
         for endpoint in ("/api/doc-templates", "/api/doc-templates/${groupKey}"):
             self.assertIn(endpoint, self.source)
-        self.assertIn("'X-Admin-Key':key", self.source)
+        self.assertNotIn("X-Admin-Key", self.source)
+        self.assertNotIn("getAdminKey", self.source)
         self.assertIn("method:'POST'", self.source)
         self.assertIn("method:'DELETE'", self.source)
 

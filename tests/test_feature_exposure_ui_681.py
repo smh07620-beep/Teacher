@@ -29,6 +29,9 @@ class FeatureExposureUi681Tests(unittest.TestCase):
         self.assertIn("/api/questions/", self.advanced)
         self.assertIn("出題藍圖", self.advanced)
         self.assertIn("題目分析", self.advanced)
+        self.assertIn("advanced-blueprint-quality-74", self.advanced)
+        self.assertIn("qualityMode", self.advanced)
+        self.assertIn("平衡模式", self.advanced)
         for forbidden in (
             "/api/ai-questions/generate",
             "/api/question-bank/drafts",

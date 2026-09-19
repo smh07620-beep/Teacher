@@ -117,7 +117,7 @@ Create reusable checks for:
 - assignment/group relationship
 - immutable/finalized state
 
-Avoid using `X-Admin-Key` as the only authorization mechanism for user-facing role actions. If it must remain for legacy administration, place RBAC checks on top and plan its deprecation.
+The legacy browser `X-Admin-Key` authorization compatibility seam has been removed. User-facing role actions must use authenticated session RBAC/scope checks; sensitive administration additionally uses the explicit elevation flow.
 
 ## Permission matrix
 

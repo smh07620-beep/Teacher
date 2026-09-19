@@ -1,7 +1,4 @@
 /* V5.9.0 · 共用狀態、身分與組別路由 */
-const EVALUATOR_NAME_MEMORY_KEY = 'smh_evaluator_name';
-const EVALUATOR_TITLE_MEMORY_KEY = 'smh_evaluator_title';
-const EVALUATOR_HISTORY_MEMORY_KEY = 'smh_evaluator_history_v1';
 const LEARNER_NAME_MEMORY_KEY = AppCore.memoryKeys.learnerName;
 const LEARNER_EMPID_MEMORY_KEY = AppCore.memoryKeys.learnerEmpId;
 
@@ -55,50 +52,6 @@ function handleGlobalLearningSearchKey(event){
 }
 
 function goBackLearning(){ location.href=currentTrainingArea==='pgy'?'/pgy':'/internal'; }
-
-function getEvaluatorHistory() {
-    try {
-        const raw = JSON.parse(readLocalMemory(EVALUATOR_HISTORY_MEMORY_KEY) || '[]');
-        return Array.isArray(raw) ? raw.filter(x => x && typeof x.name === 'string' && x.name.trim()).slice(0, 20) : [];
-    } catch (_) {
-        return [];
-    }
-}
-
-function renderEvaluatorHistory() {
-    const list = document.getElementById('evaluator-name-history');
-    if (!list) return;
-    list.innerHTML = getEvaluatorHistory().map(x => `<option value="${escapeHtml(x.name)}">${escapeHtml(x.title || '')}</option>`).join('');
-}
-
-function applyRememberedEvaluatorTitle() {
-    const name = document.getElementById('evaluator-name')?.value.trim() || '';
-    const titleEl = document.getElementById('evaluator-title');
-    if (!name || !titleEl) return;
-    const found = getEvaluatorHistory().find(x => x.name === name);
-    if (found && found.title) titleEl.value = found.title;
-}
-
-function rememberEvaluatorFields() {
-    const name = document.getElementById('evaluator-name')?.value.trim() || '';
-    const title = document.getElementById('evaluator-title')?.value || '';
-    writeLocalMemory(EVALUATOR_NAME_MEMORY_KEY, name);
-    writeLocalMemory(EVALUATOR_TITLE_MEMORY_KEY, title);
-    if (name) {
-        const history = getEvaluatorHistory().filter(x => x.name !== name);
-        history.unshift({ name, title });
-        writeLocalMemory(EVALUATOR_HISTORY_MEMORY_KEY, JSON.stringify(history.slice(0, 20)));
-        renderEvaluatorHistory();
-    }
-}
-
-function loadRememberedEvaluatorFields() {
-    const nameEl = document.getElementById('evaluator-name');
-    const titleEl = document.getElementById('evaluator-title');
-    if (nameEl) nameEl.value = readLocalMemory(EVALUATOR_NAME_MEMORY_KEY);
-    if (titleEl) titleEl.value = readLocalMemory(EVALUATOR_TITLE_MEMORY_KEY);
-    renderEvaluatorHistory();
-}
 
 // ==================================================================
 // 六大組別 (Top-level Groups)
@@ -212,10 +165,14 @@ function switchLearningModule(module){
     window.scrollTo({top:0,behavior:'smooth'});
 }
 
-// This navigation entry opens the reader in the current area and group.
-// Management actions remain behind the explicit "開啟管理後台" control.
-function openTeachingMaterials(){
-    switchLearningModule('materials');
+// The role-aware header entry is the single management entry for staff.
+// The admin router keeps the canonical course/material workspace as the
+// default landing surface and applies server-backed RBAC before opening it.
+async function openTeachingMaterials(){
+    if(typeof window.openAdminWorkspace==='function'){
+        return window.openAdminWorkspace('course-materials');
+    }
+    return window.toggleAdminModal?.(true);
 }
 
 // 切換組別：同時刷新目前所在的投影片區 / 考試區內容

@@ -24,6 +24,13 @@ class WorkspaceShell70Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
+    def test_dynamic_workspace_buttons_have_explicit_workspace_identity(self):
+        self.assertIn("item.dataset.adminWorkspace = workspace", self.source)
+        router = ROOT.joinpath("static", "admin-workspace.js").read_text(encoding="utf-8")
+        self.assertIn("document.querySelectorAll('.admin-nav-btn')", router)
+        self.assertIn("button.dataset.adminWorkspace", router)
+        self.assertIn("button.classList.toggle('bg-teal-700', active)", router)
+
     def test_workspace_waits_for_canonical_rbac_before_projecting_multirole_surface(self):
         self.assertIn("(async function ()", self.source)
         self.assertIn("window.TeacherRBAC681Ready", self.source)
@@ -53,20 +60,26 @@ class WorkspaceShell70Tests(unittest.TestCase):
         for marker in (
             "surfaceKey === 'audit'",
             "admin-section-audit",
+            "'/api/audit/events?limit=300'",
             "'/api/pgy/audit'",
+            "'/api/external-media/report?limit=100'",
             "唯讀稽核資料",
             "不提供新增、修改、發布或刪除操作",
             "navHost.replaceChildren(navGroup('稽核／唯讀'",
         ):
             self.assertIn(marker, self.source)
-        # The dedicated audit loader is GET-only and never sends a mutation method.
+        # Auditors remain GET-only.  The same workspace may expose an explicit
+        # material.manage-gated verification action to a system administrator.
         audit_block = self.source[
             self.source.index("async function renderAudit"):
             self.source.index("const adminShell = window.AdminWorkspaceShell")
         ]
-        self.assertNotIn("method:", audit_block)
+        self.assertIn("const canVerifyExternalMedia = has('material.manage')", self.source)
+        self.assertIn("canVerifyExternalMedia?", audit_block)
+        self.assertIn("external-media/verify", audit_block)
         self.assertNotIn("security-status-70", audit_block)
         self.assertNotIn("/api/security/status", audit_block)
+        self.assertIn("const [generalResponse, pgyResponse, externalResponse] = await Promise.all", audit_block)
 
     def test_auditor_entry_does_not_unlock_teacher_panels(self):
         self.assertIn("navHost.replaceChildren(navGroup('稽核／唯讀'", self.source)

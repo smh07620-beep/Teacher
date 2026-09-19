@@ -29,10 +29,8 @@
   window.renderMaterialJobs = async function(force=false){
     const host=document.getElementById('admin-material-jobs-list');
     if(!host) return;
-    const key=await getAdminKey();
-    if(!key) return;
     try{
-      const r=await fetch(`/api/material-jobs?limit=20${force?'&refresh=1':''}`,{headers:{'X-Admin-Key':key},cache:'no-store'});
+      const r=await fetch(`/api/material-jobs?limit=20${force?'&refresh=1':''}`,{cache:'no-store'});
       const d=await r.json().catch(()=>({}));
       if(!r.ok) throw new Error(d.error||'背景工作讀取失敗');
       const jobs=d.jobs||[];
@@ -62,9 +60,7 @@
   };
 
   window.retryMaterialJob = async function(id){
-    const key=await getAdminKey();
-    if(!key) return;
-    const r=await fetch(`/api/material-jobs/${encodeURIComponent(id)}/retry`,{method:'POST',headers:{'X-Admin-Key':key}});
+    const r=await fetch(`/api/material-jobs/${encodeURIComponent(id)}/retry`,{method:'POST',});
     const d=await r.json().catch(()=>({}));
     if(!r.ok){
       alert(d.error||'重新處理失敗');
@@ -75,9 +71,7 @@
 
   window.cancelMaterialJob = async function(id){
     if(!confirm('確定取消尚未開始的教材背景工作？')) return;
-    const key=await getAdminKey();
-    if(!key) return;
-    const r=await fetch(`/api/material-jobs/${encodeURIComponent(id)}/cancel`,{method:'POST',headers:{'X-Admin-Key':key}});
+    const r=await fetch(`/api/material-jobs/${encodeURIComponent(id)}/cancel`,{method:'POST',});
     const d=await r.json().catch(()=>({}));
     if(!r.ok){
       alert(d.error||'取消失敗');

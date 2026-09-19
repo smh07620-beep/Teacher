@@ -26,8 +26,6 @@
   window.submitEssayReview = async function(){
     if(currentReviewRecordIndex === null) return;
     const r = adminRecords[currentReviewRecordIndex];
-    const key = await getAdminKey();
-    if(!key) return;
     const reviewerName = document.getElementById('essay-reviewer-name').value.trim();
     if(!reviewerName){
       alert('請填寫批改者姓名；每一題問答題都會保存此批改者。');
@@ -48,7 +46,7 @@
     }
     const res = await fetch(`/api/records/${encodeURIComponent(r.id)}/review`, {
       method:'PATCH',
-      headers:{'Content-Type':'application/json','X-Admin-Key':key},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         essayScores,
         essayComments,

@@ -9,6 +9,8 @@ from __future__ import annotations
 from flask import g, jsonify, request
 
 from teacher_app.common import scope, scope_filter
+from teacher_app.common import audit as audit_store
+from teacher_app.common.auth import has_permission, has_role
 from teacher_app.common.errors import ApiError
 from teacher_app.materials import external_media as external_media_service
 
@@ -35,6 +37,13 @@ def _current_user(owner=None):
     return resolver() if callable(resolver) else None
 
 
+def _hospital_hosts(app):
+    configured = app.config.get("EXTERNAL_MEDIA_HOSPITAL_CDN_HOSTS")
+    if configured is None:
+        configured = app.config.get("DIRECT_MEDIA_ALLOWLIST", [])
+    return external_media_service.normalize_hospital_cdn_hosts(configured or ())
+
+
 def register_external_media(owner):
     app = _app(owner)
     if app.extensions.get("teacher_external_media_68_registered"):
@@ -50,7 +59,7 @@ def register_external_media(owner):
             data = external_media_service.set_external_media(
                 material_id,
                 body.get("url"),
-                app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+                _hospital_hosts(app),
             )
         except ApiError as exc:
             return _error(exc)
@@ -70,7 +79,7 @@ def register_external_media(owner):
         try:
             result = external_media_service.create_external_material(
                 body,
-                app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+                _hospital_hosts(app),
             )
         except ApiError as exc:
             return _error(exc)
@@ -82,6 +91,59 @@ def register_external_media(owner):
             return jsonify({"error": "請先登入。", "loginRequired": True}), 401
         data = external_media_service.get_external_media(material_id)
         return jsonify({"externalMedia": data})
+
+    @app.get("/api/external-media/report")
+    def external_media_report():
+        user, denied = scope_filter.denied(owner, "material.manage", "audit.read")
+        if denied:
+            return denied
+        try:
+            limit = max(1, min(500, int(request.args.get("limit", "200") or 200)))
+        except (TypeError, ValueError):
+            limit = 200
+        try:
+            items = external_media_service.list_external_media_report(
+                status=request.args.get("status", ""),
+                limit=limit,
+            )
+        except ApiError as exc:
+            return _error(exc)
+
+        # audit.read is organization-wide read-only in the current policy.
+        # Group-scoped material managers without audit.read remain confined to
+        # their preferred group even though this is a list/report endpoint.
+        if not has_permission(user, "audit.read") and any(
+            has_role(user, role) for role in ("clinical_teacher", "group_leader")
+        ):
+            group = scope_filter.preferred_group(user)
+            items = [item for item in items if str(item.get("group") or "") == group]
+        return jsonify({"items": items, "count": len(items), "readOnly": True})
+
+    @app.post("/api/materials/<material_id>/external-media/verify")
+    def verify_external_media(material_id):
+        denied = scope_filter.require_permission(owner, "material.manage")
+        if denied:
+            return denied
+        try:
+            data = external_media_service.verify_external_media(
+                material_id,
+                allow_hosts=_hospital_hosts(app),
+            )
+        except ApiError as exc:
+            return _error(exc)
+        actor = _current_user(owner) or {}
+        audit_store.record_event(
+            actor=actor,
+            action="external_media.verify",
+            target_type="external_media",
+            target_id=material_id,
+            after={
+                "availabilityStatus": data.get("availabilityStatus", ""),
+                "lastVerifiedAt": data.get("lastVerifiedAt", ""),
+            },
+            detail={"provider": data.get("provider", "")},
+        )
+        return jsonify({"ok": True, "materialId": material_id, "externalMedia": data})
 
     app.extensions["teacher_external_media_68_registered"] = True
     return app

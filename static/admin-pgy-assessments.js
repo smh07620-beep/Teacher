@@ -42,11 +42,9 @@
     const type = pendingTemplateType;
     pendingTemplateType = '';
     if (!file || !type) return;
-    const key = await getAdminKey();
-    if (!key) return;
     const formData = new FormData();
     formData.append('file', file);
-    const response = await fetch(`/api/pgy-assessment-templates/${type}`, {method:'POST', headers:{'X-Admin-Key':key}, body:formData});
+    const response = await fetch(`/api/pgy-assessment-templates/${type}`, {method:'POST',  body:formData});
     const result = await response.json().catch(() => ({}));
     if (!response.ok) { alert('❌ ' + (result.error || '上傳失敗')); return; }
     alert(`✅ 範本檢查通過並已上傳（${result.validation?.kind?.toUpperCase?.() || '檔案'}，${Math.round((result.validation?.sizeBytes || 0) / 1024)} KB）`);
@@ -55,17 +53,13 @@
 
   async function deleteTemplate(type) {
     if (!confirm('確定刪除此 PGY 評量範本？')) return;
-    const key = await getAdminKey();
-    if (!key) return;
-    const response = await fetch(`/api/pgy-assessment-templates/${type}`, {method:'DELETE', headers:{'X-Admin-Key':key}});
+    const response = await fetch(`/api/pgy-assessment-templates/${type}`, {method:'DELETE', });
     if (!response.ok) { alert('刪除失敗'); return; }
     await renderTemplates();
   }
 
   async function importTslmEpa() {
-    const key = await getAdminKey();
-    if (!key) return;
-    const response = await fetch('/api/pgy-assessment-templates/import-tslm-epa', {method:'POST', headers:{'X-Admin-Key':key}});
+    const response = await fetch('/api/pgy-assessment-templates/import-tslm-epa', {method:'POST', });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) { alert(result.error || '匯入失敗'); return; }
     alert('已將台灣醫事檢驗學會 EPA 公版參考匯入院內範本庫');
@@ -75,10 +69,8 @@
   async function renderAssessments() {
     const box = document.getElementById('admin-pgy-records');
     if (!box) return;
-    const key = await getAdminKey();
-    if (!key) return;
     box.innerHTML = '<p class="text-xs text-slate-400">讀取評量紀錄中…</p>';
-    const response = await fetch('/api/pgy-assessments', {headers:{'X-Admin-Key':key}});
+    const response = await fetch('/api/pgy-assessments', {});
     const list = await response.json().catch(() => []);
     box.innerHTML = (list || []).length ? list.slice(0, 100).map(item => {
       const group = GROUPS[item.group] || GROUPS.grpBio;

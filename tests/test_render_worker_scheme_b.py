@@ -17,6 +17,7 @@ import pgy_app
 import schema_migrations
 from teacher_app.auth import service as auth_service
 from teacher_app.storage import providers
+from teacher_app.worker import protocol as worker_protocol
 
 
 ROOT = Path(__file__).parents[1]
@@ -46,6 +47,7 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         conn, kind = self.connect()
         try:
             schema_migrations._b_free_local_worker_67(conn, kind)
+            schema_migrations._provider_publish_receipts_79(conn, kind)
         finally:
             conn.close()
 
@@ -254,7 +256,32 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         ), patch.object(self.worker_runtime, "delete_staging") as deleted, patch.object(
             self.worker_runtime, "sync_media_processing_metadata", return_value=None
         ):
-            complete = client.post("/api/material-worker/complete-job/complete", json={"workerId": "worker-a", "result": {"storageBackend": "mega", "storageKey": "/materials/m-complete/source.txt"}}, headers=headers)
+            publish_key = worker_protocol.material_publish_key(
+                "complete-job", "m-complete", "a" * 64, "mega"
+            )
+            result = {
+                "storageBackend": "mega",
+                "storageKey": "/materials/m-complete/source.txt",
+                "publishKey": publish_key,
+                "publishSourceSha256": "a" * 64,
+            }
+            published = client.post(
+                "/api/material-worker/complete-job/published",
+                json={
+                    "workerId": "worker-a",
+                    "publishKey": publish_key,
+                    "backend": "mega",
+                    "sourceSha256": "a" * 64,
+                    "result": result,
+                },
+                headers=headers,
+            )
+            self.assertEqual(published.status_code, 200, published.get_data(as_text=True))
+            complete = client.post(
+                "/api/material-worker/complete-job/complete",
+                json={"workerId": "worker-a", "publishKey": publish_key, "result": result},
+                headers=headers,
+            )
         self.assertEqual(complete.status_code, 200, complete.get_data(as_text=True)); deleted.assert_called_once()
         self.assertEqual(appmod.get_material_job("complete-job")["status"], "completed")
 

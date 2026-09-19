@@ -1,7 +1,7 @@
 """Teacher local material worker (outbound HTTPS only)."""
 from __future__ import annotations
 import datetime as dt
-import hashlib, json, os, re, socket, subprocess, sys, tempfile, time
+import hashlib, json, os, re, socket, subprocess, sys, tempfile, threading, time
 from pathlib import Path
 import requests
 from PIL import Image, ImageOps, ImageSequence
@@ -13,12 +13,15 @@ from teacher_app.materials.validation import (
 )
 from teacher_app.materials import classification
 from teacher_app.storage.worker_runtime import OFFICE_EXT, WorkerMaterialStorageAdapter
+from teacher_app.worker import protocol as worker_protocol
 
 BASE_URL=os.environ.get("TEACHER_BASE_URL", "").rstrip("/")
 TOKEN=os.environ.get("MATERIAL_WORKER_TOKEN", "")
 WORKER_ID=os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{socket.gethostname()}:{os.getpid()}"
 POLL_SECONDS=max(2,min(60,int(os.environ.get("MATERIAL_WORKER_POLL_SECONDS","5"))))
 REQUEST_TIMEOUT=max(10,min(600,int(os.environ.get("MATERIAL_WORKER_HTTP_TIMEOUT","120"))))
+HEARTBEAT_SECONDS=max(5,min(90,int(os.environ.get("MATERIAL_WORKER_HEARTBEAT_SECONDS","30"))))
+COMPLETE_RETRIES=4
 VIDEO_EXT={".mp4",".webm",".mov",".m4v"}; AUDIO_EXT={".mp3",".wav",".m4a",".ogg"}
 EXIF_RASTER_EXT={".jpg",".jpeg",".png",".webp"}
 RESTART_FOR_UPDATE=75
@@ -131,9 +134,10 @@ class WorkerApi:
             except Exception:message=response.text[:300]
             raise RuntimeError(f"Worker API {response.status_code}: {message}")
         return response.json()
-    def heartbeat(self,job_id=""):
+    def heartbeat(self,job_id="",capabilities=None):
         path=f"/api/material-worker/{job_id}/heartbeat" if job_id else "/api/material-worker/heartbeat"
-        return self.post(path,{"workerId":WORKER_ID,"capabilities":capability(),**AUTO_UPDATER.metadata()})
+        caps=capabilities if isinstance(capabilities,dict) else capability()
+        return self.post(path,{"workerId":WORKER_ID,"capabilities":caps,**AUTO_UPDATER.metadata()})
     def download(self,job,target):
         url=str(job.get("downloadUrl") or "")
         headers={}
@@ -225,6 +229,67 @@ def download(url,target,headers=None):
         with Path(target).open("wb") as fh:
             for chunk in response.iter_content(1024*1024):
                 if chunk:fh.write(chunk)
+
+class JobHeartbeat:
+    """Keep one claimed job fresh while local conversion/storage calls block."""
+    def __init__(self,api,job_id,capabilities=None,interval_seconds=None):
+        self.api=api; self.job_id=str(job_id); self.capabilities=capabilities
+        self.interval_seconds=float(interval_seconds or HEARTBEAT_SECONDS)
+        self._stop=threading.Event(); self._thread=None
+
+    def _pulse(self):
+        try:self.api.heartbeat(self.job_id,capabilities=self.capabilities)
+        except Exception as exc:log(f"heartbeat {self.job_id} failed: {str(exc)[:240]}")
+
+    def _run(self):
+        while not self._stop.wait(self.interval_seconds):self._pulse()
+
+    def __enter__(self):
+        # The first pulse is an ownership check.  If it fails, do not begin a
+        # potentially expensive publish on a job the Web no longer recognizes.
+        self.api.heartbeat(self.job_id,capabilities=self.capabilities)
+        self._thread=threading.Thread(target=self._run,name=f"material-heartbeat-{self.job_id[:24]}",daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self,_exc_type,_exc,_tb):
+        self._stop.set()
+        if self._thread is not None:self._thread.join(timeout=2)
+        return False
+
+def _completion_retryable(exc):
+    match=re.match(r"Worker API (\d{3}):",str(exc))
+    if not match:return True
+    status=int(match.group(1))
+    return status==429 or status>=500
+
+def complete_job(api,job_id,result):
+    """Retry a lost completion acknowledgement without re-running cloud publish."""
+    for attempt in range(1,COMPLETE_RETRIES+1):
+        try:
+            return api.post(f"/api/material-worker/{job_id}/complete",{"workerId":WORKER_ID,"publishKey":str(result.get("publishKey") or ""),"result":result})
+        except Exception as exc:
+            if attempt>=COMPLETE_RETRIES or not _completion_retryable(exc):raise
+            delay=min(4,attempt)
+            log(f"complete {job_id} acknowledgement failed; retry {attempt}/{COMPLETE_RETRIES-1} in {delay}s")
+            time.sleep(delay)
+
+def published_job(api,job_id,result):
+    """Durably ACK provider success before final material commit."""
+    body={
+        "workerId":WORKER_ID,
+        "publishKey":str(result.get("publishKey") or ""),
+        "backend":str(result.get("storageBackend") or ""),
+        "sourceSha256":str(result.get("publishSourceSha256") or ""),
+        "result":result,
+    }
+    for attempt in range(1,COMPLETE_RETRIES+1):
+        try:return api.post(f"/api/material-worker/{job_id}/published",body)
+        except Exception as exc:
+            if attempt>=COMPLETE_RETRIES or not _completion_retryable(exc):raise
+            delay=min(4,attempt)
+            log(f"published {job_id} acknowledgement failed; retry {attempt}/{COMPLETE_RETRIES-1} in {delay}s")
+            time.sleep(delay)
 
 def _probe_media(source):
     ffprobe=_bin("FFPROBE_PATH","ffprobe")
@@ -328,13 +393,14 @@ def _build_text_index(source,temp):
         "textIndexTruncated":truncated,
     }
 
-def publish_to_storage(source,original,job,temp):
+def publish_to_storage(source,original,job,temp,source_sha256):
     """Publish through the Flask-free canonical worker storage adapter."""
     material_id=str(job["materialId"]); source,stored_name,media_meta,derivatives=_transcode_if_needed(source,original,temp)
     text_index,index_meta=_build_text_index(source,temp)
     if text_index is not None:derivatives["index.txt"]=text_index
     media_meta={**media_meta,**index_meta}
     backend=STORAGE.active_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
+    publish_key=worker_protocol.material_publish_key(job.get("id"),material_id,source_sha256,backend)
     single=bool(backend=="mega" and STORAGE.single_preview and (ext==".pdf" or ext in OFFICE_EXT))
     if single:
         pages=STORAGE.build_single_preview_pdf(source,preview)
@@ -344,7 +410,7 @@ def publish_to_storage(source,original,job,temp):
         pages=STORAGE.convert_pdf_to_images(source,slides) if ext==".pdf" else STORAGE.convert_office_to_images(source,slides)
         if pages<=0: raise RuntimeError("Office/PDF 頁面數為零，不能完成工作。")
         if backend=="mega":key,prefix,remote=STORAGE.upload_material_tree_to_mega(material_id,source,slides,pages,derivatives)
-        elif backend=="gdrive":key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name,derivatives=derivatives)
+        elif backend=="gdrive":key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256)
         else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
         meta={"slideFormat":STORAGE.slide_format(slides,pages),**(remote or {}),**media_meta}
     elif backend=="mega":
@@ -355,23 +421,27 @@ def publish_to_storage(source,original,job,temp):
             key=STORAGE.upload_source_to_mega(material_id,source); prefix=""; meta=media_meta
     elif backend=="gdrive":
         if ext in VIDEO_EXT|AUDIO_EXT:
-            key,prefix,remote=STORAGE.upload_media_bundle_to_gdrive(material_id,source,derivatives,original_name=stored_name)
+            key,prefix,remote=STORAGE.upload_media_bundle_to_gdrive(material_id,source,derivatives,original_name=stored_name,publish_key=publish_key,source_sha256=source_sha256)
             meta={**(remote or {}),**media_meta}
         else:
-            key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,0,original_name=stored_name); meta={**(remote or {}),**media_meta}
+            key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,0,original_name=stored_name,publish_key=publish_key,source_sha256=source_sha256); meta={**(remote or {}),**media_meta}
     else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
-    return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta}
+    return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta,"publishKey":publish_key,"publishSourceSha256":source_sha256}
 
-def process_one(api,job):
+def process_one(api,job,capabilities=None):
     job_id=job["id"]
     try:
-        with tempfile.TemporaryDirectory(prefix="teacher-local-worker-") as temp_name:
-            temp=Path(temp_name); staged=temp/"source.bin"; api.download(job,staged); original=validate_download(staged,job)
-            # File content is staged as .bin, but processing must see the actual
-            # extension so LibreOffice and preview routing are deterministic.
-            source=temp/("source"+Path(original).suffix.lower()); staged.replace(source)
-            _sanitize_raster_image_in_place(source,source.suffix.lower())
-            api.heartbeat(job_id); result=publish_to_storage(source,original,job,temp); api.post(f"/api/material-worker/{job_id}/complete",{"workerId":WORKER_ID,"result":result})
+        with JobHeartbeat(api,job_id,capabilities=capabilities):
+            with tempfile.TemporaryDirectory(prefix="teacher-local-worker-") as temp_name:
+                temp=Path(temp_name); staged=temp/"source.bin"; api.download(job,staged); original=validate_download(staged,job)
+                # File content is staged as .bin, but processing must see the actual
+                # extension so LibreOffice and preview routing are deterministic.
+                source=temp/("source"+Path(original).suffix.lower()); staged.replace(source)
+                source_sha256=str(job.get("sourceSha256") or "").lower() or _sha256(source)
+                _sanitize_raster_image_in_place(source,source.suffix.lower())
+                result=publish_to_storage(source,original,job,temp,source_sha256)
+                published_job(api,job_id,result)
+        complete_job(api,job_id,result)
         log(f"completed {job_id}")
     except Exception as exc:
         message=str(exc)[:1200]
@@ -384,14 +454,14 @@ def main():
     caps=capability();log(f"startup ffmpeg={caps['ffmpeg']['available']} ffprobe={caps['ffprobe']['available']} libreoffice={caps['libreOffice']['available']}")
     while True:
         try:
-            api.heartbeat(); data=api.post("/api/material-worker/claim",{"workerId":WORKER_ID,"capabilities":caps,**AUTO_UPDATER.metadata()}); job=data.get("job")
+            api.heartbeat(capabilities=caps); data=api.post("/api/material-worker/claim",{"workerId":WORKER_ID,"capabilities":caps,**AUTO_UPDATER.metadata()}); job=data.get("job")
             if job:
                 # A claimed job is processing work: never fetch or modify code here.
-                process_one(api,job)
+                process_one(api,job,capabilities=caps)
             else:
                 # The updater may fast-forward files only after no job was claimed.
                 if AUTO_UPDATER.check_when_idle():
-                    api.heartbeat()
+                    api.heartbeat(capabilities=caps)
                     log("safe update installed while idle; requesting launcher restart")
                     return RESTART_FOR_UPDATE
                 time.sleep(POLL_SECONDS)

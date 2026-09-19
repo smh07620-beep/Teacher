@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -32,8 +34,8 @@ class Phase3AdminMaterialUploadTests(unittest.TestCase):
 
     def test_upload_module_keeps_server_authorization_boundary(self):
         source = ROOT.joinpath('static/admin-material-upload.js').read_text(encoding='utf-8')
-        self.assertIn('getAdminKey', source)
-        self.assertIn('X-Admin-Key', source)
+        self.assertNotIn('getAdminKey', source)
+        self.assertNotIn('X-Admin-Key', source)
         self.assertNotIn('professional_title', source)
         self.assertNotIn('responsibility_tags', source)
         self.assertNotIn('localStorage.setItem', source)
@@ -43,6 +45,8 @@ class Phase3AdminMaterialUploadTests(unittest.TestCase):
         source = ROOT.joinpath('static/material-upload-client.js').read_text(encoding='utf-8')
         self.assertIn("crypto.subtle.digest('SHA-256'", source)
         self.assertNotIn('file.arrayBuffer()', source)
+        self.assertIn("blob.stream().getReader()", source)
+        self.assertIn("await reader.read()", source)
         self.assertIn("hashStrategy:'sha256-parts-v1'", source)
         self.assertIn("FINGERPRINT_STRATEGY='sha256-part-tree-v1'", source)
         self.assertIn("RESUME_STORAGE_KEY='teacher.materialUpload.multipart.v1'", source)
@@ -63,6 +67,37 @@ class Phase3AdminMaterialUploadTests(unittest.TestCase):
         self.assertNotIn('32*1024*1024', source)
         persisted = source[source.index('function saveResume'):source.index('function findResume')]
         self.assertNotIn('etag', persisted.lower())
+        self.assertNotIn('/api/material-jobs/upload', source)
+        self.assertNotIn('XMLHttpRequest', source)
+
+    def test_streaming_sha256_matches_node_reference_for_multi_chunk_blob(self):
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('node is unavailable')
+        source = ROOT.joinpath('static/material-upload-client.js')
+        script = r"""
+global.window = { crypto: require('crypto').webcrypto };
+global.crypto = global.window.crypto;
+require(process.argv[1]);
+const cryptoNode = require('crypto');
+(async () => {
+  const bytes = Buffer.alloc(2 * 1024 * 1024 + 123);
+  for (let i = 0; i < bytes.length; i += 1) bytes[i] = i % 251;
+  const expected = cryptoNode.createHash('sha256').update(bytes).digest('hex');
+  const actual = await window.MaterialUploadClient.sha256Blob(new Blob([bytes]));
+  if (actual !== expected) {
+    console.error(`${actual} != ${expected}`);
+    process.exit(2);
+  }
+})().catch(error => { console.error(error); process.exit(3); });
+"""
+        result = subprocess.run(
+            [node, '-e', script, str(source)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
     def test_admin_delegates_transport_mode_to_shared_client(self):
         source = ROOT.joinpath('static/admin-material-upload.js').read_text(encoding='utf-8')

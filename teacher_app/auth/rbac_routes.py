@@ -29,7 +29,6 @@ _blueprint_group = scope_filter.blueprint_group
 _request_groups = scope_filter.request_groups
 _scoped_groups = scope_filter.scoped_groups
 _scoped = scope_filter.scoped
-_admin_key_override = rbac_legacy_adapter.admin_key_override
 _legacy_admin_guard = rbac_legacy_adapter.legacy_admin_guard
 _require_permission = scope_filter.require_permission
 _require_any_permission = scope_filter.require_any_permission

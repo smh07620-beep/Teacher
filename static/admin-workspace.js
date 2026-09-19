@@ -45,13 +45,17 @@
 
   function paintWorkspaceNav(name) {
     name = normalizeWorkspace(name);
-    const names = ['course-materials','assessment','results','people','teacher','word','system'];
-    names.forEach(item => {
-      const button = document.getElementById(`admin-nav-${item}`);
-      if (!button) return;
-      button.className = item === name
-        ? 'admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-teal-700 text-white shadow-sm'
-        : 'admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200';
+    document.querySelectorAll('.admin-nav-btn').forEach(button => {
+      const idWorkspace = button.id?.startsWith('admin-nav-') ? button.id.slice('admin-nav-'.length) : '';
+      const buttonWorkspace = normalizeWorkspace(button.dataset.adminWorkspace || idWorkspace);
+      const active = buttonWorkspace === name;
+      button.classList.toggle('bg-teal-700', active);
+      button.classList.toggle('text-white', active);
+      button.classList.toggle('shadow-sm', active);
+      button.classList.toggle('bg-slate-100', !active);
+      button.classList.toggle('text-slate-600', !active);
+      button.classList.toggle('hover:bg-slate-200', !active);
+      button.setAttribute('aria-current', active ? 'page' : 'false');
     });
   }
 
@@ -175,8 +179,6 @@
     const modal = document.getElementById('admin-modal');
     if (!modal) return false;
     if (show) {
-      const key = await window.getAdminKey?.();
-      if (!key) return false;
       window.populateAdminGroupSelects?.();
       const materialSelect = document.getElementById('admin-material-group');
       const quizSelect = document.getElementById('admin-quiz-group');

@@ -12,11 +12,23 @@
   const MAX_RETRIES=3;
   const FINGERPRINT_STRATEGY='sha256-part-tree-v1';
   const RESUME_STORAGE_KEY='teacher.materialUpload.multipart.v1';
+  const SHA256_INITIAL=new Uint32Array([
+    0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,
+    0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19
+  ]);
+  const SHA256_K=new Uint32Array([
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ]);
 
   function apiHeaders(extra={}){
-    const headers=new Headers(extra||{});
-    headers.delete('X-Admin-Key');
-    return headers;
+    return new Headers(extra||{});
   }
 
   async function bodyError(response,fallback){
@@ -27,10 +39,105 @@
     return error;
   }
 
+  function rotateRight(value,bits){
+    return ((value>>>bits)|(value<<(32-bits)))>>>0;
+  }
+
+  class StreamingSha256{
+    constructor(){
+      this.state=new Uint32Array(SHA256_INITIAL);
+      this.buffer=new Uint8Array(64);
+      this.bufferLength=0;
+      this.bytesHashed=0;
+      this.words=new Uint32Array(64);
+    }
+
+    processBlock(data,offset=0){
+      const w=this.words;
+      for(let i=0;i<16;i++){
+        const j=offset+i*4;
+        w[i]=((data[j]<<24)|(data[j+1]<<16)|(data[j+2]<<8)|data[j+3])>>>0;
+      }
+      for(let i=16;i<64;i++){
+        const x=w[i-15],y=w[i-2];
+        const s0=(rotateRight(x,7)^rotateRight(x,18)^(x>>>3))>>>0;
+        const s1=(rotateRight(y,17)^rotateRight(y,19)^(y>>>10))>>>0;
+        w[i]=(w[i-16]+s0+w[i-7]+s1)>>>0;
+      }
+      let a=this.state[0],b=this.state[1],c=this.state[2],d=this.state[3];
+      let e=this.state[4],f=this.state[5],g=this.state[6],h=this.state[7];
+      for(let i=0;i<64;i++){
+        const s1=(rotateRight(e,6)^rotateRight(e,11)^rotateRight(e,25))>>>0;
+        const ch=((e&f)^((~e)&g))>>>0;
+        const t1=(h+s1+ch+SHA256_K[i]+w[i])>>>0;
+        const s0=(rotateRight(a,2)^rotateRight(a,13)^rotateRight(a,22))>>>0;
+        const maj=((a&b)^(a&c)^(b&c))>>>0;
+        const t2=(s0+maj)>>>0;
+        h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
+      }
+      this.state[0]=(this.state[0]+a)>>>0;this.state[1]=(this.state[1]+b)>>>0;
+      this.state[2]=(this.state[2]+c)>>>0;this.state[3]=(this.state[3]+d)>>>0;
+      this.state[4]=(this.state[4]+e)>>>0;this.state[5]=(this.state[5]+f)>>>0;
+      this.state[6]=(this.state[6]+g)>>>0;this.state[7]=(this.state[7]+h)>>>0;
+    }
+
+    update(value){
+      const data=value instanceof Uint8Array?value:new Uint8Array(value);
+      this.bytesHashed+=data.byteLength;
+      let offset=0;
+      if(this.bufferLength){
+        const take=Math.min(64-this.bufferLength,data.byteLength);
+        this.buffer.set(data.subarray(0,take),this.bufferLength);
+        this.bufferLength+=take;offset+=take;
+        if(this.bufferLength===64){this.processBlock(this.buffer);this.bufferLength=0;}
+      }
+      while(offset+64<=data.byteLength){this.processBlock(data,offset);offset+=64;}
+      if(offset<data.byteLength){
+        this.buffer.set(data.subarray(offset),0);
+        this.bufferLength=data.byteLength-offset;
+      }
+      return this;
+    }
+
+    digestHex(){
+      const bitLength=this.bytesHashed*8;
+      this.buffer[this.bufferLength++]=0x80;
+      if(this.bufferLength>56){
+        this.buffer.fill(0,this.bufferLength);
+        this.processBlock(this.buffer);
+        this.bufferLength=0;
+      }
+      this.buffer.fill(0,this.bufferLength,56);
+      const high=Math.floor(bitLength/0x100000000)>>>0;
+      const low=bitLength>>>0;
+      this.buffer[56]=high>>>24;this.buffer[57]=high>>>16;this.buffer[58]=high>>>8;this.buffer[59]=high;
+      this.buffer[60]=low>>>24;this.buffer[61]=low>>>16;this.buffer[62]=low>>>8;this.buffer[63]=low;
+      this.processBlock(this.buffer);
+      return [...this.state].map(value=>value.toString(16).padStart(8,'0')).join('');
+    }
+  }
+
   async function sha256Blob(blob){
-    const buffer=await blob.arrayBuffer();
-    const digest=await crypto.subtle.digest('SHA-256',buffer);
-    return [...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('');
+    const hasher=new StreamingSha256();
+    if(typeof blob.stream==='function'){
+      const reader=blob.stream().getReader();
+      try{
+        while(true){
+          const {done,value}=await reader.read();
+          if(done)break;
+          hasher.update(value);
+        }
+      }finally{
+        reader.releaseLock?.();
+      }
+    }else{
+      const chunkSize=1024*1024;
+      for(let start=0;start<blob.size;start+=chunkSize){
+        const chunk=await blob.slice(start,Math.min(blob.size,start+chunkSize)).arrayBuffer();
+        hasher.update(new Uint8Array(chunk));
+      }
+    }
+    return hasher.digestHex();
   }
 
   async function sha256Text(value){
@@ -306,50 +413,12 @@
     throw new Error(`不支援的 R2 直傳模式：${session.mode}`);
   }
 
-  function asError(xhr,fallback){
-    let body={};
-    try{body=JSON.parse(xhr.responseText||'{}');}catch(_e){}
-    return new Error(body.error||fallback||`HTTP ${xhr.status}`);
-  }
-
-  function webByteUpload(formData,options={}){
-    const fileName=options.fileName||formData.get('file')?.name||'教材';
-    return new Promise((resolve,reject)=>{
-      const xhr=new XMLHttpRequest();
-      xhr.open('POST','/api/material-jobs/upload',true);
-      xhr.withCredentials=true;
-      xhr.timeout=options.timeout||20*60*1000;
-      Object.entries(options.headers||{}).forEach(([name,value])=>{
-        if(String(name).toLowerCase()==='x-admin-key')return;
-        if(value)xhr.setRequestHeader(name,value);
-      });
-      xhr.upload.onprogress=event=>{
-        if(event.lengthComputable)options.onProgress?.({loaded:event.loaded,total:event.total,percent:Math.round(event.loaded/event.total*100),fileName});
-      };
-      xhr.onload=()=>{
-        if(xhr.status===401){options.onUnauthorized?.();reject(new Error('登入已逾時，請重新登入。'));return;}
-        if(xhr.status===403){reject(asError(xhr,'此帳號沒有這項操作權限。'));return;}
-        if(xhr.status>=200&&xhr.status<300){
-          try{resolve(JSON.parse(xhr.responseText||'{}'));}catch(_e){resolve({});}
-          return;
-        }
-        reject(asError(xhr));
-      };
-      xhr.onerror=()=>reject(new Error(`${fileName} 網路上傳失敗`));
-      xhr.ontimeout=()=>reject(new Error(`${fileName} 傳送到伺服器逾時`));
-      xhr.send(formData);
-    });
-  }
-
   async function enqueue(formData,options={}){
     try{return await directUpload(formData,options);}
     catch(error){
       if(error?.status===401){options.onUnauthorized?.();throw new Error('登入已逾時，請重新登入。');}
       if(error?.status===403)throw error;
-      const allowFallback=options.allowLegacyWebFallback!==false;
-      const mayFallback=allowFallback&&(error?.directUnavailable||!window.crypto?.subtle);
-      if(!mayFallback)throw error;
-      return webByteUpload(formData,options);
+      throw error;
     }
   }
 

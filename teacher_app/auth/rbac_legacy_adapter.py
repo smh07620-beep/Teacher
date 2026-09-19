@@ -1,15 +1,12 @@
 """Compatibility translation from legacy admin guards to capability RBAC."""
 from __future__ import annotations
 
-import hmac
-
 from flask import g, jsonify, request
 
 from teacher_app.auth import repository as auth_repository
 from teacher_app.auth.service import public_user
 from teacher_app.common.auth import has_permission, is_teacher_workspace_user
 from teacher_app.common import scope_filter
-from teacher_app.config import admin_key
 from teacher_app.maintenance import account_roles
 
 
@@ -56,42 +53,6 @@ LEGACY_ENDPOINT_POLICIES = {
     "api_import_quiz_questions_url": ("question.manage", "scoped"),
     "api_delete_quiz_question": ("question.manage", "scoped"),
 }
-
-
-def admin_key_override(owner=None) -> bool:
-    """Return true only when a matching compatibility header adds no privilege.
-
-    Historical callers treated ``X-Admin-Key`` as a bearer credential.  The
-    header may still be sent by older clients, but it is never sufficient for
-    authorization: the request-bound session must already satisfy the endpoint
-    policy (including group scope where applicable).
-    """
-    supplied = str(request.headers.get("X-Admin-Key", "") or "")
-    key = admin_key()
-    if not (key and supplied and hmac.compare_digest(supplied, key)):
-        return False
-
-    user = getattr(g, "teacher_user", None)
-    if user is None:
-        resolver = getattr(owner, "_current_user", None)
-        user = resolver() if callable(resolver) else None
-    if not user:
-        return False
-
-    policy = LEGACY_ENDPOINT_POLICIES.get(request.endpoint or "")
-    if not policy:
-        return bool(
-            has_permission(user, "user.manage")
-            or has_permission(user, "system.manage")
-        )
-    permission, mode = policy
-    if mode in {"capability", "list"}:
-        return scope_filter.denied(owner, permission)[1] is None
-    return scope_filter.scoped_groups(
-        owner,
-        permission,
-        scope_filter.request_groups(owner),
-    )[1] is None
 
 
 def require_admin(owner=None):
@@ -160,7 +121,6 @@ def register_legacy_rbac(base):
 
 __all__ = [
     "LEGACY_ENDPOINT_POLICIES",
-    "admin_key_override",
     "ensure_07620",
     "legacy_admin_guard",
     "require_admin",

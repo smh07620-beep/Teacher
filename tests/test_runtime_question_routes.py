@@ -230,6 +230,24 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
         response = self.client.get("/api/quiz-questions/admin?category=cat-1")
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.get_json(), {"error": "此資源不在你的授權範圍。"})
+        with patch.object(
+            runtime_question_routes.runtime_questions,
+            "delete_question",
+            return_value={"ok": True},
+        ) as delete_question:
+            deleted = self.client.delete("/api/quiz-questions/q-seed")
+            self.assertEqual(deleted.status_code, 403)
+            self.assertEqual(deleted.get_json(), {"error": "此資源不在你的授權範圍。"})
+            delete_question.assert_not_called()
+
+            self.base.user = {
+                "username": "teacher",
+                "role": "clinical_teacher",
+                "preferredGroup": "grpBio",
+            }
+            own = self.client.delete("/api/quiz-questions/q-seed")
+            self.assertEqual(own.status_code, 200, own.get_data(as_text=True))
+            delete_question.assert_called_once_with("q-seed")
 
     def test_ai_job_status_is_scope_checked(self):
         with patch.object(

@@ -23,7 +23,7 @@ from teacher_app.assessments.question_runtime import (
     runtime_from_owner,
 )
 from teacher_app.assessments import runtime_questions
-from teacher_app.common import scope_filter
+from teacher_app.common import audit, scope_filter
 from teacher_app.common.auth import has_permission
 from teacher_app.materials import repository as material_repository
 
@@ -104,6 +104,26 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
     if app.extensions.get("teacher_runtime_question_routes_registered"):
         return app
     runtime = runtime or runtime_from_owner(owner)
+
+    def audit_actor():
+        return _current_user(owner) or {}
+
+    def category_for_question(question):
+        category_id = str((question or {}).get("quizCategoryId") or "")
+        return repository.get_category_full(category_id) if category_id else None
+
+    def question_snapshot(question):
+        question = question or {}
+        return {
+            "id": str(question.get("id") or ""),
+            "quizCategoryId": str(question.get("quizCategoryId") or ""),
+            "questionType": str(question.get("questionType") or ""),
+            "difficulty": str(question.get("difficulty") or ""),
+            "tag": str(question.get("tag") or ""),
+            "active": bool(question.get("active", True)),
+            "status": str(question.get("status") or ""),
+            "origin": str(question.get("origin") or ""),
+        }
 
     def api_upload_question_image():
         denied = _question_guard(owner, scoped=False)
@@ -240,13 +260,28 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         )[1]
         if denied:
             return denied
+        body = request.get_json(silent=True) or {}
+        requested_ids = body.get("ids") or []
+        touched_groups = sorted(scope_filter.request_groups(owner))
         try:
-            payload = runtime_questions.batch_delete((request.get_json(silent=True) or {}).get("ids") or [])
+            payload = runtime_questions.batch_delete(requested_ids)
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
         missing = payload.get("missing") if isinstance(payload, dict) else None
         if missing:
             return jsonify({"error": f"找不到 {len(missing)} 題", "missing": missing}), 404
+        audit.record_event(
+            actor=audit_actor(),
+            action="question.batch_delete",
+            target_type="question_batch",
+            target_id=str((payload.get("deleted") or [""])[0]),
+            group=touched_groups[0] if len(touched_groups) == 1 else "",
+            scope={"groups": touched_groups},
+            detail={
+                "questionIds": payload.get("deleted") or [],
+                "count": payload.get("count", 0),
+            },
+        )
         return jsonify(payload)
 
     def api_import_quiz_questions_url():
@@ -398,10 +433,22 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         denied = _question_guard(owner, scoped=True)
         if denied:
             return denied
+        before = repository.get_question(question_id)
+        category = category_for_question(before)
         try:
-            return jsonify(runtime_questions.delete_question(question_id))
+            payload = runtime_questions.delete_question(question_id)
         except LookupError as exc:
             return jsonify({"error": str(exc)}), 404
+        audit.record_event(
+            actor=audit_actor(),
+            action="question.delete",
+            target_type="question",
+            target_id=question_id,
+            group=str((category or {}).get("group") or ""),
+            before=question_snapshot(before),
+            detail={"source": "runtime_question"},
+        )
+        return jsonify(payload)
 
     def api_ai_question_status():
         denied = _question_guard(owner, scoped=False)
@@ -433,6 +480,24 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
             return jsonify({"error": str(exc)}), 404
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        audit.record_event(
+            actor=audit_actor(),
+            action="ai.generation.submit",
+            target_type="ai_question_job",
+            target_id=str(job.get("id") or ""),
+            group=str(job.get("group") or job.get("group_key") or ""),
+            scope={
+                "area": str(job.get("area") or job.get("training_area") or ""),
+                "quizCategoryId": str(job.get("quizCategoryId") or job.get("quiz_category_id") or data.get("quizCategoryId") or ""),
+            },
+            detail={
+                "materialIds": list((job.get("request") or {}).get("materialIds") or data.get("materialIds") or []),
+                "count": (job.get("request") or {}).get("count", data.get("count", 5)),
+                "questionType": (job.get("request") or {}).get("questionType", data.get("questionType", "mixed")),
+                "difficulty": (job.get("request") or {}).get("difficulty", data.get("difficulty", "standard")),
+                "strategy": (job.get("request") or {}).get("strategy", data.get("strategy", "auto")),
+            },
+        )
         return jsonify({"ok": True, "jobId": job.get("id"), "status": "queued"}), 202
 
     def api_ai_question_job(job_id):
@@ -474,6 +539,20 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
             )
         except Exception as exc:
             return jsonify({"error": f"批次匯入失敗：{exc}"}), 400
+        category = repository.get_category_full(category_id)
+        audit.record_event(
+            actor=audit_actor(),
+            action="ai.candidates.import",
+            target_type="assessment",
+            target_id=category_id,
+            group=str((category or {}).get("group") or ""),
+            scope={"area": str((category or {}).get("area") or "")},
+            detail={
+                "imported": len(inserted),
+                "questionIds": [str(item.get("id") or "") for item in inserted if isinstance(item, dict)],
+                "rejected": len(errors),
+            },
+        )
         return jsonify({"ok": True, "imported": len(inserted), "errors": errors[:20], "questions": inserted})
 
     rules = (

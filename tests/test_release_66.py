@@ -42,6 +42,13 @@ class ReleaseContractTests(unittest.TestCase):
             "0073-course-bundle-followups",
             "0074-assessment-list-indexes",
             "0075-ai-question-jobs",
+            "0076-assessment-reviewer-identity",
+            "0077-general-audit-events",
+            "0078-item-analytics-metrics",
+            "0079-provider-publish-receipts",
+            "0080-external-media-verification",
+            "0081-question-version-history",
+            "0082-version-aware-item-analytics",
         ):
             self.assertIn(version, release_contract.REQUIRED_MIGRATIONS)
 

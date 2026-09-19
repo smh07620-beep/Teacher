@@ -7,9 +7,9 @@
     document.getElementById('admin-atlas-fields')?.classList.toggle('hidden',type!=='atlas');
   };
 
-  window.uploadAdminMaterialRequest = function(fd,progressId,fileName,key,status){
+  window.uploadAdminMaterialRequest = function(fd,progressId,fileName,status){
     if(!window.MaterialUploadClient?.enqueue) return Promise.reject(new Error('教材上傳元件尚未載入'));
-    return window.MaterialUploadClient.enqueue(fd,{headers:{'X-Admin-Key':key},fileName,onProgress:e=>{
+    return window.MaterialUploadClient.enqueue(fd,{fileName,onProgress:e=>{
         if(status){
           const pct=e.percent;
           status.innerHTML=`⬆️ ${escapeHtml(fileName)}｜安全接收 ${pct}%<span class="block text-[11px] text-slate-500 mt-1">${(e.loaded/1024/1024).toFixed(1)} / ${(e.total/1024/1024).toFixed(1)} MB；接收後會立刻排入背景佇列，不再占住 Web worker。</span>`;
@@ -22,12 +22,12 @@
     return window.MaterialUploadClient.sha256Blob(file);
   };
 
-  window.directR2MaterialUpload = async function(file,meta,key,status){
+  window.directR2MaterialUpload = async function(file,meta,status){
     if(!window.MaterialUploadClient?.directUpload) throw new Error('教材上傳元件尚未載入');
     const fd=new FormData();
     fd.append('file',file);
     Object.entries(meta||{}).forEach(([name,value])=>fd.append(name,String(value??'')));
-    return window.MaterialUploadClient.directUpload(fd,{headers:{'X-Admin-Key':key},fileName:file.name,onProgress:e=>{
+    return window.MaterialUploadClient.directUpload(fd,{fileName:file.name,onProgress:e=>{
       if(status) status.textContent=`⬆️ ${file.name}｜R2 直傳 ${e.percent}%`;
     }});
   };
@@ -36,8 +36,6 @@
     const input=document.getElementById('admin-pptx-upload-input');
     const files=Array.from(input?.files||[]);
     if(!files.length){ alert('請先選擇要上傳的教材檔案。'); return; }
-    const key=await getAdminKey();
-    if(!key) return;
     const title=document.getElementById('admin-material-title').value.trim();
     const desc=document.getElementById('admin-material-desc').value.trim();
     const group=document.getElementById('admin-material-group').value;
@@ -73,7 +71,7 @@
       fd.append('atlasNormality',document.getElementById('admin-atlas-normality')?.value||'');
       fd.append('atlasTags',document.getElementById('admin-atlas-tags')?.value||'');
       try{
-        const data=await window.uploadAdminMaterialRequest(fd,progressId,file.name,key,status);
+        const data=await window.uploadAdminMaterialRequest(fd,progressId,file.name,status);
         queued++;
         status.innerHTML=`✅ ${n+1}/${files.length}「${escapeHtml(file.name)}」已加入背景佇列<span class="block text-[11px] mt-1">${escapeHtml(data.jobId||'')}｜現在可切換頁面或關閉後台視窗，工作會繼續。</span>`;
       }catch(err){
@@ -119,8 +117,7 @@
         atlasMeta[k]=v.trim();
       }
     }
-    const key = await getAdminKey();
-    const res = await fetch(`/api/slides/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({title,desc,category,group,materialType:m.materialType||'standard',atlasMeta})});
+    const res = await fetch(`/api/slides/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,desc,category,group,materialType:m.materialType||'standard',atlasMeta})});
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { alert(data.error || '修改失敗'); return; }
     invalidateAdminMaterialsCache();
@@ -130,8 +127,7 @@
   };
 
   window.toggleAdminMaterial = async function(id,active){
-    const key = await getAdminKey();
-    const res = await fetch(`/api/slides/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({active})});
+    const res = await fetch(`/api/slides/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({active})});
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { alert(data.error || '更新失敗'); return; }
     invalidateAdminMaterialsCache();
@@ -142,8 +138,7 @@
 
   window.deleteAdminMaterial = async function(id){
     if (!confirm('確定刪除這份教材嗎？教材檔案與轉換圖片都會刪除，此操作無法復原。')) return;
-    const key = await getAdminKey();
-    const res = await fetch(`/api/slides/${id}`, {method:'DELETE',headers:{'X-Admin-Key':key}});
+    const res = await fetch(`/api/slides/${id}`, {method:'DELETE',});
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { alert(data.error || '刪除失敗'); return; }
     invalidateAdminMaterialsCache();

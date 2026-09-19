@@ -71,7 +71,8 @@ class FinalSkeletonCleanup74Tests(unittest.TestCase):
         for path, symbol in owners.items():
             self.assertIn(symbol, self.source(path))
             self.assertNotIn(f'function {symbol}(', legacy)
-        self.assertIn('async function getAdminKey()', legacy)
+        self.assertNotIn('getAdminKey', legacy)
+        self.assertNotIn('X-Admin-Key', legacy)
         self.assertNotIn('cachedTemplateBuffer', legacy)
         self.assertNotIn('pendingExportRecordIndex', legacy)
         self.assertNotIn('pendingDocTemplateUploadGroup', legacy)

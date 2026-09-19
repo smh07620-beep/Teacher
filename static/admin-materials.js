@@ -16,9 +16,7 @@
     if (!force && Array.isArray(adminMaterialsCache.data) && (now - adminMaterialsCache.at) < ADMIN_CACHE_MS) {
       return adminMaterialsCache.data;
     }
-    const key = await getAdminKey();
-    if (!key) return null;
-    const res = await fetch('/api/slides/admin', { headers: { 'X-Admin-Key': key } });
+    const res = await fetch('/api/slides/admin', {credentials:'same-origin'});
     if (res.status === 401) {
       window.invalidateAdminMaterialsCache();
       alert('登入狀態已失效，請重新登入後再試。');

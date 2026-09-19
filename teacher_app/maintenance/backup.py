@@ -24,6 +24,8 @@ DEFAULT_TABLES = (
     "exam_records", "materials", "pgy_assignments", "pgy_assignment_audit",
     "exam_attempts", "schema_migrations", "learning_progress",
     "material_text_index", "media_processing_jobs", "atlas_import_previews",
+    "audit_events", "external_media", "question_versions",
+    "question_attempt_analytics",
 )
 
 

@@ -63,8 +63,6 @@
   };
 
   window.adminCreateQuizCategory = async function(){
-    const key=await getAdminKey();
-    if(!key) return;
     const group=document.getElementById('admin-quiz-group')?.value;
     const titleInput=document.getElementById('admin-new-category-title');
     const title=titleInput?.value.trim()||'';
@@ -72,7 +70,7 @@
     const area=document.getElementById('admin-quiz-area')?.value||currentTrainingArea;
     const res=await fetch('/api/quiz-categories',{
       method:'POST',
-      headers:{'Content-Type':'application/json','X-Admin-Key':key},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({group,area,title})
     });
     const data=await res.json().catch(()=>({}));
@@ -88,10 +86,8 @@
 
   window.adminDeleteQuizCategory = async function(catId){
     if(!confirm('確定刪除此考題頁籤？頁籤內所有題目也會一併刪除，此操作無法復原。')) return;
-    const key=await getAdminKey();
-    if(!key) return;
     const group=document.getElementById('admin-quiz-group')?.value||currentGroupKey;
-    const res=await fetch(`/api/quiz-categories/${encodeURIComponent(catId)}`,{method:'DELETE',headers:{'X-Admin-Key':key}});
+    const res=await fetch(`/api/quiz-categories/${encodeURIComponent(catId)}`,{method:'DELETE',});
     const data=await res.json().catch(()=>({}));
     if(!res.ok){ alert(data.error||'刪除失敗'); return; }
     Object.keys(dynamicCategoriesCache).filter(k=>k.endsWith(':'+group)).forEach(k=>delete dynamicCategoriesCache[k]);

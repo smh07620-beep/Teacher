@@ -10,10 +10,27 @@
     display: block;
     height: auto !important;
     min-height: 0;
-    max-height: 94vh;
-    max-height: 94dvh;
+    max-height: 88vh;
+    max-height: 88dvh;
     overflow-y: auto;
     overscroll-behavior-y: contain;
+}
+
+@media (min-width: 821px) {
+    #admin-modal > div {
+        max-width: 72rem !important;
+        max-height: 88vh !important;
+        max-height: 88dvh !important;
+    }
+
+    #admin-workspace-content {
+        padding: 1rem 1.25rem !important;
+    }
+
+    .v580-admin-groups {
+        gap: 8px;
+        padding: 10px 14px;
+    }
 }
 #admin-modal[data-section="system"] #admin-workspace-content,
 #admin-modal[data-section="people"] #admin-workspace-content {

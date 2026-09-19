@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from flask import g, jsonify, request
 
-from teacher_app.assessments import service
+from teacher_app.assessments import repository, service
 from teacher_app.auth import rbac_legacy_adapter
-from teacher_app.common import scope
+from teacher_app.common import audit, scope
+from teacher_app.common.auth import ROLE_LABELS, normalize_role
 from teacher_app.common.errors import ApiError
 
 
@@ -32,6 +33,33 @@ def register_assessment_routes(owner):
     def actor_label():
         user = getattr(g, "teacher_user", None) or {}
         return str(user.get("name") or user.get("username") or "").strip()[:100]
+
+    def actor_title():
+        user = getattr(g, "teacher_user", None) or {}
+        title = str(user.get("professionalTitle") or "").strip()
+        if title:
+            return title[:100]
+        role = normalize_role(user.get("role", "student"))
+        return str(ROLE_LABELS.get(role, role))[:100]
+
+    def actor():
+        return getattr(g, "teacher_user", None) or {}
+
+    def category_snapshot(item):
+        item = item or {}
+        return {
+            "id": str(item.get("id") or ""),
+            "title": str(item.get("title") or ""),
+            "group": str(item.get("group") or ""),
+            "area": str(item.get("area") or ""),
+            "active": bool(item.get("active", False)),
+            "reviewStatus": str(item.get("reviewStatus") or ""),
+            "reviewerName": str(item.get("reviewerName") or ""),
+            "reviewerTitle": str(item.get("reviewerTitle") or ""),
+            "publishedAt": str(item.get("publishedAt") or ""),
+            "publicationId": str(item.get("publicationId") or ""),
+            "publicationHash": str(item.get("publicationHash") or ""),
+        }
 
     def api_list_quiz_categories():
         denied = _login_required()
@@ -71,13 +99,60 @@ def register_assessment_routes(owner):
         return guarded(service.update_category, app, category_id, request.get_json(silent=True) or {})
 
     def api_review_quiz_category(category_id):
-        return guarded(service.review_category, app, category_id, reviewer=actor_label())
+        denied = require_admin()
+        if denied:
+            return denied
+        before = repository.get_category_full(category_id)
+        try:
+            payload = service.review_category(
+                app,
+                category_id,
+                reviewer=actor_label(),
+                reviewer_title=actor_title(),
+            )
+        except ApiError as exc:
+            return _legacy_error(exc)
+        after = repository.get_category_full(category_id)
+        audit.record_event(
+            actor=actor(),
+            action="assessment.review",
+            target_type="assessment",
+            target_id=category_id,
+            group=str((after or before or {}).get("group") or ""),
+            before=category_snapshot(before),
+            after=category_snapshot(after),
+            detail={"questionCount": payload.get("questionCount", 0)},
+        )
+        return jsonify(payload)
 
     def api_quiz_publications(category_id):
         return guarded(service.list_publications, app, category_id)
 
     def api_publish_quiz_category(category_id):
-        return guarded(service.publish_category, app, category_id, publisher=actor_label())
+        denied = require_admin()
+        if denied:
+            return denied
+        before = repository.get_category_full(category_id)
+        try:
+            payload = service.publish_category(app, category_id, publisher=actor_label())
+        except ApiError as exc:
+            return _legacy_error(exc)
+        after = repository.get_category_full(category_id)
+        audit.record_event(
+            actor=actor(),
+            action="assessment.publish",
+            target_type="assessment",
+            target_id=category_id,
+            group=str((after or before or {}).get("group") or ""),
+            before=category_snapshot(before),
+            after=category_snapshot(after),
+            detail={
+                "publicationId": payload.get("publicationId", ""),
+                "publicationHash": payload.get("publicationHash", ""),
+                "questionCount": payload.get("snapshotQuestionCount", 0),
+            },
+        )
+        return jsonify(payload)
 
     def api_quiz_category_materials(category_id):
         return guarded(service.category_materials, app, category_id)
@@ -86,7 +161,24 @@ def register_assessment_routes(owner):
         return guarded(service.update_category_materials, app, category_id, request.get_json(silent=True) or {})
 
     def api_delete_quiz_category(category_id):
-        return guarded(service.delete_category, app, category_id)
+        denied = require_admin()
+        if denied:
+            return denied
+        before = repository.get_category_full(category_id)
+        try:
+            payload = service.delete_category(app, category_id)
+        except ApiError as exc:
+            return _legacy_error(exc)
+        audit.record_event(
+            actor=actor(),
+            action="assessment.delete",
+            target_type="assessment",
+            target_id=category_id,
+            group=str((before or {}).get("group") or ""),
+            before=category_snapshot(before),
+            detail={"cascadeQuestions": True},
+        )
+        return jsonify(payload)
 
     rules = (
         ("/api/quiz-categories", "api_list_quiz_categories", api_list_quiz_categories, ["GET"]),

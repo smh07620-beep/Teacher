@@ -8,8 +8,38 @@ from __future__ import annotations
 
 from flask import g, jsonify, request
 
-from teacher_app.auth import accounts
+from teacher_app.auth import accounts, repository as auth_repository, service as auth_service
+from teacher_app.common import audit
 from teacher_app.common.auth import has_permission
+
+
+def _actor(owner=None):
+    user = getattr(g, "teacher_user", None)
+    if user is not None:
+        return user
+    resolver = getattr(owner, "_current_user", None)
+    return resolver() if callable(resolver) else None
+
+
+def _account_snapshot(user):
+    user = user or {}
+    return {
+        "username": str(user.get("username") or ""),
+        "name": str(user.get("name") or ""),
+        "empId": str(user.get("empId") or ""),
+        "role": str(user.get("role") or ""),
+        "roles": list(user.get("roles") or []),
+        "preferredArea": str(user.get("preferredArea") or ""),
+        "preferredGroup": str(user.get("preferredGroup") or ""),
+        "active": bool(user.get("active", True)),
+        "professionalTitle": str(user.get("professionalTitle") or ""),
+        "responsibilityTags": list(user.get("responsibilityTags") or []),
+    }
+
+
+def _public_account(username):
+    row = auth_repository.find_user(username)
+    return auth_service.public_user(row, include_roles=True) if row else None
 
 
 def _require_user_manage(owner=None):
@@ -48,6 +78,15 @@ def register_multi_role_66(owner):
         data = request.get_json(silent=True) or {}
         try:
             user = accounts.create_account(data)
+            audit.record_event(
+                actor=_actor(owner),
+                action="account.create",
+                target_type="account",
+                target_id=user.get("username", ""),
+                group=user.get("preferredGroup", ""),
+                after=_account_snapshot(user),
+                detail={"roles": list(user.get("roles") or [])},
+            )
             return jsonify({"ok": True, "user": user})
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
@@ -62,8 +101,42 @@ def register_multi_role_66(owner):
         if denied:
             return denied
         data = request.get_json(silent=True) or {}
+        before_user = _public_account(username)
         try:
             user = accounts.update_account(username, data)
+            changed_fields = sorted(
+                key for key in data if key != "password"
+            )
+            detail = {
+                "changedFields": changed_fields,
+                "credentialChanged": bool(str(data.get("password") or "")),
+            }
+            audit.record_event(
+                actor=_actor(owner),
+                action="account.update",
+                target_type="account",
+                target_id=user.get("username", username),
+                group=user.get("preferredGroup", ""),
+                before=_account_snapshot(before_user),
+                after=_account_snapshot(user),
+                detail=detail,
+            )
+            if "role" in data or "roles" in data:
+                audit.record_event(
+                    actor=_actor(owner),
+                    action="role.update",
+                    target_type="account",
+                    target_id=user.get("username", username),
+                    group=user.get("preferredGroup", ""),
+                    before={
+                        "role": (before_user or {}).get("role", ""),
+                        "roles": list((before_user or {}).get("roles") or []),
+                    },
+                    after={
+                        "role": user.get("role", ""),
+                        "roles": list(user.get("roles") or []),
+                    },
+                )
             return jsonify({"ok": True, "user": user})
         except accounts.AccountNotFound as exc:
             return jsonify({"error": str(exc)}), 404

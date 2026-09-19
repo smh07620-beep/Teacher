@@ -23,12 +23,13 @@ class Phase3VAdminQuestionPanelTests(unittest.TestCase):
         ):
             self.assertIn(f"window.{name}", self.source)
 
-    def test_category_api_and_admin_key_contract_stay_intact(self):
+    def test_category_api_uses_session_rbac_without_admin_key(self):
         self.assertIn("fetch('/api/quiz-categories'", self.source)
         self.assertIn("/api/quiz-categories/${encodeURIComponent(catId)}", self.source)
         self.assertIn("method:'POST'", self.source)
         self.assertIn("method:'DELETE'", self.source)
-        self.assertIn("'X-Admin-Key':key", self.source)
+        self.assertNotIn("X-Admin-Key", self.source)
+        self.assertNotIn("getAdminKey", self.source)
 
     def test_panel_delegates_to_extracted_question_and_ai_modules(self):
         self.assertIn("window.loadQuizQuestionsIntoPanel(catId)", self.source)

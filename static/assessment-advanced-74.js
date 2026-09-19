@@ -122,6 +122,13 @@
           <label class="text-xs font-bold text-slate-700">難度配額 JSON<textarea id="advanced-blueprint-difficulty-74" rows="3" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 font-mono text-xs">{}</textarea></label>
           <label class="text-xs font-bold text-slate-700">認知層次配額 JSON<textarea id="advanced-blueprint-cognitive-74" rows="3" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 font-mono text-xs">{}</textarea></label>
           <label class="text-xs font-bold text-slate-700">排除最近題數<input id="advanced-blueprint-recent-74" type="number" min="0" value="0" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-sm"></label>
+          <label class="text-xs font-bold text-slate-700">題目分析加權
+            <select id="advanced-blueprint-quality-74" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-sm">
+              <option value="off" selected>關閉（維持原選題）</option>
+              <option value="balanced">平衡模式（難度／鑑別度／誘答／曝光）</option>
+            </select>
+            <span class="mt-1 block text-[10px] font-normal text-slate-500">資料不足的題目保持中性權重；不會繞過配額或直接淘汰題目。</span>
+          </label>
         </div>
         <div class="mt-3 flex items-center gap-2 flex-wrap">
           <button type="button" data-blueprint-create class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-bold text-white">建立藍圖</button>
@@ -174,10 +181,13 @@
             difficulty:parseObject('advanced-blueprint-difficulty-74'),
             cognitive_level:parseObject('advanced-blueprint-cognitive-74')
           },
+          qualityMode:document.getElementById('advanced-blueprint-quality-74')?.value || 'off',
           excludeRecent:Math.max(0, Number(document.getElementById('advanced-blueprint-recent-74')?.value || 0))
         })
       });
-      if (out) out.textContent = '✅ 藍圖已建立；可發布不可變快照。';
+      if (out) out.textContent = state.blueprint?.qualityMode === 'balanced'
+        ? '✅ 藍圖已建立；已啟用版本化題目分析平衡加權，可發布不可變快照。'
+        : '✅ 藍圖已建立；可發布不可變快照。';
       root()?.querySelector('[data-blueprint-publish]')?.classList.remove('hidden');
     } catch (error) {
       if (out) out.textContent = `❌ ${error.message}`;
@@ -210,7 +220,9 @@
         if (box) box.textContent = '資料不足，暫不進行品質判定。';
         return;
       }
-      if (box) box.innerHTML = `<div class="grid gap-2 sm:grid-cols-2"><div class="rounded-lg bg-white p-3"><b>作答次數</b><div>${Number(data.attemptCount || 0)}</div></div><div class="rounded-lg bg-white p-3"><b>答對率</b><div>${Math.round(Number(data.correctRate || 0) * 100)}%</div></div></div><div class="mt-2 rounded-lg bg-white p-3 text-xs"><b>選項選擇次數：</b>${esc(JSON.stringify(data.optionSelectionCounts || {}))}<br><b>誘答選項分布：</b>${esc(JSON.stringify(data.distractorDistribution || {}))}</div>`;
+      const discrimination=data.discriminationD==null?'資料不足':Number(data.discriminationD).toFixed(2);
+      const averageSeconds=data.averageResponseSeconds==null?'尚無 timing':`${Number(data.averageResponseSeconds).toFixed(1)} 秒`;
+      if (box) box.innerHTML = `<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><div class="rounded-lg bg-white p-3"><b>曝光／作答次數</b><div>${Number(data.exposureCount || data.attemptCount || 0)}</div></div><div class="rounded-lg bg-white p-3"><b>難度 P（答對率）</b><div>${Math.round(Number(data.difficultyP ?? data.correctRate ?? 0) * 100)}%</div></div><div class="rounded-lg bg-white p-3"><b>鑑別度 D</b><div>${esc(discrimination)}</div></div><div class="rounded-lg bg-white p-3"><b>平均作答時間</b><div>${esc(averageSeconds)}</div></div></div><div class="mt-2 rounded-lg bg-white p-3 text-xs"><b>選項選擇次數：</b>${esc(JSON.stringify(data.optionSelectionCounts || {}))}<br><b>誘答選項分布：</b>${esc(JSON.stringify(data.distractorDistribution || {}))}</div>`;
     } catch (error) {
       if (out) out.textContent = `❌ ${error.message}`;
     }

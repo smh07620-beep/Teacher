@@ -37,8 +37,6 @@
   }
 
   async function renderAdminCourses(force=false){
-    const key=await getAdminKey();
-    if(!key) return;
     const box=document.getElementById('admin-courses-list');
     if(!box) return;
     const area=document.getElementById('wizard-area')?.value||'pgy';
@@ -54,7 +52,7 @@
     if(!cached?.data) box.innerHTML='<div class="text-xs text-slate-400 animate-pulse">讀取課程中…</div>';
     else box.classList.add('opacity-70');
     try{
-      const res=await fetch(`/api/courses/admin?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`,{headers:{'X-Admin-Key':key}});
+      const res=await fetch(`/api/courses/admin?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`,{});
       const cs=await res.json().catch(()=>[]);
       if(!res.ok) throw new Error(cs.error||'讀取課程失敗');
       const list=Array.isArray(cs)?cs:[];
@@ -70,9 +68,7 @@
 
   async function adminDeleteCourse(id){
     if(!confirm('刪除課程？教材與考卷不會刪除，只會解除課程關聯。')) return;
-    const key=await getAdminKey();
-    if(!key) return;
-    const r=await fetch(`/api/courses/${id}`,{method:'DELETE',headers:{'X-Admin-Key':key}});
+    const r=await fetch(`/api/courses/${id}`,{method:'DELETE',});
     if(!r.ok){ alert('刪除失敗'); return; }
     await renderAdminCourses(true);
     renderAdminCourseMaterialHub(true);
@@ -145,12 +141,10 @@
           errors:{courses:'',materials:'',cats:''}
       };
       paintAdminCourseMaterialHub(box,state);
-      const adminKey=await getAdminKey();
-      if(!adminKey)return;
       const jobs=[];
 
       if(state.loading.courses){
-          jobs.push(fetch(`/api/courses/admin?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`,{headers:{'X-Admin-Key':adminKey}})
+          jobs.push(fetch(`/api/courses/admin?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`,{})
               .then(async res=>{const data=await res.json().catch(()=>[]);if(!res.ok)throw new Error(data.error||'讀取課程失敗');state.courses=Array.isArray(data)?data:[];adminCoursesCache.set(key,{data:state.courses,at:Date.now()});})
               .catch(error=>{state.errors.courses=error.message||'讀取失敗';})
               .finally(()=>{state.loading.courses=false;paintAdminCourseMaterialHub(box,state);}));

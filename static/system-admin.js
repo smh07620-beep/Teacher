@@ -1,10 +1,4 @@
-/* Final convergence compatibility shell: session-RBAC header seam + shared caches. */
-async function getAdminKey() {
-    // Compatibility header only.  Server-side session RBAC authorizes every
-    // request; no ADMIN_KEY is prompted for or persisted in this browser.
-    return 'rbac-session';
-}
-
+/* Final convergence compatibility shell: shared admin caches only. */
 const ADMIN_CACHE_MS = 30000;
 const ADMIN_QUIZ_CACHE_MS = 60000;
 const ADMIN_COURSE_CACHE_MS = 60000;

@@ -197,6 +197,7 @@ def register_production_hardening(
             + script_src
             + "style-src 'self' 'unsafe-inline' https:; "
             "img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; "
+            "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com; "
             "connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
         )
         response.headers.setdefault(

@@ -306,7 +306,7 @@ def cleanup_budget_state(
     cleanup_staging: Callable[[], None] | None = None,
     policy: R2BudgetPolicy | None = None,
 ) -> int:
-    """Abort abandoned multipart uploads and release expired reservations."""
+    """Remove abandoned direct uploads and release their expired reservations."""
     policy = policy or R2BudgetPolicy.from_env()
     cutoff = (
         dt.datetime.now(dt.timezone.utc)
@@ -320,26 +320,39 @@ def cleanup_budget_state(
     for item in stale:
         if str(item.get("status") or "") != "uploading":
             continue
+        upload_id = str(item.get("id") or "")
+        key = str(item.get("stagingKey") or item.get("staging_key") or "")
+        remote_upload_id = str(item.get("r2UploadId") or item.get("r2_upload_id") or "")
         try:
-            providers.r2_client().abort_multipart_upload(
-                Bucket=providers.R2_BUCKET_NAME,
-                Key=str(item.get("stagingKey") or item.get("staging_key") or ""),
-                UploadId=str(item.get("r2UploadId") or item.get("r2_upload_id") or ""),
-            )
+            client = providers.r2_client()
+            if remote_upload_id:
+                client.abort_multipart_upload(
+                    Bucket=providers.R2_BUCKET_NAME,
+                    Key=key,
+                    UploadId=remote_upload_id,
+                )
+            else:
+                # A stale single-PUT session has no multipart UploadId.  The
+                # presigned PUT may already have created the object even though
+                # the browser never reached /complete, so remove that object.
+                client.delete_object(Bucket=providers.R2_BUCKET_NAME, Key=key)
         except Exception:
-            # Remote upload can already be gone; local reservation/session still
+            # The remote upload/object can already be gone; local state still
             # must be released so capacity does not remain permanently blocked.
             pass
         try:
             worker_repository.cas_upload_session_status(
-                str(item.get("id") or ""),
+                upload_id,
                 expected_status="uploading",
                 new_status="expired",
                 updated_at=_utc_now_iso(),
             )
         except Exception:
             pass
-        release_reservation(str(item.get("id") or ""), "multipart_expired")
+        release_reservation(
+            upload_id,
+            "multipart_expired" if remote_upload_id else "single_put_expired",
+        )
         expired += 1
 
     now = _utc_now_iso()

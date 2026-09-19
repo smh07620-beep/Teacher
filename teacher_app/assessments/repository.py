@@ -1,11 +1,267 @@
 """Canonical assessment/category and Question Bank data access."""
 from __future__ import annotations
 
+import datetime as dt
+import hashlib
 import json
 from typing import Any, Mapping
 
 from teacher_app.common import db as common_db
 from teacher_app.common import scope
+
+
+_QUESTION_VERSION_FIELDS = (
+    "quizCategoryId",
+    "tag",
+    "question",
+    "questionType",
+    "difficulty",
+    "imageUrl",
+    "options",
+    "correct",
+    "answerConfig",
+    "explanation",
+    "domain",
+    "topic",
+    "subtopic",
+    "learningObjective",
+    "cognitiveLevel",
+    "tags",
+    "sourceMaterialId",
+    "reviewSource",
+)
+
+_QUESTION_VERSION_ALIASES = {
+    "quizCategoryId": ("quizCategoryId", "quiz_category_id"),
+    "questionType": ("questionType", "question_type"),
+    "imageUrl": ("imageUrl", "image_url"),
+    "answerConfig": ("answerConfig", "answer_config"),
+    "learningObjective": ("learningObjective", "learning_objective"),
+    "cognitiveLevel": ("cognitiveLevel", "cognitive_level"),
+    "sourceMaterialId": ("sourceMaterialId", "source_material_id"),
+    "reviewSource": ("reviewSource", "review_source"),
+}
+
+_QUESTION_VERSION_JSON_FIELDS = {
+    "options": [],
+    "answerConfig": {},
+    "tags": [],
+    "reviewSource": {},
+}
+
+
+def _utcnow() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def _json_decode(value: Any, fallback: Any) -> Any:
+    if isinstance(value, type(fallback)):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError):
+            return fallback
+    return fallback
+
+
+def _mapping_value(data: Mapping[str, Any], key: str, default: Any = "") -> Any:
+    for alias in _QUESTION_VERSION_ALIASES.get(key, (key,)):
+        if alias in data:
+            return data.get(alias)
+    return data.get(key, default)
+
+
+def question_version_snapshot(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Canonical immutable content payload used for question version hashes.
+
+    Workflow-only fields (review status, reviewer, active state, sort order) are
+    intentionally excluded so reviewing/retiring a question does not create a
+    new content version.
+    """
+
+    data = dict(row or {})
+    snapshot: dict[str, Any] = {
+        "id": str(data.get("id") or ""),
+        "version": max(1, int(data.get("version", 1) or 1)),
+    }
+    for key in _QUESTION_VERSION_FIELDS:
+        fallback = _QUESTION_VERSION_JSON_FIELDS.get(key, "")
+        value = _mapping_value(data, key, fallback)
+        if key in _QUESTION_VERSION_JSON_FIELDS:
+            value = _json_decode(value, fallback)
+            if not isinstance(value, type(fallback)):
+                value = fallback
+        elif key == "correct":
+            try:
+                value = int(value or 0)
+            except (TypeError, ValueError):
+                value = 0
+        else:
+            value = str(value or "")
+        snapshot[key] = value
+    return snapshot
+
+
+def question_content_hash(row: Mapping[str, Any]) -> str:
+    snapshot = question_version_snapshot(row)
+    snapshot.pop("version", None)
+    canonical = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _column_exists(conn, kind: str, table: str, column: str) -> bool:
+    if kind == "postgres":
+        row = conn.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name=%s AND column_name=%s",
+            (table, column),
+        ).fetchone()
+        return bool(row)
+    return any(str(row[1]) == column for row in conn.execute(f"PRAGMA table_info({table})").fetchall())
+
+
+def _table_columns(conn, kind: str, table: str) -> set[str]:
+    if kind == "postgres":
+        rows = conn.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name=%s",
+            (table,),
+        ).fetchall()
+        return {str(dict(row).get("column_name") or "") for row in rows}
+    return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _question_versions_available(conn, kind: str) -> bool:
+    return bool(_table_columns(conn, kind, "question_versions"))
+
+
+def _insert_question_version_on_connection(
+    conn,
+    kind: str,
+    row: Mapping[str, Any],
+    *,
+    created_at: str = "",
+    created_by: str = "",
+    change_reason: str = "content",
+) -> bool:
+    if not row or not _question_versions_available(conn, kind):
+        return False
+    question_id = str(row.get("id") or "").strip()
+    if not question_id:
+        return False
+    version = max(1, int(row.get("version", 1) or 1))
+    category_id = str(_mapping_value(row, "quizCategoryId", "") or "")
+    group_key = ""
+    if category_id and _table_columns(conn, kind, "quiz_categories"):
+        ph = common_db.placeholder(kind)
+        category_row = conn.execute(
+            f"SELECT group_key FROM quiz_categories WHERE id={ph}",
+            (category_id,),
+        ).fetchone()
+        if category_row:
+            try:
+                group_key = str(dict(category_row).get("group_key") or "")
+            except (TypeError, ValueError):
+                group_key = str(category_row[0] or "")
+    snapshot = question_version_snapshot(row)
+    question_hash = question_content_hash(row)
+    snapshot["questionHash"] = question_hash
+    payload = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+    ph = common_db.placeholder(kind)
+    payload_mark = f"{ph}::jsonb" if kind == "postgres" else ph
+    if kind == "postgres":
+        cursor = conn.execute(
+            "INSERT INTO question_versions"
+            "(question_id,version,question_hash,quiz_category_id,group_key,snapshot,created_at,created_by,change_reason) "
+            f"VALUES({ph},{ph},{ph},{ph},{ph},{payload_mark},{ph},{ph},{ph}) "
+            "ON CONFLICT(question_id,version) DO NOTHING",
+            (
+                question_id,
+                version,
+                question_hash,
+                category_id,
+                group_key,
+                payload,
+                str(created_at or row.get("updated_at") or _utcnow()),
+                str(created_by or "")[:100],
+                str(change_reason or "content")[:80],
+            ),
+        )
+    else:
+        cursor = conn.execute(
+            "INSERT OR IGNORE INTO question_versions"
+            "(question_id,version,question_hash,quiz_category_id,group_key,snapshot,created_at,created_by,change_reason) "
+            f"VALUES({','.join([ph] * 9)})",
+            (
+                question_id,
+                version,
+                question_hash,
+                category_id,
+                group_key,
+                payload,
+                str(created_at or row.get("updated_at") or _utcnow()),
+                str(created_by or "")[:100],
+                str(change_reason or "content")[:80],
+            ),
+        )
+    return int(getattr(cursor, "rowcount", 0) or 0) > 0
+
+
+def backfill_question_versions_on_connection(conn, kind: str, *, created_at: str = "") -> int:
+    """Create one immutable baseline version for every existing live question."""
+
+    if not _question_versions_available(conn, kind) or not _table_columns(conn, kind, "quiz_questions"):
+        return 0
+    rows = conn.execute("SELECT * FROM quiz_questions").fetchall()
+    inserted = 0
+    for row in rows:
+        inserted += int(
+            _insert_question_version_on_connection(
+                conn,
+                kind,
+                dict(row),
+                created_at=created_at,
+                change_reason="baseline",
+            )
+        )
+    return inserted
+
+
+def list_question_versions(question_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    limit = max(1, min(200, int(limit or 100)))
+    with common_db.read_connection() as (conn, kind):
+        if not _question_versions_available(conn, kind):
+            return []
+        ph = common_db.placeholder(kind)
+        rows = conn.execute(
+            f"SELECT question_id,version,question_hash,quiz_category_id,group_key,snapshot,created_at,created_by,change_reason "
+            f"FROM question_versions WHERE question_id={ph} ORDER BY version DESC LIMIT {limit}",
+            (question_id,),
+        ).fetchall()
+    output: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        item["snapshot"] = _json_decode(item.get("snapshot"), {})
+        output.append(item)
+    return output
+
+
+def get_question_version(question_id: str, version: int) -> dict[str, Any] | None:
+    with common_db.read_connection() as (conn, kind):
+        if not _question_versions_available(conn, kind):
+            return None
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT question_id,version,question_hash,quiz_category_id,group_key,snapshot,created_at,created_by,change_reason "
+            f"FROM question_versions WHERE question_id={ph} AND version={ph}",
+            (question_id, max(1, int(version or 1))),
+        ).fetchone()
+    if not row:
+        return None
+    item = dict(row)
+    item["snapshot"] = _json_decode(item.get("snapshot"), {})
+    return item
 
 
 def category_row_to_dict(row) -> dict:
@@ -37,6 +293,7 @@ def category_row_to_dict(row) -> dict:
     review_status = str(data.pop("review_status", "approved") or "approved").lower()
     data["reviewStatus"] = review_status if review_status in {"draft", "approved"} else "draft"
     data["reviewerName"] = str(data.pop("reviewer_name", "") or "")
+    data["reviewerTitle"] = str(data.pop("reviewer_title", "") or "")
     data["reviewedAt"] = str(data.pop("reviewed_at", "") or "")
     data["publishedAt"] = str(data.pop("published_at", "") or "")
     data["publicationId"] = str(data.pop("publication_id", "") or "")
@@ -241,12 +498,14 @@ def insert_category_on_connection(conn, kind: str, values: Mapping[str, Any]) ->
 
 
 def update_category(category_id: str, values: Mapping[str, Any], *, reset_publication: bool) -> None:
-    fields = (
+    fields = [
         "title", "description", "active", "blind_mode", "draw_count", "passing_score",
         "audience", "course_id", "draw_rules", "review_status", "reviewer_name",
         "reviewed_at", "published_at",
-    )
+    ]
     with common_db.transaction() as (conn, kind):
+        if _column_exists(conn, kind, "quiz_categories", "reviewer_title"):
+            fields.insert(fields.index("reviewed_at"), "reviewer_title")
         ph = common_db.placeholder(kind)
         data = dict(values)
         data["active"] = bool(data.get("active")) if kind == "postgres" else int(bool(data.get("active")))
@@ -268,13 +527,20 @@ def update_category(category_id: str, values: Mapping[str, Any], *, reset_public
             )
 
 
-def mark_category_reviewed(category_id: str, *, reviewer: str, reviewed_at: str) -> None:
+def mark_category_reviewed(category_id: str, *, reviewer: str, reviewer_title: str, reviewed_at: str) -> None:
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
-        conn.execute(
-            f"UPDATE quiz_categories SET review_status={ph},reviewer_name={ph},reviewed_at={ph},active={ph} WHERE id={ph}",
-            ("approved", reviewer, reviewed_at, False if kind == "postgres" else 0, category_id),
-        )
+        active = False if kind == "postgres" else 0
+        if _column_exists(conn, kind, "quiz_categories", "reviewer_title"):
+            conn.execute(
+                f"UPDATE quiz_categories SET review_status={ph},reviewer_name={ph},reviewer_title={ph},reviewed_at={ph},active={ph} WHERE id={ph}",
+                ("approved", reviewer, reviewer_title, reviewed_at, active, category_id),
+            )
+        else:
+            conn.execute(
+                f"UPDATE quiz_categories SET review_status={ph},reviewer_name={ph},reviewed_at={ph},active={ph} WHERE id={ph}",
+                ("approved", reviewer, reviewed_at, active, category_id),
+            )
 
 
 def list_publications(category_id: str, limit: int = 30) -> list[dict]:
@@ -327,11 +593,19 @@ def mark_category_draft_on_connection(conn, kind: str, category_id: str) -> None
     if not category_id:
         return
     ph = common_db.placeholder(kind)
-    conn.execute(
-        f"UPDATE quiz_categories SET review_status={ph},reviewer_name={ph},reviewed_at={ph},"
-        f"published_at={ph},publication_id={ph},publication_hash={ph},active={ph} WHERE id={ph}",
-        ("draft", "", "", "", "", "", False if kind == "postgres" else 0, category_id),
-    )
+    active = False if kind == "postgres" else 0
+    if _column_exists(conn, kind, "quiz_categories", "reviewer_title"):
+        conn.execute(
+            f"UPDATE quiz_categories SET review_status={ph},reviewer_name={ph},reviewer_title={ph},reviewed_at={ph},"
+            f"published_at={ph},publication_id={ph},publication_hash={ph},active={ph} WHERE id={ph}",
+            ("draft", "", "", "", "", "", "", active, category_id),
+        )
+    else:
+        conn.execute(
+            f"UPDATE quiz_categories SET review_status={ph},reviewer_name={ph},reviewed_at={ph},"
+            f"published_at={ph},publication_id={ph},publication_hash={ph},active={ph} WHERE id={ph}",
+            ("draft", "", "", "", "", "", active, category_id),
+        )
 
 
 def mark_category_draft(category_id: str) -> None:
@@ -361,6 +635,17 @@ def insert_runtime_question_on_connection(conn, kind: str, values: Mapping[str, 
         f"INSERT INTO quiz_questions ({','.join(columns)}) VALUES ({','.join([ph] * len(columns))})",
         tuple(data.get(column) for column in columns),
     )
+    row = conn.execute(
+        f"SELECT * FROM quiz_questions WHERE id={ph}",
+        (str(data.get("id") or ""),),
+    ).fetchone()
+    if row:
+        _insert_question_version_on_connection(
+            conn,
+            kind,
+            dict(row),
+            change_reason="create",
+        )
 
 
 def reset_question_review_on_connection(
@@ -426,6 +711,12 @@ def update_runtime_question_on_connection(
     normalized: Mapping[str, Any],
 ) -> None:
     ph = common_db.placeholder(kind)
+    before_row = conn.execute(
+        f"SELECT * FROM quiz_questions WHERE id={ph}",
+        (question_id,),
+    ).fetchone()
+    before = dict(before_row) if before_row else {}
+    before_hash = question_content_hash(before) if before else ""
     values = (
         normalized["tag"], normalized["question"], normalized["questionType"], normalized["difficulty"],
         normalized["imageUrl"], json.dumps(normalized["options"], ensure_ascii=False), normalized["correct"],
@@ -437,6 +728,29 @@ def update_runtime_question_on_connection(
         f"options={ph},correct={ph},answer_config={ph},explanation={ph},active={ph} WHERE id={ph}",
         values,
     )
+    after_row = conn.execute(
+        f"SELECT * FROM quiz_questions WHERE id={ph}",
+        (question_id,),
+    ).fetchone()
+    after = dict(after_row) if after_row else {}
+    if after and before_hash != question_content_hash(after):
+        columns = _table_columns(conn, kind, "quiz_questions")
+        if "version" in columns:
+            conn.execute(
+                f"UPDATE quiz_questions SET version=version+1 WHERE id={ph}",
+                (question_id,),
+            )
+            after_row = conn.execute(
+                f"SELECT * FROM quiz_questions WHERE id={ph}",
+                (question_id,),
+            ).fetchone()
+            after = dict(after_row) if after_row else after
+        _insert_question_version_on_connection(
+            conn,
+            kind,
+            after,
+            change_reason="content_edit",
+        )
 
 
 def delete_questions_on_connection(conn, kind: str, question_ids: list[str]) -> set[str]:
@@ -513,6 +827,18 @@ def insert_bank_question(values: Mapping[str, Any]) -> None:
             f"INSERT INTO quiz_questions({','.join(columns)}) VALUES({','.join([ph] * len(columns))})",
             tuple(values.get(column) for column in columns),
         )
+        row = conn.execute(
+            f"SELECT * FROM quiz_questions WHERE id={ph}",
+            (str(values.get("id") or ""),),
+        ).fetchone()
+        if row:
+            _insert_question_version_on_connection(
+                conn,
+                kind,
+                dict(row),
+                created_at=str(values.get("updated_at") or ""),
+                change_reason="create",
+            )
 
 
 def update_bank_question(question_id: str, values: Mapping[str, Any]) -> dict | None:
@@ -524,16 +850,41 @@ def update_bank_question(question_id: str, values: Mapping[str, Any]) -> dict | 
     )
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
+        before_row = conn.execute(
+            f"SELECT * FROM quiz_questions WHERE id={ph}",
+            (question_id,),
+        ).fetchone()
+        before = dict(before_row) if before_row else {}
+        before_hash = question_content_hash(before) if before else ""
         conn.execute(
             "UPDATE quiz_questions SET "
             + ",".join(f"{column}={ph}" for column in columns)
-            + f",version=version+1 WHERE id={ph}",
+            + f" WHERE id={ph}",
             tuple(values.get(column) for column in columns) + (question_id,),
         )
         row = conn.execute(
             f"SELECT * FROM quiz_questions WHERE id={ph}",
             (question_id,),
         ).fetchone()
+        current = dict(row) if row else {}
+        if current and before_hash != question_content_hash(current):
+            if "version" in _table_columns(conn, kind, "quiz_questions"):
+                conn.execute(
+                    f"UPDATE quiz_questions SET version=version+1 WHERE id={ph}",
+                    (question_id,),
+                )
+                row = conn.execute(
+                    f"SELECT * FROM quiz_questions WHERE id={ph}",
+                    (question_id,),
+                ).fetchone()
+                current = dict(row) if row else current
+            _insert_question_version_on_connection(
+                conn,
+                kind,
+                current,
+                created_at=str(values.get("updated_at") or ""),
+                change_reason="content_edit",
+            )
     return dict(row) if row else None
 
 
@@ -558,17 +909,17 @@ def review_bank_question(
         ph = common_db.placeholder(kind)
         if decision == "accept":
             cursor = conn.execute(
-                f"UPDATE quiz_questions SET status={ph},reviewed_by={ph},reviewed_at={ph},updated_at={ph},version=version+1 WHERE id={ph} AND status='draft'",
+                f"UPDATE quiz_questions SET status={ph},reviewed_by={ph},reviewed_at={ph},updated_at={ph} WHERE id={ph} AND status='draft'",
                 ("reviewed", username, stamp, stamp, question_id),
             )
         elif decision == "return":
             cursor = conn.execute(
-                f"UPDATE quiz_questions SET status={ph},reviewed_by={ph},reviewed_at={ph},updated_at={ph},version=version+1 WHERE id={ph}",
+                f"UPDATE quiz_questions SET status={ph},reviewed_by={ph},reviewed_at={ph},updated_at={ph} WHERE id={ph}",
                 ("draft", "", "", stamp, question_id),
             )
         else:
             cursor = conn.execute(
-                f"UPDATE quiz_questions SET status={ph},updated_at={ph},version=version+1 WHERE id={ph}",
+                f"UPDATE quiz_questions SET status={ph},updated_at={ph} WHERE id={ph}",
                 ("retired", stamp, question_id),
             )
         return bool(getattr(cursor, "rowcount", 0))
@@ -640,14 +991,115 @@ def insert_blueprint_snapshot(values: Mapping[str, Any]) -> None:
         )
 
 
-def list_question_attempt_analytics(question_id: str) -> list[dict]:
+def current_question_version_identity(question_id: str) -> dict[str, Any]:
+    row = get_bank_question(question_id)
+    if not row:
+        return {"version": 1, "questionHash": ""}
+    return {
+        "version": max(1, int(row.get("version", 1) or 1)),
+        "questionHash": question_content_hash(row),
+    }
+
+
+def list_question_attempt_analytics(
+    question_id: str,
+    *,
+    version: int | None = None,
+    question_hash: str = "",
+) -> list[dict]:
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
+        columns = _table_columns(conn, kind, "question_attempt_analytics")
+        if not columns:
+            return []
+        selected = ["selected_option", "is_correct"]
+        for optional in ("attempt_score", "response_seconds", "question_version", "question_hash"):
+            if optional in columns:
+                selected.append(optional)
+        clauses = [f"question_id={ph}"]
+        params: list[Any] = [question_id]
+        if version is not None and "question_version" in columns:
+            clauses.append(f"question_version={ph}")
+            params.append(max(1, int(version or 1)))
+        if question_hash and "question_hash" in columns:
+            clauses.append(f"question_hash={ph}")
+            params.append(str(question_hash))
         rows = conn.execute(
-            f"SELECT selected_option,is_correct FROM question_attempt_analytics WHERE question_id={ph}",
-            (question_id,),
+            f"SELECT {','.join(selected)} FROM question_attempt_analytics WHERE {' AND '.join(clauses)}",
+            tuple(params),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def record_question_attempt_analytics_on_connection(
+    conn,
+    kind: str,
+    *,
+    attempt_id: str,
+    questions: list[Mapping[str, Any]],
+    answers: list[Any],
+    answer_details: list[Mapping[str, Any]],
+    attempt_score: float,
+    response_timings: list[Any] | None,
+    created_at: str,
+) -> int:
+    """Persist non-authoritative item analytics in the exam submission transaction.
+
+    Timing comes from the browser and is therefore analytics-only.  It never
+    participates in grading, access control or attempt state transitions.
+    """
+    columns = _table_columns(conn, kind, "question_attempt_analytics")
+    required = {"question_id", "attempt_id", "selected_option", "is_correct", "created_at"}
+    if not required.issubset(columns):
+        return 0
+    timings = response_timings if isinstance(response_timings, list) else []
+    ph = common_db.placeholder(kind)
+    inserted = 0
+    for index, question in enumerate(questions):
+        detail = answer_details[index] if index < len(answer_details) else {}
+        is_correct = detail.get("isCorrect")
+        question_id = str(question.get("id") or "").strip()
+        if not question_id or is_correct is None:
+            continue
+        answer = answers[index] if index < len(answers) else None
+        if isinstance(answer, (list, dict)):
+            selected_option = json.dumps(answer, ensure_ascii=False, separators=(",", ":"))
+        else:
+            selected_option = str(answer if answer is not None else "")[:4000]
+        names = ["question_id", "attempt_id", "selected_option", "is_correct", "created_at"]
+        values: list[Any] = [
+            question_id,
+            attempt_id,
+            selected_option,
+            bool(is_correct) if kind == "postgres" else int(bool(is_correct)),
+            created_at,
+        ]
+        if "attempt_score" in columns:
+            names.append("attempt_score")
+            values.append(max(0.0, min(100.0, float(attempt_score or 0))))
+        if "response_seconds" in columns:
+            names.append("response_seconds")
+            try:
+                seconds = float(timings[index]) if index < len(timings) else 0.0
+            except (TypeError, ValueError):
+                seconds = 0.0
+            values.append(max(0.0, min(86400.0, seconds)))
+        if "question_version" in columns:
+            names.append("question_version")
+            values.append(max(1, int(question.get("version", 1) or 1)))
+        if "question_hash" in columns:
+            names.append("question_hash")
+            values.append(str(question.get("questionHash") or question_content_hash(question))[:64])
+        marks = ",".join([ph] * len(names))
+        update_names = [name for name in names if name not in {"question_id", "attempt_id"}]
+        assignments = ",".join(f"{name}=excluded.{name}" for name in update_names)
+        conn.execute(
+            f"INSERT INTO question_attempt_analytics({','.join(names)}) VALUES({marks}) "
+            f"ON CONFLICT(question_id,attempt_id) DO UPDATE SET {assignments}",
+            tuple(values),
+        )
+        inserted += 1
+    return inserted
 
 
 def get_bank_question_correct(question_id: str) -> Any:
@@ -658,3 +1110,24 @@ def get_bank_question_correct(question_id: str) -> Any:
             (question_id,),
         ).fetchone()
     return dict(row).get("correct") if row else None
+
+
+def get_question_version_correct(question_id: str, version: int | None = None) -> Any:
+    if version is None:
+        return get_bank_question_correct(question_id)
+    stored = get_question_version(question_id, version)
+    snapshot = (stored or {}).get("snapshot") if stored else None
+    if isinstance(snapshot, dict) and "correct" in snapshot:
+        return snapshot.get("correct")
+    return None
+
+
+def get_question_version_options(question_id: str, version: int | None = None) -> list[Any]:
+    if version is not None:
+        stored = get_question_version(question_id, version)
+        snapshot = (stored or {}).get("snapshot") if stored else None
+        if isinstance(snapshot, dict) and isinstance(snapshot.get("options"), list):
+            return list(snapshot.get("options") or [])
+        return []
+    row = get_bank_question(question_id) or {}
+    return list(_json_decode(row.get("options"), []))

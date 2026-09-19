@@ -26,7 +26,7 @@ This audit distinguishes real duplicate implementations from intentionally separ
 | Atlas | `atlas_70.py` + `static/atlas-70.js` | DOCX import wizard | Browse/editor vs importer | Keep |
 | DOCX templates/results | document template backend + `static/admin-doc-templates.js` / results export | local DOCX fallback state in `system-admin.js` | Compatibility fallback still required | Keep until separately migrated/tested |
 | Worker/jobs | worker backend + `static/worker-status-70.js`, `static/admin-jobs.js` | material upload status | Operations vs authoring | Keep |
-| `system-admin.js` | no new product ownership | shared compatibility state/helpers and not-yet-retired fallbacks | Compatibility shell | Delete only functions proven ownerless; keep `getAdminKey()` seam and DOCX fallback until migrated |
+| `system-admin.js` | no new product ownership | shared compatibility state/helpers and not-yet-retired fallbacks | Compatibility shell | Delete only functions proven ownerless; keep only compatibility pieces that still have a live canonical consumer |
 | `admin-compat-facade.js` | none | historical Course Wizard aliases | Removed | Raw HTML now calls `courseWizard681*` directly |
 
 ## 7.4 convergence decisions
@@ -50,6 +50,6 @@ A release candidate fails convergence if:
 
 ## Final skeleton cleanup result
 
-The post-audit cleanup physically removes dead public navigation markup, retires obsolete unconsumed HTTP routes, connects batch-delete and security-status to canonical frontend owners, retires `teaching.css`, unifies `portal-v56.js` cache keys, and migrates the remaining course/question/people/system UI owners out of `system-admin.js`. The compatibility shell deliberately retains shared cache/state helpers, `getAdminKey()` as a non-secret session-RBAC header seam, and the tested local DOCX fallback only.
+The post-audit cleanup physically removes dead public navigation markup, retires obsolete unconsumed HTTP routes, connects batch-delete and security-status to canonical frontend owners, retires `teaching.css`, unifies `portal-v56.js` cache keys, and migrates the remaining course/question/people/system UI owners out of `system-admin.js`. The compatibility shell deliberately retains shared cache/state helpers and the tested local DOCX fallback only.
 
-> **Post-audit current note:** later convergence moved the local DOCX export fallback/state to `static/admin-results-export.js` and removed the dead AI picker state, stale admin-key state, and duplicate exam-quota listener from `static/system-admin.js`. The current compatibility shell retains only live shared caches/state plus the non-secret `getAdminKey()` session-RBAC header seam. Rows above describe the 7.4 snapshot and must not be read as current ownership when they mention the former DOCX fallback.
+> **Post-audit current note:** later convergence moved the local DOCX export fallback/state to `static/admin-results-export.js` and removed the dead AI picker state, stale admin-key state, and duplicate exam-quota listener from `static/system-admin.js`. The current compatibility shell retains only live shared caches/state plus no browser admin-key compatibility seam. Rows above describe the 7.4 snapshot and must not be read as current ownership when they mention the former DOCX fallback.

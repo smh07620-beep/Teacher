@@ -31,6 +31,9 @@ class WorkerStatusUi70Tests(unittest.TestCase):
     def test_operational_fields_are_exposed(self):
         for marker in (
             "pendingJobs",
+            "oldestPendingAgeSeconds",
+            "recentFailureRate",
+            "averageCompletedDurationSeconds",
             "processingJobs",
             "retryJobs",
             "failedJobs",

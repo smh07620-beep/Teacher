@@ -41,7 +41,10 @@ class BlueprintQuota68Tests(unittest.TestCase):
 class ExternalAndElevation68Tests(unittest.TestCase):
     def test_youtube_shorts_is_canonicalized(self):
         item=validate_external_url("https://www.youtube.com/shorts/dQw4w9WgXcQ")
-        self.assertEqual(item,{"provider":"youtube","canonicalUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","videoId":"dQw4w9WgXcQ"})
+        self.assertEqual(item["provider"], "youtube")
+        self.assertEqual(item["canonicalUrl"], "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        self.assertEqual(item["videoId"], "dQw4w9WgXcQ")
+        self.assertTrue(item["playbackUrl"].startswith("https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"))
 
     def test_allowed_direct_video_and_vimeo_provider(self):
         item=validate_external_url("https://cdn.example.edu/video.webm", ["cdn.example.edu"])

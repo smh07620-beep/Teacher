@@ -38,6 +38,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.command_center.audience import register_training_audience_71
     from teacher_app.command_center.routes import register_training_command_center
     from teacher_app.command_center.dashboard_routes import register_dashboard_routes
+    from teacher_app.common.audit_routes import register_general_audit_routes
     from teacher_app.common.privacy import register_ai_privacy
     from teacher_app.common.security import register_production_hardening
     from teacher_app.common import db as common_db
@@ -96,6 +97,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_record_routes(app)
     app = register_pgy_assessment_routes(app, paths=app.config["STORAGE_PATHS"])
     app = register_multi_role_66(app)
+    app = register_general_audit_routes(app)
     app = register_training_audience_71(app)
     app = register_health(app, connection_factory=common_db.get_connection)
     app = register_training_command_center(app)

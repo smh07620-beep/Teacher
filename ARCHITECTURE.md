@@ -57,7 +57,7 @@ Explicit admin deletion is strict: provider cleanup failures must surface throug
 - `static/assessment-advanced-74.js` is the sole owner for blueprint snapshots and item analytics; normal exam/question management remains with the canonical admin modules.
 - `static/shared-core.js` owns the global `escapeHtml` compatibility export until remaining callers move to `AppCore.escapeHtml`.
 - Blueprint snapshot/item analytics UI belongs to `static/assessment-advanced-74.js`; it must not re-own question CRUD or AI authoring.
-- `getAdminKey()` remains a compatibility header seam only; session RBAC is the authorization boundary.
+- The legacy browser `getAdminKey()` / `X-Admin-Key` compatibility seam is removed; session RBAC, scope checks, CSRF-origin enforcement, and sensitive elevation are the authorization boundaries.
 
 ### Canonical frontend owners
 

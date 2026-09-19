@@ -23,10 +23,11 @@ class Phase3RAdminResultsDataTests(unittest.TestCase):
         ):
             self.assertIn(f"window.{name}", self.source)
 
-    def test_records_api_and_admin_key_contract_stay_intact(self):
+    def test_records_api_uses_session_rbac_without_admin_key(self):
         self.assertIn("fetch('/api/records'", self.source)
         self.assertIn("method:'DELETE'", self.source)
-        self.assertIn("'X-Admin-Key':key", self.source)
+        self.assertNotIn("X-Admin-Key", self.source)
+        self.assertNotIn("getAdminKey", self.source)
         self.assertIn("adminRecords=", self.source)
 
     def test_results_workspace_state_remains_in_wrapper(self):

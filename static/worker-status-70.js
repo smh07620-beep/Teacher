@@ -26,6 +26,14 @@
     return Number.isNaN(date.getTime()) ? escapeHtml(value) : date.toLocaleString();
   };
 
+  const formatDuration = value => {
+    const seconds = Math.max(0, Number(value || 0));
+    if (!seconds) return '—';
+    if (seconds < 60) return `${Math.round(seconds)} 秒`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)} 分`;
+    return `${(seconds / 3600).toFixed(1)} 小時`;
+  };
+
   const statusMeta = status => ({
     online: ['🟢', '在線', 'text-emerald-700 bg-emerald-50 border-emerald-200'],
     busy: ['🔵', '處理中', 'text-sky-700 bg-sky-50 border-sky-200'],
@@ -53,6 +61,7 @@
       button.textContent = '🖥️ Worker / Job 狀態';
       button.onclick = () => window.switchAdminWorkspace?.('worker', true);
     }
+    button.dataset.adminWorkspace = 'worker';
     button.disabled = false;
     button.classList.remove('hidden');
     button.setAttribute('aria-hidden', 'false');
@@ -195,6 +204,11 @@
             ${queueCard('⚙️', '處理中', data.processingJobs, '正在由本機 Worker 執行')}
             ${queueCard('🔁', '等待重試', data.retryJobs, '保留原始檔後再次處理')}
             ${queueCard('❌', '失敗', data.failedJobs, '需要檢查錯誤或人工重試')}
+          </div>
+          <div class="grid sm:grid-cols-3 gap-2 text-xs">
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">最舊待處理等待：</span><b>${formatDuration(data.oldestPendingAgeSeconds)}</b>${data.oldestPendingAt ? ` · ${formatWhen(data.oldestPendingAt)}` : ''}</div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">最近失敗率：</span><b>${Math.round(Number(data.recentFailureRate || 0) * 100)}%</b> · ${Number(data.recentTerminalJobs || 0)} 筆 terminal job</div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">平均完成時間：</span><b>${formatDuration(data.averageCompletedDurationSeconds)}</b></div>
           </div>
           <div class="text-xs rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">Shared staging：<b>${escapeHtml(staging.backend || '未設定')}</b> · ${staging.available ? '可用' : '不可用'}${staging.shared ? ' · Web/Worker 共用' : ''}</div>
         </section>

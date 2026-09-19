@@ -23,10 +23,11 @@ class Phase3SAdminQuizMaterialsTests(unittest.TestCase):
         ):
             self.assertIn(f"window.{name}", self.source)
 
-    def test_material_link_api_and_admin_key_contract_stay_intact(self):
+    def test_material_link_api_uses_session_rbac_without_admin_key(self):
         self.assertIn("/api/quiz-categories/${catId}/materials", self.source)
         self.assertIn("method:'PUT'", self.source)
-        self.assertIn("'X-Admin-Key':key", self.source)
+        self.assertNotIn("X-Admin-Key", self.source)
+        self.assertNotIn("getAdminKey", self.source)
         self.assertIn("materialIds:ids", self.source)
         self.assertIn("invalidateAdminMaterialsCache", self.source)
 

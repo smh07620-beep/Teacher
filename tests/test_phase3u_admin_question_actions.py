@@ -40,7 +40,8 @@ class Phase3UAdminQuestionActionsTests(unittest.TestCase):
             "fetch('/api/quiz-questions'",
         ):
             self.assertIn(endpoint, self.source)
-        self.assertIn("'X-Admin-Key':key", self.source)
+        self.assertNotIn("X-Admin-Key", self.source)
+        self.assertNotIn("getAdminKey", self.source)
         self.assertIn("method:'PATCH'", self.source)
         self.assertIn("method:'DELETE'", self.source)
         self.assertIn("method:'POST'", self.source)

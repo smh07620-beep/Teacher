@@ -144,6 +144,7 @@ def create_category(base, data: Mapping[str, Any]) -> dict:
         "draw_rules": json.dumps(draw_rules, ensure_ascii=False),
         "review_status": "draft",
         "reviewer_name": "",
+        "reviewer_title": "",
         "reviewed_at": "",
         "published_at": "",
     })
@@ -164,6 +165,7 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
     active = bool(entry.get("active", False))
     review_status = str(entry.get("reviewStatus", "draft") or "draft").lower()
     reviewer_name = str(entry.get("reviewerName", "") or "").strip()[:100]
+    reviewer_title = str(entry.get("reviewerTitle", "") or "").strip()[:100]
     reviewed_at = str(entry.get("reviewedAt", "") or "")[:80]
     published_at = str(entry.get("publishedAt", "") or "")[:80]
     blind_mode = bool(data.get("blindMode", entry.get("blindMode", False)))
@@ -198,7 +200,7 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
         ]
     )
     if config_changed:
-        review_status, reviewer_name, reviewed_at, published_at, active = "draft", "", "", "", False
+        review_status, reviewer_name, reviewer_title, reviewed_at, published_at, active = "draft", "", "", "", "", False
     elif active and review_status != "approved":
         raise _fail("ASSESSMENT_NOT_REVIEWED", "此考卷尚未完成審核，請先執行『審核』再發布。", 409)
 
@@ -214,6 +216,7 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
         "draw_rules": json.dumps(draw_rules, ensure_ascii=False),
         "review_status": review_status,
         "reviewer_name": reviewer_name,
+        "reviewer_title": reviewer_title,
         "reviewed_at": reviewed_at,
         "published_at": published_at,
     }, reset_publication=config_changed)
@@ -223,6 +226,7 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
         "active": active,
         "reviewStatus": review_status,
         "reviewerName": reviewer_name,
+        "reviewerTitle": reviewer_title,
         "reviewedAt": reviewed_at,
         "publishedAt": published_at,
     }
@@ -234,11 +238,13 @@ def review_category(
     _data: Mapping[str, Any] | None = None,
     *,
     reviewer: str = "",
+    reviewer_title: str = "",
 ) -> dict:
     entry = repository.get_category_full(category_id)
     if not entry:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考卷", 404)
     reviewer = str(reviewer or _compat_actor_label(base)).strip()[:100]
+    reviewer_title = str(reviewer_title or "").strip()[:100]
     if not reviewer:
         raise _fail("REVIEWER_REQUIRED", "無法確認目前登入的審核者", 401)
     questions = repository.list_questions(category_id, include_inactive=False)
@@ -255,12 +261,18 @@ def review_category(
     if invalid:
         raise _fail("ASSESSMENT_REVIEW_FAILED", "題目審核未通過", 409, {"issues": invalid[:20]})
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    repository.mark_category_reviewed(category_id, reviewer=reviewer, reviewed_at=now)
+    repository.mark_category_reviewed(
+        category_id,
+        reviewer=reviewer,
+        reviewer_title=reviewer_title,
+        reviewed_at=now,
+    )
     _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
     return {
         "ok": True,
         "reviewStatus": "approved",
         "reviewerName": reviewer,
+        "reviewerTitle": reviewer_title,
         "reviewedAt": now,
         "questionCount": len(questions),
     }
@@ -285,8 +297,30 @@ def publication_snapshot(category_id: str, *, published_by: str = "") -> tuple[d
     if not category:
         raise ValueError("找不到此考卷")
     questions = repository.list_questions(category_id, include_inactive=False)
+    def question_snapshot(question: Mapping[str, Any]) -> dict:
+        version = max(1, int(question.get("version", 1) or 1))
+        item = {
+            "id": question.get("id"),
+            "version": version,
+            "tag": question.get("tag", ""),
+            "question": question.get("question", ""),
+            "questionType": question.get("questionType", "choice"),
+            "imageUrl": question.get("imageUrl", ""),
+            "options": question.get("options", []) or [],
+            "correct": question.get("correct", 0),
+            "answerConfig": question.get("answerConfig", {}) or {},
+            "explanation": question.get("explanation", ""),
+            "difficulty": question.get("difficulty", "standard"),
+            "sortOrder": int(question.get("sortOrder", 0) or 0),
+        }
+        # Use the same content hash as the append-only question_versions store.
+        # The publication snapshot may expose a smaller projection, but the
+        # identity always points at the canonical immutable question version.
+        item["questionHash"] = repository.question_content_hash(question)
+        return item
+
     snapshot = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "category": {
             "id": category.get("id"),
             "title": category.get("title"),
@@ -300,25 +334,11 @@ def publication_snapshot(category_id: str, *, published_by: str = "") -> tuple[d
             "audience": category.get("audience", ""),
             "drawRules": category.get("drawRules", {}) or {},
             "reviewerName": category.get("reviewerName", ""),
+            "reviewerTitle": category.get("reviewerTitle", ""),
             "reviewedAt": category.get("reviewedAt", ""),
             "publishedBy": str(published_by or "")[:100],
         },
-        "questions": [
-            {
-                "id": question.get("id"),
-                "tag": question.get("tag", ""),
-                "question": question.get("question", ""),
-                "questionType": question.get("questionType", "choice"),
-                "imageUrl": question.get("imageUrl", ""),
-                "options": question.get("options", []) or [],
-                "correct": question.get("correct", 0),
-                "answerConfig": question.get("answerConfig", {}) or {},
-                "explanation": question.get("explanation", ""),
-                "difficulty": question.get("difficulty", "standard"),
-                "sortOrder": int(question.get("sortOrder", 0) or 0),
-            }
-            for question in questions
-        ],
+        "questions": [question_snapshot(question) for question in questions],
     }
     canonical = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()

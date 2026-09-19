@@ -59,10 +59,10 @@ class FinalConvergenceStage3CleanupTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.legacy)
 
-    def test_admin_key_remains_session_rbac_compatibility_only(self):
-        self.assertIn("async function getAdminKey()", self.legacy)
-        self.assertIn("return 'rbac-session';", self.legacy)
-        self.assertIn("no ADMIN_KEY is prompted for or persisted", self.legacy)
+    def test_legacy_admin_key_compatibility_seam_is_removed(self):
+        self.assertNotIn("getAdminKey", self.legacy)
+        self.assertNotIn("X-Admin-Key", self.legacy)
+        self.assertNotIn("rbac-session", self.legacy)
 
 
 if __name__ == "__main__":

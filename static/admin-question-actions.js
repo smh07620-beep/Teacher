@@ -95,10 +95,8 @@
   window.loadQuizQuestionsIntoPanel = async function(catId){
     const list=document.getElementById(`qlist-${catId}`);
     if(list) list.innerHTML='<p class="text-xs text-slate-400 py-3">讀取題庫中…</p>';
-    const key=await getAdminKey();
-    if(!key) return;
     try{
-      const r=await fetch(`/api/quiz-questions/admin?category=${encodeURIComponent(catId)}`,{headers:{'X-Admin-Key':key}});
+      const r=await fetch(`/api/quiz-questions/admin?category=${encodeURIComponent(catId)}`,{});
       const d=await r.json().catch(()=>[]);
       if(!r.ok) throw new Error(d.error||'題庫讀取失敗');
       adminQuizQuestionCache[catId]=Array.isArray(d)?d:[];
@@ -115,11 +113,9 @@
     let payload;
     try{ payload=window.adminBuildQuestionPayload(qId); }
     catch(e){ alert(e.message); return; }
-    const key=await getAdminKey();
-    if(!key) return;
     actionBusy.add(qId); window.setQuestionRowBusy(qId,true,'儲存中…');
     try{
-      const r=await fetch(`/api/quiz-questions/${encodeURIComponent(qId)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify(payload)});
+      const r=await fetch(`/api/quiz-questions/${encodeURIComponent(qId)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const d=await r.json().catch(()=>({}));
       if(!r.ok) throw new Error(d.error||'修改失敗');
       window.updateQuestionCacheAndPaint(catId,[{id:qId,...payload,...(d.question||{})}]);
@@ -129,10 +125,9 @@
 
   window.adminToggleQuizQuestion = async function(qId,catId,active){
     if(actionBusy.has(qId)) return;
-    const key=await getAdminKey(); if(!key) return;
     actionBusy.add(qId); window.setQuestionRowBusy(qId,true,active?'啟用中…':'停用中…');
     try{
-      const r=await fetch(`/api/quiz-questions/${encodeURIComponent(qId)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({active})});
+      const r=await fetch(`/api/quiz-questions/${encodeURIComponent(qId)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({active})});
       const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'更新失敗');
       window.updateQuestionCacheAndPaint(catId,[{id:qId,active}]);
     }catch(e){ alert(e.message); }
@@ -142,10 +137,9 @@
   window.adminDeleteQuizQuestion = async function(qId,catId){
     if(!confirm('確定刪除此題目？此操作無法復原。')) return;
     if(actionBusy.has(qId)) return;
-    const key=await getAdminKey(); if(!key) return;
     actionBusy.add(qId); window.setQuestionRowBusy(qId,true,'刪除中…');
     try{
-      const r=await fetch(`/api/quiz-questions/${encodeURIComponent(qId)}`,{method:'DELETE',headers:{'X-Admin-Key':key}});
+      const r=await fetch(`/api/quiz-questions/${encodeURIComponent(qId)}`,{method:'DELETE',});
       const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'刪除失敗');
       window.updateQuestionCacheAndPaint(catId,[],{removeIds:[qId]});
     }catch(e){ alert(e.message); }
@@ -156,10 +150,9 @@
     const ids=window.adminSelectedQuestionIds(catId);
     if(!ids.length){alert('請先勾選題目');return;}
     if(bulkBusy) return;
-    const key=await getAdminKey(); if(!key) return;
     window.setQuestionBulkBusy(catId,true,active?'批次啟用中…':'批次停用中…');
     try{
-      const r=await fetch('/api/quiz-questions/batch',{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({items:ids.map(id=>({id,data:{active}}))})});
+      const r=await fetch('/api/quiz-questions/batch',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:ids.map(id=>({id,data:{active}}))})});
       const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'批次更新失敗');
       const patches=Array.isArray(d.updated)?d.updated:ids.map(id=>({id,active}));
       window.updateQuestionCacheAndPaint(catId,patches);
@@ -173,11 +166,10 @@
     const tag=prompt('輸入要套用到已選題目的分類標籤：');
     if(tag===null) return;
     if(bulkBusy) return;
-    const key=await getAdminKey(); if(!key) return;
     window.setQuestionBulkBusy(catId,true,'批次更新分類中…');
     try{
       const cleanTag=tag.trim();
-      const r=await fetch('/api/quiz-questions/batch',{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({items:ids.map(id=>({id,data:{tag:cleanTag}}))})});
+      const r=await fetch('/api/quiz-questions/batch',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:ids.map(id=>({id,data:{tag:cleanTag}}))})});
       const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'批次分類失敗');
       const patches=Array.isArray(d.updated)?d.updated:ids.map(id=>({id,tag:cleanTag}));
       window.updateQuestionCacheAndPaint(catId,patches);
@@ -191,10 +183,9 @@
     if(!ids.length){alert('請先勾選題目');return;}
     if(!confirm(`確定刪除已選的 ${ids.length} 題？此操作無法復原。`)) return;
     if(bulkBusy) return;
-    const key=await getAdminKey(); if(!key) return;
     window.setQuestionBulkBusy(catId,true,`刪除 ${ids.length} 題中…`);
     try{
-      const r=await fetch('/api/quiz-questions/batch-delete',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({ids})});
+      const r=await fetch('/api/quiz-questions/batch-delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
       const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'批次刪除失敗');
       window.updateQuestionCacheAndPaint(catId,[],{removeIds:ids});
     }catch(e){ alert(e.message); }
@@ -202,10 +193,9 @@
   };
 
   window.adminImportQuizUrl = async function(catId){
-    const key=await getAdminKey(); if(!key) return;
     const el=document.getElementById(`qimport-${catId}`),url=el?.value.trim();
     if(!url){alert('請貼上 JSON 或 CSV 題庫公開連結');return;}
-    const r=await fetch('/api/quiz-questions/import-url',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({quizCategoryId:catId,url})});
+    const r=await fetch('/api/quiz-questions/import-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quizCategoryId:catId,url})});
     const d=await r.json().catch(()=>({})); if(!r.ok){alert(d.error||'匯入失敗');return;}
     alert(`成功匯入 ${d.imported} 題${d.errors?.length?`；另有 ${d.errors.length} 筆略過`:''}`);
     if(el) el.value='';
@@ -214,7 +204,6 @@
   };
 
   window.adminAddQuizQuestion = async function(catId){
-    const key=await getAdminKey(); if(!key) return;
     const question=document.getElementById(`qform-${catId}-question`)?.value.trim()||'';
     const rawType=document.getElementById(`qform-${catId}-type`)?.value||'choice';
     const isVideo=rawType.startsWith('video_');
@@ -225,7 +214,7 @@
     const imageFile=document.getElementById(`qform-${catId}-image`)?.files?.[0];
     if(imageFile){
       const fd=new FormData(); fd.append('file',imageFile);
-      const ir=await fetch('/api/quiz-question-images',{method:'POST',headers:{'X-Admin-Key':key},body:fd});
+      const ir=await fetch('/api/quiz-question-images',{method:'POST',body:fd});
       const idata=await ir.json().catch(()=>({})); if(!ir.ok){alert(idata.error||'圖片上傳失敗');return;}
       imageUrl=idata.url||'';
     }
@@ -240,7 +229,7 @@
     }
     const needsOptions=['choice','multi','image','true_false'].includes(questionType);
     const payload={quizCategoryId:catId,question,questionType,difficulty,imageUrl,options:questionType==='true_false'?['是','否']:(needsOptions?options:[]),correct:questionType==='true_false'?Number(document.getElementById(`qform-${catId}-truefalse-correct`)?.value||0):Number(document.getElementById(`qform-${catId}-correct`)?.value||0),answerConfig,tag:document.getElementById(`qform-${catId}-tag`)?.value.trim()||'',explanation:document.getElementById(`qform-${catId}-explain`)?.value.trim()||''};
-    const r=await fetch('/api/quiz-questions',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify(payload)});
+    const r=await fetch('/api/quiz-questions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json().catch(()=>({})); if(!r.ok){alert(d.error||'新增失敗');return;}
     ['question','opt0','opt1','opt2','opt3','tag','explain','fill-answers','media-url','pause-at'].forEach(f=>{const el=document.getElementById(`qform-${catId}-${f}`);if(el)el.value='';});
     [0,1,2,3].forEach(i=>{const el=document.getElementById(`qform-${catId}-multi${i}`);if(el)el.checked=false;});

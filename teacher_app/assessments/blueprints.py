@@ -7,6 +7,7 @@ import random
 import uuid
 from typing import Any, Mapping
 
+from teacher_app.assessments import analytics as analytics_service
 from teacher_app.assessments import repository
 from teacher_app.common.errors import ApiError
 
@@ -41,7 +42,16 @@ def _draw(rows: list[dict], count: int, quotas: Mapping[str, Any], excluded=()) 
             if amount:
                 requirements.append((field, str(value), amount))
 
-    random.shuffle(candidates)
+    if any("_selectionWeight" in row for row in candidates):
+        def weighted_key(row):
+            try:
+                weight = max(0.05, float(row.get("_selectionWeight", 1.0) or 1.0))
+            except (TypeError, ValueError):
+                weight = 1.0
+            return random.random() ** (1.0 / weight)
+        candidates.sort(key=weighted_key, reverse=True)
+    else:
+        random.shuffle(candidates)
     suffix = [[0] * len(requirements) for _ in range(len(candidates) + 1)]
     for index in range(len(candidates) - 1, -1, -1):
         suffix[index] = suffix[index + 1].copy()
@@ -91,13 +101,21 @@ def create_blueprint(data: Mapping[str, Any], *, username: str) -> dict:
     quotas = data.get("quotas") or {}
     if not isinstance(quotas, dict):
         raise ApiError("BLUEPRINT_QUOTAS_INVALID", "quotas 格式錯誤", status=400)
+    quality_mode = str(data.get("qualityMode") or "off").strip().lower()
+    if quality_mode not in {"off", "balanced"}:
+        raise ApiError("BLUEPRINT_QUALITY_MODE_INVALID", "qualityMode 格式錯誤", status=400)
+    stored_quotas = dict(quotas)
+    stored_quotas["_selectionPolicy"] = {
+        "mode": quality_mode,
+        "version": analytics_service.SELECTION_POLICY_VERSION,
+    }
 
     blueprint_id = str(uuid.uuid4())
     repository.insert_blueprint({
         "id": blueprint_id,
         "quiz_category_id": str(data.get("quizCategoryId") or ""),
         "question_count": count,
-        "quotas": json.dumps(quotas, ensure_ascii=False),
+        "quotas": json.dumps(stored_quotas, ensure_ascii=False),
         "exclude_recent": exclude_recent,
         "created_by": username,
         "created_at": now(),
@@ -105,6 +123,7 @@ def create_blueprint(data: Mapping[str, Any], *, username: str) -> dict:
     return {
         "id": blueprint_id,
         "questionCount": count,
+        "qualityMode": quality_mode,
         "immutableSnapshotRequired": True,
     }
 
@@ -126,6 +145,9 @@ def publish_blueprint(blueprint_id: str) -> tuple[dict, int]:
 
     category_id = str(blueprint.get("quiz_category_id") or "")
     rows = repository.list_blueprint_questions(category_id)
+    for row in rows:
+        row["version"] = max(1, int(row.get("version", 1) or 1))
+        row["questionHash"] = repository.question_content_hash(row)
     recent: set[str] = set()
     exclude_recent = int(blueprint.get("exclude_recent") or 0)
     if exclude_recent > 0:
@@ -137,11 +159,32 @@ def publish_blueprint(blueprint_id: str) -> tuple[dict, int]:
                 if isinstance(question, dict):
                     recent.add(str(question.get("id") or ""))
 
+    quotas = _decode(blueprint.get("quotas"), {})
+    selection_policy = quotas.pop("_selectionPolicy", {}) if isinstance(quotas, dict) else {}
+    quality_mode = str((selection_policy or {}).get("mode") or "off").lower()
+    if quality_mode == "balanced":
+        metrics_by_id: dict[str, dict] = {}
+        for row in rows:
+            metrics_by_id[str(row.get("id") or "")] = analytics_service.get_question_analytics(
+                str(row.get("id") or ""),
+                version=max(1, int(row.get("version", 1) or 1)),
+            )
+        max_exposure = max(
+            [int(item.get("exposureCount", 0) or 0) for item in metrics_by_id.values()] or [0]
+        )
+        for row in rows:
+            metrics = metrics_by_id.get(str(row.get("id") or ""), {})
+            row["_selectionAnalytics"] = metrics
+            row["_selectionWeight"] = analytics_service.balanced_selection_weight(
+                metrics,
+                max_exposure=max_exposure,
+            )
+
     try:
         chosen = _draw(
             rows,
             int(blueprint.get("question_count") or 0),
-            _decode(blueprint.get("quotas"), {}),
+            quotas if isinstance(quotas, dict) else {},
             recent,
         )
     except ValueError as exc:
@@ -149,17 +192,38 @@ def publish_blueprint(blueprint_id: str) -> tuple[dict, int]:
 
     snapshot_id = str(uuid.uuid4())
     stamp = now()
+    snapshot_questions = []
+    for row in chosen:
+        item = dict(row)
+        weight = item.pop("_selectionWeight", None)
+        metrics = item.pop("_selectionAnalytics", None)
+        if quality_mode == "balanced":
+            item["selection"] = {
+                "mode": "balanced",
+                "policyVersion": str(
+                    (selection_policy or {}).get("version")
+                    or analytics_service.SELECTION_POLICY_VERSION
+                ),
+                "weight": weight,
+                "metrics": metrics or {},
+            }
+        snapshot_questions.append(item)
     repository.insert_blueprint_snapshot({
         "id": snapshot_id,
         "blueprint_id": blueprint_id,
         "quiz_category_id": category_id,
-        "questions": json.dumps(chosen, ensure_ascii=False),
+        "questions": json.dumps(snapshot_questions, ensure_ascii=False),
         "created_at": stamp,
     })
     return ({
         "id": snapshot_id,
         "blueprintId": blueprint_id,
         "questionCount": len(chosen),
+        "qualityMode": quality_mode,
+        "selectionPolicyVersion": str(
+            (selection_policy or {}).get("version")
+            or analytics_service.SELECTION_POLICY_VERSION
+        ),
         "immutable": True,
         "createdAt": stamp,
     }, 201)

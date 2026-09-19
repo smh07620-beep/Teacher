@@ -77,17 +77,17 @@
   window.exposeQuestionDeleteActions = function(root=document){
     if(!root?.querySelectorAll) return;
 
-    root.querySelectorAll('button[onclick*="adminDeleteQuizQuestion"]').forEach(btn=>{
+    root.querySelectorAll('button[data-csp-click*="adminDeleteQuizQuestion"]').forEach(btn=>{
       if(btn.textContent.trim()!=='🗑️ 刪除') btn.textContent='🗑️ 刪除';
       btn.className='text-[11px] bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-2.5 py-1.5 rounded-lg font-bold';
     });
 
-    root.querySelectorAll('button[onclick*="adminBulkDeleteQuestions"]').forEach(btn=>{
+    root.querySelectorAll('button[data-csp-click*="adminBulkDeleteQuestions"]').forEach(btn=>{
       if(btn.textContent.trim()!=='🗑️ 刪除已選題目') btn.textContent='🗑️ 刪除已選題目';
       btn.className='text-[11px] bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg font-bold';
     });
 
-    root.querySelectorAll('button[onclick*="adminDeleteQuizCategory"]').forEach(btn=>{
+    root.querySelectorAll('button[data-csp-click*="adminDeleteQuizCategory"]').forEach(btn=>{
       if(btn.textContent.trim()!=='🗑️ 刪除考卷') btn.textContent='🗑️ 刪除考卷';
       btn.className='w-full text-left text-xs bg-white hover:bg-rose-50 text-rose-700 px-3 py-2 rounded-lg font-bold';
     });
@@ -163,8 +163,6 @@
       setAdminQuizSyncStatus('已快取・可立即操作','emerald');
       return;
     }
-    const key=await getAdminKey();
-    if(!key) return;
     const hasVisibleData=!!cached?.data?.length || !!box.querySelector('article');
     if(!hasVisibleData){
       box.innerHTML='<div class="space-y-3"><div class="h-20 rounded-2xl bg-slate-100 animate-pulse"></div><div class="h-20 rounded-2xl bg-slate-100 animate-pulse"></div></div>';
@@ -173,7 +171,7 @@
     }
     setAdminQuizSyncStatus('背景同步中…','indigo');
     try{
-      const res=await fetch(`/api/quiz-categories/admin?group=${group}&area=${area}`,{headers:{'X-Admin-Key':key}});
+      const res=await fetch(`/api/quiz-categories/admin?group=${group}&area=${area}`,{});
       const cats=await res.json().catch(()=>[]);
       if(!res.ok) throw new Error((cats&&cats.error)||'讀取失敗');
       const list=Array.isArray(cats)?cats:[];

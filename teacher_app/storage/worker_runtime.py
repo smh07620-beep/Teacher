@@ -7,6 +7,7 @@ providers with the local worker's conversion and upload workflow.
 from __future__ import annotations
 
 import io
+import hashlib
 import mimetypes
 import ntpath
 import os
@@ -560,6 +561,64 @@ class WorkerMaterialStorageAdapter:
             body["appProperties"] = app_properties
         return service.files().create(body=body, fields="id,name").execute()["id"]
 
+    @staticmethod
+    def _gdrive_query_literal(value: object) -> str:
+        return str(value or "").replace("\\", "\\\\").replace("'", "\\'")
+
+    def _gdrive_find_by_properties(
+        self,
+        service,
+        *,
+        parent_id: str,
+        app_properties: dict[str, str],
+        mime_type: str = "",
+    ) -> dict[str, Any] | None:
+        clauses = [
+            "trashed = false",
+            f"'{self._gdrive_query_literal(parent_id)}' in parents",
+        ]
+        if mime_type:
+            clauses.append(f"mimeType = '{self._gdrive_query_literal(mime_type)}'")
+        for key, value in sorted((app_properties or {}).items()):
+            clauses.append(
+                "appProperties has { key='"
+                + self._gdrive_query_literal(key)
+                + "' and value='"
+                + self._gdrive_query_literal(value)
+                + "' }"
+            )
+        response = service.files().list(
+            q=" and ".join(clauses),
+            spaces="drive",
+            fields="files(id,name,size,mimeType,appProperties)",
+            pageSize=10,
+        ).execute()
+        matches = [dict(item) for item in (response.get("files") or []) if item.get("id")]
+        if not matches:
+            return None
+        # appProperties are not a uniqueness constraint. In the unlikely event
+        # of a historical/racing duplicate, deterministically reuse one object;
+        # do not pretend Drive offers an atomic upsert primitive.
+        matches.sort(key=lambda item: str(item.get("id") or ""))
+        return matches[0]
+
+    def _gdrive_upsert_folder(
+        self,
+        service,
+        name: str,
+        parent_id: str,
+        app_properties: dict[str, str],
+    ) -> tuple[str, bool]:
+        existing = self._gdrive_find_by_properties(
+            service,
+            parent_id=parent_id,
+            app_properties=app_properties,
+            mime_type="application/vnd.google-apps.folder",
+        )
+        if existing:
+            return str(existing["id"]), True
+        return self._gdrive_create_folder(service, name, parent_id, app_properties), False
+
     def _gdrive_upload_file(self, service, local_path: Path, name: str, parent_id: str, app_properties=None):
         body = {"name": name, "parents": [parent_id]}
         if app_properties:
@@ -569,11 +628,26 @@ class WorkerMaterialStorageAdapter:
             mimetype=self._content_type(local_path),
             chunk_mb=providers.GDRIVE_CHUNK_MB,
         )
-        return service.files().create(
-            body=body,
-            media_body=media,
-            fields="id,name,size,mimeType",
-        ).execute()
+        publish_key = str((app_properties or {}).get("smh_publish_key") or "")
+        object_key = str((app_properties or {}).get("smh_object_key") or "")
+        if publish_key and object_key:
+            existing = self._gdrive_find_by_properties(
+                service,
+                parent_id=parent_id,
+                app_properties={
+                    "smh_publish_key": publish_key,
+                    "smh_object_key": object_key,
+                },
+            )
+            if existing:
+                update_body = {"name": name, "appProperties": dict(app_properties or {})}
+                return service.files().update(
+                    fileId=str(existing["id"]),
+                    body=update_body,
+                    media_body=media,
+                    fields="id,name,size,mimeType,appProperties",
+                ).execute()
+        return service.files().create(body=body, media_body=media, fields="id,name,size,mimeType,appProperties").execute()
 
     def upload_material_tree_to_gdrive(
         self,
@@ -584,45 +658,68 @@ class WorkerMaterialStorageAdapter:
         *,
         original_name: str,
         derivatives: dict[str, Path] | None = None,
+        publish_key: str = "",
+        source_sha256: str = "",
     ) -> tuple[str, str, dict[str, Any]]:
         service = providers.gdrive_service()
         material_folder_id = ""
+        reused_material_folder = False
         try:
-            material_folder_id = self._gdrive_create_folder(
-                service,
-                material_id,
-                providers.GDRIVE_FOLDER_ID,
-                {"smh_kind": "material", "smh_material_id": material_id},
-            )
+            material_properties = {"smh_kind": "material", "smh_material_id": material_id}
+            if publish_key:
+                material_properties.update({
+                    "smh_publish_key": publish_key,
+                    "smh_source_sha256": str(source_sha256 or "").lower(),
+                })
+                material_folder_id, reused_material_folder = self._gdrive_upsert_folder(
+                    service,
+                    material_id,
+                    providers.GDRIVE_FOLDER_ID,
+                    material_properties,
+                )
+            else:
+                material_folder_id = self._gdrive_create_folder(
+                    service, material_id, providers.GDRIVE_FOLDER_ID, material_properties
+                )
+            source_properties = {"smh_kind": "source", "smh_material_id": material_id}
+            if publish_key:
+                source_properties.update({"smh_publish_key": publish_key, "smh_object_key": "source"})
             source = self._gdrive_upload_file(
                 service,
                 source_path,
                 Path(original_name or source_path.name).name,
                 material_folder_id,
-                {"smh_kind": "source", "smh_material_id": material_id},
+                source_properties,
             )
             slides_folder_id = ""
             slide_files: dict[str, str] = {}
             if int(page_count or 0) > 0:
-                slides_folder_id = self._gdrive_create_folder(
-                    service,
-                    "slides",
-                    material_folder_id,
-                    {"smh_kind": "slides", "smh_material_id": material_id},
-                )
+                slide_folder_properties = {"smh_kind": "slides", "smh_material_id": material_id}
+                if publish_key:
+                    slide_folder_properties.update({"smh_publish_key": publish_key, "smh_object_key": "slides"})
+                    slides_folder_id, _reused = self._gdrive_upsert_folder(
+                        service, "slides", material_folder_id, slide_folder_properties
+                    )
+                else:
+                    slides_folder_id = self._gdrive_create_folder(
+                        service, "slides", material_folder_id, slide_folder_properties
+                    )
                 for index in range(1, int(page_count or 0) + 1):
                     slide = self._slide_local_path(slides_dir, index)
                     if slide.exists():
+                        slide_properties = {
+                            "smh_kind": "slide",
+                            "smh_material_id": material_id,
+                            "smh_page": str(index),
+                        }
+                        if publish_key:
+                            slide_properties.update({"smh_publish_key": publish_key, "smh_object_key": f"slide:{index}"})
                         uploaded = self._gdrive_upload_file(
                             service,
                             slide,
                             slide.name,
                             slides_folder_id,
-                            {
-                                "smh_kind": "slide",
-                                "smh_material_id": material_id,
-                                "smh_page": str(index),
-                            },
+                            slide_properties,
                         )
                         slide_files[slide.name] = uploaded["id"]
             derived_files: dict[str, str] = {}
@@ -630,12 +727,18 @@ class WorkerMaterialStorageAdapter:
                 path = Path(path)
                 if not path.is_file() or path.stat().st_size <= 0:
                     continue
+                derived_properties = {"smh_kind": "derived", "smh_material_id": material_id}
+                if publish_key:
+                    derived_properties.update({
+                        "smh_publish_key": publish_key,
+                        "smh_object_key": "derived:" + hashlib.sha256(str(name).encode("utf-8")).hexdigest()[:20],
+                    })
                 uploaded = self._gdrive_upload_file(
                     service,
                     path,
                     str(name),
                     material_folder_id,
-                    {"smh_kind": "derived", "smh_material_id": material_id},
+                    derived_properties,
                 )
                 derived_files[str(name)] = uploaded["id"]
             meta = {
@@ -645,10 +748,11 @@ class WorkerMaterialStorageAdapter:
                 "slideFiles": slide_files,
                 "derivedFiles": derived_files,
                 "slideFormat": self.slide_format(slides_dir, page_count),
+                "publishKey": publish_key,
             }
             return source["id"], slides_folder_id, meta
         except Exception:
-            if material_folder_id:
+            if material_folder_id and not reused_material_folder:
                 try:
                     service.files().delete(fileId=material_folder_id).execute()
                 except Exception:
@@ -662,43 +766,63 @@ class WorkerMaterialStorageAdapter:
         derivatives: dict[str, Path],
         *,
         original_name: str,
+        publish_key: str = "",
+        source_sha256: str = "",
     ) -> tuple[str, str, dict[str, Any]]:
         service = providers.gdrive_service()
         material_folder_id = ""
+        reused_material_folder = False
         try:
-            material_folder_id = self._gdrive_create_folder(
-                service,
-                material_id,
-                providers.GDRIVE_FOLDER_ID,
-                {"smh_kind": "material", "smh_material_id": material_id},
-            )
+            material_properties = {"smh_kind": "material", "smh_material_id": material_id}
+            if publish_key:
+                material_properties.update({
+                    "smh_publish_key": publish_key,
+                    "smh_source_sha256": str(source_sha256 or "").lower(),
+                })
+                material_folder_id, reused_material_folder = self._gdrive_upsert_folder(
+                    service, material_id, providers.GDRIVE_FOLDER_ID, material_properties
+                )
+            else:
+                material_folder_id = self._gdrive_create_folder(
+                    service, material_id, providers.GDRIVE_FOLDER_ID, material_properties
+                )
+            source_properties = {"smh_kind": "source", "smh_material_id": material_id}
+            if publish_key:
+                source_properties.update({"smh_publish_key": publish_key, "smh_object_key": "source"})
             source = self._gdrive_upload_file(
                 service,
                 source_path,
                 Path(original_name or source_path.name).name,
                 material_folder_id,
-                {"smh_kind": "source", "smh_material_id": material_id},
+                source_properties,
             )
             uploaded: dict[str, str] = {}
             for name, path in (derivatives or {}).items():
                 path = Path(path)
                 if not path.is_file() or path.stat().st_size <= 0:
                     continue
+                derived_properties = {"smh_kind": "derived", "smh_material_id": material_id}
+                if publish_key:
+                    derived_properties.update({
+                        "smh_publish_key": publish_key,
+                        "smh_object_key": "derived:" + hashlib.sha256(str(name).encode("utf-8")).hexdigest()[:20],
+                    })
                 item = self._gdrive_upload_file(
                     service,
                     path,
                     str(name),
                     material_folder_id,
-                    {"smh_kind": "derived", "smh_material_id": material_id},
+                    derived_properties,
                 )
                 uploaded[str(name)] = item["id"]
             return source["id"], material_folder_id, {
                 "materialFolderId": material_folder_id,
                 "sourceFileId": source["id"],
                 "derivedFiles": uploaded,
+                "publishKey": publish_key,
             }
         except Exception:
-            if material_folder_id:
+            if material_folder_id and not reused_material_folder:
                 try:
                     service.files().delete(fileId=material_folder_id).execute()
                 except Exception:

@@ -66,6 +66,113 @@ def _json_dump(value: Any, fallback: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def publish_receipt_row_to_dict(row: Any) -> dict[str, Any] | None:
+    if not row:
+        return None
+    item = dict(row)
+    item["result"] = _json_decode(item.get("result"), {})
+    item["jobId"] = str(item.pop("job_id", "") or "")
+    item["publishKey"] = str(item.pop("publish_key", "") or "")
+    item["materialId"] = str(item.pop("material_id", "") or "")
+    item["sourceSha256"] = str(item.pop("source_sha256", "") or "")
+    item["workerId"] = str(item.pop("worker_id", "") or "")
+    item["providerRef"] = str(item.pop("provider_ref", "") or "")
+    item["createdAt"] = str(item.pop("created_at", "") or "")
+    item["updatedAt"] = str(item.pop("updated_at", "") or "")
+    item["publishedAt"] = str(item.pop("published_at", "") or "")
+    return item
+
+
+def get_publish_receipt(
+    job_id: str,
+    *,
+    connection_factory: ConnectionFactory | None = None,
+) -> dict[str, Any] | None:
+    with _read_connection(connection_factory) as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT * FROM material_publish_receipts WHERE job_id={ph}",
+            (job_id,),
+        ).fetchone()
+    return publish_receipt_row_to_dict(row)
+
+
+def record_publish_receipt(
+    *,
+    job_id: str,
+    publish_key: str,
+    material_id: str,
+    source_sha256: str,
+    backend: str,
+    worker_id: str,
+    result: Mapping[str, Any],
+    provider_ref: str,
+    stamp: str,
+    connection_factory: ConnectionFactory | None = None,
+) -> tuple[dict[str, Any], bool]:
+    """Insert or replay one provider-success receipt without changing identity."""
+
+    expected = {
+        "jobId": str(job_id),
+        "publishKey": str(publish_key),
+        "materialId": str(material_id),
+        "sourceSha256": str(source_sha256).lower(),
+        "backend": str(backend).lower(),
+        "result": dict(result),
+        "providerRef": str(provider_ref or ""),
+    }
+    with _transaction(connection_factory) as (conn, kind):
+        ph = common_db.placeholder(kind)
+        existing_row = conn.execute(
+            f"SELECT * FROM material_publish_receipts WHERE job_id={ph} OR publish_key={ph}",
+            (job_id, publish_key),
+        ).fetchone()
+        if existing_row:
+            existing = publish_receipt_row_to_dict(existing_row) or {}
+            for key in ("jobId", "publishKey", "materialId", "sourceSha256", "backend", "providerRef"):
+                if str(existing.get(key) or "") != str(expected.get(key) or ""):
+                    raise ValueError("provider publish receipt identity mismatch")
+            if dict(existing.get("result") or {}) != expected["result"]:
+                raise ValueError("provider publish receipt result mismatch")
+            conn.execute(
+                f"UPDATE material_publish_receipts SET worker_id={ph},updated_at={ph} WHERE job_id={ph}",
+                (worker_id, stamp, job_id),
+            )
+            row = conn.execute(
+                f"SELECT * FROM material_publish_receipts WHERE job_id={ph}",
+                (job_id,),
+            ).fetchone()
+            return publish_receipt_row_to_dict(row) or {}, True
+
+        result_mark = ph + ("::jsonb" if kind == "postgres" else "")
+        conn.execute(
+            "INSERT INTO material_publish_receipts "
+            "(job_id,publish_key,material_id,source_sha256,backend,worker_id,result,provider_ref,status,created_at,updated_at,published_at) "
+            f"VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{result_mark},{ph},'published',{ph},{ph},{ph})",
+            (
+                job_id,
+                publish_key,
+                material_id,
+                source_sha256,
+                backend,
+                worker_id,
+                _json_dump(dict(result), {}),
+                provider_ref,
+                stamp,
+                stamp,
+                stamp,
+            ),
+        )
+        row = conn.execute(
+            f"SELECT * FROM material_publish_receipts WHERE job_id={ph}",
+            (job_id,),
+        ).fetchone()
+        decoded = publish_receipt_row_to_dict(row)
+        if not decoded:
+            raise RuntimeError("provider publish receipt insert did not persist")
+        return decoded, False
+
+
 @contextmanager
 def _read_connection(
     connection_factory: ConnectionFactory | None = None,

@@ -149,7 +149,9 @@ class WorkspaceContract681Tests(unittest.TestCase):
     def test_normal_ui_does_not_prompt_or_persist_admin_key(self):
         source = Path(__file__).parents[1].joinpath("static", "system-admin.js").read_text(encoding="utf-8")
         self.assertNotIn("/api/admin/elevation", source)
-        self.assertIn("return 'rbac-session'", source)
+        self.assertNotIn("getAdminKey", source)
+        self.assertNotIn("X-Admin-Key", source)
+        self.assertNotIn("rbac-session", source)
 
     def test_learner_office_guard_is_server_side(self):
         source = Path(__file__).parents[1].joinpath("teacher_app", "frontend", "system_page.py").read_text(encoding="utf-8")

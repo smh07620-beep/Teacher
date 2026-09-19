@@ -430,6 +430,145 @@ def _ai_question_jobs_75(conn, kind: str) -> None:
     init_schema(conn, kind)
 
 
+@migration("0076-assessment-reviewer-identity")
+def _assessment_reviewer_identity_76(conn, kind: str) -> None:
+    """Snapshot the server-authenticated exam reviewer into learner attempts."""
+    _add_columns(conn, kind, "quiz_categories", {
+        "reviewer_title": "reviewer_title TEXT NOT NULL DEFAULT ''",
+    })
+    _add_columns(conn, kind, "exam_attempts", {
+        "evaluator_name": "evaluator_name TEXT NOT NULL DEFAULT ''",
+        "evaluator_title": "evaluator_title TEXT NOT NULL DEFAULT ''",
+    })
+
+
+@migration("0077-general-audit-events")
+def _general_audit_events_77(conn, kind: str) -> None:
+    """Append-only audit store for non-PGY administrative/security events."""
+    payload = "JSONB" if kind == "postgres" else "TEXT"
+    conn.execute(
+        f"CREATE TABLE IF NOT EXISTS audit_events ("
+        "id TEXT PRIMARY KEY,created_at TEXT NOT NULL,actor_username TEXT NOT NULL,"
+        "actor_role TEXT NOT NULL,action TEXT NOT NULL,target_type TEXT NOT NULL,"
+        "target_id TEXT NOT NULL DEFAULT '',group_key TEXT NOT NULL DEFAULT '',"
+        f"scope_json {payload} NOT NULL DEFAULT '{{}}',"
+        f"before_json {payload} NOT NULL DEFAULT '{{}}',"
+        f"after_json {payload} NOT NULL DEFAULT '{{}}',"
+        f"detail_json {payload} NOT NULL DEFAULT '{{}}',"
+        "request_id TEXT NOT NULL DEFAULT '')"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_events_created "
+        "ON audit_events(created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_events_target "
+        "ON audit_events(target_type,target_id,created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_events_group "
+        "ON audit_events(group_key,created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_events_actor "
+        "ON audit_events(actor_username,created_at)"
+    )
+
+
+@migration("0078-item-analytics-metrics")
+def _item_analytics_metrics_78(conn, kind: str) -> None:
+    """Add bounded score/timing context for item difficulty/discrimination analytics."""
+    _add_columns(conn, kind, "question_attempt_analytics", {
+        "attempt_score": "attempt_score REAL NOT NULL DEFAULT 0",
+        "response_seconds": "response_seconds REAL NOT NULL DEFAULT 0",
+    })
+
+
+@migration("0079-provider-publish-receipts")
+def _provider_publish_receipts_79(conn, kind: str) -> None:
+    """Durable Web-owned checkpoint between provider publish and job completion."""
+
+    payload = "JSONB" if kind == "postgres" else "TEXT"
+    payload_default = "'{}'::jsonb" if kind == "postgres" else "'{}'"
+    conn.execute(
+        f"CREATE TABLE IF NOT EXISTS material_publish_receipts ("
+        "job_id TEXT PRIMARY KEY,publish_key TEXT NOT NULL UNIQUE,material_id TEXT NOT NULL,"
+        "source_sha256 TEXT NOT NULL,backend TEXT NOT NULL,worker_id TEXT NOT NULL,"
+        f"result {payload} NOT NULL DEFAULT {payload_default},"
+        "provider_ref TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'published',"
+        "created_at TEXT NOT NULL,updated_at TEXT NOT NULL,published_at TEXT NOT NULL)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_material_publish_receipts_material "
+        "ON material_publish_receipts(material_id,backend,published_at)"
+    )
+
+
+@migration("0080-external-media-verification")
+def _external_media_verification_80(conn, kind: str) -> None:
+    """Persist bounded external-media availability checks without changing playback ownership."""
+    payload = "JSONB" if kind == "postgres" else "TEXT"
+    payload_default = "'{}'::jsonb" if kind == "postgres" else "'{}'"
+    _add_columns(conn, kind, "external_media", {
+        "last_verified_at": "last_verified_at TEXT NOT NULL DEFAULT ''",
+        "availability_status": "availability_status TEXT NOT NULL DEFAULT 'unverified'",
+        "last_error": "last_error TEXT NOT NULL DEFAULT ''",
+        "provider_metadata": f"provider_metadata {payload} NOT NULL DEFAULT {payload_default}",
+    })
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_external_media_availability "
+        "ON external_media(availability_status,last_verified_at)"
+    )
+
+
+@migration("0081-question-version-history")
+def _question_version_history_81(conn, kind: str) -> None:
+    """Create immutable per-question content history and baseline current rows."""
+    payload = "JSONB" if kind == "postgres" else "TEXT"
+    payload_default = "'{}'::jsonb" if kind == "postgres" else "'{}'"
+    conn.execute(
+        f"CREATE TABLE IF NOT EXISTS question_versions ("
+        "question_id TEXT NOT NULL,version INTEGER NOT NULL,question_hash TEXT NOT NULL,"
+        "quiz_category_id TEXT NOT NULL DEFAULT '',group_key TEXT NOT NULL DEFAULT '',"
+        f"snapshot {payload} NOT NULL DEFAULT {payload_default},"
+        "created_at TEXT NOT NULL,created_by TEXT NOT NULL DEFAULT '',"
+        "change_reason TEXT NOT NULL DEFAULT '',"
+        "PRIMARY KEY(question_id,version))"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_question_versions_hash "
+        "ON question_versions(question_hash)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_question_versions_category "
+        "ON question_versions(quiz_category_id,question_id,version)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_question_versions_group "
+        "ON question_versions(group_key,question_id,version)"
+    )
+    from teacher_app.assessments import repository as assessment_repository
+
+    assessment_repository.backfill_question_versions_on_connection(
+        conn,
+        kind,
+        created_at=utcnow(),
+    )
+
+
+@migration("0082-version-aware-item-analytics")
+def _version_aware_item_analytics_82(conn, kind: str) -> None:
+    """Bind new item analytics to immutable question version/hash identity."""
+    _add_columns(conn, kind, "question_attempt_analytics", {
+        "question_version": "question_version INTEGER NOT NULL DEFAULT 1",
+        "question_hash": "question_hash TEXT NOT NULL DEFAULT ''",
+    })
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_question_attempt_analytics_version "
+        "ON question_attempt_analytics(question_id,question_version,question_hash)"
+    )
+
+
 def ensure_r2_free_budget_guard_67(base) -> None:
     """Compatibility maintenance helper for old callers and one-off repairs.
 
