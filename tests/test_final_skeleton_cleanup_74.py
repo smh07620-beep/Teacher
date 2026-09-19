@@ -64,6 +64,7 @@ class FinalSkeletonCleanup74Tests(unittest.TestCase):
             'static/admin-people.js': 'renderAdminUserAccounts',
             'static/admin-system.js': 'renderAdminSystemStatus',
             'static/admin-exam-settings.js': 'difficultyLabel',
+            'static/admin-results-export.js': 'exportRecordToWord',
             'static/learner-result-chart.js': 'renderCategoryChart',
             'static/learner-exam-controls.js': 'resetCurrentQuiz',
         }
@@ -71,8 +72,9 @@ class FinalSkeletonCleanup74Tests(unittest.TestCase):
             self.assertIn(symbol, self.source(path))
             self.assertNotIn(f'function {symbol}(', legacy)
         self.assertIn('async function getAdminKey()', legacy)
-        self.assertIn('let cachedTemplateBuffer = null', legacy)
-        self.assertIn('let pendingExportRecordIndex = null', legacy)
+        self.assertNotIn('cachedTemplateBuffer', legacy)
+        self.assertNotIn('pendingExportRecordIndex', legacy)
+        self.assertNotIn('pendingDocTemplateUploadGroup', legacy)
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-/* Phase 3J: AI question studio runtime.  The legacy bundle remains a fallback. */
+/* Phase 3J: canonical AI question studio runtime. */
 (() => {
   const drafts = {};
   const catalog = {};

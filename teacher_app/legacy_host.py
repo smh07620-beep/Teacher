@@ -2181,12 +2181,9 @@ def _record_to_dict(row):
 
 
 def require_admin():
-    supplied = request.headers.get("X-Admin-Key", "")
-    if ADMIN_KEY and supplied == ADMIN_KEY:
-        return None
     user = _current_user()
     if not user:
-        return jsonify({"error": "請先以管理者帳號登入，或提供正確的 ADMIN_KEY。", "loginRequired": True}), 401
+        return jsonify({"error": "請先以管理者帳號登入。", "loginRequired": True}), 401
     if not (has_permission(user, "user.manage") or has_permission(user, "system.manage")):
         return jsonify({"error": "權限不足：此功能限教學管理者使用。"}), 403
     return None
@@ -6898,19 +6895,18 @@ def api_create_pgy_assessment():
 @app.get('/api/pgy-assessments')
 def api_list_pgy_assessments():
     emp=str(request.args.get('emp_id','')).strip()
-    admin=request.headers.get('X-Admin-Key','')==ADMIN_KEY and bool(ADMIN_KEY)
     user=_current_user()
-    if not admin and not user:
+    if not user:
         return jsonify({'error':'請先登入後查看評量紀錄','loginRequired':True}),401
-    if not admin and normalize_role(user.get('role')) == 'student':
+    if normalize_role(user.get('role')) == 'student':
         emp=user['empId']
-    elif not admin and normalize_role(user.get('role')) in {'clinical_teacher', 'group_leader'}:
+    elif normalize_role(user.get('role')) in {'clinical_teacher', 'group_leader'}:
         requested_group=normalize_group(request.args.get('group', user.get('preferredGroup')))
         if requested_group != normalize_group(user.get('preferredGroup')):
             return jsonify({'error':'權限不足：臨床教師只能查看自己負責組別的評量。'}),403
     conn,kind=_db_conn(); ph='%s' if kind=='postgres' else '?'
     try:
-        if not admin and user and normalize_role(user.get('role')) in {'clinical_teacher', 'group_leader'}:
+        if normalize_role(user.get('role')) in {'clinical_teacher', 'group_leader'}:
             rows=conn.execute(f'SELECT * FROM pgy_assessments WHERE group_key={ph} ORDER BY created_at DESC',(normalize_group(user.get('preferredGroup')),)).fetchall()
         elif emp: rows=conn.execute(f'SELECT * FROM pgy_assessments WHERE emp_id={ph} ORDER BY created_at DESC',(emp,)).fetchall()
         else: rows=conn.execute('SELECT * FROM pgy_assessments ORDER BY created_at DESC').fetchall()
@@ -6955,7 +6951,7 @@ def login_page():
 
 @app.get("/system")
 def training_system():
-    # 管理者可先以 ADMIN_KEY 進入後台建立第一批帳號；一般教材區必須登入。
+    # 管理後台與一般教材區都以已驗證 session 為授權基礎。
     if request.args.get("admin") != "1" and not _current_user():
         target = request.full_path if request.query_string else request.path
         return redirect("/login?next=" + quote(target, safe=""))

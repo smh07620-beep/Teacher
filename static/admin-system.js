@@ -1,8 +1,4 @@
-/* Phase 3E · Admin system/storage runtime.
- * Loaded after the legacy admin bundle so these functions become the
- * canonical runtime implementation while system-admin.js remains a
- * compatibility fallback during the incremental split.
- */
+/* Phase 3E · Canonical admin system/storage runtime. */
 (function(){
   'use strict';
 

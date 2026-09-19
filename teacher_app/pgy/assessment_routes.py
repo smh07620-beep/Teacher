@@ -9,7 +9,6 @@ from flask import g, jsonify, request
 
 from teacher_app.common.auth import has_permission, require_role
 from teacher_app.common.errors import ApiError
-from teacher_app.config import admin_key
 from teacher_app.pgy import assessments
 from teacher_app.pgy.template_runtime import PgyTemplateRuntime
 
@@ -19,17 +18,13 @@ def _current_user():
 
 
 def _require_admin():
-    key = admin_key()
-    supplied = str(request.headers.get("X-Admin-Key", "") or "")
-    if key and supplied == key:
-        return None
     user = _current_user()
     if not user:
         return jsonify({
-            "error": "請先以管理者帳號登入，或提供正確的 ADMIN_KEY。",
+            "error": "請先以管理者帳號登入。",
             "loginRequired": True,
         }), 401
-    if not (has_permission(user, "user.manage") or has_permission(user, "system.manage")):
+    if not has_permission(user, "template.manage"):
         return jsonify({"error": "權限不足：此功能限教學管理者使用。"}), 403
     return None
 
@@ -161,14 +156,12 @@ def register_pgy_assessment_routes(owner, *, paths, template_runtime=None):
 
     def api_list_pgy_assessments():
         user = _current_user()
-        key = admin_key()
-        admin_override = bool(key and request.headers.get("X-Admin-Key", "") == key)
         try:
             result = assessments.list_assessments(
                 user,
                 emp_id=str(request.args.get("emp_id", "")).strip(),
                 group=(str(request.args.get("group", "")).strip() if "group" in request.args else None),
-                admin_override=admin_override,
+                admin_override=False,
             )
         except assessments.AssessmentError as exc:
             body = {"error": str(exc)}

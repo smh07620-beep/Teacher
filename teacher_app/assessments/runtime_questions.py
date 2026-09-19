@@ -361,32 +361,50 @@ def insert_payloads_bulk(category_id: str, items: list[Mapping[str, Any]]) -> li
         if qtype not in QUESTION_TYPES:
             qtype = "choice"
         config = dict(payload.get("answerConfig")) if isinstance(payload.get("answerConfig"), dict) else {}
-        options = [str(value).strip() for value in (payload.get("options") or []) if str(value).strip()][:6]
+        raw_options = payload.get("options") or []
+        if qtype in OPTION_TYPES and qtype != "true_false" and not isinstance(raw_options, list):
+            raise ValueError("選項格式錯誤")
+        options = [str(value).strip() for value in raw_options if str(value).strip()][:6] if isinstance(raw_options, list) else []
         if qtype in {"essay", "fill"}:
             options = []
-        if not qtext or (qtype in {"choice", "multi", "image", "video"} and len(options) < 2):
+        if qtype == "true_false":
+            options = ["是", "否"]
+        if not qtext or (qtype in OPTION_TYPES and len(options) < 2):
             raise ValueError("題目內容或選項不足")
         try:
             correct = int(payload.get("correct", 0) or 0)
-        except Exception:
-            correct = 0
-        correct = max(0, min(len(options) - 1, correct)) if options else 0
+        except (TypeError, ValueError) as exc:
+            raise ValueError("正確答案格式錯誤") from exc
+        if qtype in {"choice", "image", "video", "true_false"} and not 0 <= correct < len(options):
+            raise ValueError("正確答案超出選項範圍")
+        correct = correct if options else 0
         if qtype == "multi":
+            raw_indices = config.get("correctIndices", [])
+            if not isinstance(raw_indices, list):
+                raise ValueError("多選題正確選項格式錯誤")
             indices = []
-            for value in config.get("correctIndices", []) or []:
+            invalid_index = False
+            for value in raw_indices:
                 try:
                     index = int(value)
                     if 0 <= index < len(options):
                         indices.append(index)
+                    else:
+                        invalid_index = True
                 except Exception:
-                    pass
+                    invalid_index = True
+            if invalid_index:
+                raise ValueError("多選題正確選項超出選項範圍")
             indices = sorted(set(indices))
             if not indices:
                 raise ValueError("多選題至少要設定一個正確選項")
             config["correctIndices"] = indices
             correct = indices[0]
         if qtype == "fill":
-            answers = [str(value).strip() for value in config.get("acceptedAnswers", []) if str(value).strip()][:20]
+            raw_answers = config.get("acceptedAnswers", [])
+            if not isinstance(raw_answers, list):
+                raise ValueError("填空題可接受答案格式錯誤")
+            answers = [str(value).strip() for value in raw_answers if str(value).strip()][:20]
             if not answers:
                 raise ValueError("填空題至少要設定一個可接受答案")
             config["acceptedAnswers"] = answers
@@ -442,4 +460,3 @@ def insert_payloads_bulk(category_id: str, items: list[Mapping[str, Any]]) -> li
                 },
             )
     return prepared
-

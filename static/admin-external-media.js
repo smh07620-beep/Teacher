@@ -1,8 +1,4 @@
-/* Phase 3P · Admin external interactive media runtime.
- * Loaded after the legacy admin bundle so these functions become the
- * canonical implementation while system-admin.js remains a compatibility
- * fallback during the incremental split.
- */
+/* Phase 3P · Canonical admin external interactive media runtime. */
 (function(){
   'use strict';
 

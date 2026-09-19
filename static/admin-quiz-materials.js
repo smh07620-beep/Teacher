@@ -1,7 +1,4 @@
-/* Phase 3S · Quiz-to-material linking runtime.
- * Loaded after the legacy admin bundle so these functions become canonical
- * while system-admin.js remains a compatibility fallback.
- */
+/* Phase 3S · Canonical quiz-to-material linking runtime. */
 (function(){
   'use strict';
 

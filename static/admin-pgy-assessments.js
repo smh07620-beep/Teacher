@@ -1,6 +1,5 @@
-/* Phase 3O: PGY assessment administration runtime.
- * system-admin.js and system-assessment.js remain compatibility fallbacks;
- * this module owns the admin-side onclick entry points after they load. */
+/* Phase 3O: canonical PGY assessment administration runtime.
+ * This module owns the admin-side onclick entry points. */
 (() => {
   'use strict';
 
@@ -88,9 +87,7 @@
     }).join('') : '<p class="text-xs text-slate-400">尚無 PGY 評量紀錄</p>';
   }
 
-  // The fallback listens during bubbling. Capture first and clear the input
-  // so the extracted handler remains the single active upload implementation.
-  document.getElementById('admin-pgy-template-upload-input')?.addEventListener('change', uploadTemplate, true);
+  document.getElementById('admin-pgy-template-upload-input')?.addEventListener('change', uploadTemplate);
 
   window.renderAdminPgyTemplates = renderTemplates;
   window.adminTriggerPgyTemplateUpload = triggerTemplateUpload;

@@ -1,5 +1,4 @@
-/* Phase 3M: exam settings, preview, review, and publication runtime.
- * The legacy system-admin.js bundle remains the compatibility fallback. */
+/* Phase 3M: canonical exam settings, preview, review, and publication runtime. */
 (() => {
   'use strict';
 

@@ -17,7 +17,7 @@ class Phase3NAdminDocTemplatesTests(unittest.TestCase):
         for name in ("renderAdminDocTemplates", "adminTriggerDocTemplateUpload", "adminDeleteDocTemplate"):
             self.assertIn(f"window.{name}", self.source)
         self.assertIn("admin-doc-template-upload-input", self.source)
-        self.assertIn("uploadTemplate, true", self.source)
+        self.assertIn("addEventListener('change', uploadTemplate)", self.source)
         self.assertIn("onclick=\"adminTriggerDocTemplateUpload", self.source)
         self.assertIn("onclick=\"adminDeleteDocTemplate", self.source)
 

@@ -1,6 +1,6 @@
 # Teacher 醫學檢驗教學平台
 
-目前正式 release contract 版本為 `6.8.1`；後續 7.1 / 7.2 / 7.3 名稱是功能與 UI 模組世代，不等同於已決定的新 SemVer。產品功能與 Release Candidate 暴露狀態請以 `RC_FEATURE_UI_COVERAGE_MATRIX.md` 為準；`FEATURE_EXPOSURE_681.md` 僅保留為歷史 release record。
+目前正式 release contract 版本為 **`6.8.1`**。Repository 內的 7.x 名稱是功能、UI 與 convergence 的內部世代；目前已到 **`7.9 / RC79`** 標記，但這不等於正式 SemVer 已升版。正式版本永遠以 `VERSION` / `release_contract.py` 為準。產品功能與 Release Candidate 暴露狀態請以 `RC_FEATURE_UI_COVERAGE_MATRIX.md` 為準；`FEATURE_EXPOSURE_681.md` 僅保留為歷史 release record。
 
 本系統是 Flask + HTML/JavaScript 的醫學檢驗教育訓練平台，涵蓋課程、教材、考卷、題庫、成績、PGY 流程、教師評核與管理後台。正式 Web entrypoint 是 `pgy_app:app`。
 
@@ -61,7 +61,7 @@ Worker 使用獨立的 `MATERIAL_WORKER_TOKEN`，不需要 production `DATABASE_
 - 外部影音／連結
 - 顯微鏡／血球 Atlas
 
-Course Wizard 的 canonical frontend owner 是 `static/course-wizard-681.js`；Course Bundle backend 由 `course_bundle_72.py` 與 `course_bundle_followup_73.py` 負責。`static/system-admin.js` 僅保留 legacy compatibility，不應新增產品邏輯。詳見 `ARCHITECTURE.md`。
+Course Wizard 的 canonical frontend owner 是 `static/course-wizard-681.js`；Course Bundle backend 的 canonical owners 是 `teacher_app.courses.bundle_routes` 與 `teacher_app.courses.bundle_followup_routes`。root `course_bundle_72.py` / `course_bundle_followup_73.py` 僅保留 compatibility import seam。`static/system-admin.js` 僅保留 legacy compatibility，不應新增產品邏輯。詳見 `ARCHITECTURE.md`。
 
 ## 本機開發
 
@@ -88,18 +88,34 @@ python -m teacher_app.maintenance.account_roles grant-system-admin USERNAME
 
 ## Render 部署必要設定
 
-`render.yaml` 已定義 Web Service 與非敏感預設值。下列 secrets / connection values 必須由部署環境提供，不能提交到 GitHub：
+`render.yaml` 已定義 Web Service 與非敏感預設值。正式環境由
+`teacher_app.config.deployment_config_status()` 檢查部署設定；啟動時會記錄
+缺項代碼，`/health` 的 `configuration` 區塊也會列出相同警告，但不會回傳
+任何 secret 值。`/health` 的 HTTP `200/503` 與頂層 `status` 只由 database 與
+migration readiness 決定；`configuration.ok=false` 是部署診斷訊號，不會單獨把
+健康檢查改成 `503`。會讓服務無法安全啟動的條件仍由 startup hardening fail-fast；
+例如 `PRODUCTION_REQUIRE_SECRET=true` 時，`SECRET_KEY` 少於 32 字元會在 Web
+開始服務前直接拒絕啟動。
 
-- `DATABASE_URL`
-- `SECRET_KEY`
-- `MATERIAL_WORKER_TOKEN`
-- R2 credentials / bucket settings（若使用 R2 staging）
-- MEGA / Google Drive 等目前啟用 provider 所需憑證
-- `GROQ_API_KEY`（若啟用相關 AI 功能）
+必填或依功能條件必填的 secrets / connection values 如下，不能提交到 GitHub：
+
+- `DATABASE_URL`：正式 Render 必填，指向持久化 PostgreSQL／Supabase。
+- `SECRET_KEY`：正式環境必填且至少 32 字元，不能以 `ADMIN_KEY` 或開發預設值替代。
+- `ADMIN_KEY`：僅作為**已登入且具合格 RBAC 權限使用者**執行敏感操作時的短效 elevation/revalidation secret；它不能單獨授權 API，`X-Admin-Key` 也不是 bearer credential。
+- `MATERIAL_WORKER_TOKEN`：`MATERIAL_BACKGROUND_JOBS=true` 或啟用 Worker API 時必填。
+- `GROQ_API_KEY`：`AI_EXTERNAL_PROCESSING_ENABLED=true` 且 `AI_PROVIDER=groq`／`auto` 時必填。
+- `MEGA_EMAIL`、`MEGA_PASSWORD`：選用 MEGA 為 material storage 時必填。
+- `R2_ACCOUNT_ID`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_BUCKET_NAME`：選用 R2 staging/storage 時必填。
+- `GDRIVE_CLIENT_ID`、`GDRIVE_CLIENT_SECRET`、`GDRIVE_REFRESH_TOKEN`、`GDRIVE_FOLDER_ID`：選用 Google Drive 或設定為 storage failover 時必填。
+
+目前登入失敗 rate limiting 是 process-local。正式設定以 `render.yaml` 的
+`numInstances: 1` 與 `run_web.sh` 預設 `WEB_CONCURRENCY=1` 為支援拓撲；若未來
+改成多 instance 或多 Gunicorn process，必須先加入共享 limiter backend，不能把
+目前的 in-memory 計數視為跨 process／跨 instance 限流。
 
 部署後至少確認：
 
-1. `/health` 回傳 `200`、`status=healthy`、database OK、migrations OK。
+1. `/health` 回傳 `200`、`status=healthy`、database OK、migrations OK，並另外檢查 `configuration.ok` / `configuration.warnings` 是否只包含已知且可接受的條件式警告；不要把 HTTP `200` 誤解為所有條件式 provider 設定都完整。
 2. 登入 → `/api/auth/me` → 登出流程正常。
 3. 教師可建立課程／教材／考卷／題目，RBAC scope 正確。
 4. 學員可開始考試、提交一次並看到正確結果狀態。

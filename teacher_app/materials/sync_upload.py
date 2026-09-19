@@ -1,10 +1,9 @@
 """Canonical synchronous material-upload orchestration.
 
 The synchronous ``/api/slides/upload`` endpoint is retained for compatibility,
-while the main admin UI uses the background material-job pipeline.  This module
-owns the compatibility workflow without owning Flask request globals or cloud
-credentials.  Conversion/provider operations are injected by the HTTP boundary
-until the shared web runtime is fully independent from ``legacy_host``.
+while the main admin UI uses the background material-job pipeline. This module
+owns the compatibility workflow without Flask request globals or cloud
+credentials; conversion/provider operations come from the canonical sync runtime.
 """
 from __future__ import annotations
 

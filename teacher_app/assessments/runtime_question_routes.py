@@ -24,7 +24,6 @@ from teacher_app.assessments.question_runtime import (
 from teacher_app.assessments import runtime_questions
 from teacher_app.common import scope_filter
 from teacher_app.common.auth import has_permission
-from teacher_app.config import admin_key
 from teacher_app.materials import repository as material_repository
 
 
@@ -45,29 +44,19 @@ def _login_required(owner):
     return jsonify({"error": "請先登入後再使用教材。", "loginRequired": True}), 401
 
 
-def _admin_key_override() -> bool:
-    supplied = str(request.headers.get("X-Admin-Key", "") or "")
-    key = admin_key()
-    return bool(key and supplied and supplied == key)
-
-
 def _strict_admin(owner):
-    if _admin_key_override():
-        return None
     user = _current_user(owner)
     if not user:
         return jsonify({
-            "error": "請先以管理者帳號登入，或提供正確的 ADMIN_KEY。",
+            "error": "請先以管理者帳號登入。",
             "loginRequired": True,
         }), 401
-    if not (has_permission(user, "user.manage") or has_permission(user, "system.manage")):
+    if not has_permission(user, "system.manage"):
         return jsonify({"error": "權限不足：此功能限教學管理者使用。"}), 403
     return None
 
 
 def _question_guard(owner, *, scoped: bool):
-    if _admin_key_override():
-        return None
     if scoped:
         return scope_filter.scoped_groups(
             owner,
@@ -83,6 +72,30 @@ def _bind_or_add(app, rule: str, endpoint: str, view, methods: list[str]) -> Non
         app.view_functions[endpoint] = view
         return
     app.add_url_rule(rule, endpoint=endpoint, view_func=view, methods=methods)
+
+
+def _parse_import_correct(raw_value, *, qtype: str, option_count: int) -> int:
+    """Parse a URL-import answer without silently changing malformed values."""
+    if qtype in {"essay", "fill", "multi"}:
+        return 0
+    if raw_value in (None, ""):
+        return 0
+    if qtype == "true_false":
+        text = str(raw_value).strip()
+        if text in {"是", "對", "true", "True", "TRUE"}:
+            return 0
+        if text in {"否", "錯", "false", "False", "FALSE"}:
+            return 1
+    if isinstance(raw_value, str) and raw_value.strip().upper() in "ABCDEF":
+        correct = "ABCDEF".index(raw_value.strip().upper())
+    else:
+        try:
+            correct = int(raw_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("正確答案格式錯誤") from exc
+    if correct < 0 or correct >= option_count:
+        raise ValueError("正確答案超出選項範圍")
+    return correct
 
 
 def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None = None):
@@ -261,6 +274,7 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
             "問答題": "essay", "申論題": "essay", "text": "essay", "essay": "essay",
             "多選題": "multi", "複選題": "multi", "multi": "multi", "multiple": "multi",
             "填空題": "fill", "fill": "fill", "blank": "fill",
+            "是非題": "true_false", "判斷題": "true_false", "true_false": "true_false", "truefalse": "true_false",
             "圖片題": "image", "圖片判讀題": "image", "image": "image",
             "影片題": "video", "video": "video",
             "選擇題": "choice", "單選題": "choice", "choice": "choice", "single": "choice",
@@ -283,13 +297,7 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
                     for key in ("optionA", "optionB", "optionC", "optionD", "optionE", "optionF")
                     if str(item.get(key, "")).strip()
                 ]
-            correct = item.get("correct", item.get("answer", 0))
-            if isinstance(correct, str) and correct.upper() in "ABCDEF":
-                correct = "ABCDEF".index(correct.upper())
-            try:
-                correct = int(correct)
-            except Exception:
-                correct = 0
+            raw_correct = item.get("correct", item.get("answer", 0))
             answer_config = item.get("answerConfig", {})
             if isinstance(answer_config, str):
                 try:
@@ -329,6 +337,15 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
                 continue
             if qtype == "fill" and not answer_config.get("acceptedAnswers"):
                 errors.append(f"第{index}題缺少填空可接受答案")
+                continue
+            try:
+                correct = _parse_import_correct(
+                    raw_correct,
+                    qtype=qtype,
+                    option_count=len(options),
+                )
+            except ValueError as exc:
+                errors.append(f"第{index}題：{exc}")
                 continue
             payload = {
                 "quizCategoryId": category_id,

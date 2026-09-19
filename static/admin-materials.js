@@ -1,8 +1,4 @@
-/* Phase 3F · Admin material list/search-index runtime.
- * Loaded after the legacy admin bundle so these functions become the
- * canonical runtime implementation while system-admin.js remains a
- * compatibility fallback during the incremental split.
- */
+/* Phase 3F · Canonical admin material list/search-index runtime. */
 (function(){
   'use strict';
 
@@ -24,10 +20,8 @@
     if (!key) return null;
     const res = await fetch('/api/slides/admin', { headers: { 'X-Admin-Key': key } });
     if (res.status === 401) {
-      sessionStorage.removeItem('admin_key');
-      adminKey = '';
       window.invalidateAdminMaterialsCache();
-      alert('管理者金鑰錯誤或尚未設定，請重新輸入。');
+      alert('登入狀態已失效，請重新登入後再試。');
       return null;
     }
     const data = await res.json().catch(() => []);

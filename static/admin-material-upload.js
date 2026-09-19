@@ -1,8 +1,4 @@
-/* Phase 3I · Admin material upload/mutation runtime.
- * Loaded after the legacy admin bundle so these functions become the
- * canonical runtime implementation while system-admin.js remains a
- * compatibility fallback during the incremental split.
- */
+/* Phase 3I · Canonical admin material upload/mutation runtime. */
 (function(){
   'use strict';
 

@@ -1,7 +1,8 @@
 """Compatibility adapter for the modular Teacher 6.5 exam implementation.
 
-The Render entrypoint still imports ``register_exam_integrity`` from here. Exam
-grading, persistence, orchestration and route definitions now live under
+Production composition registers the canonical exam package directly from
+``teacher_app.factory``. This root module only preserves historical imports;
+grading, persistence, orchestration and route definitions live under
 ``teacher_app.exams``.
 """
 

@@ -1,9 +1,6 @@
 """Canonical legacy-compatible exam-record HTTP routes."""
 from __future__ import annotations
 
-import hmac
-import os
-
 from flask import g, jsonify, request
 
 from teacher_app.common.auth import has_permission
@@ -22,20 +19,13 @@ def _current_user(owner=None):
 
 
 def _require_admin(owner=None):
-    supplied = str(request.headers.get("X-Admin-Key", "") or "")
-    admin_key = os.environ.get("ADMIN_KEY", "").strip()
-    if admin_key and supplied and hmac.compare_digest(supplied, admin_key):
-        return None
     user = _current_user(owner)
     if not user:
         return jsonify({
-            "error": "請先以管理者帳號登入，或提供正確的 ADMIN_KEY。",
+            "error": "請先以管理者帳號登入。",
             "loginRequired": True,
         }), 401
-    if not (
-        has_permission(user, "user.manage")
-        or has_permission(user, "system.manage")
-    ):
+    if not has_permission(user, "system.manage"):
         return jsonify({"error": "權限不足：此功能限教學管理者使用。"}), 403
     return None
 

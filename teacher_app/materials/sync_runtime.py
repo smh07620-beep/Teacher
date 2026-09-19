@@ -1,9 +1,9 @@
 """Canonical runtime composition for synchronous material upload.
 
-This module preserves the historical web upload workflow while composing only
-canonical provider/client owners.  R2 usage accounting remains an explicit,
-narrow callback until the ledger itself is extracted from the worker/runtime
-compatibility owner.
+This module preserves the historical web upload contract while composing only
+canonical provider/client, conversion, progress, and storage owners. R2 usage
+accounting stays injectable so isolated tests can retain narrow compatibility
+seams without reintroducing a broad application owner.
 """
 from __future__ import annotations
 

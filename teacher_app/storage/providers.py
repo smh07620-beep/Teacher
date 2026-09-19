@@ -1,8 +1,8 @@
 """Canonical live provider configuration and client/session construction.
 
-This module is the production owner for storage credentials and SDK client
-construction.  Higher-level material/template workflows stay in the legacy host
-during the transition and call these helpers through thin compatibility wrappers.
+This module is the production owner for storage credentials, provider selection,
+SDK clients, and the shared MEGAcmd authentication/session policy. Higher-level
+material/template workflows compose these providers from canonical runtimes.
 """
 
 from __future__ import annotations

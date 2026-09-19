@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from flask import g, jsonify, request
 
-from teacher_app.common.auth import normalize_role
+from teacher_app.common.auth import has_role
 
 
 _RATE_LOCK = threading.Lock()
@@ -21,10 +21,31 @@ def truthy(value: str) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def login_rate_limit_status() -> dict:
+    """Describe the supported topology of the in-process login limiter."""
+    try:
+        web_concurrency = max(1, int(os.environ.get("WEB_CONCURRENCY", "1") or 1))
+    except (TypeError, ValueError):
+        web_concurrency = 1
+    return {
+        "backend": "process-local",
+        "shared": False,
+        "webConcurrency": web_concurrency,
+        "supportedTopology": "single web process / single service instance",
+        "topologySupported": web_concurrency == 1,
+    }
+
+
 def client_ip() -> str:
     forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip()[:100]
+    # Render is the trusted edge for production traffic.  Use the right-most
+    # forwarded address there so a client-supplied left-most X-Forwarded-For
+    # value cannot rotate the login-rate-limit key.  Outside Render, do not
+    # trust a forwarding header supplied directly by the caller.
+    if forwarded and truthy(os.environ.get("RENDER", "false")):
+        parts = [part.strip() for part in forwarded.split(",") if part.strip()]
+        if parts:
+            return parts[-1][:100]
     return str(request.remote_addr or "unknown")[:100]
 
 
@@ -179,17 +200,17 @@ def register_production_hardening(
     @app.get("/api/security/status")
     def security_status():
         user = current_user()
-        if not user or normalize_role(user.get("role")) not in {
-            "education_admin",
-            "system_admin",
-            "auditor",
-        }:
+        if not user or not any(
+            has_role(user, role)
+            for role in ("education_admin", "system_admin", "auditor")
+        ):
             return jsonify({"error": "權限不足。"}), 403
         return jsonify({
             "sessionHours": session_hours,
             "secureCookie": bool(app.config.get("SESSION_COOKIE_SECURE")),
             "csrfOriginCheck": csrf_origin_check,
             "loginRateLimitMaxAttempts": max_attempts,
+            "loginRateLimit": login_rate_limit_status(),
             "cspEnforced": csp_enforce,
             "productionSecretRequired": require_secret,
         })
@@ -202,6 +223,7 @@ __all__ = [
     "client_ip",
     "csrf_origin_ok",
     "login_key",
+    "login_rate_limit_status",
     "register_production_hardening",
     "same_origin",
     "truthy",

@@ -12,6 +12,9 @@ from teacher_app.assessments import runtime_question_routes
 from teacher_app.assessments.question_runtime import QuestionRuntime
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
 class _Base:
     AI_MAX_QUESTIONS = 15
     AI_SOURCE_MAX_CHARS = 50000
@@ -278,6 +281,438 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.get_json()["error"], "基於安全性，不允許讀取內網或本機網址")
+
+    def test_import_url_rejects_non_http_scheme_before_dns(self):
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+        ) as resolver:
+            response = self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": "file:///tmp/questions.csv"},
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "僅接受公開 HTTP/HTTPS 連結")
+        resolver.assert_not_called()
+
+    def test_import_url_is_row_tolerant_and_invalidates_review_after_insert(self):
+        class Response:
+            headers = {"Content-Type": "text/csv; charset=utf-8"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read(_limit):
+                return (
+                    "question,optionA,optionB,correct\n"
+                    "有效題,A,B,B\n"
+                    ",只有一個選項,,A\n"
+                ).encode("utf-8")
+
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        ), patch(
+            "teacher_app.assessments.runtime_question_routes.urllib.request.urlopen",
+            return_value=Response(),
+        ):
+            response = self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": "https://example.test/questions.csv"},
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual(payload["imported"], 1)
+        self.assertEqual(payload["errors"], ["第2題格式不足"])
+        self.assertTrue(payload["reviewInvalidated"])
+        conn, _ = self.base.connect()
+        try:
+            category = conn.execute(
+                "SELECT review_status,active FROM quiz_categories WHERE id='cat-1'"
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(category["review_status"], "draft")
+        self.assertEqual(category["active"], 0)
+
+    def _assert_repository_template_imports_cleanly(self, filename, content_type):
+        body = ROOT.joinpath(filename).read_bytes()
+
+        class Response:
+            headers = {"Content-Type": content_type}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read(_limit):
+                return body
+
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        ), patch(
+            "teacher_app.assessments.runtime_question_routes.urllib.request.urlopen",
+            return_value=Response(),
+        ):
+            response = self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": f"https://example.test/{filename}"},
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual(payload["imported"], 4)
+        self.assertEqual(payload["errors"], [])
+        self.assertTrue(payload["reviewInvalidated"])
+
+    def test_repository_csv_import_template_matches_current_validator(self):
+        self._assert_repository_template_imports_cleanly(
+            "QUESTION_IMPORT_TEMPLATE.csv",
+            "text/csv; charset=utf-8",
+        )
+
+    def test_repository_json_import_template_matches_current_validator(self):
+        self._assert_repository_template_imports_cleanly(
+            "QUESTION_IMPORT_TEMPLATE.json",
+            "application/json; charset=utf-8",
+        )
+
+    def test_import_url_csv_true_false_alias_and_chinese_answer_are_canonicalized(self):
+        body = (
+            "question,questionType,correct,tag\n"
+            "收到檢體後可以略過病人身分核對。,是非題,否,檢體處理\n"
+        ).encode("utf-8")
+
+        class Response:
+            headers = {"Content-Type": "text/csv; charset=utf-8"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read(_limit):
+                return body
+
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        ), patch(
+            "teacher_app.assessments.runtime_question_routes.urllib.request.urlopen",
+            return_value=Response(),
+        ):
+            response = self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": "https://example.test/questions.csv"},
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()["imported"], 1)
+        self.assertEqual(response.get_json()["errors"], [])
+        conn, _ = self.base.connect()
+        try:
+            true_false = conn.execute(
+                "SELECT question_type,options,correct FROM quiz_questions WHERE question LIKE '收到檢體後%'"
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(true_false["question_type"], "true_false")
+        self.assertEqual(true_false["options"], '["是", "否"]')
+        self.assertEqual(true_false["correct"], 1)
+
+    def test_import_url_rejects_malformed_and_out_of_range_correct_values(self):
+        body = (
+            '[{"question":"格式錯誤","questionType":"choice","options":["A","B"],"correct":"Z"},'
+            '{"question":"超出範圍","questionType":"choice","options":["A","B"],"correct":9},'
+            '{"question":"有效題","questionType":"choice","options":["A","B"],"correct":"B"}]'
+        ).encode("utf-8")
+
+        class Response:
+            headers = {"Content-Type": "application/json"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read(_limit):
+                return body
+
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        ), patch(
+            "teacher_app.assessments.runtime_question_routes.urllib.request.urlopen",
+            return_value=Response(),
+        ):
+            response = self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": "https://example.test/questions.json"},
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual(payload["imported"], 1)
+        self.assertEqual(
+            payload["errors"],
+            ["第1題：正確答案格式錯誤", "第2題：正確答案超出選項範圍"],
+        )
+        conn, _ = self.base.connect()
+        try:
+            row = conn.execute(
+                "SELECT question,correct FROM quiz_questions WHERE question='有效題'"
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(row["correct"], 1)
+
+    def test_import_url_required_fields_report_exact_row_errors_without_review_invalidation(self):
+        body = (
+            '[{"question":"","questionType":"choice","options":["A","B"],"correct":0},'
+            '{"question":"複選缺答案","questionType":"multi","options":["A","B"]},'
+            '{"question":"填空缺答案","questionType":"fill"}]'
+        ).encode("utf-8")
+
+        class Response:
+            headers = {"Content-Type": "application/json"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read(_limit):
+                return body
+
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        ), patch(
+            "teacher_app.assessments.runtime_question_routes.urllib.request.urlopen",
+            return_value=Response(),
+        ):
+            response = self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": "https://example.test/questions.json"},
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            response.get_json(),
+            {
+                "ok": True,
+                "imported": 0,
+                "errors": [
+                    "第1題格式不足",
+                    "第2題缺少多選正確答案",
+                    "第3題缺少填空可接受答案",
+                ],
+                "reviewInvalidated": False,
+            },
+        )
+        conn, _ = self.base.connect()
+        try:
+            category = conn.execute(
+                "SELECT review_status,active FROM quiz_categories WHERE id='cat-1'"
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(category["review_status"], "approved")
+        self.assertEqual(category["active"], 1)
+
+    def test_import_url_malformed_json_structure_preserves_stable_error(self):
+        body = b'{"questions":{"question":"not-an-array"}}'
+
+        class Response:
+            headers = {"Content-Type": "application/json"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read(_limit):
+                return body
+
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        ), patch(
+            "teacher_app.assessments.runtime_question_routes.urllib.request.urlopen",
+            return_value=Response(),
+        ):
+            response = self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": "https://example.test/questions.json"},
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json(),
+            {"error": "JSON 格式需為題目陣列，或使用 questions 陣列"},
+        )
+
+    def test_import_url_object_without_questions_is_an_empty_import(self):
+        body = b'{"metadata":{"title":"empty export"}}'
+
+        class Response:
+            headers = {"Content-Type": "application/json"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read(_limit):
+                return body
+
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        ), patch(
+            "teacher_app.assessments.runtime_question_routes.urllib.request.urlopen",
+            return_value=Response(),
+        ):
+            response = self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": "https://example.test/questions.json"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json(),
+            {"ok": True, "imported": 0, "errors": [], "reviewInvalidated": False},
+        )
+
+    def test_import_url_duplicate_rows_are_additive_and_unknown_type_falls_back_to_choice(self):
+        body = (
+            '[{"question":"重複題","questionType":"unsupported","options":["A","B"],"correct":"A"},'
+            '{"question":"重複題","questionType":"unsupported","options":["A","B"],"correct":"A"}]'
+        ).encode("utf-8")
+
+        class Response:
+            headers = {"Content-Type": "application/json"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read(_limit):
+                return body
+
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        ), patch(
+            "teacher_app.assessments.runtime_question_routes.urllib.request.urlopen",
+            return_value=Response(),
+        ):
+            response = self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": "https://example.test/questions.json"},
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()["imported"], 2)
+        self.assertEqual(response.get_json()["errors"], [])
+        conn, _ = self.base.connect()
+        try:
+            rows = conn.execute(
+                "SELECT question_type FROM quiz_questions WHERE question='重複題' ORDER BY sort_order"
+            ).fetchall()
+        finally:
+            conn.close()
+        self.assertEqual([row["question_type"] for row in rows], ["choice", "choice"])
+
+    def test_ai_import_rejects_malformed_bulk_semantics_without_partial_write(self):
+        cases = (
+            (
+                {"question": "bad options", "questionType": "choice", "options": "AB", "correct": 0},
+                "批次匯入失敗：選項格式錯誤",
+            ),
+            (
+                {"question": "bad correct", "questionType": "choice", "options": ["A", "B"], "correct": 9},
+                "批次匯入失敗：正確答案超出選項範圍",
+            ),
+            (
+                {
+                    "question": "bad multi",
+                    "questionType": "multi",
+                    "options": ["A", "B"],
+                    "answerConfig": {"correctIndices": [0, 9]},
+                },
+                "批次匯入失敗：多選題正確選項超出選項範圍",
+            ),
+            (
+                {
+                    "question": "bad fill",
+                    "questionType": "fill",
+                    "answerConfig": {"acceptedAnswers": "RBC"},
+                },
+                "批次匯入失敗：填空題可接受答案格式錯誤",
+            ),
+        )
+        for invalid, expected_error in cases:
+            with self.subTest(expected_error=expected_error):
+                response = self.client.post(
+                    "/api/ai-questions/import",
+                    json={
+                        "quizCategoryId": "cat-1",
+                        "questions": [
+                            invalid,
+                            {"question": "should-not-write", "questionType": "choice", "options": ["A", "B"], "correct": 0},
+                        ],
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json(), {"error": expected_error})
+                conn, _ = self.base.connect()
+                try:
+                    count = conn.execute(
+                        "SELECT COUNT(*) AS n FROM quiz_questions WHERE question='should-not-write'"
+                    ).fetchone()["n"]
+                finally:
+                    conn.close()
+                self.assertEqual(count, 0)
+
+    def test_ai_import_true_false_and_non_object_row_contract(self):
+        response = self.client.post(
+            "/api/ai-questions/import",
+            json={
+                "quizCategoryId": "cat-1",
+                "questions": [
+                    "bad-row",
+                    {"question": "是非候選題", "questionType": "true_false", "correct": 1},
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual(payload["imported"], 1)
+        self.assertEqual(payload["errors"], ["第1題：題目格式錯誤"])
+        self.assertEqual(payload["questions"][0]["options"], ["是", "否"])
+        self.assertEqual(payload["questions"][0]["correct"], 1)
+
+    def test_ai_import_empty_selection_preserves_stable_error(self):
+        response = self.client.post(
+            "/api/ai-questions/import",
+            json={"quizCategoryId": "cat-1", "questions": []},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json(), {"error": "請至少勾選一題"})
 
     def test_batch_delete_preserves_strict_legacy_admin_boundary(self):
         response = self.client.post(

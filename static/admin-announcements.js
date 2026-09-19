@@ -1,6 +1,5 @@
-/* Phase 3D · Admin announcements module.
- * Loaded after the legacy admin bundle; window exports preserve existing
- * inline-handler contracts while announcements move out of system-admin.js.
+/* Phase 3D · Canonical admin announcements module.
+ * Window exports preserve the existing inline-handler contracts.
  */
 (function(){
   'use strict';

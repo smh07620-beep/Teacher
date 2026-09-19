@@ -1,10 +1,9 @@
-/* Phase 3Q · Result export helpers and CSV runtime.
- * Loaded after the legacy admin bundle. The legacy bundle intentionally keeps
- * the local DOCX fallback input/state for now; this module owns the reusable
- * payload/template helpers and CSV export globals without changing RBAC.
- */
+/* Phase 3Q · Canonical result export helpers, DOCX fallback, and CSV runtime. */
 (function(){
   'use strict';
+
+  let cachedTemplateBuffer = null;
+  let pendingExportRecordIndex = null;
 
   window.buildRoleCheckboxText = function(role, groupKey = currentGroupKey) {
     const memberRole = getGroupMemberRole(groupKey);
@@ -111,6 +110,51 @@
       return false;
     }
   };
+
+  function generateWordFromTemplate(recordIndex) {
+    const rec = adminRecords[recordIndex];
+    if (!rec) { alert('找不到這筆伺服器成績，請重新整理後台。'); return; }
+    const {payload, filenamePart} = window.buildRecordDocPayload(rec);
+    if (!window.renderDocxFromBuffer(cachedTemplateBuffer, payload, filenamePart)) {
+      cachedTemplateBuffer = null;
+    }
+  }
+
+  window.exportRecordToWord = async function(recordIndex) {
+    const rec = adminRecords[recordIndex];
+    if (!rec) { alert('找不到這筆伺服器成績，請重新整理後台。'); return; }
+    const groupKey = rec.groupKey || 'grpBio';
+    const {payload, filenamePart} = window.buildRecordDocPayload(rec);
+    const ok = await window.exportWithServerTemplate(groupKey, payload, filenamePart, groupKey === 'grpBio');
+    if (!ok && groupKey === 'grpBio') {
+      pendingExportRecordIndex = recordIndex;
+      if (cachedTemplateBuffer) {
+        generateWordFromTemplate(recordIndex);
+      } else {
+        alert('後台尚未上傳生化組 Word 範本。可暫時選擇本機「附件1.docx」匯出。');
+        document.getElementById('docx-template-input')?.click();
+      }
+    }
+  };
+
+  document.getElementById('docx-template-input')?.addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(loadEvent) {
+      cachedTemplateBuffer = loadEvent.target.result;
+      if (pendingExportRecordIndex !== null) {
+        const index = pendingExportRecordIndex;
+        pendingExportRecordIndex = null;
+        generateWordFromTemplate(index);
+      }
+    };
+    reader.onerror = function() {
+      alert('讀取範本檔案失敗。');
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = '';
+  });
 
   window.exportToCSV = async function() {
     try {

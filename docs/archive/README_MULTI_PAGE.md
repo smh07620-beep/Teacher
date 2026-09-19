@@ -1,4 +1,6 @@
-# 檢驗科教學網｜多頁面教育訓練版
+# [Historical] 檢驗科教學網｜多頁面教育訓練版
+
+> **歷史文件。** 本頁保留早期多頁面版本與舊題庫匯入說明供追溯，不代表目前 production ownership 或完整現行契約。現行題庫匯入驗證與錯誤行為請見 `docs/QUESTION_IMPORT.md`；現行架構請見 `ARCHITECTURE.md`。
 
 此版本由原有 Flask 教育訓練/考核系統擴充而來，原有生化組固定教材與考題邏輯保留在「內部教育訓練區」。
 
@@ -41,7 +43,7 @@
 CSV 可使用欄位：
 `question,questionType,optionA,optionB,optionC,optionD,correct,tag,explanation,imageUrl`
 
-- `questionType`: `choice` 或 `essay`
+- `questionType`: 此歷史版本只記載 `choice` 或 `essay`；目前 production 支援的完整題型與驗證契約請見 `docs/QUESTION_IMPORT.md`。
 - `correct`: 可填 `0/1/2/3` 或 `A/B/C/D`
 - 問答題的選項與 correct 可留空。
 

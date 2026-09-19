@@ -1,5 +1,7 @@
 # Teacher 7.4 Runtime Convergence Audit
 
+> **Historical convergence snapshot.** This audit records the 7.4 cleanup point. The production factory cutover and later 7.5–7.9 / RC79 convergence happened afterward; current backend ownership is defined by `ARCHITECTURE.md` and `RUNTIME_OWNERSHIP_MAP_STAGE5.md`.
+
 This audit distinguishes real duplicate implementations from intentionally separate responsibilities. The release rule is **one normal user-facing runtime owner per responsibility**. Compatibility names may remain for one cache/HTML compatibility cycle, but they may not render a second product UI or own business mutations.
 
 ## Audit result
@@ -18,7 +20,7 @@ This audit distinguishes real duplicate implementations from intentionally separ
 | Item analytics | `static/assessment-advanced-74.js` | formerly embedded in `assessment-681.js` | Unique capability | Extract and keep one owner |
 | Teacher content creation | `static/teacher-content-studio-71.js` + `static/teacher-content-composer-72.js` | hidden legacy material executor | Orchestration vs executor | Keep one visible launcher; executor stays hidden |
 | Results / exports | `static/admin-results-data.js`, `static/admin-results-workspace.js`, `static/admin-results-export.js` | legacy fallback seams | Compatibility only | No second visible result workflow |
-| PGY clinical assessment form | `static/system-assessment.js` + canonical PGY APIs | `static/admin-pgy-assessments.js` | **Distinct** learner/clinical workflow vs administration | Do not merge |
+| PGY clinical assessment form | `static/system-assessment.js` + canonical PGY APIs | `static/admin-pgy-assessments.js` | **Distinct** learner/clinical workflow vs administration; admin globals are owned only by the latter | Do not merge |
 | PGY workflow/signing | canonical PGY service/workflow + `static/pgy-workflow.js` | signing overlays | Distinct transition/UI layers | Keep |
 | External media | `external_media_68.py` + `static/external-material-681.js` | `static/admin-external-media.js` | Feature runtime vs admin adapter | Keep |
 | Atlas | `atlas_70.py` + `static/atlas-70.js` | DOCX import wizard | Browse/editor vs importer | Keep |
@@ -49,3 +51,5 @@ A release candidate fails convergence if:
 ## Final skeleton cleanup result
 
 The post-audit cleanup physically removes dead public navigation markup, retires obsolete unconsumed HTTP routes, connects batch-delete and security-status to canonical frontend owners, retires `teaching.css`, unifies `portal-v56.js` cache keys, and migrates the remaining course/question/people/system UI owners out of `system-admin.js`. The compatibility shell deliberately retains shared cache/state helpers, `getAdminKey()` as a non-secret session-RBAC header seam, and the tested local DOCX fallback only.
+
+> **Post-audit current note:** later convergence moved the local DOCX export fallback/state to `static/admin-results-export.js` and removed the dead AI picker state, stale admin-key state, and duplicate exam-quota listener from `static/system-admin.js`. The current compatibility shell retains only live shared caches/state plus the non-secret `getAdminKey()` session-RBAC header seam. Rows above describe the 7.4 snapshot and must not be read as current ownership when they mention the former DOCX fallback.

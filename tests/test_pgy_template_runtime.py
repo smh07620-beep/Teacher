@@ -376,19 +376,34 @@ class PgyAssessmentRouteOwnershipTests(unittest.TestCase):
         self.assertIn("評量範本刪除失敗：delete failed", response.get_json()["error"])
         delete_row.assert_not_called()
 
-    def test_list_assessments_admin_override_uses_canonical_admin_key(self):
+    def test_list_assessments_admin_header_requires_authenticated_session(self):
         self.actor = None
-        with mock.patch.object(assessment_routes, "admin_key", return_value="secret"), mock.patch.object(
-            assessment_routes.assessments, "list_assessments", return_value=[]
+        with mock.patch.object(
+            assessment_routes.assessments,
+            "list_assessments",
+            side_effect=assessment_routes.assessments.AssessmentError("請先登入後查看評量紀錄", 401),
         ) as listing:
             response = self.client.get(
                 "/api/pgy-assessments",
                 headers={"X-Admin-Key": "secret"},
             )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(listing.call_args.kwargs["admin_override"])
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(listing.call_args.kwargs["admin_override"])
         self.assertIsNone(listing.call_args.args[0])
+
+    def test_list_assessments_valid_admin_session_does_not_need_header_override(self):
+        self.actor = {"username": "root", "role": "system_admin", "roles": ["system_admin"]}
+        with mock.patch.object(
+            assessment_routes.assessments,
+            "list_assessments",
+            return_value=[],
+        ) as listing:
+            response = self.client.get("/api/pgy-assessments")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(listing.call_args.kwargs["admin_override"])
+        self.assertEqual(listing.call_args.args[0]["role"], "system_admin")
 
     def test_route_source_has_no_legacy_template_or_base_dependencies(self):
         source = Path(assessment_routes.__file__).read_text(encoding="utf-8")

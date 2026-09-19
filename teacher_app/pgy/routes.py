@@ -1,4 +1,4 @@
-"""PGY Blueprint. Not mounted on pgy_app:app in Milestone 2."""
+"""Canonical PGY Blueprint mounted by :func:`teacher_app.factory.create_app`."""
 
 from __future__ import annotations
 

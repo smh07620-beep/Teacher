@@ -1,8 +1,4 @@
-/* Phase 3G · Admin question-bank category runtime.
- * Loaded after the legacy admin bundle so these functions become the
- * canonical runtime implementation while system-admin.js remains a
- * compatibility fallback during the incremental split.
- */
+/* Phase 3G · Canonical admin question-bank category runtime. */
 (function(){
   'use strict';
 

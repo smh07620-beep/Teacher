@@ -30,6 +30,8 @@ class RootMirrorPolicyTests(unittest.TestCase):
             "teacher_app.courses.service",
             "teacher_app.assessments.service",
             "Converged read/data ownership",
+            "Converged data/rule ownership",
+            "teacher_app.materials.external_media_routes",
             "teacher_app.storage.providers",
             "teacher_app.worker.repository",
             "teacher_app.worker.routes",
@@ -38,6 +40,54 @@ class RootMirrorPolicyTests(unittest.TestCase):
             "responsibility_tags",
         ):
             self.assertIn(marker, document)
+        self.assertNotIn("data-access migration continues where still required", document)
+
+    def test_root_compatibility_inventory_is_explicit_and_bounded(self):
+        document = ROOT.joinpath("ARCHITECTURE.md").read_text(encoding="utf-8")
+        compatibility = {
+            "admin_elevation_68.py",
+            "ai_privacy.py",
+            "app.py",
+            "atlas_70.py",
+            "backup_restore.py",
+            "course_bundle_72.py",
+            "course_bundle_followup_73.py",
+            "exam_integrity.py",
+            "external_media_68.py",
+            "free_worker_67.py",
+            "health_65.py",
+            "legacy_office_69.py",
+            "media_processing_67.py",
+            "multi_role_66.py",
+            "pgy_frontend.py",
+            "pgy_signing_66.py",
+            "pgy_workflow.py",
+            "production_hardening.py",
+            "question_bank_68.py",
+            "rbac_681.py",
+            "schema_migrations.py",
+            "sensitive_elevation_69.py",
+            "smart_learning_67.py",
+            "upload_hardening.py",
+        }
+        for marker in (
+            "### Retained root compatibility inventory",
+            *(f"`{name}`" for name in sorted(compatibility)),
+            "`teacher_app.compatibility`",
+            "`legacy_app.py`",
+            "`legacy_routes.py`",
+            "`teacher_app.maintenance.migrations`",
+            "`teacher_app.auth.elevation`",
+            "`teacher_app.atlas.routes`",
+            "Production `teacher_app.factory.create_app()` imports canonical package owners directly",
+        ):
+            self.assertIn(marker, document)
+        root_python = {path.name for path in ROOT.glob("*.py")}
+        canonical_root = {"pgy_app.py", "material_worker.py", "release_contract.py"}
+        self.assertEqual(root_python - compatibility - canonical_root, set())
+        factory = ROOT.joinpath("teacher_app/factory.py").read_text(encoding="utf-8")
+        self.assertNotIn("teacher_app.compatibility", factory)
+        self.assertNotIn("load_legacy_app", factory)
 
     def test_live_auth_routes_are_thin_canonical_delegates_without_duplicate_legacy_impls(self):
         functions = module_functions(ROOT / "teacher_app" / "legacy_host.py")

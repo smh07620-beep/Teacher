@@ -270,9 +270,9 @@ class CanonicalLegacyHomeSurfaceTests(unittest.TestCase):
             headers = {"X-Admin-Key": "test-admin-key"}
             self.assertEqual(
                 client.get("/api/announcements/admin", headers=headers).status_code,
-                200,
+                401,
             )
-            self.assertEqual(client.get("/api/records", headers=headers).status_code, 200)
+            self.assertEqual(client.get("/api/records", headers=headers).status_code, 401)
 
     def test_announcements_preserve_public_admin_and_crud_contracts(self):
         self._sql(
@@ -297,7 +297,7 @@ class CanonicalLegacyHomeSurfaceTests(unittest.TestCase):
         self.assertEqual(
             denied.get_json(),
             {
-                "error": "請先以管理者帳號登入，或提供正確的 ADMIN_KEY。",
+                "error": "請先以管理者帳號登入。",
                 "loginRequired": True,
             },
         )

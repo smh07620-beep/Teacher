@@ -4,10 +4,10 @@ This repository is the PGY / medical laboratory technologist training and assess
 
 ## Current architecture
 
-- Flask backend is primarily in `app.py`.
-- Frontend is under `static/`, including `system-admin.js`, `system-core.js`, `system-learner.js`, `system-assessment.js`, `system-exam.js`, and `shared-core.js`.
-- The existing `user_accounts.role` model currently uses legacy roles such as `learner`, `teacher`, and `manager`.
-- Existing server-side role validation and frontend role labels must be migrated without breaking existing accounts.
+- Production Flask composition is owned by `teacher_app.factory.create_app()` and exposed by the thin `pgy_app:app` WSGI shim. Root `app.py` / `teacher_app.legacy_host` are compatibility surfaces only and must not receive new product ownership.
+- Backend domain logic lives under canonical `teacher_app/` packages. Frontend is under `static/`; `system-admin.js` is a compatibility/state shell and new product logic belongs in the responsibility-specific admin/runtime modules.
+- `user_accounts` and authorization use the canonical roles below while continuing to normalize historical `learner`, `teacher`, and `manager` values for old accounts/data.
+- Existing server-side role validation and frontend role labels must preserve legacy-account compatibility without reintroducing legacy authorization as the source of truth.
 - Keep the current SQLite/PostgreSQL compatibility unless a separate migration task explicitly changes the database architecture.
 
 ## Canonical roles

@@ -2,8 +2,9 @@
 
 The legacy ``smart_learning_67`` module remains a compatibility import surface,
 but route behavior and learning/search persistence live under ``teacher_app``.
-Local source-file lookup is still injected through the compatibility host until
-material file transport is fully canonicalized.
+Production source-file lookup receives canonical ``StoragePaths`` from the
+application factory; owner-shaped path fallbacks remain only for isolated
+compatibility fixtures.
 """
 from __future__ import annotations
 

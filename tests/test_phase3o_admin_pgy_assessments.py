@@ -11,6 +11,7 @@ class Phase3OAdminPgyAssessmentsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "static" / "admin-pgy-assessments.js").read_text(encoding="utf-8")
+        cls.clinical_source = (ROOT / "static" / "system-assessment.js").read_text(encoding="utf-8")
         cls.ordered = dict(ASSET_MANIFEST["system"]["ordered"])["/system-admin.js"]
 
     def test_preserves_pgy_admin_globals_and_onclick_contracts(self):
@@ -44,6 +45,18 @@ class Phase3OAdminPgyAssessmentsTests(unittest.TestCase):
 
     def test_loads_after_legacy_bundle_and_before_workflow_wrappers(self):
         self.assertIn('/admin-pgy-assessments.js', self.ordered)
+
+    def test_clinical_assessment_bundle_no_longer_duplicates_admin_runtime(self):
+        self.assertIn("function renderPgyAssessmentForm", self.clinical_source)
+        self.assertIn("async function submitPgyAssessment", self.clinical_source)
+        for name in (
+            "renderAdminPgyTemplates",
+            "adminTriggerPgyTemplateUpload",
+            "adminDeletePgyTemplate",
+            "adminImportTslmEpa",
+            "renderAdminPgyAssessments",
+        ):
+            self.assertNotIn(name, self.clinical_source)
 
 
 if __name__ == "__main__":

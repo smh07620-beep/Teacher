@@ -13,8 +13,11 @@ def version_file_value() -> str:
 
 
 # VERSION is the single SemVer source.  Teacher 7.x module generations do not
-# independently bump the formal release version.
+# independently bump the formal release version.  The current repository has
+# internal UI/convergence work through the 7.9 / RC79 generation; that label is
+# intentionally distinct from the deployable SemVer contract.
 RELEASE_VERSION = version_file_value()
+INTERNAL_GENERATION = "7.9 / RC79"
 
 # Runtime health and release validation consume this exact schema baseline.
 # Keep the tuple ordered by migration/application order, including the distinct

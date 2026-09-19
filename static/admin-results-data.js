@@ -1,6 +1,5 @@
-/* Phase 3R · Admin results data/table runtime.
- * Loaded after the legacy admin bundle and before admin-results-workspace.js
- * so the workspace mode wrapper captures this extracted implementation.
+/* Phase 3R · Canonical admin results data/table runtime.
+ * Loaded before admin-results-workspace.js so its wrapper captures this owner.
  */
 (function(){
   'use strict';
@@ -39,9 +38,7 @@
     if(!key) return null;
     const res=await fetch('/api/records',{headers:{'X-Admin-Key':key}});
     if(res.status===401){
-      sessionStorage.removeItem('admin_key');
-      adminKey='';
-      alert('管理者金鑰錯誤或尚未設定，請重新輸入。');
+      alert('登入狀態已失效，請重新登入後再試。');
       return null;
     }
     const data=await res.json().catch(()=>[]);
@@ -116,7 +113,6 @@
     try{
       const res=await fetch('/api/records',{method:'DELETE',headers:{'X-Admin-Key':key}});
       const data=await res.json().catch(()=>({}));
-      if(res.status===401){sessionStorage.removeItem('admin_key');adminKey='';}
       if(!res.ok) throw new Error(data.error||'清空失敗');
       adminRecords=[];
       page=1;

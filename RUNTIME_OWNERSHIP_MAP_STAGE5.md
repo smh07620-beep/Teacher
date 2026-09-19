@@ -1,202 +1,87 @@
-# Runtime Ownership Map — Stage 5
+# Runtime Ownership Map — Stage 5 historical record and current cutover status
 
 Branch target: `feature/teacher-content-authoring-studio-72`
 
-This map records *runtime ownership*, not just file placement. A module is only considered converged when its canonical domain owns data access/business behavior and the legacy host is limited to URL/format compatibility.
+This file originally tracked the Stage 5 migration from the monolithic Flask host. That migration has since crossed the production composition boundary. The statements below describe the **current** repository state; older Stage 5 assumptions such as “`pgy_app.py` still imports `app.py`” are no longer valid.
 
-## Production entrypoint
+Formal release SemVer remains `6.8.1`. Internal UI/convergence work currently carries `7.9 / RC79` markers. Those labels do not change the formal release contract unless `VERSION` is intentionally updated.
 
-`pgy_app.py` still imports `app.py` as `legacy_app`. Therefore the application factory convergence is **not complete**. Do not switch to `teacher_app.create_app()` until the remaining runtime owners below have been migrated and regression-tested.
+## Production composition — cutover complete
 
-## Register modules in `pgy_app.py`
+- `pgy_app.py` is the WSGI entrypoint and contains `app = create_app()` from `teacher_app`.
+- `teacher_app.factory.create_app()` is the production composition root. It creates the Flask object, runs canonical bootstrap, registers canonical blueprints and production domain routes, and installs common error handlers.
+- `teacher_app.factory` has no `legacy_host`, `LegacyBaseAdapter`, root `app.py`, or `runtime_from_owner` production dependency.
+- Root `app.py` is only a historical import alias to `teacher_app.legacy_host`. It remains for old imports and isolated compatibility tests; production startup does not pass through it.
+- `teacher_app.legacy_host` is therefore a compatibility/test surface, not the production composition owner.
 
-### A. Startup / cross-cutting infrastructure — keep as explicit registration for now
+This cutover is structurally protected by `tests/test_teacher_app_factory.py`, `tests/test_root_mirror_policy.py`, and the GitHub release workflow.
 
-These are not ordinary domain implementations and should not be removed merely to shorten the register list:
+## Canonical production registration
 
-- `register_schema_migrations` — startup schema migration runner.
-- `register_health` — health/deployment diagnostics.
-- `register_production_hardening` — same-origin/rate-limit/request hardening.
-- `register_upload_hardening` — upload validation/hardening.
-- `register_ai_privacy` — AI/privacy guardrail.
-- `register_exam_integrity` — exam security/integrity overlay.
-- `register_admin_elevation` — privileged-session elevation.
-- `register_sensitive_elevation_69` — short-lived elevation for destructive/sensitive operations.
-- `register_rbac_681` — canonical session/capability RBAC bridge.
-- `register_pgy_frontend` — temporary production asset injection while the HTML shell is still legacy-owned.
+`teacher_app.factory` directly registers the current production surfaces, including:
 
-### B. Canonical Teacher modules — already valid owners
+- schema/bootstrap, health, hardening, browser cache policy and AI privacy;
+- canonical auth, request context, exam and PGY blueprints;
+- materials catalog/delivery/jobs/templates/synchronous upload and storage administration;
+- courses, assessments, exam records and PGY assessment routes;
+- training audience, command center and dashboard;
+- smart learning/progress and announcements;
+- worker HTTP routes using the canonical worker web runtime;
+- external media, Atlas, course bundle/follow-up, elevation/RBAC and Question Bank routes;
+- the canonical question runtime built by `build_canonical_question_runtime()`.
 
-- `register_training_audience_71` — explicit training-track audience state; does not grant RBAC.
-- `register_training_command_center` — read-only aggregation surface over canonical domains.
+The root WSGI file must stay free of domain registration and business behavior. New production registration belongs in `teacher_app.factory` or a canonical domain package called by the factory.
 
-### C. Compatibility adapters — keep only while the original URL/shell contract exists
+## Compatibility seams that remain intentionally isolated
 
-- `register_pgy_workflow` — surviving thin PGY legacy URL/JSON adapter over `teacher_app.pgy`; no independent schema/business ownership.
-- `register_legacy_office_69` — compatibility route; must stay thin and defer authorization to canonical RBAC.
-- `register_atlas_70` — Atlas HTTP compatibility adapter; CRUD/search/local-image/DOCX import runtime ownership is canonical and the adapter retains only established HTTP/RBAC/config seams.
-- `register_question_bank` — Question Bank HTTP/RBAC compatibility adapter; CRUD/review/blueprint/snapshot/analytics runtime ownership is canonical in `teacher_app.assessments`.
+Several packages still expose narrow runtime-owner compatibility adapters. They exist for legacy-style unit fixtures and compatibility registration calls. Production factory composition passes explicit canonical runtimes instead:
 
-### D. Runtime domain owners still pending convergence
+- `teacher_app.assessments.question_runtime.runtime_from_owner`
+- `teacher_app.worker.web_runtime.runtime_from_owner`
+- `teacher_app.materials.job_runtime.from_compat_owner`
 
-These modules still own meaningful runtime behavior and must be migrated domain-by-domain before they can disappear from `pgy_app.py`:
+These `runtime_from_owner(...)` / `from_compat_owner(...)` helpers must not become a route back to `teacher_app.legacy_host` in production. Structural tests enforce that the canonical factory does not use them.
 
-- `register_multi_role_66`
-- `register_pgy_signing_66`
-- `register_backup_restore`
-- `register_smart_learning`
-- `register_free_worker`
-- `register_external_media`
-- `register_course_bundle_72`
-- `register_course_bundle_followup_73`
+Root `app.py` also remains import-compatible because older tests and operational compatibility code still import `app`. That alias is not evidence that production uses the legacy host.
 
-`register_pgy_atomic_workflow` is **retired**. It only replaced six existing PGY mutation endpoints with the same canonical `teacher_app.pgy.service` handlers and had no unique runtime ownership.
+## Current domain owners
 
-Removing any remaining runtime owner by name alone would be cosmetic convergence and risks deleting real behavior.
+| Domain | Current production owner | Compatibility note |
+| --- | --- | --- |
+| Application composition | `teacher_app.factory` | `pgy_app.py` is WSGI-only; root `app.py` is import compatibility only. |
+| Auth / session / roles / scope | `teacher_app.auth.*`, `teacher_app.common.auth`, `teacher_app.common.scope` | Historical legacy delegates may remain for isolated compatibility tests. |
+| Exams / attempts / grading / records | `teacher_app.exams.*` | Root adapters must not regain business logic. |
+| PGY workflow / signing / assessments | `teacher_app.pgy.*` | Established URLs remain stable while canonical packages own behavior. |
+| Materials / upload / jobs / templates | `teacher_app.materials.*` | Provider/runtime callbacks are injected explicitly by factory/runtime builders. |
+| Courses / bundle / follow-up | `teacher_app.courses.*` | 0072/0073 schema ownership remains in canonical migrations. |
+| Assessment configuration / question runtime | `teacher_app.assessments.*` | Question routes receive the canonical `QuestionRuntime` in production. |
+| Storage providers / web runtime | `teacher_app.storage.*` | No second provider session/client should be introduced. |
+| Worker Web protocol / queue | `teacher_app.worker.*` | `material_worker.py` remains the executable local worker loop. |
+| Smart learning / progress | `teacher_app.learning.*` | Production registration is canonical. |
+| Atlas | `teacher_app.atlas.*` | DOCX import and Atlas persistence stay canonical. |
+| Maintenance / backup / migrations / health | `teacher_app.maintenance.*` | Production startup runs canonical bootstrap/migrations before domain registration. |
 
-## Domain status
+## Storage and worker boundary
 
-### Materials — ordinary host dependency removed; storage seam deferred
+The Web process and local/hospital worker remain separate deployment roles. Web-side storage/provider construction and state belong under `teacher_app.storage`; worker queue/protocol persistence belongs under `teacher_app.worker`. The executable local worker stays `material_worker.py` and must not be duplicated by a second poller or queue consumer.
 
-Completed:
+Material upload and worker routes should consume explicit canonical runtime objects. Compatibility owner adapters may support old tests, but production factory wiring must remain explicit so storage credentials, filesystem paths and provider clients do not flow through the legacy host.
 
-- All runtime `materials` SQL is owned by `teacher_app.materials.repository`.
-- Repository reads/writes use `teacher_app.common.db` pooled connection/transaction seams.
-- `app.py` material SQL was removed.
-- Course/assessment/external-media material relation writes join explicit transactions.
-- Group/area normalization is canonical in `teacher_app.common.scope`.
-- Built-in catalog loading/basic labels are canonical in `teacher_app.materials.catalog`.
-- Course/category validation reads use `teacher_app.courses.repository` and `teacher_app.assessments.repository`.
-- `teacher_app.materials.repository` no longer consults the legacy `base` object; its legacy first argument is compatibility-only.
+## Question runtime boundary
 
-Remaining legacy dependency:
+Production Question Bank registration passes `build_canonical_question_runtime()` directly from `teacher_app.factory`. The runtime owns AI provider/source generation seams, storage image behavior, progress storage and configured limits. `runtime_from_owner()` exists only for compatibility fixtures.
 
-- physical provider deletion (`mega_destroy`, GDrive/R2/OCI delete);
-- legacy local upload/cache filesystem paths used during deletion.
+Public question-import behavior is documented in `docs/QUESTION_IMPORT.md`; import validation must continue to preserve RBAC/group scope, SSRF protection, bounded download size, per-row validation and review invalidation after successful inserts.
 
-Those are storage-provider responsibilities and should move only when one canonical `teacher_app.storage` seam is established.
+## Deletion / regression rule
 
-### Courses — next data-access owner to converge
+When removing another compatibility seam:
 
-`teacher_app.courses.service` still calls legacy host methods such as `base.list_courses`, `base.get_course`, `base._db_conn`, `base.normalize_area` and `base.normalize_group`. `teacher_app.courses.repository` now exists as the canonical read seam, but create/update and teaching-plan paths are not fully migrated yet. The target is:
+1. establish or confirm the canonical owner;
+2. wire production factory/routes directly to it;
+3. preserve exact public URLs, endpoint names, RBAC/scope and error contracts;
+4. run focused tests plus the full release gate;
+5. add or retain a structural guard preventing production from re-acquiring the retired dependency;
+6. only then delete the obsolete compatibility implementation.
 
-`legacy URL -> thin adapter -> teacher_app.courses.service -> teacher_app.courses.repository -> teacher_app.common.db`
-
-Material relation SQL already delegates to `teacher_app.materials.repository` and should remain that way.
-
-### Assessments — follow courses
-
-`teacher_app.assessments.repository` now owns the first category read/label seam, but `teacher_app.assessments.service` still depends on `base` for list-with-counts, question reads and several writes. Do not migrate it in the same commit as courses. Move each read/write family to the canonical DB seam separately and preserve the short category-list cache behavior.
-
-### PGY workflow — canonical business owner established; signing overlay pending
-
-Completed:
-
-- PGY schema, repository queries, transitions, validation and audit writes are canonical in `teacher_app.pgy`.
-- `pgy_workflow.py` is a compatibility HTTP/JSON adapter only.
-- The redundant `pgy_atomic.py` view-function replacement layer is retired.
-
-Remaining:
-
-- `pgy_signing_66.py` still owns unique multi-role and single/dual sign-mode route behavior, candidate/list/get projections and some DB access. Move those rules into `teacher_app.pgy.service/repository/signing` before shrinking the adapter.
-
-### Backup / restore — pending
-
-`backup_restore.py` still owns archive creation, manifest/hash validation and conservative restore orchestration. Security/elevation behavior must remain unchanged while persistence/archive implementation moves to a canonical maintenance package.
-
-### Smart learning — pending
-
-`smart_learning_67.py` still owns reader progress, coverage, preview/indexing integration and API behavior. Converge the state/repository logic before touching the frontend adapter.
-
-### Worker — heartbeat canonical; queue/terminal/direct-upload pending
-
-Completed:
-
-- `teacher_app.worker.protocol` owns worker-ID normalization, bounded non-secret build metadata whitelisting, heartbeat capability projection and heartbeat orchestration.
-- `teacher_app.worker.repository` is the single SQL owner for `material_worker_heartbeats` upsert persistence.
-- `free_worker_67.py` keeps `_worker_id` / `_worker_metadata` only as compatibility aliases and delegates heartbeat persistence to the canonical worker domain.
-- The current-job `worker_last_seen` touch remains a narrow callback into the still-legacy material-job owner; the canonical worker modules do not import the legacy host object.
-- A narrow `connection_factory` seam preserves isolated legacy-host tests while production still resolves through the already-canonical shared DB connection path.
-- `material_worker.py` remains the only executable local worker loop. No second poller, queue consumer, provider client or code-update loop exists under `teacher_app.worker`.
-
-Remaining:
-
-- claim/job ownership (`claim_next_material_job`, ownership validation and claimed-job projection);
-- complete/retry/fail terminal transitions and post-completion indexing hook;
-- direct multipart upload session state and R2 orchestration in `free_worker_67.py`;
-- local worker processing/storage execution in `material_worker.py` remains unique and should be migrated only by delegation, never duplicated.
-
-Preserve the existing single-worker protocol and server-side token boundary while moving those pieces in separate bounded slices.
-
-### External media — pending
-
-`external_media_68.py` still owns URL normalization/validation and external material creation orchestration. Move validation/persistence into a canonical external-media domain while keeping current public contracts.
-
-### Course bundle — pending
-
-`course_bundle_72.py` and `course_bundle_followup_73.py` own idempotent course/exam creation and material follow-up workflow state. Converge together only at the service/repository boundary while preserving the two-stage HTTP contract and idempotency migrations.
-
-### Atlas — runtime ownership canonical; HTTP compatibility only
-
-Completed:
-
-- `teacher_app.atlas.repository` owns Atlas row projection plus `atlas_items` reads and writes.
-- `teacher_app.atlas.service` owns group scope, read/manage visibility, draft/published filtering and CRUD validation.
-- `teacher_app.atlas.search` owns `/api/teaching-resource-search` aggregation across readable materials and Atlas records.
-- `teacher_app.learning.repository` remains the sole `material_text_index` SQL owner; Atlas search reuses `get_material_text_rows()` instead of creating a parallel search-index repository.
-- `teacher_app.atlas.image_store` owns local `atlas_images` directory creation, extension/content validation, image persistence, thumbnail generation and safe request-name projection.
-- `teacher_app.atlas.importer` owns canonical-first material lookup, DOCX source-path resolution, preview parsing, embedded-image selection, metadata merge, image persistence delegation and draft Atlas item creation.
-- Manual Atlas image upload and DOCX-selected embedded images both use the same canonical image writer; `atlas_70.py` no longer imports Pillow/BytesIO or creates thumbnails itself.
-- `atlas_70.py` contains no Atlas-table CRUD SQL, no `material_text_index` SQL, no ZIP parser and no DOCX item-creation implementation; routes delegate to canonical Atlas modules.
-- A narrow `legacy_material_getter` fallback remains only for isolated legacy-host/test fixtures after canonical material lookup returns no record. It owns no SQL, path rules or import behavior.
-
-Source cleanup note:
-
-- `smart_learning_67.py` still contains the old `preview_docx_atlas` helper as dead compatibility source, but Atlas runtime no longer imports or calls it. Remove or convert it to a re-export when the Smart Learning domain is converged, rather than reopening Atlas ownership.
-
-### Question Bank — runtime ownership canonical; HTTP compatibility only
-
-Completed:
-
-- `teacher_app.assessments.repository` owns Bank 2.0 `quiz_questions` list/get/duplicate-candidate/insert/update/delete/review SQL.
-- `teacher_app.assessments.question_bank` owns Bank metadata validation, payload projection, duplicate detection, draft creation, editing, deletion and review transitions.
-- `teacher_app.assessments.repository` also owns `exam_blueprints` / `exam_blueprint_snapshots` persistence and reviewed-question/recent-snapshot reads.
-- `teacher_app.assessments.blueprints` owns blueprint payload validation, exact multi-dimension quota selection, recent-question exclusion and immutable snapshot publication.
-- `teacher_app.assessments.repository` owns `question_attempt_analytics` reads and the narrow answer-key lookup needed by item analytics.
-- `teacher_app.assessments.analytics` owns the 10-attempt sufficiency threshold, correct-rate aggregation, option-selection counts and distractor distribution.
-- `question_bank_68.py` keeps the established Question Bank / Blueprint / Analytics HTTP and RBAC routes but delegates all domain behavior to canonical assessment modules.
-- `_draw` remains only as a compatibility re-export from `teacher_app.assessments.blueprints`; there is no root implementation.
-- Structural and behavior regression coverage prevents Question Bank CRUD/review/blueprint/snapshot/analytics ownership from returning to the root adapter.
-
-No Question Bank domain implementation remains in the root adapter; keep `register_question_bank` only until the final app-factory/route-composition cutover.
-
-## Storage / MEGA ownership
-
-The active legacy provider engine remains in `app.py`. Teacher's default MEGA root is `smh-teaching-materials`; each uploaded material is stored below `<MEGA_ROOT_FOLDER>/<material_id>/`.
-
-Provider credentials, MEGAcmd process/session handling, cloud upload/download and destructive remote delete are still storage-provider responsibilities and should move to a canonical `teacher_app.storage` provider layer before the final app-factory cutover.
-
-Do **not** add a second MEGA client or second connection/session implementation while migrating this layer.
-
-## Ordered convergence plan
-
-1. Finish PGY by moving unique multi-role/sign-mode behavior out of `pgy_signing_66.py` into `teacher_app.pgy`.
-2. Move backup/restore ownership into a canonical maintenance domain.
-3. Move smart-learning state/data ownership into a canonical domain; retire its dead Atlas preview helper during that cleanup.
-4. Continue worker ownership from the now-canonical heartbeat into claim/terminal/direct-upload slices without creating a second worker implementation.
-5. Move external-media validation/persistence ownership.
-6. Move course-bundle and follow-up workflow ownership while preserving idempotency.
-7. Atlas runtime convergence is complete; keep `register_atlas_70` only as the established HTTP compatibility adapter until app-factory cutover.
-8. Question Bank runtime convergence is complete; keep `register_question_bank` only as the established HTTP/RBAC compatibility adapter until app-factory cutover.
-9. Continue course/assessment repository migration and provider/storage extraction in bounded slices.
-10. Only after the runtime ownership map has no domain implementation in `app.py`, replace `pgy_app.py` with `app = create_app()`.
-
-## Deletion rule
-
-For every migration:
-
-1. establish canonical owner;
-2. redirect the existing route/consumer to it;
-3. run the full release gate;
-4. delete the previous implementation;
-5. add a structural regression guard preventing the duplicate owner from returning.
+Historical 6.5–6.7 architecture and the pre-factory-cutover narrative are preserved in `docs/archive/ARCHITECTURE_HISTORY.md`. They are release history, not the current production ownership contract.

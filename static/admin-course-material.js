@@ -1,7 +1,5 @@
-/* Phase 3B · Admin course/material module.
- * Loaded after the legacy admin bundle.  Extracted globals intentionally keep
- * the historical window contract so existing inline handlers and sibling
- * bundles keep working while system-admin.js is reduced incrementally.
+/* Phase 3B · Canonical admin course/material module.
+ * Exported globals preserve historical inline-handler and sibling-module contracts.
  */
 (function(){
   'use strict';

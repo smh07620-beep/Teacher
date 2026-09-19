@@ -1,8 +1,7 @@
 """Canonical course and teaching-plan behavior.
 
-Storage remains on the legacy application object during Stage 5.1; this module
-owns course validation, persistence orchestration and response data while the
-public URL contract stays unchanged.
+Course validation and persistence orchestration use canonical repositories;
+the public URL and response contracts remain unchanged for compatibility.
 """
 from __future__ import annotations
 

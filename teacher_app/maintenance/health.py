@@ -8,6 +8,7 @@ from flask import jsonify
 
 from release_contract import RELEASE_VERSION, REQUIRED_MIGRATIONS
 from teacher_app.common import db as common_db
+from teacher_app.config import deployment_config_status
 
 
 def app_version() -> str:
@@ -68,6 +69,7 @@ def health_state(connection_factory: Callable | None = None):
             except Exception:
                 pass
 
+    configuration = deployment_config_status()
     healthy = bool(database["ok"] and migrations["ok"])
     payload = {
         "ok": healthy,
@@ -76,6 +78,7 @@ def health_state(connection_factory: Callable | None = None):
         "deployment": deployment_identity(),
         "database": database,
         "migrations": migrations,
+        "configuration": configuration,
     }
     return payload, 200 if healthy else 503
 
