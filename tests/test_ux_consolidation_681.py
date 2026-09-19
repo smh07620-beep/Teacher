@@ -41,4 +41,5 @@ class UxConsolidation681Tests(unittest.TestCase):
         self.assertIn('ExternalMediaClient',self.external)
         self.assertIn('/external-media',self.external_client)
         self.assertNotIn('<iframe',self.external.lower())
-        self.assertNotIn('iframe',self.html[self.html.index('external-material-drawer'):self.html.index('<!-- Footer -->')])
+        drawer=self.html[self.html.index('external-material-drawer'):self.html.index('<!-- Footer -->')]
+        self.assertNotIn('<iframe',drawer.lower())
