@@ -38,6 +38,7 @@ class MaterialJobRuntime:
     background_enabled: bool | Callable[[], bool] = True
     worker_enabled: bool | Callable[[], bool] = True
     max_attempts: int | Callable[[], int] = 3
+    web_byte_upload_enabled: bool | Callable[[], bool] = True
 
 
 def _env_true(name: str, default: bool) -> bool:
@@ -80,6 +81,10 @@ def build_canonical_runtime(*, paths_provider=storage_paths) -> MaterialJobRunti
         background_enabled=lambda: _env_true("MATERIAL_BACKGROUND_JOBS", True),
         worker_enabled=lambda: _env_true("MATERIAL_WORKER_ENABLED", True),
         max_attempts=_max_attempts,
+        # Production Browser -> R2 direct upload is the canonical path.  This
+        # compatibility endpoint must be explicitly re-enabled when R2 is not
+        # available in a local/emergency deployment.
+        web_byte_upload_enabled=lambda: _env_true("MATERIAL_WEB_BYTE_UPLOAD_ENABLED", False),
     )
 
 
@@ -106,6 +111,9 @@ def from_compat_owner(owner) -> MaterialJobRuntime:
         max_attempts=lambda: max(
             1,
             min(8, int(getattr(owner, "MATERIAL_JOB_MAX_ATTEMPTS", _max_attempts()) or 3)),
+        ),
+        web_byte_upload_enabled=lambda: bool(
+            getattr(owner, "MATERIAL_WEB_BYTE_UPLOAD_ENABLED", True)
         ),
     )
 

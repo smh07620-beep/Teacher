@@ -27,14 +27,18 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
 
-    def test_safe_updater_is_origin_main_ff_only_and_never_handles_secrets(self):
+    def test_safe_updater_requires_verified_pinned_release_and_never_tracks_main(self):
         source = ROOT.joinpath("update_material_worker.ps1").read_text(encoding="utf-8")
-        self.assertIn("git fetch origin main", source)
-        self.assertIn("git pull --ff-only origin main", source)
-        self.assertIn("branch -ne \"main\"", source)
-        self.assertIn("merge-base --is-ancestor HEAD origin/main", source)
+        self.assertIn("MATERIAL_WORKER_RELEASE_REF", source)
+        self.assertIn("MATERIAL_WORKER_RELEASE_COMMIT", source)
+        self.assertIn("MATERIAL_WORKER_REQUIRE_SIGNED_TAG", source)
+        self.assertIn("git verify-tag", source)
+        self.assertIn("refs/tags/", source)
+        self.assertIn("git merge --ff-only", source)
+        self.assertNotIn("git pull --ff-only origin main", source)
+        self.assertNotIn("git fetch origin main", source)
         self.assertIn("working tree is dirty", source)
-        self.assertIn("Already up to date", source)
+        self.assertIn("Already on approved release", source)
         self.assertNotIn("reset --hard", source)
         self.assertNotIn("git stash", source.lower())
         self.assertNotIn("set-url", source)
@@ -62,6 +66,12 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         runner.assert_called_once()
         self.assertTrue(controller.update_available)
         self.assertIn("lastUpdateCheckAt", state.read_text(encoding="utf-8"))
+
+    def test_auto_update_is_disabled_until_explicitly_enabled(self):
+        with patch.dict(os.environ, {}, clear=True):
+            controller = material_worker.AutoUpdateController(root=self.temp.name, runner=Mock())
+        self.assertFalse(controller.enabled)
+        self.assertFalse(controller.due())
 
     def test_processing_job_never_invokes_auto_update(self):
         api = Mock()
@@ -131,7 +141,9 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         self.assertIn(".local-worker.env", ROOT.joinpath(".gitignore").read_text(encoding="utf-8"))
         render = ROOT.joinpath("render.yaml").read_text(encoding="utf-8")
         self.assertIn("MATERIAL_WORKER_ENABLED", render)
-        self.assertNotIn("type: worker", render)
+        self.assertNotIn("biochemical-training-material-worker", render)
+        self.assertIn("biochemical-training-ai-worker", render)
+        self.assertIn("python -u ai_question_worker.py", render)
 
 
 if __name__ == "__main__":

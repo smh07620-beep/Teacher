@@ -37,7 +37,8 @@ class SystemWorkspaceSimplification75Tests(unittest.TestCase):
         shell = self.source("static/workspace-shell-70.js")
         self.assertIn("system-advanced-maintenance-75", shell)
         self.assertIn("if(!isSystemAdmin)return", shell)
-        self.assertIn("admin-material-jobs-panel", shell)
+        self.assertNotIn("admin-material-jobs-panel", shell)
+        self.assertNotIn("data-system75-jobs", shell)
         self.assertIn("migrateMaterialsToMega", shell)
         self.assertIn("migrateLocalMaterialsToR2", shell)
 

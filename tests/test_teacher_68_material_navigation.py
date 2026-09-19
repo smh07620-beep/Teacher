@@ -101,8 +101,8 @@ class MaterialReadAccess68Tests(unittest.TestCase):
             data={"group": "grpBio", "area": "internal"},
             headers={"Origin": "http://localhost"},
         )
-        self.assertEqual(upload.status_code, 400, upload.get_data(as_text=True))
-        self.assertEqual(upload.get_json().get("error"), "未收到檔案")
+        self.assertEqual(upload.status_code, 409, upload.get_data(as_text=True))
+        self.assertTrue(upload.get_json().get("directUploadRequired"))
         self.assertFalse(upload.get_json().get("elevationRequired", False))
 
     def test_group_leader_can_upload_only_to_own_group(self):
@@ -112,8 +112,8 @@ class MaterialReadAccess68Tests(unittest.TestCase):
             data={"group": "grpHema", "area": "internal"},
             headers={"Origin": "http://localhost"},
         )
-        self.assertEqual(own.status_code, 400, own.get_data(as_text=True))
-        self.assertEqual(own.get_json().get("error"), "未收到檔案")
+        self.assertEqual(own.status_code, 409, own.get_data(as_text=True))
+        self.assertTrue(own.get_json().get("directUploadRequired"))
 
         other = self.client.post(
             "/api/slides/upload",
@@ -130,7 +130,8 @@ class MaterialReadAccess68Tests(unittest.TestCase):
             data={"group": "grpHema", "area": "internal"},
             headers={"Origin": "http://localhost"},
         )
-        self.assertEqual(own.status_code, 400, own.get_data(as_text=True))
+        self.assertEqual(own.status_code, 409, own.get_data(as_text=True))
+        self.assertTrue(own.get_json().get("directUploadRequired"))
         other = self.client.post(
             "/api/slides/upload",
             data={"group": "grpBio", "area": "internal"},
@@ -285,11 +286,11 @@ class MaterialNavigationFrontend68Tests(unittest.TestCase):
     def test_system_navigation_opens_materials_not_admin_workspace(self):
         html = self.source("static/system.html")
         core = self.source("static/system-core.js")
-        self.assertIn('onclick="openTeachingMaterials()"', html)
-        self.assertNotIn("onclick=\"openAdminWorkspace('course-materials')\"", html)
+        self.assertIn('data-csp-click="openTeachingMaterials()"', html)
+        self.assertNotIn("data-csp-click=\"openAdminWorkspace('course-materials')\"", html)
         self.assertIn("function openTeachingMaterials()", core)
         self.assertIn("switchLearningModule('materials')", core)
-        self.assertIn('onclick="toggleAdminModal(true)"', html)
+        self.assertIn('data-csp-click="toggleAdminModal(true)"', html)
 
     def test_portal_navigation_has_no_dead_public_management_handler(self):
         portal = self.source("static/portal-v56.js")

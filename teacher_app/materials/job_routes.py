@@ -15,14 +15,11 @@ from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.common import scope
 from teacher_app.config import max_upload_mb
 from teacher_app.materials.job_runtime import MaterialJobRuntime, from_compat_owner
+from teacher_app.materials.validation import ALLOWED_MATERIAL_EXTENSIONS, normalize_material_filename
 from teacher_app.worker import repository as worker_repository
 
 
-ALLOWED_EXT = frozenset({
-    ".pptx", ".ppt", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".odp", ".odt", ".ods",
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4", ".webm", ".mov", ".m4v",
-    ".mp3", ".wav", ".m4a", ".ogg", ".txt", ".csv", ".srt", ".vtt", ".zip",
-})
+ALLOWED_EXT = ALLOWED_MATERIAL_EXTENSIONS
 
 
 def _utc_now_iso() -> str:
@@ -137,15 +134,20 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
         denied = _guard(app)
         if denied:
             return denied
+        if not _runtime_bool(runtime.web_byte_upload_enabled):
+            return jsonify({
+                "error": "Web 檔案接收相容路徑已關閉；請使用 Browser → R2 直傳。",
+                "directUploadRequired": True,
+            }), 409
         if not _runtime_bool(runtime.background_enabled):
             return jsonify({"error": "背景教材佇列未啟用，請改用同步上傳端點。"}), 409
         if "file" not in request.files:
             return jsonify({"error": "未收到檔案"}), 400
         upload = request.files["file"]
-        original_name = Path(upload.filename or "untitled").name
-        ext = Path(original_name).suffix.lower()
-        if ext not in ALLOWED_EXT:
-            return jsonify({"error": "不支援此檔案格式。可上傳簡報、PDF、Office 文件、圖片、影音、文字與 ZIP。"}), 400
+        try:
+            original_name, ext = normalize_material_filename(upload.filename or "untitled")
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
 
         job_id = f"matjob-{uuid.uuid4().hex[:16]}"
         material_id = "upload-" + hashlib.sha256(job_id.encode("utf-8")).hexdigest()[:12]

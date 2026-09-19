@@ -13,10 +13,15 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertNotIn('X-Admin-Key', source)
         self.assertNotIn('getAdminKey', source)
 
-    def test_shared_transport_uses_background_jobs_and_session_cookies(self):
+    def test_shared_transport_prefers_r2_direct_upload_and_keeps_guarded_compat_fallback(self):
         source = ROOT.joinpath('static', 'material-upload-client.js').read_text(encoding='utf-8')
+        self.assertIn("/api/material-upload/init", source)
+        self.assertIn("hashStrategy:'sha256-parts-v1'", source)
+        self.assertIn('CONCURRENCY=3', source)
+        self.assertIn("headers.delete('X-Admin-Key')", source)
+        self.assertIn('directUpload(formData,options)', source)
         self.assertIn("/api/material-jobs/upload", source)
-        self.assertIn('xhr.withCredentials=true', source)
+        self.assertIn('allowLegacyWebFallback', source)
         self.assertIn('onProgress', source)
         self.assertIn('response.status', ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8'))
 

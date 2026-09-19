@@ -20,12 +20,12 @@ class Phase3PAdminExternalMediaTests(unittest.TestCase):
         for element_id in ("external-material-drawer", "external-material-id", "external-material-url", "external-material-preview"):
             self.assertIn(element_id, self.source)
 
-    def test_external_media_api_and_admin_key_contract_stay_intact(self):
-        self.assertIn("/api/materials/${encodeURIComponent(id)}/external-media", self.source)
-        self.assertIn("method: 'PUT'", self.source)
-        self.assertIn("'X-Admin-Key':key", self.source)
+    def test_external_media_admin_adapter_delegates_to_canonical_session_client(self):
+        self.assertIn("window.ExternalMediaClient", self.source)
+        self.assertIn("client.link(id, url)", self.source)
         self.assertIn("window.fetchAdminMaterials", self.source)
-        self.assertIn("window.getAdminKey", self.source)
+        self.assertNotIn("X-Admin-Key", self.source)
+        self.assertNotIn("getAdminKey", self.source)
 
     def test_module_does_not_redefine_rbac_or_profile_metadata_as_policy(self):
         for forbidden in (

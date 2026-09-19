@@ -15,13 +15,15 @@ class Phase3AdminAiQuestionsTests(unittest.TestCase):
         source = ROOT.joinpath('static/admin-ai-questions.js').read_text(encoding='utf-8')
         for name in ('loadAiMaterialOptions', 'toggleAiMaterialSelection', 'filterAiMaterials', 'recommendAiMaterials', 'adminGenerateAiQuestions', 'pollAiProgress', 'renderAiQuestionCandidates', 'collectAiCandidate', 'adminImportAiCandidates'):
             self.assertIn(f'window.{name}', source)
-        for endpoint in ('/api/slides?area=', '/api/ai-questions/generate', '/api/slides/upload-progress/', '/api/ai-questions/import'):
+        for endpoint in ('/api/slides?area=', '/api/ai-questions/generate', '/api/ai-questions/jobs/', '/api/ai-questions/import'):
             self.assertIn(endpoint, source)
 
     def test_ai_module_keeps_authorization_at_server_boundary(self):
         source = ROOT.joinpath('static/admin-ai-questions.js').read_text(encoding='utf-8')
-        self.assertIn('getAdminKey', source)
-        self.assertIn('X-Admin-Key', source)
+        self.assertNotIn('getAdminKey', source)
+        self.assertNotIn('X-Admin-Key', source)
+        self.assertNotIn('/api/slides/upload-progress/', source)
+        self.assertIn('待審核題庫', source)
         self.assertNotIn('professional_title', source)
         self.assertNotIn('responsibility_tags', source)
         self.assertNotIn('role ===', source)

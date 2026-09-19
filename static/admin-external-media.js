@@ -8,11 +8,6 @@
   }
 
   window.openExternalMaterialLinkDrawer = async function(){
-    const getKey = window.getAdminKey;
-    if (typeof getKey !== 'function') return;
-    const key = await getKey();
-    if (!key) return;
-
     const drawer = document.getElementById('external-material-drawer');
     const select = document.getElementById('external-material-id');
     drawer?.classList.remove('hidden');
@@ -37,26 +32,17 @@
   };
 
   window.saveExternalMaterialLinkToExisting = async function(){
-    const getKey = window.getAdminKey;
-    if (typeof getKey !== 'function') return;
-    const key = await getKey();
     const id = document.getElementById('external-material-id')?.value;
     const url = document.getElementById('external-material-url')?.value.trim();
     const preview = document.getElementById('external-material-preview');
-    if (!key || !id || !url) return;
-
-    const response = await fetch(`/api/materials/${encodeURIComponent(id)}/external-media`, {
-      method: 'PUT',
-      headers: {'Content-Type':'application/json','X-Admin-Key':key},
-      body: JSON.stringify({url}),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      if (preview) preview.textContent = '❌ ' + (data.error || '網址驗證失敗');
-      return;
-    }
-    if (preview) {
-      preview.textContent = `✅ ${data.provider} · ${data.canonicalUrl}${data.videoId ? ' · ' + data.videoId : ''}`;
+    if (!id || !url) return;
+    try {
+      const client = window.ExternalMediaClient;
+      if (!client?.link) throw new Error('外部影音模組尚未載入');
+      const data = await client.link(id, url);
+      if (preview) preview.textContent = `✅ ${data.provider} · ${data.canonicalUrl}${data.videoId ? ' · ' + data.videoId : ''}`;
+    } catch (error) {
+      if (preview) preview.textContent = '❌ ' + (error.message || '網址驗證失敗');
     }
   };
 })();

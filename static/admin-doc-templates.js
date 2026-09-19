@@ -20,8 +20,8 @@
               : '<span class="text-xs text-slate-400 ml-2">尚未上傳範本</span>'}
           </div>
           <div class="flex gap-2 shrink-0">
-            <button onclick="adminTriggerDocTemplateUpload('${group.group}')" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg">⬆️ ${group.exists ? '重新上傳' : '上傳範本'}</button>
-            ${group.exists ? `<a href="/api/doc-templates/${group.group}/download" target="_blank" class="text-xs bg-white border border-amber-300 hover:bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg">⬇️ 下載目前範本</a><button onclick="adminDeleteDocTemplate('${group.group}')" class="text-[11px] bg-white border border-slate-200 hover:border-rose-200 text-slate-500 hover:text-rose-700 px-2.5 py-1.5 rounded-lg">更多：刪除</button>` : ''}
+            <button data-csp-click="adminTriggerDocTemplateUpload('${group.group}')" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg">⬆️ ${group.exists ? '重新上傳' : '上傳範本'}</button>
+            ${group.exists ? `<a href="/api/doc-templates/${group.group}/download" target="_blank" class="text-xs bg-white border border-amber-300 hover:bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg">⬇️ 下載目前範本</a><button data-csp-click="adminDeleteDocTemplate('${group.group}')" class="text-[11px] bg-white border border-slate-200 hover:border-rose-200 text-slate-500 hover:text-rose-700 px-2.5 py-1.5 rounded-lg">更多：刪除</button>` : ''}
           </div>
         </div>`).join('');
     } catch (error) {

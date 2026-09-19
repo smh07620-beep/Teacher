@@ -55,9 +55,12 @@ class DeploymentConfigTests(unittest.TestCase):
 
         self.assertIn("runtime: docker", render)
         self.assertIn("numInstances: 1", render)
-        self.assertIn("healthCheckPath: /health", render)
+        self.assertIn("healthCheckPath: /ready", render)
         self.assertEqual(render.count("- type: web"), 1)
-        self.assertNotIn("- type: worker", render)
+        self.assertEqual(render.count("- type: worker"), 1)
+        self.assertIn("name: biochemical-training-ai-worker", render)
+        self.assertIn("dockerCommand: python -u ai_question_worker.py", render)
+        self.assertIn("plan: 0.5c-512mb", render)
         self.assertIn("--workers ${WEB_CONCURRENCY:-1}", run_web)
         self.assertIn("pgy_app:app", run_web)
 

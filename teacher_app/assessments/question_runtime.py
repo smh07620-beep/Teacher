@@ -155,11 +155,12 @@ def build_canonical_question_runtime(
     progress_store = UploadProgressStore(paths_provider())
 
     def generate(materials, **kwargs):
+        progress_callback = kwargs.pop("progress_callback", progress_store.set)
         return ai_runtime.generate_ai_questions_from_materials(
             materials,
             settings=settings,
             paths_provider=paths_provider,
-            progress_callback=progress_store.set,
+            progress_callback=progress_callback,
             **kwargs,
         )
 

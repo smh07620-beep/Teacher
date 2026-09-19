@@ -40,11 +40,13 @@
   function mount() {
     let section = document.getElementById(ID);
     if (section) return section;
+    const statusHost = document.getElementById('learning-status-detail-71');
     const header = document.querySelector('#course-overview > .edu-card');
-    if (!header) return null;
+    const host = statusHost || header;
+    if (!host) return null;
     section = document.createElement('div');
     section.id = ID;
-    section.className = 'mt-4 pt-4 border-t border-slate-100';
+    section.className = 'pt-3 border-t border-slate-100';
     section.innerHTML = `
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <div><b class="text-xs text-slate-800">📊 學習摘要</b><span id="learning-analytics-status-71" class="ml-2 text-[10px] text-slate-400">讀取中…</span></div>
@@ -56,7 +58,7 @@
         <div id="learning-analytics-table-71" class="mt-3 overflow-x-auto"></div>
         <div id="learning-analytics-timeline-71" class="mt-3"></div>
       </details>`;
-    header.appendChild(section);
+    host.appendChild(section);
     section.querySelector('#learning-analytics-refresh-71').addEventListener('click', () => load(true));
     return section;
   }

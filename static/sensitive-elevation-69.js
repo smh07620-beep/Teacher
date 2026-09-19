@@ -3,7 +3,7 @@
  * Normal teacher requests stay session-RBAC only.  This bridge watches for the
  * server's 428 elevationRequired contract, asks for the break-glass credential
  * once, and retries the original same-origin request.  Legacy fake
- * X-Admin-Key: rbac-session headers are stripped before they reach the server.
+ * Legacy X-Admin-Key headers are stripped before they reach the server.
  */
 (function(){
   'use strict';
@@ -25,7 +25,10 @@
     const options = {...init};
     if(!sameOrigin(input)) return options;
     const headers = new Headers(options.headers || (input instanceof Request ? input.headers : undefined));
-    if(headers.get('X-Admin-Key') === 'rbac-session') headers.delete('X-Admin-Key');
+    // Browser administration is session-RBAC only.  Old modules may still add
+    // an X-Admin-Key header while they are being migrated, but the canonical
+    // request pipeline never sends that compatibility credential from the UI.
+    if(headers.has('X-Admin-Key')) headers.delete('X-Admin-Key');
     options.headers = headers;
     if(options.credentials == null) options.credentials = 'same-origin';
     return options;

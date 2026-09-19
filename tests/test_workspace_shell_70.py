@@ -65,6 +65,8 @@ class WorkspaceShell70Tests(unittest.TestCase):
             self.source.index("const adminShell = window.AdminWorkspaceShell")
         ]
         self.assertNotIn("method:", audit_block)
+        self.assertNotIn("security-status-70", audit_block)
+        self.assertNotIn("/api/security/status", audit_block)
 
     def test_auditor_entry_does_not_unlock_teacher_panels(self):
         self.assertIn("navHost.replaceChildren(navGroup('稽核／唯讀'", self.source)

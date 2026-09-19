@@ -83,12 +83,46 @@ def health_state(connection_factory: Callable | None = None):
     return payload, 200 if healthy else 503
 
 
+def live_state():
+    """Return a dependency-free process liveness response.
+
+    Liveness deliberately avoids the database and external providers so an
+    orchestrator does not restart a healthy Web process during a transient
+    dependency outage.
+    """
+    return {
+        "ok": True,
+        "status": "live",
+        "version": app_version(),
+        "deployment": deployment_identity(),
+    }, 200
+
+
+def ready_state(connection_factory: Callable | None = None):
+    """Return readiness including required production configuration."""
+    payload, _status = health_state(connection_factory)
+    ready = bool(payload.get("ok") and payload.get("configuration", {}).get("ok"))
+    return {
+        **payload,
+        "ok": ready,
+        "status": "ready" if ready else "not_ready",
+    }, 200 if ready else 503
+
+
 def register_health(app, *, connection_factory: Callable | None = None):
     if app.extensions.get("teacher_health_65_registered"):
         return app
 
     def teacher_health():
         payload, status = health_state(connection_factory)
+        return jsonify(payload), status
+
+    def teacher_live():
+        payload, status = live_state()
+        return jsonify(payload), status
+
+    def teacher_ready():
+        payload, status = ready_state(connection_factory)
         return jsonify(payload), status
 
     existing = [
@@ -109,8 +143,17 @@ def register_health(app, *, connection_factory: Callable | None = None):
             view_func=teacher_health,
             methods=["GET"],
         )
+    app.add_url_rule("/live", endpoint="live", view_func=teacher_live, methods=["GET"])
+    app.add_url_rule("/ready", endpoint="ready", view_func=teacher_ready, methods=["GET"])
     app.extensions["teacher_health_65_registered"] = True
     return app
 
 
-__all__ = ["app_version", "deployment_identity", "health_state", "register_health"]
+__all__ = [
+    "app_version",
+    "deployment_identity",
+    "health_state",
+    "live_state",
+    "ready_state",
+    "register_health",
+]

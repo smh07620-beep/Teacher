@@ -1,5 +1,6 @@
 """Thin HTTP compatibility adapter for synchronous material upload."""
 from __future__ import annotations
+import os
 
 from flask import jsonify, request
 
@@ -35,6 +36,13 @@ def register_sync_upload_routes(
             r2_record_deleted=r2_record_deleted,
         )
 
+    # Explicit runtime injection is reserved for compatibility tests/local
+    # tooling. Production composition must opt in to the old Web-byte path.
+    compatibility_runtime = runtime is not None and paths is None and paths_provider is None
+    sync_enabled = compatibility_runtime or os.environ.get(
+        "MATERIAL_SYNC_UPLOAD_ENABLED", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
     def require_admin():
         # Isolated compatibility fixtures historically install only a local
         # require_admin function. Production has canonical request/RBAC binding.
@@ -48,6 +56,11 @@ def register_sync_upload_routes(
         denied = require_admin()
         if denied:
             return denied
+        if not sync_enabled:
+            return jsonify({
+                "error": "同步 Web 轉檔相容路徑已關閉；請使用 Browser → R2 背景處理。",
+                "directUploadRequired": True,
+            }), 409
         if "file" not in request.files:
             return jsonify({"error": "未收到檔案"}), 400
         try:

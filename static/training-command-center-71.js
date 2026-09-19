@@ -77,22 +77,21 @@
     if (!course) return null;
     section = document.createElement('details');
     section.id = ID;
-    section.className = 'rounded-2xl border border-indigo-100 bg-indigo-50/30 px-4 py-3';
+    section.className = 'rounded-2xl border border-indigo-100 bg-white px-4 py-3 shadow-sm';
     section.innerHTML = `
       <summary class="cursor-pointer list-none flex items-center justify-between gap-3">
-        <span class="flex items-center gap-2 min-w-0"><b class="text-sm text-slate-900">📌 我的待辦</b><span id="training-command-summary-71" class="text-[11px] text-slate-500 truncate">讀取中…</span></span>
+        <span class="flex items-center gap-2 min-w-0"><b class="text-sm text-slate-900">📊 學習狀態</b><span id="training-command-summary-71" class="text-[11px] text-slate-500 truncate">讀取中…</span></span>
         <span class="text-[11px] font-bold text-indigo-700">展開 ▾</span>
       </summary>
-      <div id="training-command-status-71" class="text-xs text-slate-500 mt-3">讀取待辦中…</div>
-      <div id="training-command-stats-71" class="hidden grid grid-cols-3 gap-2 mt-3"></div>
-      <div id="training-command-list-71" class="space-y-2 mt-3"></div>`;
+      <div id="learning-status-detail-71" class="mt-3 space-y-4 border-t border-slate-100 pt-3">
+        <section id="training-command-tasks-71">
+          <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-800">📌 我的待辦</b><span id="training-command-status-71" class="text-[10px] text-slate-400">讀取中…</span></div>
+          <div id="training-command-list-71" class="space-y-2 mt-2"></div>
+        </section>
+      </div>`;
     const header = course.querySelector(':scope > .edu-card');
     if (header) header.after(section); else course.prepend(section);
     return section;
-  }
-
-  function chip(label, value) {
-    return `<div class="rounded-xl border border-slate-200 bg-white px-3 py-2"><div class="text-[9px] text-slate-400">${escapeHtml(label)}</div><div class="text-sm font-black text-slate-800 mt-0.5">${escapeHtml(value)}</div></div>`;
   }
 
   function openPGY() {
@@ -103,27 +102,14 @@
   function render(profile, command, dashboard) {
     const status = document.getElementById('training-command-status-71');
     const summaryLine = document.getElementById('training-command-summary-71');
-    const stats = document.getElementById('training-command-stats-71');
     const list = document.getElementById('training-command-list-71');
-    if (!status || !summaryLine || !stats || !list) return;
+    if (!status || !summaryLine || !list) return;
 
     const pending = Array.isArray(dashboard?.pendingExams) ? dashboard.pendingExams : [];
     const pgyItems = profile?.pgyLearner && Array.isArray(command?.items) ? command.items : [];
     const total = pending.length + pgyItems.length;
     summaryLine.textContent = total ? `${total} 項需要處理` : '目前沒有待辦';
-    status.textContent = profile?.pgyLearner
-      ? 'PGY 學員會同時看到線上課程／考核與自己的 PGY 學員待辦。'
-      : '一般／線上人員只顯示課程、教材與考核相關待辦。';
-
-    stats.classList.remove('hidden');
-    const statRows = [
-      chip('待完成考核', String(pending.length)),
-      chip('進行中課程', String(Number(dashboard?.activeCourses || 0))),
-      profile?.pgyLearner
-        ? chip('PGY 待辦', String(pgyItems.length))
-        : chip('教材完成', `${Number(dashboard?.materialsCompleted || 0)}/${Number(dashboard?.materialsTotal || 0)}`)
-    ];
-    stats.innerHTML = statRows.join('');
+    status.textContent = profile?.pgyLearner ? 'PGY 學員：線上考核＋PGY' : '一般／線上人員：課程／考核';
 
     const rows = [];
     pending.slice(0, 4).forEach(exam => rows.push(`

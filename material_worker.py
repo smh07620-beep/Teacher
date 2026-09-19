@@ -4,12 +4,14 @@ import datetime as dt
 import hashlib, json, os, re, socket, subprocess, sys, tempfile, time
 from pathlib import Path
 import requests
+from PIL import Image, ImageOps, ImageSequence
 from teacher_app.materials.validation import (
-    ALLOWED_MATERIAL_EXTENSIONS,
     ZIP_EXT,
     magic_ok,
-    validate_zip_bytes,
+    normalize_material_filename,
+    validate_zip_source,
 )
+from teacher_app.materials import classification
 from teacher_app.storage.worker_runtime import OFFICE_EXT, WorkerMaterialStorageAdapter
 
 BASE_URL=os.environ.get("TEACHER_BASE_URL", "").rstrip("/")
@@ -17,8 +19,8 @@ TOKEN=os.environ.get("MATERIAL_WORKER_TOKEN", "")
 WORKER_ID=os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{socket.gethostname()}:{os.getpid()}"
 POLL_SECONDS=max(2,min(60,int(os.environ.get("MATERIAL_WORKER_POLL_SECONDS","5"))))
 REQUEST_TIMEOUT=max(10,min(600,int(os.environ.get("MATERIAL_WORKER_HTTP_TIMEOUT","120"))))
-ALLOWED_EXT=ALLOWED_MATERIAL_EXTENSIONS
 VIDEO_EXT={".mp4",".webm",".mov",".m4v"}; AUDIO_EXT={".mp3",".wav",".m4a",".ogg"}
+EXIF_RASTER_EXT={".jpg",".jpeg",".png",".webp"}
 RESTART_FOR_UPDATE=75
 ROOT=Path(__file__).resolve().parent
 STORAGE=WorkerMaterialStorageAdapter()
@@ -48,7 +50,7 @@ class AutoUpdateController:
     """Run the fixed local updater only between jobs; never hot-reload Python."""
     def __init__(self, root=ROOT, runner=None, now=None):
         self.root=Path(root); self.runner=runner or self._run_updater; self.now=now or _utc_now
-        self.enabled=_env_true("MATERIAL_WORKER_AUTO_UPDATE", True)
+        self.enabled=_env_true("MATERIAL_WORKER_AUTO_UPDATE", False)
         try: requested=float(os.environ.get("MATERIAL_WORKER_UPDATE_INTERVAL_HOURS","6"))
         except ValueError: requested=6
         self.interval_seconds=max(1.0, requested)*3600
@@ -147,16 +149,75 @@ def _sha256(path):
     with Path(path).open("rb") as fh:
         for chunk in iter(lambda:fh.read(1024*1024),b""):digest.update(chunk)
     return digest.hexdigest()
+
+def _validate_part_sha256(path, job):
+    payload=job.get("payload") if isinstance(job.get("payload"),dict) else {}
+    hashes=payload.get("sourcePartSha256") if isinstance(payload,dict) else None
+    try:part_size=int(payload.get("sourcePartSize",0) or 0)
+    except (TypeError,ValueError):part_size=0
+    if not isinstance(hashes,list) or not hashes or part_size<=0:
+        raise RuntimeError("Worker 工作缺少檔案完整性驗證資料。")
+    expected=[str(value or "").lower() for value in hashes]
+    if any(not re.fullmatch(r"[a-f0-9]{64}",value) for value in expected):
+        raise RuntimeError("Worker 工作的分段 SHA256 格式錯誤。")
+    actual=[]
+    with Path(path).open("rb") as fh:
+        while True:
+            chunk=fh.read(part_size)
+            if not chunk:break
+            actual.append(hashlib.sha256(chunk).hexdigest())
+    if actual!=expected:raise RuntimeError("Worker 下載檔案分段 SHA256 不符。")
+
 def validate_download(source,job):
-    original=Path(str(job.get("originalName") or "")).name; ext=Path(original).suffix.lower(); source=Path(source)
-    if ext not in ALLOWED_EXT:raise RuntimeError("Worker 收到不支援的副檔名。")
+    try:original,ext=normalize_material_filename(job.get("originalName") or "")
+    except ValueError as exc:raise RuntimeError(f"Worker 收到不安全的檔名：{exc}") from exc
     if not source.is_file() or source.stat().st_size<=0:raise RuntimeError("Worker 下載到空白檔案。")
     if source.stat().st_size!=int(job.get("sourceBytes",0) or 0):raise RuntimeError("Worker 下載檔案大小不符。")
-    if _sha256(source)!=str(job.get("sourceSha256") or "").lower():raise RuntimeError("Worker 下載檔案 SHA256 不符。")
+    expected_sha=str(job.get("sourceSha256") or "").lower()
+    if expected_sha:
+        if _sha256(source)!=expected_sha:raise RuntimeError("Worker 下載檔案 SHA256 不符。")
+    else:
+        _validate_part_sha256(source,job)
     with source.open("rb") as fh:head=fh.read(8192)
     if not magic_ok(ext,head):raise RuntimeError("Worker 檔案內容與副檔名不符。")
-    if ext in ZIP_EXT:validate_zip_bytes(source.read_bytes(),ext)
+    if ext in ZIP_EXT:validate_zip_source(source,ext)
     return original
+
+def _sanitize_raster_image_in_place(source,ext):
+    """Re-encode EXIF-capable raster uploads so stored sources carry no metadata."""
+    ext=str(ext or "").lower(); source=Path(source)
+    if ext not in EXIF_RASTER_EXT:return False
+    output=source.with_name(source.stem+".sanitized"+ext)
+    try:
+        with Image.open(source) as opened:
+            frame_count=max(1,int(getattr(opened,"n_frames",1) or 1))
+            if frame_count>1 and ext==".webp":
+                frames=[]; durations=[]
+                for frame in ImageSequence.Iterator(opened):
+                    clean=ImageOps.exif_transpose(frame.copy())
+                    frames.append(clean)
+                    durations.append(int(frame.info.get("duration",opened.info.get("duration",0)) or 0))
+                frames[0].save(output,format="WEBP",save_all=True,append_images=frames[1:],duration=durations,loop=int(opened.info.get("loop",0) or 0),lossless=True,method=6)
+                for frame in frames:frame.close()
+            else:
+                clean=ImageOps.exif_transpose(opened)
+                if ext in {".jpg",".jpeg"}:
+                    if clean.mode not in {"RGB","L"}:clean=clean.convert("RGB")
+                    clean.save(output,format="JPEG",quality=95,optimize=True)
+                elif ext==".png":
+                    clean.save(output,format="PNG",optimize=True)
+                else:
+                    clean.save(output,format="WEBP",lossless=True,method=6)
+        if not output.is_file() or output.stat().st_size<=0:
+            raise RuntimeError("影像重新編碼未產生有效檔案。")
+        with output.open("rb") as fh:head=fh.read(8192)
+        if not magic_ok(ext,head):raise RuntimeError("影像重新編碼後格式驗證失敗。")
+        os.replace(output,source)
+        return True
+    except Exception as exc:
+        output.unlink(missing_ok=True)
+        if isinstance(exc,RuntimeError):raise
+        raise RuntimeError(f"影像安全重新編碼失敗：{exc}") from exc
 def download(url,target,headers=None):
     if not str(url).startswith("https://"):raise RuntimeError("Worker download URL 必須是 HTTPS。")
     with requests.get(url,stream=True,headers=headers or {},timeout=REQUEST_TIMEOUT) as response:
@@ -165,39 +226,139 @@ def download(url,target,headers=None):
             for chunk in response.iter_content(1024*1024):
                 if chunk:fh.write(chunk)
 
+def _probe_media(source):
+    ffprobe=_bin("FFPROBE_PATH","ffprobe")
+    if not ffprobe:raise RuntimeError("FFprobe unavailable")
+    try:
+        completed=subprocess.run([
+            ffprobe,"-v","error","-show_entries",
+            "format=duration,bit_rate:stream=codec_type,codec_name,width,height",
+            "-of","json",str(source)
+        ],capture_output=True,text=True,timeout=30,check=False)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("FFprobe timed out") from exc
+    if completed.returncode!=0:
+        raise RuntimeError(f"FFprobe failed: {(completed.stderr or '')[-300:]}")
+    try:data=json.loads(completed.stdout or "{}")
+    except Exception as exc:raise RuntimeError("FFprobe returned invalid metadata") from exc
+    fmt=data.get("format") or {}; streams=data.get("streams") or []
+    video=next((item for item in streams if item.get("codec_type")=="video"),{})
+    audio=next((item for item in streams if item.get("codec_type")=="audio"),{})
+    try:duration=max(0.0,float(fmt.get("duration") or 0))
+    except (TypeError,ValueError):duration=0.0
+    try:bitrate=max(0,int(fmt.get("bit_rate") or 0))
+    except (TypeError,ValueError):bitrate=0
+    width=int(video.get("width") or 0); height=int(video.get("height") or 0)
+    max_duration=max(60,int(os.environ.get("MATERIAL_MEDIA_MAX_DURATION_SECONDS","14400") or 14400))
+    max_width=max(320,int(os.environ.get("MATERIAL_MEDIA_MAX_WIDTH","4096") or 4096))
+    max_height=max(240,int(os.environ.get("MATERIAL_MEDIA_MAX_HEIGHT","2160") or 2160))
+    if duration>max_duration:raise RuntimeError(f"影音長度超過限制（{max_duration} 秒）")
+    if width>max_width or height>max_height:raise RuntimeError(f"影片解析度超過限制（{max_width}x{max_height}）")
+    return {
+        "durationSeconds":round(duration,3),"width":width,"height":height,
+        "bitrate":bitrate,"videoCodec":str(video.get("codec_name") or ""),
+        "audioCodec":str(audio.get("codec_name") or ""),
+    }
+
 def _transcode_if_needed(source,original,temp):
     ext=Path(original).suffix.lower(); ffmpeg=_bin("FFMPEG_PATH","ffmpeg")
-    if ext not in VIDEO_EXT|AUDIO_EXT:return source,original,{}
+    if ext not in VIDEO_EXT|AUDIO_EXT:return source,original,{},{}
     if not ffmpeg:raise RuntimeError("FFmpeg unavailable")
+    metadata=_probe_media(source)
+    timeout=max(60,min(3600,int(os.environ.get("MATERIAL_FFMPEG_TIMEOUT_SECONDS","1800"))))
+    derivatives={}
     if ext in VIDEO_EXT:
-        output=Path(temp)/"web.mp4"; command=[ffmpeg,"-y","-i",str(source),"-c:v","libx264","-preset","medium","-movflags","+faststart","-c:a","aac","-b:a","160k",str(output)]; name=Path(original).with_suffix(".mp4").name
+        output=Path(temp)/"web.mp4"
+        command=[
+            ffmpeg,"-y","-i",str(source),
+            "-vf","scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+            "-c:v","libx264","-preset","veryfast","-crf","23",
+            "-movflags","+faststart","-c:a","aac","-b:a","128k",str(output),
+        ]
+        name=Path(original).with_suffix(".mp4").name
     else:
-        output=Path(temp)/"web.m4a"; command=[ffmpeg,"-y","-i",str(source),"-c:a","aac","-b:a","160k",str(output)]; name=Path(original).with_suffix(".m4a").name
-    try:completed=subprocess.run(command,capture_output=True,text=True,timeout=max(60,min(3600,int(os.environ.get("MATERIAL_FFMPEG_TIMEOUT_SECONDS","1800")))),check=False)
+        output=Path(temp)/"web.m4a"; command=[ffmpeg,"-y","-i",str(source),"-c:a","aac","-b:a","128k",str(output)]; name=Path(original).with_suffix(".m4a").name
+    try:completed=subprocess.run(command,capture_output=True,text=True,timeout=timeout,check=False)
     except subprocess.TimeoutExpired:raise RuntimeError("FFmpeg conversion timed out")
     if completed.returncode!=0 or not output.is_file() or output.stat().st_size<=0:raise RuntimeError(f"FFmpeg conversion failed: {(completed.stderr or '')[-300:]}")
-    return output,name,{"transcoded":True,"sourceOriginalName":original}
+    if ext in VIDEO_EXT:
+        poster=Path(temp)/"poster.webp"; audio=Path(temp)/"audio.m4a"
+        stamp=max(0.0,min(30.0,float(metadata.get("durationSeconds") or 0)*0.1))
+        sidecars=(
+            ([ffmpeg,"-y","-ss",str(stamp),"-i",str(output),"-frames:v","1","-vf","scale='min(640,iw)':-2","-c:v","libwebp","-quality","80",str(poster)],poster),
+            ([ffmpeg,"-y","-i",str(output),"-vn","-c:a","aac","-b:a","64k",str(audio)],audio),
+        )
+        for sidecar_cmd,target in sidecars:
+            try:result=subprocess.run(sidecar_cmd,capture_output=True,text=True,timeout=min(timeout,600),check=False)
+            except subprocess.TimeoutExpired:result=None
+            if result is not None and result.returncode==0 and target.is_file() and target.stat().st_size>0:
+                derivatives[target.name]=target
+    metadata.update({
+        "transcoded":True,"sourceOriginalName":original,
+        "normalizedMaxHeight":720,
+        "videoCrf":23 if ext in VIDEO_EXT else None,
+        "videoPreset":"veryfast" if ext in VIDEO_EXT else "",
+    })
+    return output,name,{key:value for key,value in metadata.items() if value is not None},derivatives
+
+def _build_text_index(source,temp):
+    """Build a reusable text sidecar on the Worker for document AI/search."""
+    source=Path(source); ext=source.suffix.lower()
+    if ext not in ({".pdf"}|set(OFFICE_EXT)):
+        return None,{}
+    try:
+        if ext==".pdf":text=classification.extract_pdf_text(source)
+        elif ext==".pptx":text=classification.extract_pptx_text(source)
+        elif ext==".docx":text=classification.extract_docx_text(source)
+        else:
+            converted=classification.convert_office_to_pdf_for_text(source,Path(temp)/"index-convert")
+            text=classification.extract_pdf_text(converted)
+        text=classification.clean_extracted_text(text)
+    except Exception:
+        return None,{"textIndexAvailable":False}
+    if not text:
+        return None,{"textIndexAvailable":False}
+    limit=max(100000,min(10000000,int(os.environ.get("MATERIAL_TEXT_INDEX_MAX_CHARS","5000000") or 5000000)))
+    truncated=len(text)>limit
+    index_path=Path(temp)/"index.txt"
+    index_path.write_text(text[:limit],encoding="utf-8")
+    return index_path,{
+        "textIndexAvailable":True,
+        "textIndexChars":min(len(text),limit),
+        "textIndexTruncated":truncated,
+    }
 
 def publish_to_storage(source,original,job,temp):
     """Publish through the Flask-free canonical worker storage adapter."""
-    material_id=str(job["materialId"]); source,stored_name,media_meta=_transcode_if_needed(source,original,temp)
+    material_id=str(job["materialId"]); source,stored_name,media_meta,derivatives=_transcode_if_needed(source,original,temp)
+    text_index,index_meta=_build_text_index(source,temp)
+    if text_index is not None:derivatives["index.txt"]=text_index
+    media_meta={**media_meta,**index_meta}
     backend=STORAGE.active_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
     single=bool(backend=="mega" and STORAGE.single_preview and (ext==".pdf" or ext in OFFICE_EXT))
     if single:
         pages=STORAGE.build_single_preview_pdf(source,preview)
         if pages<=0 or not preview.is_file() or preview.stat().st_size<=0: raise RuntimeError("Office/PDF preview 產生失敗，不能完成工作。")
-        key,prefix,remote=STORAGE.upload_material_preview_to_mega(material_id,source,preview,pages); meta={"previewMode":"single_pdf","previewFilename":"preview.pdf","slideFormat":"pdf",**(remote or {}),**media_meta}
+        key,prefix,remote=STORAGE.upload_material_preview_to_mega(material_id,source,preview,pages,derivatives); meta={"previewMode":"single_pdf","previewFilename":"preview.pdf","slideFormat":"pdf",**(remote or {}),**media_meta}
     elif ext==".pdf" or ext in OFFICE_EXT:
         pages=STORAGE.convert_pdf_to_images(source,slides) if ext==".pdf" else STORAGE.convert_office_to_images(source,slides)
         if pages<=0: raise RuntimeError("Office/PDF 頁面數為零，不能完成工作。")
-        if backend=="mega":key,prefix,remote=STORAGE.upload_material_tree_to_mega(material_id,source,slides,pages)
-        elif backend=="gdrive":key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name)
+        if backend=="mega":key,prefix,remote=STORAGE.upload_material_tree_to_mega(material_id,source,slides,pages,derivatives)
+        elif backend=="gdrive":key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name,derivatives=derivatives)
         else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
         meta={"slideFormat":STORAGE.slide_format(slides,pages),**(remote or {}),**media_meta}
     elif backend=="mega":
-        key=STORAGE.upload_source_to_mega(material_id,source); prefix=""; meta=media_meta
+        if ext in VIDEO_EXT|AUDIO_EXT:
+            key,prefix,remote=STORAGE.upload_media_bundle_to_mega(material_id,source,derivatives)
+            meta={**(remote or {}),**media_meta}
+        else:
+            key=STORAGE.upload_source_to_mega(material_id,source); prefix=""; meta=media_meta
     elif backend=="gdrive":
-        key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,0,original_name=stored_name); meta={**(remote or {}),**media_meta}
+        if ext in VIDEO_EXT|AUDIO_EXT:
+            key,prefix,remote=STORAGE.upload_media_bundle_to_gdrive(material_id,source,derivatives,original_name=stored_name)
+            meta={**(remote or {}),**media_meta}
+        else:
+            key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,0,original_name=stored_name); meta={**(remote or {}),**media_meta}
     else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
     return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta}
 
@@ -209,6 +370,7 @@ def process_one(api,job):
             # File content is staged as .bin, but processing must see the actual
             # extension so LibreOffice and preview routing are deterministic.
             source=temp/("source"+Path(original).suffix.lower()); staged.replace(source)
+            _sanitize_raster_image_in_place(source,source.suffix.lower())
             api.heartbeat(job_id); result=publish_to_storage(source,original,job,temp); api.post(f"/api/material-worker/{job_id}/complete",{"workerId":WORKER_ID,"result":result})
         log(f"completed {job_id}")
     except Exception as exc:

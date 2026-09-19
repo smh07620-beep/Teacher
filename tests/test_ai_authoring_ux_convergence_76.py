@@ -34,6 +34,12 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         self.assertIn("classList.toggle('hidden',selected.length===0)", editor)
         self.assertNotIn('📝 全選編輯', bank)
 
+    def test_bulk_question_mutations_use_batch_endpoint(self):
+        actions = ROOT.joinpath('static/admin-question-actions.js').read_text(encoding='utf-8')
+        self.assertIn("fetch('/api/quiz-questions/batch'", actions)
+        self.assertIn('window.adminBulkSetQuestionTag = window.adminBulkTagQuestions', actions)
+        self.assertNotIn("for(const id of ids){\n        const r=await fetch(`/api/quiz-questions/${encodeURIComponent(id)}`", actions)
+
 
 if __name__ == '__main__':
     unittest.main()

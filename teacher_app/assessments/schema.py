@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from teacher_app.assessments import ai_job_schema
+
 
 def _columns(conn: Any, kind: str, table: str) -> set[str]:
     if kind == "postgres":
@@ -79,6 +81,7 @@ def init_schema(conn: Any, kind: str) -> None:
             "publication_hash": "publication_hash TEXT NOT NULL DEFAULT ''",
         },
     )
+    ai_job_schema.init_schema(conn, kind)
 
     conn.execute(
         f"""

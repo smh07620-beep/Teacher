@@ -183,6 +183,60 @@ class AIRuntimeSourceTests(unittest.TestCase):
                     paths_provider=lambda: self.paths,
                 )
 
+    def test_worker_media_derivatives_download_without_video_source(self):
+        class FakeMega:
+            def __init__(self, _paths):
+                pass
+
+            def mega_download_file(self, file_id, target):
+                Path(target).write_bytes(("download:" + file_id).encode("utf-8"))
+                return Path(target)
+
+        root, files = ai_runtime.material_derivatives_to_temp(
+            {
+                "id": "video-1",
+                "storageBackend": "mega",
+                "storageMeta": {
+                    "derivedFiles": {
+                        "audio.m4a": "/teacher/video-1/audio.m4a",
+                        "poster.webp": "/teacher/video-1/poster.webp",
+                    }
+                },
+            },
+            paths_provider=lambda: self.paths,
+            web_storage_factory=FakeMega,
+        )
+        self.addCleanup(lambda: __import__("shutil").rmtree(root, ignore_errors=True))
+        self.assertEqual(set(files), {"audio.m4a", "poster.webp"})
+        self.assertEqual(files["audio.m4a"].read_bytes(), b"download:/teacher/video-1/audio.m4a")
+        self.assertFalse((root / "source.mp4").exists())
+
+    def test_worker_text_index_is_preferred_over_source_conversion(self):
+        index_root = self.paths.tmp_dir / "index-fixture"
+        index_root.mkdir(parents=True)
+        index_path = index_root / "index.txt"
+        index_path.write_text("Worker 索引內容 " * 30, encoding="utf-8")
+        entry = {
+            "id": "office-1",
+            "filename": "legacy.xls",
+            "storageBackend": "mega",
+            "storageMeta": {"derivedFiles": {"index.txt": "/teacher/office-1/index.txt"}},
+        }
+        with patch.object(
+            ai_runtime,
+            "material_derivatives_to_temp",
+            return_value=(index_root, {"index.txt": index_path}),
+        ) as derivatives, patch.object(ai_runtime, "material_source_to_temp") as source:
+            text, total = ai_runtime.extract_material_text_for_ai(
+                entry,
+                settings=_settings(source_max_chars=100),
+                paths_provider=lambda: self.paths,
+            )
+        self.assertEqual(len(text), 100)
+        self.assertGreater(total, len(text))
+        derivatives.assert_called_once()
+        source.assert_not_called()
+
     def test_text_extraction_rejects_builtin_short_and_unsupported_sources(self):
         with self.assertRaisesRegex(RuntimeError, "內建舊教材沒有保留原始"):
             ai_runtime.extract_material_text_for_ai({"isBuiltin": True})
@@ -262,6 +316,43 @@ class AIRuntimeSourceTests(unittest.TestCase):
         self.assertIn("[身分證號已遮罩]", prompt)
         previews.assert_not_called()
         self.assertFalse(any(item.get("type") == "image_url" for item in post.call_args.kwargs["json"]["messages"][0]["content"]))
+
+    def test_rag_selects_relevant_chunks_and_persists_review_provenance(self):
+        entry = {"id": "mat-rag", "title": "輸血安全教材", "filename": "lesson.txt"}
+        text = (
+            "一般前言與課程介紹。" * 30
+            + "\n\n[第 8 頁]\n輸血反應發生時必須立即停止輸血並通知醫師與血庫。" * 8
+            + "\n\n附錄與版本紀錄。" * 30
+        )
+        chunks = ai_runtime.build_retrieval_chunks(entry, text, chunk_chars=220, overlap_chars=20)
+        selected = ai_runtime.select_retrieval_chunks(
+            chunks,
+            "輸血反應 停止輸血 血庫",
+            max_chunks=2,
+            max_chars=1200,
+        )
+        self.assertTrue(selected)
+        self.assertTrue(any("停止輸血" in chunk["text"] for chunk in selected))
+        self.assertLess(sum(len(chunk["text"]) for chunk in selected), len(text))
+
+        questions = ai_runtime.attach_question_provenance(
+            [{
+                "questionType": "choice",
+                "question": "輸血反應時第一步為何？",
+                "options": ["停止輸血", "繼續觀察", "加快滴速", "移除紀錄"],
+                "correct": 0,
+                "answerConfig": {},
+                "sourceEvidence": "",
+            }],
+            selected,
+        )
+        question = questions[0]
+        self.assertEqual(question["sourceMaterialId"], "mat-rag")
+        self.assertTrue(question["chunkId"].startswith("mat-rag:chunk-"))
+        review = question["answerConfig"]["reviewSource"]
+        self.assertEqual(review["materialId"], "mat-rag")
+        self.assertEqual(review["section"], question["chunkId"])
+        self.assertTrue(review["reviewHint"])
 
 
 class AIRuntimeGenerationTests(unittest.TestCase):
@@ -360,6 +451,82 @@ class AIRuntimeGenerationTests(unittest.TestCase):
         prompt = post.call_args.kwargs["json"]["messages"][0]["content"][0]["text"]
         self.assertIn("教材文字", prompt)
         self.assertIn("舊題", prompt)
+
+    def test_groq_video_uses_worker_derivatives_without_web_ffmpeg(self):
+        response = _Response({
+            "choices": [{
+                "message": {
+                    "content": json.dumps({
+                        "questions": [{
+                            "questionType": "choice",
+                            "question": "影片題目",
+                            "options": ["A", "B", "C", "D"],
+                            "correct": 0,
+                            "sourceHint": "00:10",
+                        }]
+                    }, ensure_ascii=False)
+                }
+            }]
+        })
+        with tempfile.TemporaryDirectory() as temp_name:
+            root = Path(temp_name)
+            audio = root / "audio.m4a"
+            poster = root / "poster.webp"
+            audio.write_bytes(b"audio")
+            poster.write_bytes(b"poster")
+            with patch.object(
+                ai_runtime,
+                "material_derivatives_to_temp",
+                return_value=(root, {"audio.m4a": audio, "poster.webp": poster}),
+            ), patch.object(
+                ai_runtime,
+                "extract_video_audio_and_frames",
+            ) as web_ffmpeg, patch.object(
+                ai_runtime,
+                "groq_transcribe",
+                return_value="[00:10] 影片語音",
+            ), patch.object(ai_runtime.requests, "post", return_value=response) as post:
+                questions = ai_runtime.generate_groq_multisource_candidates(
+                    [{
+                        "id": "video-1",
+                        "filename": "source.mp4",
+                        "title": "影片",
+                        "storageBackend": "mega",
+                        "storageMeta": {"derivedFiles": {"audio.m4a": "a", "poster.webp": "p"}},
+                    }],
+                    count=1,
+                    qtype="video_choice",
+                    difficulty="standard",
+                    focus="",
+                    source_title="影片",
+                    settings=_settings(provider="groq"),
+                )
+        web_ffmpeg.assert_not_called()
+        self.assertEqual(len(questions), 1)
+        self.assertEqual(questions[0]["answerConfig"]["mediaUrl"], "/view/video-1")
+        sent = post.call_args.kwargs["json"]["messages"][0]["content"]
+        self.assertTrue(any(item.get("type") == "image_url" for item in sent))
+        self.assertIn("影片語音", sent[0]["text"])
+
+    def test_groq_video_without_derivatives_fails_closed_by_default(self):
+        with tempfile.TemporaryDirectory() as temp_name, patch.object(
+            ai_runtime,
+            "material_derivatives_to_temp",
+            return_value=(Path(temp_name), {}),
+        ), patch.object(ai_runtime, "material_source_to_temp") as source, patch.dict(
+            "os.environ", {"AI_WEB_MEDIA_FFMPEG_FALLBACK": "false"}, clear=False
+        ):
+            with self.assertRaisesRegex(RuntimeError, "尚未有 Worker 音訊/代表畫面衍生檔"):
+                ai_runtime.generate_groq_multisource_candidates(
+                    [{"id": "video-1", "filename": "source.mp4", "title": "影片"}],
+                    count=1,
+                    qtype="video_choice",
+                    difficulty="standard",
+                    focus="",
+                    source_title="影片",
+                    settings=_settings(provider="groq"),
+                )
+        source.assert_not_called()
 
     def test_openai_generation_preserves_responses_api_and_error_contract(self):
         payload = {

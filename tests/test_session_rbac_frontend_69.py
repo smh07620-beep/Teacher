@@ -34,7 +34,7 @@ class SessionRbacFrontend69Tests(unittest.TestCase):
     def test_sensitive_bridge_strips_legacy_fake_header_and_retries_428(self):
         source = self.source("sensitive-elevation-69.js")
         for marker in (
-            "headers.get('X-Admin-Key') === 'rbac-session'",
+            "headers.has('X-Admin-Key')",
             "headers.delete('X-Admin-Key')",
             "response.status !== 428",
             "contract.elevationRequired",

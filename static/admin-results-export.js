@@ -21,7 +21,10 @@
   window.buildCurrentTabDocPayload = function() {
     const nameInput = document.getElementById('examinee-name').value.trim();
     const idInput = document.getElementById('examinee-id').value.trim();
-    const roleInput = document.getElementById('examinee-role').value;
+    // The live exam form no longer asks the learner to self-declare a duty role.
+    // Leave legacy duty/member checkboxes blank here; persisted-record exports use
+    // the server-owned role value through buildRecordDocPayload().
+    const roleInput = '';
     const evaluatorNameInput = document.getElementById('evaluator-name').value.trim();
     const evaluatorTitleInput = document.getElementById('evaluator-title').value;
     const quizList = allQuizData[currentCatKey].questions;

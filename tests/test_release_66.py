@@ -41,6 +41,7 @@ class ReleaseContractTests(unittest.TestCase):
             "0072-course-bundle-idempotency",
             "0073-course-bundle-followups",
             "0074-assessment-list-indexes",
+            "0075-ai-question-jobs",
         ):
             self.assertIn(version, release_contract.REQUIRED_MIGRATIONS)
 

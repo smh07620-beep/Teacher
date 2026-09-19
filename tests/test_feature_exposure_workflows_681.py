@@ -133,7 +133,10 @@ class FeatureExposureWorkflow681Tests(unittest.TestCase):
         self.assertEqual(item["cognitiveLevel"], "analyze")
         self.assertEqual(item["sourceMaterialId"], "material-b")
         self.assertEqual(item["reviewSource"]["timeEnd"], 28)
-        self.assertEqual(item["status"], "published")
+        self.assertEqual(item["status"], "draft")
+        self.assertEqual(item["origin"], "ai_generated")
+        self.assertEqual(item["reviewedBy"], "")
+        self.assertEqual(item["reviewedAt"], "")
 
     def test_blueprint_payload_publish_and_analytics_contract(self):
         ids = []

@@ -7,17 +7,20 @@ ROOT=Path(__file__).resolve().parents[1]
 class RC79ContainerRuntimeRegressions(unittest.TestCase):
     def src(self,path): return (ROOT/path).read_text(encoding="utf-8")
 
-    def test_web_image_installs_office_components_for_supported_sync_formats(self):
+    def test_worker_image_installs_office_components_for_supported_sync_formats(self):
         dockerfile=self.src("Dockerfile")
+        worker_dockerfile=self.src("Dockerfile.worker")
         classification=self.src("teacher_app/materials/classification.py")
         self.assertIn("FROM python:3.12-slim-bookworm",dockerfile)
         self.assertIn("megacmd-Debian_12_amd64.deb",dockerfile)
         for package in ("libreoffice-writer","libreoffice-calc","libreoffice-impress"):
-            self.assertIn(package,dockerfile)
+            self.assertNotIn(package,dockerfile)
+            self.assertIn(package,worker_dockerfile)
+        self.assertIn('CMD ["python", "-u", "material_worker.py"]',worker_dockerfile)
         for extension in ('.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp'):
             self.assertIn(extension,classification)
 
-    def test_web_image_retains_system_tools_for_live_canonical_web_callers(self):
+    def test_web_image_keeps_only_live_canonical_system_tools(self):
         dockerfile=self.src("Dockerfile")
         run_web=self.src("run_web.sh")
         sync_runtime=self.src("teacher_app/materials/sync_runtime.py")
@@ -26,26 +29,28 @@ class RC79ContainerRuntimeRegressions(unittest.TestCase):
         ai_runtime=self.src("teacher_app/assessments/ai_runtime.py")
 
         for package in ("ffmpeg", "qpdf", "fonts-noto-cjk"):
-            self.assertIn(package,dockerfile)
+            self.assertNotIn(package,dockerfile)
         self.assertIn("megacmd-Debian_12_amd64.deb",dockerfile)
         self.assertIn('CMD ["bash", "run_web.sh"]',dockerfile)
         self.assertIn("pgy_app:app",run_web)
         self.assertNotIn("material_worker.py",run_web.splitlines()[-1])
 
-        # The Web synchronous upload composer intentionally reuses the canonical
-        # storage/conversion adapter, so qpdf and soffice are still Web runtime
-        # dependencies rather than worker-image-only packages.
+        # The compatibility composer still exists in Python for emergency/local
+        # use, but its heavy conversion binaries now belong to Dockerfile.worker.
         self.assertIn("WorkerMaterialStorageAdapter()",sync_runtime)
         self.assertIn("self.storage._office_to_pdf",sync_runtime)
         self.assertIn("self.storage._save_optimized_pdf",sync_runtime)
         self.assertIn('shutil.which("qpdf")',storage_runtime)
         self.assertIn('self.soffice = os.environ.get("SOFFICE_PATH", "soffice")',storage_runtime)
 
-        # Canonical Web reads still execute MEGAcmd, and video AI generation is
-        # still in-process on Web and shells out to ffmpeg/ffprobe.
+        # Canonical Web reads still execute MEGAcmd. Video AI normally consumes
+        # Worker-generated audio/poster derivatives; Web FFmpeg is emergency-only
+        # and therefore is not installed in the production Web image.
         self.assertIn('["mega-get", str(file_id), str(tempdir)]',web_storage)
         self.assertIn('["ffmpeg", "-y", "-i", str(video)',ai_runtime)
         self.assertIn('["ffprobe", "-v", "error"',ai_runtime)
+        self.assertIn('AI_WEB_MEDIA_FFMPEG_FALLBACK", False',ai_runtime)
+        self.assertIn("material_derivatives_to_temp",ai_runtime)
 
     def test_home_outer_surface_is_flat(self):
         css=self.src("static/portal.css")

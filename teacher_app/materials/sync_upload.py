@@ -22,7 +22,7 @@ from teacher_app.common import scope
 from teacher_app.courses import repository as course_repository
 from teacher_app.materials import catalog
 from teacher_app.materials import repository as material_repository
-from teacher_app.materials.validation import ALLOWED_MATERIAL_EXTENSIONS
+from teacher_app.materials.validation import ALLOWED_MATERIAL_EXTENSIONS, normalize_material_filename
 
 
 OFFICE_EXT = frozenset({".pptx", ".ppt", ".doc", ".docx", ".xls", ".xlsx", ".odp", ".odt", ".ods"})
@@ -88,6 +88,13 @@ def _progress(runtime: SyncUploadRuntime, progress_id: str, percent: float, stag
 def process_upload(storage, form: Mapping[str, Any], runtime: SyncUploadRuntime) -> dict:
     """Process one synchronous compatibility upload and return legacy JSON data."""
 
+    try:
+        original_name, ext = normalize_material_filename(
+            getattr(storage, "filename", "") or "untitled"
+        )
+    except ValueError as exc:
+        raise SyncUploadError(str(exc), 400) from exc
+
     progress_id = str(form.get("progressId", "") or "").strip()[:80]
     if progress_id:
         runtime.clear_progress(progress_id)
@@ -96,7 +103,7 @@ def process_upload(storage, form: Mapping[str, Any], runtime: SyncUploadRuntime)
             progress_id,
             2,
             "接收教材",
-            f"正在接收 {Path(getattr(storage, 'filename', '') or '教材').name}",
+            f"正在接收 {original_name}",
         )
 
     group = scope.normalize_group(form.get("group", scope.DEFAULT_GROUP))
@@ -132,14 +139,6 @@ def process_upload(storage, form: Mapping[str, Any], runtime: SyncUploadRuntime)
     atlas_meta: dict[str, Any] = {}
     classification_method = "人工指定"
     classification_reason = ""
-
-    original_name = Path(str(getattr(storage, "filename", "") or "untitled")).name
-    ext = Path(original_name).suffix.lower()
-    if ext not in ALLOWED_MATERIAL_EXTENSIONS:
-        raise SyncUploadError(
-            "不支援此檔案格式。可上傳簡報、PDF、Office 文件、圖片、影音、文字與 ZIP。",
-            400,
-        )
 
     try:
         backend = runtime.active_material_backend()

@@ -89,7 +89,7 @@ function mount(){
 function render(){
   const root=el('course-wizard-681');if(!root)return;
   const steps=['基本資料','教材','題目與考卷','確認建立'];
-  root.innerHTML=`<div class="flex flex-wrap gap-2">${steps.map((name,i)=>`<span class="rounded-full px-3 py-1 text-xs font-bold ${state.step===i+1?'bg-violet-700 text-white':state.step>i+1?'bg-violet-100 text-violet-800':'bg-slate-100 text-slate-500'}">${i+1} ${name}</span>`).join('')}</div><div class="rounded-xl border border-violet-200 bg-violet-50/30 p-4"><div id="cw681-step"></div><div class="mt-4 flex justify-between gap-2"><button ${state.step===1||state.busy?'disabled':''} onclick="courseWizard681Back()" class="rounded border px-4 py-2 text-sm disabled:opacity-40">返回</button>${state.step<4?`<button ${state.busy?'disabled':''} onclick="courseWizard681Next()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">下一步</button>`:`<button id="cw681-create" ${state.busy?'disabled':''} onclick="courseWizard681Create()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">${state.busy?'⏳ 建立中…':'建立課程與關聯'}</button>`}</div><div id="cw681-status" class="mt-3 text-xs text-violet-900"></div></div>`;
+  root.innerHTML=`<div class="flex flex-wrap gap-2">${steps.map((name,i)=>`<span class="rounded-full px-3 py-1 text-xs font-bold ${state.step===i+1?'bg-violet-700 text-white':state.step>i+1?'bg-violet-100 text-violet-800':'bg-slate-100 text-slate-500'}">${i+1} ${name}</span>`).join('')}</div><div class="rounded-xl border border-violet-200 bg-violet-50/30 p-4"><div id="cw681-step"></div><div class="mt-4 flex justify-between gap-2"><button ${state.step===1||state.busy?'disabled':''} data-csp-click="courseWizard681Back()" class="rounded border px-4 py-2 text-sm disabled:opacity-40">返回</button>${state.step<4?`<button ${state.busy?'disabled':''} data-csp-click="courseWizard681Next()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">下一步</button>`:`<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681Create()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">${state.busy?'⏳ 建立中…':'建立課程與關聯'}</button>`}</div><div id="cw681-status" class="mt-3 text-xs text-violet-900"></div></div>`;
   const box=el('cw681-step');
   if(state.step===1)box.innerHTML=stepOne();
   if(state.step===2){box.innerHTML=stepTwo();paintMaterials();renderFileSummary();}
@@ -103,11 +103,11 @@ function stepOne(){
 }
 
 function stepTwo(){
-  return `<h5 class="font-black">2. 教材</h5><p class="mt-1 text-xs text-slate-500">可同時上傳新教材並掛入既有教材；檔案會在最後確認後才送出。</p><div class="mt-3 grid gap-4 lg:grid-cols-2"><div><label class="block text-xs font-bold">上傳新教材<input id="cw681-files" type="file" multiple class="mt-1 w-full text-sm" onchange="courseWizard681FilesChanged(this)"></label><div id="cw681-file-summary" class="mt-2 text-xs text-slate-500"></div></div><div><div class="flex justify-between"><b class="text-xs">既有教材</b><button type="button" onclick="courseWizard681RefreshMaterials()" class="text-xs text-violet-700">更新</button></div><div id="cw681-materials" class="mt-2 max-h-48 overflow-auto rounded border bg-white p-2 text-xs">讀取中…</div></div></div><p class="mt-3 text-xs text-violet-800">外部連結請先用「＋新增單一教材 → 外部連結」建立，之後可在這裡直接掛入課程。</p>`;
+  return `<h5 class="font-black">2. 教材</h5><p class="mt-1 text-xs text-slate-500">可同時上傳新教材並掛入既有教材；檔案會在最後確認後才送出。</p><div class="mt-3 grid gap-4 lg:grid-cols-2"><div><label class="block text-xs font-bold">上傳新教材<input id="cw681-files" type="file" multiple class="mt-1 w-full text-sm" data-csp-change="courseWizard681FilesChanged(this)"></label><div id="cw681-file-summary" class="mt-2 text-xs text-slate-500"></div></div><div><div class="flex justify-between"><b class="text-xs">既有教材</b><button type="button" data-csp-click="courseWizard681RefreshMaterials()" class="text-xs text-violet-700">更新</button></div><div id="cw681-materials" class="mt-2 max-h-48 overflow-auto rounded border bg-white p-2 text-xs">讀取中…</div></div></div><p class="mt-3 text-xs text-violet-800">外部連結請先用「＋新增單一教材 → 外部連結」建立，之後可在這裡直接掛入課程。</p>`;
 }
 
 function stepThree(){
-  return `<h5 class="font-black">3. 題目與考卷</h5><p class="mt-1 text-xs text-slate-500">先決定建立後要接到哪一種出題流程；系統只建立考卷骨架，不會把未審題目直接發布。</p><div class="mt-3 grid gap-2 md:grid-cols-2">${Object.entries(MODE_META).map(([id,meta])=>`<button type="button" onclick="courseWizard681SetMode('${id}')" class="rounded border p-3 text-left text-sm ${state.examMode===id?'border-violet-500 bg-violet-100':'bg-white'}"><b>${esc(meta.label)}</b><span class="block mt-1 text-xs text-slate-500">${esc(meta.next)}</span></button>`).join('')}</div><label class="mt-4 block text-xs font-bold">考卷名稱${state.examMode==='later'?'（可留白）':'（必填）'}<input id="cw681-exam" value="${esc(el('wizard-exam-title')?.value||'')}" class="mt-1 w-full rounded border p-2" placeholder="例如：課後評量"></label>`;
+  return `<h5 class="font-black">3. 題目與考卷</h5><p class="mt-1 text-xs text-slate-500">先決定建立後要接到哪一種出題流程；系統只建立考卷骨架，不會把未審題目直接發布。</p><div class="mt-3 grid gap-2 md:grid-cols-2">${Object.entries(MODE_META).map(([id,meta])=>`<button type="button" data-csp-click="courseWizard681SetMode('${id}')" class="rounded border p-3 text-left text-sm ${state.examMode===id?'border-violet-500 bg-violet-100':'bg-white'}"><b>${esc(meta.label)}</b><span class="block mt-1 text-xs text-slate-500">${esc(meta.next)}</span></button>`).join('')}</div><label class="mt-4 block text-xs font-bold">考卷名稱${state.examMode==='later'?'（可留白）':'（必填）'}<input id="cw681-exam" value="${esc(el('wizard-exam-title')?.value||'')}" class="mt-1 w-full rounded border p-2" placeholder="例如：課後評量"></label>`;
 }
 
 function stepFour(){
@@ -119,13 +119,13 @@ function fileMeta(index,file){return {title:file.name.replace(/\.[^.]+$/,''),mat
 
 function renderFileSummary(){
   const box=el('cw681-file-summary');if(!box)return;
-  box.innerHTML=state.files.length?state.files.map((file,index)=>{const meta=fileMeta(index,file);return `<div class="mt-2 rounded border bg-white p-2"><b>${esc(file.name)}</b><div class="mt-1 grid gap-1 sm:grid-cols-2"><input value="${esc(meta.title)}" oninput="courseWizard681SetFileMeta(${index},'title',this.value)" class="rounded border p-1" aria-label="教材名稱"><select onchange="courseWizard681SetFileMeta(${index},'materialType',this.value)" class="rounded border p-1" aria-label="教材類型"><option value="auto" ${meta.materialType==='auto'?'selected':''}>自動判定</option><option value="standard" ${meta.materialType==='standard'?'selected':''}>一般教材</option><option value="atlas" ${meta.materialType==='atlas'?'selected':''}>圖譜教材</option></select></div></div>`;}).join(''):'尚未選擇新檔案。';
+  box.innerHTML=state.files.length?state.files.map((file,index)=>{const meta=fileMeta(index,file);return `<div class="mt-2 rounded border bg-white p-2"><b>${esc(file.name)}</b><div class="mt-1 grid gap-1 sm:grid-cols-2"><input value="${esc(meta.title)}" data-csp-input="courseWizard681SetFileMeta(${index},'title',this.value)" class="rounded border p-1" aria-label="教材名稱"><select data-csp-change="courseWizard681SetFileMeta(${index},'materialType',this.value)" class="rounded border p-1" aria-label="教材類型"><option value="auto" ${meta.materialType==='auto'?'selected':''}>自動判定</option><option value="standard" ${meta.materialType==='standard'?'selected':''}>一般教材</option><option value="atlas" ${meta.materialType==='atlas'?'selected':''}>圖譜教材</option></select></div></div>`;}).join(''):'尚未選擇新檔案。';
 }
 
 function paintMaterials(){
   const box=el('cw681-materials');if(!box)return;
   if(!state.materials.length){box.textContent='沒有可用教材';return;}
-  box.innerHTML=state.materials.map(m=>`<label class="block rounded px-1 py-1 hover:bg-violet-50"><input class="cw681-existing" onchange="courseWizard681SelectExisting()" type="checkbox" value="${esc(m.id)}" ${state.existing.includes(String(m.id))?'checked':''}> ${esc(m.title||m.filename||m.id)}</label>`).join('');
+  box.innerHTML=state.materials.map(m=>`<label class="block rounded px-1 py-1 hover:bg-violet-50"><input class="cw681-existing" data-csp-change="courseWizard681SelectExisting()" type="checkbox" value="${esc(m.id)}" ${state.existing.includes(String(m.id))?'checked':''}> ${esc(m.title||m.filename||m.id)}</label>`).join('');
 }
 
 function syncExamInput(){
@@ -210,10 +210,10 @@ async function create(){
       }catch(error){failed++;console.warn('Course wizard material upload failed',file.name,error);}
     }
     status.textContent='⏳ 同步課程、教材與考卷清單…';await refreshWorkspaceData();
-    const nextButton=state.categoryId?'<button type="button" onclick="courseWizard681Continue()" class="ml-2 rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white">前往題庫與考卷 →</button>':'<button type="button" onclick="courseWizard681OpenCourse()" class="ml-2 rounded-lg bg-teal-700 px-3 py-1.5 font-bold text-white">查看課程總覽 →</button>';
+    const nextButton=state.categoryId?'<button type="button" data-csp-click="courseWizard681Continue()" class="ml-2 rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white">前往題庫與考卷 →</button>':'<button type="button" data-csp-click="courseWizard681OpenCourse()" class="ml-2 rounded-lg bg-teal-700 px-3 py-1.5 font-bold text-white">查看課程總覽 →</button>';
     const uploadNote=failed?`；${failed} 份教材未能排入佇列，可重新選取後再試` : '';
     const retryNote=bundle.reused?'（本次安全沿用既有建立結果，未重複建立課程／考卷）':'';
-    status.innerHTML=`<span class="font-bold text-emerald-700">✅ 「${esc(title)}」建立完成${retryNote}。</span> 已關聯 ${linked} 份既有教材、已排入背景佇列 ${uploaded} 份新教材${uploadNote}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。${nextButton}<button type="button" onclick="courseWizard681Reset()" class="ml-2 text-slate-500 underline">建立下一門課</button>`;
+    status.innerHTML=`<span class="font-bold text-emerald-700">✅ 「${esc(title)}」建立完成${retryNote}。</span> 已關聯 ${linked} 份既有教材、已排入背景佇列 ${uploaded} 份新教材${uploadNote}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。${nextButton}<button type="button" data-csp-click="courseWizard681Reset()" class="ml-2 text-slate-500 underline">建立下一門課</button>`;
   }catch(error){status.textContent='❌ '+error.message+'（未變更內容時可直接重試，系統會沿用同一建立流程。）';}
   finally{setBusy(false);}
 }

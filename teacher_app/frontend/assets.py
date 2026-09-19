@@ -34,6 +34,7 @@ ASSET_MANIFEST = {
         ),
         "head": (),
         "body": (
+            "/system-csp-actions.js",
             "/pgy-workflow.js",
             "/roles-signing-66.js",
             "/maintenance-64.js",

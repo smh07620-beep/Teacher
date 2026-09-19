@@ -36,19 +36,20 @@
     if (section) return section;
     const course = document.getElementById('course-overview');
     if (!course) return null;
-    section = document.createElement('details');
+    section = document.createElement('section');
     section.id = ID;
-    section.className = 'rounded-2xl border border-teal-100 bg-teal-50/25 px-4 py-3';
+    section.className = 'rounded-xl border border-teal-100 bg-teal-50/20 px-3 py-3';
     section.innerHTML = `
-      <summary class="cursor-pointer list-none flex items-center justify-between gap-3">
+      <div class="flex items-center justify-between gap-3">
         <span class="flex items-center gap-2 min-w-0"><b id="training-progress-title-71" class="text-sm text-slate-900">📈 訓練進度</b><span id="training-progress-summary-71" class="text-[11px] text-slate-500 truncate">讀取中…</span></span>
-        <span class="text-[11px] font-bold text-teal-700">展開 ▾</span>
-      </summary>
+      </div>
       <div id="pgy-matrix-status-71" class="text-xs text-slate-500 mt-3">讀取訓練進度中…</div>
       <div id="pgy-matrix-stats-71" class="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-3"></div>
       <div id="pgy-matrix-table-71" class="mt-3 overflow-x-auto"></div>`;
+    const statusHost = document.getElementById('learning-status-detail-71');
     const command = document.getElementById('training-command-center-71');
-    if (command) command.after(section);
+    if (statusHost) statusHost.appendChild(section);
+    else if (command) command.after(section);
     else {
       const header = course.querySelector(':scope > .edu-card');
       if (header) header.after(section); else course.prepend(section);
@@ -66,6 +67,8 @@
   }
 
   function renderOnline(p, dashboard, analytics) {
+    const section = document.getElementById(ID);
+    if (section) section.classList.add('hidden');
     const title = document.getElementById('training-progress-title-71');
     const summaryLine = document.getElementById('training-progress-summary-71');
     const status = document.getElementById('pgy-matrix-status-71');
@@ -88,6 +91,8 @@
   }
 
   function renderPgy(matrix) {
+    const section = document.getElementById(ID);
+    if (section) section.classList.remove('hidden');
     const title = document.getElementById('training-progress-title-71');
     const summaryLine = document.getElementById('training-progress-summary-71');
     const status = document.getElementById('pgy-matrix-status-71');
@@ -128,7 +133,6 @@
         ]);
         renderOnline(p, dashboard, analytics);
       }
-      section.classList.remove('hidden');
     } catch (error) {
       if (error?.status === 401 || error?.status === 403) { section.classList.add('hidden'); return; }
       const status = document.getElementById('pgy-matrix-status-71');

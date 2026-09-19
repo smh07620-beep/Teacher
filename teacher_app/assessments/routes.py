@@ -29,6 +29,10 @@ def register_assessment_routes(owner):
     def require_admin():
         return rbac_legacy_adapter.legacy_admin_guard(app)
 
+    def actor_label():
+        user = getattr(g, "teacher_user", None) or {}
+        return str(user.get("name") or user.get("username") or "").strip()[:100]
+
     def api_list_quiz_categories():
         denied = _login_required()
         if denied:
@@ -51,12 +55,12 @@ def register_assessment_routes(owner):
             True,
         ))
 
-    def guarded(handler, *args):
+    def guarded(handler, *args, **kwargs):
         denied = require_admin()
         if denied:
             return denied
         try:
-            return jsonify(handler(*args))
+            return jsonify(handler(*args, **kwargs))
         except ApiError as exc:
             return _legacy_error(exc)
 
@@ -67,13 +71,13 @@ def register_assessment_routes(owner):
         return guarded(service.update_category, app, category_id, request.get_json(silent=True) or {})
 
     def api_review_quiz_category(category_id):
-        return guarded(service.review_category, app, category_id, request.get_json(silent=True) or {})
+        return guarded(service.review_category, app, category_id, reviewer=actor_label())
 
     def api_quiz_publications(category_id):
         return guarded(service.list_publications, app, category_id)
 
     def api_publish_quiz_category(category_id):
-        return guarded(service.publish_category, app, category_id)
+        return guarded(service.publish_category, app, category_id, publisher=actor_label())
 
     def api_quiz_category_materials(category_id):
         return guarded(service.category_materials, app, category_id)

@@ -36,6 +36,25 @@ class ManagementSurfaceSimplification78Tests(unittest.TestCase):
         self.assertIn("meta.dataset.profileHydrated = '1'",profile)
         self.assertNotIn("set('v573-system-user-id',empId?",core)
 
+    def test_exam_surface_keeps_one_progress_summary_and_no_manual_examinee_role(self):
+        html=self.src('static/system.html'); exam=self.src('static/system-exam.js')
+        self.assertNotIn('ONLINE ASSESSMENT',html)
+        self.assertIn('本卷完成進度',html)
+        self.assertEqual(html.count('id="stat-progress"'),1)
+        self.assertNotIn('id="examinee-role"',html)
+        self.assertNotIn("getElementById('examinee-role')",exam)
+        self.assertNotIn('examineeRole:',exam)
+
+    def test_learning_status_uses_one_outer_shell(self):
+        command=self.src('static/training-command-center-71.js')
+        matrix=self.src('static/pgy-competency-matrix-71.js')
+        analytics=self.src('static/learning-analytics-71.js')
+        notifications=self.src('static/notification-center-71.js')
+        self.assertIn('📊 學習狀態',command)
+        self.assertIn('id="learning-status-detail-71"',command)
+        for source in (matrix,analytics,notifications):
+            self.assertIn("document.getElementById('learning-status-detail-71')",source)
+
     def test_modified_browser_js_syntax(self):
         for asset in ('admin-question-bank.js','teacher-content-studio-71.js','system-core.js','training-command-center-71.js'):
             result=subprocess.run(['node','--check',str(ROOT/'static'/asset)],capture_output=True,text=True)

@@ -291,6 +291,22 @@ class WorkerMaterialStorageAdapter:
         qpdf = shutil.which("qpdf")
         if not qpdf or not path.exists():
             return False
+        def check_pdf(candidate: Path) -> None:
+            try:
+                checked = subprocess.run(
+                    [qpdf, "--check", str(candidate)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=120,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise RuntimeError("qpdf PDF 結構檢查失敗。") from exc
+            # qpdf uses exit 3 for warnings; exit 2 is a structural/error failure.
+            if checked.returncode not in {0, 3}:
+                detail = (checked.stderr or checked.stdout or b"").decode(errors="ignore")[-400:]
+                raise RuntimeError(f"qpdf 拒絕不安全或損壞的 PDF：{detail or 'invalid PDF'}")
+        check_pdf(path)
         temp = path.with_name(path.stem + ".linearized.tmp.pdf")
         try:
             completed = subprocess.run(
@@ -301,6 +317,7 @@ class WorkerMaterialStorageAdapter:
                 check=False,
             )
             if completed.returncode == 0 and temp.exists() and temp.stat().st_size > 0:
+                check_pdf(temp)
                 os.replace(temp, path)
                 return True
         except Exception:
@@ -403,16 +420,56 @@ class WorkerMaterialStorageAdapter:
         self._mega_free_guard(source_path.stat().st_size)
         return self._mega_upload_file(source_path, folder, f"source{source_path.suffix.lower()}")
 
+    def upload_media_bundle_to_mega(
+        self,
+        material_id: str,
+        source_path: Path,
+        derivatives: dict[str, Path],
+    ) -> tuple[str, str, dict[str, Any]]:
+        files = {
+            str(name): Path(path)
+            for name, path in (derivatives or {}).items()
+            if Path(path).is_file() and Path(path).stat().st_size > 0
+        }
+        total = source_path.stat().st_size + sum(path.stat().st_size for path in files.values())
+        self._mega_free_guard(total)
+        folder = self._mega_remote_join(self._mega_root(), material_id)
+        self._mega_ensure_dir(folder)
+        uploaded: dict[str, str] = {}
+        try:
+            source_remote = self._mega_upload_file(
+                source_path,
+                folder,
+                f"source{source_path.suffix.lower()}",
+            )
+            for name, path in files.items():
+                uploaded[name] = self._mega_upload_file(path, folder, name)
+            return source_remote, folder, {
+                "folderId": folder,
+                "sourceFileId": source_remote,
+                "derivedFiles": uploaded,
+                "adapter": "megacmd",
+            }
+        except Exception:
+            self._mega_cleanup(folder)
+            raise
+
     def upload_material_tree_to_mega(
         self,
         material_id: str,
         source_path: Path,
         slides_dir: Path,
         page_count: int,
+        derivatives: dict[str, Path] | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
+        derivative_files = {
+            str(name): Path(path)
+            for name, path in (derivatives or {}).items()
+            if Path(path).is_file() and Path(path).stat().st_size > 0
+        }
         total = source_path.stat().st_size + sum(
             path.stat().st_size for path in slides_dir.glob("slide-*.*")
-        )
+        ) + sum(path.stat().st_size for path in derivative_files.values())
         self._mega_free_guard(total)
         folder = self._mega_remote_join(self._mega_root(), material_id)
         self._mega_ensure_dir(folder)
@@ -427,10 +484,15 @@ class WorkerMaterialStorageAdapter:
                 slide = self._slide_local_path(slides_dir, index)
                 if slide.exists():
                     slide_files[slide.name] = self._mega_upload_file(slide, folder, slide.name)
+            derived_files = {
+                name: self._mega_upload_file(path, folder, name)
+                for name, path in derivative_files.items()
+            }
             meta = {
                 "folderId": folder,
                 "sourceFileId": source_remote,
                 "slideFiles": slide_files,
+                "derivedFiles": derived_files,
                 "adapter": "megacmd",
                 "slideFormat": self.slide_format(slides_dir, page_count),
             }
@@ -445,8 +507,18 @@ class WorkerMaterialStorageAdapter:
         source_path: Path,
         preview_path: Path,
         page_count: int,
+        derivatives: dict[str, Path] | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
-        total = source_path.stat().st_size + (preview_path.stat().st_size if preview_path.exists() else 0)
+        derivative_files = {
+            str(name): Path(path)
+            for name, path in (derivatives or {}).items()
+            if Path(path).is_file() and Path(path).stat().st_size > 0
+        }
+        total = (
+            source_path.stat().st_size
+            + (preview_path.stat().st_size if preview_path.exists() else 0)
+            + sum(path.stat().st_size for path in derivative_files.values())
+        )
         self._mega_free_guard(total)
         folder = self._mega_remote_join(self._mega_root(), material_id)
         self._mega_ensure_dir(folder)
@@ -454,17 +526,22 @@ class WorkerMaterialStorageAdapter:
         try:
             source_remote = self._mega_upload_file(source_path, folder, source_name)
             preview_remote = self._mega_upload_file(preview_path, folder, "preview.pdf")
+            derived_files = {
+                name: self._mega_upload_file(path, folder, name)
+                for name, path in derivative_files.items()
+            }
             meta = {
                 "folderId": folder,
                 "sourceFileId": source_remote,
                 "previewFileId": preview_remote,
+                "derivedFiles": derived_files,
                 "previewFilename": "preview.pdf",
                 "previewMode": "single_pdf",
                 "previewBytes": preview_path.stat().st_size if preview_path.exists() else 0,
                 "pageCount": int(page_count or 0),
                 "adapter": "megacmd",
                 "slideFormat": "pdf",
-                "cloudObjectCount": 2,
+                "cloudObjectCount": 2 + len(derived_files),
                 "uploadStrategy": "single_preview",
             }
             return source_remote, folder, meta
@@ -506,6 +583,7 @@ class WorkerMaterialStorageAdapter:
         page_count: int,
         *,
         original_name: str,
+        derivatives: dict[str, Path] | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
         service = providers.gdrive_service()
         material_folder_id = ""
@@ -547,14 +625,78 @@ class WorkerMaterialStorageAdapter:
                             },
                         )
                         slide_files[slide.name] = uploaded["id"]
+            derived_files: dict[str, str] = {}
+            for name, path in (derivatives or {}).items():
+                path = Path(path)
+                if not path.is_file() or path.stat().st_size <= 0:
+                    continue
+                uploaded = self._gdrive_upload_file(
+                    service,
+                    path,
+                    str(name),
+                    material_folder_id,
+                    {"smh_kind": "derived", "smh_material_id": material_id},
+                )
+                derived_files[str(name)] = uploaded["id"]
             meta = {
                 "materialFolderId": material_folder_id,
                 "sourceFileId": source["id"],
                 "slidesFolderId": slides_folder_id,
                 "slideFiles": slide_files,
+                "derivedFiles": derived_files,
                 "slideFormat": self.slide_format(slides_dir, page_count),
             }
             return source["id"], slides_folder_id, meta
+        except Exception:
+            if material_folder_id:
+                try:
+                    service.files().delete(fileId=material_folder_id).execute()
+                except Exception:
+                    pass
+            raise
+
+    def upload_media_bundle_to_gdrive(
+        self,
+        material_id: str,
+        source_path: Path,
+        derivatives: dict[str, Path],
+        *,
+        original_name: str,
+    ) -> tuple[str, str, dict[str, Any]]:
+        service = providers.gdrive_service()
+        material_folder_id = ""
+        try:
+            material_folder_id = self._gdrive_create_folder(
+                service,
+                material_id,
+                providers.GDRIVE_FOLDER_ID,
+                {"smh_kind": "material", "smh_material_id": material_id},
+            )
+            source = self._gdrive_upload_file(
+                service,
+                source_path,
+                Path(original_name or source_path.name).name,
+                material_folder_id,
+                {"smh_kind": "source", "smh_material_id": material_id},
+            )
+            uploaded: dict[str, str] = {}
+            for name, path in (derivatives or {}).items():
+                path = Path(path)
+                if not path.is_file() or path.stat().st_size <= 0:
+                    continue
+                item = self._gdrive_upload_file(
+                    service,
+                    path,
+                    str(name),
+                    material_folder_id,
+                    {"smh_kind": "derived", "smh_material_id": material_id},
+                )
+                uploaded[str(name)] = item["id"]
+            return source["id"], material_folder_id, {
+                "materialFolderId": material_folder_id,
+                "sourceFileId": source["id"],
+                "derivedFiles": uploaded,
+            }
         except Exception:
             if material_folder_id:
                 try:

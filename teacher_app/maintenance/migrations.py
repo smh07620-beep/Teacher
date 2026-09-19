@@ -422,6 +422,14 @@ def _assessment_list_indexes_74(conn, kind: str) -> None:
         )
 
 
+@migration("0075-ai-question-jobs")
+def _ai_question_jobs_75(conn, kind: str) -> None:
+    """Persist AI question-generation jobs independently from material jobs."""
+    from teacher_app.assessments.ai_job_schema import init_schema
+
+    init_schema(conn, kind)
+
+
 def ensure_r2_free_budget_guard_67(base) -> None:
     """Compatibility maintenance helper for old callers and one-off repairs.
 

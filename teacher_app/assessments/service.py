@@ -36,6 +36,14 @@ def _fail(code: str, message: str, status: int = 400, extra: dict | None = None)
     return ApiError(code, message, status=status, extra=extra or {})
 
 
+def _compat_actor_label(base) -> str:
+    """Resolve only a server-bound compatibility actor, never payload identity."""
+    resolver = getattr(base, "_current_user", None)
+    user = resolver() if callable(resolver) else None
+    user = user if isinstance(user, Mapping) else {}
+    return str(user.get("name") or user.get("username") or "").strip()[:100]
+
+
 def _draw_rules(value: Any) -> dict:
     rules = value if isinstance(value, dict) else {}
     if rules.get("mode") != "type_quota":
@@ -150,13 +158,14 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
 
     title = str(data.get("title", entry["title"])).strip()[:255]
     desc = str(data.get("desc", entry.get("desc", ""))).strip()[:1000]
-    active = bool(data.get("active", entry.get("active", True)))
-    review_status = str(data.get("reviewStatus", entry.get("reviewStatus", "approved")) or "draft").lower()
-    if review_status not in {"draft", "approved"}:
-        review_status = entry.get("reviewStatus", "draft")
-    reviewer_name = str(data.get("reviewerName", entry.get("reviewerName", "")) or "").strip()[:100]
-    reviewed_at = str(data.get("reviewedAt", entry.get("reviewedAt", "")) or "")[:80]
-    published_at = str(data.get("publishedAt", entry.get("publishedAt", "")) or "")[:80]
+    # Review/publication state is workflow-owned.  A settings PATCH may retain
+    # the current state or invalidate it through a content change, but it may
+    # never approve/publish itself from browser-supplied workflow fields.
+    active = bool(entry.get("active", False))
+    review_status = str(entry.get("reviewStatus", "draft") or "draft").lower()
+    reviewer_name = str(entry.get("reviewerName", "") or "").strip()[:100]
+    reviewed_at = str(entry.get("reviewedAt", "") or "")[:80]
+    published_at = str(entry.get("publishedAt", "") or "")[:80]
     blind_mode = bool(data.get("blindMode", entry.get("blindMode", False)))
     audience = str(data.get("audience", entry.get("audience", ""))).strip()[:200]
     course_id = str(data.get("courseId", entry.get("courseId", ""))).strip()[:100]
@@ -209,16 +218,29 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
         "published_at": published_at,
     }, reset_publication=config_changed)
     _clear_category_list_cache(base, entry.get("group"), entry.get("area"))
-    return {"ok": True}
+    return {
+        "ok": True,
+        "active": active,
+        "reviewStatus": review_status,
+        "reviewerName": reviewer_name,
+        "reviewedAt": reviewed_at,
+        "publishedAt": published_at,
+    }
 
 
-def review_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
+def review_category(
+    base,
+    category_id: str,
+    _data: Mapping[str, Any] | None = None,
+    *,
+    reviewer: str = "",
+) -> dict:
     entry = repository.get_category_full(category_id)
     if not entry:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考卷", 404)
-    reviewer = str(data.get("reviewerName", "")).strip()[:100]
+    reviewer = str(reviewer or _compat_actor_label(base)).strip()[:100]
     if not reviewer:
-        raise _fail("REVIEWER_REQUIRED", "審核前請填寫審核者姓名")
+        raise _fail("REVIEWER_REQUIRED", "無法確認目前登入的審核者", 401)
     questions = repository.list_questions(category_id, include_inactive=False)
     if not questions:
         raise _fail("ASSESSMENT_EMPTY", "此考卷沒有啟用中的題目，無法完成審核", 409)
@@ -258,7 +280,7 @@ def list_publications(base, category_id: str) -> list[dict]:
     ]
 
 
-def publication_snapshot(category_id: str) -> tuple[dict, str, str]:
+def publication_snapshot(category_id: str, *, published_by: str = "") -> tuple[dict, str, str]:
     category = repository.get_category_full(category_id)
     if not category:
         raise ValueError("找不到此考卷")
@@ -279,6 +301,7 @@ def publication_snapshot(category_id: str) -> tuple[dict, str, str]:
             "drawRules": category.get("drawRules", {}) or {},
             "reviewerName": category.get("reviewerName", ""),
             "reviewedAt": category.get("reviewedAt", ""),
+            "publishedBy": str(published_by or "")[:100],
         },
         "questions": [
             {
@@ -303,7 +326,7 @@ def publication_snapshot(category_id: str) -> tuple[dict, str, str]:
     return snapshot, digest, publication_id
 
 
-def publish_category(base, category_id: str) -> dict:
+def publish_category(base, category_id: str, *, publisher: str = "") -> dict:
     entry = repository.get_category_full(category_id)
     if not entry:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考卷", 404)
@@ -312,7 +335,13 @@ def publish_category(base, category_id: str) -> dict:
     if not repository.list_questions(category_id, include_inactive=False):
         raise _fail("ASSESSMENT_EMPTY", "此考卷沒有啟用中的題目，不能發布", 409)
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    snapshot, snapshot_hash, publication_id = publication_snapshot(category_id)
+    publisher = str(publisher or _compat_actor_label(base)).strip()[:100]
+    if not publisher:
+        raise _fail("PUBLISHER_REQUIRED", "無法確認目前登入的發布者", 401)
+    snapshot, snapshot_hash, publication_id = publication_snapshot(
+        category_id,
+        published_by=publisher,
+    )
     repository.publish_category(
         category_id,
         publication_id=publication_id,
@@ -329,6 +358,7 @@ def publish_category(base, category_id: str) -> dict:
         "publicationId": publication_id,
         "publicationHash": snapshot_hash,
         "snapshotQuestionCount": len(snapshot.get("questions") or []),
+        "publishedBy": publisher,
     }
 
 

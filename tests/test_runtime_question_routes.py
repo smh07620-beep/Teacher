@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from flask import Flask, g, jsonify
 
-from teacher_app.assessments import runtime_question_routes
+from teacher_app.assessments import ai_job_schema, ai_jobs, runtime_question_routes
 from teacher_app.assessments.question_runtime import QuestionRuntime
 
 
@@ -116,7 +116,10 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
                     question TEXT NOT NULL, question_type TEXT NOT NULL DEFAULT 'choice', difficulty TEXT NOT NULL DEFAULT 'standard',
                     image_url TEXT NOT NULL DEFAULT '', options TEXT NOT NULL DEFAULT '[]', correct INTEGER NOT NULL DEFAULT 0,
                     answer_config TEXT NOT NULL DEFAULT '{}', explanation TEXT NOT NULL DEFAULT '',
-                    sort_order INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1
+                    sort_order INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1,
+                    status TEXT NOT NULL DEFAULT 'published', origin TEXT NOT NULL DEFAULT 'manual',
+                    reviewed_by TEXT NOT NULL DEFAULT '', reviewed_at TEXT NOT NULL DEFAULT '',
+                    version INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL DEFAULT '', normalized_hash TEXT NOT NULL DEFAULT ''
                 );
                 INSERT INTO quiz_categories(
                     id,group_key,training_area,title,active,draw_count,draw_rules,review_status
@@ -126,6 +129,7 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
                 ) VALUES('q-seed','cat-1','一般','種子題','choice','standard','','["A","B"]',0,'{}','',0,1);
                 """
             )
+            ai_job_schema.init_schema(conn, "sqlite")
         finally:
             conn.close()
 
@@ -143,6 +147,7 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
             ("/api/quiz-questions/import-url", "api_import_quiz_questions_url", "POST"),
             ("/api/ai-questions/status", "api_ai_question_status", "GET"),
             ("/api/ai-questions/generate", "api_ai_generate_questions", "POST"),
+            ("/api/ai-questions/jobs/<job_id>", "api_ai_question_job", "GET"),
             ("/api/ai-questions/import", "api_ai_import_questions", "POST"),
         }
         actual = set()
@@ -226,6 +231,44 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.get_json(), {"error": "此資源不在你的授權範圍。"})
 
+    def test_ai_job_status_is_scope_checked(self):
+        with patch.object(
+            runtime_question_routes.material_repository,
+            "get_material",
+            side_effect=self.base.get_material,
+        ):
+            queued = self.client.post(
+                "/api/ai-questions/generate",
+                json={"quizCategoryId": "cat-1", "materialIds": ["mat-1"]},
+            )
+        self.assertEqual(queued.status_code, 202, queued.get_data(as_text=True))
+        self.base.user = {
+            "username": "teacher",
+            "role": "clinical_teacher",
+            "preferredGroup": "grpMicro",
+        }
+        response = self.client.get(f"/api/ai-questions/jobs/{queued.get_json()['jobId']}")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json(), {"error": "此資源不在你的授權範圍。"})
+
+    def test_ai_enqueue_limits_active_jobs_per_actor(self):
+        with patch.dict("os.environ", {"AI_QUESTION_JOB_MAX_ACTIVE_PER_USER": "1"}), patch.object(
+            runtime_question_routes.material_repository,
+            "get_material",
+            side_effect=self.base.get_material,
+        ):
+            first = self.client.post(
+                "/api/ai-questions/generate",
+                json={"quizCategoryId": "cat-1", "materialIds": ["mat-1"]},
+            )
+            second = self.client.post(
+                "/api/ai-questions/generate",
+                json={"quizCategoryId": "cat-1", "materialIds": ["mat-1"]},
+            )
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(second.status_code, 429)
+        self.assertIn("排隊或執行中", second.get_json()["error"])
+
     def test_image_upload_uses_legacy_storage_boundary(self):
         response = self.client.post(
             "/api/quiz-question-images",
@@ -250,25 +293,100 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
         ):
             generated = self.client.post(
                 "/api/ai-questions/generate",
-                json={"quizCategoryId": "cat-1", "materialIds": ["mat-1"], "progressId": "p-1"},
+                json={"quizCategoryId": "cat-1", "materialIds": ["mat-1"]},
             )
-        self.assertEqual(generated.status_code, 200, generated.get_data(as_text=True))
-        self.assertEqual(generated.get_json()["strategyApplied"], "balanced")
-        self.assertEqual(generated.get_json()["sourceCount"], 1)
-        self.assertIn(("clear", "p-1"), self.base.progress)
-        self.assertTrue(any(item[:3] == ("p-1", 2, "準備 AI 出題") for item in self.base.progress if len(item) >= 3))
-        self.assertTrue(any(item[:3] == ("p-1", 100, "AI 候選題完成") for item in self.base.progress if len(item) >= 3))
+            self.assertEqual(generated.status_code, 202, generated.get_data(as_text=True))
+            job_id = generated.get_json()["jobId"]
+            queued = self.client.get(f"/api/ai-questions/jobs/{job_id}")
+            self.assertEqual(queued.status_code, 200)
+            self.assertEqual(queued.get_json()["status"], "queued")
+            processor = ai_jobs.AiQuestionJobProcessor(
+                runtime_question_routes.runtime_from_owner(self.base)
+            )
+            self.assertTrue(processor.run_job(job_id))
+        job = self.client.get(f"/api/ai-questions/jobs/{job_id}")
+        self.assertEqual(job.status_code, 200, job.get_data(as_text=True))
+        self.assertEqual(job.get_json()["status"], "completed")
+        self.assertEqual(job.get_json()["result"]["strategyApplied"], "balanced")
+        self.assertEqual(job.get_json()["result"]["sourceCount"], 1)
+        self.assertEqual(job.get_json()["progress"]["percent"], 100)
 
         imported = self.client.post(
             "/api/ai-questions/import",
             json={
                 "quizCategoryId": "cat-1",
-                "questions": [{"question": "AI 匯入題", "questionType": "choice", "options": ["A", "B"], "correct": 0}],
+                "questions": [{
+                    "question": "AI 匯入題",
+                    "questionType": "choice",
+                    "options": ["A", "B"],
+                    "correct": 0,
+                    "sourceMaterialId": "mat-1",
+                    "chunkId": "mat-1:chunk-0003",
+                    "sourceEvidence": "教材第三段直接支持答案。",
+                    "answerConfig": {
+                        "reviewSource": {
+                            "materialId": "mat-1",
+                            "materialTitle": "教材",
+                            "anchorType": "section",
+                            "section": "mat-1:chunk-0003",
+                            "reviewHint": "教材第三段直接支持答案。",
+                        }
+                    },
+                }],
             },
         )
         self.assertEqual(imported.status_code, 200, imported.get_data(as_text=True))
         self.assertEqual(imported.get_json()["imported"], 1)
         self.assertEqual(len(imported.get_json()["questions"]), 1)
+        self.assertEqual(imported.get_json()["questions"][0]["status"], "draft")
+        self.assertEqual(imported.get_json()["questions"][0]["origin"], "ai_generated")
+        review_source = imported.get_json()["questions"][0]["answerConfig"]["reviewSource"]
+        self.assertEqual(review_source["materialId"], "mat-1")
+        self.assertEqual(review_source["section"], "mat-1:chunk-0003")
+        conn, _ = self.base.connect()
+        try:
+            category = conn.execute(
+                "SELECT review_status,active FROM quiz_categories WHERE id='cat-1'"
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(category["review_status"], "draft")
+        self.assertEqual(category["active"], 0)
+
+    def test_external_video_url_uses_canonical_media_validation(self):
+        created = self.client.post(
+            "/api/quiz-questions",
+            json={
+                "quizCategoryId": "cat-1",
+                "question": "影片題",
+                "questionType": "choice",
+                "options": ["A", "B"],
+                "correct": 0,
+                "answerConfig": {
+                    "mediaUrl": "https://youtu.be/dQw4w9WgXcQ",
+                    "pauseAt": 12,
+                },
+            },
+        )
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        self.assertEqual(
+            created.get_json()["answerConfig"]["mediaUrl"],
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        )
+
+        rejected = self.client.post(
+            "/api/quiz-questions",
+            json={
+                "quizCategoryId": "cat-1",
+                "question": "不安全影片題",
+                "questionType": "choice",
+                "options": ["A", "B"],
+                "correct": 0,
+                "answerConfig": {"mediaUrl": "http://127.0.0.1/video.mp4"},
+            },
+        )
+        self.assertEqual(rejected.status_code, 400)
+        self.assertIn("HTTPS", rejected.get_json()["error"])
 
     def test_import_url_rejects_private_address_before_fetch(self):
         with patch(
@@ -730,6 +848,23 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
         self.assertEqual(allowed.status_code, 200)
         self.assertEqual(allowed.get_json()["count"], 1)
 
+    def test_batch_delete_rejects_missing_question_ids_atomically(self):
+        self.base.user = {"username": "root", "role": "system_admin"}
+        response = self.client.post(
+            "/api/quiz-questions/batch-delete",
+            json={"ids": ["q-seed", "q-missing"]},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json()["missing"], ["q-missing"])
+        conn, _ = self.base.connect()
+        try:
+            remaining = conn.execute(
+                "SELECT COUNT(*) AS n FROM quiz_questions WHERE id='q-seed'"
+            ).fetchone()["n"]
+        finally:
+            conn.close()
+        self.assertEqual(remaining, 1)
+
     def test_direct_flask_app_uses_request_actor_and_explicit_question_runtime(self):
         root = Path(self.tmp.name) / "direct"
         question_images = root / "question-images"
@@ -792,11 +927,17 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
         ):
             generated = client.post(
                 "/api/ai-questions/generate",
-                json={"quizCategoryId": "cat-direct", "materialIds": ["mat-direct"], "progressId": "direct-p"},
+                json={"quizCategoryId": "cat-direct", "materialIds": ["mat-direct"]},
             )
-        self.assertEqual(generated.status_code, 200, generated.get_data(as_text=True))
+            self.assertEqual(generated.status_code, 202, generated.get_data(as_text=True))
+            job_id = generated.get_json()["jobId"]
+            self.assertEqual(len(generated_calls), 0)
+            processor = ai_jobs.AiQuestionJobProcessor(runtime)
+            self.assertTrue(processor.run_job(job_id))
+        completed = client.get(f"/api/ai-questions/jobs/{job_id}")
+        self.assertEqual(completed.status_code, 200, completed.get_data(as_text=True))
+        self.assertEqual(completed.get_json()["status"], "completed")
         self.assertEqual(len(generated_calls), 1)
-        self.assertTrue((progress_dir / "direct-p.json").exists())
 
         def fail_generate(*_args, **_kwargs):
             raise RuntimeError("generation failed")
@@ -813,13 +954,16 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
         ):
             failed = client.post(
                 "/api/ai-questions/generate",
-                json={"quizCategoryId": "cat-direct", "materialIds": ["mat-direct"], "progressId": "failed-p"},
+                json={"quizCategoryId": "cat-direct", "materialIds": ["mat-direct"]},
             )
-        self.assertEqual(failed.status_code, 400)
-        self.assertEqual(failed.get_json(), {"error": "generation failed"})
-        progress = runtime._progress_store().read("failed-p")
-        self.assertEqual(progress["percent"], 0)
-        self.assertEqual(progress["stage"], "AI 出題失敗")
+            self.assertEqual(failed.status_code, 202)
+            failed_job_id = failed.get_json()["jobId"]
+            self.assertTrue(processor.run_job(failed_job_id))
+        failed_state = client.get(f"/api/ai-questions/jobs/{failed_job_id}")
+        self.assertEqual(failed_state.status_code, 200)
+        self.assertEqual(failed_state.get_json()["status"], "failed")
+        self.assertEqual(failed_state.get_json()["error"], "generation failed")
+        self.assertEqual(failed_state.get_json()["progress"]["stage"], "AI 出題失敗")
 
     def test_question_image_mega_failure_preserves_502_and_cleans_local_file(self):
         root = Path(self.tmp.name) / "mega-image"

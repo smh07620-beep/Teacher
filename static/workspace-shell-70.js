@@ -57,18 +57,52 @@
       details=document.createElement('details');
       details.id='system-advanced-maintenance-75';
       details.className='bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden';
-      details.innerHTML=`<summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3"><div><h4 class="font-black text-slate-950">🧰 進階維護</h4><p class="mt-1 text-xs text-slate-500">只在儲存搬移或背景工作異常時使用；日常教學不需要展開。</p></div><span class="text-xs font-bold text-slate-500">需要時展開</span></summary><div class="border-t border-slate-100 p-5 space-y-4"><div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">僅 system_admin 顯示。教材建立請使用「＋ 建立教學內容」；這裡只保留高風險維運工具。</div><div class="flex flex-wrap gap-2"><button id="system75-refresh-status" type="button" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold">🔄 重新檢查系統狀態</button><button id="system75-migrate-mega" type="button" class="rounded-xl bg-fuchsia-700 px-3 py-2 text-xs font-bold text-white">☁️ 搬移既有教材到 MEGA</button><button id="system75-migrate-r2" type="button" class="rounded-xl border border-cyan-300 bg-white px-3 py-2 text-xs font-bold text-cyan-800">☁️ R2 舊備援搬移</button></div><div data-system75-jobs></div></div>`;
+      details.innerHTML=`<summary class="cursor-pointer list-none p-5 flex items-center justify-between gap-3"><div><h4 class="font-black text-slate-950">🧰 進階維護</h4><p class="mt-1 text-xs text-slate-500">只在儲存搬移或維運異常時使用；日常教學不需要展開。</p></div><span class="text-xs font-bold text-slate-500">需要時展開</span></summary><div class="border-t border-slate-100 p-5 space-y-4"><div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">僅 system_admin 顯示。教材建立請使用「＋ 建立教學內容」；這裡只保留高風險維運工具。</div><div class="flex flex-wrap gap-2"><button id="system75-refresh-status" type="button" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold">🔄 重新檢查系統狀態</button><button id="system75-migrate-mega" type="button" class="rounded-xl bg-fuchsia-700 px-3 py-2 text-xs font-bold text-white">☁️ 搬移既有教材到 MEGA</button><button id="system75-migrate-r2" type="button" class="rounded-xl border border-cyan-300 bg-white px-3 py-2 text-xs font-bold text-cyan-800">☁️ R2 舊備援搬移</button></div></div>`;
       systemPanel.appendChild(details);
       details.querySelector('#system75-refresh-status').onclick=()=>window.renderAdminSystemStatus?.(true);
       details.querySelector('#system75-migrate-mega').onclick=async()=>{await window.migrateMaterialsToMega?.();await window.renderAdminSystemStatus?.(true);};
       details.querySelector('#system75-migrate-r2').onclick=async()=>{await window.migrateLocalMaterialsToR2?.();await window.renderAdminSystemStatus?.(true);};
     }
-    const jobs=document.getElementById('admin-material-jobs-panel');
-    const host=details.querySelector('[data-system75-jobs]');
-    if(jobs&&host&&jobs.parentElement!==host){
-      jobs.classList.remove('hidden');
-      jobs.removeAttribute('aria-hidden');
-      host.appendChild(jobs);
+  }
+
+  async function renderSystemSecurityStatus(force = false) {
+    if (!isSystemAdmin) return false;
+    const systemPanel = document.getElementById('admin-section-system');
+    if (!systemPanel) return false;
+    let section = document.getElementById('system-security-status-70');
+    if (!section) {
+      section = document.createElement('section');
+      section.id = 'system-security-status-70';
+      section.className = 'bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3';
+      section.innerHTML = `
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div><h4 class="font-black text-slate-900">🛡️ 安全狀態</h4><p class="mt-1 text-xs text-slate-500">只顯示安全策略是否啟用，不回傳或顯示任何密鑰。</p></div>
+          <button id="security-refresh-70" type="button" class="text-xs border border-slate-300 bg-white px-3 py-2 rounded-xl">🔄 更新</button>
+        </div>
+        <div id="security-status-70" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2"><div class="text-xs text-slate-400">讀取安全狀態中…</div></div>`;
+      systemPanel.appendChild(section);
+      section.querySelector('#security-refresh-70').onclick = () => renderSystemSecurityStatus(true);
+    }
+    if (section.dataset.loaded === '1' && !force) return true;
+    const securityHost = section.querySelector('#security-status-70');
+    try {
+      const securityResponse = await fetch('/api/security/status', {credentials: 'same-origin', cache: 'no-store'});
+      const security = await securityResponse.json().catch(() => ({}));
+      if (!securityResponse.ok) throw new Error(security.error || `讀取失敗（${securityResponse.status}）`);
+      const chip = (label, value, good=true) => `<div class="rounded-xl border ${good?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50'} p-3"><div class="text-[11px] font-bold text-slate-500">${escapeHtml(label)}</div><div class="mt-1 text-sm font-black text-slate-900">${escapeHtml(value)}</div></div>`;
+      securityHost.innerHTML = [
+        chip('Session 期限', `${Number(security.sessionHours||0)} 小時`, Number(security.sessionHours||0)>0),
+        chip('Secure Cookie', security.secureCookie?'已啟用':'未啟用', !!security.secureCookie),
+        chip('CSRF Origin 檢查', security.csrfOriginCheck?'已啟用':'未啟用', !!security.csrfOriginCheck),
+        chip('登入失敗限制', `${Number(security.loginRateLimitMaxAttempts||0)} 次`, Number(security.loginRateLimitMaxAttempts||0)>0),
+        chip('CSP', security.cspEnforced?'強制模式':'Report-Only', !!security.cspEnforced),
+        chip('Production Secret', security.productionSecretRequired?'正式環境必填':'非強制', !!security.productionSecretRequired),
+      ].join('');
+      section.dataset.loaded = '1';
+      return true;
+    } catch (error) {
+      if (securityHost) securityHost.innerHTML = `<div class="sm:col-span-2 lg:col-span-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">⚠️ ${escapeHtml(error.message)}</div>`;
+      return false;
     }
   }
 
@@ -187,10 +221,6 @@
     if (!canAudit) return false;
     if (auditPanel.dataset.loaded === '1' && !force) return true;
     auditPanel.innerHTML = `
-      <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
-        <div><h4 class="font-black text-slate-900">🛡️ 安全狀態</h4><p class="mt-1 text-xs text-slate-500">只顯示安全策略是否啟用，不回傳或顯示任何密鑰。</p></div>
-        <div id="security-status-70" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2"><div class="text-xs text-slate-400">讀取安全狀態中…</div></div>
-      </section>
       <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div><h4 class="font-black text-slate-950 text-lg">🔎 稽核／唯讀紀錄</h4>
@@ -208,23 +238,6 @@
     document.getElementById('audit-refresh-70').onclick = () => renderAudit(true);
     const status = document.getElementById('audit-status-70');
     const body = document.getElementById('audit-body-70');
-    const securityHost = document.getElementById('security-status-70');
-    try {
-      const securityResponse = await fetch('/api/security/status', {credentials: 'same-origin', cache: 'no-store'});
-      const security = await securityResponse.json().catch(() => ({}));
-      if (!securityResponse.ok) throw new Error(security.error || `讀取失敗（${securityResponse.status}）`);
-      const chip = (label, value, good=true) => `<div class="rounded-xl border ${good?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50'} p-3"><div class="text-[11px] font-bold text-slate-500">${escapeHtml(label)}</div><div class="mt-1 text-sm font-black text-slate-900">${escapeHtml(value)}</div></div>`;
-      securityHost.innerHTML = [
-        chip('Session 期限', `${Number(security.sessionHours||0)} 小時`, Number(security.sessionHours||0)>0),
-        chip('Secure Cookie', security.secureCookie?'已啟用':'未啟用', !!security.secureCookie),
-        chip('CSRF Origin 檢查', security.csrfOriginCheck?'已啟用':'未啟用', !!security.csrfOriginCheck),
-        chip('登入失敗限制', `${Number(security.loginRateLimitMaxAttempts||0)} 次`, Number(security.loginRateLimitMaxAttempts||0)>0),
-        chip('CSP', security.cspEnforced?'強制模式':'Report-Only', !!security.cspEnforced),
-        chip('Production Secret', security.productionSecretRequired?'正式環境必填':'非強制', !!security.productionSecretRequired),
-      ].join('');
-    } catch (securityError) {
-      if (securityHost) securityHost.innerHTML = `<div class="sm:col-span-2 lg:col-span-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">⚠️ ${escapeHtml(securityError.message)}</div>`;
-    }
     try {
       const response = await fetch('/api/pgy/audit', {credentials: 'same-origin', cache: 'no-store'});
       const data = await response.json().catch(() => []);
@@ -271,6 +284,9 @@
       return {handled:true, result:true};
     }
     return null;
+  });
+  adminShell?.addAfterWorkspace(({workspace}) => {
+    if (workspace === 'system') void renderSystemSecurityStatus(false);
   });
   adminShell?.addAfterModal(({show}) => {
     if (show) {

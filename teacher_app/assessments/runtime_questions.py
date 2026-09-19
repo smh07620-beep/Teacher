@@ -11,6 +11,7 @@ from typing import Any, Mapping
 
 from teacher_app.assessments import repository
 from teacher_app.common import db as common_db
+from teacher_app.materials import external_media as external_media_service
 
 
 QUESTION_TYPES = {"choice", "essay", "multi", "fill", "image", "video", "true_false"}
@@ -62,7 +63,23 @@ def _clean_review_source(value: Any) -> dict:
     return out
 
 
-def _normalized_common(data: Mapping[str, Any], *, existing: Mapping[str, Any] | None = None) -> dict:
+def _canonical_media_url(value: Any, allow_hosts=()) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith("/") and not raw.startswith("//"):
+        return raw[:1500]
+    return str(
+        external_media_service.validate_external_url(raw, allow_hosts).get("canonicalUrl") or ""
+    )[:1500]
+
+
+def _normalized_common(
+    data: Mapping[str, Any],
+    *,
+    existing: Mapping[str, Any] | None = None,
+    allow_hosts=(),
+) -> dict:
     existing = existing or {}
     question = str(data.get("question", existing.get("question", ""))).strip()
     question_type = str(data.get("questionType", existing.get("questionType", "choice"))).lower()
@@ -101,7 +118,7 @@ def _normalized_common(data: Mapping[str, Any], *, existing: Mapping[str, Any] |
         if not answer_config["acceptedAnswers"]:
             raise ValueError("填空題至少要設定一個可接受答案")
     if question_type == "video":
-        answer_config["mediaUrl"] = str(answer_config.get("mediaUrl", "")).strip()[:1500]
+        answer_config["mediaUrl"] = _canonical_media_url(answer_config.get("mediaUrl", ""), allow_hosts)
         try:
             answer_config["pauseAt"] = max(0, float(answer_config.get("pauseAt", 0) or 0))
         except Exception:
@@ -133,11 +150,19 @@ def _normalized_common(data: Mapping[str, Any], *, existing: Mapping[str, Any] |
     }
 
 
-def prepare_question_update(entry: Mapping[str, Any], data: Mapping[str, Any]) -> dict:
-    return _normalized_common(data if isinstance(data, dict) else {}, existing=entry)
+def prepare_question_update(entry: Mapping[str, Any], data: Mapping[str, Any], *, allow_hosts=()) -> dict:
+    normalized = _normalized_common(
+        data if isinstance(data, dict) else {},
+        existing=entry,
+        allow_hosts=allow_hosts,
+    )
+    media_url = normalized["answerConfig"].get("mediaUrl")
+    if media_url:
+        normalized["answerConfig"]["mediaUrl"] = _canonical_media_url(media_url, allow_hosts)
+    return normalized
 
 
-def create_question(data: Mapping[str, Any]) -> dict:
+def create_question(data: Mapping[str, Any], *, allow_hosts=()) -> dict:
     category_id = str(data.get("quizCategoryId", "")).strip()
     if not repository.get_category_full(category_id):
         raise ValueError("找不到對應的考題頁籤，請先建立頁籤")
@@ -155,7 +180,13 @@ def create_question(data: Mapping[str, Any]) -> dict:
     if not question or (question_type in OPTION_TYPES and (not isinstance(raw_options, list) or len(raw_options) < 2)):
         raise ValueError("請輸入題目；選擇／多選／圖片／影片題至少需要 2 個選項")
 
-    normalized = _normalized_common({**dict(data), "questionType": question_type, "options": raw_options})
+    normalized = _normalized_common(
+        {**dict(data), "questionType": question_type, "options": raw_options},
+        allow_hosts=allow_hosts,
+    )
+    media_url = normalized["answerConfig"].get("mediaUrl")
+    if media_url:
+        normalized["answerConfig"]["mediaUrl"] = _canonical_media_url(media_url, allow_hosts)
     review_source = _clean_review_source(normalized["answerConfig"].get("reviewSource"))
     if review_source:
         normalized["answerConfig"]["reviewSource"] = review_source
@@ -184,22 +215,29 @@ def create_question(data: Mapping[str, Any]) -> dict:
                 "active": True,
             },
         )
+        repository.reset_question_review_on_connection(
+            conn,
+            kind,
+            [question_id],
+            origin="manual",
+        )
         mark_category_draft(category_id, conn, kind)
     return repository.get_question(question_id) or {"id": question_id, **normalized}
 
 
-def update_question(question_id: str, data: Mapping[str, Any]) -> dict:
+def update_question(question_id: str, data: Mapping[str, Any], *, allow_hosts=()) -> dict:
     entry = repository.get_question(question_id)
     if not entry:
         raise LookupError("找不到此題目")
-    normalized = prepare_question_update(entry, data)
+    normalized = prepare_question_update(entry, data, allow_hosts=allow_hosts)
     with common_db.transaction() as (conn, kind):
         repository.update_runtime_question_on_connection(conn, kind, question_id, normalized)
+        repository.reset_question_review_on_connection(conn, kind, [question_id])
         mark_category_draft(entry.get("quizCategoryId"), conn, kind)
     return {"ok": True, "question": {"id": question_id, **normalized}}
 
 
-def batch_update(items: Any) -> dict:
+def batch_update(items: Any, *, allow_hosts=()) -> dict:
     if not isinstance(items, list) or not items:
         raise ValueError("items 必須是非空陣列")
     if len(items) > 200:
@@ -229,12 +267,17 @@ def batch_update(items: Any) -> dict:
         normalized_items = []
         for question_id in requested:
             try:
-                normalized = prepare_question_update(existing[question_id], patches[question_id])
+                normalized = prepare_question_update(
+                    existing[question_id],
+                    patches[question_id],
+                    allow_hosts=allow_hosts,
+                )
             except ValueError as exc:
                 raise ValueError(f"題目 {question_id}：{exc}") from exc
             normalized_items.append((question_id, normalized))
         for question_id, normalized in normalized_items:
             repository.update_runtime_question_on_connection(conn, kind, question_id, normalized)
+        repository.reset_question_review_on_connection(conn, kind, requested)
         for category_id in {
             str(existing[question_id].get("quizCategoryId", "")) for question_id in requested
         }:
@@ -258,6 +301,10 @@ def batch_delete(ids: Any) -> dict:
     if len(question_ids) > 200:
         raise ValueError("一次最多刪除 200 題")
     with common_db.transaction() as (conn, kind):
+        existing = repository.get_questions_by_ids_on_connection(conn, kind, question_ids)
+        missing = [question_id for question_id in question_ids if question_id not in existing]
+        if missing:
+            return {"missing": missing}
         category_ids = repository.delete_questions_on_connection(conn, kind, question_ids)
         for category_id in category_ids:
             mark_category_draft(category_id, conn, kind)
@@ -279,7 +326,7 @@ def delete_question(question_id: str) -> dict:
     return {"ok": True}
 
 
-def insert_payload(category_id: str, payload: Mapping[str, Any]) -> str:
+def insert_payload(category_id: str, payload: Mapping[str, Any], *, allow_hosts=()) -> str:
     qtext = str(payload.get("question", "")).strip()
     qtype = str(payload.get("questionType", "choice")).lower()
     if qtype not in QUESTION_TYPES:
@@ -318,7 +365,7 @@ def insert_payload(category_id: str, payload: Mapping[str, Any]) -> str:
         config["acceptedAnswers"] = answers
         config["caseSensitive"] = bool(config.get("caseSensitive", False))
     if config.get("mediaUrl"):
-        config["mediaUrl"] = str(config.get("mediaUrl"))[:1500]
+        config["mediaUrl"] = _canonical_media_url(config.get("mediaUrl"), allow_hosts)
         try:
             config["pauseAt"] = max(0, float(config.get("pauseAt", 0) or 0))
         except Exception:
@@ -348,10 +395,16 @@ def insert_payload(category_id: str, payload: Mapping[str, Any]) -> str:
                 "active": True,
             },
         )
+        repository.reset_question_review_on_connection(
+            conn,
+            kind,
+            [question_id],
+            origin="imported",
+        )
     return question_id
 
 
-def insert_payloads_bulk(category_id: str, items: list[Mapping[str, Any]]) -> list[dict]:
+def insert_payloads_bulk(category_id: str, items: list[Mapping[str, Any]], *, allow_hosts=()) -> list[dict]:
     prepared = []
     for payload in items:
         if not isinstance(payload, dict):
@@ -410,11 +463,16 @@ def insert_payloads_bulk(category_id: str, items: list[Mapping[str, Any]]) -> li
             config["acceptedAnswers"] = answers
             config["caseSensitive"] = bool(config.get("caseSensitive", False))
         if config.get("mediaUrl"):
-            config["mediaUrl"] = str(config.get("mediaUrl"))[:1500]
+            config["mediaUrl"] = _canonical_media_url(config.get("mediaUrl"), allow_hosts)
             try:
                 config["pauseAt"] = max(0, float(config.get("pauseAt", 0) or 0))
             except Exception:
                 config["pauseAt"] = 0
+        review_source = _clean_review_source(config.get("reviewSource"))
+        if review_source:
+            config["reviewSource"] = review_source
+        else:
+            config.pop("reviewSource", None)
         difficulty = str(payload.get("difficulty", "standard") or "standard").lower()
         if difficulty not in {"basic", "standard", "advanced"}:
             difficulty = "standard"
@@ -432,6 +490,8 @@ def insert_payloads_bulk(category_id: str, items: list[Mapping[str, Any]]) -> li
                 "answerConfig": config,
                 "explanation": str(payload.get("explanation", ""))[:4000],
                 "active": True,
+                "status": "draft",
+                "origin": "ai_generated",
             }
         )
     if not prepared:
@@ -459,4 +519,11 @@ def insert_payloads_bulk(category_id: str, items: list[Mapping[str, Any]]) -> li
                     "active": True,
                 },
             )
+        repository.reset_question_review_on_connection(
+            conn,
+            kind,
+            [item["id"] for item in prepared],
+            origin="ai_generated",
+        )
+        mark_category_draft(category_id, conn, kind)
     return prepared

@@ -10,6 +10,7 @@ class UxConsolidation681Tests(unittest.TestCase):
         cls.html=ROOT.joinpath("static/system.html").read_text(encoding="utf-8")
         cls.workspace=ROOT.joinpath("static/admin-workspace.js").read_text(encoding="utf-8")
         cls.external=ROOT.joinpath("static/admin-external-media.js").read_text(encoding="utf-8")
+        cls.external_client=ROOT.joinpath("static/external-material-681.js").read_text(encoding="utf-8")
 
     def test_existing_wizard_is_course_first_and_multi_material(self):
         for marker in (
@@ -37,6 +38,7 @@ class UxConsolidation681Tests(unittest.TestCase):
     def test_external_material_drawer_uses_safe_backend_only(self):
         for marker in ('external-material-drawer','YouTube、Shorts','openExternalMaterialCreateDrawer'):
             self.assertIn(marker,self.html)
-        self.assertIn('/external-media',self.external)
+        self.assertIn('ExternalMediaClient',self.external)
+        self.assertIn('/external-media',self.external_client)
         self.assertNotIn('<iframe',self.external.lower())
         self.assertNotIn('iframe',self.html[self.html.index('external-material-drawer'):self.html.index('<!-- Footer -->')])

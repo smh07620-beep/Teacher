@@ -67,7 +67,19 @@ def validate_external_url(value: str, allow_hosts=()) -> dict:
         }
 
     if host in {"vimeo.com", "www.vimeo.com", "player.vimeo.com"}:
-        raise ValueError("目前僅支援 YouTube、YouTube Shorts 與核准的 HTTPS MP4/WebM。")
+        parts = [part for part in parsed.path.split("/") if part]
+        video_id = ""
+        if host == "player.vimeo.com" and len(parts) >= 2 and parts[0] == "video":
+            video_id = parts[1]
+        elif parts:
+            video_id = parts[0]
+        if not re.fullmatch(r"[0-9]{6,12}", video_id or ""):
+            raise ValueError("Vimeo video id 無效")
+        return {
+            "provider": "vimeo",
+            "canonicalUrl": f"https://vimeo.com/{video_id}",
+            "videoId": video_id,
+        }
 
     configured = {str(item).strip().lower() for item in allow_hosts if str(item).strip()} | DIRECT_HOSTS
     if host not in configured or not any(parsed.path.lower().endswith(ext) for ext in VIDEO_TYPES):

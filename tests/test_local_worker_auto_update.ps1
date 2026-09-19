@@ -9,10 +9,6 @@ try {
   $fakeGit = Join-Path $fakeBin "git.cmd"
   @'
 @echo off
-if "%1"=="branch" (
-  if exist "%~dp0..\.fake-branch-feature" (echo feature) else (echo main)
-  exit /b 0
-)
 if "%1"=="remote" (
   echo https://github.com/smh07620-beep/Teacher.git
   exit /b 0
@@ -25,79 +21,73 @@ if "%1"=="fetch" (
   if exist "%~dp0..\.fake-fetch-fail" exit /b 1
   exit /b 0
 )
+if "%1"=="cat-file" (
+  if exist "%~dp0..\.fake-lightweight" (echo commit) else (echo tag)
+  exit /b 0
+)
+if "%1"=="verify-tag" (
+  if exist "%~dp0..\.fake-unsigned" exit /b 1
+  exit /b 0
+)
 if "%1"=="rev-parse" (
   if "%2"=="HEAD" (
-    if exist "%~dp0..\.fake-pulled" (echo newsha) else (echo oldsha)
+    if exist "%~dp0..\.fake-merged" (echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb) else (echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
     exit /b 0
   )
-  if "%2"=="origin/main" echo newsha
+  echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
   exit /b 0
 )
 if "%1"=="merge-base" (
   if exist "%~dp0..\.fake-diverged" exit /b 1
   exit /b 0
 )
-if "%1"=="pull" (
-  if exist "%~dp0..\.fake-pull-fail" exit /b 1
-  type nul > "%~dp0..\.fake-pulled"
+if "%1"=="merge" (
+  if exist "%~dp0..\.fake-merge-fail" exit /b 1
+  type nul > "%~dp0..\.fake-merged"
   exit /b 0
 )
 exit /b 1
 '@ | Set-Content $fakeGit -Encoding ascii
-  $savedPath = $env:Path; $env:Path = "$fakeBin;$savedPath"
+
+  $savedPath = $env:Path
+  $savedRef = $env:MATERIAL_WORKER_RELEASE_REF
+  $savedCommit = $env:MATERIAL_WORKER_RELEASE_COMMIT
+  $savedSigned = $env:MATERIAL_WORKER_REQUIRE_SIGNED_TAG
+  $env:Path = "$fakeBin;$savedPath"
+  $env:MATERIAL_WORKER_REQUIRE_SIGNED_TAG = "true"
+
+  function Clear-Markers {
+    foreach ($name in @(".fake-merged", ".fake-dirty", ".fake-fetch-fail", ".fake-lightweight", ".fake-unsigned", ".fake-diverged", ".fake-merge-fail")) {
+      Remove-Item (Join-Path $sandbox $name) -ErrorAction SilentlyContinue
+    }
+  }
   function Assert-Exit([string]$Name, [int]$Expected) {
-    Remove-Item (Join-Path $sandbox ".fake-pulled") -ErrorAction SilentlyContinue
     & (Join-Path $sandbox "update_material_worker.ps1") 2>$null
     if ($LASTEXITCODE -ne $Expected) { throw "$Name expected exit $Expected, got $LASTEXITCODE" }
   }
-  Assert-Exit "clean behind origin" 0
-  if (-not (Test-Path (Join-Path $sandbox ".fake-pulled"))) { throw "clean update did not use fast-forward pull" }
-  New-Item (Join-Path $sandbox ".fake-dirty") | Out-Null; Assert-Exit "dirty tree" 24; Remove-Item (Join-Path $sandbox ".fake-dirty")
-  $normalFakeGit = Get-Content $fakeGit -Raw
-  @'
-@echo off
-if "%1"=="branch" (echo main & exit /b 0)
-if "%1"=="remote" (echo https://github.com/smh07620-beep/Teacher.git & exit /b 0)
-if "%1"=="status" exit /b 0
-if "%1"=="fetch" exit /b 0
-if "%1"=="rev-parse" (
-  if "%2"=="HEAD" echo oldsha
-  if "%2"=="origin/main" echo newsha
-  exit /b 0
-)
-if "%1"=="merge-base" exit /b 1
-exit /b 1
-'@ | Set-Content $fakeGit -Encoding ascii
-  Assert-Exit "diverged history" 27
-  $normalFakeGit | Set-Content $fakeGit -Encoding ascii
-  New-Item (Join-Path $sandbox ".fake-branch-feature") | Out-Null; Assert-Exit "wrong branch" 21; Remove-Item (Join-Path $sandbox ".fake-branch-feature")
-  @'
-@echo off
-if "%1"=="branch" (echo main & exit /b 0)
-if "%1"=="remote" (echo https://github.com/smh07620-beep/Teacher.git & exit /b 0)
-if "%1"=="status" exit /b 0
-if "%1"=="fetch" exit /b 1
-exit /b 1
-'@ | Set-Content $fakeGit -Encoding ascii
-  Assert-Exit "fetch failure" 25
-  @'
-@echo off
-if "%1"=="branch" (echo main & exit /b 0)
-if "%1"=="remote" (echo https://github.com/smh07620-beep/Teacher.git & exit /b 0)
-if "%1"=="status" exit /b 0
-if "%1"=="fetch" exit /b 0
-if "%1"=="rev-parse" (
-  if "%2"=="HEAD" echo oldsha
-  if "%2"=="origin/main" echo newsha
-  exit /b 0
-)
-if "%1"=="merge-base" exit /b 0
-if "%1"=="pull" exit /b 1
-exit /b 1
-'@ | Set-Content $fakeGit -Encoding ascii
-  Assert-Exit "pull failure" 28
-  Write-Output "PowerShell safe-update regression tests passed (6 scenarios)."
+
+  Clear-Markers
+  Remove-Item Env:MATERIAL_WORKER_RELEASE_REF -ErrorAction SilentlyContinue
+  Assert-Exit "missing approved release" 21
+
+  $env:MATERIAL_WORKER_RELEASE_REF = "v6.8.1"
+  Clear-Markers; Assert-Exit "clean approved release" 0
+  if (-not (Test-Path (Join-Path $sandbox ".fake-merged"))) { throw "approved release did not use fast-forward merge" }
+
+  Clear-Markers; New-Item (Join-Path $sandbox ".fake-dirty") | Out-Null; Assert-Exit "dirty tree" 24
+  Clear-Markers; New-Item (Join-Path $sandbox ".fake-unsigned") | Out-Null; Assert-Exit "unsigned tag" 27
+  Clear-Markers; New-Item (Join-Path $sandbox ".fake-diverged") | Out-Null; Assert-Exit "diverged history" 30
+  Clear-Markers; New-Item (Join-Path $sandbox ".fake-merge-fail") | Out-Null; Assert-Exit "merge failure" 31
+
+  Clear-Markers
+  $env:MATERIAL_WORKER_RELEASE_COMMIT = "ccccccc"
+  Assert-Exit "commit pin mismatch" 29
+
+  Write-Output "PowerShell pinned-release worker update regression tests passed (7 scenarios)."
 } finally {
   if ($savedPath) { $env:Path = $savedPath }
+  if ($null -eq $savedRef) { Remove-Item Env:MATERIAL_WORKER_RELEASE_REF -ErrorAction SilentlyContinue } else { $env:MATERIAL_WORKER_RELEASE_REF = $savedRef }
+  if ($null -eq $savedCommit) { Remove-Item Env:MATERIAL_WORKER_RELEASE_COMMIT -ErrorAction SilentlyContinue } else { $env:MATERIAL_WORKER_RELEASE_COMMIT = $savedCommit }
+  if ($null -eq $savedSigned) { Remove-Item Env:MATERIAL_WORKER_REQUIRE_SIGNED_TAG -ErrorAction SilentlyContinue } else { $env:MATERIAL_WORKER_REQUIRE_SIGNED_TAG = $savedSigned }
   Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
 }

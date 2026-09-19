@@ -2,6 +2,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from teacher_app.storage.worker_runtime import WorkerMaterialStorageAdapter
@@ -43,6 +44,38 @@ class _DriveService:
 
 
 class WorkerStorageRuntimeTests(unittest.TestCase):
+    def test_qpdf_check_rejects_structurally_invalid_pdf(self):
+        adapter = WorkerMaterialStorageAdapter()
+        with tempfile.TemporaryDirectory() as temp_name:
+            pdf = Path(temp_name) / "source.pdf"
+            pdf.write_bytes(b"%PDF-1.7\n")
+            invalid = SimpleNamespace(returncode=2, stdout=b"", stderr=b"invalid xref")
+            with patch("teacher_app.storage.worker_runtime.shutil.which", return_value="qpdf"), patch(
+                "teacher_app.storage.worker_runtime.subprocess.run", return_value=invalid
+            ):
+                with self.assertRaisesRegex(RuntimeError, "qpdf"):
+                    adapter._linearize_pdf_in_place(pdf)
+
+    def test_qpdf_checks_before_and_after_linearization(self):
+        adapter = WorkerMaterialStorageAdapter()
+        calls = []
+        with tempfile.TemporaryDirectory() as temp_name:
+            pdf = Path(temp_name) / "source.pdf"
+            pdf.write_bytes(b"%PDF-1.7\n")
+
+            def run(args, **_kwargs):
+                calls.append(list(args))
+                if "--linearize" in args:
+                    Path(args[-1]).write_bytes(b"%PDF-1.7\nlinearized")
+                return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+            with patch("teacher_app.storage.worker_runtime.shutil.which", return_value="qpdf"), patch(
+                "teacher_app.storage.worker_runtime.subprocess.run", side_effect=run
+            ):
+                self.assertTrue(adapter._linearize_pdf_in_place(pdf))
+        self.assertEqual(sum("--check" in call for call in calls), 2)
+        self.assertEqual(sum("--linearize" in call for call in calls), 1)
+
     def test_runtime_module_has_no_flask_or_legacy_app_dependency(self):
         source = ROOT.joinpath(
             "teacher_app", "storage", "worker_runtime.py"
@@ -107,6 +140,39 @@ class WorkerStorageRuntimeTests(unittest.TestCase):
         self.assertEqual(prefix, "")
         self.assertEqual(meta["materialFolderId"], "folder-1")
         self.assertEqual(meta["sourceFileId"], "source-1")
+
+    def test_gdrive_document_upload_publishes_index_derivative(self):
+        adapter = WorkerMaterialStorageAdapter()
+        service = _DriveService()
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.pdf"
+            source.write_bytes(b"pdf")
+            index = temp / "index.txt"
+            index.write_text("全文索引", encoding="utf-8")
+            slides = temp / "slides"
+            slides.mkdir()
+            with (
+                patch(
+                    "teacher_app.storage.worker_runtime.providers.gdrive_service",
+                    return_value=service,
+                ),
+                patch(
+                    "teacher_app.storage.worker_runtime.providers.gdrive_media_file_upload",
+                    return_value=object(),
+                ),
+            ):
+                _key, _prefix, meta = adapter.upload_material_tree_to_gdrive(
+                    "material-1",
+                    source,
+                    slides,
+                    0,
+                    original_name="lesson.pdf",
+                    derivatives={"index.txt": index},
+                )
+        self.assertEqual(meta["derivedFiles"]["index.txt"], "source-1")
+        names = [body["name"] for body, _media, _fields in service.files_api.created]
+        self.assertIn("index.txt", names)
 
 
 if __name__ == "__main__":

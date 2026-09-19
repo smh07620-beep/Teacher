@@ -18,41 +18,18 @@
   };
 
   window.sha256File = async function(file){
-    const buf=await file.arrayBuffer();
-    const hash=await crypto.subtle.digest('SHA-256',buf);
-    return [...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('');
+    if(!window.MaterialUploadClient?.sha256Blob) throw new Error('教材上傳元件尚未載入');
+    return window.MaterialUploadClient.sha256Blob(file);
   };
 
   window.directR2MaterialUpload = async function(file,meta,key,status){
-    if(!window.crypto?.subtle) throw new Error('此瀏覽器不支援大型影音安全雜湊直傳');
-    status.textContent=`⏳ 正在計算 ${file.name} SHA-256…`;
-    const sha256=await window.sha256File(file);
-    const init=await fetch('/api/material-upload/init',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','X-Admin-Key':key},
-      body:JSON.stringify({...meta,filename:file.name,size:file.size,sha256,partSizeMb:16})
-    });
-    const data=await init.json().catch(()=>({}));
-    if(!init.ok) throw new Error(data.error||'無法建立大型影音直傳');
-    const etags=[];
-    for(const part of data.parts||[]){
-      const start=(part.partNumber-1)*data.partSize;
-      const end=Math.min(file.size,start+data.partSize);
-      const res=await fetch(part.url,{method:'PUT',body:file.slice(start,end)});
-      if(!res.ok) throw new Error(`R2 第 ${part.partNumber} 段上傳失敗`);
-      const etag=res.headers.get('etag');
-      if(!etag) throw new Error('R2 未回傳 ETag，請檢查 bucket CORS ExposeHeaders');
-      etags.push({partNumber:part.partNumber,etag});
-      status.textContent=`⬆️ ${file.name}｜R2 直傳 ${Math.round(end/file.size*100)}%`;
-    }
-    const done=await fetch(`/api/material-upload/${encodeURIComponent(data.uploadId)}/complete`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','X-Admin-Key':key},
-      body:JSON.stringify({parts:etags})
-    });
-    const result=await done.json().catch(()=>({}));
-    if(!done.ok) throw new Error(result.error||'R2 直傳完成驗證失敗');
-    return result;
+    if(!window.MaterialUploadClient?.directUpload) throw new Error('教材上傳元件尚未載入');
+    const fd=new FormData();
+    fd.append('file',file);
+    Object.entries(meta||{}).forEach(([name,value])=>fd.append(name,String(value??'')));
+    return window.MaterialUploadClient.directUpload(fd,{headers:{'X-Admin-Key':key},fileName:file.name,onProgress:e=>{
+      if(status) status.textContent=`⬆️ ${file.name}｜R2 直傳 ${e.percent}%`;
+    }});
   };
 
   window.adminUploadMaterials = async function(){
@@ -74,7 +51,7 @@
     for(let n=0;n<files.length;n++){
       const file=files[n];
       const progressId=`manual-${Date.now()}-${n}-${Math.random().toString(36).slice(2,8)}`;
-      status.innerHTML=`⏳ ${n+1}/${files.length} 接收「${escapeHtml(file.name)}」<span class="block text-[11px] text-slate-500 mt-1">只等待檔案傳到 Render；轉檔、壓縮、MEGA 上傳會在背景繼續。</span>`;
+      status.innerHTML=`⏳ ${n+1}/${files.length} 接收「${escapeHtml(file.name)}」<span class="block text-[11px] text-slate-500 mt-1">只等待檔案傳到雲端暫存；轉檔、壓縮、正式儲存會在背景繼續。</span>`;
       const area=document.getElementById('admin-material-area')?.value||currentTrainingArea;
       const courseId=document.getElementById('admin-material-course')?.value||'';
       const materialType=document.getElementById('admin-material-type')?.value||'standard';
@@ -96,10 +73,7 @@
       fd.append('atlasNormality',document.getElementById('admin-atlas-normality')?.value||'');
       fd.append('atlasTags',document.getElementById('admin-atlas-tags')?.value||'');
       try{
-        const meta={title,desc,category,group,area,courseId,materialType};
-        const data=file.size>250*1024*1024
-          ? await window.directR2MaterialUpload(file,meta,key,status)
-          : await window.uploadAdminMaterialRequest(fd,progressId,file.name,key,status);
+        const data=await window.uploadAdminMaterialRequest(fd,progressId,file.name,key,status);
         queued++;
         status.innerHTML=`✅ ${n+1}/${files.length}「${escapeHtml(file.name)}」已加入背景佇列<span class="block text-[11px] mt-1">${escapeHtml(data.jobId||'')}｜現在可切換頁面或關閉後台視窗，工作會繼續。</span>`;
       }catch(err){

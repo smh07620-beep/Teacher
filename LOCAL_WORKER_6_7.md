@@ -38,13 +38,14 @@ from `ADMIN_KEY`.
 ## Windows 安全自動更新（6.8.1）
 
 第一次仍須由院內人員把 repository 更新到含本功能的版本，並建立
-`.venv`。此後 Windows 開機或 Task Scheduler 啟動時，canonical launcher
-會只向 `origin/main` 執行 `git fetch origin main`；只有乾淨的 `main` 且
-本機 HEAD 是 `origin/main` 的 ancestor 時，才會以 `git pull --ff-only
-origin main` 更新。它不會切換 branch、變更 remote、stash、reset 或讀出
+`.venv`。Worker 不再自動追蹤 `main`。只有明確設定核准的 annotated release
+tag 時，更新器才會抓取該 tag；預設還會執行 `git verify-tag` 驗證簽章，並可
+再用核准 commit SHA 做第二層 pin。更新器只允許 fast-forward 到這個已核准
+release，不會切換 branch、變更 remote、stash、reset 或讀出
 `.local-worker.env`。
 
-執行中的 Worker 預設每六小時只在沒有 claimed/processing job 時檢查一次。
+執行中的 Worker 只有在 `MATERIAL_WORKER_AUTO_UPDATE=true` 時才會啟用更新
+檢查，且只在沒有 claimed/processing job 時執行。
 發現並成功安裝新版時，Worker 以 exit code `75` 請 launcher 重啟；不會在
 Python process 中 hot reload。更新、fetch 或依賴同步失敗時，launcher 會記錄
 不含 secrets 的警告，並繼續嘗試啟動既有本機版本。可設定：
@@ -52,11 +53,17 @@ Python process 中 hot reload。更新、fetch 或依賴同步失敗時，launch
 ```text
 MATERIAL_WORKER_AUTO_UPDATE=false
 MATERIAL_WORKER_UPDATE_INTERVAL_HOURS=6
+MATERIAL_WORKER_RELEASE_REF=v6.8.1
+# 可選：再 pin 到核准 commit 的 7–40 碼 SHA
+MATERIAL_WORKER_RELEASE_COMMIT=abcdef1
+# 預設 true；正式環境建議維持簽章驗證
+MATERIAL_WORKER_REQUIRE_SIGNED_TAG=true
 ```
 
-interval 最低為一小時。要手動安全檢查，請在 repository root 執行
-`./update_material_worker.ps1`。此 script 拒絕 dirty tree、非 `main`、缺少
-`origin`、diverged history 或 fetch 失敗，並保留目前 checkout。
+interval 最低為一小時。要手動安全檢查，先設定核准的 release tag，再在
+repository root 執行 `./update_material_worker.ps1`。此 script 拒絕 dirty
+tree、缺少 `origin`、非 annotated tag、簽章驗證失敗、commit pin 不符、
+diverged history 或 fetch 失敗，並保留目前 checkout。
 
 Task Scheduler 請使用唯一 canonical entrypoint（工作目錄為
 `C:\TeacherWorker`）：

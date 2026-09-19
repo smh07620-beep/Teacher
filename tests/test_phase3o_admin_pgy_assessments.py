@@ -23,8 +23,8 @@ class Phase3OAdminPgyAssessmentsTests(unittest.TestCase):
             "renderAdminPgyAssessments",
         ):
             self.assertIn(f"window.{name}", self.source)
-        self.assertIn('onclick="adminTriggerPgyTemplateUpload', self.source)
-        self.assertIn('onclick="adminDeletePgyTemplate', self.source)
+        self.assertIn('data-csp-click="adminTriggerPgyTemplateUpload', self.source)
+        self.assertIn('data-csp-click="adminDeletePgyTemplate', self.source)
         self.assertIn("admin-pgy-template-upload-input", self.source)
 
     def test_template_and_assessment_api_contracts_remain_server_authorized(self):

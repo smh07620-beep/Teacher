@@ -184,10 +184,18 @@ def register_production_hardening(
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         if app.config.get("SESSION_COOKIE_SECURE"):
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        # All live HTML surfaces have converged away from inline scripts and
+        # inline event attributes.  Keep the browser-runtime compatibility
+        # needed by the current Tailwind/CDN stack, but deny inline script
+        # execution globally instead of maintaining a weaker portal branch.
+        script_src = (
+            "script-src 'self' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "script-src-attr 'none'; "
+        )
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-            "style-src 'self' 'unsafe-inline' https:; "
+            + script_src
+            + "style-src 'self' 'unsafe-inline' https:; "
             "img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; "
             "connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
         )

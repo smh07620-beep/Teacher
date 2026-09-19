@@ -16,11 +16,11 @@ import time
 import uuid
 from pathlib import Path
 
-from flask import jsonify, request, send_file
+from flask import g, jsonify, request, send_file
 
 from teacher_app.common import scope, scope_filter
 from teacher_app.learning.routes import auto_index_material
-from teacher_app.materials.validation import ALLOWED_MATERIAL_EXTENSIONS
+from teacher_app.materials.validation import normalize_material_filename
 from teacher_app.worker import protocol as worker_protocol
 from teacher_app.worker import repository as worker_repository
 from teacher_app.worker.web_runtime import WorkerWebRuntime, runtime_from_owner
@@ -28,6 +28,9 @@ from teacher_app.worker.web_runtime import WorkerWebRuntime, runtime_from_owner
 
 _RATE_LOCK = threading.Lock()
 _RATE: dict[str, list[float]] = {}
+PART_HASH_STRATEGY = "sha256-parts-v1"
+SINGLE_HASH_STRATEGY = "sha256-single-v1"
+SINGLE_PUT_MAX_BYTES = 32 * 1024 * 1024
 
 
 def _now() -> str:
@@ -97,11 +100,7 @@ def _heartbeat(runtime: WorkerWebRuntime, worker_id: str, capabilities=None, cur
 
 
 def _safe_upload_filename(value) -> tuple[str, str]:
-    filename = Path(str(value or "")).name
-    ext = Path(filename).suffix.lower()
-    if not filename or ext not in ALLOWED_MATERIAL_EXTENSIONS:
-        raise ValueError("不支援此檔案格式。")
-    return filename, ext
+    return normalize_material_filename(value)
 
 
 def _session(runtime: WorkerWebRuntime, upload_id: str):
@@ -111,9 +110,50 @@ def _session(runtime: WorkerWebRuntime, upload_id: str):
     ) or {}
 
 
+def _list_r2_parts(runtime: WorkerWebRuntime, session) -> list[dict]:
+    """Read the authoritative multipart state directly from R2, including pagination."""
+
+    client = runtime.r2_client_factory()
+    bucket = str(_runtime_value(runtime.r2_bucket_name) or "")
+    marker = None
+    remote_parts: list[dict] = []
+    while True:
+        kwargs = {
+            "Bucket": bucket,
+            "Key": session["staging_key"],
+            "UploadId": session["r2_upload_id"],
+        }
+        if marker is not None:
+            kwargs["PartNumberMarker"] = marker
+        page = client.list_parts(**kwargs)
+        remote_parts.extend(page.get("Parts") or [])
+        if not page.get("IsTruncated"):
+            break
+        next_marker = page.get("NextPartNumberMarker")
+        if next_marker in (None, ""):
+            if not remote_parts:
+                raise RuntimeError("R2 multipart list_parts 分頁資訊不完整。")
+            next_marker = max(int(part.get("PartNumber", 0) or 0) for part in remote_parts)
+        marker = int(next_marker)
+    return worker_protocol.normalize_remote_multipart_parts(
+        remote_parts,
+        session["expected_parts"],
+    )
+
+
+def _public_r2_parts(parts) -> list[dict]:
+    return [
+        {
+            "partNumber": int(part.get("PartNumber", 0) or 0),
+            "size": int(part.get("Size", 0) or 0),
+        }
+        for part in parts
+    ]
+
+
 def _fail_upload(runtime: WorkerWebRuntime, session, reason: str, *, delete_object=False, terminal=True):
     """Terminally release a direct-upload reservation without leaking R2 data."""
-    if terminal:
+    if terminal and session.get("r2_upload_id"):
         try:
             runtime.r2_client_factory().abort_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"], UploadId=session["r2_upload_id"])
         except Exception:
@@ -198,6 +238,50 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         if callable(compat_admin_guard):
             return compat_admin_guard()
         return scope_filter.require_permission(app, "material.manage")
+
+    def current_actor():
+        actor = getattr(g, "teacher_user", None)
+        if actor is not None:
+            return actor
+        resolver = getattr(compat_owner, "_current_user", None)
+        return resolver() if callable(resolver) else None
+
+    def upload_session_guard(session):
+        payload = dict(session.get("payload") or {})
+        group = str(payload.get("group") or "").strip()
+        _actor, denied = scope_filter.scoped_groups(
+            compat_owner or app,
+            "material.manage",
+            {group} if group else set(),
+        )
+        if denied:
+            return denied
+        expected_username = str(payload.get("uploadActor") or "").strip()
+        actor_username = str((current_actor() or {}).get("username") or "").strip()
+        if expected_username and (
+            not actor_username
+            or not hmac.compare_digest(expected_username, actor_username)
+        ):
+            return jsonify({"error": "此上傳工作屬於另一個登入工作階段。"}), 403
+        return None
+
+    def normalize_resume_identity(body, session):
+        stored = dict((session.get("payload") or {}).get("uploadIdentity") or {})
+        if not stored:
+            raise ValueError("此上傳工作建立時未啟用安全續傳，請重新建立上傳工作。")
+        supplied_name, _ext = _safe_upload_filename(body.get("filename"))
+        supplied = worker_protocol.normalize_client_file_identity(
+            filename=supplied_name,
+            size=body.get("size"),
+            last_modified=body.get("lastModified"),
+            fingerprint=body.get("fingerprint"),
+            strategy=body.get("fingerprintStrategy"),
+            part_size=body.get("fingerprintPartSize"),
+            required=True,
+        )
+        if not worker_protocol.client_file_identity_matches(stored, supplied):
+            raise ValueError("續傳檔案識別不符，已拒絕使用舊的上傳工作。")
+        return supplied
 
     @app.post("/api/material-worker/claim")
     def material_worker_claim():
@@ -375,21 +459,49 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         limit = int(_runtime_value(runtime.direct_upload_max_mb)) * 1024 * 1024
         if size <= 0 or size > limit: return jsonify({"error": "檔案大小超過直傳限制。"}), 400
         sha = str(body.get("sha256") or "").lower()
-        if not re.fullmatch(r"[a-f0-9]{64}", sha): return jsonify({"error": "必須提供 SHA256。"}), 400
+        hash_strategy = str(body.get("hashStrategy") or "").strip().lower()
+        if sha and not re.fullmatch(r"[a-f0-9]{64}", sha):
+            return jsonify({"error": "SHA256 格式錯誤。"}), 400
+        if not sha and hash_strategy not in {PART_HASH_STRATEGY, SINGLE_HASH_STRATEGY}:
+            return jsonify({"error": "必須提供 SHA256 或支援的分段雜湊策略。"}), 400
         part_size = max(8, min(32, int(body.get("partSizeMb", 16) or 16))) * 1024 * 1024
-        part_count = int(math.ceil(size / part_size))
+        upload_mode = "single" if size <= SINGLE_PUT_MAX_BYTES else "multipart"
+        part_count = 1 if upload_mode == "single" else int(math.ceil(size / part_size))
         if part_count > 10000: return jsonify({"error": "分段數量超過限制。"}), 400
+        upload_identity = {}
+        try:
+            if upload_mode == "multipart" and any(
+                body.get(key) not in (None, "")
+                for key in ("fingerprint", "fingerprintStrategy", "lastModified", "fingerprintPartSize")
+            ):
+                upload_identity = worker_protocol.normalize_client_file_identity(
+                    filename=original,
+                    size=size,
+                    last_modified=body.get("lastModified"),
+                    fingerprint=body.get("fingerprint"),
+                    strategy=body.get("fingerprintStrategy"),
+                    part_size=body.get("fingerprintPartSize"),
+                    required=True,
+                )
+                if int(upload_identity["partSize"]) != part_size:
+                    raise ValueError("續傳檔案指紋分段大小與上傳工作不符。")
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
         upload_id = "matup-" + uuid.uuid4().hex[:20]; job_id = "matjob-" + uuid.uuid4().hex[:16]; material_id = "upload-" + hashlib.sha256(job_id.encode()).hexdigest()[:12]
         key = f"_staging/material-jobs/{job_id}/source{ext}"
         # The filename remains in PostgreSQL/session payloads.  S3 metadata
         # must be ASCII-only, so it deliberately contains no raw filename.
-        metadata = _ascii_metadata({"jobid": job_id, "expectedbytes": str(size), "sha256": sha, "createdat": _now()})
+        integrity_mode = "sha256" if sha else (SINGLE_HASH_STRATEGY if upload_mode == "single" else PART_HASH_STRATEGY)
+        integrity_metadata = {"sha256": sha} if sha else {"hashstrategy": integrity_mode}
+        metadata = _ascii_metadata({"jobid": job_id, "expectedbytes": str(size), **integrity_metadata, "createdat": _now()})
         r2_upload_id = ""
         try:
             runtime.enforce_large_upload_budget(upload_id, key, size)
-            multipart = runtime.r2_client_factory().create_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=key, ContentType=_content_type_for(original), Metadata=metadata)
-            r2_upload_id = str(multipart["UploadId"])
-            payload = {"originalName": original, "sourceMime": _content_type_for(original), "title": str(body.get("title") or "")[:255], "desc": str(body.get("desc") or "")[:1000], "category": str(body.get("category") or "")[:100], "group": scope.normalize_group(body.get("group", scope.DEFAULT_GROUP)), "area": scope.normalize_area(body.get("area", scope.DEFAULT_TRAINING_AREA)), "courseId": str(body.get("courseId") or "")[:100], "materialType": str(body.get("materialType") or "standard")[:40], "materialId": material_id, "sourceSha256": sha}
+            if upload_mode == "multipart":
+                multipart = runtime.r2_client_factory().create_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=key, ContentType=_content_type_for(original), Metadata=metadata)
+                r2_upload_id = str(multipart["UploadId"])
+            actor_username = str((current_actor() or {}).get("username") or "").strip()[:100]
+            payload = {"originalName": original, "sourceMime": _content_type_for(original), "title": str(body.get("title") or "")[:255], "desc": str(body.get("desc") or "")[:1000], "category": str(body.get("category") or "")[:100], "group": scope.normalize_group(body.get("group", scope.DEFAULT_GROUP)), "area": scope.normalize_area(body.get("area", scope.DEFAULT_TRAINING_AREA)), "courseId": str(body.get("courseId") or "")[:100], "materialType": str(body.get("materialType") or "standard")[:40], "atlasCategory": str(body.get("atlasCategory") or "").strip()[:120], "atlasMagnification": str(body.get("atlasMagnification") or "").strip()[:80], "atlasInterpretation": str(body.get("atlasInterpretation") or "").strip()[:1000], "atlasClinical": str(body.get("atlasClinical") or "").strip()[:1000], "atlasDifferential": str(body.get("atlasDifferential") or "").strip()[:1000], "atlasNormality": str(body.get("atlasNormality") or "").strip()[:40], "atlasTags": str(body.get("atlasTags") or "").strip()[:300], "materialId": material_id, "sourceSha256": sha, "integrityMode": integrity_mode, "uploadMode": upload_mode, "uploadActor": actor_username, "uploadIdentity": upload_identity}
             now = _now()
             worker_repository.create_upload_session(
                 {
@@ -401,7 +513,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
                     "source_sha256": sha,
                     "source_bytes": size,
                     "r2_upload_id": r2_upload_id,
-                    "part_size": part_size,
+                    "part_size": size if upload_mode == "single" else part_size,
                     "expected_parts": part_count,
                     "payload": payload,
                     "status": "uploading",
@@ -411,14 +523,132 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
                 connection_factory=runtime.connection_factory,
             )
         except Exception as exc:
-            try: runtime.r2_client_factory().abort_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=key, UploadId=r2_upload_id)
-            except Exception: pass
+            if r2_upload_id:
+                try: runtime.r2_client_factory().abort_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=key, UploadId=r2_upload_id)
+                except Exception: pass
             runtime.release_reservation(upload_id, "init_failed")
             status = 409 if isinstance(exc, ValueError) else 503
             return jsonify({"error": f"無法建立雲端直傳工作：{str(exc)[:300]}"}), status
         ttl = int(_runtime_value(runtime.worker_url_ttl_seconds))
+        if upload_mode == "single":
+            url = runtime.r2_client_factory().generate_presigned_url("put_object", Params={"Bucket": str(_runtime_value(runtime.r2_bucket_name) or ""), "Key": key}, ExpiresIn=ttl)
+            # Keep a one-item parts shape for older direct clients while the
+            # canonical client uses the explicit server-selected mode/url.
+            urls = [{"partNumber": 1, "url": url}]
+            return jsonify({"mode": "single", "uploadId": upload_id, "jobId": job_id, "materialId": material_id, "partSize": size, "parts": urls, "url": url, "singlePutMaxBytes": SINGLE_PUT_MAX_BYTES, "expiresIn": ttl}), 201
         urls = [{"partNumber": n, "url": runtime.r2_client_factory().generate_presigned_url("upload_part", Params={"Bucket": str(_runtime_value(runtime.r2_bucket_name) or ""), "Key": key, "UploadId": r2_upload_id, "PartNumber": n}, ExpiresIn=ttl)} for n in range(1, part_count + 1)]
-        return jsonify({"uploadId": upload_id, "jobId": job_id, "materialId": material_id, "partSize": part_size, "parts": urls, "expiresIn": ttl}), 201
+        return jsonify({"mode": "multipart", "uploadId": upload_id, "jobId": job_id, "materialId": material_id, "partSize": part_size, "expectedParts": part_count, "parts": urls, "uploadedParts": [], "expiresIn": ttl, "resumable": bool(upload_identity)}), 201
+
+    @app.get("/api/material-upload/<upload_id>/status")
+    def material_upload_status(upload_id):
+        denied = admin_guard()
+        if denied: return denied
+        session = _session(runtime, upload_id)
+        if not session:
+            return jsonify({"error": "找不到上傳工作。"}), 404
+        denied = upload_session_guard(session)
+        if denied: return denied
+        payload = dict(session.get("payload") or {})
+        mode = str(payload.get("uploadMode") or ("multipart" if session.get("r2_upload_id") else "single"))
+        response = {
+            "mode": mode,
+            "uploadId": session["id"],
+            "jobId": session["job_id"],
+            "materialId": session["material_id"],
+            "status": str(session.get("status") or ""),
+            "partSize": int(session.get("part_size") or 0),
+            "expectedParts": int(session.get("expected_parts") or 0),
+            "resumable": bool(payload.get("uploadIdentity")),
+        }
+        if mode != "multipart" or session.get("status") != "uploading":
+            response["uploadedParts"] = []
+            response["missingPartNumbers"] = []
+            return jsonify(response)
+        try:
+            remote_parts = _list_r2_parts(runtime, session)
+        except Exception as exc:
+            return jsonify({"error": f"無法讀取 R2 multipart 狀態：{str(exc)[:240]}"}), 503
+        response["uploadedParts"] = _public_r2_parts(remote_parts)
+        response["missingPartNumbers"] = worker_protocol.missing_multipart_part_numbers(
+            remote_parts,
+            session["expected_parts"],
+        )
+        return jsonify(response)
+
+    @app.post("/api/material-upload/<upload_id>/resume")
+    def material_upload_resume(upload_id):
+        denied = admin_guard()
+        if denied: return denied
+        session = _session(runtime, upload_id)
+        if not session:
+            return jsonify({"error": "找不到上傳工作。", "code": "upload_missing"}), 404
+        denied = upload_session_guard(session)
+        if denied: return denied
+        payload = dict(session.get("payload") or {})
+        mode = str(payload.get("uploadMode") or ("multipart" if session.get("r2_upload_id") else "single"))
+        if mode != "multipart":
+            return jsonify({"error": "single PUT 不支援跨頁續傳。", "code": "resume_not_supported"}), 409
+        body = request.get_json(silent=True) or {}
+        try:
+            normalize_resume_identity(body, session)
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "code": "file_identity_mismatch"}), 409
+        status = str(session.get("status") or "")
+        if status == "completed":
+            return jsonify({
+                "mode": "multipart",
+                "uploadId": session["id"],
+                "jobId": session["job_id"],
+                "materialId": session["material_id"],
+                "status": "completed",
+                "parts": [],
+                "uploadedParts": [],
+                "missingPartNumbers": [],
+            })
+        if status != "uploading":
+            return jsonify({"error": "此上傳工作已無法續傳。", "code": "upload_terminal", "status": status}), 409
+        try:
+            remote_parts = _list_r2_parts(runtime, session)
+        except Exception as exc:
+            return jsonify({"error": f"無法讀取 R2 multipart 狀態：{str(exc)[:240]}"}), 503
+        missing = worker_protocol.missing_multipart_part_numbers(remote_parts, session["expected_parts"])
+        ttl = int(_runtime_value(runtime.worker_url_ttl_seconds))
+        client = runtime.r2_client_factory()
+        bucket = str(_runtime_value(runtime.r2_bucket_name) or "")
+        presigned = [
+            {
+                "partNumber": number,
+                "url": client.generate_presigned_url(
+                    "upload_part",
+                    Params={
+                        "Bucket": bucket,
+                        "Key": session["staging_key"],
+                        "UploadId": session["r2_upload_id"],
+                        "PartNumber": number,
+                    },
+                    ExpiresIn=ttl,
+                ),
+            }
+            for number in missing
+        ]
+        worker_repository.update_upload_session(
+            upload_id,
+            fields={"updated_at": _now()},
+            connection_factory=runtime.connection_factory,
+        )
+        return jsonify({
+            "mode": "multipart",
+            "uploadId": session["id"],
+            "jobId": session["job_id"],
+            "materialId": session["material_id"],
+            "status": "uploading",
+            "partSize": int(session["part_size"]),
+            "expectedParts": int(session["expected_parts"]),
+            "parts": presigned,
+            "uploadedParts": _public_r2_parts(remote_parts),
+            "missingPartNumbers": missing,
+            "expiresIn": ttl,
+        })
 
     @app.post("/api/material-upload/<upload_id>/complete")
     def material_upload_complete(upload_id):
@@ -426,24 +656,91 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         if denied: return denied
         session = _session(runtime, upload_id)
         if not session or session.get("status") != "uploading": return jsonify({"error": "上傳工作不存在或已完成。"}), 404
+        denied = upload_session_guard(session)
+        if denied: return denied
         body = request.get_json(silent=True) or {}; parts = body.get("parts")
+        upload_mode = str((session.get("payload") or {}).get("uploadMode") or ("multipart" if session.get("r2_upload_id") else "single"))
         try:
-            normalized = worker_protocol.validate_multipart_parts(parts, session["expected_parts"])
+            if upload_mode == "single":
+                if not isinstance(parts, list) or len(parts) != 1 or not isinstance(parts[0], dict):
+                    raise ValueError("single PUT 完成資料不完整。")
+                etag = str(parts[0].get("etag") or "").strip()
+                supplied_sha = str(parts[0].get("sha256") or session.get("source_sha256") or "").lower()
+                if not etag:
+                    raise ValueError("single PUT 缺少 ETag。")
+                if not re.fullmatch(r"[a-f0-9]{64}", supplied_sha):
+                    raise ValueError("single PUT 必須提供 SHA256。")
+                if session.get("source_sha256") and supplied_sha != str(session.get("source_sha256") or "").lower():
+                    raise ValueError("single PUT SHA256 與上傳工作不符。")
+                normalized = [{"PartNumber": 1, "ETag": etag}]
+                part_hashes = []
+            else:
+                part_hashes = worker_protocol.validate_multipart_part_sha256(
+                    parts,
+                    session["expected_parts"],
+                    required=not bool(session.get("source_sha256")),
+                )
+                supplied_sha = str(session.get("source_sha256") or "").lower()
         except ValueError as exc:
-            _fail_upload(runtime, session, "validation_failed", terminal=False)
+            # No remote completion happened yet. Keep the upload session and
+            # reservation intact so the client may resubmit corrected metadata.
             return jsonify({"error": str(exc)}), 400
+        if upload_mode == "multipart":
+            try:
+                remote_parts = _list_r2_parts(runtime, session)
+                normalized = worker_protocol.normalize_remote_multipart_parts(
+                    remote_parts,
+                    session["expected_parts"],
+                    require_complete=True,
+                )
+                normalized = [
+                    {"PartNumber": part["PartNumber"], "ETag": part["ETag"]}
+                    for part in normalized
+                ]
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            except Exception as exc:
+                return jsonify({"error": f"無法讀取 R2 multipart 狀態：{str(exc)[:240]}"}), 503
         try:
-            runtime.r2_client_factory().complete_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"], UploadId=session["r2_upload_id"], MultipartUpload={"Parts": normalized})
+            if upload_mode == "multipart":
+                runtime.r2_client_factory().complete_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"], UploadId=session["r2_upload_id"], MultipartUpload={"Parts": normalized})
             head = runtime.r2_client_factory().head_object(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"])
             if int(head.get("ContentLength", -1)) != int(session["source_bytes"]): raise ValueError("R2 物件大小驗證失敗。")
-            if str((head.get("Metadata") or {}).get("sha256", "")).lower() != str(session["source_sha256"]).lower(): raise ValueError("R2 物件 metadata 驗證失敗。")
-            runtime.record_r2_object(session["staging_key"], int(session["source_bytes"]), multipart_parts=len(normalized), estimated_operations=len(normalized) + 3)
+            if upload_mode == "single":
+                remote_etag = str(head.get("ETag") or "").strip().strip('"')
+                expected_etag = str(normalized[0]["ETag"] or "").strip().strip('"')
+                if not remote_etag or remote_etag != expected_etag:
+                    raise ValueError("R2 single PUT ETag 驗證失敗。")
+                record_parts = 0
+                estimated_operations = 2
+            else:
+                remote_metadata = head.get("Metadata") or {}
+                if session.get("source_sha256"):
+                    if str(remote_metadata.get("sha256", "")).lower() != str(session["source_sha256"]).lower(): raise ValueError("R2 物件 metadata 驗證失敗。")
+                elif str(remote_metadata.get("hashstrategy", "")).lower() != PART_HASH_STRATEGY:
+                    raise ValueError("R2 物件完整性策略驗證失敗。")
+                record_parts = len(normalized)
+                estimated_operations = len(normalized) + 3
+            runtime.record_r2_object(session["staging_key"], int(session["source_bytes"]), multipart_parts=record_parts, estimated_operations=estimated_operations)
             try:
+                payload = dict(session.get("payload") or {})
+                job_session = session
+                if part_hashes:
+                    payload.update({"sourcePartSha256": part_hashes, "sourcePartSize": int(session["part_size"])})
+                    job_session = {**session, "payload": payload}
+                elif upload_mode == "single":
+                    payload.update({"sourceSha256": supplied_sha, "integrityMode": "sha256"})
+                    job_session = {**session, "source_sha256": supplied_sha, "payload": payload}
+                persisted_parts = (
+                    [{**normalized[0], "SHA256": supplied_sha}]
+                    if upload_mode == "single"
+                    else normalized
+                )
                 created_job = worker_repository.finalize_upload_session_with_job(
                     upload_id,
-                    completed_parts=normalized,
+                    completed_parts=persisted_parts,
                     updated_at=_now(),
-                    job=_job_record_from_session(runtime, session),
+                    job=_job_record_from_session(runtime, job_session),
                     connection_factory=runtime.connection_factory,
                 )
                 if not created_job:
@@ -465,9 +762,18 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         if denied: return denied
         session = _session(runtime, upload_id)
         if not session: return jsonify({"error": "找不到上傳工作。"}), 404
+        denied = upload_session_guard(session)
+        if denied: return denied
         if session.get("status") == "uploading":
-            try: runtime.r2_client_factory().abort_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"], UploadId=session["r2_upload_id"])
-            except Exception: pass
+            if session.get("r2_upload_id"):
+                try: runtime.r2_client_factory().abort_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"], UploadId=session["r2_upload_id"])
+                except Exception: pass
+            else:
+                try:
+                    runtime.r2_client_factory().delete_object(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"])
+                    runtime.record_r2_deleted(session["staging_key"])
+                except Exception:
+                    pass
             worker_repository.cas_upload_session_status(
                 upload_id,
                 expected_status="uploading",

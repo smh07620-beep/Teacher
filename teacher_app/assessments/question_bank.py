@@ -98,8 +98,9 @@ def create_draft(data: Mapping[str, Any]) -> dict:
     options = data.get("options")
     if not text or not isinstance(options, list):
         raise ApiError("QUESTION_BANK_REQUIRED", "題目與選項為必填", status=400)
-    if bank_meta["origin"] == "ai_generated":
-        bank_meta["status"] = "draft"
+    # This endpoint is deliberately a draft-only entry point.  Review state is
+    # server-owned and may only advance through ``review_question``.
+    bank_meta["status"] = "draft"
 
     question_id = str(uuid.uuid4())
     normalized_hash = hashlib.sha256(normalized(text).encode()).hexdigest()
@@ -151,6 +152,10 @@ def update_question(question_id: str, data: Mapping[str, Any]) -> dict:
     if not existing:
         raise ApiError("QUESTION_BANK_NOT_FOUND", "找不到題目", status=404)
     merged = {**existing, **dict(data)}
+    # Ordinary edits invalidate a previous review.  Do not allow a browser to
+    # promote a question by PATCHing ``status`` or rewrite its provenance.
+    merged["status"] = "draft"
+    merged["origin"] = existing.get("origin", "manual")
     bank_meta = metadata(merged)
     question = str(merged.get("question") or "").strip()
     options = merged.get("options")
@@ -172,6 +177,8 @@ def update_question(question_id: str, data: Mapping[str, Any]) -> dict:
         "status": bank_meta["status"],
         "origin": bank_meta["origin"],
         "updated_at": now(),
+        "reviewed_by": "",
+        "reviewed_at": "",
     })
     return {"ok": True, "item": question_payload(row or {})}
 

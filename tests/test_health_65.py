@@ -183,6 +183,37 @@ class Health65Tests(
         codes = {item["code"] for item in body["configuration"]["warnings"]}
         self.assertIn("database_url_missing", codes)
         self.assertIn("secret_key_invalid", codes)
+
+    def test_live_ignores_dependencies_but_ready_requires_configuration(self):
+        base = HealthBase()
+        self.addCleanup(base.close)
+        schema_migrations.apply_migrations(base)
+        health_65.register_health(base)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "RENDER": "true",
+                "DATABASE_URL": "",
+                "SECRET_KEY": "short",
+                "MATERIAL_STORAGE_BACKEND": "local",
+                "MATERIAL_SHARED_STAGING_BACKEND": "local",
+                "AI_EXTERNAL_PROCESSING_ENABLED": "false",
+                "MATERIAL_BACKGROUND_JOBS": "false",
+                "MATERIAL_WORKER_ENABLED": "false",
+            },
+            clear=True,
+        ):
+            live = base.app.test_client().get("/live")
+            ready = base.app.test_client().get("/ready")
+
+        self.assertEqual(live.status_code, 200)
+        self.assertTrue(live.get_json()["ok"])
+        self.assertEqual(live.get_json()["status"], "live")
+        self.assertEqual(ready.status_code, 503)
+        self.assertFalse(ready.get_json()["ok"])
+        self.assertEqual(ready.get_json()["status"], "not_ready")
+
     def test_missing_0066_returns_degraded_503(self):
         base = HealthBase()
         self.addCleanup(base.close)

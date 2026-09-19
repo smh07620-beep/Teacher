@@ -9,6 +9,9 @@ from typing import Any, Callable, Mapping, Sequence
 from teacher_app.worker import repository
 
 
+CLIENT_FINGERPRINT_STRATEGY = "sha256-part-tree-v1"
+
+
 def now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
@@ -126,6 +129,147 @@ def validate_multipart_parts(
             raise ValueError("multipart part 格式錯誤。")
         normalized.append({"PartNumber": expected, "ETag": etag})
     return normalized
+
+
+def validate_multipart_part_sha256(
+    parts: Any,
+    expected_parts: Any,
+    *,
+    required: bool = False,
+) -> list[str]:
+    """Validate optional per-part SHA-256 digests carried by browser uploads."""
+
+    try:
+        expected_count = int(expected_parts)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("multipart expected_parts 不合法。") from exc
+    if expected_count < 1 or not isinstance(parts, list) or len(parts) != expected_count:
+        raise ValueError("multipart parts 不完整。")
+    values: list[str] = []
+    for expected, part in enumerate(parts, 1):
+        if not isinstance(part, Mapping):
+            raise ValueError("multipart part 格式錯誤。")
+        try:
+            number = int(part.get("partNumber", 0) or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("multipart part 格式錯誤。") from exc
+        if number != expected:
+            raise ValueError("multipart part 格式錯誤。")
+        values.append(str(part.get("sha256") or "").lower())
+    present = [bool(value) for value in values]
+    if any(present) and not all(present):
+        raise ValueError("multipart 分段 SHA256 不完整。")
+    if required and not all(present):
+        raise ValueError("multipart 必須提供每段 SHA256。")
+    if not any(present):
+        return []
+    if any(not re.fullmatch(r"[a-f0-9]{64}", value) for value in values):
+        raise ValueError("multipart 分段 SHA256 格式錯誤。")
+    return values
+
+
+def normalize_remote_multipart_parts(
+    parts: Any,
+    expected_parts: Any,
+    *,
+    require_complete: bool = False,
+) -> list[dict[str, Any]]:
+    """Normalize R2 ``list_parts`` rows without trusting a browser manifest."""
+
+    try:
+        expected_count = int(expected_parts)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("multipart expected_parts 不合法。") from exc
+    if expected_count < 1:
+        raise ValueError("multipart expected_parts 不合法。")
+    if not isinstance(parts, list):
+        raise ValueError("R2 multipart parts 格式錯誤。")
+    normalized: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for part in parts:
+        if not isinstance(part, Mapping):
+            raise ValueError("R2 multipart part 格式錯誤。")
+        try:
+            number = int(part.get("PartNumber", 0) or 0)
+            size = int(part.get("Size", 0) or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("R2 multipart part 格式錯誤。") from exc
+        etag = str(part.get("ETag") or "").strip()
+        if number < 1 or number > expected_count or number in seen or not etag:
+            raise ValueError("R2 multipart part 格式錯誤。")
+        seen.add(number)
+        normalized.append({"PartNumber": number, "ETag": etag, "Size": max(0, size)})
+    normalized.sort(key=lambda item: item["PartNumber"])
+    if require_complete and [item["PartNumber"] for item in normalized] != list(range(1, expected_count + 1)):
+        raise ValueError("R2 multipart parts 尚未完整上傳。")
+    return normalized
+
+
+def missing_multipart_part_numbers(parts: Sequence[Mapping[str, Any]], expected_parts: Any) -> list[int]:
+    """Return missing part numbers from server-authoritative R2 list-parts state."""
+
+    try:
+        expected_count = int(expected_parts)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("multipart expected_parts 不合法。") from exc
+    if expected_count < 1:
+        raise ValueError("multipart expected_parts 不合法。")
+    present = {int(part.get("PartNumber", 0) or 0) for part in parts if isinstance(part, Mapping)}
+    return [number for number in range(1, expected_count + 1) if number not in present]
+
+
+def normalize_client_file_identity(
+    *,
+    filename: Any,
+    size: Any,
+    last_modified: Any,
+    fingerprint: Any,
+    strategy: Any,
+    part_size: Any,
+    required: bool = False,
+) -> dict[str, Any]:
+    """Validate the browser-computed identity used to bind resumable uploads."""
+
+    fingerprint_value = str(fingerprint or "").strip().lower()
+    strategy_value = str(strategy or "").strip().lower()
+    if not fingerprint_value and not strategy_value and last_modified in (None, "") and part_size in (None, ""):
+        if required:
+            raise ValueError("缺少可續傳檔案識別資訊。")
+        return {}
+    if strategy_value != CLIENT_FINGERPRINT_STRATEGY:
+        raise ValueError("不支援的續傳檔案指紋策略。")
+    if not re.fullmatch(r"[a-f0-9]{64}", fingerprint_value):
+        raise ValueError("續傳檔案指紋格式錯誤。")
+    try:
+        size_value = int(size)
+        modified_value = int(last_modified)
+        part_size_value = int(part_size)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("續傳檔案識別資訊格式錯誤。") from exc
+    name_value = str(filename or "").strip()
+    if not name_value or size_value <= 0 or modified_value < 0 or part_size_value <= 0:
+        raise ValueError("續傳檔案識別資訊格式錯誤。")
+    return {
+        "filename": name_value,
+        "size": size_value,
+        "lastModified": modified_value,
+        "fingerprint": fingerprint_value,
+        "strategy": strategy_value,
+        "partSize": part_size_value,
+    }
+
+
+def client_file_identity_matches(stored: Any, supplied: Any) -> bool:
+    """Constant-time fingerprint comparison plus exact browser file metadata."""
+
+    if not isinstance(stored, Mapping) or not isinstance(supplied, Mapping):
+        return False
+    for key in ("filename", "size", "lastModified", "strategy", "partSize"):
+        if str(stored.get(key, "")) != str(supplied.get(key, "")):
+            return False
+    stored_fingerprint = str(stored.get("fingerprint") or "")
+    supplied_fingerprint = str(supplied.get("fingerprint") or "")
+    return bool(stored_fingerprint) and hmac.compare_digest(stored_fingerprint, supplied_fingerprint)
 
 
 def record_heartbeat(

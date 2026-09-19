@@ -363,6 +363,49 @@ def insert_runtime_question_on_connection(conn, kind: str, values: Mapping[str, 
     )
 
 
+def reset_question_review_on_connection(
+    conn,
+    kind: str,
+    question_ids: list[str],
+    *,
+    origin: str | None = None,
+) -> None:
+    """Reset optional 6.8 Question Bank workflow columns after content mutation."""
+    if not question_ids:
+        return
+    if kind == "postgres":
+        rows = conn.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='quiz_questions'"
+        ).fetchall()
+        columns = {str(dict(row).get("column_name") or "").lower() for row in rows}
+    else:
+        columns = {
+            str(row[1]).lower()
+            for row in conn.execute("PRAGMA table_info(quiz_questions)").fetchall()
+        }
+    if "status" not in columns:
+        return
+
+    ph = common_db.placeholder(kind)
+    assignments = [f"status={ph}"]
+    values: list[Any] = ["draft"]
+    if "reviewed_by" in columns:
+        assignments.append(f"reviewed_by={ph}")
+        values.append("")
+    if "reviewed_at" in columns:
+        assignments.append(f"reviewed_at={ph}")
+        values.append("")
+    if origin is not None and "origin" in columns:
+        assignments.append(f"origin={ph}")
+        values.append(str(origin or "manual")[:40])
+    placeholders = ",".join([ph] * len(question_ids))
+    conn.execute(
+        f"UPDATE quiz_questions SET {','.join(assignments)} WHERE id IN ({placeholders})",
+        tuple(values) + tuple(question_ids),
+    )
+
+
 def get_questions_by_ids_on_connection(conn, kind: str, question_ids: list[str]) -> dict[str, dict]:
     if not question_ids:
         return {}
@@ -477,6 +520,7 @@ def update_bank_question(question_id: str, values: Mapping[str, Any]) -> dict | 
         "question", "options", "correct", "explanation", "topic", "subtopic",
         "learning_objective", "difficulty", "cognitive_level", "tags",
         "source_material_id", "review_source", "status", "origin", "updated_at",
+        "reviewed_by", "reviewed_at",
     )
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -519,8 +563,8 @@ def review_bank_question(
             )
         elif decision == "return":
             cursor = conn.execute(
-                f"UPDATE quiz_questions SET status={ph},updated_at={ph},version=version+1 WHERE id={ph}",
-                ("draft", stamp, question_id),
+                f"UPDATE quiz_questions SET status={ph},reviewed_by={ph},reviewed_at={ph},updated_at={ph},version=version+1 WHERE id={ph}",
+                ("draft", "", "", stamp, question_id),
             )
         else:
             cursor = conn.execute(

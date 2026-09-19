@@ -401,6 +401,42 @@ class WorkerProtocolPhase4Tests(unittest.TestCase):
                 [{"partNumber": 2, "etag": "etag-2"}], 1
             )
 
+    def test_remote_multipart_parts_and_resume_identity_are_server_safe(self):
+        remote = protocol.normalize_remote_multipart_parts(
+            [
+                {"PartNumber": 3, "ETag": '"etag-3"', "Size": 4},
+                {"PartNumber": 1, "ETag": '"etag-1"', "Size": 8},
+            ],
+            3,
+        )
+        self.assertEqual([part["PartNumber"] for part in remote], [1, 3])
+        self.assertEqual(protocol.missing_multipart_part_numbers(remote, 3), [2])
+        with self.assertRaisesRegex(ValueError, "尚未完整"):
+            protocol.normalize_remote_multipart_parts(remote, 3, require_complete=True)
+
+        identity = protocol.normalize_client_file_identity(
+            filename="movie.mp4",
+            size=40,
+            last_modified=1700000000000,
+            fingerprint="a" * 64,
+            strategy="sha256-part-tree-v1",
+            part_size=16,
+            required=True,
+        )
+        self.assertTrue(protocol.client_file_identity_matches(identity, dict(identity)))
+        changed = {**identity, "fingerprint": "b" * 64}
+        self.assertFalse(protocol.client_file_identity_matches(identity, changed))
+        with self.assertRaisesRegex(ValueError, "指紋格式"):
+            protocol.normalize_client_file_identity(
+                filename="movie.mp4",
+                size=40,
+                last_modified=1700000000000,
+                fingerprint="not-a-hash",
+                strategy="sha256-part-tree-v1",
+                part_size=16,
+                required=True,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

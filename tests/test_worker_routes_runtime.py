@@ -15,12 +15,18 @@ class _FakeR2:
     def __init__(self, events):
         self.events = events
         self.expected_bytes = 0
+        self.multipart_bytes = 0
         self.sha256 = ""
+        self.metadata = {}
+        self.listed_parts = None
+        self.completed_manifest = None
 
     def create_multipart_upload(self, **kwargs):
         self.events.append(("r2.create", kwargs["Key"]))
         metadata = kwargs.get("Metadata") or {}
+        self.metadata = dict(metadata)
         self.expected_bytes = int(metadata.get("expectedbytes") or 0)
+        self.multipart_bytes = self.expected_bytes
         self.sha256 = str(metadata.get("sha256") or "")
         return {"UploadId": "remote-upload"}
 
@@ -30,13 +36,32 @@ class _FakeR2:
 
     def complete_multipart_upload(self, **kwargs):
         self.events.append(("r2.complete", kwargs["Key"]))
+        self.completed_manifest = list((kwargs.get("MultipartUpload") or {}).get("Parts") or [])
         return {}
+
+    def list_parts(self, **kwargs):
+        self.events.append(("r2.list_parts", kwargs["Key"], kwargs.get("PartNumberMarker")))
+        if self.listed_parts is not None:
+            parts = list(self.listed_parts)
+        else:
+            unit = 8 * 1024 * 1024
+            count = max(1, (self.multipart_bytes + unit - 1) // unit)
+            parts = [
+                {
+                    "PartNumber": number,
+                    "ETag": f'"server-etag-{number}"',
+                    "Size": min(unit, max(0, self.multipart_bytes - (number - 1) * unit)),
+                }
+                for number in range(1, count + 1)
+            ]
+        return {"Parts": parts, "IsTruncated": False}
 
     def head_object(self, **kwargs):
         self.events.append(("r2.head", kwargs["Key"]))
         return {
             "ContentLength": self.expected_bytes,
-            "Metadata": {"sha256": self.sha256},
+            "Metadata": dict(self.metadata),
+            "ETag": '"etag-1"',
         }
 
     def abort_multipart_upload(self, **kwargs):
@@ -191,6 +216,8 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
             ("/api/material-worker/<job_id>/retry", "material_worker_retry", "POST"),
             ("/api/material-worker/<job_id>/fail", "material_worker_fail", "POST"),
             ("/api/material-upload/init", "material_upload_init", "POST"),
+            ("/api/material-upload/<upload_id>/status", "material_upload_status", "GET"),
+            ("/api/material-upload/<upload_id>/resume", "material_upload_resume", "POST"),
             ("/api/material-upload/<upload_id>/complete", "material_upload_complete", "POST"),
             ("/api/material-upload/<upload_id>/abort", "material_upload_abort", "POST"),
         }
@@ -252,16 +279,40 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
         }
         own = self.client.post("/api/material-upload/init", json=body)
         self.assertEqual(own.status_code, 201, own.get_data(as_text=True))
+        self.assertEqual(own.get_json()["mode"], "single")
+        self.assertIn("/put_object/", own.get_json()["url"])
         cross = self.client.post("/api/material-upload/init", json={**body, "group": "grpHema"})
         self.assertEqual(cross.status_code, 403)
         self.assertEqual(cross.get_json()["error"], "此資源不在你的授權範圍。")
+
+    def test_direct_upload_normalizes_filename_and_rejects_svg_macro_office(self):
+        normalized = self.client.post(
+            "/api/material-upload/init",
+            json={
+                "filename": "..\\folder/e\u0301vidence\x00.pdf",
+                "size": 4 * 1024 * 1024,
+                "sha256": "a" * 64,
+                "group": "grpBio",
+            },
+        )
+        self.assertEqual(normalized.status_code, 201, normalized.get_data(as_text=True))
+        data = normalized.get_json()
+        session = worker_repository.get_upload_session(data["uploadId"], connection_factory=self.connect)
+        self.assertEqual(session["original_name"], "évidence.pdf")
+        for filename in ("diagram.svg", "macro.docm", "macro.xlsm", "macro.pptm"):
+            with self.subTest(filename=filename):
+                rejected = self.client.post(
+                    "/api/material-upload/init",
+                    json={"filename": filename, "size": 1024, "sha256": "b" * 64, "group": "grpBio"},
+                )
+                self.assertEqual(rejected.status_code, 400)
 
     def test_multipart_complete_preserves_accounting_then_job_then_release_order(self):
         init = self.client.post(
             "/api/material-upload/init",
             json={
                 "filename": "movie.mp4",
-                "size": 8 * 1024 * 1024,
+                "size": 40 * 1024 * 1024,
                 "sha256": "b" * 64,
                 "partSizeMb": 8,
                 "group": "grpBio",
@@ -269,9 +320,10 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(init.status_code, 201, init.get_data(as_text=True))
         data = init.get_json()
+        self.assertEqual(data["mode"], "multipart")
         complete = self.client.post(
             f"/api/material-upload/{data['uploadId']}/complete",
-            json={"parts": [{"partNumber": 1, "etag": "etag-1"}]},
+            json={"parts": [{"partNumber": n, "etag": f"etag-{n}"} for n in range(1, 6)]},
         )
         self.assertEqual(complete.status_code, 202, complete.get_data(as_text=True))
         self.assertEqual(complete.get_json()["status"], "queued")
@@ -285,12 +337,213 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
         self.assertLess(record_index, media_index)
         self.assertLess(media_index, release_index)
 
-    def test_multipart_validation_failure_preserves_abort_delete_ledger_release_order(self):
+    def test_multipart_resume_uses_server_parts_and_presigns_only_missing(self):
+        self.actor = {
+            "username": "teacher-a",
+            "role": "clinical_teacher",
+            "roles": ["clinical_teacher"],
+            "preferredGroup": "grpBio",
+        }
+        identity = {
+            "lastModified": 1_700_000_000_000,
+            "fingerprint": "a" * 64,
+            "fingerprintStrategy": "sha256-part-tree-v1",
+            "fingerprintPartSize": 8 * 1024 * 1024,
+        }
+        init = self.client.post(
+            "/api/material-upload/init",
+            json={
+                "filename": "movie.mp4",
+                "size": 40 * 1024 * 1024,
+                "hashStrategy": "sha256-parts-v1",
+                "partSizeMb": 8,
+                "group": "grpBio",
+                **identity,
+            },
+        )
+        self.assertEqual(init.status_code, 201, init.get_data(as_text=True))
+        data = init.get_json()
+        self.assertTrue(data["resumable"])
+        self.r2.listed_parts = [
+            {"PartNumber": 1, "ETag": '"remote-1"', "Size": 8 * 1024 * 1024},
+            {"PartNumber": 3, "ETag": '"remote-3"', "Size": 8 * 1024 * 1024},
+        ]
+
+        self.actor = {**self.actor, "preferredGroup": "grpHema"}
+        denied = self.client.get(f"/api/material-upload/{data['uploadId']}/status")
+        self.assertEqual(denied.status_code, 403)
+        self.actor = {**self.actor, "preferredGroup": "grpBio"}
+
+        status = self.client.get(f"/api/material-upload/{data['uploadId']}/status")
+        self.assertEqual(status.status_code, 200, status.get_data(as_text=True))
+        self.assertEqual(status.get_json()["missingPartNumbers"], [2, 4, 5])
+        self.assertEqual(
+            [part["partNumber"] for part in status.get_json()["uploadedParts"]],
+            [1, 3],
+        )
+
+        presigns_before = len([event for event in self.events if isinstance(event, tuple) and event[:2] == ("r2.presign", "upload_part")])
+        resumed = self.client.post(
+            f"/api/material-upload/{data['uploadId']}/resume",
+            json={"filename": "movie.mp4", "size": 40 * 1024 * 1024, **identity},
+        )
+        self.assertEqual(resumed.status_code, 200, resumed.get_data(as_text=True))
+        self.assertEqual([part["partNumber"] for part in resumed.get_json()["parts"]], [2, 4, 5])
+        presign_events = [event for event in self.events if isinstance(event, tuple) and event[:2] == ("r2.presign", "upload_part")]
+        self.assertEqual(len(presign_events) - presigns_before, 3)
+        self.assertEqual([event[2] for event in presign_events[-3:]], [2, 4, 5])
+
+        self.actor = {
+            "username": "other-admin",
+            "role": "system_admin",
+            "roles": ["system_admin"],
+            "preferredGroup": "grpBio",
+        }
+        wrong_actor = self.client.get(f"/api/material-upload/{data['uploadId']}/status")
+        self.assertEqual(wrong_actor.status_code, 403)
+
+    def test_multipart_resume_rejects_file_identity_mismatch_before_presign(self):
+        identity = {
+            "lastModified": 1_700_000_000_001,
+            "fingerprint": "b" * 64,
+            "fingerprintStrategy": "sha256-part-tree-v1",
+            "fingerprintPartSize": 8 * 1024 * 1024,
+        }
+        init = self.client.post(
+            "/api/material-upload/init",
+            json={
+                "filename": "movie.mp4",
+                "size": 40 * 1024 * 1024,
+                "hashStrategy": "sha256-parts-v1",
+                "partSizeMb": 8,
+                "group": "grpBio",
+                **identity,
+            },
+        )
+        data = init.get_json()
+        presigns_before = len([event for event in self.events if isinstance(event, tuple) and event[:2] == ("r2.presign", "upload_part")])
+        mismatch = self.client.post(
+            f"/api/material-upload/{data['uploadId']}/resume",
+            json={
+                "filename": "movie.mp4",
+                "size": 40 * 1024 * 1024,
+                **identity,
+                "fingerprint": "c" * 64,
+            },
+        )
+        self.assertEqual(mismatch.status_code, 409)
+        self.assertEqual(mismatch.get_json()["code"], "file_identity_mismatch")
+        presigns_after = len([event for event in self.events if isinstance(event, tuple) and event[:2] == ("r2.presign", "upload_part")])
+        self.assertEqual(presigns_after, presigns_before)
+
+    def test_multipart_complete_uses_r2_etags_not_client_etags(self):
+        init = self.client.post(
+            "/api/material-upload/init",
+            json={
+                "filename": "movie.mp4",
+                "size": 40 * 1024 * 1024,
+                "sha256": "d" * 64,
+                "partSizeMb": 8,
+                "group": "grpBio",
+            },
+        )
+        data = init.get_json()
+        self.r2.listed_parts = [
+            {"PartNumber": number, "ETag": f'"authoritative-{number}"', "Size": 8 * 1024 * 1024}
+            for number in range(1, 6)
+        ]
+        complete = self.client.post(
+            f"/api/material-upload/{data['uploadId']}/complete",
+            json={"parts": [{"partNumber": number, "etag": f"untrusted-{number}"} for number in range(1, 6)]},
+        )
+        self.assertEqual(complete.status_code, 202, complete.get_data(as_text=True))
+        self.assertEqual(
+            self.r2.completed_manifest,
+            [{"PartNumber": number, "ETag": f'"authoritative-{number}"'} for number in range(1, 6)],
+        )
+
+    def test_single_put_mode_queues_job_with_whole_file_sha(self):
         init = self.client.post(
             "/api/material-upload/init",
             json={
                 "filename": "movie.mp4",
                 "size": 8 * 1024 * 1024,
+                "hashStrategy": "sha256-parts-v1",
+                "partSizeMb": 8,
+                "group": "grpBio",
+                "materialType": "atlas",
+                "atlasCategory": "blood_cell",
+                "atlasMagnification": "100x",
+                "atlasInterpretation": "key finding",
+                "atlasClinical": "clinical note",
+                "atlasDifferential": "differential note",
+                "atlasNormality": "abnormal",
+                "atlasTags": "tag-a,tag-b",
+            },
+        )
+        self.assertEqual(init.status_code, 201, init.get_data(as_text=True))
+        data = init.get_json()
+        self.assertEqual(data["mode"], "single")
+        self.assertEqual(len(data["parts"]), 1)
+        self.assertEqual(data["singlePutMaxBytes"], 32 * 1024 * 1024)
+        self.r2.expected_bytes = 8 * 1024 * 1024
+        complete = self.client.post(
+            f"/api/material-upload/{data['uploadId']}/complete",
+            json={"parts": [{"partNumber": 1, "etag": "etag-1", "sha256": "e" * 64}]},
+        )
+        self.assertEqual(complete.status_code, 202, complete.get_data(as_text=True))
+        job = worker_repository.get_material_job(
+            data["jobId"], include_payload=True, connection_factory=self.connect
+        )
+        self.assertEqual(job["sourceSha256"], "e" * 64)
+        self.assertEqual(job["payload"]["sourceSha256"], "e" * 64)
+        self.assertEqual(job["payload"]["integrityMode"], "sha256")
+        session = worker_repository.get_upload_session(data["uploadId"], connection_factory=self.connect)
+        self.assertEqual(session["completed_parts"][0]["SHA256"], "e" * 64)
+        self.assertEqual(job["payload"]["atlasCategory"], "blood_cell")
+        self.assertEqual(job["payload"]["atlasMagnification"], "100x")
+        self.assertEqual(job["payload"]["atlasInterpretation"], "key finding")
+        self.assertEqual(job["payload"]["atlasClinical"], "clinical note")
+        self.assertEqual(job["payload"]["atlasDifferential"], "differential note")
+        self.assertEqual(job["payload"]["atlasNormality"], "abnormal")
+        self.assertEqual(job["payload"]["atlasTags"], "tag-a,tag-b")
+
+    def test_multipart_manifest_error_keeps_session_reserved_for_retry(self):
+        init = self.client.post(
+            "/api/material-upload/init",
+            json={
+                "filename": "movie.mp4",
+                "size": 40 * 1024 * 1024,
+                "sha256": "f" * 64,
+                "partSizeMb": 8,
+                "group": "grpBio",
+            },
+        )
+        self.assertEqual(init.status_code, 201, init.get_data(as_text=True))
+        data = init.get_json()
+        malformed = self.client.post(
+            f"/api/material-upload/{data['uploadId']}/complete",
+            json={"parts": []},
+        )
+        self.assertEqual(malformed.status_code, 400)
+        session = worker_repository.get_upload_session(
+            data["uploadId"], connection_factory=self.connect
+        )
+        self.assertEqual(session["status"], "uploading")
+        self.assertNotIn(("budget.release", data["uploadId"], "validation_failed"), self.events)
+
+        retried = self.client.post(
+            f"/api/material-upload/{data['uploadId']}/complete",
+            json={"parts": [{"partNumber": n, "etag": f"etag-{n}"} for n in range(1, 6)]},
+        )
+        self.assertEqual(retried.status_code, 202, retried.get_data(as_text=True))
+
+    def test_multipart_validation_failure_preserves_abort_delete_ledger_release_order(self):
+        init = self.client.post(
+            "/api/material-upload/init",
+            json={
+                "filename": "movie.mp4",
+                "size": 40 * 1024 * 1024,
                 "sha256": "c" * 64,
                 "partSizeMb": 8,
                 "group": "grpBio",
@@ -300,7 +553,7 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
         self.r2.expected_bytes = 1
         failed = self.client.post(
             f"/api/material-upload/{data['uploadId']}/complete",
-            json={"parts": [{"partNumber": 1, "etag": "etag-1"}]},
+            json={"parts": [{"partNumber": n, "etag": f"etag-{n}"} for n in range(1, 6)]},
         )
         self.assertEqual(failed.status_code, 400, failed.get_data(as_text=True))
         session = worker_repository.get_upload_session(data["uploadId"], connection_factory=self.connect)
@@ -319,7 +572,7 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
             "/api/material-upload/init",
             json={
                 "filename": "movie.mp4",
-                "size": 8 * 1024 * 1024,
+                "size": 40 * 1024 * 1024,
                 "sha256": "d" * 64,
                 "partSizeMb": 8,
                 "group": "grpBio",
@@ -333,6 +586,54 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
         abort_index = next(i for i, event in enumerate(self.events) if isinstance(event, tuple) and event[0] == "r2.abort")
         release_index = self.events.index(("budget.release", data["uploadId"], "aborted"))
         self.assertLess(abort_index, release_index)
+
+    def test_single_put_abort_deletes_object_before_releasing_reservation(self):
+        init = self.client.post(
+            "/api/material-upload/init",
+            json={
+                "filename": "small.pdf",
+                "size": 4 * 1024 * 1024,
+                "hashStrategy": "sha256-parts-v1",
+                "group": "grpBio",
+            },
+        )
+        self.assertEqual(init.status_code, 201, init.get_data(as_text=True))
+        data = init.get_json()
+        self.assertEqual(data["mode"], "single")
+        aborted = self.client.post(f"/api/material-upload/{data['uploadId']}/abort")
+        self.assertEqual(aborted.status_code, 200)
+        session = worker_repository.get_upload_session(data["uploadId"], connection_factory=self.connect)
+        self.assertEqual(session["status"], "aborted")
+        delete_index = next(i for i, event in enumerate(self.events) if isinstance(event, tuple) and event[0] == "r2.delete")
+        ledger_index = next(i for i, event in enumerate(self.events) if isinstance(event, tuple) and event[0] == "ledger.deleted")
+        release_index = self.events.index(("budget.release", data["uploadId"], "aborted"))
+        self.assertLess(delete_index, ledger_index)
+        self.assertLess(ledger_index, release_index)
+
+    def test_single_put_etag_mismatch_fails_before_job_enqueue_and_cleans_object(self):
+        init = self.client.post(
+            "/api/material-upload/init",
+            json={
+                "filename": "small.pdf",
+                "size": 4 * 1024 * 1024,
+                "hashStrategy": "sha256-parts-v1",
+                "group": "grpBio",
+            },
+        )
+        data = init.get_json()
+        self.r2.expected_bytes = 4 * 1024 * 1024
+        failed = self.client.post(
+            f"/api/material-upload/{data['uploadId']}/complete",
+            json={"parts": [{"partNumber": 1, "etag": "wrong-etag", "sha256": "a" * 64}]},
+        )
+        self.assertEqual(failed.status_code, 400, failed.get_data(as_text=True))
+        self.assertIn("ETag", failed.get_json()["error"])
+        session = worker_repository.get_upload_session(data["uploadId"], connection_factory=self.connect)
+        self.assertEqual(session["status"], "failed")
+        self.assertIsNone(worker_repository.get_material_job(data["jobId"], connection_factory=self.connect))
+        delete_index = next(i for i, event in enumerate(self.events) if isinstance(event, tuple) and event[0] == "r2.delete")
+        release_index = self.events.index(("budget.release", data["uploadId"], "validation_failed"))
+        self.assertLess(delete_index, release_index)
 
 
 if __name__ == "__main__":

@@ -69,8 +69,10 @@
   }
 
   async function switchSection(name, force=false) {
-    const names = ['content','quiz','word','pgy','results','exam-settings','people','system'];
-    names.forEach(item => document.getElementById(`admin-section-${item}`)?.classList.toggle('hidden', item !== name));
+    const sectionId = `admin-section-${name}`;
+    document.querySelectorAll('.admin-section-panel').forEach(item => {
+      item.classList.toggle('hidden', item.id !== sectionId);
+    });
     syncSectionChrome(name);
 
     if (name === 'exam-settings' || name === 'people' || name === 'system') return;
@@ -157,6 +159,10 @@
     for (const guard of workspaceGuards) {
       if (await guard(context) === false) return false;
     }
+    state.workspace = workspace;
+    paintWorkspaceNav(workspace);
+    const modal = document.getElementById('admin-modal');
+    if (modal) modal.dataset.workspace = workspace;
     const extension = workspaceHandlers.get(requested) || workspaceHandlers.get(workspace);
     const result = extension
       ? await extension(context)

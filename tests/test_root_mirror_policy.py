@@ -83,7 +83,7 @@ class RootMirrorPolicyTests(unittest.TestCase):
         ):
             self.assertIn(marker, document)
         root_python = {path.name for path in ROOT.glob("*.py")}
-        canonical_root = {"pgy_app.py", "material_worker.py", "release_contract.py"}
+        canonical_root = {"pgy_app.py", "material_worker.py", "ai_question_worker.py", "release_contract.py"}
         self.assertEqual(root_python - compatibility - canonical_root, set())
         factory = ROOT.joinpath("teacher_app/factory.py").read_text(encoding="utf-8")
         self.assertNotIn("teacher_app.compatibility", factory)

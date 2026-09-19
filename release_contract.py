@@ -37,6 +37,7 @@ REQUIRED_MIGRATIONS = (
     "0072-course-bundle-idempotency",
     "0073-course-bundle-followups",
     "0074-assessment-list-indexes",
+    "0075-ai-question-jobs",
 )
 
 # Backward-compatible singular name used by older release checks.  It now

@@ -18,8 +18,8 @@ class Phase3NAdminDocTemplatesTests(unittest.TestCase):
             self.assertIn(f"window.{name}", self.source)
         self.assertIn("admin-doc-template-upload-input", self.source)
         self.assertIn("addEventListener('change', uploadTemplate)", self.source)
-        self.assertIn("onclick=\"adminTriggerDocTemplateUpload", self.source)
-        self.assertIn("onclick=\"adminDeleteDocTemplate", self.source)
+        self.assertIn("data-csp-click=\"adminTriggerDocTemplateUpload", self.source)
+        self.assertIn("data-csp-click=\"adminDeleteDocTemplate", self.source)
 
     def test_template_api_and_admin_key_contract_stay_intact(self):
         for endpoint in ("/api/doc-templates", "/api/doc-templates/${groupKey}"):

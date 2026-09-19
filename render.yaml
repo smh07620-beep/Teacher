@@ -5,7 +5,7 @@ services:
     plan: free
     region: singapore
     numInstances: 1
-    healthCheckPath: /health
+    healthCheckPath: /ready
     autoDeployTrigger: checksPass
     envVars:
       - key: DATABASE_URL
@@ -27,7 +27,7 @@ services:
       - key: CSRF_ORIGIN_CHECK
         value: "true"
       - key: CSP_ENFORCE
-        value: "false"
+        value: "true"
       - key: MATERIAL_STORAGE_BACKEND
         value: mega
       - key: STORAGE_FAILOVER_ON_FULL
@@ -65,7 +65,7 @@ services:
       - key: FREE_ONLY_MODE
         value: "true"
       - key: MAX_UPLOAD_MB
-        value: "250"
+        value: "50"
       - key: UPLOAD_ZIP_MAX_FILES
         value: "2000"
       - key: UPLOAD_ZIP_MAX_EXPANDED_MB
@@ -98,6 +98,10 @@ services:
         value: r2
       - key: MATERIAL_DIRECT_UPLOAD_ENABLED
         value: "true"
+      - key: MATERIAL_WEB_BYTE_UPLOAD_ENABLED
+        value: "false"
+      - key: MATERIAL_SYNC_UPLOAD_ENABLED
+        value: "false"
       - key: MATERIAL_DIRECT_UPLOAD_MAX_MB
         value: "2048"
       - key: R2_FREE_STORAGE_GB_MONTH
@@ -162,5 +166,97 @@ services:
         value: "4"
       - key: AI_VIDEO_FRAME_COUNT
         value: "3"
+      - key: AI_RAG_SOURCE_MAX_CHARS
+        value: "250000"
+      - key: AI_RAG_CHUNK_CHARS
+        value: "1800"
+      - key: AI_RAG_CHUNK_OVERLAP
+        value: "240"
+      - key: AI_RAG_MAX_CHUNKS
+        value: "8"
+      - key: AI_RAG_CONTEXT_MAX_CHARS
+        value: "14000"
+      - key: MATERIAL_STORAGE
+        value: /tmp/teacher-materials
+
+  - type: worker
+    name: biochemical-training-ai-worker
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    autoDeployTrigger: checksPass
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -u ai_question_worker.py
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: AI_EXTERNAL_PROCESSING_ENABLED
+        value: "true"
+      - key: AI_DEIDENTIFICATION_ENABLED
+        value: "true"
+      - key: AI_EXTERNAL_MEDIA_ALLOWED
+        value: "false"
+      - key: AI_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: qwen/qwen3.6-27b
+      - key: GROQ_TRANSCRIBE_MODEL
+        value: whisper-large-v3-turbo
+      - key: FREE_ONLY_MODE
+        value: "true"
+      - key: AI_SOURCE_MAX_CHARS
+        value: "50000"
+      - key: AI_MAX_QUESTIONS
+        value: "15"
+      - key: AI_MEDIA_MAX_MB
+        value: "250"
+      - key: AI_MAX_MATERIALS
+        value: "4"
+      - key: AI_RAG_SOURCE_MAX_CHARS
+        value: "250000"
+      - key: AI_RAG_CHUNK_CHARS
+        value: "1800"
+      - key: AI_RAG_CHUNK_OVERLAP
+        value: "240"
+      - key: AI_RAG_MAX_CHUNKS
+        value: "8"
+      - key: AI_RAG_CONTEXT_MAX_CHARS
+        value: "14000"
+      - key: AI_QUESTION_WORKER_POLL_SECONDS
+        value: "2"
+      - key: AI_QUESTION_WORKER_RECOVERY_SECONDS
+        value: "300"
+      - key: AI_QUESTION_JOB_STALE_MINUTES
+        value: "20"
+      - key: MEGA_EMAIL
+        sync: false
+      - key: MEGA_PASSWORD
+        sync: false
+      - key: MEGA_ROOT_FOLDER
+        value: smh-teaching-materials
+      - key: MEGACMD_HOME
+        value: /tmp/megacmd-home
+      - key: MEGACMD_TIMEOUT_SECONDS
+        value: "300"
+      - key: GDRIVE_CLIENT_ID
+        sync: false
+      - key: GDRIVE_CLIENT_SECRET
+        sync: false
+      - key: GDRIVE_REFRESH_TOKEN
+        sync: false
+      - key: GDRIVE_FOLDER_ID
+        sync: false
+      - key: GDRIVE_TOKEN_URI
+        value: https://oauth2.googleapis.com/token
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
       - key: MATERIAL_STORAGE
         value: /tmp/teacher-materials

@@ -65,6 +65,15 @@ class Phase3AdminWorkspaceRouterTests(unittest.TestCase):
         self.assertIn('Storage/worker probes remain intentionally deferred', self.router)
         self.assertNotIn('renderMaterialJobs(', self.router)
 
+    def test_core_section_switch_hides_dynamic_extension_panels(self):
+        self.assertIn("document.querySelectorAll('.admin-section-panel').forEach", self.router)
+        self.assertIn("item.id !== sectionId", self.router)
+
+    def test_workspace_state_and_nav_are_set_before_extension_dispatch(self):
+        dispatch = self.router[self.router.index('async function switchWorkspace'):self.router.index('async function toggleCoreModal')]
+        self.assertLess(dispatch.index('state.workspace = workspace'), dispatch.index('const extension ='))
+        self.assertLess(dispatch.index('paintWorkspaceNav(workspace)'), dispatch.index('const extension ='))
+
     def test_router_does_not_redefine_rbac_or_profile_metadata_as_policy(self):
         for forbidden in (
             'professional_title',

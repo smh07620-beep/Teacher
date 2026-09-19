@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from PIL import Image
+
 import app as appmod
 import material_worker
 import pgy_app
@@ -53,11 +55,13 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         self.assertNotIn("material_worker.py", source)
         self.assertNotIn("worker_pid", source)
 
-    def test_render_blueprint_is_free_web_only(self):
+    def test_render_blueprint_keeps_material_worker_external_and_ai_worker_separate(self):
         source = ROOT.joinpath("render.yaml").read_text(encoding="utf-8")
         self.assertIn("type: web", source)
         self.assertIn("plan: free", source)
-        self.assertNotIn("type: worker", source)
+        self.assertEqual(source.count("type: worker"), 1)
+        self.assertIn("biochemical-training-ai-worker", source)
+        self.assertIn("python -u ai_question_worker.py", source)
         self.assertNotIn("biochemical-training-material-worker", source)
         self.assertIn("MATERIAL_WORKER_ENABLED", source)
 
@@ -110,6 +114,55 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
             material_worker.validate_download(source, {"originalName": "lesson.txt", **base_job, "sourceBytes": 1})
         with self.assertRaisesRegex(RuntimeError, "SHA256"):
             material_worker.validate_download(source, {"originalName": "lesson.txt", **base_job, "sourceSha256": "0" * 64})
+
+    def test_worker_normalizes_filename_and_rejects_blocked_formats(self):
+        source = Path(self.temp.name) / "lesson.txt"
+        source.write_text("safe learning material", encoding="utf-8")
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        job = {
+            "originalName": "..\\folder/e\u0301vidence\x00.txt",
+            "sourceBytes": source.stat().st_size,
+            "sourceSha256": digest,
+            "payload": {},
+        }
+        self.assertEqual(material_worker.validate_download(source, job), "évidence.txt")
+        for filename in ("diagram.svg", "macro.docm"):
+            with self.subTest(filename=filename), self.assertRaisesRegex(RuntimeError, "不安全的檔名"):
+                material_worker.validate_download(source, {**job, "originalName": filename})
+
+    def test_worker_reencodes_jpeg_without_exif(self):
+        source = Path(self.temp.name) / "source.jpg"
+        image = Image.new("RGB", (8, 8), "white")
+        exif = Image.Exif()
+        exif[270] = "sensitive description"
+        image.save(source, format="JPEG", exif=exif)
+        image.close()
+        with Image.open(source) as before:
+            self.assertEqual(before.getexif().get(270), "sensitive description")
+        self.assertTrue(material_worker._sanitize_raster_image_in_place(source, ".jpg"))
+        with Image.open(source) as after:
+            self.assertFalse(after.getexif())
+            self.assertEqual(after.size, (8, 8))
+
+    def test_worker_validates_streamed_part_hashes_when_whole_sha_is_omitted(self):
+        source = Path(self.temp.name) / "lesson.txt"
+        raw = b"safe learning material"
+        source.write_bytes(raw)
+        part_size = 7
+        hashes = [
+            hashlib.sha256(raw[offset:offset + part_size]).hexdigest()
+            for offset in range(0, len(raw), part_size)
+        ]
+        job = {
+            "originalName": "lesson.txt",
+            "sourceBytes": len(raw),
+            "sourceSha256": "",
+            "payload": {"sourcePartSize": part_size, "sourcePartSha256": hashes},
+        }
+        self.assertEqual(material_worker.validate_download(source, job), "lesson.txt")
+        bad = {**job, "payload": {**job["payload"], "sourcePartSha256": ["0" * 64, *hashes[1:]]}}
+        with self.assertRaisesRegex(RuntimeError, "分段 SHA256"):
+            material_worker.validate_download(source, bad)
 
     def test_stale_recovery_and_terminal_retention(self):
         self.with_queue()
@@ -219,8 +272,9 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         class FakeR2:
             def create_multipart_upload(self, **_kwargs): return {"UploadId": "remote-upload"}
             def generate_presigned_url(self, _operation, Params, ExpiresIn): return f"https://r2.example/{Params.get('PartNumber', 'get')}?expires={ExpiresIn}"
+            def list_parts(self, **_kwargs): return {"Parts": [{"PartNumber": n, "ETag": f'"server-etag-{n}"', "Size": 8 * 1024 * 1024} for n in range(1, 6)], "IsTruncated": False}
             def complete_multipart_upload(self, **_kwargs): return {}
-            def head_object(self, **_kwargs): return {"ContentLength": 20 * 1024 * 1024, "Metadata": {"sha256": "a" * 64}}
+            def head_object(self, **_kwargs): return {"ContentLength": 40 * 1024 * 1024, "Metadata": {"sha256": "a" * 64}}
             def abort_multipart_upload(self, **_kwargs): return {}
             def delete_object(self, **_kwargs): return {}
         client = pgy_app.app.test_client(); headers = {"Origin": "http://localhost"}
@@ -236,13 +290,13 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
         ), patch.object(self.worker_runtime, "record_r2_object", return_value=None), patch.object(
             self.worker_runtime, "record_r2_deleted", return_value=None
         ), patch.object(self.worker_runtime, "sync_media_processing_metadata", return_value=None):
-            init = client.post("/api/material-upload/init", json={"filename": "movie.mp4", "size": 20 * 1024 * 1024, "sha256": "a" * 64, "partSizeMb": 8}, headers=headers)
+            init = client.post("/api/material-upload/init", json={"filename": "movie.mp4", "size": 40 * 1024 * 1024, "sha256": "a" * 64, "partSizeMb": 8}, headers=headers)
             self.assertEqual(init.status_code, 201, init.get_data(as_text=True))
-            data = init.get_json(); self.assertEqual(len(data["parts"]), 3)
+            data = init.get_json(); self.assertEqual(data["mode"], "multipart"); self.assertEqual(len(data["parts"]), 5)
             self.assertNotIn("secret", str(data).lower())
             malformed = client.post(f"/api/material-upload/{data['uploadId']}/complete", json={"parts": []}, headers=headers)
             self.assertEqual(malformed.status_code, 400)
-            complete = client.post(f"/api/material-upload/{data['uploadId']}/complete", json={"parts": [{"partNumber": n, "etag": f'etag-{n}'} for n in range(1, 4)]}, headers=headers)
+            complete = client.post(f"/api/material-upload/{data['uploadId']}/complete", json={"parts": [{"partNumber": n, "etag": f'etag-{n}'} for n in range(1, 6)]}, headers=headers)
         self.assertEqual(complete.status_code, 202, complete.get_data(as_text=True))
         self.assertEqual(appmod.get_material_job(data["jobId"])["stagingBackend"], "r2")
 
@@ -299,7 +353,7 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
             "training (final).pptx",
             "教材📘.pptx",
         )
-        size = 8 * 1024 * 1024
+        size = 40 * 1024 * 1024
 
         class FakeR2:
             def __init__(self):
@@ -313,6 +367,9 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
 
             def generate_presigned_url(self, _operation, Params, ExpiresIn):
                 return f"https://r2.example/{Params.get('PartNumber', 'get')}?expires={ExpiresIn}"
+
+            def list_parts(self, **_kwargs):
+                return {"Parts": [{"PartNumber": n, "ETag": f'"server-etag-{n}"', "Size": 8 * 1024 * 1024} for n in range(1, 6)], "IsTruncated": False}
 
             def complete_multipart_upload(self, **_kwargs):
                 return {}
@@ -355,7 +412,7 @@ class RenderWorkerSchemeBTests(unittest.TestCase):
                     conn.close()
                 self.assertEqual(session["original_name"], filename)
                 self.assertEqual(json.loads(session["payload"])["originalName"], filename)
-                complete = client.post(f"/api/material-upload/{data['uploadId']}/complete", json={"parts": [{"partNumber": 1, "etag": "etag-1"}]}, headers=headers)
+                complete = client.post(f"/api/material-upload/{data['uploadId']}/complete", json={"parts": [{"partNumber": n, "etag": f"etag-{n}"} for n in range(1, 6)]}, headers=headers)
                 self.assertEqual(complete.status_code, 202, complete.get_data(as_text=True))
                 job = appmod.get_material_job(data["jobId"], include_payload=True)
                 self.assertEqual(job["originalName"], filename)

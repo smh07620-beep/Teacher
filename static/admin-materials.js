@@ -49,9 +49,9 @@
           </div>
           ${m.isBuiltin ? '<span class="text-xs text-slate-400">內建教材不可修改</span>' : `
             <div class="flex flex-wrap gap-2 shrink-0">
-              <button onclick="editAdminMaterial('${m.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg">✏️ 編輯</button><button onclick="rebuildMaterialIndex('${m.id}')" class="text-xs border border-teal-200 text-teal-800 px-3 py-1.5 rounded-lg">🔄 重建索引</button>
-              <button onclick="toggleAdminMaterial('${m.id}', ${m.active ? 'false' : 'true'})" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg">${m.active ? '⏸️ 停用' : '▶️ 啟用'}</button>
-              <details class="relative"><summary class="list-none cursor-pointer text-[11px] bg-white border border-slate-200 text-slate-500 px-2.5 py-1.5 rounded-lg">更多</summary><div class="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-rose-200 bg-white shadow-lg p-2"><button onclick="deleteAdminMaterial('${m.id}')" class="w-full text-xs bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg">🗑️ 永久刪除</button></div></details>
+              <button data-csp-click="editAdminMaterial('${m.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg">✏️ 編輯</button><button data-csp-click="rebuildMaterialIndex('${m.id}')" class="text-xs border border-teal-200 text-teal-800 px-3 py-1.5 rounded-lg">🔄 重建索引</button>
+              <button data-csp-click="toggleAdminMaterial('${m.id}', ${m.active ? 'false' : 'true'})" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg">${m.active ? '⏸️ 停用' : '▶️ 啟用'}</button>
+              <details class="relative"><summary class="list-none cursor-pointer text-[11px] bg-white border border-slate-200 text-slate-500 px-2.5 py-1.5 rounded-lg">更多</summary><div class="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-rose-200 bg-white shadow-lg p-2"><button data-csp-click="deleteAdminMaterial('${m.id}')" class="w-full text-xs bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg">🗑️ 永久刪除</button></div></details>
             </div>`}
         </div>
       </div>`).join('') || '<p class="text-xs text-slate-400">目前沒有教材。</p>';

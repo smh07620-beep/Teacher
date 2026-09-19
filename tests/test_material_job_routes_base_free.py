@@ -163,6 +163,30 @@ class MaterialJobRoutesBaseFreeTests(unittest.TestCase):
         self.assertEqual(self.progress[0], ("clear", body["jobId"]))
         self.assertEqual(self.progress[1][1:3], (9, "已加入背景佇列"))
 
+    def test_web_byte_upload_normalizes_filename_and_rejects_macro_office(self):
+        normalized = self.client.post(
+            "/api/material-jobs/upload",
+            data={
+                "file": (io.BytesIO(b"safe text"), "..\\folder/e\u0301vidence\x00.txt"),
+                "group": "grpBio",
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(normalized.status_code, 202, normalized.get_data(as_text=True))
+        job = worker_repository.get_material_job(
+            normalized.get_json()["jobId"], include_payload=True, connection_factory=self.connect
+        )
+        self.assertEqual(job["originalName"], "évidence.txt")
+        self.assertEqual(job["payload"]["originalName"], "évidence.txt")
+
+        rejected = self.client.post(
+            "/api/material-jobs/upload",
+            data={"file": (io.BytesIO(b"macro"), "lesson.docm"), "group": "grpBio"},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(rejected.status_code, 400)
+        self.assertIn("巨集", rejected.get_json()["error"])
+
     def test_create_failure_cleans_staging_once_before_error_response(self):
         with patch.object(
             worker_repository,

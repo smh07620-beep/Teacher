@@ -183,6 +183,15 @@
     return authUser;
   }
 
+  function syncPgyManagementVisibility(){
+    const targets=$$('[data-pgy-management-only]');
+    if(!targets.length)return;
+    const roles=Array.isArray(authUser?.roles)?authUser.roles:[authUser?.roles||authUser?.role];
+    const allowed=new Set(['clinical_teacher','teacher','group_leader','education_admin','manager','system_admin']);
+    const visible=roles.some(role=>allowed.has(String(role||'')));
+    targets.forEach(target=>target.classList.toggle('hidden',!visible));
+  }
+
   function renderPendingExams(rows){
     const box=$('#v571-pending-exams');if(!box)return;const groups={grpBio:'生化組',grpMicro:'鏡檢組',grpSero:'血清組',grpBB:'血庫組',grpBact:'細菌組',grpHema:'血液組',grpNew:'新進醫檢師',grpPgyDocs:'PGY'};
     const list=Array.isArray(rows)?rows.slice(0,3):[];
@@ -215,12 +224,13 @@
 
   function setupProfileDialog(){
     const dialog=$('#v561-profile-dialog'), trigger=$('#v561-profile-trigger'), form=$('#v561-profile-form');
-    const name=$('#v561-profile-name'), emp=$('#v561-profile-empid'), status=$('#v561-profile-status'), clear=$('#v561-profile-clear'), close=$('#v561-profile-close'), cancel=$('#v561-profile-cancel');
+    const name=$('#v561-profile-name'), emp=$('#v561-profile-empid'), status=$('#v561-profile-status'), clear=$('#v561-profile-clear'), close=$('#v561-profile-close'), cancel=$('#v561-profile-cancel'), progressOpen=$('#v561-progress-open');
     if(!dialog||!trigger||!form)return;
     const shut=()=>{try{dialog.close();}catch(_){dialog.removeAttribute('open');}};
     const open=()=>{if(!authUser){location.href='/login?next=%2F';return;}if(name){name.value=authUser.name||'';name.readOnly=true;}if(emp){emp.value=authUser.empId||'';emp.readOnly=true;}if(status)status.textContent=`已登入 ${authUser.username}；個人資料由管理者維護。`;if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();else dialog.setAttribute('open','');};
     trigger.addEventListener('click',open);
     trigger.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
+    progressOpen?.addEventListener('click',open);
     close?.addEventListener('click',shut); cancel?.addEventListener('click',shut);
     dialog.addEventListener('click',e=>{if(e.target===dialog)shut();});
     form.addEventListener('submit',e=>{e.preventDefault();shut();});
@@ -310,6 +320,7 @@
 
   (async()=>{
     await loadAuthState();
+    syncPgyManagementVisibility();
 
     await Promise.all([
       loadPersonalDashboard(),

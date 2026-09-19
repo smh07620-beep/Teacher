@@ -226,6 +226,11 @@ def request_groups(owner=None) -> set[str]:
             add(category_group(owner, item.get("quizCategoryId") or item.get("category")))
             add(question_group(owner, item.get("id") or item.get("questionId")))
 
+    ids = body.get("ids")
+    if isinstance(ids, list):
+        for question_id in ids:
+            add(question_group(owner, question_id))
+
     if not groups and (request.endpoint or "") in DEFAULT_GROUP_ENDPOINTS:
         add(scope.DEFAULT_GROUP)
     return {group for group in groups if group}

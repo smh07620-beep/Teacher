@@ -15,6 +15,7 @@ import uuid
 
 from flask import g, jsonify, request
 
+from teacher_app.assessments import ai_job_repository, ai_jobs
 from teacher_app.assessments import repository
 from teacher_app.assessments.question_runtime import (
     QuestionImageMegaUploadError,
@@ -187,7 +188,10 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         if denied:
             return denied
         try:
-            return jsonify(runtime_questions.create_question(request.get_json(silent=True) or {}))
+            return jsonify(runtime_questions.create_question(
+                request.get_json(silent=True) or {},
+                allow_hosts=app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+            ))
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 
@@ -196,7 +200,11 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         if denied:
             return denied
         try:
-            return jsonify(runtime_questions.update_question(question_id, request.get_json(silent=True) or {}))
+            return jsonify(runtime_questions.update_question(
+                question_id,
+                request.get_json(silent=True) or {},
+                allow_hosts=app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+            ))
         except LookupError as exc:
             return jsonify({"error": str(exc)}), 404
         except ValueError as exc:
@@ -207,7 +215,10 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         if denied:
             return denied
         try:
-            payload = runtime_questions.batch_update((request.get_json(silent=True) or {}).get("items") or [])
+            payload = runtime_questions.batch_update(
+                (request.get_json(silent=True) or {}).get("items") or [],
+                allow_hosts=app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+            )
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
         missing = payload.get("missing") if isinstance(payload, dict) else None
@@ -222,10 +233,21 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         denied = _strict_admin(owner)
         if denied:
             return denied
+        denied = scope_filter.scoped_groups(
+            owner,
+            "question.manage",
+            scope_filter.request_groups(owner),
+        )[1]
+        if denied:
+            return denied
         try:
-            return jsonify(runtime_questions.batch_delete((request.get_json(silent=True) or {}).get("ids") or []))
+            payload = runtime_questions.batch_delete((request.get_json(silent=True) or {}).get("ids") or [])
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        missing = payload.get("missing") if isinstance(payload, dict) else None
+        if missing:
+            return jsonify({"error": f"找不到 {len(missing)} 題", "missing": missing}), 404
+        return jsonify(payload)
 
     def api_import_quiz_questions_url():
         denied = _question_guard(owner, scoped=True)
@@ -360,7 +382,11 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
                 "imageUrl": item.get("imageUrl", ""),
             }
             try:
-                runtime_questions.insert_payload(category_id, payload)
+                runtime_questions.insert_payload(
+                    category_id,
+                    payload,
+                    allow_hosts=app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+                )
                 imported += 1
             except ValueError as exc:
                 errors.append(f"第{index}題：{exc}")
@@ -399,67 +425,28 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         if denied:
             return denied
         data = request.get_json(silent=True) or {}
-        progress_id = re.sub(r"[^A-Za-z0-9_-]", "", str(data.get("progressId", "") or ""))[:80]
-        if progress_id:
-            runtime.clear_progress(progress_id)
-            runtime.set_progress(progress_id, 2, "準備 AI 出題", "正在驗證考卷與教材設定")
-        category_id = str(data.get("quizCategoryId", "")).strip()
-        category = repository.get_category_full(category_id)
-        if not category:
-            return jsonify({"error": "找不到考題頁籤。請重新整理後台後再試。"}), 404
-        raw_ids = data.get("materialIds")
-        if not isinstance(raw_ids, list):
-            one = str(data.get("materialId", "")).strip()
-            raw_ids = [one] if one else []
-        material_ids = []
-        for value in raw_ids:
-            material_id = str(value).strip()
-            if material_id and material_id not in material_ids:
-                material_ids.append(material_id)
-        if not material_ids:
-            return jsonify({"error": "請至少選擇一份教材"}), 400
-        if len(material_ids) > runtime.max_materials:
-            return jsonify({"error": f"一次最多選 {runtime.max_materials} 份教材"}), 400
-        materials = []
-        for material_id in material_ids:
-            material = material_repository.get_material(material_id)
-            if not material or not material.get("active", True):
-                return jsonify({"error": f"找不到指定教材：{material_id}"}), 404
-            if material.get("group") != category.get("group") or material.get("area") != category.get("area"):
-                return jsonify({"error": "所選教材與考卷不屬於同一訓練區/組別"}), 400
-            materials.append(material)
         try:
-            requested_strategy = str(data.get("strategy", "auto")).strip()[:30] or "auto"
-            questions, source_title, source_kinds = runtime.generate_ai_questions_from_materials(
-                materials,
-                category_id=category_id,
-                count=data.get("count", 5),
-                qtype=str(data.get("questionType", "mixed")),
-                difficulty=str(data.get("difficulty", "standard")),
-                focus=str(data.get("focus", "")).strip()[:500],
-                strategy=requested_strategy,
-                progress_id=progress_id,
-            )
-            if progress_id:
-                runtime.set_progress(progress_id, 100, "AI 候選題完成", f"已產生 {len(questions)} 題，請在後台人工審核後再匯入")
-            applied_strategy = runtime.infer_ai_strategy(materials) if requested_strategy == "auto" else requested_strategy
-            provider = runtime.active_ai_provider()
-            return jsonify({
-                "ok": True,
-                "questions": questions,
-                "sourceTitle": source_title,
-                "sourceCount": len(materials),
-                "sourceKinds": source_kinds,
-                "sourceMode": "multimedia" if any(kind in {"image", "video", "audio"} for kind in source_kinds) else "text",
-                "provider": provider,
-                "model": runtime.ai_model_name(),
-                "strategyRequested": requested_strategy,
-                "strategyApplied": applied_strategy,
-            })
-        except Exception as exc:
-            if progress_id:
-                runtime.set_progress(progress_id, 0, "AI 出題失敗", str(exc)[:500])
+            job = ai_jobs.enqueue(data, runtime, _current_user(owner))
+        except ai_jobs.AiJobLimitError as exc:
+            return jsonify({"error": str(exc)}), 429
+        except LookupError as exc:
+            return jsonify({"error": str(exc)}), 404
+        except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        return jsonify({"ok": True, "jobId": job.get("id"), "status": "queued"}), 202
+
+    def api_ai_question_job(job_id):
+        job = ai_job_repository.get_job(str(job_id or ""))
+        if not job:
+            return jsonify({"error": "找不到 AI 出題工作"}), 404
+        denied = scope_filter.scoped_groups(
+            owner,
+            "question.manage",
+            {str(job.get("group") or "")},
+        )[1]
+        if denied:
+            return denied
+        return jsonify(ai_jobs.public_job(job))
 
     def api_ai_import_questions():
         denied = _question_guard(owner, scoped=True)
@@ -480,7 +467,11 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
             else:
                 errors.append(f"第{index}題：題目格式錯誤")
         try:
-            inserted = runtime_questions.insert_payloads_bulk(category_id, valid)
+            inserted = runtime_questions.insert_payloads_bulk(
+                category_id,
+                valid,
+                allow_hosts=app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+            )
         except Exception as exc:
             return jsonify({"error": f"批次匯入失敗：{exc}"}), 400
         return jsonify({"ok": True, "imported": len(inserted), "errors": errors[:20], "questions": inserted})
@@ -498,6 +489,7 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         ("/api/quiz-questions/<question_id>", "api_delete_quiz_question", api_delete_quiz_question, ["DELETE"]),
         ("/api/ai-questions/status", "api_ai_question_status", api_ai_question_status, ["GET"]),
         ("/api/ai-questions/generate", "api_ai_generate_questions", api_ai_generate_questions, ["POST"]),
+        ("/api/ai-questions/jobs/<job_id>", "api_ai_question_job", api_ai_question_job, ["GET"]),
         ("/api/ai-questions/import", "api_ai_import_questions", api_ai_import_questions, ["POST"]),
     )
     for rule, endpoint, view, methods in rules:

@@ -151,6 +151,28 @@ class SyncUploadRouteTests(unittest.TestCase):
         self.assertTrue(any(call[:3] == ("p1", 100, "教材建立完成") for call in progress if call and call[0] != "clear"))
         self.assertFalse((self.paths.upload_dir / "upload-abcdef123456").exists())
 
+    def test_filename_is_normalized_and_macro_office_is_rejected(self):
+        client = self._register(_runtime(self.paths))
+        with patch("teacher_app.materials.sync_upload.material_repository.get_material", return_value=None), patch(
+            "teacher_app.materials.sync_upload.material_repository.insert_material"
+        ) as insert:
+            normalized = client.post(
+                "/api/slides/upload",
+                data={"file": (io.BytesIO(b"hello"), "..\\folder/e\u0301vidence\x00.txt")},
+                content_type="multipart/form-data",
+            )
+        self.assertEqual(normalized.status_code, 200, normalized.get_data(as_text=True))
+        self.assertEqual(normalized.get_json()["filename"], "évidence.txt")
+        self.assertEqual(insert.call_args.args[0]["filename"], "évidence.txt")
+
+        rejected = client.post(
+            "/api/slides/upload",
+            data={"file": (io.BytesIO(b"macro"), "lesson.docm")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(rejected.status_code, 400)
+        self.assertIn("巨集", rejected.get_json()["error"])
+
     def test_auto_classification_keeps_atlas_metadata(self):
         def classify(*args, **kwargs):
             return "atlas", "規則分類", "atlas keywords"

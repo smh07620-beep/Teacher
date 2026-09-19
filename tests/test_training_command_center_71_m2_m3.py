@@ -161,6 +161,8 @@ class CommandCenterM2M3FrontendTests(unittest.TestCase):
         self.assertIn('p?.pgyLearner', self.matrix_ui)
         self.assertIn('/api/dashboard/me?', self.matrix_ui)
         self.assertIn('/api/training-command-center/pgy-matrix', self.matrix_ui)
+        self.assertIn("if (section) section.classList.add('hidden');", self.matrix_ui)
+        self.assertEqual(self.matrix_ui.count("if (section) section.classList.remove('hidden');"), 1)
         for mutation in ("method: 'POST'", "method: 'PATCH'", "method: 'DELETE'"):
             self.assertNotIn(mutation, self.matrix_ui)
 

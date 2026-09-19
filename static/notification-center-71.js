@@ -11,23 +11,24 @@
 
   function mount() {
     if (document.getElementById(ID)) return document.getElementById(ID);
+    const statusHost = document.getElementById('learning-status-detail-71');
     const course = document.getElementById('course-overview');
     const host = course || document.querySelector('main.flex-grow') || document.querySelector('main');
     if (!host) return null;
     const section = document.createElement('details');
     section.id = ID;
-    section.className = 'rounded-2xl border border-amber-100 bg-amber-50/30 px-4 py-3';
+    section.className = 'rounded-xl border border-amber-100 bg-amber-50/20 px-3 py-3';
     section.innerHTML = `
       <summary class="cursor-pointer list-none flex items-center justify-between gap-3">
         <span><b class="text-sm text-slate-900">🔔 通知中心</b><span id="notification-status-71" class="ml-2 text-[11px] text-slate-500">讀取中…</span></span>
         <span class="text-[11px] font-bold text-amber-700">展開 ▾</span>
       </summary>
       <div class="mt-3 flex justify-end"><button id="notification-refresh-71" type="button" class="text-[10px] font-bold text-amber-700">↻ 更新</button></div>
-      <div id="notification-stats-71" class="hidden grid grid-cols-3 gap-2 mt-2"></div>
       <div id="notification-list-71" class="space-y-2 mt-3"></div>
       <p class="text-[10px] text-slate-400 mt-3">一般人員彙整考核與公告；只有後台明確標記的 PGY 學員才會額外出現 PGY 學員待辦。通知中心本身不執行任何 mutation。</p>`;
     const grid = document.getElementById('course-overview-grid');
-    if (grid) grid.after(section);
+    if (statusHost) statusHost.appendChild(section);
+    else if (grid) grid.after(section);
     else if (course) course.appendChild(section);
     else host.appendChild(section);
     section.querySelector('#notification-refresh-71').addEventListener('click', () => load(true));
@@ -82,10 +83,6 @@
     return rows.sort((a, b) => a.priority - b.priority);
   }
 
-  function stat(label, value, emphasis = '') {
-    return `<div class="rounded-xl border border-slate-200 bg-white px-3 py-2"><div class="text-[9px] text-slate-400">${escapeHtml(label)}</div><div class="text-sm font-black ${emphasis || 'text-slate-900'}">${Number(value || 0)}</div></div>`;
-  }
-
   function openPGY() {
     if (typeof window.switchLearningModule === 'function') window.switchLearningModule('assessment');
     window.setTimeout(() => (document.getElementById('pgy-workflow-center') || document.getElementById('panel-assessment'))?.scrollIntoView?.({behavior:'smooth',block:'start'}), 120);
@@ -93,15 +90,12 @@
 
   function render(rows) {
     const status = document.getElementById('notification-status-71');
-    const stats = document.getElementById('notification-stats-71');
     const list = document.getElementById('notification-list-71');
-    if (!status || !stats || !list) return;
+    if (!status || !list) return;
     const urgent = rows.filter(item => item.overdue).length;
     const actionable = rows.filter(item => item.kind === 'pgy' || item.kind === 'exam').length;
     const info = rows.filter(item => item.kind === 'announcement').length;
-    status.textContent = rows.length ? `${rows.length} 則通知` : '沒有新通知';
-    stats.classList.remove('hidden');
-    stats.innerHTML = [stat('需處理', actionable), stat('逾期', urgent, urgent ? 'text-rose-600' : ''), stat('公告', info)].join('');
+    status.textContent = rows.length ? `${actionable} 待處理 · ${urgent} 逾期 · ${info} 公告` : '沒有新通知';
     if (!rows.length) {
       list.innerHTML = '<div class="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-700">✓ 目前沒有需要注意的新事項。</div>';
       return;

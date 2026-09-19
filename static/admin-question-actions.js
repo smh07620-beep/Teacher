@@ -159,12 +159,9 @@
     const key=await getAdminKey(); if(!key) return;
     window.setQuestionBulkBusy(catId,true,active?'批次啟用中…':'批次停用中…');
     try{
-      const patches=[];
-      for(const id of ids){
-        const r=await fetch(`/api/quiz-questions/${encodeURIComponent(id)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({active})});
-        const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'批次更新失敗');
-        patches.push({id,active});
-      }
+      const r=await fetch('/api/quiz-questions/batch',{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({items:ids.map(id=>({id,data:{active}}))})});
+      const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'批次更新失敗');
+      const patches=Array.isArray(d.updated)?d.updated:ids.map(id=>({id,active}));
       window.updateQuestionCacheAndPaint(catId,patches);
     }catch(e){ alert(e.message); }
     finally{ window.setQuestionBulkBusy(catId,false); }
@@ -179,16 +176,15 @@
     const key=await getAdminKey(); if(!key) return;
     window.setQuestionBulkBusy(catId,true,'批次更新分類中…');
     try{
-      const patches=[];
-      for(const id of ids){
-        const r=await fetch(`/api/quiz-questions/${encodeURIComponent(id)}`,{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({tag:tag.trim()})});
-        const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'批次分類失敗');
-        patches.push({id,tag:tag.trim()});
-      }
+      const cleanTag=tag.trim();
+      const r=await fetch('/api/quiz-questions/batch',{method:'PATCH',headers:{'Content-Type':'application/json','X-Admin-Key':key},body:JSON.stringify({items:ids.map(id=>({id,data:{tag:cleanTag}}))})});
+      const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'批次分類失敗');
+      const patches=Array.isArray(d.updated)?d.updated:ids.map(id=>({id,tag:cleanTag}));
       window.updateQuestionCacheAndPaint(catId,patches);
     }catch(e){ alert(e.message); }
     finally{ window.setQuestionBulkBusy(catId,false); }
   };
+  window.adminBulkSetQuestionTag = window.adminBulkTagQuestions;
 
   window.adminBulkDeleteQuestions = async function(catId){
     const ids=window.adminSelectedQuestionIds(catId);
