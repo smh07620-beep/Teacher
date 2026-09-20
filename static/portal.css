@@ -916,12 +916,12 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
   background-position:center!important;
   filter:saturate(.86) contrast(.97) brightness(1.04)
 }
-.internal-training-page .v580-group-card:nth-child(1) .v580-group-art{background-image:url('/assets/v684/internal-bio-hd.png')!important}
-.internal-training-page .v580-group-card:nth-child(2) .v580-group-art{background-image:url('/assets/v684/internal-micro-hd.png')!important}
-.internal-training-page .v580-group-card:nth-child(3) .v580-group-art{background-image:url('/assets/v684/internal-sero-hd.png')!important}
-.internal-training-page .v580-group-card:nth-child(4) .v580-group-art{background-image:url('/assets/v684/internal-bb-hd.png')!important}
-.internal-training-page .v580-group-card:nth-child(5) .v580-group-art{background-image:url('/assets/v684/internal-bact-hd.png')!important}
-.internal-training-page .v580-group-card:nth-child(6) .v580-group-art{background-image:url('/assets/v684/internal-hema-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(1) .v580-group-art{background-image:url('/assets/v686/internal-bio-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(2) .v580-group-art{background-image:url('/assets/v686/internal-micro-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(3) .v580-group-art{background-image:url('/assets/v686/internal-sero-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(4) .v580-group-art{background-image:url('/assets/v686/internal-bb-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(5) .v580-group-art{background-image:url('/assets/v686/internal-bact-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(6) .v580-group-art{background-image:url('/assets/v686/internal-hema-hd.png')!important}
 .internal-training-page .v580-group-art img{opacity:0!important}
 
 .pgy-training-page .v682-pgy-photo{
@@ -930,10 +930,10 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
   background-position:center!important;
   filter:saturate(.83) contrast(.97) brightness(1.04)
 }
-.pgy-training-page .photo-foundation{background-image:url('/assets/v684/pgy-foundation-hd.png')!important}
-.pgy-training-page .photo-advanced{background-image:url('/assets/v684/pgy-advanced-hd.png')!important}
-.pgy-training-page .photo-specialty{background-image:url('/assets/v684/pgy-specialty-hd.png')!important}
-.pgy-training-page .photo-records{background-image:url('/assets/v684/pgy-records-hd.png')!important}
+.pgy-training-page .photo-foundation{background-image:url('/assets/v686/pgy-foundation-hd.png')!important}
+.pgy-training-page .photo-advanced{background-image:url('/assets/v686/pgy-advanced-hd.png')!important}
+.pgy-training-page .photo-specialty{background-image:url('/assets/v686/pgy-specialty-hd.png')!important}
+.pgy-training-page .photo-records{background-image:url('/assets/v686/pgy-records-hd.png')!important}
 
 /* The same reference photography continues into the home learning-centre cards. */
 .home-dashboard-page .phase3-groups a>span:first-child{
@@ -942,12 +942,12 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
   background-position:center!important;
   filter:saturate(.86) contrast(.97) brightness(1.04)
 }
-.home-dashboard-page .phase3-groups a:nth-child(1)>span:first-child{background-image:url('/assets/v684/internal-bio-hd.png')!important}
-.home-dashboard-page .phase3-groups a:nth-child(2)>span:first-child{background-image:url('/assets/v684/internal-micro-hd.png')!important}
-.home-dashboard-page .phase3-groups a:nth-child(3)>span:first-child{background-image:url('/assets/v684/internal-sero-hd.png')!important}
-.home-dashboard-page .phase3-groups a:nth-child(4)>span:first-child{background-image:url('/assets/v684/internal-bb-hd.png')!important}
-.home-dashboard-page .phase3-groups a:nth-child(5)>span:first-child{background-image:url('/assets/v684/internal-bact-hd.png')!important}
-.home-dashboard-page .phase3-groups a:nth-child(6)>span:first-child{background-image:url('/assets/v684/internal-hema-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(1)>span:first-child{background-image:url('/assets/v686/internal-bio-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(2)>span:first-child{background-image:url('/assets/v686/internal-micro-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(3)>span:first-child{background-image:url('/assets/v686/internal-sero-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(4)>span:first-child{background-image:url('/assets/v686/internal-bb-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(5)>span:first-child{background-image:url('/assets/v686/internal-bact-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(6)>span:first-child{background-image:url('/assets/v686/internal-hema-hd.png')!important}
 .home-dashboard-page .phase3-groups a>span:first-child img{opacity:0!important}
 
 @media(max-width:1000px){
