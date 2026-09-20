@@ -856,7 +856,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
     height:267px;
     min-height:267px;
     overflow:hidden;
-    background:url('/assets/v682/home-hero.webp') center/100% 100% no-repeat;
+    background:url('/assets/v684/home-hero-hd.png') center/100% 100% no-repeat;
   }
   .home-dashboard-page .phase3-home .phase3-home-hero-681:before{display:none}
   .home-dashboard-page .phase3-home .phase3-home-hero-681>.v56-hero-copy,
@@ -886,7 +886,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
     min-height:217px;
     padding:0;
     overflow:hidden;
-    background:url('/assets/v682/internal-hero.webp') center/100% 100% no-repeat
+    background:url('/assets/v684/internal-hero-hd.png') center/100% 100% no-repeat
   }
   .internal-training-page .v681-internal-hero:before{display:none}
   .internal-training-page .v681-internal-copy,
@@ -901,7 +901,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
     min-height:218px;
     padding:0;
     overflow:hidden;
-    background:url('/assets/v682/pgy-hero.webp') center/100% 100% no-repeat
+    background:url('/assets/v684/pgy-hero-hd.png') center/100% 100% no-repeat
   }
   .pgy-training-page .v681-pgy-hero:before,
   .pgy-training-page .v681-pgy-hero:after{display:none}
@@ -916,12 +916,12 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
   background-position:center!important;
   filter:saturate(.86) contrast(.97) brightness(1.04)
 }
-.internal-training-page .v580-group-card:nth-child(1) .v580-group-art{background-image:url('/assets/v682/internal-bio.webp')!important}
-.internal-training-page .v580-group-card:nth-child(2) .v580-group-art{background-image:url('/assets/v682/internal-micro.webp')!important}
-.internal-training-page .v580-group-card:nth-child(3) .v580-group-art{background-image:url('/assets/v682/internal-sero.webp')!important}
-.internal-training-page .v580-group-card:nth-child(4) .v580-group-art{background-image:url('/assets/v682/internal-bb.webp')!important}
-.internal-training-page .v580-group-card:nth-child(5) .v580-group-art{background-image:url('/assets/v682/internal-bact.webp')!important}
-.internal-training-page .v580-group-card:nth-child(6) .v580-group-art{background-image:url('/assets/v682/internal-hema.webp')!important}
+.internal-training-page .v580-group-card:nth-child(1) .v580-group-art{background-image:url('/assets/v684/internal-bio-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(2) .v580-group-art{background-image:url('/assets/v684/internal-micro-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(3) .v580-group-art{background-image:url('/assets/v684/internal-sero-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(4) .v580-group-art{background-image:url('/assets/v684/internal-bb-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(5) .v580-group-art{background-image:url('/assets/v684/internal-bact-hd.png')!important}
+.internal-training-page .v580-group-card:nth-child(6) .v580-group-art{background-image:url('/assets/v684/internal-hema-hd.png')!important}
 .internal-training-page .v580-group-art img{opacity:0!important}
 
 .pgy-training-page .v682-pgy-photo{
@@ -930,10 +930,10 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
   background-position:center!important;
   filter:saturate(.83) contrast(.97) brightness(1.04)
 }
-.pgy-training-page .photo-foundation{background-image:url('/assets/v682/pgy-foundation.webp')!important}
-.pgy-training-page .photo-advanced{background-image:url('/assets/v682/pgy-advanced.webp')!important}
-.pgy-training-page .photo-specialty{background-image:url('/assets/v682/pgy-specialty.webp')!important}
-.pgy-training-page .photo-records{background-image:url('/assets/v682/pgy-records.webp')!important}
+.pgy-training-page .photo-foundation{background-image:url('/assets/v684/pgy-foundation-hd.png')!important}
+.pgy-training-page .photo-advanced{background-image:url('/assets/v684/pgy-advanced-hd.png')!important}
+.pgy-training-page .photo-specialty{background-image:url('/assets/v684/pgy-specialty-hd.png')!important}
+.pgy-training-page .photo-records{background-image:url('/assets/v684/pgy-records-hd.png')!important}
 
 /* The same reference photography continues into the home learning-centre cards. */
 .home-dashboard-page .phase3-groups a>span:first-child{
@@ -942,12 +942,12 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
   background-position:center!important;
   filter:saturate(.86) contrast(.97) brightness(1.04)
 }
-.home-dashboard-page .phase3-groups a:nth-child(1)>span:first-child{background-image:url('/assets/v682/internal-bio.webp')!important}
-.home-dashboard-page .phase3-groups a:nth-child(2)>span:first-child{background-image:url('/assets/v682/internal-micro.webp')!important}
-.home-dashboard-page .phase3-groups a:nth-child(3)>span:first-child{background-image:url('/assets/v682/internal-sero.webp')!important}
-.home-dashboard-page .phase3-groups a:nth-child(4)>span:first-child{background-image:url('/assets/v682/internal-bb.webp')!important}
-.home-dashboard-page .phase3-groups a:nth-child(5)>span:first-child{background-image:url('/assets/v682/internal-bact.webp')!important}
-.home-dashboard-page .phase3-groups a:nth-child(6)>span:first-child{background-image:url('/assets/v682/internal-hema.webp')!important}
+.home-dashboard-page .phase3-groups a:nth-child(1)>span:first-child{background-image:url('/assets/v684/internal-bio-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(2)>span:first-child{background-image:url('/assets/v684/internal-micro-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(3)>span:first-child{background-image:url('/assets/v684/internal-sero-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(4)>span:first-child{background-image:url('/assets/v684/internal-bb-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(5)>span:first-child{background-image:url('/assets/v684/internal-bact-hd.png')!important}
+.home-dashboard-page .phase3-groups a:nth-child(6)>span:first-child{background-image:url('/assets/v684/internal-hema-hd.png')!important}
 .home-dashboard-page .phase3-groups a>span:first-child img{opacity:0!important}
 
 @media(max-width:1000px){
@@ -955,163 +955,3 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
   .internal-training-page .v56-shell,
   .pgy-training-page .v56-shell{width:100%;max-width:none}
 }
-
-/* Teacher 6.8.3 HD pass.
-   Keep the supplied reference composition, but render all copy as live HTML and
-   use the original 1800px laboratory photograph instead of stretching tiny
-   composite screenshots. Card crops use lossless, pre-upscaled PNG assets so
-   the browser never enlarges an 80px source to desktop-card size. */
-@media(min-width:1001px){
-  .home-dashboard-page .phase3-home .phase3-home-hero-681{
-    display:grid;
-    grid-template-columns:50% 50%;
-    height:267px;
-    min-height:267px;
-    background:
-      radial-gradient(circle at 20% 28%,rgba(215,245,240,.75),transparent 30%),
-      linear-gradient(108deg,#f9fdfd 0%,#edf8f8 53%,#e8f4f6 100%);
-  }
-  .home-dashboard-page .phase3-home .phase3-home-hero-681:before{
-    display:block;
-    width:63%;
-    background:linear-gradient(90deg,rgba(251,254,254,.98),rgba(251,254,254,.75) 70%,transparent)
-  }
-  .home-dashboard-page .phase3-home .phase3-home-hero-681>.v56-hero-copy{
-    position:relative;
-    inset:auto;
-    z-index:4;
-    display:block;
-    align-self:center;
-    opacity:1;
-    padding:31px 25px 28px 57px;
-    pointer-events:auto
-  }
-  .home-dashboard-page .phase3-home .phase3-home-hero-681>.phase3-home-hero-art{
-    position:relative;
-    inset:auto;
-    z-index:1;
-    display:flex;
-    min-height:267px;
-    opacity:1
-  }
-  .home-dashboard-page .phase3-hero-art-frame{
-    inset:0;
-    border-radius:0;
-    box-shadow:none
-  }
-  .home-dashboard-page .phase3-hero-art-frame:before{
-    background:linear-gradient(90deg,rgba(239,249,248,.78),rgba(239,249,248,.16) 34%,transparent 68%)
-  }
-  .home-dashboard-page .phase3-home .phase3-home-hero-art img{
-    width:100%;
-    height:100%;
-    object-fit:cover;
-    object-position:50% 48%;
-    filter:saturate(.76) contrast(.95) brightness(1.08);
-    transform:none
-  }
-  .home-dashboard-page .v682-handnote{
-    left:20%;
-    top:58px;
-    font-size:24px
-  }
-
-  .internal-training-page .v681-internal-hero{
-    display:grid;
-    grid-template-columns:minmax(0,56%) minmax(0,44%);
-    height:auto;
-    min-height:272px;
-    padding:27px 36px 18px;
-    gap:0;
-    background:#eef9fa
-  }
-  .internal-training-page .v681-internal-hero:before{
-    display:block;
-    background:linear-gradient(90deg,rgba(248,253,253,.99) 0%,rgba(248,253,253,.94) 47%,rgba(238,249,249,.48) 69%,transparent 100%)
-  }
-  .internal-training-page .v681-internal-copy{
-    position:relative;
-    z-index:3;
-    display:block;
-    max-width:590px;
-    align-self:start;
-    opacity:1;
-    pointer-events:auto
-  }
-  .internal-training-page .v681-internal-art{
-    display:block;
-    inset:0 0 0 47%;
-    opacity:1;
-    pointer-events:none;
-    border-radius:0;
-    background-image:url('/assets/v681/lab-training-photo.jpg');
-    background-position:56% 45%;
-    background-size:cover;
-    filter:saturate(.78) contrast(.96) brightness(1.09)
-  }
-  .internal-training-page .v681-internal-art:before{
-    background:linear-gradient(90deg,rgba(247,252,253,.98),rgba(247,252,253,.54) 34%,transparent 68%)
-  }
-  .internal-training-page .v682-area-note{
-    right:21%;
-    top:56px;
-    opacity:1;
-    pointer-events:none;
-    font-size:18px
-  }
-
-  .pgy-training-page .v681-pgy-hero{
-    display:grid;
-    grid-template-columns:56% 44%;
-    height:auto;
-    min-height:272px;
-    padding:31px 36px 24px;
-    gap:0;
-    background:#edf8f9
-  }
-  .pgy-training-page .v681-pgy-hero:before{
-    display:block;
-    background:url('/assets/v681/lab-training-photo.jpg') 69% 48%/cover no-repeat;
-    filter:saturate(.74) contrast(.95) brightness(1.1)
-  }
-  .pgy-training-page .v681-pgy-hero:after{
-    display:block;
-    background:linear-gradient(90deg,rgba(248,253,253,.99) 0%,rgba(248,253,253,.94) 46%,rgba(239,249,249,.54) 68%,transparent 100%)
-  }
-  .pgy-training-page .v681-pgy-copy{
-    position:relative;
-    z-index:3;
-    display:block;
-    max-width:570px;
-    align-self:start;
-    opacity:1;
-    pointer-events:auto
-  }
-  .pgy-training-page .v682-area-note{
-    right:20%;
-    top:55px;
-    opacity:1;
-    pointer-events:none;
-    font-size:19px
-  }
-}
-
-/* HD card crops. */
-.internal-training-page .v580-group-card:nth-child(1) .v580-group-art{background-image:url('/assets/v683/internal-bio-hd.png')!important}
-.internal-training-page .v580-group-card:nth-child(2) .v580-group-art{background-image:url('/assets/v683/internal-micro-hd.png')!important}
-.internal-training-page .v580-group-card:nth-child(3) .v580-group-art{background-image:url('/assets/v683/internal-sero-hd.png')!important}
-.internal-training-page .v580-group-card:nth-child(4) .v580-group-art{background-image:url('/assets/v683/internal-bb-hd.png')!important}
-.internal-training-page .v580-group-card:nth-child(5) .v580-group-art{background-image:url('/assets/v683/internal-bact-hd.png')!important}
-.internal-training-page .v580-group-card:nth-child(6) .v580-group-art{background-image:url('/assets/v683/internal-hema-hd.png')!important}
-
-.pgy-training-page .photo-foundation{background-image:url('/assets/v683/pgy-foundation-hd.png')!important}
-.pgy-training-page .photo-advanced{background-image:url('/assets/v683/pgy-advanced-hd.png')!important}
-.pgy-training-page .photo-specialty{background-image:url('/assets/v683/pgy-specialty-hd.png')!important}
-.pgy-training-page .photo-records{background-image:url('/assets/v683/pgy-records-hd.png')!important}
-
-.home-dashboard-page .phase3-groups a:nth-child(1)>span:first-child{background-image:url('/assets/v683/internal-bio-hd.png')!important}
-.home-dashboard-page .phase3-groups a:nth-child(2)>span:first-child{background-image:url('/assets/v683/internal-micro-hd.png')!important}
-.home-dashboard-page .phase3-groups a:nth-child(3)>span:first-child{background-image:url('/assets/v683/internal-sero-hd.png')!important}
-.home-dashboard-page .phase3-groups a:nth-child(4)>span:first-child{background-image:url('/assets/v683/internal-bb-hd.png')!important}
-.home-dashboard-page .phase3-groups a:nth-child(5)>span:first-child{background-image:url('/assets/v683/internal-bact-hd.png')!important}
-.home-dashboard-page .phase3-groups a:nth-child(6)>span:first-child{background-image:url('/assets/v683/internal-hema-hd.png')!important}
