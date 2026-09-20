@@ -1023,12 +1023,28 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
     margin-top:24px
   }
   .home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:13px;
     min-width:210px;
     min-height:52px;
     padding:0 28px;
     border-radius:999px;
     font-size:14px;
+    line-height:1;
+    white-space:nowrap;
     box-shadow:0 12px 26px rgba(4,137,148,.18)
+  }
+  .home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary>span{
+    display:inline-flex;
+    align-items:center;
+    line-height:1
+  }
+  .home-dashboard-page .phase3-home .phase3-home-hero-681 .v687-primary-arrow{
+    margin-top:-1px;
+    font-size:18px;
+    font-weight:800
   }
   .v687-home-hint{
     display:flex;
