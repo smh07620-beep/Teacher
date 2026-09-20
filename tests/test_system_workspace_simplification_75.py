@@ -14,11 +14,12 @@ class SystemWorkspaceSimplification75Tests(unittest.TestCase):
         for marker in ("STEP 1", "STEP 2", "STEP 3", "STEP 4", "AI 候選題需人工確認後才匯入"):
             self.assertNotIn(marker, html)
 
-    def test_course_creation_is_explicitly_routed_from_studio(self):
+    def test_course_creation_is_explicitly_routed_from_full_page_workspace(self):
         studio = self.source("static/teacher-content-studio-71.js")
         ux = self.source("static/teacher-ux-convergence-72.js")
         self.assertIn("const canCourse", studio)
-        self.assertIn("card('materials-manager'", studio)
+        self.assertIn("openCourseCreateWorkspace", studio)
+        self.assertIn("ensureWorkspacePage('course-materials')", studio)
         self.assertIn("mountMaterialManagerInStudio", studio)
         self.assertIn("mountCourseWizardInStudio", studio)
         self.assertIn("data-course-wizard-host-77", studio)

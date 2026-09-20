@@ -61,9 +61,9 @@ class SystemCspEnforcementTests(unittest.TestCase):
         self.assertIn("function setupProgressEntry()", runtime)
         self.assertIn("module:'progress'", runtime)
         self.assertNotIn("progressOpen?.addEventListener('click',open)", runtime)
-        self.assertIn("data-pgy-management-only", pgy)
-        self.assertIn("function syncPgyManagementVisibility()", runtime)
-        self.assertIn("syncPgyManagementVisibility();", runtime)
+        self.assertNotIn("data-pgy-management-only", pgy)
+        self.assertNotIn("function syncPgyManagementVisibility()", runtime)
+        self.assertNotIn("syncPgyManagementVisibility();", runtime)
 
     def test_csp_delegate_is_canonical_and_does_not_eval_action_text(self):
         source = (STATIC / "system-csp-actions.js").read_text(encoding="utf-8")

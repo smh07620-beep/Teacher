@@ -20,6 +20,26 @@
   const modalGuards = [];
   const afterModalHooks = [];
   const PAGE_MODE_PARAM = 'admin';
+  const WORKSPACE_META = Object.freeze({
+    'course-materials': {
+      icon: '📚',
+      title: '教材與課程 Workspace',
+      summary: '管理課程、教材、影音、圖譜與內容處理進度。',
+    },
+    assessment: {
+      icon: '📝',
+      title: '評量與出題 Workspace',
+      summary: '管理考卷、題庫、AI 輔助出題、審核與發布。',
+    },
+    teacher: {icon:'👩‍🏫', title:'教師評核 Workspace', summary:'集中處理人工閱卷、問答評分與 PGY 教師評核。'},
+    results: {icon:'📊', title:'成績管理 Workspace', summary:'查閱歷次成績、通過狀態、批改結果與考核分析。'},
+    word: {icon:'📝', title:'Word 範本 Workspace', summary:'維護各組正式考核表範本與套版輸出。'},
+    people: {icon:'👥', title:'人員管理 Workspace', summary:'管理帳號、角色、範圍與教學存取權限。'},
+    system: {icon:'⚙️', title:'系統設定 Workspace', summary:'檢查系統服務、儲存、安全設定與公告。'},
+    maintenance: {icon:'🛡️', title:'備份維護 Workspace', summary:'執行授權範圍內的備份、還原與維護工作。'},
+    audit: {icon:'🔎', title:'稽核紀錄 Workspace', summary:'唯讀檢視授權範圍內的系統與教學稽核紀錄。'},
+    worker: {icon:'⚙️', title:'Worker Workspace', summary:'檢查教材背景處理與工作執行狀態。'},
+  });
 
   function isPageMode() {
     return new URLSearchParams(window.location.search).get(PAGE_MODE_PARAM) === '1';
@@ -87,6 +107,17 @@
       button.classList.toggle('hover:bg-slate-200', !active);
       button.setAttribute('aria-current', active ? 'page' : 'false');
     });
+  }
+
+  function paintWorkspaceHeader(name) {
+    const key = normalizeWorkspace(name);
+    const meta = WORKSPACE_META[key] || {icon:'⚙️', title:'檢驗科教學平台｜教學管理', summary:'依工作目的分區：建立內容、執行評量、維護平台。'};
+    const icon = document.getElementById('admin-workspace-icon');
+    const title = document.getElementById('admin-workspace-title');
+    const summary = document.getElementById('admin-workspace-summary');
+    if (icon) icon.textContent = meta.icon;
+    if (title) title.textContent = meta.title;
+    if (summary) summary.textContent = meta.summary;
   }
 
   function syncSectionChrome(name) {
@@ -195,6 +226,7 @@
     }
     state.workspace = workspace;
     paintWorkspaceNav(workspace);
+    paintWorkspaceHeader(workspace);
     const modal = document.getElementById('admin-modal');
     if (modal) modal.dataset.workspace = workspace;
     const extension = workspaceHandlers.get(requested) || workspaceHandlers.get(workspace);
@@ -263,6 +295,7 @@
 
   window.normalizeAdminWorkspace = normalizeWorkspace;
   window.paintAdminWorkspaceNav = paintWorkspaceNav;
+  window.paintAdminWorkspaceHeader = paintWorkspaceHeader;
   window.syncAdminSectionChrome = syncSectionChrome;
   window.switchAdminSection = switchSection;
   window.switchAdminWorkspace = switchWorkspace;

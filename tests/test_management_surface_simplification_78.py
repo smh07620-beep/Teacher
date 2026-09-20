@@ -12,8 +12,9 @@ class ManagementSurfaceSimplification78Tests(unittest.TestCase):
         self.assertNotIn('V5.7.0 EXAM FLOW',html)
         self.assertNotIn('id="admin-quiz-guide"',html)
         self.assertIn('data-teacher78-canonical-create-executor',html)
-        self.assertIn('先從考卷清單進入工作',html)
-        self.assertIn('建立新考卷請使用「＋ 建立教學內容」',html)
+        self.assertIn('評量與出題 Workspace',html)
+        self.assertIn('id="assessment-workspace-create-exam"',html)
+        self.assertIn('不再使用大型彈窗',html)
 
     def test_exam_list_is_compact_searchable_and_paged(self):
         bank=self.src('static/admin-question-bank.js')
@@ -24,11 +25,12 @@ class ManagementSurfaceSimplification78Tests(unittest.TestCase):
 
     def test_material_entry_is_one_container(self):
         studio=self.src('static/teacher-content-studio-71.js')
-        self.assertIn("card('materials-manager'",studio)
+        self.assertIn('openTeacherCourseCreateWorkspace',studio)
+        self.assertIn('openTeacherMaterialCreateWorkspace',studio)
         self.assertIn('mountMaterialManagerInStudio',studio)
         self.assertIn('data-material-hub-host-78',studio)
-        self.assertNotIn("card('material','📄','上傳教材'",studio)
-        self.assertNotIn("card('video-material'",studio)
+        self.assertNotIn('teacher-content-studio-launcher-71',studio)
+        self.assertNotIn('fixed inset-0 z-[140]',studio)
 
     def test_identity_meta_has_one_profile_owner(self):
         html=self.src('static/system.html'); core=self.src('static/system-core.js'); profile=self.src('static/training-command-center-71.js')

@@ -10,7 +10,9 @@ class ContentContainerConvergence77Tests(unittest.TestCase):
         cls.ai=ROOT.joinpath('static/admin-ai-questions.js').read_text(encoding='utf-8')
 
     def test_studio_outer_surface_only_exposes_exam_management(self):
-        self.assertIn("'考卷管理'",self.studio)
+        self.assertIn('openTeacherAssessmentWorkspace',self.studio)
+        self.assertIn('openTeacherAssessmentCreateWorkspace',self.studio)
+        self.assertIn('考卷工作畫面',self.studio)
         self.assertNotIn("card('question'",self.studio)
         self.assertNotIn("card('image-question'",self.studio)
         self.assertNotIn("card('video-question'",self.studio)

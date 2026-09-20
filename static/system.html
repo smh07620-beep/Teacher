@@ -357,16 +357,16 @@
         <div class="admin-workspace-shell bg-slate-50 rounded-2xl max-w-6xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-300">
             <div id="admin-workspace-header" class="bg-slate-900 text-white px-5 sm:px-6 py-4 flex justify-between items-center border-b border-slate-800">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-teal-700 flex items-center justify-center text-xl">⚙️</div>
+                    <div id="admin-workspace-icon" class="w-10 h-10 rounded-xl bg-teal-700 flex items-center justify-center text-xl">⚙️</div>
                     <div><h3 id="admin-workspace-title" class="text-lg font-bold">檢驗科教學平台｜教學管理</h3><p id="admin-workspace-summary" class="text-xs text-slate-300 mt-0.5">依工作目的分區：建立內容、執行評量、維護平台。</p></div>
                 </div>
                 <button id="admin-workspace-close" data-csp-click="toggleAdminModal(false)" class="text-slate-300 hover:text-white text-sm font-bold px-3 py-2 rounded-lg border border-slate-700 hover:border-slate-500">← 返回教學首頁</button>
             </div>
 
             <div class="v580-admin-groups" aria-label="後台功能導覽">
-                <section class="v580-admin-group"><span class="v580-admin-group-label">建立教學內容</span><div class="v580-admin-group-actions">
-                    <button id="admin-nav-course-materials" data-csp-click="switchAdminWorkspace('course-materials')" class="admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-teal-700 text-white shadow-sm">📚 課程＋教材</button>
-                    <button id="admin-nav-assessment" data-csp-click="switchAdminWorkspace('assessment')" class="admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">📝 題庫與考卷</button>
+                <section class="v580-admin-group"><span class="v580-admin-group-label">教學工作區</span><div class="v580-admin-group-actions">
+                    <button id="admin-nav-course-materials" data-csp-click="switchAdminWorkspace('course-materials')" class="admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-teal-700 text-white shadow-sm">📚 教材與課程</button>
+                    <button id="admin-nav-assessment" data-csp-click="switchAdminWorkspace('assessment')" class="admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">📝 評量與出題</button>
                 </div></section>
                 <section class="v580-admin-group compact"><span class="v580-admin-group-label">評量與追蹤</span><div class="v580-admin-group-actions">
                     <button id="admin-nav-teacher" data-csp-click="switchAdminWorkspace('teacher')" class="admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">👩‍🏫 教師評核</button>
@@ -390,14 +390,20 @@
             <div id="admin-workspace-content" class="p-4 sm:p-6 overflow-y-auto min-h-0">
                 <!-- ① Content -->
                 <div id="admin-section-content" class="admin-section-panel space-y-5">
-                    <!-- RC75_WORKSPACE_SIMPLIFIED: persistent teaching instructions removed; creation begins from Teacher Content Studio. -->
+                    <!-- RC75_WORKSPACE_SIMPLIFIED: course/material management is now a first-class full-page workspace. -->
                     <section id="admin-course-workspace" class="admin-primary-workspace bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                         <div class="admin-page-section-heading">
-                            <div><p class="admin-page-eyebrow">COURSES & MATERIALS</p><h4 class="font-black text-slate-950 text-xl">課程與教材</h4><p class="text-xs text-slate-500 mt-1">先從課程總覽工作；新增課程、教材、影音與圖譜統一使用上方「＋ 建立教學內容」。</p></div>
-                            <div id="admin-course-scope" class="admin-scope-toolbar" aria-label="課程教材管理範圍">
-                                <label><span>訓練區</span><select id="wizard-area"><option value="pgy">PGY訓練區</option><option value="internal">內部教育訓練區</option></select></label>
-                                <label><span>組別</span><select id="wizard-group"></select></label>
-                                <button type="button" data-csp-click="renderAdminCourseMaterialHub(true)" class="admin-toolbar-button">↻ 更新總覽</button>
+                            <div><p class="admin-page-eyebrow">COURSES & MATERIALS WORKSPACE</p><h4 class="font-black text-slate-950 text-xl">教材與課程 Workspace</h4><p class="text-xs text-slate-500 mt-1">課程、教材、影音與圖譜都在這個完整工作頁管理；建立流程不再跳出大型彈窗。</p></div>
+                            <div class="admin-page-heading-tools">
+                                <div id="admin-course-scope" class="admin-scope-toolbar" aria-label="課程教材管理範圍">
+                                    <label><span>訓練區</span><select id="wizard-area"><option value="pgy">PGY訓練區</option><option value="internal">內部教育訓練區</option></select></label>
+                                    <label><span>組別</span><select id="wizard-group"></select></label>
+                                    <button type="button" data-csp-click="renderAdminCourseMaterialHub(true)" class="admin-toolbar-button">↻ 更新總覽</button>
+                                </div>
+                                <div class="admin-workspace-primary-actions">
+                                    <button id="course-workspace-create-course" type="button" class="admin-workspace-primary-button">＋ 建立課程</button>
+                                    <button id="course-workspace-add-material" type="button" class="admin-workspace-secondary-button">＋ 新增教材</button>
+                                </div>
                             </div>
                         </div>
                         <div id="course-wizard-legacy-fields" class="hidden" aria-hidden="true">
@@ -449,8 +455,13 @@
                 <div id="admin-section-quiz" class="admin-section-panel hidden space-y-5">
                     <section id="admin-quiz-workspace" class="admin-primary-workspace bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                         <div class="admin-page-section-heading">
-                            <div><p class="admin-page-eyebrow">QUESTION BANK & EXAMS</p><h4 class="font-black text-slate-950 text-xl">題庫與考卷</h4><p class="text-xs text-slate-500 mt-1">先從考卷清單進入工作；題庫、AI 出題、教材關聯、審核與發布都收在各考卷內。</p></div>
-                            <div id="admin-quiz-scope-78" class="admin-scope-toolbar" aria-label="題庫與考卷管理範圍"><label><span>訓練區</span><select id="admin-quiz-area"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></label><label><span>組別</span><select id="admin-quiz-group" data-csp-change="onAdminQuizGroupChange()"></select></label><button type="button" data-csp-click="renderAdminQuizCategories(true)" class="admin-toolbar-button">↻ 更新清單</button></div>
+                            <div><p class="admin-page-eyebrow">ASSESSMENT & AUTHORING WORKSPACE</p><h4 class="font-black text-slate-950 text-xl">評量與出題 Workspace</h4><p class="text-xs text-slate-500 mt-1">考卷、題庫、一般／圖片／影片題、AI 輔助出題、審核與發布都在這個完整工作頁完成。</p></div>
+                            <div class="admin-page-heading-tools">
+                                <div id="admin-quiz-scope-78" class="admin-scope-toolbar" aria-label="評量與出題管理範圍"><label><span>訓練區</span><select id="admin-quiz-area"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></label><label><span>組別</span><select id="admin-quiz-group" data-csp-change="onAdminQuizGroupChange()"></select></label><button type="button" data-csp-click="renderAdminQuizCategories(true)" class="admin-toolbar-button">↻ 更新清單</button></div>
+                                <div class="admin-workspace-primary-actions">
+                                    <button id="assessment-workspace-create-exam" type="button" class="admin-workspace-primary-button">＋ 建立考卷</button>
+                                </div>
+                            </div>
                         </div>
                         <div id="admin-quiz-overview" class="admin-quiz-overview">
                             <div class="admin-quiz-summary-grid" aria-label="考卷狀態摘要">
@@ -459,7 +470,7 @@
                                 <div><span>待發布</span><strong id="admin-quiz-approved-count">—</strong><small>已完成審核</small></div>
                                 <div><span>草稿</span><strong id="admin-quiz-draft-count">—</strong><small>尚待整理／審核</small></div>
                             </div>
-                            <div class="admin-quiz-status-line"><span id="admin-quiz-sync-status" class="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold">待同步</span><span>建立新考卷請使用「＋ 建立教學內容」，避免把建立表單與日常管理混在同一頁。</span></div>
+                            <div class="admin-quiz-status-line"><span id="admin-quiz-sync-status" class="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold">待同步</span><span>選擇考卷後直接進入完整出題工作畫面；建立、編輯與發布不再使用大型彈窗。</span></div>
                         </div>
                         <div data-teacher78-canonical-create-executor class="hidden" aria-hidden="true"><input id="admin-new-category-title" type="text" maxlength="255"><button type="button" data-csp-click="adminCreateQuizCategory()">建立</button></div>
                         <div id="admin-quiz-categories-list" class="space-y-3"></div>

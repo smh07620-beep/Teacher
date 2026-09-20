@@ -14,10 +14,10 @@
   const canCourse = () => has('course.manage');
   const canOpen = () => canQuestion() || canMaterial();
   const studioId = 'teacher-content-studio-71';
-  const launcherId = 'teacher-content-studio-launcher-71';
   const aiMount = {section:null, placeholder:null, catId:''};
   const courseMount = {root:null, placeholder:null};
   const materialHubMount = {root:null, placeholder:null};
+  const studioState = {returnWorkspace:'assessment'};
 
   function scope(){
     return {
@@ -40,36 +40,14 @@
     return true;
   }
 
-  function card(action, icon, title, desc, tone='indigo'){
-    return `<button type="button" data-studio-action="${esc(action)}" class="group text-left rounded-2xl border border-slate-200 bg-white p-4 hover:border-${tone}-300 hover:shadow-md transition"><div class="flex items-start gap-3"><span class="text-2xl" aria-hidden="true">${icon}</span><span class="min-w-0"><span class="block font-black text-slate-900">${esc(title)}</span><span class="mt-1 block text-xs leading-5 text-slate-500">${esc(desc)}</span></span></div></button>`;
-  }
-
-  function baseBody(){
-    const questionCards = canQuestion() ? `
-      <section>
-        <div class="mb-2"><h4 class="font-black text-slate-900">📝 出題與考核</h4><p class="text-xs text-slate-500 mt-1">先管理考卷；選定考卷後才建立或管理題目。</p></div>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          ${card('exam','📋','考卷管理','管理既有考卷、建立新考卷，並在考卷內加入一般題、圖片題、影片題或 AI 題。','indigo')}
-        </div>
-      </section>` : '';
-    const materialCards = canMaterial() ? `
-      <section>
-        <div class="mb-2"><h4 class="font-black text-slate-900">📚 教材與課程</h4><p class="text-xs text-slate-500 mt-1">先進入課程容器，再管理教材、影音、圖譜與對應考卷。</p></div>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          ${card('materials-manager','📚','教材與課程管理','管理既有課程與教材；新增內容先從課程開始，避免未歸類教材持續增加。','teal')}
-        </div>
-      </section>` : '';
-    return `<div class="space-y-6">${questionCards}${materialCards}</div>`;
-  }
-
   function ensureStudio(){
     let root = document.getElementById(studioId);
     if(root) return root;
     root = document.createElement('div');
     root.id = studioId;
-    root.className = 'hidden fixed inset-0 z-[140] bg-slate-950/55 backdrop-blur-sm overflow-y-auto p-3 sm:p-6';
-    root.innerHTML = `<div class="mx-auto max-w-5xl rounded-3xl bg-slate-50 shadow-2xl border border-white/60 overflow-hidden"><div class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur"><div><p class="text-xs font-black tracking-wide text-teal-700">TEACHER CONTENT STUDIO</p><h3 class="text-xl font-black text-slate-950 mt-1">＋ 建立教學內容</h3><p class="text-xs text-slate-500 mt-1">選擇要完成的工作；進階欄位只在需要時才出現。</p></div><button type="button" data-studio-close class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">關閉</button></div><div id="teacher-content-studio-body-71" class="p-5 sm:p-6"></div></div>`;
-    document.body.appendChild(root);
+    root.className = 'hidden teacher-content-workspace-view';
+    root.innerHTML = `<div class="teacher-content-workspace-card"><div class="teacher-content-workspace-header"><div><p id="teacher-content-studio-eyebrow-71" class="text-xs font-black tracking-wide text-teal-700">WORKSPACE TASK</p><h3 id="teacher-content-studio-title-71" class="text-xl font-black text-slate-950 mt-1">工作畫面</h3><p id="teacher-content-studio-summary-71" class="text-xs text-slate-500 mt-1">在目前工作區完成這項工作。</p></div><button type="button" data-studio-close class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">← 返回工作區</button></div><div id="teacher-content-studio-body-71" class="p-5 sm:p-6"></div></div>`;
+    (document.getElementById('admin-workspace-content') || document.body).appendChild(root);
     root.addEventListener('click', event => {
       const close = event.target.closest('[data-studio-close]');
       if(close){ closeStudio(); return; }
@@ -81,40 +59,48 @@
       if(event.target.closest('[data-exam-create-submit]')){ createExamFromStudio(); return; }
       const examAction = event.target.closest('[data-exam-action]');
       if(examAction){ dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId); return; }
-      if(event.target.closest('[data-course-studio-back]')){ restoreCourseWizard(); renderHome(); return; }
+      if(event.target.closest('[data-course-studio-back]')){ restoreCourseWizard(); closeStudio(); return; }
       const back = event.target.closest('[data-studio-back]');
-      if(back) renderHome();
+      if(back) closeStudio();
       const confirmQuestion = event.target.closest('[data-studio-question-confirm]');
       if(confirmQuestion) confirmQuestionPreset(confirmQuestion.dataset.preset || 'choice');
       const confirmAi = event.target.closest('[data-studio-ai-confirm]');
       if(confirmAi) mountAiPanel(document.getElementById('teacher-studio-ai-exam-75')?.value || '');
     });
-    root.addEventListener('click', event => { if(event.target === root) closeStudio(); });
     return root;
   }
 
-  function renderHome(){
-    restoreAiPanel();
-    restoreCourseWizard();
-    restoreMaterialHub();
-    const body = document.getElementById('teacher-content-studio-body-71');
-    if(body) body.innerHTML = baseBody();
+  function setStudioChrome(workspace,title,summary){
+    studioState.returnWorkspace = workspace === 'course-materials' ? 'course-materials' : 'assessment';
+    const eyebrow=document.getElementById('teacher-content-studio-eyebrow-71');
+    const heading=document.getElementById('teacher-content-studio-title-71');
+    const detail=document.getElementById('teacher-content-studio-summary-71');
+    if(eyebrow)eyebrow.textContent=studioState.returnWorkspace==='assessment'?'ASSESSMENT & AUTHORING':'COURSES & MATERIALS';
+    if(heading)heading.textContent=title|| (studioState.returnWorkspace==='assessment'?'評量與出題':'教材與課程');
+    if(detail)detail.textContent=summary||'在目前工作區完成這項工作。';
   }
 
-  function openStudio(){
+  function openStudio(workspace=studioState.returnWorkspace,title='',summary=''){
     if(!canOpen()) return;
+    if(window.isAdminWorkspacePage && !window.isAdminWorkspacePage()){
+      void window.openAdminWorkspace?.(workspace);
+      return false;
+    }
     const root = ensureStudio();
-    renderHome();
+    setStudioChrome(workspace,title,summary);
     root.classList.remove('hidden');
     document.body.dataset.teacherContentStudioOpen = '1';
+    root.scrollIntoView?.({block:'start'});
+    return true;
   }
 
-  function closeStudio(){
+  function closeStudio(restoreWorkspace=true){
     restoreAiPanel();
     restoreCourseWizard();
     restoreMaterialHub();
     document.getElementById(studioId)?.classList.add('hidden');
     delete document.body.dataset.teacherContentStudioOpen;
+    if(restoreWorkspace && window.isAdminWorkspacePage?.()) void window.switchAdminWorkspace?.(studioState.returnWorkspace, false);
   }
 
   async function loadCategories(){
@@ -154,7 +140,7 @@
     host.innerHTML='<p class="text-sm text-slate-500">正在讀取考卷…</p>';
     try{
       const categories=await loadCategories();
-      host.innerHTML=`<div class="mx-auto max-w-4xl"><div class="flex items-start justify-between gap-3 flex-wrap"><div><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 返回建立首頁</button><h4 class="mt-2 text-xl font-black text-slate-950">📋 考卷管理</h4><p class="mt-1 text-xs text-slate-500">先選考卷，再在該考卷內建立與管理題目。</p></div><button type="button" data-exam-create-open class="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-black text-white">＋ 建立考卷</button></div>${message?`<div class="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">${esc(message)}</div>`:''}<div class="mt-5 grid gap-3">${categories.length?categories.map(c=>`<button type="button" data-exam-open="${esc(c.id)}" class="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-indigo-300 hover:shadow-sm"><div class="flex items-center justify-between gap-3"><div class="min-w-0"><div class="font-black text-slate-900">${esc(c.title||c.id)}</div><div class="mt-1 text-xs text-slate-500">${esc(c.desc||'尚未填寫考卷說明')}</div></div><span class="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">題庫 ${Number(c.questionCount||0)} 題</span></div></button>`).join(''):'<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">目前還沒有考卷。請先建立第一份考卷。</div>'}</div></div>`;
+      host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="flex items-start justify-between gap-3 flex-wrap"><div><button type="button" data-studio-close class="text-sm font-bold text-slate-500">← 返回評量與出題</button><h4 class="mt-2 text-xl font-black text-slate-950">📋 考卷工作畫面</h4><p class="mt-1 text-xs text-slate-500">先選考卷，再在同一個全頁工作區建立題目、使用 AI、管理題庫與發布。</p></div><button type="button" data-exam-create-open class="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-black text-white">＋ 建立考卷</button></div>${message?`<div class="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">${esc(message)}</div>`:''}<div class="mt-5 grid gap-3">${categories.length?categories.map(c=>`<button type="button" data-exam-open="${esc(c.id)}" class="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-indigo-300 hover:shadow-sm"><div class="flex items-center justify-between gap-3"><div class="min-w-0"><div class="font-black text-slate-900">${esc(c.title||c.id)}</div><div class="mt-1 text-xs text-slate-500">${esc(c.desc||'尚未填寫考卷說明')}</div></div><span class="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">題庫 ${Number(c.questionCount||0)} 題</span></div></button>`).join(''):'<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">目前還沒有考卷。請先建立第一份考卷。</div>'}</div></div>`;
     }catch(error){host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3"><button type="button" data-studio-action="exam" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">重新讀取</button></div></div>`;}
   }
 
@@ -195,6 +181,7 @@
   function showExamActionFailure(catId,error){
     const root=ensureStudio();
     const host=document.getElementById('teacher-content-studio-body-71');
+    setStudioChrome('assessment','評量與出題｜考卷工作畫面','目前考卷的出題工具載入失敗，可直接在此重新嘗試。');
     root?.classList.remove('hidden');
     if(root)document.body.dataset.teacherContentStudioOpen='1';
     if(!host)return;
@@ -249,7 +236,7 @@
       if(!root){await timeout77(window.openAdminWorkspace?.('course-materials'),2200,'開啟教材與課程管理');root=await waitFor77('#admin-course-material-hub',2400);}
       if(!root)throw new Error('教材與課程管理尚未載入，請重新嘗試。');
       const placeholder=document.createElement('div');placeholder.hidden=true;placeholder.dataset.teacher78MaterialHubPlaceholder='1';root.before(placeholder);materialHubMount.root=root;materialHubMount.placeholder=placeholder;
-      host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-4 flex items-start justify-between gap-3 flex-wrap"><div><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 返回建立首頁</button><h4 class="mt-2 text-xl font-black text-slate-950">📚 教材與課程管理</h4><p class="mt-1 text-xs text-slate-500">先選課程，再管理該課程的教材與考卷；未歸類內容只保留作為整理入口。</p></div>${canCourse()?'<button type="button" data-studio-action="course" class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">＋ 建立課程</button>':''}</div><div data-material-refresh-status-79 class="mb-3 rounded-xl border border-teal-100 bg-teal-50 px-3 py-2 text-xs text-teal-700">正在背景更新課程與教材…</div><div data-material-hub-host-78></div></div>`;
+      host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-4 flex items-start justify-between gap-3 flex-wrap"><div><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 返回教材與課程</button><h4 class="mt-2 text-xl font-black text-slate-950">📚 教材與課程管理</h4><p class="mt-1 text-xs text-slate-500">先選課程，再管理該課程的教材與考卷；未歸類內容只保留作為整理入口。</p></div>${canCourse()?'<button type="button" data-studio-action="course" class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">＋ 建立課程</button>':''}</div><div data-material-refresh-status-79 class="mb-3 rounded-xl border border-teal-100 bg-teal-50 px-3 py-2 text-xs text-teal-700">正在背景更新課程與教材…</div><div data-material-hub-host-78></div></div>`;
       host.querySelector('[data-material-hub-host-78]')?.appendChild(root);
       const refreshStatus=host.querySelector('[data-material-refresh-status-79]');
       timeout77(window.renderAdminCourseMaterialHub?.(false),8000,'更新課程與教材').then(()=>refreshStatus?.remove()).catch(error=>{if(refreshStatus){refreshStatus.className='mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700';refreshStatus.textContent=`⚠️ ${error.message}；目前畫面仍可使用，可稍後按更新重試。`;}});
@@ -286,7 +273,7 @@
       if(group)group.value=selectedScope.group;
       const placeholder=document.createElement('div');placeholder.hidden=true;placeholder.dataset.teacher77CoursePlaceholder='1';root.before(placeholder);
       courseMount.root=root;courseMount.placeholder=placeholder;
-      host.innerHTML='<div class="mx-auto max-w-4xl"><div class="mb-4"><button type="button" data-course-studio-back class="text-sm font-bold text-slate-500">← 返回建立首頁</button><h4 class="mt-2 text-xl font-black text-slate-950">🪄 建立課程</h4><p class="mt-1 text-xs text-slate-500">課程、教材與考卷都在這個建立視窗完成，不會跳離目前工作。</p></div><div data-course-wizard-host-77></div></div>';
+      host.innerHTML='<div class="mx-auto max-w-4xl"><div class="mb-4"><button type="button" data-course-studio-back class="text-sm font-bold text-slate-500">← 返回教材與課程</button><h4 class="mt-2 text-xl font-black text-slate-950">🪄 建立課程</h4><p class="mt-1 text-xs text-slate-500">課程、教材與考卷都在這個全頁工作畫面完成，不會跳出另一層大型視窗。</p></div><div data-course-wizard-host-77></div></div>';
       host.querySelector('[data-course-wizard-host-77]')?.appendChild(root);
       requestAnimationFrame(()=>root.scrollIntoView({behavior:'smooth',block:'start'}));
     }catch(error){restoreCourseWizard();host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3 flex gap-2"><button type="button" data-studio-action="course" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 重新嘗試</button><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;}
@@ -462,9 +449,64 @@
     if(action==='atlas')return openAtlas();
   }
 
+  async function ensureWorkspacePage(workspace){
+    if(window.isAdminWorkspacePage?.()){
+      await window.switchAdminWorkspace?.(workspace, false);
+      return true;
+    }
+    await window.openAdminWorkspace?.(workspace);
+    return false;
+  }
+
+  async function openAssessmentManagerWorkspace(){
+    if(!canQuestion())return false;
+    if(!await ensureWorkspacePage('assessment'))return false;
+    openStudio('assessment','評量與出題｜考卷工作畫面','建立考卷、選擇考卷，並在完整工作畫面內進行出題、AI、題庫與發布。');
+    await renderExamManager();
+    return true;
+  }
+
+  async function openAssessmentCreateWorkspace(){
+    if(!canQuestion())return false;
+    if(!await ensureWorkspacePage('assessment'))return false;
+    openStudio('assessment','評量與出題｜建立考卷','建立考卷容器後，直接進入該考卷完成出題、題庫管理、審核與發布。');
+    renderCreateExam();
+    return true;
+  }
+
+  async function openCourseCreateWorkspace(){
+    if(!canCourse())return false;
+    if(!await ensureWorkspacePage('course-materials'))return false;
+    openStudio('course-materials','教材與課程｜建立課程','在完整工作畫面建立課程，並沿用既有課程、教材與考卷 canonical owner。');
+    await mountCourseWizardInStudio();
+    return true;
+  }
+
+  async function openMaterialCreateWorkspace(){
+    if(!canMaterial())return false;
+    if(!await ensureWorkspacePage('course-materials'))return false;
+    openStudio('course-materials','教材與課程｜新增教材','新增教材使用完整工作畫面；上傳與背景處理仍由既有教材流程負責。');
+    if(typeof window.TeacherContentComposer72?.handleStudioAction==='function'){
+      window.TeacherContentComposer72.handleStudioAction('material');
+      return true;
+    }
+    await openMaterialUpload('standard');
+    return true;
+  }
+
   window.teacherContentStudioExamAction=(action,catId)=>dispatchExamAction(action,catId);
   window.TeacherContentStudio71=Object.freeze({registerExamActions});
-  window.openTeacherContentExam=async function(catId){openStudio();await renderExamContainer(catId);};
+  window.openTeacherContentExam=async function(catId){
+    if(!canQuestion())return false;
+    if(!await ensureWorkspacePage('assessment'))return false;
+    openStudio('assessment','評量與出題｜考卷工作畫面','目前考卷的手動出題、圖片／影片題、AI、題庫與設定集中在這個全頁工作畫面。');
+    await renderExamContainer(catId);
+    return true;
+  };
+  window.openTeacherAssessmentWorkspace=openAssessmentManagerWorkspace;
+  window.openTeacherAssessmentCreateWorkspace=openAssessmentCreateWorkspace;
+  window.openTeacherCourseCreateWorkspace=openCourseCreateWorkspace;
+  window.openTeacherMaterialCreateWorkspace=openMaterialCreateWorkspace;
 
   function hideMaterialExecutorNode(node){
     if(!node) return;
@@ -491,32 +533,40 @@
     hideMaterialExecutorNode(external);
   }
 
-  function ensureLauncher(){
-    if(!canOpen()) return;
-    const modal = document.getElementById('admin-modal');
-    const workspace = document.getElementById('admin-workspace-content');
-    if(!modal || !workspace || document.getElementById(launcherId)) return;
-    const bar = document.createElement('div');
-    bar.id = launcherId;
-    bar.className = 'mb-4 flex items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-white p-3 sm:p-4';
-    bar.innerHTML = `<div class="min-w-0"><div class="font-black text-teal-950">＋ 建立教學內容</div><div class="text-xs text-teal-700 mt-0.5">考題、教材、影音與圖譜從同一入口開始。</div></div><button type="button" class="shrink-0 rounded-xl bg-teal-700 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-teal-600">開始建立</button>`;
-    bar.querySelector('button').addEventListener('click', openStudio);
-    workspace.prepend(bar);
+  function bindWorkspaceActions(){
+    const bind=(id,allowed,handler)=>{
+      const button=document.getElementById(id);
+      if(!button)return;
+      button.classList.toggle('hidden',!allowed);
+      button.setAttribute('aria-hidden',allowed?'false':'true');
+      button.disabled=!allowed;
+      if(!allowed || button.dataset.teacherWorkspaceBound==='1')return;
+      button.dataset.teacherWorkspaceBound='1';
+      button.addEventListener('click',handler);
+    };
+    bind('assessment-workspace-create-exam',canQuestion(),()=>void openAssessmentCreateWorkspace());
+    bind('course-workspace-create-course',canCourse(),()=>void openCourseCreateWorkspace());
+    bind('course-workspace-add-material',canMaterial(),()=>void openMaterialCreateWorkspace());
   }
 
   function mount(){
     ensureStudio();
-    ensureLauncher();
+    bindWorkspaceActions();
     consolidateMaterialWorkspace();
     window.teacherContentStudioOpen = openStudio;
     window.teacherContentStudioClose = closeStudio;
+    document.addEventListener('click',event=>{
+      if(!event.target.closest('.admin-nav-btn'))return;
+      const root=document.getElementById(studioId);
+      if(root && !root.classList.contains('hidden'))closeStudio(false);
+    },true);
   }
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once:true});
   else mount();
 
   const observer = new MutationObserver(() => {
-    ensureLauncher();
+    bindWorkspaceActions();
     consolidateMaterialWorkspace();
   });
   document.addEventListener('DOMContentLoaded', () => {

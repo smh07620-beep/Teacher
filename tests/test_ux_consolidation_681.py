@@ -23,7 +23,7 @@ class UxConsolidation681Tests(unittest.TestCase):
 
     def test_assessment_navigation_is_unified(self):
         self.assertIn('admin-nav-assessment',self.html)
-        self.assertIn('題庫與考卷',self.html)
+        self.assertIn('評量與出題',self.html)
         self.assertNotIn('admin-nav-questions',self.html)
         self.assertNotIn('admin-nav-exams',self.html)
         self.assertIn("name === 'assessment' || name === 'questions'",self.workspace)

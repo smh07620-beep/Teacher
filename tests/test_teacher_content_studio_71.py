@@ -19,15 +19,15 @@ class TeacherContentStudio71Tests(unittest.TestCase):
 
     def test_task_first_content_types_are_visible(self):
         for label in (
-            '考卷管理', '一般考題', '圖片判讀題', '影片互動題', 'AI 輔助出題',
-            '教材與課程管理', '建立課程',
+            '考卷工作畫面', '一般考題', '圖片判讀題', '影片互動題', 'AI 輔助出題',
+            '教材與課程｜建立課程', '建立課程',
         ):
             self.assertIn(label, self.source)
-        self.assertIn("card('materials-manager'", self.source)
-        self.assertNotIn("card('material','📄','上傳教材'", self.source)
-        self.assertNotIn("card('video-material'", self.source)
-        self.assertIn('TEACHER CONTENT STUDIO', self.source)
-        self.assertIn('＋ 建立教學內容', self.source)
+        self.assertIn("ensureWorkspacePage('assessment')", self.source)
+        self.assertIn("ensureWorkspacePage('course-materials')", self.source)
+        self.assertIn('teacher-content-workspace-view', self.source)
+        self.assertNotIn('teacher-content-studio-launcher-71', self.source)
+        self.assertNotIn('fixed inset-0 z-[140]', self.source)
 
     def test_studio_is_permission_gated_and_does_not_invent_authority(self):
         for permission in ('question.manage', 'exam.manage', 'material.manage', 'course.manage'):
@@ -80,7 +80,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn("details.dataset.teacher72CourseWizard='1'", self.convergence)
         self.assertIn("details.className='hidden", self.convergence)
         self.assertIn('teacher75OpenCourseWizard', self.convergence)
-        self.assertIn("card('materials-manager'", self.source)
+        self.assertIn('openTeacherCourseCreateWorkspace', self.source)
         self.assertIn('mountMaterialManagerInStudio', self.source)
         self.assertNotIn('進階：一次建立整套課程', self.convergence)
         self.assertFalse(ROOT.joinpath('static/question-authoring-ux-71.js').exists())

@@ -160,14 +160,34 @@
     }
 }
 
-/* RC content-studio layering and scope convergence.
-   The mobile admin modal is z-index 200, so the studio must sit above it.
-   The unified creation launcher belongs only to authoring workspaces. */
+/* Teacher authoring now lives inside the two full-page teaching workspaces.
+   The former fixed overlay is intentionally gone: task views replace the active
+   workspace panel in-place and return to it when the task is finished. */
 #teacher-content-studio-71 {
-    z-index: 260 !important;
+    width: 100%;
+    max-width: 1500px;
+    margin: 0 auto;
 }
 
-#admin-modal:not([data-workspace="course-materials"]):not([data-workspace="assessment"]) #teacher-content-studio-launcher-71 {
+.teacher-content-workspace-card {
+    overflow: hidden;
+    border: 1px solid #dbe4e8;
+    border-radius: 18px;
+    background: #f8fafc;
+    box-shadow: 0 14px 38px rgba(15, 23, 42, .08);
+}
+
+.teacher-content-workspace-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    background: rgba(255,255,255,.96);
+}
+
+body[data-teacher-content-studio-open="1"] #admin-workspace-content > .admin-section-panel {
     display: none !important;
 }
 
@@ -283,10 +303,6 @@ body.admin-page-mode #admin-teacher-subnav {
     border-radius: 12px;
 }
 
-body.admin-page-mode #teacher-content-studio-launcher-71 {
-    margin: 0 0 14px !important;
-}
-
 body.admin-page-mode #admin-workspace-content {
     grid-column: 2;
     grid-row: 4;
@@ -313,14 +329,60 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
     overflow: visible !important;
 }
 
-/* Full-page workspace content hierarchy.  Creation stays in Teacher Content
-   Studio; the daily landing surface is deliberately a browse/manage workspace. */
+/* Full-page workspace content hierarchy. Creation opens an inline task view;
+   the daily landing surface remains a browse/manage workspace. */
 .admin-page-section-heading {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 18px;
     flex-wrap: wrap;
+}
+
+.admin-page-heading-tools {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 9px;
+    min-width: min(100%, 470px);
+}
+
+.admin-workspace-primary-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.admin-workspace-primary-button,
+.admin-workspace-secondary-button {
+    min-height: 38px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 900;
+    transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.admin-workspace-primary-button {
+    border: 1px solid #0f766e;
+    background: #0f766e;
+    color: #fff;
+}
+
+.admin-workspace-primary-button:hover {
+    background: #115e59;
+}
+
+.admin-workspace-secondary-button {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #334155;
+}
+
+.admin-workspace-secondary-button:hover {
+    border-color: #94a3b8;
+    background: #f8fafc;
 }
 
 .admin-page-eyebrow {
@@ -382,7 +444,7 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
 }
 
 /* The guided course wizard remains the canonical executor, but it is only
-   visible after Teacher Content Studio moves it out of the daily workspace. */
+   visible after the course workspace moves it into an explicit inline task view. */
 #admin-course-workspace > #course-wizard-681 {
     display: none !important;
 }
@@ -775,8 +837,7 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 
-    body.admin-page-mode #admin-teacher-subnav,
-    body.admin-page-mode #teacher-content-studio-launcher-71 {
+    body.admin-page-mode #admin-teacher-subnav {
         margin-left: 12px !important;
         margin-right: 12px !important;
     }
@@ -818,6 +879,29 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
 }
 
 @media (max-width: 620px) {
+    .teacher-content-workspace-card {
+        border-radius: 14px;
+    }
+
+    .teacher-content-workspace-header {
+        flex-direction: column;
+        padding: 15px;
+    }
+
+    .teacher-content-workspace-header > button {
+        width: 100%;
+    }
+
+    .admin-page-heading-tools {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .admin-workspace-primary-actions,
+    .admin-workspace-primary-actions > button {
+        width: 100%;
+    }
+
     .admin-scope-toolbar {
         grid-template-columns: 1fr 1fr;
     }

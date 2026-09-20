@@ -29,7 +29,7 @@
         event.preventDefault();
         event.stopImmediatePropagation();
         if(location.pathname==='/') location.assign('/#pending-exams');
-        else location.assign(location.pathname==='/pgy'?'/pgy#pgy-assessments':'/#pending-exams');
+        else location.assign(location.pathname==='/pgy'?'/system?area=pgy&group=grpPgyDocs&module=assessment&from=search':'/#pending-exams');
         return;
       }
       if(query.includes('教材')||query.includes('課程')){
@@ -52,14 +52,14 @@
         nav.replaceChildren();
         const items=[
           ['首頁','/'],
-          ['PGY 學習','/pgy'],
-          ['輪訓組別','#rotations']
+          ['院內課程','/internal'],
+          ['PGY','/pgy']
         ];
         items.forEach(([label,href],index)=>{
           const link=document.createElement('a');
           link.href=href;
           link.textContent=label;
-          if(index===1) link.classList.add('active');
+          if(index===2){link.classList.add('active');link.setAttribute('aria-current','page');}
           nav.appendChild(link);
         });
       }

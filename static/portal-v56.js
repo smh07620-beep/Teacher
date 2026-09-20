@@ -186,15 +186,6 @@
     return authUser;
   }
 
-  function syncPgyManagementVisibility(){
-    const targets=$$('[data-pgy-management-only]');
-    if(!targets.length)return;
-    const roles=Array.isArray(authUser?.roles)?authUser.roles:[authUser?.roles||authUser?.role];
-    const allowed=new Set(['clinical_teacher','teacher','group_leader','education_admin','manager','system_admin']);
-    const visible=roles.some(role=>allowed.has(String(role||'')));
-    targets.forEach(target=>target.classList.toggle('hidden',!visible));
-  }
-
   function renderPendingExams(rows,materialsPending=0){
     const box=$('#v571-pending-exams');if(!box)return;const groups={grpBio:'生化組',grpMicro:'鏡檢組',grpSero:'血清組',grpBB:'血庫組',grpBact:'細菌組',grpHema:'血液組',grpNew:'新進醫檢師',grpPgyDocs:'PGY'};
     const list=Array.isArray(rows)?rows.slice(0,3):[];
@@ -343,7 +334,6 @@
 
   (async()=>{
     await loadAuthState();
-    syncPgyManagementVisibility();
 
     await Promise.all([
       loadPersonalDashboard(),

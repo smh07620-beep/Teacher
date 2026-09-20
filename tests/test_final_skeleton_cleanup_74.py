@@ -13,7 +13,10 @@ class FinalSkeletonCleanup74Tests(unittest.TestCase):
             html = self.source(path)
             self.assertNotIn('class="v575-manage-direct"', html)
             self.assertIn('/portal-v56.js?v=7400', html)
-        self.assertIn('data-pgy-management-only', self.source('static/area-pgy.html'))
+        pgy = self.source('static/area-pgy.html')
+        self.assertNotIn('data-pgy-management-only', pgy)
+        self.assertNotIn('PGY 學習層級（教學管理）', pgy)
+        self.assertNotIn('PGY 評核方式（教學管理）', pgy)
         self.assertIn('class="v575-manage-direct"', self.source('static/system.html'))
 
     def test_public_navigation_no_longer_carries_dead_management_compat(self):
