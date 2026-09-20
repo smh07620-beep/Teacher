@@ -742,12 +742,12 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
 .v682-handnote,.v682-area-note{position:absolute;z-index:3;color:#078baa;font-family:"Segoe Print","Bradley Hand","DFKai-SB",cursive;font-weight:400;font-style:italic;line-height:1.15;transform:rotate(-8deg);text-shadow:0 1px 0 rgba(255,255,255,.7)}
 .v682-handnote{left:22%;top:54px;font-size:24px}
 .home-dashboard-page .phase3-stats{position:relative;z-index:7;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:-1px 45px 0}
-.home-dashboard-page .phase3-stat{min-height:110px;padding:14px 15px;grid-template-columns:49px minmax(0,1fr) auto;gap:13px;border-radius:9px;box-shadow:0 5px 16px rgba(31,74,91,.055)}
+.home-dashboard-page .phase3-stat{min-height:132px;padding:16px 15px;grid-template-columns:49px minmax(0,1fr) auto;gap:13px;border-radius:9px;box-shadow:0 5px 16px rgba(31,74,91,.055)}
 .home-dashboard-page .phase3-stat:after{display:none}
 .home-dashboard-page .phase3-stat-icon{width:48px;height:48px;border-radius:12px}.home-dashboard-page .phase3-stat-icon svg{width:25px;height:25px}
 .home-dashboard-page .phase3-stat b{font-size:12px}.home-dashboard-page .phase3-stat strong{margin-top:5px;font-size:30px}.home-dashboard-page .phase3-stat em{font-size:10px}
 .home-dashboard-page .phase3-stat-note{font-size:9px}.home-dashboard-page .phase3-stat i{width:110px;height:6px;margin-top:7px}
-.home-dashboard-page .phase3-announcement-strip{margin:13px 45px 0;padding:8px 12px;border-radius:9px;background:rgba(255,255,255,.86)}
+.home-dashboard-page .phase3-announcement-strip{min-height:42px;margin:13px 45px 0;padding:9px 12px;border-radius:9px;background:rgba(255,255,255,.86)}
 .home-dashboard-page .phase3-section,.home-dashboard-page .phase3-lower{margin-left:45px;margin-right:45px}
 
 /* Internal training: exactly the reference structure — copy on left, photo on right, three chips, six cards. */
@@ -827,3 +827,131 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
   .pgy-training-page .v681-pgy-hero{padding:26px 18px;min-height:270px}.pgy-training-page .v681-pgy-copy h1{font-size:31px}.pgy-training-page .v580-step-row span{min-width:0}.pgy-training-page .v682-area-note{display:none}.pgy-training-page .v682-pgy-learning{padding:12px}.pgy-training-page .v682-pgy-grid{grid-template-columns:1fr 1fr}.v682-pgy-photo{height:82px}
 }
 @media(max-width:480px){.internal-training-page .v580-card-grid,.pgy-training-page .v682-pgy-grid{grid-template-columns:1fr}.internal-training-page .v580-group-card,.v682-pgy-card{min-height:160px}}
+
+/* Teacher 6.8.3 · User supplied reference image is the desktop composition base.
+   Keep live data/actions in the DOM while the three reference heroes provide
+   the exact desktop artwork, typography placement and photographic treatment. */
+.home-dashboard-page .v56-shell,
+.internal-training-page .v56-shell,
+.pgy-training-page .v56-shell{
+  width:min(1204px,calc(100% - 34px));
+  max-width:1204px
+}
+.home-dashboard-page .v56-user:after,
+.internal-training-page .v56-user:after,
+.pgy-training-page .v56-user:after{
+  content:"⌄";
+  margin-left:5px;
+  color:#315b72;
+  font-size:13px;
+  line-height:1
+}
+.home-dashboard-page .phase3-announcement-mark svg{width:18px;height:18px}
+
+@media(min-width:1001px){
+  .home-dashboard-page .phase3-home .phase3-home-hero-681{
+    position:relative;
+    display:block;
+    width:100%;
+    height:267px;
+    min-height:267px;
+    overflow:hidden;
+    background:url('/assets/v682/home-hero.webp') center/100% 100% no-repeat;
+  }
+  .home-dashboard-page .phase3-home .phase3-home-hero-681:before{display:none}
+  .home-dashboard-page .phase3-home .phase3-home-hero-681>.v56-hero-copy,
+  .home-dashboard-page .phase3-home .phase3-home-hero-681>.phase3-home-hero-art{
+    position:absolute;
+    inset:0;
+    z-index:2;
+    opacity:0
+  }
+  .home-dashboard-page .phase3-home .phase3-home-hero-681>.v56-hero-copy{
+    display:block;
+    padding:34px 30px 28px 57px;
+    pointer-events:none
+  }
+  .home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-actions{
+    pointer-events:auto
+  }
+  .home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-actions a{
+    pointer-events:auto
+  }
+
+  .internal-training-page .v681-internal-hero{
+    position:relative;
+    display:block;
+    width:100%;
+    height:217px;
+    min-height:217px;
+    padding:0;
+    overflow:hidden;
+    background:url('/assets/v682/internal-hero.webp') center/100% 100% no-repeat
+  }
+  .internal-training-page .v681-internal-hero:before{display:none}
+  .internal-training-page .v681-internal-copy,
+  .internal-training-page .v681-internal-art,
+  .internal-training-page .v682-area-note{opacity:0;pointer-events:none}
+
+  .pgy-training-page .v681-pgy-hero{
+    position:relative;
+    display:block;
+    width:100%;
+    height:218px;
+    min-height:218px;
+    padding:0;
+    overflow:hidden;
+    background:url('/assets/v682/pgy-hero.webp') center/100% 100% no-repeat
+  }
+  .pgy-training-page .v681-pgy-hero:before,
+  .pgy-training-page .v681-pgy-hero:after{display:none}
+  .pgy-training-page .v681-pgy-copy,
+  .pgy-training-page .v682-area-note{opacity:0;pointer-events:none}
+}
+
+/* Photo cards use the same reference artwork family instead of the old cartoon illustrations. */
+.internal-training-page .v580-group-art{
+  background-repeat:no-repeat!important;
+  background-size:cover!important;
+  background-position:center!important;
+  filter:saturate(.86) contrast(.97) brightness(1.04)
+}
+.internal-training-page .v580-group-card:nth-child(1) .v580-group-art{background-image:url('/assets/v682/internal-bio.webp')!important}
+.internal-training-page .v580-group-card:nth-child(2) .v580-group-art{background-image:url('/assets/v682/internal-micro.webp')!important}
+.internal-training-page .v580-group-card:nth-child(3) .v580-group-art{background-image:url('/assets/v682/internal-sero.webp')!important}
+.internal-training-page .v580-group-card:nth-child(4) .v580-group-art{background-image:url('/assets/v682/internal-bb.webp')!important}
+.internal-training-page .v580-group-card:nth-child(5) .v580-group-art{background-image:url('/assets/v682/internal-bact.webp')!important}
+.internal-training-page .v580-group-card:nth-child(6) .v580-group-art{background-image:url('/assets/v682/internal-hema.webp')!important}
+.internal-training-page .v580-group-art img{opacity:0!important}
+
+.pgy-training-page .v682-pgy-photo{
+  background-repeat:no-repeat!important;
+  background-size:cover!important;
+  background-position:center!important;
+  filter:saturate(.83) contrast(.97) brightness(1.04)
+}
+.pgy-training-page .photo-foundation{background-image:url('/assets/v682/pgy-foundation.webp')!important}
+.pgy-training-page .photo-advanced{background-image:url('/assets/v682/pgy-advanced.webp')!important}
+.pgy-training-page .photo-specialty{background-image:url('/assets/v682/pgy-specialty.webp')!important}
+.pgy-training-page .photo-records{background-image:url('/assets/v682/pgy-records.webp')!important}
+
+/* The same reference photography continues into the home learning-centre cards. */
+.home-dashboard-page .phase3-groups a>span:first-child{
+  background-repeat:no-repeat!important;
+  background-size:cover!important;
+  background-position:center!important;
+  filter:saturate(.86) contrast(.97) brightness(1.04)
+}
+.home-dashboard-page .phase3-groups a:nth-child(1)>span:first-child{background-image:url('/assets/v682/internal-bio.webp')!important}
+.home-dashboard-page .phase3-groups a:nth-child(2)>span:first-child{background-image:url('/assets/v682/internal-micro.webp')!important}
+.home-dashboard-page .phase3-groups a:nth-child(3)>span:first-child{background-image:url('/assets/v682/internal-sero.webp')!important}
+.home-dashboard-page .phase3-groups a:nth-child(4)>span:first-child{background-image:url('/assets/v682/internal-bb.webp')!important}
+.home-dashboard-page .phase3-groups a:nth-child(5)>span:first-child{background-image:url('/assets/v682/internal-bact.webp')!important}
+.home-dashboard-page .phase3-groups a:nth-child(6)>span:first-child{background-image:url('/assets/v682/internal-hema.webp')!important}
+.home-dashboard-page .phase3-groups a>span:first-child img{opacity:0!important}
+
+@media(max-width:1000px){
+  .home-dashboard-page .v56-shell,
+  .internal-training-page .v56-shell,
+  .pgy-training-page .v56-shell{width:100%;max-width:none}
+}
