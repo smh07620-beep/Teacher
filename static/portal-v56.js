@@ -148,7 +148,7 @@
   }
 
   function setupPhase3AreaSwitch(){
-    const buttons=$$('[data-phase3-area]'), groups=$$('[data-phase3-group]'), all=$('#phase3-area-all'), pendingAll=$('#v66-pending-all'), progressLinks=$$('[data-home-progress-link]');
+    const buttons=$$('[data-phase3-area]'), groups=$$('[data-phase3-group]'), all=$('#phase3-area-all'), pendingAll=$('#v66-pending-all'), progressLinks=$$('[data-home-progress-link]'), areaLinks=$$('[data-home-area-link]');
     if(!buttons.length||!groups.length)return;
     const saved=readLocal('smh_home_training_area');
     const apply=area=>{
@@ -159,6 +159,7 @@
         all.href=next==='pgy'?'/pgy':'/internal';
         all.textContent=next==='pgy'?'PGY 全部 →':'院內全部 →';
       }
+      areaLinks.forEach(link=>{link.href=next==='pgy'?'/pgy':'/internal';});
 
       if(pendingAll){
         const examGroup=next==='pgy'?'grpNew':'grpBio';
