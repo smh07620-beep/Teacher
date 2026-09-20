@@ -21,11 +21,10 @@ class InternalTrainingPageRefresh681Tests(unittest.TestCase):
         for marker in (
             'v681-internal-hero',
             'v681-internal-features',
-            '快速開始',
-            '多元學習資源',
-            '依專業組別瀏覽',
-            '隨時線上學習',
+            '依組別學習',
+            '課程與教材',
             '圖譜與 SOP',
+            'Precision in Practice',
         ):
             self.assertIn(marker, self.html)
 

@@ -35,8 +35,8 @@ class PortalInformationArchitecture73Tests(unittest.TestCase):
         self.assertIn('.phase3-home', portal_css)
 
     def test_internal_area_is_selection_surface_only(self):
-        self.assertIn('快速開始', self.internal)
-        self.assertIn('依專業組別瀏覽', self.internal)
+        self.assertIn('依組別學習', self.internal)
+        self.assertIn('選擇專業組別', self.internal)
         self.assertIn('院內課程', self.internal)
         self.assertNotIn('class="v575-manage-direct"', self.internal)
         self.assertNotIn('>PGY 專區<', self.internal)

@@ -651,3 +651,179 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
 .pgy-training-page .v56-bottom-nav{grid-template-columns:repeat(3,1fr)}
 @media(max-width:1080px){.internal-training-page .v56-user-copy,.pgy-training-page .v56-user-copy{display:none}.internal-training-page .v56-user,.pgy-training-page .v56-user{min-width:0}.pgy-training-page .v681-pgy-hero{grid-template-columns:1fr;min-height:0}.pgy-training-page .v681-pgy-hero:after{background:linear-gradient(90deg,rgba(247,252,252,.98),rgba(247,252,252,.90) 62%,rgba(238,248,247,.54))}.pgy-training-page .v681-pgy-aside{width:100%;max-width:430px;justify-self:start}}
 @media(max-width:760px){.pgy-training-page .v56-header{min-height:62px;padding:0 14px}.pgy-training-page .v56-header.menu-open .v56-nav{grid-template-columns:repeat(3,1fr)}.pgy-training-page main{padding-top:14px}.pgy-training-page .v681-pgy-hero{padding:30px 21px;border-radius:22px}.pgy-training-page .v681-pgy-hero:before{background-position:72% center}.pgy-training-page .v681-pgy-hero:after{background:rgba(247,252,252,.89)}.pgy-training-page .v681-pgy-aside{max-width:none;padding:18px}.pgy-training-page .v580-section{margin-top:24px}.pgy-training-page .v580-card-grid{grid-template-columns:1fr}.pgy-training-page .v580-group-card{min-height:236px}.pgy-training-page .v580-group-art{height:100px}.internal-training-page .v56-user-actions,.pgy-training-page .v56-user-actions{margin-left:auto}.internal-training-page .v56-user-copy,.pgy-training-page .v56-user-copy{display:none}}
+
+/* Teacher 6.8.2 · Reference-locked learner UI.
+   This block intentionally follows the single user-supplied composite reference:
+   compact white shell, teal active pills, photographic hero, restrained cards. */
+.home-dashboard-page .v56-shell,
+.internal-training-page .v56-shell,
+.pgy-training-page .v56-shell{
+  width:min(1240px,calc(100% - 34px));
+  max-width:1240px;
+  margin:2px auto 26px;
+  overflow:hidden;
+  border:1px solid #e2ecef;
+  border-radius:5px;
+  background:#fff;
+  box-shadow:0 18px 55px rgba(39,83,101,.12)
+}
+.home-dashboard-page .v56-header,
+.internal-training-page .v56-header,
+.pgy-training-page .v56-header{
+  position:relative;
+  min-height:55px;
+  height:55px;
+  padding:0 56px;
+  gap:20px;
+  border-bottom:1px solid #e3eef1;
+  background:#fff;
+  box-shadow:none
+}
+.home-dashboard-page .v56-logo,
+.internal-training-page .v56-logo,
+.pgy-training-page .v56-logo{width:32px;height:32px}
+.home-dashboard-page .v56-brand,
+.internal-training-page .v56-brand,
+.pgy-training-page .v56-brand{gap:8px}
+.home-dashboard-page .v56-brand-copy strong,
+.internal-training-page .v56-brand-copy strong,
+.pgy-training-page .v56-brand-copy strong{font-size:13px!important;color:#0b3f62}
+.home-dashboard-page .v56-brand-copy span,
+.internal-training-page .v56-brand-copy span,
+.pgy-training-page .v56-brand-copy span{margin-top:2px;font-size:8px!important;letter-spacing:.02em;color:#688496}
+.home-dashboard-page .v56-nav,
+.internal-training-page .v56-nav,
+.pgy-training-page .v56-nav{height:100%;margin-left:48px;gap:8px;align-items:center}
+.home-dashboard-page .v56-nav>a,
+.internal-training-page .v56-nav>a,
+.pgy-training-page .v56-nav>a{height:38px;padding:0 17px!important;border-radius:20px!important;font-size:11px!important;color:#244e68!important}
+.home-dashboard-page .v56-nav>a.active,
+.internal-training-page .v56-nav>a.active,
+.pgy-training-page .v56-nav>a.active{background:#e9f7f7!important;color:#087b84!important}
+.home-dashboard-page .v56-user-actions,
+.internal-training-page .v56-user-actions,
+.pgy-training-page .v56-user-actions{gap:7px}
+.home-dashboard-page .v56-icon-button,
+.internal-training-page .v56-icon-button,
+.pgy-training-page .v56-icon-button{width:30px;height:30px}
+.home-dashboard-page .v56-avatar,
+.internal-training-page .v56-avatar,
+.pgy-training-page .v56-avatar{width:30px;height:30px}
+.home-dashboard-page .v56-user-copy,
+.internal-training-page .v56-user-copy,
+.pgy-training-page .v56-user-copy{min-width:72px}
+.home-dashboard-page .v56-user-copy strong,
+.internal-training-page .v56-user-copy strong,
+.pgy-training-page .v56-user-copy strong{font-size:9px}.home-dashboard-page .v56-user-copy span,.internal-training-page .v56-user-copy span,.pgy-training-page .v56-user-copy span{font-size:8px}
+
+/* Homepage: reference hero + three summary cards + announcement strip. */
+.home-dashboard-page .phase3-home{max-width:none;padding:0 0 20px!important;background:linear-gradient(180deg,#f7fcfd 0%,#edf8f9 100%)}
+.home-dashboard-page .phase3-home .phase3-home-hero-681{
+  min-height:267px;
+  margin:0;
+  border:0;
+  border-radius:0;
+  grid-template-columns:50% 50%;
+  background:#effafb;
+  box-shadow:none
+}
+.home-dashboard-page .phase3-home .phase3-home-hero-681:before{width:61%;background:radial-gradient(ellipse at 15% 45%,rgba(255,255,255,.99),rgba(248,253,253,.94) 54%,rgba(241,250,250,.58) 76%,transparent 100%)}
+.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy{padding:34px 30px 28px 57px}
+.home-dashboard-page .phase3-home .phase3-home-hero-681 .phase3-hero-eyebrow{margin-bottom:12px!important;font-size:9px!important}
+.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy h1{max-width:510px;font-size:35px;line-height:1.16;letter-spacing:-.035em}
+.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy>p:not(.phase3-hero-eyebrow){max-width:480px;margin-top:9px;font-size:12px;line-height:1.7}
+.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-actions{gap:10px 24px;margin-top:18px}
+.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary{min-width:178px;min-height:42px;padding:0 20px;border-radius:999px;background:linear-gradient(135deg,#0593a0,#087e8a);font-size:12px}
+.home-dashboard-page .phase3-hero-link{font-size:11px;color:#214c63}
+.home-dashboard-page .phase3-home .phase3-home-hero-art{min-height:267px}
+.home-dashboard-page .phase3-hero-art-frame{inset:0;border-radius:0;background:#e7f5f7;box-shadow:none}
+.home-dashboard-page .phase3-hero-art-frame:before{background:linear-gradient(90deg,rgba(240,251,251,.76) 0%,rgba(240,251,251,.18) 31%,transparent 60%)}
+.home-dashboard-page .phase3-home .phase3-home-hero-art img{object-position:61% 50%;filter:saturate(.72) contrast(.94) brightness(1.11)}
+.v682-handnote,.v682-area-note{position:absolute;z-index:3;color:#078baa;font-family:"Segoe Print","Bradley Hand","DFKai-SB",cursive;font-weight:400;font-style:italic;line-height:1.15;transform:rotate(-8deg);text-shadow:0 1px 0 rgba(255,255,255,.7)}
+.v682-handnote{left:22%;top:54px;font-size:24px}
+.home-dashboard-page .phase3-stats{position:relative;z-index:7;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:-1px 45px 0}
+.home-dashboard-page .phase3-stat{min-height:110px;padding:14px 15px;grid-template-columns:49px minmax(0,1fr) auto;gap:13px;border-radius:9px;box-shadow:0 5px 16px rgba(31,74,91,.055)}
+.home-dashboard-page .phase3-stat:after{display:none}
+.home-dashboard-page .phase3-stat-icon{width:48px;height:48px;border-radius:12px}.home-dashboard-page .phase3-stat-icon svg{width:25px;height:25px}
+.home-dashboard-page .phase3-stat b{font-size:12px}.home-dashboard-page .phase3-stat strong{margin-top:5px;font-size:30px}.home-dashboard-page .phase3-stat em{font-size:10px}
+.home-dashboard-page .phase3-stat-note{font-size:9px}.home-dashboard-page .phase3-stat i{width:110px;height:6px;margin-top:7px}
+.home-dashboard-page .phase3-announcement-strip{margin:13px 45px 0;padding:8px 12px;border-radius:9px;background:rgba(255,255,255,.86)}
+.home-dashboard-page .phase3-section,.home-dashboard-page .phase3-lower{margin-left:45px;margin-right:45px}
+
+/* Internal training: exactly the reference structure — copy on left, photo on right, three chips, six cards. */
+.internal-training-page main,.pgy-training-page main{padding:0 0 22px}
+.internal-training-page .v681-internal-hero{
+  min-height:250px;
+  margin:0;
+  padding:28px 37px 16px;
+  grid-template-columns:minmax(0,55%) minmax(0,45%);
+  gap:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:#eef9fa
+}
+.internal-training-page .v681-internal-hero:before{background:linear-gradient(90deg,rgba(248,253,253,.99) 0%,rgba(248,253,253,.91) 47%,rgba(238,249,249,.34) 69%,transparent 100%)}
+.internal-training-page .v681-internal-copy{max-width:590px;align-self:start}
+.internal-training-page .v681-internal-copy .v580-eyebrow{margin:0 0 9px;font-size:8px;letter-spacing:.16em}
+.internal-training-page .v681-internal-copy h1{font-size:33px;line-height:1.08;letter-spacing:-.035em}
+.internal-training-page .v681-internal-lead{max-width:540px;margin-top:10px;font-size:11px;line-height:1.65}
+.internal-training-page .v681-internal-features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:15px}
+.internal-training-page .v681-feature-chip{min-width:0;padding:8px 9px;border-radius:12px;gap:9px;background:rgba(238,249,250,.93)}
+.internal-training-page .v681-feature-icon{width:34px;height:34px;flex-basis:34px;border-radius:50%}.internal-training-page .v681-feature-icon svg{width:20px;height:20px}
+.internal-training-page .v681-feature-chip strong{font-size:11px}.internal-training-page .v681-feature-chip small{font-size:9px}
+.internal-training-page .v681-internal-art{inset:0 0 0 47%;border-radius:0;background-position:63% 52%;box-shadow:none;filter:saturate(.72) contrast(.95) brightness(1.08)}
+.internal-training-page .v681-internal-art:before{background:linear-gradient(90deg,rgba(247,252,253,.96),rgba(247,252,253,.36) 31%,transparent 62%)}
+.internal-training-page .v682-area-note{right:23%;top:65px;font-size:17px}
+.v682-area-tabs{display:inline-flex;align-items:center;padding:3px;border:1px solid #d9e8eb;border-radius:8px;background:#f2f7f8;white-space:nowrap}
+.v682-area-tabs>*{display:inline-flex;align-items:center;justify-content:center;min-width:112px;height:30px;padding:0 12px;border-radius:7px;color:#627b89;font-size:10px;font-weight:850}
+.v682-area-tabs>.active{background:#058994;color:#fff;box-shadow:0 3px 8px rgba(5,137,148,.18)}
+.internal-training-page .v681-groups-section{margin:0;padding:12px 37px 6px;background:#fff}
+.internal-training-page .v580-section-heading{margin-bottom:10px}.internal-training-page .v580-section-heading h2{font-size:20px}.internal-training-page .v580-section-heading p{margin-top:3px;font-size:10px}
+.internal-training-page .v580-card-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:7px}
+.internal-training-page .v580-group-card{min-height:164px;padding:6px 6px 9px;border-radius:8px;align-items:flex-start;text-align:left;box-shadow:0 3px 12px rgba(31,74,91,.05)}
+.internal-training-page .v580-group-art{height:78px;margin:0 0 7px;border-radius:6px;background:#eef8fa}
+.internal-training-page .v580-group-art img{width:100%;max-width:100%;height:100%;object-fit:cover;mix-blend-mode:normal;filter:saturate(.78) contrast(.95)}
+.internal-training-page .v580-card-top{display:none!important}.internal-training-page .v580-group-card h3{margin:0 5px 2px;font-size:12px}.internal-training-page .v580-group-card p{margin:0 5px;font-size:8px;line-height:1.45}.internal-training-page .v580-group-card b{align-self:center;margin-top:auto;padding-top:5px;font-size:0}.internal-training-page .v580-group-card b:after{content:'→';display:grid;place-items:center;width:19px;height:19px;border-radius:50%;background:#dff5f5;color:#078692;font-size:11px}
+
+/* PGY: one hero and four learning cards as shown in the supplied reference. */
+.pgy-training-page .v681-pgy-hero{
+  min-height:218px;
+  margin:0;
+  padding:32px 36px;
+  grid-template-columns:56% 44%;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:#edf8f9
+}
+.pgy-training-page .v681-pgy-hero:before{background-position:68% 46%;filter:saturate(.68) contrast(.94) brightness(1.12)}
+.pgy-training-page .v681-pgy-hero:after{background:linear-gradient(90deg,rgba(248,253,253,.99) 0%,rgba(248,253,253,.92) 45%,rgba(239,249,249,.42) 68%,transparent 100%)}
+.pgy-training-page .v681-pgy-copy{max-width:570px;align-self:start}.pgy-training-page .v681-pgy-copy .v580-eyebrow{margin:0 0 9px;font-size:8px}.pgy-training-page .v681-pgy-copy h1{margin:4px 0 8px;font-size:33px}.pgy-training-page .v681-pgy-copy>p:not(.v580-eyebrow){max-width:530px;font-size:11px;line-height:1.7}
+.pgy-training-page .v580-step-row{margin-top:14px;gap:9px}.pgy-training-page .v580-step-row span{min-width:137px;padding:8px 10px;border-radius:12px;text-align:center;font-size:9px;background:rgba(239,249,249,.84)}
+.pgy-training-page .v682-area-note{right:19%;top:57px;font-size:18px}
+.pgy-training-page .v682-pgy-learning{margin:0;padding:12px 36px 8px;background:#fff}
+.pgy-training-page .v580-section-heading{align-items:center;margin-bottom:10px}.pgy-training-page .v580-section-heading h2{font-size:20px}.pgy-training-page .v580-section-heading p{margin-top:3px;font-size:10px}
+.v682-pgy-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.v682-pgy-card{display:flex;flex-direction:column;min-height:180px;padding:6px 6px 9px;border:1px solid #dce8ec;border-radius:8px;background:#fff;box-shadow:0 3px 12px rgba(31,74,91,.05);transition:.18s ease}
+.v682-pgy-card:hover{transform:translateY(-2px);border-color:#a9d3d4;box-shadow:0 8px 18px rgba(31,74,91,.09)}
+.v682-pgy-photo{display:block;height:87px;border-radius:6px;background-image:url('/assets/v681/lab-training-photo.jpg');background-size:210%;filter:saturate(.72) contrast(.94) brightness(1.08)}
+.v682-pgy-photo.photo-foundation{background-position:42% 57%}.v682-pgy-photo.photo-advanced{background-position:73% 61%}.v682-pgy-photo.photo-specialty{background-position:88% 35%}.v682-pgy-photo.photo-records{background-position:66% 27%}
+.v682-pgy-card h3{margin:8px 6px 0;color:#173f52;font-size:12px}.v682-pgy-card b{margin:2px 6px 0;color:#6e8591;font-size:8px}.v682-pgy-card p{margin:4px 6px 0;color:#7a909b;font-size:8px}.v682-pgy-card i{display:grid;place-items:center;width:19px;height:19px;margin:auto auto 0;border-radius:50%;background:#dff5f5;color:#078692;font-size:11px;font-style:normal}
+
+@media(max-width:1000px){
+  .home-dashboard-page .v56-shell,.internal-training-page .v56-shell,.pgy-training-page .v56-shell{width:100%;margin:0;border-radius:0;border-left:0;border-right:0}
+  .home-dashboard-page .v56-header,.internal-training-page .v56-header,.pgy-training-page .v56-header{padding:0 22px}
+  .home-dashboard-page .v56-nav,.internal-training-page .v56-nav,.pgy-training-page .v56-nav{margin-left:18px}
+  .home-dashboard-page .phase3-home .phase3-home-hero-681{grid-template-columns:1fr}.home-dashboard-page .phase3-home .phase3-home-hero-art{min-height:205px}.home-dashboard-page .phase3-stats{grid-template-columns:1fr 1fr;margin:10px 22px 0}.home-dashboard-page .phase3-stat-todo{grid-column:1/-1}.home-dashboard-page .phase3-announcement-strip,.home-dashboard-page .phase3-section,.home-dashboard-page .phase3-lower{margin-left:22px;margin-right:22px}
+  .internal-training-page .v681-internal-hero{grid-template-columns:1fr;min-height:300px}.internal-training-page .v681-internal-art{inset:0;opacity:.27}.internal-training-page .v681-internal-copy{max-width:650px}.internal-training-page .v580-card-grid{grid-template-columns:repeat(3,1fr)}
+  .pgy-training-page .v681-pgy-hero{grid-template-columns:1fr}.pgy-training-page .v682-pgy-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:760px){
+  .home-dashboard-page .v56-header,.internal-training-page .v56-header,.pgy-training-page .v56-header{min-height:58px;height:58px;padding:0 13px}.home-dashboard-page .v56-brand-copy span,.internal-training-page .v56-brand-copy span,.pgy-training-page .v56-brand-copy span{display:none}
+  .internal-training-page .v56-header.menu-open .v56-nav,.pgy-training-page .v56-header.menu-open .v56-nav,.home-dashboard-page .v56-header.menu-open .v56-nav{grid-template-columns:repeat(2,1fr)}
+  .home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy{padding:26px 20px 18px}.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy h1{font-size:30px}.v682-handnote{font-size:18px;top:38px}.home-dashboard-page .phase3-stats{grid-template-columns:1fr;margin:9px 10px 0}.home-dashboard-page .phase3-stat-todo{grid-column:auto}.home-dashboard-page .phase3-announcement-strip,.home-dashboard-page .phase3-section,.home-dashboard-page .phase3-lower{margin-left:10px;margin-right:10px}
+  .internal-training-page .v681-internal-hero{padding:25px 18px 18px}.internal-training-page .v681-internal-copy h1{font-size:31px}.internal-training-page .v681-internal-features{grid-template-columns:1fr}.internal-training-page .v682-area-note{display:none}.internal-training-page .v681-groups-section{padding:12px 12px 4px}.internal-training-page .v580-card-grid{grid-template-columns:repeat(2,1fr)}.v682-area-tabs>*{min-width:92px}
+  .pgy-training-page .v681-pgy-hero{padding:26px 18px;min-height:270px}.pgy-training-page .v681-pgy-copy h1{font-size:31px}.pgy-training-page .v580-step-row span{min-width:0}.pgy-training-page .v682-area-note{display:none}.pgy-training-page .v682-pgy-learning{padding:12px}.pgy-training-page .v682-pgy-grid{grid-template-columns:1fr 1fr}.v682-pgy-photo{height:82px}
+}
+@media(max-width:480px){.internal-training-page .v580-card-grid,.pgy-training-page .v682-pgy-grid{grid-template-columns:1fr}.internal-training-page .v580-group-card,.v682-pgy-card{min-height:160px}}

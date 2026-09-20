@@ -35,7 +35,7 @@
       if(query.includes('教材')||query.includes('課程')){
         event.preventDefault();
         event.stopImmediatePropagation();
-        location.assign(location.pathname==='/pgy'?'/pgy#rotations':'/internal');
+        location.assign(location.pathname==='/pgy'?'/pgy':'/internal');
       }
     },true);
   }
@@ -46,24 +46,8 @@
         normalizeSearch();
     }
 
-    if(path==='/pgy'){
-      const nav=document.querySelector('.v56-header .v56-nav');
-      if(nav){
-        nav.replaceChildren();
-        const items=[
-          ['首頁','/'],
-          ['院內課程','/internal'],
-          ['PGY','/pgy']
-        ];
-        items.forEach(([label,href],index)=>{
-          const link=document.createElement('a');
-          link.href=href;
-          link.textContent=label;
-          if(index===2){link.classList.add('active');link.setAttribute('aria-current','page');}
-          nav.appendChild(link);
-        });
-      }
-    }
+    /* Public headers are authored per page to match the supplied reference:
+       home only shows Home; area pages show Home + the current area. */
   }
 
   function normalizeSystem(){

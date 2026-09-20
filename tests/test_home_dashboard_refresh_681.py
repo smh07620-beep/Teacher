@@ -32,7 +32,7 @@ class HomeDashboardRefresh681Tests(unittest.TestCase):
 
     def test_progress_card_is_real_area_aware_training_progress_entry(self):
         self.assertIn('id="v561-progress-open" data-home-progress-link', self.html)
-        self.assertIn('個人訓練進度', self.html)
+        self.assertIn('學習進度', self.html)
         self.assertIn('module=progress&amp;from=home', self.html)
         self.assertGreaterEqual(self.html.count('data-home-progress-link'), 2)
         self.assertIn("progressLinks=$$('[data-home-progress-link]')", self.runtime)

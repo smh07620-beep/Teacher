@@ -21,15 +21,20 @@ class PublicPortalVisualConsistency681Tests(unittest.TestCase):
         self.assertIn('/assets/v681/lab-training-photo.jpg', self.home)
         self.assertGreaterEqual(self.css.count("/assets/v681/lab-training-photo.jpg"), 2)
 
-    def test_three_public_headers_use_the_same_primary_navigation(self):
-        for source in (self.home, self.internal, self.pgy):
-            header = source[source.index('<header class="v56-header">'):source.index('</header>')]
-            self.assertIn('href="/"', header)
-            self.assertIn('>首頁</a>', header)
-            self.assertIn('href="/internal"', header)
-            self.assertIn('>院內課程</a>', header)
-            self.assertIn('href="/pgy"', header)
-            self.assertIn('>PGY</a>', header)
+    def test_public_headers_follow_the_supplied_reference_context(self):
+        home_header = self.home[self.home.index('<header class="v56-header">'):self.home.index('</header>')]
+        internal_header = self.internal[self.internal.index('<header class="v56-header">'):self.internal.index('</header>')]
+        pgy_header = self.pgy[self.pgy.index('<header class="v56-header">'):self.pgy.index('</header>')]
+        self.assertIn('>首頁</a>', home_header)
+        self.assertNotIn('>院內課程</a>', home_header)
+        self.assertNotIn('>PGY</a>', home_header)
+        self.assertIn('>首頁</a>', internal_header)
+        self.assertIn('>院內課程</a>', internal_header)
+        self.assertNotIn('>PGY</a>', internal_header)
+        self.assertIn('>首頁</a>', pgy_header)
+        self.assertIn('>PGY</a>', pgy_header)
+        self.assertNotIn('>院內課程</a>', pgy_header)
+        for header in (home_header, internal_header, pgy_header):
             self.assertNotIn('>考核</a>', header)
 
     def test_home_medium_width_switches_to_a_safe_single_column_hero(self):
@@ -41,6 +46,11 @@ class PublicPortalVisualConsistency681Tests(unittest.TestCase):
         self.assertIn('分階段課程', self.pgy)
         self.assertIn('臨床實務資源', self.pgy)
         self.assertIn('學習進度追蹤', self.pgy)
+        self.assertIn('PGY 學習專區', self.pgy)
+        self.assertIn('基礎訓練', self.pgy)
+        self.assertIn('進階訓練', self.pgy)
+        self.assertIn('專科深化', self.pgy)
+        self.assertIn('評核與紀錄', self.pgy)
         self.assertNotIn('PGY 學習層級（教學管理）', self.pgy)
         self.assertNotIn('PGY 評核方式（教學管理）', self.pgy)
 
