@@ -14,11 +14,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.37.11/docxtemplater.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <link rel="stylesheet" href="/design-tokens.css?v=5900">
-    <link rel="stylesheet" href="/portal.css?v=5900">
-    <link rel="stylesheet" href="/learner.css?v=5900">
+    <link rel="stylesheet" href="/portal.css?v=6870">
+    <link rel="stylesheet" href="/learner.css?v=6870">
     <link rel="stylesheet" href="/admin.css?v=6606">
 </head>
-<body class="v56-system edu-shell platform-v580 bg-slate-100 text-slate-800 font-sans leading-relaxed min-h-screen flex flex-col">
+<body class="v56-system edu-shell platform-v580 learning-center-page bg-slate-100 text-slate-800 font-sans leading-relaxed min-h-screen flex flex-col">
 
     <!-- Hidden file input used to let the admin pick 附件1.docx manually -->
     <input type="file" id="docx-template-input" accept=".docx" style="display:none">
@@ -48,7 +48,7 @@
     <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
         <!-- V5.3.20：使用者已於上一層選定組別；組內不再提供跨組切換 -->
-        <section class="edu-card px-4 py-3.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <section class="edu-card v687-breadcrumb-card px-4 py-3.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <nav aria-label="教學導覽" class="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">
                 <a href="/" class="breadcrumb-link">🏠 教學網首頁</a><span class="text-slate-300">›</span>
                 <a id="learning-area-link" href="/#groups" class="breadcrumb-link"><span id="learning-area-crumb">院內訓練</span></a><span class="text-slate-300">›</span>
@@ -60,7 +60,7 @@
             </div>
         </section>
 
-        <section class="edu-card p-4 sm:p-5">
+        <section class="edu-card v687-learning-path-card p-4 sm:p-5">
             <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
                 <div>
                     <p class="edu-kicker">YOUR LEARNING PATH</p>
@@ -116,7 +116,7 @@
                     </div>
                 </div>
             </section>
-            <section class="rounded-2xl border border-teal-100 bg-teal-50/50 p-4 sm:p-5">
+            <section class="v687-resource-search rounded-2xl border border-teal-100 bg-teal-50/50 p-4 sm:p-5">
                 <label class="block text-xs font-black text-teal-900">🔎 搜尋教學資源</label><div class="mt-2 flex gap-2"><input id="resource-search-input" data-csp-keydown="if(event.key==='Enter')searchTeachingResources()" placeholder="搜尋教材全文或圖譜，例如：抗體鑑定" class="min-w-0 flex-1 rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm"><button data-csp-click="searchTeachingResources()" class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white">搜尋</button></div><div id="resource-search-results" class="mt-3 space-y-2" aria-live="polite"></div>
             </section>
 
