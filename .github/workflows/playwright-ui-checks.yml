@@ -13,7 +13,7 @@ permissions:
 jobs:
   responsive-ui:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -25,8 +25,10 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install Playwright test runner
-        run: npm install --no-save @playwright/test@1.55.0
+      - name: Install application and Playwright test dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          npm install --no-save @playwright/test@1.55.0
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -49,6 +51,26 @@ jobs:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
         run: npx playwright test tests/playwright/ui-regression.spec.js --reporter=line --workers=1
 
-      - name: Show harness log on failure
+      - name: Start real Flask factory server
+        run: |
+          python tests/flask_ui_server.py > flask-ui.log 2>&1 &
+          echo $! > flask-ui.pid
+          for i in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:4174/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat flask-ui.log
+          exit 1
+
+      - name: Run real Flask auth, CSP and system smoke
+        env:
+          TEACHER_FLASK_BASE_URL: http://127.0.0.1:4174
+        run: npx playwright test tests/playwright/flask-smoke.spec.js --reporter=line --workers=1
+
+      - name: Show harness logs on failure
         if: failure()
-        run: cat ui-harness.log || true
+        run: |
+          cat ui-harness.log || true
+          cat flask-ui.log || true
