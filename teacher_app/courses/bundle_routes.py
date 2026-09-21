@@ -10,7 +10,7 @@ from flask import g, jsonify, request
 
 from teacher_app.maintenance.migrations import _course_bundle_idempotency_72
 from teacher_app.assessments import repository as assessment_repository
-from teacher_app.common import scope_filter
+from teacher_app.common import scope, scope_filter
 from teacher_app.common.errors import ApiError
 from teacher_app.courses import bundle as bundle_service
 from teacher_app.courses import repository as course_repository
@@ -64,6 +64,11 @@ def register_course_bundle_72(owner):
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
             return jsonify({"error": "請提供有效的建立資料。"}), 400
+        try:
+            scope.validate_group(data.get("group", scope.DEFAULT_GROUP))
+            scope.validate_area(data.get("area", scope.DEFAULT_TRAINING_AREA))
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "invalidScope": True}), 400
 
         # Capability/RBAC remains at the existing HTTP boundary.
         denied = scope_filter.require_permission(app, "course.manage")
