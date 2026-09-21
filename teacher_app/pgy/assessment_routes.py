@@ -7,6 +7,7 @@ from pathlib import Path
 import requests
 from flask import g, jsonify, request
 
+from teacher_app.common import scope
 from teacher_app.common.auth import has_permission, require_role
 from teacher_app.common.errors import ApiError
 from teacher_app.pgy import assessments
@@ -148,8 +149,13 @@ def register_pgy_assessment_routes(owner, *, paths, template_runtime=None):
         user, denied = _require_roles("clinical_teacher")
         if denied:
             return denied
+        data = request.get_json(silent=True) or {}
         try:
-            record_id = assessments.create_assessment(user, request.get_json(silent=True) or {})
+            scope.validate_group(data.get("group", scope.DEFAULT_GROUP))
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "invalidScope": True}), 400
+        try:
+            record_id = assessments.create_assessment(user, data)
         except assessments.AssessmentError as exc:
             return jsonify({"error": str(exc)}), exc.status
         return jsonify({"ok": True, "id": record_id})
