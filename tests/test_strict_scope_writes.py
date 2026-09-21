@@ -1,5 +1,4 @@
 import unittest
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from flask import Flask, g, jsonify
@@ -65,12 +64,12 @@ class StrictScopeRequestGuardTests(unittest.TestCase):
 
     def test_preferred_scope_fields_are_also_strict(self):
         client = self._app().test_client()
-        self.assertEqual(
-            client.patch("/probe", json={"preferredGroup": "wrong"}).status_code,
-            405,
-        )
+        response = client.patch("/probe", json={"preferredGroup": "wrong"})
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(response.get_json()["invalidScope"])
         response = client.post("/probe", json={"preferredArea": "wrong"})
         self.assertEqual(response.status_code, 400)
+        self.assertTrue(response.get_json()["invalidScope"])
 
     def test_valid_scope_passes(self):
         response = self._app().test_client().post(
