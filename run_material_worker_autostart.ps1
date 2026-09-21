@@ -50,6 +50,33 @@ function Load-LocalWorkerEnvironment {
   }
 }
 
+function Ensure-StableWorkerId {
+  if ([string]$env:MATERIAL_WORKER_ID) {
+    $configured = ([string]$env:MATERIAL_WORKER_ID).Trim()
+    if ($configured) { return $configured }
+  }
+
+  $statePath = Join-Path $root ".worker-id"
+  $workerId = ""
+  if (Test-Path $statePath -PathType Leaf) {
+    $saved = (Get-Content -LiteralPath $statePath -Raw).Trim()
+    if ($saved -match '^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$') { $workerId = $saved }
+  }
+  if (-not $workerId) {
+    $machine = ([Environment]::MachineName -replace '[^A-Za-z0-9._-]', '-').Trim('-')
+    if (-not $machine) { $machine = "TeacherWorker" }
+    if ($machine.Length -gt 70) { $machine = $machine.Substring(0, 70) }
+    $workerId = "$machine-TeacherWorker-$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
+    try {
+      Set-Content -LiteralPath $statePath -Value $workerId -NoNewline -Encoding UTF8
+    } catch {
+      Write-TeacherWorkerEvent -EntryType "Warning" -EventId 2003 -Message "Persistent Worker identity could not be saved; this launch will continue with the generated identity."
+    }
+  }
+  [Environment]::SetEnvironmentVariable("MATERIAL_WORKER_ID", $workerId, "Process")
+  return $workerId
+}
+
 function Add-MegaCmdPath {
   $megaDirectories = @(
     $env:MEGACMD_PATH,
@@ -97,6 +124,7 @@ function Ensure-WorkerEnvironment {
 }
 
 Load-LocalWorkerEnvironment
+$stableWorkerId = Ensure-StableWorkerId
 Add-MegaCmdPath
 if (-not $env:TEACHER_BASE_URL -or -not $env:MATERIAL_WORKER_TOKEN) {
   Write-TeacherWorkerEvent -EntryType "Error" -EventId 3001 -Message "Required Worker connection settings are missing; supervisor cannot start."
@@ -104,6 +132,7 @@ if (-not $env:TEACHER_BASE_URL -or -not $env:MATERIAL_WORKER_TOKEN) {
   exit 20
 }
 Write-TeacherWorkerEvent -EntryType "Information" -EventId 1000 -Message "Teacher material Worker supervisor starting."
+Write-Host "Worker identity: $stableWorkerId"
 
 $autoUpdateEnabled = @("1", "true", "yes", "on") -contains ([string]$env:MATERIAL_WORKER_AUTO_UPDATE).Trim().ToLowerInvariant()
 if ($autoUpdateEnabled) {

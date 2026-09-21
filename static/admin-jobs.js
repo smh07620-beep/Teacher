@@ -34,14 +34,16 @@
       const d=await r.json().catch(()=>({}));
       if(!r.ok) throw new Error(d.error||'背景工作讀取失敗');
       const jobs=d.jobs||[];
-      const workers=d.workers||[];
+      const workerStatusAvailable=d.workerStatusAvailable!==false;
+      const workers=workerStatusAvailable&&Array.isArray(d.workers)?d.workers:[];
       const worker=workers[0];
-      const workerLabel=worker?(worker.status==='busy'?'🟡 Busy':worker.status==='online'?'🟢 Online':'⚪ Offline'):'⚪ Offline';
-      const workerDetail=worker?`${worker.workerId}｜FFmpeg ${worker.ffmpeg?'✓':'✕'}｜LibreOffice ${worker.libreOffice?'✓':'✕'}`:'尚未收到本機 Worker heartbeat';
+      const workerLabel=!workerStatusAvailable?'❌ 狀態讀取異常':worker?(worker.status==='busy'?'🟡 Busy':worker.status==='online'?'🟢 Online':'⚪ Offline'):'⚪ Offline';
+      const workerDetail=!workerStatusAvailable?(d.workerStatusError||'無法讀取本機 Worker 狀態；此訊息不代表 Worker 已離線。'):worker?`${worker.workerId}｜FFmpeg ${worker.ffmpeg?'✓':'✕'}｜LibreOffice ${worker.libreOffice?'✓':'✕'}`:'尚未收到本機 Worker heartbeat';
       const workerBuild=worker&&worker.workerVersion?`<div class="mt-1">Version ${escapeHtml(worker.workerVersion)} · SHA ${escapeHtml(worker.workerSha||'unknown')} · ${escapeHtml(worker.workerBranch||'unknown')}</div>`:'';
       const workerUpdate=worker?.updateAvailable?'<div class="mt-1 text-amber-800 font-bold">⚠ Worker 有新版待更新</div>':'';
       const workerChecked=worker?.lastUpdateCheckAt?`<div class="mt-1">Last update check: ${escapeHtml(worker.lastUpdateCheckAt)}</div>`:'';
-      const summary=`<div class="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-950"><b>背景教材處理</b><div class="mt-1">Worker：${workerLabel}　${escapeHtml(workerDetail)}</div>${workerBuild}${workerUpdate}${workerChecked}<div class="mt-1">Pending ${Number(d.pendingJobs||0)} · Processing ${Number(d.processingJobs||0)} · Retry ${Number(d.retryJobs||0)} · Failed ${Number(d.failedJobs||0)}</div></div>`;
+      const summaryClass=workerStatusAvailable?'border-sky-200 bg-sky-50 text-sky-950':'border-rose-200 bg-rose-50 text-rose-800';
+      const summary=`<div class="rounded-xl border ${summaryClass} p-3 text-xs"><b>背景教材處理</b><div class="mt-1">Worker：${workerLabel}　${escapeHtml(workerDetail)}</div>${workerBuild}${workerUpdate}${workerChecked}<div class="mt-1">Pending ${Number(d.pendingJobs||0)} · Processing ${Number(d.processingJobs||0)} · Retry ${Number(d.retryJobs||0)} · Failed ${Number(d.failedJobs||0)}</div></div>`;
       if(!jobs.length){
         host.innerHTML=summary+'<p class="text-xs text-slate-400">目前沒有背景教材工作。</p>';
         window.scheduleMaterialJobsRefresh(false);

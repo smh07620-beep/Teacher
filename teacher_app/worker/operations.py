@@ -3,11 +3,16 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import os
 from typing import Callable
 
 from teacher_app.storage import r2_budget
 from teacher_app.worker import repository
+
+
+LOGGER = logging.getLogger(__name__)
+WORKER_STATUS_ERROR = "無法讀取本機 Worker 狀態，請稍後再試或檢查伺服器記錄。"
 
 
 def _env_true(name: str, default: bool) -> bool:
@@ -136,8 +141,6 @@ def recover_stale_processing_jobs(
         if changed:
             counts[counter] += 1
         else:
-            # A fresh heartbeat/ownership transition changed updated_at or owner
-            # after our stale snapshot; never overwrite that newer state.
             counts["lostRace"] += 1
     return counts
 
@@ -214,6 +217,8 @@ def status(
             pass
 
     workers = []
+    worker_status_available = True
+    worker_status_error = ""
     try:
         now = dt.datetime.now(dt.timezone.utc)
         cutoff = now - dt.timedelta(seconds=120)
@@ -221,9 +226,10 @@ def status(
             "MATERIAL_WORKER_HEARTBEAT_RETENTION_HOURS", 24, 1, 720
         )
         history_cutoff = now - dt.timedelta(hours=retention_hours)
-        for item in repository.list_heartbeats(
+        heartbeats = repository.list_heartbeats(
             50, connection_factory=connection_factory
-        ):
+        )
+        for item in heartbeats:
             last_seen = str(item.get("last_seen") or item.get("lastSeen") or "")
             try:
                 seen = dt.datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
@@ -262,7 +268,10 @@ def status(
                 }
             )
     except Exception:
+        worker_status_available = False
+        worker_status_error = WORKER_STATUS_ERROR
         workers = []
+        LOGGER.exception("Worker heartbeat status lookup failed")
 
     return {
         "backgroundJobsEnabled": _env_true("MATERIAL_BACKGROUND_JOBS", True),
@@ -281,9 +290,16 @@ def status(
             else 0.0
         ),
         "workers": workers,
+        "workerStatusAvailable": worker_status_available,
+        "workerStatusError": worker_status_error,
         "staging": staging_capability(),
         "r2Budget": r2_budget.status(),
     }
 
 
-__all__ = ["cleanup_staging", "recover_stale_processing_jobs", "status"]
+__all__ = [
+    "WORKER_STATUS_ERROR",
+    "cleanup_staging",
+    "recover_stale_processing_jobs",
+    "status",
+]

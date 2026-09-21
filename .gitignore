@@ -1,4 +1,5 @@
 .local-worker.env
+.worker-id
 .worker-update-state.json
 .worker-requirements.sha256
 .env

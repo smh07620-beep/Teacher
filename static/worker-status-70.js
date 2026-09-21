@@ -165,7 +165,7 @@
           <li>把 Teacher repository 放在固定目錄，例如 <code>C:\\TeacherWorker</code>，並保持在 <code>main</code> branch。</li>
           <li>建立虛擬環境：<code>py -3.12 -m venv .venv</code>。</li>
           <li>安裝依賴：<code>.venv\\Scripts\\python.exe -m pip install -r requirements.txt</code>。</li>
-          <li>建立只存在本機的 <code>.local-worker.env</code>，至少填入 <code>TEACHER_BASE_URL</code>、<code>MATERIAL_WORKER_TOKEN</code> 與 MEGA 登入資料。</li>
+          <li>建立只存在本機的 <code>.local-worker.env</code>，至少填入 <code>TEACHER_BASE_URL</code>、<code>MATERIAL_WORKER_TOKEN</code> 與 MEGA 登入資料；若未指定 <code>MATERIAL_WORKER_ID</code>，啟動器會建立 gitignored 的固定 <code>.worker-id</code>。</li>
           <li>第一次手動啟動：<code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\TeacherWorker\\run_material_worker_autostart.ps1"</code>，確認本頁顯示 🟢 在線。</li>
           <li>確認正常後，以系統管理員 PowerShell 執行 <code>install_material_worker_task.ps1 -ServiceAccount -TaskUser SYSTEM -StartNow</code>，由 Windows Task Scheduler 的「開機時」觸發器接手；PowerShell 不需常駐。</li>
         </ol>
@@ -189,14 +189,22 @@
         return;
       }
       if (!response.ok) throw new Error(data.error || `讀取失敗（${response.status}）`);
+      const workerStatusAvailable = data.workerStatusAvailable !== false;
+      const workerStatusError = data.workerStatusError || '無法讀取本機 Worker 狀態，請稍後再試。';
       const workers = Array.isArray(data.workers) ? data.workers : [];
-      const activeWorkers = workers.filter(worker => worker.status === 'online' || worker.status === 'busy');
-      const recentOfflineWorkers = workers.filter(worker => worker.status === 'offline');
+      const activeWorkers = workerStatusAvailable ? workers.filter(worker => worker.status === 'online' || worker.status === 'busy') : [];
+      const recentOfflineWorkers = workerStatusAvailable ? workers.filter(worker => worker.status === 'offline') : [];
       const jobs = Array.isArray(data.jobs) ? data.jobs : [];
       const staging = data.staging || {};
       const emptyWorkerMessage = recentOfflineWorkers.length
         ? '⚠ 目前沒有在線 Worker；下方仍保留最近 24 小時內的離線紀錄供檢查。'
         : '⚠ 尚未收到本機 Worker heartbeat。若這是第一次使用，請展開下方「第一次安裝」完成院內電腦設定。';
+      const workerSummary = workerStatusAvailable
+        ? `${activeWorkers.length} 台在線${recentOfflineWorkers.length ? ` · ${recentOfflineWorkers.length} 台近期離線` : ''}`
+        : '狀態讀取異常';
+      const workerBody = !workerStatusAvailable
+        ? `<div data-worker-status-error class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${escapeHtml(workerStatusError)}<div class="mt-1 text-xs text-rose-600">佇列統計仍可使用；此訊息不代表 Worker 已離線。</div></div>`
+        : `${activeWorkers.length ? activeWorkers.map(workerCard).join('') : `<div class="rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-5 text-sm text-amber-800">${emptyWorkerMessage}</div>`}${recentOfflineWorkers.length ? `<details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><summary class="cursor-pointer text-sm font-bold text-slate-700">近期離線 Worker（${recentOfflineWorkers.length}）</summary><div class="mt-3 space-y-3">${recentOfflineWorkers.map(workerCard).join('')}</div></details>` : ''}`;
       panel.innerHTML = `
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -218,9 +226,8 @@
           <div class="text-xs rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">Shared staging：<b>${escapeHtml(staging.backend || '未設定')}</b> · ${staging.available ? '可用' : '不可用'}${staging.shared ? ' · Web/Worker 共用' : ''}</div>
         </section>
         <section class="space-y-3">
-          <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${activeWorkers.length} 台在線${recentOfflineWorkers.length ? ` · ${recentOfflineWorkers.length} 台近期離線` : ''}</span></div>
-          ${activeWorkers.length ? activeWorkers.map(workerCard).join('') : `<div class="rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-5 text-sm text-amber-800">${emptyWorkerMessage}</div>`}
-          ${recentOfflineWorkers.length ? `<details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><summary class="cursor-pointer text-sm font-bold text-slate-700">近期離線 Worker（${recentOfflineWorkers.length}）</summary><div class="mt-3 space-y-3">${recentOfflineWorkers.map(workerCard).join('')}</div></details>` : ''}
+          <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
+          ${workerBody}
         </section>
         <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
           <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">最近背景工作</h5><span class="text-[11px] text-slate-400">最近 ${jobs.length} 筆</span></div>

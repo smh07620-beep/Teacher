@@ -1,0 +1,54 @@
+name: Playwright UI checks
+
+on:
+  push:
+    branches:
+      - main
+      - feature/reliability-hardening-20260921
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  responsive-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright test runner
+        run: npm install --no-save @playwright/test@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start deterministic UI harness
+        run: |
+          python tests/ui_harness.py > ui-harness.log 2>&1 &
+          echo $! > ui-harness.pid
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat ui-harness.log
+          exit 1
+
+      - name: Run responsive browser regressions
+        env:
+          TEACHER_UI_BASE_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/playwright/ui-regression.spec.js --reporter=line --workers=1
+
+      - name: Show harness log on failure
+        if: failure()
+        run: cat ui-harness.log || true
