@@ -55,8 +55,17 @@ def _request_core(data: Mapping[str, Any]):
             status=400,
         )
 
-    area = scope.normalize_area(data.get("area") or scope.DEFAULT_TRAINING_AREA)
-    group = scope.normalize_group(data.get("group") or scope.DEFAULT_GROUP)
+    try:
+        area = scope.validate_area(
+            data.get("area"),
+            default=scope.DEFAULT_TRAINING_AREA,
+        )
+        group = scope.validate_group(
+            data.get("group"),
+            default=scope.DEFAULT_GROUP,
+        )
+    except ValueError as exc:
+        raise ApiError("INVALID_SCOPE", str(exc), status=400) from exc
     title = str(data.get("title") or "").strip()[:255]
     desc = str(data.get("desc") or "").strip()[:2000]
     exam_mode = str(data.get("examMode") or "later").strip().lower()
