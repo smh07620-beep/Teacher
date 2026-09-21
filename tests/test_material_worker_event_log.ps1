@@ -20,6 +20,7 @@ foreach ($marker in @(
   'Write-EventLog',
   '-EntryType "Information" -EventId 1000',
   '-EntryType "Information" -EventId 1001',
+  '-EntryType "Information" -EventId 1002',
   '-EntryType "Information" -EventId 1010',
   '-EntryType "Warning" -EventId 2001',
   '-EntryType "Warning" -EventId 2002',
@@ -35,10 +36,23 @@ foreach ($marker in @(
   }
 }
 
+$autoUpdateGate = '$autoUpdateEnabled = @("1", "true", "yes", "on") -contains ([string]$env:MATERIAL_WORKER_AUTO_UPDATE).Trim().ToLowerInvariant()'
+if (-not $source.Contains($autoUpdateGate)) {
+  throw "Worker supervisor must gate startup updates behind MATERIAL_WORKER_AUTO_UPDATE."
+}
+$gateIndex = $source.IndexOf('if ($autoUpdateEnabled) {')
+$updaterIndex = $source.IndexOf('& $updater')
+if ($gateIndex -lt 0 -or $updaterIndex -lt 0 -or $updaterIndex -lt $gateIndex) {
+  throw "Worker updater invocation must only occur inside the opt-in auto-update gate."
+}
+if (-not $source.Contains('Safe updater is disabled by configuration; existing Worker version will start.')) {
+  throw "Worker supervisor must record a non-warning event when startup auto-update is disabled."
+}
+
 $eventCalls = @(
   $source -split "`r?`n" | Where-Object { $_ -match 'Write-TeacherWorkerEvent\s+-EntryType' }
 )
-if ($eventCalls.Count -lt 9) {
+if ($eventCalls.Count -lt 10) {
   throw "Expected bounded Event Log call sites were not found."
 }
 foreach ($line in $eventCalls) {
