@@ -11,6 +11,7 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Split-Path -Parent $MyInvocation.MyCommand.Path)).Path
 $launcher = Join-Path $root "run_material_worker_autostart.ps1"
 $envFile = Join-Path $root ".local-worker.env"
+$workerIdFile = Join-Path $root ".worker-id"
 $python = Join-Path $root ".venv\Scripts\python.exe"
 
 function Assert-Administrator {
@@ -57,6 +58,37 @@ function Ensure-TeacherWorkerEventSource {
   }
 }
 
+function Read-ConfiguredWorkerId {
+  if (-not (Test-Path $envFile -PathType Leaf)) { return "" }
+  foreach ($line in Get-Content -LiteralPath $envFile) {
+    if ($line -match '^\s*MATERIAL_WORKER_ID\s*=\s*(.+?)\s*$') {
+      $value = ([string]$matches[1]).Trim()
+      if ($value) { return $value }
+    }
+  }
+  return ""
+}
+
+function Ensure-StableWorkerId {
+  $configured = Read-ConfiguredWorkerId
+  if ($configured) { return $configured }
+
+  if (Test-Path $workerIdFile -PathType Leaf) {
+    $saved = (Get-Content -LiteralPath $workerIdFile -Raw).Trim()
+    if ($saved -match '^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$') { return $saved }
+  }
+
+  $machine = ([Environment]::MachineName -replace '[^A-Za-z0-9._-]', '-').Trim('-')
+  if (-not $machine) { $machine = "TeacherWorker" }
+  if ($machine.Length -gt 70) { $machine = $machine.Substring(0, 70) }
+  $suffix = [Guid]::NewGuid().ToString("N").Substring(0, 8)
+  $stableId = "$machine-TeacherWorker-$suffix"
+  if ($PSCmdlet.ShouldProcess($workerIdFile, "Create persistent local Worker identity")) {
+    Set-Content -LiteralPath $workerIdFile -Value $stableId -NoNewline -Encoding UTF8
+  }
+  return $stableId
+}
+
 Assert-Administrator
 Ensure-TeacherWorkerEventSource
 if (-not (Test-Path $launcher -PathType Leaf)) {
@@ -68,6 +100,7 @@ if (-not (Test-Path $envFile -PathType Leaf)) {
 if (-not (Test-Path $python -PathType Leaf)) {
   throw "Create .venv\Scripts\python.exe before installing the scheduled task."
 }
+$stableWorkerId = Ensure-StableWorkerId
 
 $powershell = (Get-Command powershell.exe -CommandType Application -ErrorAction Stop).Source
 $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $launcher + '"'
@@ -149,6 +182,7 @@ if ($registered) {
   Write-Output "Trigger: At startup"
   Write-Output "Launcher: $launcher"
   Write-Output "Task user: $TaskUser"
+  Write-Output "Stable Worker ID: $stableWorkerId"
   Write-Output "Restart policy: 5 attempts, 1 minute interval"
   if ($StartNow) {
     Start-ScheduledTask -TaskName $TaskName
