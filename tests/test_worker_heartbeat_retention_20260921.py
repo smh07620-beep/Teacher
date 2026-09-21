@@ -52,8 +52,8 @@ class WorkerHeartbeatRetentionTests(unittest.TestCase):
     def test_worker_ui_prioritizes_active_and_collapses_recent_offline(self):
         source = ROOT.joinpath("static", "worker-status-70.js").read_text(encoding="utf-8")
         for marker in (
-            "const activeWorkers = workers.filter",
-            "const recentOfflineWorkers = workers.filter",
+            "workers.filter(worker => worker.status === 'online' || worker.status === 'busy')",
+            "workers.filter(worker => worker.status === 'offline')",
             "近期離線 Worker",
             "最近 24 小時內的離線紀錄",
             "activeWorkers.map(workerCard)",
