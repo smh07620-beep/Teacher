@@ -215,7 +215,12 @@ def status(
 
     workers = []
     try:
-        cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=120)
+        now = dt.datetime.now(dt.timezone.utc)
+        cutoff = now - dt.timedelta(seconds=120)
+        retention_hours = _int_env(
+            "MATERIAL_WORKER_HEARTBEAT_RETENTION_HOURS", 24, 1, 720
+        )
+        history_cutoff = now - dt.timedelta(hours=retention_hours)
         for item in repository.list_heartbeats(
             50, connection_factory=connection_factory
         ):
@@ -224,9 +229,11 @@ def status(
                 seen = dt.datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
                 if seen.tzinfo is None:
                     seen = seen.replace(tzinfo=dt.timezone.utc)
-                online = seen >= cutoff
             except (TypeError, ValueError):
-                online = False
+                continue
+            if seen < history_cutoff:
+                continue
+            online = seen >= cutoff
             raw = item.get("capabilities") or {}
             try:
                 capabilities = json.loads(raw) if isinstance(raw, str) else dict(raw)
