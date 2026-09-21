@@ -56,7 +56,7 @@ jobs:
           python tests/flask_ui_server.py > flask-ui.log 2>&1 &
           echo $! > flask-ui.pid
           for i in $(seq 1 45); do
-            if curl --fail --silent http://127.0.0.1:4174/health >/dev/null; then
+            if curl --fail --silent http://127.0.0.1:4174/ >/dev/null; then
               exit 0
             fi
             sleep 1
