@@ -33,7 +33,7 @@ os.environ["CSP_ENFORCE"] = "true"
 os.environ["MATERIAL_BACKGROUND_JOBS"] = "false"
 os.environ["MATERIAL_WORKER_ENABLED"] = "false"
 os.environ["AI_EXTERNAL_PROCESSING_ENABLED"] = "false"
-os.environ["ASSET_VERSION"] = "playwright-real-flask"
+os.environ["ASSET_VERSION"] = "realflaskci"
 
 from teacher_app import create_app  # noqa: E402
 
