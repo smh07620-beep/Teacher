@@ -9,14 +9,19 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from teacher_app.frontend.assets import _apply_asset_manifest
 
 
-ROOT = Path(__file__).parents[1]
 STATIC = ROOT / "static"
 PORT = int(os.environ.get("TEACHER_UI_HARNESS_PORT", "4173"))
 
