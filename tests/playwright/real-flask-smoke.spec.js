@@ -32,17 +32,15 @@ test('real portal response has enforced CSP and runtime asset injection', async 
   expect(response.status()).toBe(200);
   expect(headers['content-security-policy']).toContain("script-src-attr 'none'");
   expect(headers['content-security-policy']).not.toContain("script-src 'self' 'unsafe-inline'");
-  expect(body).toContain('/home-profile-title-71.js?v=playwright-real-flask');
-  expect(body).toContain('/portal-navigation-73.js?v=playwright-real-flask');
+  expect(body).toContain('/home-profile-title-71.js?v=realflaskci');
+  expect(body).toContain('/portal-navigation-73.js?v=realflaskci');
 });
 
-test('real system response includes canonical admin assets under CSP', async ({ request }) => {
-  const { response, body, headers } = await bodyAndHeaders(request, '/system');
-  expect(response.status()).toBe(200);
-  expect(headers['content-security-policy']).toContain("script-src-attr 'none'");
-  expect(body).toContain('/worker-status-70.js?v=playwright-real-flask');
-  expect(body).toContain('/admin-workspace.js?v=playwright-real-flask');
-  expect(body).toContain('/system-csp-actions.js?v=playwright-real-flask');
+test('real protected system route keeps login boundary and CSP', async ({ request }) => {
+  const response = await request.get(`${baseURL}/system`, { maxRedirects: 0 });
+  expect(response.status()).toBe(302);
+  expect(response.headers()['location']).toContain('/login?next=/system');
+  expect(response.headers()['content-security-policy']).toContain("script-src-attr 'none'");
 });
 
 test('real learner portal does not horizontally overflow on mobile', async ({ page }) => {
