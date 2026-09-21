@@ -1,0 +1,70 @@
+name: Windows Worker checks
+
+on:
+  push:
+    branches:
+      - main
+      - feature/reliability-hardening-20260921
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  worker-powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse canonical Worker PowerShell scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(
+            'install_material_worker_task.ps1',
+            'run_material_worker.ps1',
+            'run_material_worker_autostart.ps1',
+            'update_material_worker.ps1'
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Join-Path $PWD $file),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              throw "$file PowerShell parse failed: $($errors[0].Message)"
+            }
+          }
+
+      - name: Worker Task Scheduler contract regressions
+        shell: pwsh
+        run: ./tests/test_material_worker_task_installer.ps1
+
+      - name: Worker Event Log and updater gate regressions
+        shell: pwsh
+        run: ./tests/test_material_worker_event_log.ps1
+
+      - name: Stable Worker identity source contract
+        shell: pwsh
+        run: |
+          $installer = Get-Content ./install_material_worker_task.ps1 -Raw
+          $supervisor = Get-Content ./run_material_worker_autostart.ps1 -Raw
+          $gitignore = Get-Content ./.gitignore -Raw
+          foreach ($source in @($installer, $supervisor)) {
+            if (-not $source.Contains('Ensure-StableWorkerId')) { throw 'Stable Worker identity helper is missing.' }
+            if (-not $source.Contains('.worker-id')) { throw 'Persistent .worker-id state is missing.' }
+          }
+          if (-not $supervisor.Contains('SetEnvironmentVariable("MATERIAL_WORKER_ID", $workerId, "Process")')) {
+            throw 'Supervisor must export the stable Worker identity to material_worker.py.'
+          }
+          if (-not $gitignore.Contains('.worker-id')) { throw '.worker-id must remain gitignored.' }
+
+      - name: Do not create a persistent scheduled task in CI
+        shell: pwsh
+        run: |
+          if (Get-ScheduledTask -TaskName 'Teacher Material Worker' -ErrorAction SilentlyContinue) {
+            throw 'CI must not register the production Teacher Material Worker task.'
+          }
