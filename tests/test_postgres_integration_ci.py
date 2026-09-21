@@ -59,6 +59,7 @@ class PostgresIntegrationCiTests(unittest.TestCase):
         response = client.post(
             "/api/auth/login",
             json={"username": username, "password": "ci-password-123"},
+            headers={"Origin": "http://localhost"},
         )
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         me = client.get("/api/auth/me")
