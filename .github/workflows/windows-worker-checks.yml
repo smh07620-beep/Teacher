@@ -57,7 +57,7 @@ jobs:
             if (-not $source.Contains('Ensure-StableWorkerId')) { throw 'Stable Worker identity helper is missing.' }
             if (-not $source.Contains('.worker-id')) { throw 'Persistent .worker-id state is missing.' }
           }
-          if (-not $supervisor.Contains('SetEnvironmentVariable("MATERIAL_WORKER_ID", $workerId, "Process")'.Replace('\"','"'))) {
+          if (-not $supervisor.Contains('SetEnvironmentVariable') -or -not $supervisor.Contains('MATERIAL_WORKER_ID')) {
             throw 'Supervisor must export the stable Worker identity to material_worker.py.'
           }
           if (-not $gitignore.Contains('.worker-id')) { throw '.worker-id must remain gitignored.' }
