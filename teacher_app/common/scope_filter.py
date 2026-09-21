@@ -126,6 +126,30 @@ def scope_resolution_failed() -> bool:
     return bool(getattr(g, _SCOPE_FAILURE_ATTR, False))
 
 
+def _strict_request_scope_denied():
+    """Reject explicit unknown write scope before normalization/RBAC fallback."""
+
+    if request.method not in {"POST", "PUT", "PATCH"}:
+        return None
+    body = request.get_json(silent=True)
+    body = body if isinstance(body, dict) else {}
+    candidates = (
+        (scope.validate_group, body.get("group")),
+        (scope.validate_group, body.get("groupKey")),
+        (scope.validate_group, request.form.get("group")),
+        (scope.validate_area, body.get("area")),
+        (scope.validate_area, body.get("trainingArea")),
+        (scope.validate_area, request.form.get("area")),
+    )
+    try:
+        for validator, value in candidates:
+            if value is not None and str(value).strip():
+                validator(value)
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "invalidScope": True}), 400
+    return None
+
+
 def _scope_resolution_denied(owner, *permissions):
     if not scope_resolution_failed():
         return None
@@ -321,6 +345,9 @@ def scoped_groups(owner, permission, groups, *, allow_unscoped=False):
 
 
 def scoped(owner, permission, group=None):
+    invalid_scope = _strict_request_scope_denied()
+    if invalid_scope:
+        return None, invalid_scope
     groups = (
         {str(group).strip()}
         if group is not None and str(group).strip()
@@ -333,6 +360,9 @@ def scoped(owner, permission, group=None):
 
 
 def require_permission(owner, permission):
+    invalid_scope = _strict_request_scope_denied()
+    if invalid_scope:
+        return invalid_scope
     if permission in GROUP_SCOPED_PERMISSIONS:
         groups = request_groups(owner)
         resolution_denied = _scope_resolution_denied(owner, permission)
@@ -344,6 +374,9 @@ def require_permission(owner, permission):
 
 
 def require_any_permission(owner, *permissions):
+    invalid_scope = _strict_request_scope_denied()
+    if invalid_scope:
+        return invalid_scope
     user, denied_response = denied(owner, *permissions)
     if denied_response:
         return denied_response

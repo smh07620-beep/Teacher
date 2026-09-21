@@ -140,8 +140,15 @@ def update_material(base_or_material_id, material_id_or_data, data: Mapping[str,
         if material_type == "atlas"
         else {}
     )
-    group = scope.normalize_group(str(data.get("group", entry.get("group", scope.DEFAULT_GROUP))))
-    area = scope.normalize_area(str(data.get("area", entry.get("area", scope.DEFAULT_TRAINING_AREA))))
+    try:
+        group = scope.validate_group(
+            data.get("group", entry.get("group", scope.DEFAULT_GROUP))
+        )
+        area = scope.validate_area(
+            data.get("area", entry.get("area", scope.DEFAULT_TRAINING_AREA))
+        )
+    except ValueError as exc:
+        raise _fail("MATERIAL_SCOPE_INVALID", str(exc)) from exc
     category = str(data.get("category", entry.get("category", "")))
     course_id = str(data.get("courseId", entry.get("courseId", ""))).strip()
     course = course_repository.get_course(course_id) if course_id else None

@@ -94,8 +94,15 @@ def create_record(user: Mapping[str, Any], data: Mapping[str, Any]) -> str:
     record_id = str(values["id"])[:100]
     created_at = dt.datetime.now(dt.timezone.utc).isoformat()
     answers = values.get("answersDetail", [])
-    group_key = scope.normalize_group(values.get("groupKey", scope.DEFAULT_GROUP))
-    training_area = scope.normalize_area(values.get("trainingArea", scope.DEFAULT_TRAINING_AREA))
+    try:
+        group_key = scope.validate_group(
+            values.get("groupKey", scope.DEFAULT_GROUP)
+        )
+        training_area = scope.validate_area(
+            values.get("trainingArea", scope.DEFAULT_TRAINING_AREA)
+        )
+    except ValueError as exc:
+        raise RecordError(str(exc), 400) from exc
     course_id = str(values.get("courseId", "")).strip()[:100]
     quiz_category_id = str(values.get("quizCategoryId", "")).strip()[:100]
     # Records snapshot the publication identity that was active when the attempt

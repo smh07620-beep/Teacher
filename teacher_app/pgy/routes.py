@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from flask import Blueprint, g, jsonify, request
 
+from teacher_app.common import scope
 from teacher_app.common.errors import ApiError
 from teacher_app.pgy import service as pgy_service
 from teacher_app.pgy import signing_facade
@@ -17,6 +18,16 @@ def _actor():
 
 def _payload():
     return request.get_json(silent=True) or {}
+
+
+def _validate_assignment_scope(data):
+    try:
+        if data.get("group") not in (None, ""):
+            scope.validate_group(data.get("group"))
+        if data.get("area") not in (None, ""):
+            scope.validate_area(data.get("area"))
+    except ValueError as exc:
+        raise ApiError("INVALID_SCOPE", str(exc), status=400) from exc
 
 
 @bp.errorhandler(ApiError)
@@ -55,7 +66,9 @@ def pgy_assignment_get(assignment_id):
 
 @bp.post("/api/pgy/assignments")
 def pgy_assignment_create():
-    assignment = signing_facade.create_assignment(_actor(), _payload())
+    data = _payload()
+    _validate_assignment_scope(data)
+    assignment = signing_facade.create_assignment(_actor(), data)
     return jsonify({"ok": True, "assignment": assignment}), 201
 
 

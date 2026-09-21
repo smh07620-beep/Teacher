@@ -1,8 +1,12 @@
 """Inject Teacher workflow/security/maintenance/workspace assets into UI pages."""
 
+import logging
 import os
 import re
 from pathlib import Path
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 ASSET_MANIFEST = {
@@ -146,6 +150,7 @@ def register_pgy_frontend(app):
 
     @app.after_request
     def inject_pgy_workflow_assets(response):
+        path = "<unknown>"
         try:
             if response.status_code != 200:
                 return response
@@ -180,6 +185,7 @@ def register_pgy_frontend(app):
             response.set_data(html)
             response.content_length = len(response.get_data())
         except Exception:
+            LOGGER.exception("Teacher frontend asset injection failed path=%s", path)
             return response
         return response
 

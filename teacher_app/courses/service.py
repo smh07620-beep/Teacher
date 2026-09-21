@@ -30,8 +30,11 @@ def list_courses(base, area: str | None, group: str | None, include_inactive: bo
 
 
 def create_course(base, data: Mapping[str, Any]) -> dict:
-    area = scope.normalize_area(str(data.get("area", "pgy")))
-    group = scope.normalize_group(str(data.get("group", scope.DEFAULT_GROUP)))
+    try:
+        area = scope.validate_area(data.get("area", "pgy"))
+        group = scope.validate_group(data.get("group", scope.DEFAULT_GROUP))
+    except ValueError as exc:
+        raise _fail("COURSE_SCOPE_INVALID", str(exc)) from exc
     title = str(data.get("title", "")).strip()[:255]
     desc = str(data.get("desc", "")).strip()[:2000]
     if not title:
