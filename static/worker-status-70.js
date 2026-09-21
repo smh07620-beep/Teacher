@@ -167,9 +167,9 @@
           <li>安裝依賴：<code>.venv\\Scripts\\python.exe -m pip install -r requirements.txt</code>。</li>
           <li>建立只存在本機的 <code>.local-worker.env</code>，至少填入 <code>TEACHER_BASE_URL</code>、<code>MATERIAL_WORKER_TOKEN</code> 與 MEGA 登入資料。</li>
           <li>第一次手動啟動：<code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\TeacherWorker\\run_material_worker_autostart.ps1"</code>，確認本頁顯示 🟢 在線。</li>
-          <li>確認正常後，再把同一個 command 放進 Windows Task Scheduler 的「登入時」觸發器。</li>
+          <li>確認正常後，以系統管理員 PowerShell 執行 <code>install_material_worker_task.ps1 -ServiceAccount -TaskUser SYSTEM -StartNow</code>，由 Windows Task Scheduler 的「開機時」觸發器接手；PowerShell 不需常駐。</li>
         </ol>
-        <p class="font-bold">完成這一次後，正常版本更新會由安全 updater 在閒置時自動 fast-forward <code>origin/main</code>，需要新版程式時 launcher 會自動重啟；不需要每次都人工更新。</p>
+        <p class="font-bold">自動更新預設關閉；只有明確啟用且設定核准 release tag 時，安全 updater 才會在 Worker 閒置時自動 fast-forward。一般情況可由管理者更新 <code>main</code> 後重新啟動排程。</p>
       </div>
     </details>`;
   }
@@ -190,8 +190,13 @@
       }
       if (!response.ok) throw new Error(data.error || `讀取失敗（${response.status}）`);
       const workers = Array.isArray(data.workers) ? data.workers : [];
+      const activeWorkers = workers.filter(worker => worker.status === 'online' || worker.status === 'busy');
+      const recentOfflineWorkers = workers.filter(worker => worker.status === 'offline');
       const jobs = Array.isArray(data.jobs) ? data.jobs : [];
       const staging = data.staging || {};
+      const emptyWorkerMessage = recentOfflineWorkers.length
+        ? '⚠ 目前沒有在線 Worker；下方仍保留最近 24 小時內的離線紀錄供檢查。'
+        : '⚠ 尚未收到本機 Worker heartbeat。若這是第一次使用，請展開下方「第一次安裝」完成院內電腦設定。';
       panel.innerHTML = `
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -213,8 +218,9 @@
           <div class="text-xs rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">Shared staging：<b>${escapeHtml(staging.backend || '未設定')}</b> · ${staging.available ? '可用' : '不可用'}${staging.shared ? ' · Web/Worker 共用' : ''}</div>
         </section>
         <section class="space-y-3">
-          <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${workers.length} 台有 heartbeat 紀錄</span></div>
-          ${workers.length ? workers.map(workerCard).join('') : '<div class="rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-5 text-sm text-amber-800">⚠ 尚未收到本機 Worker heartbeat。若這是第一次使用，請展開下方「第一次安裝」完成院內電腦設定。</div>'}
+          <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${activeWorkers.length} 台在線${recentOfflineWorkers.length ? ` · ${recentOfflineWorkers.length} 台近期離線` : ''}</span></div>
+          ${activeWorkers.length ? activeWorkers.map(workerCard).join('') : `<div class="rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-5 text-sm text-amber-800">${emptyWorkerMessage}</div>`}
+          ${recentOfflineWorkers.length ? `<details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><summary class="cursor-pointer text-sm font-bold text-slate-700">近期離線 Worker（${recentOfflineWorkers.length}）</summary><div class="mt-3 space-y-3">${recentOfflineWorkers.map(workerCard).join('')}</div></details>` : ''}
         </section>
         <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
           <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">最近背景工作</h5><span class="text-[11px] text-slate-400">最近 ${jobs.length} 筆</span></div>
