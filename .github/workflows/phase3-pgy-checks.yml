@@ -14,6 +14,20 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: teacher_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d teacher_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -101,42 +115,79 @@ jobs:
           assert REQUIRED_RELEASE_MIGRATION in data['migrations']['applied']
           PY
       - name: Deployment and compatibility policy checks
+        shell: bash
         run: |
-          grep -q 'SECRET_KEY' render.yaml
-          grep -q 'SESSION_COOKIE_SECURE' render.yaml
-          grep -q 'autoDeployTrigger: checksPass' render.yaml
-          ! grep -q 'autoDeployTrigger: commit' render.yaml
-          grep -q 'AI_DEIDENTIFICATION_ENABLED' render.yaml
-          grep -q 'AI_EXTERNAL_MEDIA_ALLOWED' render.yaml
-          grep -q 'UPLOAD_ZIP_MAX_RATIO' render.yaml
-          grep -q 'GROQ_API_KEY' render.yaml
-          grep -q 'from teacher_app import create_app' pgy_app.py
-          grep -q 'app = create_app()' pgy_app.py
-          ! grep -q 'legacy_app' pgy_app.py
-          ! grep -q 'from app import' pgy_app.py
-          grep -q 'register_health' teacher_app/factory.py
-          grep -q 'register_training_audience_71' teacher_app/factory.py
-          grep -q 'register_sensitive_elevation' teacher_app/factory.py
-          grep -q 'register_course_bundle_followup_73' teacher_app/factory.py
-          ! grep -q 'register_pgy_atomic_workflow' pgy_app.py
-          test ! -f pgy_atomic.py
-          grep -q 'from teacher_app.maintenance import migrations as _migrations' schema_migrations.py
-          grep -q '0066-additive-rbac-pgy-signing' teacher_app/maintenance/migrations.py
-          grep -q '0067-smart-learning-content' teacher_app/maintenance/migrations.py
-          grep -q '0067-render-worker-shared-staging' teacher_app/maintenance/migrations.py
-          grep -q '0067-b-free-local-worker' teacher_app/maintenance/migrations.py
-          grep -q '0068-external-interactive-media' teacher_app/maintenance/migrations.py
-          grep -q 'from teacher_app.frontend import assets as _assets' pgy_frontend.py
-          grep -q 'ASSET_MANIFEST' teacher_app/frontend/assets.py
-          grep -q 'register_pgy_frontend' teacher_app/frontend/assets.py
-          ! grep -q 'type: worker' render.yaml
-          grep -q 'MATERIAL_DIRECT_UPLOAD_ENABLED' render.yaml
-          grep -q 'MEGA_WEB_READ_TIMEOUT_SECONDS' render.yaml
-          grep -q 'GUNICORN_TIMEOUT' render.yaml
-          grep -q 'MATERIAL_WORKER_TOKEN' render.yaml
-          ! grep -q 'material_worker.py' run_web.sh
-          test -f ARCHITECTURE.md
-          test -f docs/archive/ARCHITECTURE_HISTORY.md
-          grep -q 'Teacher 6.7' docs/archive/ARCHITECTURE_HISTORY.md
-          grep -q 'Root freeze policy' ARCHITECTURE.md
-          grep -q 'system-admin.js.*legacy compatibility bundle' ARCHITECTURE.md
+          set -euo pipefail
+
+          require_match() {
+            local pattern="$1"
+            local file="$2"
+            local message="$3"
+            if ! grep -Eq "$pattern" "$file"; then
+              echo "::error::$message"
+              exit 1
+            fi
+          }
+
+          forbid_match() {
+            local pattern="$1"
+            local file="$2"
+            local message="$3"
+            if grep -Eq "$pattern" "$file"; then
+              echo "::error::$message"
+              exit 1
+            fi
+          }
+
+          require_match 'SECRET_KEY' render.yaml 'Render must declare SECRET_KEY.'
+          require_match 'SESSION_COOKIE_SECURE' render.yaml 'Render must keep secure session cookies.'
+          require_match 'autoDeployTrigger:[[:space:]]*checksPass' render.yaml 'Render deploys must wait for checksPass.'
+          forbid_match 'autoDeployTrigger:[[:space:]]*commit' render.yaml 'Render must not deploy before checks pass.'
+          require_match 'AI_DEIDENTIFICATION_ENABLED' render.yaml 'AI de-identification policy is required.'
+          require_match 'AI_EXTERNAL_MEDIA_ALLOWED' render.yaml 'AI external-media policy is required.'
+          require_match 'UPLOAD_ZIP_MAX_RATIO' render.yaml 'ZIP expansion ratio guard is required.'
+          require_match 'GROQ_API_KEY' render.yaml 'Groq secret declaration is required.'
+          require_match 'from teacher_app import create_app' pgy_app.py 'WSGI shim must import canonical create_app.'
+          require_match 'app = create_app\(\)' pgy_app.py 'WSGI shim must compose the canonical app.'
+          forbid_match 'legacy_app' pgy_app.py 'Production WSGI shim must not import legacy_app.'
+          forbid_match 'from app import' pgy_app.py 'Production WSGI shim must not import root app.py.'
+          require_match 'register_health' teacher_app/factory.py 'Factory must register health routes.'
+          require_match 'register_training_audience_71' teacher_app/factory.py 'Factory must register training audience routes.'
+          require_match 'register_sensitive_elevation' teacher_app/factory.py 'Factory must register sensitive elevation.'
+          require_match 'register_course_bundle_followup_73' teacher_app/factory.py 'Factory must register Course Wizard follow-up routes.'
+          forbid_match 'register_pgy_atomic_workflow' pgy_app.py 'PGY workflow registration must not return to the WSGI shim.'
+          if [[ -e pgy_atomic.py ]]; then
+            echo '::error::Retired pgy_atomic.py must stay removed.'
+            exit 1
+          fi
+          require_match 'from teacher_app.maintenance import migrations as _migrations' schema_migrations.py 'Root migration module must remain a canonical alias.'
+          require_match '0066-additive-rbac-pgy-signing' teacher_app/maintenance/migrations.py 'Required PGY migration missing.'
+          require_match '0067-smart-learning-content' teacher_app/maintenance/migrations.py 'Required smart-learning migration missing.'
+          require_match '0067-render-worker-shared-staging' teacher_app/maintenance/migrations.py 'Required shared-staging migration missing.'
+          require_match '0067-b-free-local-worker' teacher_app/maintenance/migrations.py 'Required local-worker migration missing.'
+          require_match '0068-external-interactive-media' teacher_app/maintenance/migrations.py 'Required external-media migration missing.'
+          require_match 'from teacher_app.frontend import assets as _assets' pgy_frontend.py 'Frontend compatibility module must delegate to canonical assets.'
+          require_match 'ASSET_MANIFEST' teacher_app/frontend/assets.py 'Canonical frontend asset manifest is required.'
+          require_match 'register_pgy_frontend' teacher_app/frontend/assets.py 'Canonical frontend registration is required.'
+          require_match 'type:[[:space:]]*worker' render.yaml 'The dedicated AI background worker must remain declared.'
+          require_match 'dockerCommand:[[:space:]]*python -u ai_question_worker\.py' render.yaml 'The Render worker must remain the dedicated AI executor.'
+          forbid_match '(dockerCommand|startCommand|command):.*material_worker\.py' render.yaml 'Hospital/local material_worker.py must never run as a Render service.'
+          require_match 'MATERIAL_DIRECT_UPLOAD_ENABLED' render.yaml 'Direct upload setting is required.'
+          require_match 'MEGA_WEB_READ_TIMEOUT_SECONDS' render.yaml 'MEGA Web timeout setting is required.'
+          require_match 'GUNICORN_TIMEOUT' render.yaml 'Gunicorn timeout setting is required.'
+          require_match 'MATERIAL_WORKER_TOKEN' render.yaml 'Worker API token declaration is required.'
+          forbid_match 'material_worker\.py' run_web.sh 'The Web process must not supervise material_worker.py.'
+          [[ -f ARCHITECTURE.md ]] || { echo '::error::ARCHITECTURE.md is required.'; exit 1; }
+          [[ -f docs/archive/ARCHITECTURE_HISTORY.md ]] || { echo '::error::Architecture history is required.'; exit 1; }
+          require_match 'Teacher 6\.7' docs/archive/ARCHITECTURE_HISTORY.md 'Architecture history must retain Teacher 6.7.'
+          require_match 'Root freeze policy' ARCHITECTURE.md 'Current architecture must retain the root freeze policy.'
+          require_match 'system-admin\.js.*legacy compatibility bundle' ARCHITECTURE.md 'Frontend ownership contract is missing.'
+      - name: Real PostgreSQL fresh-bootstrap and persistence smoke
+        env:
+          TEACHER_POSTGRES_CI: '1'
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/teacher_ci
+          SECRET_KEY: teacher-ci-postgres-secret-key-0123456789abcdef
+          PRODUCTION_REQUIRE_SECRET: 'false'
+          SESSION_COOKIE_SECURE: 'false'
+          MATERIAL_STORAGE: /tmp/teacher-postgres-materials
+        run: python -m unittest tests.test_postgres_integration_ci -v
