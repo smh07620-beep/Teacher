@@ -44,6 +44,18 @@ FILTERED_LIST_ENDPOINTS = {
     "learning_analytics",
 }
 
+# These routes load the upload session through their injected Worker runtime and
+# immediately call ``upload_session_guard(session)``.  Re-querying the global
+# repository in the generic RBAC pre-guard can target a different isolated test
+# database and, more importantly, would duplicate canonical ownership.  Defer
+# resource scope to the route's already fail-closed session guard.
+UPLOAD_SESSION_SCOPE_OWNER_ENDPOINTS = {
+    "material_upload_status",
+    "material_upload_resume",
+    "material_upload_complete",
+    "material_upload_abort",
+}
+
 _SCOPE_FAILURE_ATTR = "teacher_scope_resolution_failed"
 _SCOPE_FAILURE_MESSAGE = "無法確認資源授權範圍，請稍後再試。"
 
@@ -155,9 +167,7 @@ def upload_session_group(owner, upload_id) -> str:
     if not upload_id:
         return ""
     try:
-        session = worker_repository.get_upload_session(
-            upload_id,
-        ) or {}
+        session = worker_repository.get_upload_session(upload_id) or {}
         return row_group(json_object(session.get("payload")))
     except Exception:
         return ""
@@ -177,10 +187,14 @@ def blueprint_group(owner, blueprint_id) -> str:
 def request_groups(owner=None) -> set[str]:
     """Resolve every group touched by the current request, conservatively.
 
-    Resource-id lookups are fail-closed for group-scoped actors.  When an
-    existing target id cannot be resolved to a group, ``require_permission``
+    Explicit resource-id lookups are fail-closed for group-scoped actors. When
+    an existing target id cannot be resolved to a group, ``require_permission``
     returns a generic 503 instead of silently degrading to capability-only
     authorization. Organization/system-wide actors keep their existing scope.
+
+    Legacy ``category`` query/form values are not necessarily category ids, so
+    only explicit ``quizCategoryId`` / route ids are treated as strict resource
+    lookups. Upload-session routes defer to their canonical session guard.
     """
     groups: set[str] = set()
     body = request.get_json(silent=True)
@@ -204,16 +218,23 @@ def request_groups(owner=None) -> set[str]:
     add(request.args.get("group"))
     add(view.get("group_key"))
 
-    category_ids = {
+    strict_category_ids = {
         str(body.get("quizCategoryId") or "").strip(),
-        str(body.get("category") or "").strip(),
         str(request.args.get("quizCategoryId") or "").strip(),
-        str(request.args.get("category") or "").strip(),
         str(view.get("category_id") or "").strip(),
     }
-    for category_id in category_ids:
+    for category_id in strict_category_ids:
         if category_id:
             add_required(category_group(owner, category_id))
+
+    # Historical ``category`` can also be a display/filter label. Resolve it
+    # opportunistically but do not turn a non-id label into a scope outage.
+    for category_value in (
+        body.get("category"),
+        request.args.get("category"),
+    ):
+        if category_value:
+            add(category_group(owner, category_value))
 
     material_id = view.get("material_id") or view.get("slide_id")
     if material_id:
@@ -250,7 +271,7 @@ def request_groups(owner=None) -> set[str]:
             _mark_scope_resolution_failed()
 
     upload_id = view.get("upload_id")
-    if upload_id:
+    if upload_id and (request.endpoint or "") not in UPLOAD_SESSION_SCOPE_OWNER_ENDPOINTS:
         add_required(upload_session_group(owner, upload_id))
 
     items = body.get("items")
@@ -258,9 +279,11 @@ def request_groups(owner=None) -> set[str]:
         for item in items:
             if not isinstance(item, dict):
                 continue
-            category_id = item.get("quizCategoryId") or item.get("category")
-            if category_id:
-                add_required(category_group(owner, category_id))
+            explicit_category_id = item.get("quizCategoryId") or item.get("categoryId")
+            if explicit_category_id:
+                add_required(category_group(owner, explicit_category_id))
+            elif item.get("category"):
+                add(category_group(owner, item.get("category")))
             item_question_id = item.get("id") or item.get("questionId")
             if item_question_id:
                 add_required(question_group(owner, item_question_id))
@@ -433,6 +456,7 @@ __all__ = [
     "FILTERED_LIST_ENDPOINTS",
     "GROUP_SCOPED_PERMISSIONS",
     "GROUP_SCOPED_ROLES",
+    "UPLOAD_SESSION_SCOPE_OWNER_ENDPOINTS",
     "category_group",
     "denied",
     "filter_scoped_response",
