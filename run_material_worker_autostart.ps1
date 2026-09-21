@@ -105,18 +105,23 @@ if (-not $env:TEACHER_BASE_URL -or -not $env:MATERIAL_WORKER_TOKEN) {
 }
 Write-TeacherWorkerEvent -EntryType "Information" -EventId 1000 -Message "Teacher material Worker supervisor starting."
 
-$updater = Join-Path $root "update_material_worker.ps1"
-if (Test-Path $updater -PathType Leaf) {
-  & $updater
-  if ($LASTEXITCODE -ne 0) {
-    Write-TeacherWorkerEvent -EntryType "Warning" -EventId 2002 -Message "Safe updater was refused or failed; existing Worker version will start."
-    Write-Warning "Safe update did not run; starting the existing local Worker version."
+$autoUpdateEnabled = @("1", "true", "yes", "on") -contains ([string]$env:MATERIAL_WORKER_AUTO_UPDATE).Trim().ToLowerInvariant()
+if ($autoUpdateEnabled) {
+  $updater = Join-Path $root "update_material_worker.ps1"
+  if (Test-Path $updater -PathType Leaf) {
+    & $updater
+    if ($LASTEXITCODE -ne 0) {
+      Write-TeacherWorkerEvent -EntryType "Warning" -EventId 2002 -Message "Safe updater was refused or failed; existing Worker version will start."
+      Write-Warning "Safe update did not run; starting the existing local Worker version."
+    } else {
+      Write-TeacherWorkerEvent -EntryType "Information" -EventId 1001 -Message "Safe updater check completed successfully before Worker launch."
+    }
   } else {
-    Write-TeacherWorkerEvent -EntryType "Information" -EventId 1001 -Message "Safe updater check completed successfully before Worker launch."
+    Write-TeacherWorkerEvent -EntryType "Warning" -EventId 2001 -Message "Safe updater script is missing; existing Worker version will start."
+    Write-Warning "Safe updater is missing; starting the existing local Worker version."
   }
 } else {
-  Write-TeacherWorkerEvent -EntryType "Warning" -EventId 2001 -Message "Safe updater script is missing; existing Worker version will start."
-  Write-Warning "Safe updater is missing; starting the existing local Worker version."
+  Write-TeacherWorkerEvent -EntryType "Information" -EventId 1002 -Message "Safe updater is disabled by configuration; existing Worker version will start."
 }
 
 $crashRestarts = 0
