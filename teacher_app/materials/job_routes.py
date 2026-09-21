@@ -110,6 +110,8 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             "queueBackend": "material_jobs",
             "staging": runtime.staging_capability(),
             "workers": ops.get("workers", []),
+            "workerStatusAvailable": bool(ops.get("workerStatusAvailable", True)),
+            "workerStatusError": str(ops.get("workerStatusError") or "")[:300],
             "pendingJobs": ops.get("pendingJobs", 0),
             "processingJobs": ops.get("processingJobs", 0),
             "retryJobs": ops.get("retryJobs", 0),
