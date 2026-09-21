@@ -58,6 +58,9 @@ UPLOAD_SESSION_SCOPE_OWNER_ENDPOINTS = {
 
 _SCOPE_FAILURE_ATTR = "teacher_scope_resolution_failed"
 _SCOPE_FAILURE_MESSAGE = "無法確認資源授權範圍，請稍後再試。"
+_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_SCOPE_GROUP_KEYS = ("group", "groupKey", "preferredGroup")
+_SCOPE_AREA_KEYS = ("area", "trainingArea", "preferredArea")
 
 
 def _current_user(owner=None):
@@ -135,6 +138,49 @@ def _scope_resolution_denied(owner, *permissions):
     if not any(has_role(user, role) for role in GROUP_SCOPED_ROLES):
         return None
     return jsonify({"error": _SCOPE_FAILURE_MESSAGE, "scopeResolutionFailed": True}), 503
+
+
+def _explicit_scope_values(mapping, keys):
+    if mapping is None:
+        return []
+    values = []
+    for key in keys:
+        try:
+            present = key in mapping
+        except TypeError:
+            present = False
+        if present:
+            values.append((key, mapping.get(key)))
+    return values
+
+
+def validate_request_scope_values(owner=None):
+    """Reject malformed explicit scope on authenticated write requests.
+
+    Historical read-side normalization intentionally keeps default fallback for
+    legacy rows. Browser/API writes are different: an explicit unknown group or
+    training area must never silently become grpBio/internal. This guard covers
+    canonical and retained compatibility routes before their service layer runs.
+    Worker-token routes do not have a session actor and validate captured scope
+    again at their canonical commit boundary.
+    """
+    if request.method not in _MUTATING_METHODS:
+        return None
+    if not _current_user(owner):
+        return None
+
+    body = request.get_json(silent=True)
+    body = body if isinstance(body, dict) else {}
+    sources = (body, request.form, request.args)
+    try:
+        for source in sources:
+            for _key, value in _explicit_scope_values(source, _SCOPE_GROUP_KEYS):
+                scope.validate_group(value, default=None)
+            for _key, value in _explicit_scope_values(source, _SCOPE_AREA_KEYS):
+                scope.validate_area(value, default=None)
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "invalidScope": True}), 400
+    return None
 
 
 def category_group(owner, category_id) -> str:
@@ -446,6 +492,10 @@ def filter_scoped_response(owner, response):
 def register_scope_filter(owner):
     app = _app(owner)
 
+    @app.before_request
+    def teacher_scope_write_validation():
+        return validate_request_scope_values(owner)
+
     @app.after_request
     def teacher_scope_filter(response):
         return filter_scoped_response(owner, response)
@@ -470,4 +520,5 @@ __all__ = [
     "scope_resolution_failed",
     "scoped",
     "scoped_groups",
+    "validate_request_scope_values",
 ]

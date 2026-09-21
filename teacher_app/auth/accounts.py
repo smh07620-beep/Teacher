@@ -112,6 +112,14 @@ def create_account(base_or_data, data: dict | None = None) -> dict:
         raise ValueError("帳號至少 3 碼、密碼至少 4 碼，姓名與工號皆為必填。")
 
     role, roles = roles_for_create(data)
+    preferred_area = scope.validate_area(
+        data.get("preferredArea"),
+        default=scope.DEFAULT_TRAINING_AREA,
+    )
+    preferred_group = scope.validate_group(
+        data.get("preferredGroup"),
+        default=scope.DEFAULT_GROUP,
+    )
     professional_title = profile_title(data.get("professionalTitle"))
     responsibility_tags = profile_tags(data.get("responsibilityTags", []))
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -122,8 +130,8 @@ def create_account(base_or_data, data: dict | None = None) -> dict:
         "emp_id": emp_id,
         "role": role,
         "roles_json": _json_roles(roles),
-        "preferred_area": scope.normalize_area(data.get("preferredArea", scope.DEFAULT_TRAINING_AREA)),
-        "preferred_group": scope.normalize_group(data.get("preferredGroup", scope.DEFAULT_GROUP)),
+        "preferred_area": preferred_area,
+        "preferred_group": preferred_group,
         "active": True,
         "session_version": 1,
         "created_at": now,
@@ -161,9 +169,9 @@ def update_account(base_or_username, username_or_data, data: dict | None = None)
             continue
         value = str(data.get(key, "")).strip()[:100]
         if key == "preferredArea":
-            value = scope.normalize_area(value)
+            value = scope.validate_area(value, default=None)
         elif key == "preferredGroup":
-            value = scope.normalize_group(value)
+            value = scope.validate_group(value, default=None)
         if key in {"name", "empId"} and not value:
             raise ValueError("姓名與工號不可空白。")
         updates[column] = value

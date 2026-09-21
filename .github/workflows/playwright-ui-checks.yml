@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/reliability-hardening-20260921
+      - hardening/ci-scope-postgres-observability
   pull_request:
 
 permissions:
@@ -13,7 +14,7 @@ permissions:
 jobs:
   responsive-ui:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +25,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Install Python runtime dependencies
+        run: python -m pip install -r requirements.txt
 
       - name: Install Playwright test runner
         run: npm install --no-save @playwright/test@1.55.0
@@ -44,11 +48,33 @@ jobs:
           cat ui-harness.log
           exit 1
 
-      - name: Run responsive browser regressions
+      - name: Start real canonical Flask app
+        run: |
+          python tests/real_flask_ui_server.py > real-flask.log 2>&1 &
+          echo $! > real-flask.pid
+          for i in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:4174/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat real-flask.log
+          exit 1
+
+      - name: Run deterministic responsive browser regressions
         env:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
         run: npx playwright test tests/playwright/ui-regression.spec.js --reporter=line --workers=1
 
-      - name: Show harness log on failure
+      - name: Run real Flask browser smoke regressions
+        env:
+          TEACHER_FLASK_BASE_URL: http://127.0.0.1:4174
+        run: npx playwright test tests/playwright/real-flask-smoke.spec.js --reporter=line --workers=1
+
+      - name: Show harness logs on failure
         if: failure()
-        run: cat ui-harness.log || true
+        run: |
+          echo '=== deterministic harness ==='
+          cat ui-harness.log || true
+          echo '=== real Flask app ==='
+          cat real-flask.log || true

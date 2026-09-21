@@ -1,9 +1,12 @@
 """Inject Teacher workflow/security/maintenance/workspace assets into UI pages."""
 
+import logging
 import os
 import re
 from pathlib import Path
 
+
+LOGGER = logging.getLogger(__name__)
 
 ASSET_MANIFEST = {
     "portal": {
@@ -146,6 +149,7 @@ def register_pgy_frontend(app):
 
     @app.after_request
     def inject_pgy_workflow_assets(response):
+        path = ""
         try:
             if response.status_code != 200:
                 return response
@@ -174,12 +178,20 @@ def register_pgy_frontend(app):
                 return response
 
             html = response.get_data(as_text=True)
-
             html = _apply_asset_manifest(html, "system")
             html = _rewrite_local_asset_versions(html)
             response.set_data(html)
             response.content_length = len(response.get_data())
         except Exception:
+            # Asset injection is an enhancement layer and must not turn an
+            # otherwise valid HTML response into a 500. Unlike the previous
+            # silent fallback, always emit a server-side traceback so Render
+            # logs make the degradation observable without exposing details to
+            # the browser response.
+            LOGGER.exception(
+                "Teacher frontend asset injection failed path=%s",
+                path or "<unknown>",
+            )
             return response
         return response
 
