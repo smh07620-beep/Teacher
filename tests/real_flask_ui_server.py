@@ -8,9 +8,14 @@ headers, migrations and runtime asset injection together.
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 PORT = int(os.environ.get("TEACHER_REAL_FLASK_PORT", "4174"))
 STATE_DIR = Path(tempfile.mkdtemp(prefix="teacher-real-flask-ci-"))
