@@ -54,6 +54,19 @@ def commit(job: dict, result: dict) -> dict:
     if Path(original).suffix.lower() in _OFFICE_EXTENSIONS:
         if page_count <= 0 or storage_meta.get("previewMode") != "single_pdf":
             raise ValueError("Office/PDF 必須有有效 preview.pdf 與 pageCount 才能完成。")
+
+    # The Worker is trusted for conversion output, not for authorization scope.
+    # Persist only the group/area captured and validated by the Web enqueue path;
+    # malformed or stale payload scope must fail instead of silently becoming
+    # grpBio/internal.
+    group_key = scope.validate_group(
+        payload.get("group"),
+        default=scope.DEFAULT_GROUP,
+    )
+    training_area = scope.validate_area(
+        payload.get("area"),
+        default=scope.DEFAULT_TRAINING_AREA,
+    )
     entry = {
         "id": material_id,
         "filename": original,
@@ -62,10 +75,8 @@ def commit(job: dict, result: dict) -> dict:
             payload.get("desc") or "管理者上傳之教育訓練補充教材"
         )[:1000],
         "category": str(payload.get("category") or "")[:100],
-        "group_key": scope.normalize_group(payload.get("group", scope.DEFAULT_GROUP)),
-        "training_area": scope.normalize_area(
-            payload.get("area", scope.DEFAULT_TRAINING_AREA)
-        ),
+        "group_key": group_key,
+        "training_area": training_area,
         "course_id": str(payload.get("courseId") or "")[:100],
         "folder": material_id,
         "page_count": page_count,
