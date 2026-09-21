@@ -6,7 +6,7 @@ from flask import g, jsonify, request
 from teacher_app.auth import repository as auth_repository
 from teacher_app.auth.service import public_user
 from teacher_app.common.auth import has_permission, is_teacher_workspace_user
-from teacher_app.common import scope_filter
+from teacher_app.common import scope, scope_filter
 from teacher_app.maintenance import account_roles
 
 
@@ -55,6 +55,34 @@ LEGACY_ENDPOINT_POLICIES = {
 }
 
 
+def _strict_write_scope():
+    """Reject explicit unknown group/area values before RBAC scope projection.
+
+    Read paths retain ``normalize_*`` compatibility for historical rows.  New
+    writes must never silently map a typo/unknown scope to grpBio/internal.
+    """
+
+    if request.method not in {"POST", "PUT", "PATCH"}:
+        return None
+    body = request.get_json(silent=True)
+    body = body if isinstance(body, dict) else {}
+    values = (
+        (scope.validate_group, body.get("group")),
+        (scope.validate_group, body.get("groupKey")),
+        (scope.validate_group, request.form.get("group")),
+        (scope.validate_area, body.get("area")),
+        (scope.validate_area, body.get("trainingArea")),
+        (scope.validate_area, request.form.get("area")),
+    )
+    try:
+        for validator, value in values:
+            if value is not None and str(value).strip():
+                validator(value)
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "invalidScope": True}), 400
+    return None
+
+
 def require_admin(owner=None):
     """Canonical implementation of the historical teaching-admin guard."""
     user = getattr(g, "teacher_user", None)
@@ -72,6 +100,9 @@ def require_admin(owner=None):
 
 
 def legacy_admin_guard(owner, original=None):
+    invalid_scope = _strict_write_scope()
+    if invalid_scope:
+        return invalid_scope
     policy = LEGACY_ENDPOINT_POLICIES.get(request.endpoint or "")
     if not policy:
         return require_admin(owner)
