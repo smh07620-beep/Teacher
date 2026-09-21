@@ -6,6 +6,7 @@ on:
       - main
       - codex/phase-3-pgy-architecture
       - feature/teacher-content-authoring-studio-72
+      - hardening/ci-scope-postgres-observability
   pull_request:
 
 permissions:
@@ -14,6 +15,20 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: teacher_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d teacher_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,6 +49,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_pre_migration_schema_owners.py' -v
           python -m unittest discover -s tests -p 'test_root_mirror_policy.py' -v
           python -m unittest discover -s tests -p 'test_runtime_question_routes.py' -v
+          python -m unittest discover -s tests -p 'test_strict_scope_writes.py' -v
+          python -m unittest discover -s tests -p 'test_frontend_asset_observability.py' -v
       - name: Browser JavaScript syntax
         run: |
           find static -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
@@ -102,41 +119,118 @@ jobs:
           PY
       - name: Deployment and compatibility policy checks
         run: |
-          grep -q 'SECRET_KEY' render.yaml
-          grep -q 'SESSION_COOKIE_SECURE' render.yaml
-          grep -q 'autoDeployTrigger: checksPass' render.yaml
-          ! grep -q 'autoDeployTrigger: commit' render.yaml
-          grep -q 'AI_DEIDENTIFICATION_ENABLED' render.yaml
-          grep -q 'AI_EXTERNAL_MEDIA_ALLOWED' render.yaml
-          grep -q 'UPLOAD_ZIP_MAX_RATIO' render.yaml
-          grep -q 'GROQ_API_KEY' render.yaml
-          grep -q 'from teacher_app import create_app' pgy_app.py
-          grep -q 'app = create_app()' pgy_app.py
-          ! grep -q 'legacy_app' pgy_app.py
-          ! grep -q 'from app import' pgy_app.py
-          grep -q 'register_health' teacher_app/factory.py
-          grep -q 'register_training_audience_71' teacher_app/factory.py
-          grep -q 'register_sensitive_elevation' teacher_app/factory.py
-          grep -q 'register_course_bundle_followup_73' teacher_app/factory.py
-          ! grep -q 'register_pgy_atomic_workflow' pgy_app.py
-          test ! -f pgy_atomic.py
-          grep -q 'from teacher_app.maintenance import migrations as _migrations' schema_migrations.py
-          grep -q '0066-additive-rbac-pgy-signing' teacher_app/maintenance/migrations.py
-          grep -q '0067-smart-learning-content' teacher_app/maintenance/migrations.py
-          grep -q '0067-render-worker-shared-staging' teacher_app/maintenance/migrations.py
-          grep -q '0067-b-free-local-worker' teacher_app/maintenance/migrations.py
-          grep -q '0068-external-interactive-media' teacher_app/maintenance/migrations.py
-          grep -q 'from teacher_app.frontend import assets as _assets' pgy_frontend.py
-          grep -q 'ASSET_MANIFEST' teacher_app/frontend/assets.py
-          grep -q 'register_pgy_frontend' teacher_app/frontend/assets.py
-          ! grep -q 'type: worker' render.yaml
-          grep -q 'MATERIAL_DIRECT_UPLOAD_ENABLED' render.yaml
-          grep -q 'MEGA_WEB_READ_TIMEOUT_SECONDS' render.yaml
-          grep -q 'GUNICORN_TIMEOUT' render.yaml
-          grep -q 'MATERIAL_WORKER_TOKEN' render.yaml
-          ! grep -q 'material_worker.py' run_web.sh
-          test -f ARCHITECTURE.md
-          test -f docs/archive/ARCHITECTURE_HISTORY.md
-          grep -q 'Teacher 6.7' docs/archive/ARCHITECTURE_HISTORY.md
-          grep -q 'Root freeze policy' ARCHITECTURE.md
-          grep -q 'system-admin.js.*legacy compatibility bundle' ARCHITECTURE.md
+          python - <<'PY'
+          from pathlib import Path
+
+          def require(text, source, label):
+              if text not in source:
+                  raise SystemExit(f"required contract missing: {label}: {text}")
+
+          def forbid(text, source, label):
+              if text in source:
+                  raise SystemExit(f"forbidden contract present: {label}: {text}")
+
+          render = Path('render.yaml').read_text(encoding='utf-8')
+          pgy = Path('pgy_app.py').read_text(encoding='utf-8')
+          factory = Path('teacher_app/factory.py').read_text(encoding='utf-8')
+          migrations = Path('teacher_app/maintenance/migrations.py').read_text(encoding='utf-8')
+          frontend_compat = Path('pgy_frontend.py').read_text(encoding='utf-8')
+          frontend_assets = Path('teacher_app/frontend/assets.py').read_text(encoding='utf-8')
+          run_web = Path('run_web.sh').read_text(encoding='utf-8')
+          architecture = Path('ARCHITECTURE.md').read_text(encoding='utf-8')
+          history = Path('docs/archive/ARCHITECTURE_HISTORY.md').read_text(encoding='utf-8')
+          schema_alias = Path('schema_migrations.py').read_text(encoding='utf-8')
+
+          for text in (
+              'SECRET_KEY', 'SESSION_COOKIE_SECURE', 'autoDeployTrigger: checksPass',
+              'AI_DEIDENTIFICATION_ENABLED', 'AI_EXTERNAL_MEDIA_ALLOWED',
+              'UPLOAD_ZIP_MAX_RATIO', 'GROQ_API_KEY', 'MATERIAL_DIRECT_UPLOAD_ENABLED',
+              'MEGA_WEB_READ_TIMEOUT_SECONDS', 'GUNICORN_TIMEOUT', 'MATERIAL_WORKER_TOKEN',
+          ):
+              require(text, render, 'render.yaml')
+          forbid('autoDeployTrigger: commit', render, 'render.yaml')
+          # Render may run the dedicated AI worker. The hospital material worker
+          # must remain local and must never be configured as a Render worker.
+          forbid('dockerCommand: python -u material_worker.py', render, 'render.yaml')
+
+          require('from teacher_app import create_app', pgy, 'pgy_app.py')
+          require('app = create_app()', pgy, 'pgy_app.py')
+          for text in ('legacy_app', 'from app import', 'register_pgy_atomic_workflow'):
+              forbid(text, pgy, 'pgy_app.py')
+          if Path('pgy_atomic.py').exists():
+              raise SystemExit('forbidden compatibility file present: pgy_atomic.py')
+
+          for text in (
+              'register_health', 'register_training_audience_71',
+              'register_sensitive_elevation', 'register_course_bundle_followup_73',
+          ):
+              require(text, factory, 'teacher_app/factory.py')
+          require('from teacher_app.maintenance import migrations as _migrations', schema_alias, 'schema_migrations.py')
+          for text in (
+              '0066-additive-rbac-pgy-signing', '0067-smart-learning-content',
+              '0067-render-worker-shared-staging', '0067-b-free-local-worker',
+              '0068-external-interactive-media',
+          ):
+              require(text, migrations, 'teacher_app/maintenance/migrations.py')
+          require('from teacher_app.frontend import assets as _assets', frontend_compat, 'pgy_frontend.py')
+          require('ASSET_MANIFEST', frontend_assets, 'teacher_app/frontend/assets.py')
+          require('register_pgy_frontend', frontend_assets, 'teacher_app/frontend/assets.py')
+          forbid('material_worker.py', run_web, 'run_web.sh')
+          require('Teacher 6.7', history, 'docs/archive/ARCHITECTURE_HISTORY.md')
+          require('Root freeze policy', architecture, 'ARCHITECTURE.md')
+          require('system-admin.js', architecture, 'ARCHITECTURE.md')
+          require('legacy compatibility bundle', architecture, 'ARCHITECTURE.md')
+          PY
+      - name: PostgreSQL 16 factory and migration contracts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/teacher_ci
+          SECRET_KEY: teacher-postgres-ci-secret-key-1234567890
+          PRODUCTION_REQUIRE_SECRET: 'false'
+          SESSION_COOKIE_SECURE: 'false'
+          CSRF_ORIGIN_CHECK: 'false'
+          CSP_ENFORCE: 'false'
+          MATERIAL_BACKGROUND_JOBS: 'false'
+          MATERIAL_WORKER_ENABLED: 'false'
+          AI_EXTERNAL_PROCESSING_ENABLED: 'false'
+          DB_POOL_MIN_SIZE: '1'
+          DB_POOL_MAX_SIZE: '2'
+        run: |
+          python - <<'PY'
+          from release_contract import REQUIRED_MIGRATIONS
+          from teacher_app import create_app
+          from teacher_app.common import db as common_db
+
+          app = create_app()
+          client = app.test_client()
+
+          health = client.get('/health')
+          assert health.status_code == 200, health.get_data(as_text=True)
+          health_data = health.get_json()
+          assert health_data['database']['ok'] is True, health_data
+          assert health_data['migrations']['ok'] is True, health_data
+          assert health_data['migrations']['missing'] == [], health_data
+
+          ready = client.get('/ready')
+          assert ready.status_code == 200, ready.get_data(as_text=True)
+
+          with common_db.read_connection() as (conn, kind):
+              assert kind == 'postgres'
+              applied = {
+                  row['version']
+                  for row in conn.execute('SELECT version FROM schema_migrations').fetchall()
+              }
+              missing = set(REQUIRED_MIGRATIONS) - applied
+              assert not missing, sorted(missing)
+              for table in (
+                  'user_accounts',
+                  'materials',
+                  'material_jobs',
+                  'material_upload_sessions',
+                  'ai_question_jobs',
+                  'question_versions',
+                  'audit_events',
+              ):
+                  row = conn.execute('SELECT to_regclass(%s) AS name', (f'public.{table}',)).fetchone()
+                  assert row['name'], table
+          common_db.close_postgres_pool()
+          PY
