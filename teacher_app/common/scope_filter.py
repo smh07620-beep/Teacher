@@ -44,6 +44,9 @@ FILTERED_LIST_ENDPOINTS = {
     "learning_analytics",
 }
 
+_SCOPE_FAILURE_ATTR = "teacher_scope_resolution_failed"
+_SCOPE_FAILURE_MESSAGE = "無法確認資源授權範圍，請稍後再試。"
+
 
 def _current_user(owner=None):
     """Return the request-bound canonical actor, with a test-only fallback.
@@ -103,6 +106,25 @@ def json_object(value) -> dict:
     return {}
 
 
+def _mark_scope_resolution_failed() -> None:
+    setattr(g, _SCOPE_FAILURE_ATTR, True)
+
+
+def scope_resolution_failed() -> bool:
+    return bool(getattr(g, _SCOPE_FAILURE_ATTR, False))
+
+
+def _scope_resolution_denied(owner, *permissions):
+    if not scope_resolution_failed():
+        return None
+    user, denied_response = denied(owner, *permissions)
+    if denied_response:
+        return denied_response
+    if not any(has_role(user, role) for role in GROUP_SCOPED_ROLES):
+        return None
+    return jsonify({"error": _SCOPE_FAILURE_MESSAGE, "scopeResolutionFailed": True}), 503
+
+
 def category_group(owner, category_id) -> str:
     del owner
     category_id = str(category_id or "").strip()
@@ -153,7 +175,13 @@ def blueprint_group(owner, blueprint_id) -> str:
 
 
 def request_groups(owner=None) -> set[str]:
-    """Resolve every group touched by the current request, conservatively."""
+    """Resolve every group touched by the current request, conservatively.
+
+    Resource-id lookups are fail-closed for group-scoped actors.  When an
+    existing target id cannot be resolved to a group, ``require_permission``
+    returns a generic 503 instead of silently degrading to capability-only
+    authorization. Organization/system-wide actors keep their existing scope.
+    """
     groups: set[str] = set()
     body = request.get_json(silent=True)
     body = body if isinstance(body, dict) else {}
@@ -163,6 +191,13 @@ def request_groups(owner=None) -> set[str]:
         value = str(value or "").strip()
         if value:
             groups.add(value)
+
+    def add_required(value):
+        value = str(value or "").strip()
+        if value:
+            groups.add(value)
+        else:
+            _mark_scope_resolution_failed()
 
     add(body.get("group"))
     add(request.form.get("group"))
@@ -178,29 +213,29 @@ def request_groups(owner=None) -> set[str]:
     }
     for category_id in category_ids:
         if category_id:
-            add(category_group(owner, category_id))
+            add_required(category_group(owner, category_id))
 
     material_id = view.get("material_id") or view.get("slide_id")
     if material_id:
         try:
-            add(row_group(material_repository.get_material(material_id) or {}))
+            add_required(row_group(material_repository.get_material(material_id) or {}))
         except Exception:
-            pass
+            _mark_scope_resolution_failed()
 
     course_id = view.get("course_id") or body.get("courseId") or request.args.get("courseId")
     if course_id:
         try:
-            add(row_group(course_repository.get_course(course_id) or {}))
+            add_required(row_group(course_repository.get_course(course_id) or {}))
         except Exception:
-            pass
+            _mark_scope_resolution_failed()
 
     question_id = view.get("question_id")
     if question_id:
-        add(question_group(owner, question_id))
+        add_required(question_group(owner, question_id))
 
     blueprint_id = view.get("blueprint_id")
     if blueprint_id:
-        add(blueprint_group(owner, blueprint_id))
+        add_required(blueprint_group(owner, blueprint_id))
 
     job_id = view.get("job_id")
     if job_id:
@@ -209,29 +244,34 @@ def request_groups(owner=None) -> set[str]:
                 str(job_id),
                 include_payload=True,
             ) or {}
-            add(row_group(job))
-            add(row_group(json_object(job.get("payload"))))
+            job_group = row_group(job) or row_group(json_object(job.get("payload")))
+            add_required(job_group)
         except Exception:
-            pass
+            _mark_scope_resolution_failed()
 
     upload_id = view.get("upload_id")
     if upload_id:
-        add(upload_session_group(owner, upload_id))
+        add_required(upload_session_group(owner, upload_id))
 
     items = body.get("items")
     if isinstance(items, list):
         for item in items:
             if not isinstance(item, dict):
                 continue
-            add(category_group(owner, item.get("quizCategoryId") or item.get("category")))
-            add(question_group(owner, item.get("id") or item.get("questionId")))
+            category_id = item.get("quizCategoryId") or item.get("category")
+            if category_id:
+                add_required(category_group(owner, category_id))
+            item_question_id = item.get("id") or item.get("questionId")
+            if item_question_id:
+                add_required(question_group(owner, item_question_id))
 
     ids = body.get("ids")
     if isinstance(ids, list):
-        for question_id in ids:
-            add(question_group(owner, question_id))
+        for item_question_id in ids:
+            if item_question_id:
+                add_required(question_group(owner, item_question_id))
 
-    if not groups and (request.endpoint or "") in DEFAULT_GROUP_ENDPOINTS:
+    if not groups and not scope_resolution_failed() and (request.endpoint or "") in DEFAULT_GROUP_ENDPOINTS:
         add(scope.DEFAULT_GROUP)
     return {group for group in groups if group}
 
@@ -263,12 +303,18 @@ def scoped(owner, permission, group=None):
         if group is not None and str(group).strip()
         else request_groups(owner)
     )
+    resolution_denied = _scope_resolution_denied(owner, permission)
+    if resolution_denied:
+        return None, resolution_denied
     return scoped_groups(owner, permission, groups)
 
 
 def require_permission(owner, permission):
     if permission in GROUP_SCOPED_PERMISSIONS:
         groups = request_groups(owner)
+        resolution_denied = _scope_resolution_denied(owner, permission)
+        if resolution_denied:
+            return resolution_denied
         if groups:
             return scoped_groups(owner, permission, groups)[1]
     return denied(owner, permission)[1]
@@ -288,7 +334,11 @@ def require_any_permission(owner, *permissions):
         if permission in GROUP_SCOPED_PERMISSIONS and has_permission(user, permission)
     ]
     if scoped_permissions:
-        return scoped_groups(owner, scoped_permissions[0], request_groups(owner))[1]
+        groups = request_groups(owner)
+        resolution_denied = _scope_resolution_denied(owner, *scoped_permissions)
+        if resolution_denied:
+            return resolution_denied
+        return scoped_groups(owner, scoped_permissions[0], groups)[1]
     return None
 
 
@@ -386,12 +436,14 @@ __all__ = [
     "category_group",
     "denied",
     "filter_scoped_response",
+    "preferred_group",
     "question_group",
     "register_scope_filter",
     "request_groups",
     "require_any_permission",
     "require_permission",
     "row_group",
+    "scope_resolution_failed",
     "scoped",
     "scoped_groups",
 ]
