@@ -1,0 +1,81 @@
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # GitHub Actions cron uses UTC. 01:37 UTC = 09:37 Asia/Taipei (UTC+8).
+    - cron: "37 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  keepalive:
+    name: Wake Render and verify Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call production health endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          response="$(mktemp)"
+          trap 'rm -f "$response"' EXIT
+
+          # /health is intentionally used instead of /live: the canonical
+          # health handler opens the configured database and reads
+          # schema_migrations, so this creates real PostgreSQL/Supabase
+          # activity while also waking a sleeping Render web service.
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --retry 4 \
+            --retry-all-errors \
+            --retry-delay 15 \
+            --connect-timeout 20 \
+            --max-time 180 \
+            --output "$response" \
+            "https://teacher-j3id.onrender.com/health"
+
+          python - "$response" <<'PY'
+          import json
+          import sys
+
+          path = sys.argv[1]
+          with open(path, "r", encoding="utf-8") as handle:
+              payload = json.load(handle)
+
+          database = payload.get("database") or {}
+          migrations = payload.get("migrations") or {}
+          deployment = payload.get("deployment") or {}
+
+          if payload.get("ok") is not True:
+              raise SystemExit("Teacher /health did not report ok=true")
+          if database.get("ok") is not True:
+              raise SystemExit("Teacher /health did not reach the database")
+          if database.get("kind") != "postgres":
+              raise SystemExit(
+                  f"Expected production PostgreSQL/Supabase, got {database.get('kind')!r}"
+              )
+          if migrations.get("ok") is not True:
+              raise SystemExit(
+                  f"Required migrations are not healthy: {migrations.get('missing')!r}"
+              )
+          if deployment.get("provider") != "render":
+              raise SystemExit(
+                  f"Expected Render production deployment, got {deployment.get('provider')!r}"
+              )
+
+          print(
+              "Supabase keep-alive OK: "
+              f"database={database.get('kind')}, "
+              f"migrations={len(migrations.get('applied') or [])}, "
+              f"commit={deployment.get('commit') or 'unknown'}"
+          )
+          PY
