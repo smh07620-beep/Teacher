@@ -1,6 +1,11 @@
 name: Supabase keep-alive
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/supabase-keepalive.yml
   schedule:
     # GitHub Actions cron uses UTC. 01:37 UTC = 09:37 Asia/Taipei (UTC+8).
     - cron: "37 1 * * *"
