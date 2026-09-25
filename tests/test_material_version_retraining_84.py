@@ -48,6 +48,20 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
             """
         )
         conn.execute(
+            """
+            CREATE TABLE learning_progress (
+                material_id TEXT NOT NULL,
+                username TEXT NOT NULL,
+                position TEXT NOT NULL DEFAULT '{}',
+                progress REAL NOT NULL DEFAULT 0,
+                completed INTEGER NOT NULL DEFAULT 0,
+                last_viewed_at TEXT NOT NULL DEFAULT '',
+                completed_at TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY(material_id,username)
+            )
+            """
+        )
+        conn.execute(
             "INSERT INTO materials "
             "(id,filename,title,folder,date_added,storage_filename,material_type) "
             "VALUES ('mat-1','sop.pdf','SOP','mat-1','2026-09-25','sop.pdf','sop')"
@@ -55,6 +69,10 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
         conn.execute(
             "INSERT INTO material_progress(emp_id,name,material_id,completed_at) "
             "VALUES ('E001','Learner','mat-1','2026-09-20T00:00:00+00:00')"
+        )
+        conn.execute(
+            "INSERT INTO learning_progress(material_id,username,completed,completed_at) "
+            "VALUES ('mat-1','learner',1,'2026-09-20T00:00:00+00:00')"
         )
         return conn
 
@@ -74,6 +92,9 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
             progress_columns = {
                 row[1] for row in conn.execute("PRAGMA table_info(material_progress)").fetchall()
             }
+            smart_columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(learning_progress)").fetchall()
+            }
             self.assertTrue({
                 "current_version",
                 "required_completion_version",
@@ -81,6 +102,7 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
                 "version_updated_by",
             }.issubset(material_columns))
             self.assertIn("completed_version", progress_columns)
+            self.assertIn("completed_version", smart_columns)
             versions = conn.execute(
                 "SELECT material_id,version,requires_retraining FROM material_versions"
             ).fetchall()
@@ -89,7 +111,11 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
             progress = conn.execute(
                 "SELECT completed_version FROM material_progress WHERE emp_id='E001'"
             ).fetchone()
+            smart = conn.execute(
+                "SELECT completed_version FROM learning_progress WHERE username='learner'"
+            ).fetchone()
             self.assertEqual(dict(progress)["completed_version"], 1)
+            self.assertEqual(dict(smart)["completed_version"], 1)
         finally:
             conn.close()
 
