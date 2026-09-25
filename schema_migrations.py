@@ -2,6 +2,7 @@
 import sys
 
 from teacher_app.maintenance import migrations as _migrations
+from teacher_app.maintenance import learning_assignment_migration as _learning_assignment_migration  # noqa: F401
 
 
 sys.modules[__name__] = _migrations
