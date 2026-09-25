@@ -9,6 +9,7 @@ from teacher_app.assessments import repository as assessment_repository
 from teacher_app.common import db as common_db
 from teacher_app.common import scope
 from teacher_app.courses import repository as course_repository
+from teacher_app.learning import access as learning_access
 from teacher_app.materials import repository as material_repository
 
 
@@ -85,8 +86,11 @@ def mark_material_complete(user: Mapping[str, Any], material_id: str) -> str:
     material_id = str(material_id or "").strip()[:100]
     if not emp_id or not name or not material_id:
         raise ProgressError("請先輸入姓名、工號，並指定教材", 400)
-    if not material_repository.get_material(material_id):
+    material = material_repository.get_material(material_id)
+    if not material:
         raise ProgressError("找不到教材", 404)
+    if not learning_access.can_access_learning_item(user, material):
+        raise ProgressError("此教材不在你的授權範圍。", 403)
 
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     with common_db.transaction() as (conn, kind):
@@ -120,16 +124,19 @@ def my_progress(
 
     normalized_area = scope.normalize_area(area)
     normalized_group = scope.normalize_group(group)
+    if not learning_access.can_access_requested_scope(
+        user,
+        normalized_area,
+        normalized_group,
+    ):
+        raise ProgressError("此學習範圍不在你的授權範圍。", 403)
+
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
         progress_rows = conn.execute(
             f"SELECT material_id,completed_at FROM material_progress WHERE emp_id={ph}",
             (emp_id,),
         ).fetchall()
-        completed = {
-            dict(row)["material_id"]: dict(row)["completed_at"]
-            for row in progress_rows
-        }
         record_rows = conn.execute(
             f"SELECT * FROM exam_records WHERE emp_id={ph} AND training_area={ph} "
             f"AND group_key={ph} ORDER BY created_at DESC",
@@ -148,6 +155,14 @@ def my_progress(
         if item.get("area") == normalized_area
         and item.get("group") == normalized_group
     ]
+    allowed_material_ids = {
+        str(item.get("id") or "") for item in materials if item.get("id")
+    }
+    completed = {
+        str(dict(row)["material_id"]): dict(row)["completed_at"]
+        for row in progress_rows
+        if str(dict(row).get("material_id") or "") in allowed_material_ids
+    }
     categories = assessment_repository.list_categories(
         normalized_group,
         normalized_area,
@@ -188,6 +203,7 @@ def my_progress(
             }
         )
     return {
+        "scope": {"area": normalized_area, "group": normalized_group},
         "courses": result,
         "materialsCompleted": completed,
         "records": records,

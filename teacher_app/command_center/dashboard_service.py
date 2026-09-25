@@ -8,8 +8,19 @@ from teacher_app.assessments import repository as assessment_repository
 from teacher_app.common import db as common_db
 from teacher_app.common import scope
 from teacher_app.courses import repository as course_repository
+from teacher_app.learning import access as learning_access
 from teacher_app.learning.progress_service import assessment_to_dict, record_to_dict
 from teacher_app.materials import repository as material_repository
+
+
+def _record_visible_to_user(user: Mapping[str, Any], record: Mapping[str, Any]) -> bool:
+    return learning_access.can_access_learning_item(
+        user,
+        {
+            "area": record.get("trainingArea"),
+            "group": record.get("groupKey"),
+        },
+    )
 
 
 def dashboard_summary(
@@ -36,7 +47,8 @@ def dashboard_summary(
             (emp_id,),
         ).fetchall()
 
-    records = [record_to_dict(row) for row in record_rows]
+    all_records = [record_to_dict(row) for row in record_rows]
+    records = [record for record in all_records if _record_visible_to_user(user, record)]
     assessments = [assessment_to_dict(row) for row in assessment_rows]
     completed_material_ids = {
         str(dict(row).get("material_id", ""))
@@ -56,13 +68,19 @@ def dashboard_summary(
         item
         for item in material_repository.list_uploaded_materials(include_inactive=False)
         if item.get("active", True)
+        and learning_access.can_access_learning_item(user, item)
     ]
     quizzes = [
         item
         for item in assessment_repository.list_categories(None, None, False)
         if item.get("active", True)
+        and learning_access.can_access_learning_item(user, item)
     ]
-    courses = course_repository.list_courses(None, None, False)
+    courses = [
+        item
+        for item in course_repository.list_courses(None, None, False)
+        if learning_access.can_access_learning_item(user, item)
+    ]
     active_material_ids = {
         str(item.get("id", "")) for item in materials if item.get("id")
     }
@@ -122,10 +140,12 @@ def dashboard_summary(
             }
         )
     pending_exams.sort(key=lambda item: item.get("publishedAt", ""), reverse=True)
+    preferred_area, preferred_group = learning_access.preferred_learning_scope(user)
 
     return {
         "empId": emp_id,
         "name": display_name,
+        "scope": {"area": preferred_area, "group": preferred_group},
         "activeCourses": len(active_courses),
         "materialsTotal": len(active_material_ids),
         "materialsCompleted": material_done,
