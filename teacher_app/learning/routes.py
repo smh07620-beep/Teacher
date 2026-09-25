@@ -16,7 +16,7 @@ from typing import Callable
 from flask import g, jsonify, request
 
 from teacher_app.auth import rbac_legacy_adapter
-from teacher_app.common.auth import has_role
+from teacher_app.learning import access as learning_access
 from teacher_app.learning import content, repository
 from teacher_app.materials import repository as material_repository
 
@@ -126,11 +126,23 @@ def register_smart_learning(
     def current_paths():
         return paths_provider() if paths_provider is not None else paths
 
+    def visible_material(user, material_id):
+        material = get_material(material_id)
+        if (
+            not material
+            or not material.get("active", True)
+            or not learning_access.can_access_learning_item(user, material)
+        ):
+            return None
+        return material
+
     @app.get("/api/learning-progress/<material_id>")
     def learning_progress_get(material_id):
         user, denied = _user(owner)
         if denied:
             return denied
+        if not visible_material(user, material_id):
+            return jsonify({"error": "找不到教材"}), 404
         data = repository.get_progress(material_id, user["username"])
         if not data:
             return jsonify({
@@ -162,7 +174,7 @@ def register_smart_learning(
         user, denied = _user(owner)
         if denied:
             return denied
-        if not get_material(material_id):
+        if not visible_material(user, material_id):
             return jsonify({"error": "找不到教材"}), 404
 
         body = request.get_json(silent=True) or {}
@@ -236,16 +248,8 @@ def register_smart_learning(
         material_id = str(request.args.get("materialId", "")).strip()[:100]
         if not query or not material_id:
             return jsonify([])
-        material = get_material(material_id)
-        if not material or not material.get("active", True):
-            return jsonify([])
-        group = str(material.get("group") or material.get("groupKey") or "")
-        own = str(user.get("preferredGroup") or user.get("preferred_group") or "")
-        if not (
-            has_role(user, "system_admin")
-            or has_role(user, "education_admin")
-            or group == own
-        ):
+        material = visible_material(user, material_id)
+        if not material:
             return jsonify([])
         rows = repository.search_material(material_id, query, limit=50)
         return jsonify([
@@ -295,16 +299,7 @@ def register_smart_learning(
         user, denied = _user(owner)
         if denied:
             return denied
-        material = get_material(material_id)
-        if not material:
-            return jsonify({"error": "找不到教材"}), 404
-        group = str(material.get("group") or material.get("groupKey") or "")
-        own = str(user.get("preferredGroup") or user.get("preferred_group") or "")
-        if not (
-            has_role(user, "system_admin")
-            or has_role(user, "education_admin")
-            or group == own
-        ):
+        if not visible_material(user, material_id):
             return jsonify({"error": "找不到教材"}), 404
         status = repository.get_index_status(material_id)
         return jsonify(status or {
