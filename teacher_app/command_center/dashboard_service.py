@@ -253,16 +253,45 @@ def dashboard_summary(
         for item in assignment_rows
         if item.get("required", True) and not item.get("completed")
     )
+    pending_courses = [
+        {
+            "id": str(item.get("courseId") or ""),
+            "title": str(item.get("courseTitle") or "未命名課程"),
+            "area": str(item.get("area") or preferred_area),
+            "group": str(item.get("group") or preferred_group),
+            "dueAt": str(item.get("dueAt") or ""),
+            "overdue": bool(item.get("overdue")),
+            "materialsCompleted": int(item.get("materialsCompleted") or 0),
+            "materialsTotal": int(item.get("materialsTotal") or 0),
+            "examRequired": bool(item.get("examRequired")),
+            "examPassed": bool(item.get("examPassed")),
+        }
+        for item in assignment_rows
+        if item.get("required", True) and not item.get("completed")
+    ]
+    pending_courses.sort(
+        key=lambda item: (
+            0 if item.get("overdue") else 1,
+            str(item.get("dueAt") or "9999-12-31"),
+            str(item.get("title") or ""),
+        )
+    )
+    required_assignments = sum(
+        1 for item in assignment_rows if item.get("required", True)
+    )
 
     return {
         "empId": emp_id,
         "name": display_name,
         "scope": {"area": preferred_area, "group": preferred_group},
+        "scopeSource": "assignments" if assignment_mode else "profile",
         "assignmentMode": assignment_mode,
         "assignments": assignment_rows,
         "assignmentsTotal": len(assignment_rows),
         "assignmentsOverdue": overdue_count,
         "requiredAssignmentsPending": required_pending,
+        "requiredAssignments": required_assignments,
+        "overdueAssignments": overdue_count,
         "activeCourses": len(active_courses),
         "materialsTotal": len(active_material_ids),
         "materialsCompleted": material_done,
@@ -271,6 +300,7 @@ def dashboard_summary(
         "examsPassed": quiz_done,
         "examsPending": max(0, len(active_quiz_ids) - quiz_done),
         "pendingExams": pending_exams[:5],
+        "pendingCourses": pending_courses[:5],
         "essayReviewsPending": pending_review_count,
         "teacherAssessmentsCompleted": len(assessments),
         "progressPercent": progress_percent,

@@ -58,6 +58,16 @@
     return `/system?${query.toString()}`;
   }
 
+  function courseHref(item) {
+    const query = new URLSearchParams({
+      area: item?.area || 'internal',
+      group: item?.group || 'grpBio',
+      module: 'materials',
+      from: 'notification-center'
+    });
+    return `/system?${query.toString()}`;
+  }
+
   function normalizeNotifications(command, dashboard, announcements) {
     const rows = [];
     const tasks = Array.isArray(command?.items) ? command.items : [];
@@ -68,8 +78,21 @@
       badge: task?.overdue ? '逾期' : 'PGY', overdue: Boolean(task?.overdue), href: '', target: 'pgy'
     }));
 
+    const pendingCourses = Array.isArray(dashboard?.pendingCourses) ? dashboard.pendingCourses : [];
+    const pendingCourseIds = new Set(pendingCourses.map(item => String(item?.id || '')));
+    pendingCourses.forEach(course => {
+      const due = String(course?.dueAt || '').trim();
+      const progress = `教材 ${Number(course?.materialsCompleted || 0)}/${Number(course?.materialsTotal || 0)}`;
+      rows.push({
+        kind: 'course', priority: course?.overdue ? 0 : 1,
+        title: course?.title || '待完成課程',
+        detail: `${course?.overdue ? '已逾期' : due ? `期限 ${due.slice(0, 10)}` : '正式指派'} · ${progress}${course?.examRequired ? course?.examPassed ? ' · 考核已通過' : ' · 尚待考核' : ''}`,
+        badge: course?.overdue ? '逾期' : '必修課程', overdue: Boolean(course?.overdue), href: courseHref(course), target: ''
+      });
+    });
+
     const pendingExams = Array.isArray(dashboard?.pendingExams) ? dashboard.pendingExams : [];
-    pendingExams.forEach(exam => rows.push({
+    pendingExams.filter(exam => !pendingCourseIds.has(String(exam?.courseId || ''))).forEach(exam => rows.push({
       kind: 'exam', priority: 2, title: exam?.title || '待完成考核',
       detail: `${exam?.area === 'pgy' ? 'PGY' : '院內'}考核 · 及格 ${Number(exam?.passingScore || 80)} 分`,
       badge: '考核', overdue: false, href: examHref(exam), target: ''
@@ -93,7 +116,7 @@
     const list = document.getElementById('notification-list-71');
     if (!status || !list) return;
     const urgent = rows.filter(item => item.overdue).length;
-    const actionable = rows.filter(item => item.kind === 'pgy' || item.kind === 'exam').length;
+    const actionable = rows.filter(item => item.kind === 'pgy' || item.kind === 'course' || item.kind === 'exam').length;
     const info = rows.filter(item => item.kind === 'announcement').length;
     status.textContent = rows.length ? `${actionable} 待處理 · ${urgent} 逾期 · ${info} 公告` : '沒有新通知';
     if (!rows.length) {
@@ -103,7 +126,7 @@
     list.innerHTML = rows.slice(0, 10).map((item, index) => `
       <article class="rounded-xl border ${item.overdue ? 'border-rose-200 bg-rose-50/50' : 'border-slate-200 bg-white'} px-3 py-2 flex items-start justify-between gap-3 flex-wrap">
         <div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-black text-slate-900">${escapeHtml(item.title)}</span><span class="text-[10px] rounded-full ${item.overdue ? 'bg-rose-100 text-rose-700' : 'bg-amber-50 text-amber-700'} px-2 py-0.5 font-bold">${escapeHtml(item.badge)}</span></div><p class="text-[11px] text-slate-500 mt-1 line-clamp-2">${escapeHtml(item.detail)}</p></div>
-        ${item.target === 'pgy' ? `<button type="button" data-notification-pgy="${index}" class="text-xs font-bold px-3 py-2 rounded-xl bg-indigo-700 text-white shrink-0">開啟 PGY</button>` : item.href ? `<a href="${escapeHtml(item.href)}" class="text-xs font-bold px-3 py-2 rounded-xl bg-amber-600 text-white shrink-0">前往考核</a>` : ''}
+        ${item.target === 'pgy' ? `<button type="button" data-notification-pgy="${index}" class="text-xs font-bold px-3 py-2 rounded-xl bg-indigo-700 text-white shrink-0">開啟 PGY</button>` : item.href ? `<a href="${escapeHtml(item.href)}" class="text-xs font-bold px-3 py-2 rounded-xl bg-amber-600 text-white shrink-0">${item.kind === 'course' ? '前往課程' : '前往考核'}</a>` : ''}
       </article>`).join('');
     list.querySelectorAll('[data-notification-pgy]').forEach(button => button.addEventListener('click', openPGY));
   }
@@ -123,8 +146,8 @@
       ];
       if (user.empId) {
         const query = new URLSearchParams({empId:user.empId}); if (user.name) query.set('name',user.name);
-        requests.push(getJSON(`/api/dashboard/me?${query.toString()}`).catch(()=>({pendingExams:[]})));
-      } else requests.push(Promise.resolve({pendingExams:[]}));
+        requests.push(getJSON(`/api/dashboard/me?${query.toString()}`).catch(()=>({pendingCourses:[],pendingExams:[]})));
+      } else requests.push(Promise.resolve({pendingCourses:[],pendingExams:[]}));
       const [command, announcements, dashboard] = await Promise.all(requests);
       section.classList.remove('hidden');
       render(normalizeNotifications(command, dashboard, announcements));

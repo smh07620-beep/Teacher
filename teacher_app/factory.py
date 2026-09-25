@@ -48,6 +48,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.frontend.pages import register_page_routes
     from teacher_app.learning.routes import register_smart_learning
     from teacher_app.learning.progress_routes import register_progress_routes
+    from teacher_app.learning.assignment_routes import register_learning_assignment_routes
     from teacher_app.maintenance.health import register_health
     from teacher_app.maintenance.announcement_routes import register_announcement_routes
     from teacher_app.materials.upload_routes import register_upload_hardening
@@ -123,6 +124,7 @@ def _register_production(app: Flask) -> Flask:
         material_getter=lambda material_id: material_repository.get_material(material_id),
     )
     app = register_progress_routes(app)
+    app = register_learning_assignment_routes(app)
     app = register_announcement_routes(app)
     app = register_free_worker(
         app,

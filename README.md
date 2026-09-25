@@ -63,6 +63,12 @@ Worker 使用獨立的 `MATERIAL_WORKER_TOKEN`，不需要 production `DATABASE_
 
 Course Wizard 的 canonical frontend owner 是 `static/course-wizard-681.js`；Course Bundle backend 的 canonical owners 是 `teacher_app.courses.bundle_routes` 與 `teacher_app.courses.bundle_followup_routes`。root `course_bundle_72.py` / `course_bundle_followup_73.py` 僅保留 compatibility import seam。`static/system-admin.js` 僅保留 legacy compatibility，不應新增產品邏輯。詳見 `ARCHITECTURE.md`。
 
+### 一般課程正式指派
+
+Migration `0083-learning-assignments` 提供院內／一般課程的正式學習指派：可指定個人、組別或全體，設定必修／選修與截止日。組長只能操作自己組別的整組指派；教學管理者與系統管理者可管理個人、組別與組織層級的一般學習指派。PGY 臨床評核／簽核仍維持原本獨立 workflow，不會被一般課程指派取代。
+
+有正式指派時，首頁「我的課程／待辦／進度」改以指派中的必修課程為完成分母；沒有正式指派的既有帳號仍以個人 preferred area/group 作相容 fallback。詳見 `docs/LEARNING_ASSIGNMENTS_0083.md`。
+
 ## 本機開發
 
 建議 Python 3.12：
@@ -140,6 +146,7 @@ GitHub Actions 的 `Teacher release checks` 會執行 Python compile、完整 re
 - `ARCHITECTURE.md`：目前 canonical architecture、runtime ownership 與 root freeze policy
 - `docs/archive/ARCHITECTURE_HISTORY.md`：6.5 / 6.6 / 6.7 歷史架構與 release contract
 - `LOCAL_WORKER_6_7.md`：院內／本機 Worker 設定
+- `docs/LEARNING_ASSIGNMENTS_0083.md`：一般課程正式指派、RBAC 與 learner dashboard fallback 規則
 - `VERSION` / `release_contract.py`：目前正式 release contract
 
 ## GitHub 安全原則

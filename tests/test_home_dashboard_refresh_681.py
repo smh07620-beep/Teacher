@@ -51,8 +51,10 @@ class HomeDashboardRefresh681Tests(unittest.TestCase):
     def test_home_todo_summary_reuses_dashboard_contract(self):
         self.assertIn("Number(d.materialsPending||0)", self.runtime)
         self.assertIn("Number(d.examsPending||0)", self.runtime)
-        self.assertIn("setText('#v681-home-todo-count',materialsPending+examsPending)", self.runtime)
-        self.assertIn("renderPendingExams(d.pendingExams||[],materialsPending)", self.runtime)
+        self.assertIn("const pendingCourses=Array.isArray(d.pendingCourses)?d.pendingCourses:[]", self.runtime)
+        self.assertIn("d?.scopeSource==='assignments'", self.runtime)
+        self.assertIn(":materialsPending+examsPending", self.runtime)
+        self.assertIn("renderPendingExams(d.pendingExams||[],materialsPending,pendingCourses)", self.runtime)
 
     def test_visual_refresh_is_home_scoped(self):
         self.assertIn('home-dashboard-page', self.html)

@@ -49,6 +49,7 @@ class ReleaseContractTests(unittest.TestCase):
             "0080-external-media-verification",
             "0081-question-version-history",
             "0082-version-aware-item-analytics",
+            "0083-learning-assignments",
         ):
             self.assertIn(version, release_contract.REQUIRED_MIGRATIONS)
 

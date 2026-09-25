@@ -61,10 +61,15 @@ def get_assignment(assignment_id: str) -> dict[str, Any] | None:
 
 
 def list_active_assignments() -> list[dict[str, Any]]:
+    return list_assignments(include_inactive=False)
+
+
+def list_assignments(*, include_inactive: bool = False) -> list[dict[str, Any]]:
     try:
         with common_db.read_connection() as (conn, kind):
+            where = "" if include_inactive else f"WHERE active={_true(kind)}"
             rows = conn.execute(
-                f"SELECT * FROM learning_assignments WHERE active={_true(kind)} "
+                f"SELECT * FROM learning_assignments {where} "
                 "ORDER BY due_at='',due_at,assigned_at,id"
             ).fetchall()
     except Exception as exc:
@@ -150,6 +155,26 @@ def set_active(assignment_id: str, active: bool, *, updated_at: str) -> dict[str
     return get_assignment(assignment_id)
 
 
+def update_assignment(
+    assignment_id: str,
+    *,
+    required: bool,
+    due_at: str,
+    active: bool,
+    updated_at: str,
+) -> dict[str, Any] | None:
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        stored_required = required if kind == "postgres" else int(required)
+        stored_active = active if kind == "postgres" else int(active)
+        conn.execute(
+            f"UPDATE learning_assignments SET required={ph},due_at={ph},active={ph},updated_at={ph} "
+            f"WHERE id={ph}",
+            (stored_required, due_at, stored_active, updated_at, assignment_id),
+        )
+    return get_assignment(assignment_id)
+
+
 def course_ids(assignments: Sequence[Mapping[str, Any]]) -> set[str]:
     return {
         str(item.get("courseId") or "").strip()
@@ -163,7 +188,9 @@ __all__ = [
     "course_ids",
     "get_assignment",
     "insert_assignment",
+    "list_assignments",
     "list_active_assignments",
     "list_for_user",
     "set_active",
+    "update_assignment",
 ]

@@ -42,11 +42,13 @@ ROLE_PERMISSIONS = {
         "result.group.read", "group.member.read", "group.content.manage",
         "group.result.read", "document.export", "evaluation.submit", "evaluation.review",
         "teacher.assessment.sign", "evaluation.countersign", "student.view_assigned", "student.view_group",
+        "learning.assign",
     },
     "education_admin": {
         "material.read", "course.view", "course.manage", "course.edit", "material.manage",
         "question.manage", "question.review", "exam.manage", "result.group.read",
         "document.export", "education.cross_group.manage", "evaluation.finalize", "student.view_all",
+        "learning.assign",
     },
     "system_admin": {
         "material.read", "course.view", "course.manage", "course.edit", "material.manage",
@@ -54,6 +56,7 @@ ROLE_PERMISSIONS = {
         "document.export", "education.cross_group.manage", "group.member.read", "group.content.manage",
         "group.result.read", "user.manage", "role.manage", "audit.read", "audit.view", "system.manage",
         "storage.manage", "backup.manage", "template.manage",
+        "learning.assign",
     },
     "auditor": {"audit.read", "audit.view"},
 }

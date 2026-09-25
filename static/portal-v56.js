@@ -187,10 +187,13 @@
     return authUser;
   }
 
-  function renderPendingExams(rows,materialsPending=0){
+  function renderPendingExams(rows,materialsPending=0,pendingCourses=[]){
     const box=$('#v571-pending-exams');if(!box)return;const groups={grpBio:'生化組',grpMicro:'鏡檢組',grpSero:'血清組',grpBB:'血庫組',grpBact:'細菌組',grpHema:'血液組',grpNew:'新進醫檢師',grpPgyDocs:'PGY'};
-    const list=Array.isArray(rows)?rows.slice(0,3):[];
-    const materialTask=Number(materialsPending||0)>0?`<a class="v56-assessment-row phase3-home-task-row" href="#groups"><span class="v56-assessment-badge material">教材</span><span><strong>尚有 ${Number(materialsPending)} 份教材待完成</strong><span>前往學習中心繼續目前進度</span></span><b aria-hidden="true">›</b></a>`:'';
+    const courses=Array.isArray(pendingCourses)?pendingCourses.slice(0,3):[];
+    const assignedIds=new Set(courses.map(x=>String(x?.id||'')));
+    const list=(Array.isArray(rows)?rows:[]).filter(x=>!assignedIds.has(String(x?.courseId||''))).slice(0,3);
+    const courseTasks=courses.map(x=>{const qs=new URLSearchParams({area:x.area||'internal',group:x.group||'grpBio',module:'materials',from:'home'});const due=x.dueAt?`${x.overdue?'已逾期':'期限'} ${String(x.dueAt).slice(0,10)}`:'正式指派';return `<a class="v56-assessment-row phase3-home-task-row" href="/system?${qs.toString()}"><span class="v56-assessment-badge ${x.overdue?'':'material'}">${x.overdue?'逾期':'必修'}</span><span><strong>${escapeHtml(x.title||'待完成課程')}</strong><span>${escapeHtml(due)} · 教材 ${Number(x.materialsCompleted||0)}/${Number(x.materialsTotal||0)}${x.examRequired?(x.examPassed?' · 考核已通過':' · 尚待考核'):''}</span></span><b aria-hidden="true">›</b></a>`;}).join('');
+    const materialTask=!courses.length&&Number(materialsPending||0)>0?`<a class="v56-assessment-row phase3-home-task-row" href="#groups"><span class="v56-assessment-badge material">教材</span><span><strong>尚有 ${Number(materialsPending)} 份教材待完成</strong><span>前往學習中心繼續目前進度</span></span><b aria-hidden="true">›</b></a>`:'';
     const examTasks=list.map(x=>{
       const area=x.area==='pgy'?'PGY':'院內';
       const g=groups[x.group]||'';
@@ -211,13 +214,13 @@
 
       return `<a class="v56-assessment-row phase3-home-task-row" href="${href}"><span class="v56-assessment-badge">${area}考核</span><span><strong>${escapeHtml(x.title||'未命名考核')}</strong><span>${escapeHtml(g)} · 及格 ${Number(x.passingScore||80)} 分</span></span><b aria-hidden="true">›</b></a>`;
     }).join('');
-    box.innerHTML=materialTask||examTasks?materialTask+examTasks:'<div class="v56-empty">目前沒有待辦，今天可以依自己的節奏繼續學習。</div>';
+    box.innerHTML=courseTasks||materialTask||examTasks?courseTasks+materialTask+examTasks:'<div class="v56-empty">目前沒有待辦，今天可以依自己的節奏繼續學習。</div>';
   }
 
   function resetPersonalDashboard(){
     setText('#v561-course-count','—'); setText('#v561-exam-pending','—'); setText('#v561-progress-percent','—');
     setText('#v681-home-todo-count','—');setText('#v681-home-materials-pending','—');setText('#v681-home-exams-pending','—');
-    const bar=$('#v561-progress-bar'); if(bar)bar.style.width='0%';renderPendingExams([],0);
+    const bar=$('#v561-progress-bar'); if(bar)bar.style.width='0%';renderPendingExams([],0,[]);
   }
 
   function setupProfileDialog(){
@@ -282,10 +285,16 @@
       setText('#v561-exam-pending',Number(d.examsPending||0));
       const materialsPending=Math.max(0,Number(d.materialsPending||0));
       const examsPending=Math.max(0,Number(d.examsPending||0));
-      setText('#v681-home-materials-pending',materialsPending);setText('#v681-home-exams-pending',examsPending);setText('#v681-home-todo-count',materialsPending+examsPending);
-      renderPendingExams(d.pendingExams||[],materialsPending);
+      const pendingCourses=Array.isArray(d.pendingCourses)?d.pendingCourses:[];
+      const pendingCourseIds=new Set(pendingCourses.map(x=>String(x?.id||'')));
+      const standaloneExams=(Array.isArray(d.pendingExams)?d.pendingExams:[]).filter(x=>!pendingCourseIds.has(String(x?.courseId||''))).length;
+      const todoCount=d?.scopeSource==='assignments'?pendingCourses.length+standaloneExams:materialsPending+examsPending;
+      setText('#v681-home-materials-pending',materialsPending);setText('#v681-home-exams-pending',examsPending);setText('#v681-home-todo-count',todoCount);
+      renderPendingExams(d.pendingExams||[],materialsPending,pendingCourses);
       const pct=Math.max(0,Math.min(100,Number(d.progressPercent||0)));setText('#v561-progress-percent',pct);const bar=$('#v561-progress-bar');if(bar)bar.style.width=`${pct}%`;
-      if(welcome)welcome.textContent=`早安，${d.name||name||'同仁'}｜教材完成 ${Number(d.materialsCompleted||0)}/${Number(d.materialsTotal||0)}・考核通過 ${Number(d.examsPassed||0)}/${Number(d.examsTotal||0)}・教師評核 ${Number(d.teacherAssessmentsCompleted||0)} 次${Number(d.essayReviewsPending||0)?`・待人工批改 ${Number(d.essayReviewsPending)} 份`:''}`;
+      if(welcome)welcome.textContent=d?.scopeSource==='assignments'
+        ? `早安，${d.name||name||'同仁'}｜正式指派 ${Number(d.requiredAssignments||0)} 門必修・待完成 ${pendingCourses.length} 門${Number(d.overdueAssignments||0)?`・逾期 ${Number(d.overdueAssignments)} 門`:''}・整體進度 ${pct}%`
+        : `早安，${d.name||name||'同仁'}｜教材完成 ${Number(d.materialsCompleted||0)}/${Number(d.materialsTotal||0)}・考核通過 ${Number(d.examsPassed||0)}/${Number(d.examsTotal||0)}・教師評核 ${Number(d.teacherAssessmentsCompleted||0)} 次${Number(d.essayReviewsPending||0)?`・待人工批改 ${Number(d.essayReviewsPending)} 份`:''}`;
     }catch(err){resetPersonalDashboard();if(welcome)welcome.textContent=`個人紀錄暫時無法讀取：${err.message}`;}
   }
 

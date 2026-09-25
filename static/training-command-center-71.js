@@ -70,6 +70,22 @@
     return `/system?${query.toString()}`;
   }
 
+  function courseHref(item) {
+    const query = new URLSearchParams({
+      area: item?.area || 'internal',
+      group: item?.group || 'grpBio',
+      module: 'materials',
+      from: 'training-command-center'
+    });
+    return `/system?${query.toString()}`;
+  }
+
+  function dueLabel(item) {
+    const due = String(item?.dueAt || '').trim();
+    if (!due) return '未設定期限';
+    return `${item?.overdue ? '已逾期' : '期限'} ${due.slice(0, 10)}`;
+  }
+
   function mount() {
     let section = document.getElementById(ID);
     if (section) return section;
@@ -105,13 +121,23 @@
     const list = document.getElementById('training-command-list-71');
     if (!status || !summaryLine || !list) return;
 
-    const pending = Array.isArray(dashboard?.pendingExams) ? dashboard.pendingExams : [];
+    const assignedCourses = Array.isArray(dashboard?.pendingCourses) ? dashboard.pendingCourses : [];
+    const assignedCourseIds = new Set(assignedCourses.map(item => String(item?.id || '')));
+    const pending = (Array.isArray(dashboard?.pendingExams) ? dashboard.pendingExams : [])
+      .filter(exam => !assignedCourseIds.has(String(exam?.courseId || '')));
     const pgyItems = profile?.pgyLearner && Array.isArray(command?.items) ? command.items : [];
-    const total = pending.length + pgyItems.length;
+    const total = assignedCourses.length + pending.length + pgyItems.length;
     summaryLine.textContent = total ? `${total} 項需要處理` : '目前沒有待辦';
-    status.textContent = profile?.pgyLearner ? 'PGY 學員：線上考核＋PGY' : '一般／線上人員：課程／考核';
+    status.textContent = dashboard?.scopeSource === 'assignments'
+      ? `正式指派：${Number(dashboard?.requiredAssignments || 0)} 門必修${Number(dashboard?.overdueAssignments || 0) ? ` · ${Number(dashboard.overdueAssignments)} 門逾期` : ''}`
+      : (profile?.pgyLearner ? 'PGY 學員：線上考核＋PGY' : '一般／線上人員：課程／考核');
 
     const rows = [];
+    assignedCourses.slice(0, 4).forEach(course => rows.push(`
+      <a href="${courseHref(course)}" class="block rounded-xl border ${course.overdue ? 'border-rose-200 bg-rose-50/60' : 'border-teal-100 bg-white'} px-3 py-2 hover:border-teal-300">
+        <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-800">${escapeHtml(course.title || '待完成課程')}</b><span class="text-[10px] font-bold ${course.overdue ? 'text-rose-700' : 'text-teal-700'}">繼續學習 →</span></div>
+        <div class="text-[10px] ${course.overdue ? 'text-rose-600' : 'text-slate-400'} mt-1">${escapeHtml(dueLabel(course))} · 教材 ${Number(course.materialsCompleted || 0)}/${Number(course.materialsTotal || 0)}${course.examRequired ? ` · ${course.examPassed ? '考核已通過' : '尚待考核'}` : ''}</div>
+      </a>`));
     pending.slice(0, 4).forEach(exam => rows.push(`
       <a href="${examHref(exam)}" class="block rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-teal-300">
         <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-800">${escapeHtml(exam.title || '待完成考核')}</b><span class="text-[10px] font-bold text-teal-700">前往考核 →</span></div>
@@ -139,7 +165,7 @@
       const profile = await loadProfile(force);
       const requests = [
         getJSON('/api/training-command-center').catch(() => ({items:[], counts:{}})),
-        profile?.empId ? getJSON(dashboardUrl(profile)).catch(() => ({pendingExams:[]})) : Promise.resolve({pendingExams:[]})
+        profile?.empId ? getJSON(dashboardUrl(profile)).catch(() => ({pendingCourses:[],pendingExams:[]})) : Promise.resolve({pendingCourses:[],pendingExams:[]})
       ];
       const [command, dashboard] = await Promise.all(requests);
       section.classList.remove('hidden');
