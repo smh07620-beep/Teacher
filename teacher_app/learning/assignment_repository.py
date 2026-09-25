@@ -74,6 +74,26 @@ def list_active_assignments() -> list[dict[str, Any]]:
     return [assignment_to_dict(row) for row in rows]
 
 
+def list_for_course(course_id: str, *, include_inactive: bool = False) -> list[dict[str, Any]]:
+    course_id = str(course_id or "").strip()
+    if not course_id:
+        return []
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            active_clause = "" if include_inactive else f" AND active={_true(kind)}"
+            rows = conn.execute(
+                f"SELECT * FROM learning_assignments WHERE course_id={ph}{active_clause} "
+                "ORDER BY active DESC,required DESC,due_at='',due_at,assigned_at,id",
+                (course_id,),
+            ).fetchall()
+    except Exception as exc:
+        if _missing_table(exc):
+            return []
+        raise
+    return [assignment_to_dict(row) for row in rows]
+
+
 def list_for_user(
     *,
     username: str,
@@ -93,14 +113,13 @@ def list_for_user(
                 SELECT * FROM learning_assignments
                 WHERE active={_true(kind)}
                   AND (
-                        (assignee_type='user' AND LOWER(assignee_key)={ph}
-                         AND training_area={ph} AND group_key={ph})
+                        (assignee_type='user' AND LOWER(assignee_key)={ph})
                      OR (assignee_type='group' AND training_area={ph} AND group_key={ph})
                      OR (assignee_type='all' AND training_area={ph})
                   )
                 ORDER BY required DESC,due_at='',due_at,assigned_at,id
                 """,
-                (username, area, group, area, group, area),
+                (username, area, group, area),
             ).fetchall()
     except Exception as exc:
         if _missing_table(exc):
@@ -109,21 +128,11 @@ def list_for_user(
     return [assignment_to_dict(row) for row in rows]
 
 
-def insert_assignment(values: Mapping[str, Any]) -> dict[str, Any]:
+def upsert_assignment(values: Mapping[str, Any]) -> dict[str, Any]:
     fields = (
-        "id",
-        "course_id",
-        "training_area",
-        "group_key",
-        "assignee_type",
-        "assignee_key",
-        "required",
-        "due_at",
-        "assigned_at",
-        "assigned_by",
-        "active",
-        "created_at",
-        "updated_at",
+        "id", "course_id", "training_area", "group_key", "assignee_type",
+        "assignee_key", "required", "due_at", "assigned_at", "assigned_by",
+        "active", "created_at", "updated_at",
     )
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -131,12 +140,36 @@ def insert_assignment(values: Mapping[str, Any]) -> dict[str, Any]:
         if kind != "postgres":
             stored["required"] = int(bool(stored.get("required", True)))
             stored["active"] = int(bool(stored.get("active", True)))
-        conn.execute(
-            f"INSERT INTO learning_assignments ({','.join(fields)}) "
-            f"VALUES ({','.join(ph for _ in fields)})",
-            tuple(stored.get(field) for field in fields),
-        )
-    return get_assignment(str(values.get("id") or "")) or {}
+        existing = conn.execute(
+            f"SELECT id,created_at FROM learning_assignments "
+            f"WHERE course_id={ph} AND assignee_type={ph} AND assignee_key={ph}",
+            (stored["course_id"], stored["assignee_type"], stored["assignee_key"]),
+        ).fetchone()
+        if existing:
+            existing = dict(existing)
+            assignment_id = str(existing.get("id") or stored["id"])
+            updates = (
+                "training_area", "group_key", "required", "due_at", "assigned_at",
+                "assigned_by", "active", "updated_at",
+            )
+            conn.execute(
+                f"UPDATE learning_assignments SET "
+                + ",".join(f"{field}={ph}" for field in updates)
+                + f" WHERE id={ph}",
+                tuple(stored[field] for field in updates) + (assignment_id,),
+            )
+        else:
+            assignment_id = str(stored["id"])
+            conn.execute(
+                f"INSERT INTO learning_assignments ({','.join(fields)}) "
+                f"VALUES ({','.join(ph for _ in fields)})",
+                tuple(stored.get(field) for field in fields),
+            )
+    return get_assignment(assignment_id) or {}
+
+
+def insert_assignment(values: Mapping[str, Any]) -> dict[str, Any]:
+    return upsert_assignment(values)
 
 
 def set_active(assignment_id: str, active: bool, *, updated_at: str) -> dict[str, Any] | None:
@@ -159,11 +192,7 @@ def course_ids(assignments: Sequence[Mapping[str, Any]]) -> set[str]:
 
 
 __all__ = [
-    "assignment_to_dict",
-    "course_ids",
-    "get_assignment",
-    "insert_assignment",
-    "list_active_assignments",
-    "list_for_user",
-    "set_active",
+    "assignment_to_dict", "course_ids", "get_assignment", "insert_assignment",
+    "list_active_assignments", "list_for_course", "list_for_user", "set_active",
+    "upsert_assignment",
 ]
