@@ -11,6 +11,21 @@ from typing import Iterable
 from teacher_app.common import db as common_db
 
 
+def _has_column(conn, kind: str, table: str, column: str) -> bool:
+    """Compatibility probe for isolated legacy-schema tests and upgrade tools."""
+    if kind == "postgres":
+        row = conn.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name=%s AND column_name=%s",
+            (table, column),
+        ).fetchone()
+        return bool(row)
+    return any(
+        str(row[1]) == column
+        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    )
+
+
 def get_progress(material_id: str, username: str) -> dict:
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -33,56 +48,97 @@ def upsert_progress(
     completed_at: str,
 ) -> None:
     with common_db.transaction() as (conn, kind):
+        versioned = _has_column(conn, kind, "learning_progress", "completed_version")
         if kind == "postgres":
-            conn.execute(
-                "INSERT INTO learning_progress(material_id,username,position,progress,completed,completed_version,last_viewed_at,completed_at) "
-                "VALUES(%s,%s,%s::jsonb,%s,%s,%s,%s,%s) "
-                "ON CONFLICT(material_id,username) DO UPDATE SET "
-                "position=EXCLUDED.position,progress=EXCLUDED.progress,"
-                "completed=CASE "
-                "WHEN EXCLUDED.completed_version > learning_progress.completed_version THEN EXCLUDED.completed "
-                "ELSE learning_progress.completed OR EXCLUDED.completed END,"
-                "completed_version=CASE "
-                "WHEN EXCLUDED.completed THEN GREATEST(learning_progress.completed_version,EXCLUDED.completed_version) "
-                "ELSE learning_progress.completed_version END,"
-                "last_viewed_at=EXCLUDED.last_viewed_at,"
-                "completed_at=CASE WHEN EXCLUDED.completed THEN EXCLUDED.last_viewed_at ELSE learning_progress.completed_at END",
-                (
-                    material_id,
-                    username,
-                    json.dumps(position, ensure_ascii=False),
-                    progress,
-                    completed,
-                    completed_version,
-                    last_viewed_at,
-                    completed_at,
-                ),
-            )
+            if versioned:
+                conn.execute(
+                    "INSERT INTO learning_progress(material_id,username,position,progress,completed,completed_version,last_viewed_at,completed_at) "
+                    "VALUES(%s,%s,%s::jsonb,%s,%s,%s,%s,%s) "
+                    "ON CONFLICT(material_id,username) DO UPDATE SET "
+                    "position=EXCLUDED.position,progress=EXCLUDED.progress,"
+                    "completed=CASE "
+                    "WHEN EXCLUDED.completed_version > learning_progress.completed_version THEN EXCLUDED.completed "
+                    "ELSE learning_progress.completed OR EXCLUDED.completed END,"
+                    "completed_version=CASE "
+                    "WHEN EXCLUDED.completed THEN GREATEST(learning_progress.completed_version,EXCLUDED.completed_version) "
+                    "ELSE learning_progress.completed_version END,"
+                    "last_viewed_at=EXCLUDED.last_viewed_at,"
+                    "completed_at=CASE WHEN EXCLUDED.completed THEN EXCLUDED.last_viewed_at ELSE learning_progress.completed_at END",
+                    (
+                        material_id,
+                        username,
+                        json.dumps(position, ensure_ascii=False),
+                        progress,
+                        completed,
+                        completed_version,
+                        last_viewed_at,
+                        completed_at,
+                    ),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO learning_progress(material_id,username,position,progress,completed,last_viewed_at,completed_at) "
+                    "VALUES(%s,%s,%s::jsonb,%s,%s,%s,%s) "
+                    "ON CONFLICT(material_id,username) DO UPDATE SET "
+                    "position=EXCLUDED.position,progress=EXCLUDED.progress,"
+                    "completed=learning_progress.completed OR EXCLUDED.completed,"
+                    "last_viewed_at=EXCLUDED.last_viewed_at,"
+                    "completed_at=CASE WHEN EXCLUDED.completed THEN EXCLUDED.last_viewed_at ELSE learning_progress.completed_at END",
+                    (
+                        material_id,
+                        username,
+                        json.dumps(position, ensure_ascii=False),
+                        progress,
+                        completed,
+                        last_viewed_at,
+                        completed_at,
+                    ),
+                )
         else:
-            conn.execute(
-                "INSERT INTO learning_progress(material_id,username,position,progress,completed,completed_version,last_viewed_at,completed_at) "
-                "VALUES(?,?,?,?,?,?,?,?) "
-                "ON CONFLICT(material_id,username) DO UPDATE SET "
-                "position=excluded.position,progress=excluded.progress,"
-                "completed=CASE "
-                "WHEN excluded.completed_version > learning_progress.completed_version THEN excluded.completed "
-                "ELSE MAX(learning_progress.completed,excluded.completed) END,"
-                "completed_version=CASE "
-                "WHEN excluded.completed=1 THEN MAX(learning_progress.completed_version,excluded.completed_version) "
-                "ELSE learning_progress.completed_version END,"
-                "last_viewed_at=excluded.last_viewed_at,"
-                "completed_at=CASE WHEN excluded.completed=1 THEN excluded.last_viewed_at ELSE learning_progress.completed_at END",
-                (
-                    material_id,
-                    username,
-                    json.dumps(position, ensure_ascii=False),
-                    progress,
-                    int(completed),
-                    completed_version,
-                    last_viewed_at,
-                    completed_at,
-                ),
-            )
+            if versioned:
+                conn.execute(
+                    "INSERT INTO learning_progress(material_id,username,position,progress,completed,completed_version,last_viewed_at,completed_at) "
+                    "VALUES(?,?,?,?,?,?,?,?) "
+                    "ON CONFLICT(material_id,username) DO UPDATE SET "
+                    "position=excluded.position,progress=excluded.progress,"
+                    "completed=CASE "
+                    "WHEN excluded.completed_version > learning_progress.completed_version THEN excluded.completed "
+                    "ELSE MAX(learning_progress.completed,excluded.completed) END,"
+                    "completed_version=CASE "
+                    "WHEN excluded.completed=1 THEN MAX(learning_progress.completed_version,excluded.completed_version) "
+                    "ELSE learning_progress.completed_version END,"
+                    "last_viewed_at=excluded.last_viewed_at,"
+                    "completed_at=CASE WHEN excluded.completed=1 THEN excluded.last_viewed_at ELSE learning_progress.completed_at END",
+                    (
+                        material_id,
+                        username,
+                        json.dumps(position, ensure_ascii=False),
+                        progress,
+                        int(completed),
+                        completed_version,
+                        last_viewed_at,
+                        completed_at,
+                    ),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO learning_progress(material_id,username,position,progress,completed,last_viewed_at,completed_at) "
+                    "VALUES(?,?,?,?,?,?,?) "
+                    "ON CONFLICT(material_id,username) DO UPDATE SET "
+                    "position=excluded.position,progress=excluded.progress,"
+                    "completed=MAX(learning_progress.completed,excluded.completed),"
+                    "last_viewed_at=excluded.last_viewed_at,"
+                    "completed_at=CASE WHEN excluded.completed=1 THEN excluded.last_viewed_at ELSE learning_progress.completed_at END",
+                    (
+                        material_id,
+                        username,
+                        json.dumps(position, ensure_ascii=False),
+                        progress,
+                        int(completed),
+                        last_viewed_at,
+                        completed_at,
+                    ),
+                )
 
 
 def update_media_progress(
@@ -157,7 +213,6 @@ def write_terminal_status(
     source_kind: str,
 ) -> None:
     with common_db.transaction() as (conn, kind):
-        ph = common_db.placeholder(kind)
         if kind == "postgres":
             conn.execute(
                 "INSERT INTO material_search_status(material_id,status,page_count,last_indexed_at,failure_reason,source_kind) "
