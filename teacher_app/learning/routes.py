@@ -19,6 +19,7 @@ from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.learning import access as learning_access
 from teacher_app.learning import content, repository
 from teacher_app.materials import repository as material_repository
+from teacher_app.materials import versioning as material_versioning
 
 
 def _now() -> str:
@@ -141,7 +142,8 @@ def register_smart_learning(
         user, denied = _user(owner)
         if denied:
             return denied
-        if not visible_material(user, material_id):
+        material = visible_material(user, material_id)
+        if not material:
             return jsonify({"error": "找不到教材"}), 404
         data = repository.get_progress(material_id, user["username"])
         if not data:
@@ -150,6 +152,8 @@ def register_smart_learning(
                 "position": {},
                 "progress": 0,
                 "completed": False,
+                "completedVersion": 0,
+                "requiredCompletionVersion": int(material.get("requiredCompletionVersion") or 1),
                 "lastPositionSeconds": 0,
                 "duration": 0,
                 "watchedBuckets": [],
@@ -161,6 +165,11 @@ def register_smart_learning(
             data["position"] = {}
         data["materialId"] = data.pop("material_id")
         data.pop("username", None)
+        completed_version = int(data.pop("completed_version", 1) or 1)
+        current_completion = material_versioning.completion_is_current(material, completed_version)
+        data["completed"] = bool(data.get("completed")) and current_completion
+        data["completedVersion"] = completed_version
+        data["requiredCompletionVersion"] = int(material.get("requiredCompletionVersion") or 1)
         try:
             data["watchedBuckets"] = json.loads(data.pop("watched_buckets", "[]"))
         except Exception:
@@ -174,7 +183,8 @@ def register_smart_learning(
         user, denied = _user(owner)
         if denied:
             return denied
-        if not visible_material(user, material_id):
+        material = visible_material(user, material_id)
+        if not material:
             return jsonify({"error": "找不到教材"}), 404
 
         body = request.get_json(silent=True) or {}
@@ -209,12 +219,14 @@ def register_smart_learning(
             threshold,
         )
         now = _now()
+        current_version = max(1, int(material.get("currentVersion") or 1))
         repository.upsert_progress(
             material_id,
             user["username"],
             position=position,
             progress=progress,
             completed=completed,
+            completed_version=current_version,
             last_viewed_at=now,
             completed_at=now if completed else "",
         )
@@ -233,6 +245,8 @@ def register_smart_learning(
             "position": position,
             "progress": progress,
             "completed": completed,
+            "completedVersion": current_version if completed else 0,
+            "requiredCompletionVersion": int(material.get("requiredCompletionVersion") or 1),
             "lastPositionSeconds": last,
             "duration": duration,
             "watchedBuckets": buckets,
