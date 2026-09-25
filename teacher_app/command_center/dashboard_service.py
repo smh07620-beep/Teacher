@@ -218,6 +218,8 @@ def dashboard_summary(
                 ),
                 "remediationRequired": bool((remediation_plan or {}).get("required")),
                 "remediation": remediation_plan if (remediation_plan or {}).get("required") else None,
+                "remediationRecordId": str((failed_record or {}).get("id") or ""),
+                "remediationRecordAt": str((failed_record or {}).get("timestamp") or ""),
             }
         )
     pending_exams.sort(key=lambda item: item.get("publishedAt", ""), reverse=True)
@@ -270,10 +272,12 @@ def dashboard_summary(
     pending_courses = [
         {
             "id": str(item.get("courseId") or ""),
+            "assignmentId": str(item.get("id") or ""),
             "title": str(item.get("courseTitle") or "未命名課程"),
             "area": str(item.get("area") or preferred_area),
             "group": str(item.get("group") or preferred_group),
             "dueAt": str(item.get("dueAt") or ""),
+            "assignedAt": str(item.get("assignedAt") or ""),
             "overdue": bool(item.get("overdue")),
             "materialsCompleted": int(item.get("materialsCompleted") or 0),
             "materialsTotal": int(item.get("materialsTotal") or 0),
@@ -293,6 +297,13 @@ def dashboard_summary(
     required_assignments = sum(
         1 for item in assignment_rows if item.get("required", True)
     )
+    material_by_id = {
+        str(item.get("id") or ""): item for item in materials if item.get("id")
+    }
+    retraining_version_keys = [
+        f"{material_id}@{int(material_by_id.get(material_id, {}).get('requiredCompletionVersion') or 1)}"
+        for material_id in sorted(retraining_ids)
+    ]
 
     return {
         "empId": emp_id,
@@ -312,6 +323,7 @@ def dashboard_summary(
         "materialsPending": max(0, len(active_material_ids) - material_done),
         "materialsRetraining": len(retraining_ids),
         "retrainingMaterialIds": sorted(retraining_ids),
+        "retrainingVersionKeys": retraining_version_keys,
         "examsTotal": len(active_quiz_ids),
         "examsPassed": quiz_done,
         "examsPending": max(0, len(active_quiz_ids) - quiz_done),

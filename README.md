@@ -77,6 +77,10 @@ Migration `0084-material-version-retraining` 為上傳教材增加版本歷史�
 
 考核未達及格線時，伺服器會依該次考卷的 `courseId / quizCategoryId / training area / group` 產生同範圍的補強學習建議，優先列出同課程 SOP 與教材；原始未合格成績與逐題紀錄不會被覆蓋。學員可先回教材區複習，再用既有安全考試流程建立新的重測 attempt。含問答題且尚待人工批改的紀錄不會提前判定為補強；教師完成批改後若仍未合格，首頁與通知中心會顯示「補強再測」。此流程不新增平行成績來源，也不放寬任何教材或考試 scope。
 
+### 通知中心已讀／未讀同步
+
+Migration `0086-notification-read-state` 為既有通知中心增加跨裝置已讀／未讀同步。資料庫只保存登入帳號與事件級 `notification_key` 的 read marker，不複製課程、考試、PGY 或公告內容；因此 canonical source 更新後仍由原 domain 即時計算。再次未合格、課程重新指派、PGY 狀態改變、重大教材新版或公告內容更新都會產生新的事件 key，不會被舊的已讀狀態錯誤隱藏。詳見 `docs/NOTIFICATION_READ_STATE_0086.md`。
+
 ## 本機開發
 
 建議 Python 3.12：
@@ -155,6 +159,8 @@ GitHub Actions 的 `Teacher release checks` 會執行 Python compile、完整 re
 - `docs/archive/ARCHITECTURE_HISTORY.md`：6.5 / 6.6 / 6.7 歷史架構與 release contract
 - `LOCAL_WORKER_6_7.md`：院內／本機 Worker 設定
 - `docs/LEARNING_ASSIGNMENTS_0083.md`：一般課程正式指派、RBAC 與 learner dashboard fallback 規則
+- `docs/MATERIAL_VERSION_RETRAINING_0084.md`：教材/SOP 版本歷史與重新訓練完成證據
+- `docs/NOTIFICATION_READ_STATE_0086.md`：通知中心跨裝置已讀／未讀狀態與事件 key 契約
 - `VERSION` / `release_contract.py`：目前正式 release contract
 
 ## GitHub 安全原則

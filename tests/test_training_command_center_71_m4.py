@@ -13,10 +13,12 @@ class NotificationCenter71Tests(unittest.TestCase):
         cls.workflow = ROOT.joinpath(".github", "workflows", "phase3-pgy-checks.yml").read_text(encoding="utf-8")
         cls.coverage = ROOT.joinpath("RC_FEATURE_UI_COVERAGE_MATRIX.md").read_text(encoding="utf-8")
 
-    def test_m4_is_normal_read_only_notification_surface(self):
+    def test_m4_only_mutates_personal_read_markers(self):
         self.assertIn("🔔 通知中心", self.ui)
-        self.assertIn("不執行任何 mutation", self.ui)
-        for mutation in ("method: 'POST'", 'method: "POST"', "method: 'PATCH'", "method: 'DELETE'"):
+        self.assertIn("只保存你的已讀狀態", self.ui)
+        self.assertIn("/api/notification-states", self.ui)
+        self.assertIn("method: 'PATCH'", self.ui)
+        for mutation in ("method: 'POST'", 'method: "POST"', "method: 'DELETE'"):
             self.assertNotIn(mutation, self.ui)
 
     def test_m4_reuses_existing_canonical_read_apis(self):
@@ -39,10 +41,11 @@ class NotificationCenter71Tests(unittest.TestCase):
         self.assertIn("find static -type f -name '*.js'", self.workflow)
 
     def test_rc_matrix_records_m4(self):
-        self.assertIn("Notification Center (7.1 M4)", self.coverage)
+        self.assertIn("Notification Center + durable read state (7.1 M4 / 8.6)", self.coverage)
         self.assertIn("static/notification-center-71.js", self.coverage)
         self.assertIn("/api/dashboard/me", self.coverage)
-        self.assertIn("no new mutation API", self.coverage)
+        self.assertIn("GET/PATCH /api/notification-states", self.coverage)
+        self.assertIn("read markers", self.coverage)
 
 
 if __name__ == "__main__":

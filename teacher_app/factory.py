@@ -32,6 +32,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance.migrations import register_schema_migrations
     from teacher_app.maintenance import learning_assignment_migration as _learning_assignment_migration  # noqa: F401
     from teacher_app.maintenance import material_version_migration as _material_version_migration  # noqa: F401
+    from teacher_app.maintenance import notification_state_migration as _notification_state_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
@@ -40,6 +41,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.command_center.audience import register_training_audience_71
     from teacher_app.command_center.routes import register_training_command_center
     from teacher_app.command_center.dashboard_routes import register_dashboard_routes
+    from teacher_app.command_center.notification_routes import register_notification_state_routes
     from teacher_app.common.audit_routes import register_general_audit_routes
     from teacher_app.common.privacy import register_ai_privacy
     from teacher_app.common.security import register_production_hardening
@@ -105,6 +107,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_health(app, connection_factory=common_db.get_connection)
     app = register_training_command_center(app)
     app = register_dashboard_routes(app)
+    app = register_notification_state_routes(app)
     app = register_exam_integrity_guards(app)
     app = register_production_hardening(app, current_user=current_user)
     app = register_upload_hardening(app)

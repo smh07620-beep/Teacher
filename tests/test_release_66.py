@@ -51,6 +51,7 @@ class ReleaseContractTests(unittest.TestCase):
             "0082-version-aware-item-analytics",
             "0083-learning-assignments",
             "0084-material-version-retraining",
+            "0086-notification-read-state",
         ):
             self.assertIn(version, release_contract.REQUIRED_MIGRATIONS)
 

@@ -76,9 +76,9 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
     def test_release_contract_registers_0084_once(self):
         versions = [version for version, _fn in schema_migrations.MIGRATIONS]
         self.assertEqual(versions.count("0084-material-version-retraining"), 1)
-        self.assertEqual(
-            release_contract.REQUIRED_MIGRATIONS[-1],
-            "0084-material-version-retraining",
+        self.assertLess(
+            release_contract.REQUIRED_MIGRATIONS.index("0084-material-version-retraining"),
+            release_contract.REQUIRED_MIGRATIONS.index("0086-notification-read-state"),
         )
 
     def test_migration_is_idempotent_and_backfills_version_one(self):

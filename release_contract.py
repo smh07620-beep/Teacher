@@ -47,6 +47,7 @@ REQUIRED_MIGRATIONS = (
     "0082-version-aware-item-analytics",
     "0083-learning-assignments",
     "0084-material-version-retraining",
+    "0086-notification-read-state",
 )
 
 # Backward-compatible singular name used by older release checks.  It now
