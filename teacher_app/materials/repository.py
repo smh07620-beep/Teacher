@@ -92,12 +92,14 @@ def get_material(material_or_legacy_base, legacy_material_id: str | None = None)
     return material_row_to_dict(row) if row else None
 
 
+# Keep the insert contract limited to the historical columns. Version fields
+# have database defaults so legacy fixtures/callers can continue inserting rows
+# while migrated/fresh databases initialize version state to V1 automatically.
 MATERIAL_DB_COLUMNS = (
     "id", "filename", "title", "description", "category", "group_key",
     "training_area", "course_id", "folder", "page_count", "date_added",
     "storage_filename", "storage_backend", "storage_key", "slides_prefix",
-    "storage_meta", "material_type", "atlas_meta", "current_version",
-    "required_completion_version", "version_updated_at", "version_updated_by", "active",
+    "storage_meta", "material_type", "atlas_meta", "active",
 )
 
 
@@ -105,19 +107,16 @@ def insert_material_on_connection(conn, kind: str, entry: dict, *, ignore_confli
     ph = common_db.placeholder(kind)
     columns = ",".join(MATERIAL_DB_COLUMNS)
     marks = ",".join([ph] * len(MATERIAL_DB_COLUMNS))
-    defaults = {
-        "current_version": 1,
-        "required_completion_version": 1,
-        "version_updated_at": "",
-        "version_updated_by": "",
-    }
-    values_list = []
-    for name in MATERIAL_DB_COLUMNS:
-        value = entry.get(name, defaults.get(name))
-        if name == "active":
-            value = bool(value) if kind == "postgres" else int(bool(value))
-        values_list.append(value)
-    values = tuple(values_list)
+    values = tuple(
+        (
+            bool(entry.get(name))
+            if name == "active" and kind == "postgres"
+            else int(bool(entry.get(name)))
+            if name == "active"
+            else entry.get(name)
+        )
+        for name in MATERIAL_DB_COLUMNS
+    )
     if kind == "sqlite" and ignore_conflict:
         sql = f"INSERT OR IGNORE INTO materials ({columns}) VALUES ({marks})"
     else:
