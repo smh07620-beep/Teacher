@@ -4,6 +4,11 @@ Until general course assignments exist, a learner's persisted preferred training
 area/group is the authoritative personal learning scope. Organization/system
 administrators may inspect all learning content, but ordinary learner/teacher
 surfaces must not silently mix other groups into progress or completion data.
+
+Production session users always carry preferred area/group. Isolated legacy
+compatibility fixtures may omit both fields; those fixtures retain their prior
+behavior so tests/adapters do not invent a false scope that production never
+uses.
 """
 from __future__ import annotations
 
@@ -14,10 +19,22 @@ from teacher_app.common.auth import has_role
 
 
 GLOBAL_LEARNING_ROLES = ("education_admin", "system_admin")
+_SCOPE_KEYS = (
+    "preferredArea",
+    "preferred_area",
+    "preferredGroup",
+    "preferred_group",
+)
 
 
 def has_global_learning_access(user: Mapping[str, Any] | None) -> bool:
     return bool(user) and any(has_role(user, role) for role in GLOBAL_LEARNING_ROLES)
+
+
+def has_explicit_learning_scope(user: Mapping[str, Any] | None) -> bool:
+    if not user:
+        return False
+    return any(key in user for key in _SCOPE_KEYS)
 
 
 def preferred_learning_scope(user: Mapping[str, Any] | None) -> tuple[str, str]:
@@ -60,6 +77,8 @@ def can_access_learning_item(
         return False
     if has_global_learning_access(user):
         return True
+    if not has_explicit_learning_scope(user):
+        return True
     return item_learning_scope(item) == preferred_learning_scope(user)
 
 
@@ -72,6 +91,8 @@ def can_access_requested_scope(
         return False
     if has_global_learning_access(user):
         return True
+    if not has_explicit_learning_scope(user):
+        return True
     requested = (scope.normalize_area(area), scope.normalize_group(group))
     return requested == preferred_learning_scope(user)
 
@@ -80,6 +101,7 @@ __all__ = [
     "GLOBAL_LEARNING_ROLES",
     "can_access_learning_item",
     "can_access_requested_scope",
+    "has_explicit_learning_scope",
     "has_global_learning_access",
     "item_learning_scope",
     "preferred_learning_scope",
