@@ -56,6 +56,13 @@ def material_version_retraining_84(conn, kind: str) -> None:
         "completed_version",
         "completed_version INTEGER NOT NULL DEFAULT 1",
     )
+    _add_column(
+        conn,
+        kind,
+        "learning_progress",
+        "completed_version",
+        "completed_version INTEGER NOT NULL DEFAULT 1",
+    )
 
     conn.execute(
         f"""
