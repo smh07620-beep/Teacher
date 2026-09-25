@@ -1,4 +1,4 @@
-﻿import contextlib
+import contextlib
 import sqlite3
 import unittest
 from unittest.mock import patch
@@ -48,8 +48,8 @@ class CourseFeedback87Tests(unittest.TestCase):
     def test_release_contract_registers_0087_once_after_0086(self):
         versions = [version for version, _fn in schema_migrations.MIGRATIONS]
         self.assertEqual(versions.count("0087-course-feedback"), 1)
-        self.assertEqual(release_contract.REQUIRED_MIGRATIONS[-1], "0087-course-feedback")
         self.assertLess(release_contract.REQUIRED_MIGRATIONS.index("0086-notification-read-state"), release_contract.REQUIRED_MIGRATIONS.index("0087-course-feedback"))
+        self.assertLess(release_contract.REQUIRED_MIGRATIONS.index("0087-course-feedback"), release_contract.REQUIRED_MIGRATIONS.index("0088-saved-learning-items"))
 
     def test_student_can_create_and_update_only_own_feedback(self):
         patches = self._patches()

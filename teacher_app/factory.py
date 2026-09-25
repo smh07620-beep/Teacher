@@ -34,6 +34,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import material_version_migration as _material_version_migration  # noqa: F401
     from teacher_app.maintenance import notification_state_migration as _notification_state_migration  # noqa: F401
     from teacher_app.maintenance import course_feedback_migration as _course_feedback_migration  # noqa: F401
+    from teacher_app.maintenance import saved_learning_items_migration as _saved_learning_items_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
@@ -54,6 +55,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.learning.progress_routes import register_progress_routes
     from teacher_app.learning.assignment_routes import register_learning_assignment_routes
     from teacher_app.learning.feedback_routes import register_course_feedback_routes
+    from teacher_app.learning.saved_routes import register_saved_learning_routes
     from teacher_app.maintenance.health import register_health
     from teacher_app.maintenance.announcement_routes import register_announcement_routes
     from teacher_app.materials.upload_routes import register_upload_hardening
@@ -132,6 +134,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_progress_routes(app)
     app = register_learning_assignment_routes(app)
     app = register_course_feedback_routes(app)
+    app = register_saved_learning_routes(app)
     app = register_announcement_routes(app)
     app = register_free_worker(
         app,

@@ -53,6 +53,7 @@ class ReleaseContractTests(unittest.TestCase):
             "0084-material-version-retraining",
             "0086-notification-read-state",
             "0087-course-feedback",
+            "0088-saved-learning-items",
         ):
             self.assertIn(version, release_contract.REQUIRED_MIGRATIONS)
 

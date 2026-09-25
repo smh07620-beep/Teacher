@@ -83,6 +83,8 @@ Migration `0086-notification-read-state` 為既有通知中心增加跨裝置已
 
 Migration `0087-course-feedback` 增加一般課程學員回饋：學員可對自己可存取的啟用課程提交／更新 1–5 分與選填建議；管理端只提供回覆數、平均分與星等分布，不直接曝露個別學員身分或留言。回饋資料不會改變完成條件、考試成績、補強流程或 PGY 評核。詳見 `docs/COURSE_FEEDBACK_0087.md`。
 
+Migration `0088-saved-learning-items` 增加跨裝置「稍後閱讀／收藏」：課程與上傳教材的收藏狀態跟隨登入帳號同步，學習中心提供「我的收藏」快速入口；既有閱讀頁碼 bookmark 仍只存在目前瀏覽器的 localStorage，收藏與頁碼都不會改寫完成紀錄或考核狀態。詳見 `docs/SAVED_LEARNING_ITEMS_0088.md`。
+
 ### Accessibility regression gate
 
 現有 Playwright release workflow 已加入 deterministic accessibility regression：首頁、院內教育訓練、PGY 與 system workspace 會在 mobile / desktop 實際 DOM 下檢查 `html[lang]`、landmark、重複 ID、圖片替代文字、accessible name、正 `tabindex`、`aria-hidden` 內可聚焦元件、dialog 名稱、鍵盤 focus 可視性與橫向 overflow。這是一個高訊號的 WCAG regression guard，不宣稱取代完整 axe 或人工螢幕閱讀器稽核。詳見 `docs/ACCESSIBILITY_REGRESSION.md`。
@@ -169,6 +171,7 @@ GitHub Actions 的 `Teacher release checks` 會執行 Python compile、完整 re
 - `docs/NOTIFICATION_READ_STATE_0086.md`：通知中心跨裝置已讀／未讀狀態與事件 key 契約
 - `docs/ACCESSIBILITY_REGRESSION.md`：Playwright accessibility/WCAG regression gate 與涵蓋範圍
 - `docs/COURSE_FEEDBACK_0087.md`：一般課程學員回饋、scope 與匿名管理彙總契約
+- `docs/SAVED_LEARNING_ITEMS_0088.md`：跨裝置課程／教材收藏與 browser-local 頁碼 bookmark 分工
 - `VERSION` / `release_contract.py`：目前正式 release contract
 
 ## GitHub 安全原則

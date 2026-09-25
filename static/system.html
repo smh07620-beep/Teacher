@@ -127,6 +127,10 @@
                         <div class="flex flex-wrap gap-2 text-[11px]"><span id="course-overview-course-count" class="course-stat-chip">課程 0</span><span id="course-overview-material-count" class="course-stat-chip">教材 0</span><span id="course-overview-exam-count" class="course-stat-chip">考卷 0</span></div>
                     </div>
                 </div>
+                <section id="saved-learning-items" class="hidden rounded-2xl border border-amber-100 bg-amber-50/60 p-4 sm:p-5" aria-label="我的收藏">
+                    <div class="flex items-center justify-between gap-3"><div><p class="edu-kicker">SAVE FOR LATER</p><h4 class="mt-1 text-sm font-black text-slate-900">★ 我的收藏</h4><p class="mt-1 text-[11px] text-slate-500">收藏會同步到你的帳號；閱讀頁碼仍只保存在目前瀏覽器。</p></div><span id="saved-learning-count" class="course-stat-chip">0 項</span></div>
+                    <div id="saved-learning-items-list" class="mt-3 grid gap-2 sm:grid-cols-2"></div>
+                </section>
                 <div id="learning-start"></div><input id="learning-search" type="hidden" value=""><div class="v573-course-tools v573-filter-only"><label>閱讀狀態<select id="learning-filter" data-csp-change="renderCourseOverview()"><option value="all">全部課程</option><option value="todo">尚有教材未完成</option><option value="done">教材已完成</option></select></label></div><p id="learning-result-count" role="status"></p><div id="course-overview-grid" class="space-y-4"></div>
             </section>
 
@@ -713,7 +717,7 @@
 <script defer src="/system-csp-actions.js?v=8500"></script>
 <script defer src="/atlas-70.js?v=7000"></script>
 <script defer src="/atlas-docx-wizard-70.js?v=7000"></script>
-<script defer src="/system-learner.js?v=8700"></script>
+<script defer src="/system-learner.js?v=8800"></script>
 <script defer src="/system-exam.js?v=8500"></script>
 <script defer src="/system-assessment.js?v=6100"></script>
 <script defer src="/system-admin.js?v=6502"></script>
