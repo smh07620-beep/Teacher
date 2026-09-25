@@ -12,7 +12,11 @@ class LearningAssignment83Tests(unittest.TestCase):
     def test_release_registry_contains_0083_once(self):
         versions = [version for version, _fn in schema_migrations.MIGRATIONS]
         self.assertEqual(versions.count("0083-learning-assignments"), 1)
-        self.assertEqual(release_contract.REQUIRED_MIGRATIONS[-1], "0083-learning-assignments")
+        self.assertIn("0083-learning-assignments", release_contract.REQUIRED_MIGRATIONS)
+        self.assertLess(
+            release_contract.REQUIRED_MIGRATIONS.index("0083-learning-assignments"),
+            release_contract.REQUIRED_MIGRATIONS.index("0084-material-version-retraining"),
+        )
 
     def test_sqlite_migration_is_additive_and_idempotent(self):
         conn = sqlite3.connect(":memory:")
