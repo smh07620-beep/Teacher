@@ -56,6 +56,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.learning.assignment_routes import register_learning_assignment_routes
     from teacher_app.learning.feedback_routes import register_course_feedback_routes
     from teacher_app.learning.saved_routes import register_saved_learning_routes
+    from teacher_app.learning.calendar_routes import register_learning_calendar_routes
     from teacher_app.maintenance.health import register_health
     from teacher_app.maintenance.announcement_routes import register_announcement_routes
     from teacher_app.materials.upload_routes import register_upload_hardening
@@ -135,6 +136,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_learning_assignment_routes(app)
     app = register_course_feedback_routes(app)
     app = register_saved_learning_routes(app)
+    app = register_learning_calendar_routes(app)
     app = register_announcement_routes(app)
     app = register_free_worker(
         app,

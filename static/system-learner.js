@@ -27,6 +27,9 @@ let myCompletedMaterials = {};
 let savedLearningItems = new Map();
 let savedLearningLoaded = false;
 let savedLearningLoading = null;
+let learningCalendarEvents = [];
+let learningCalendarLoaded = false;
+let learningCalendarLoading = null;
 
 
 
@@ -663,6 +666,50 @@ function goToExamModule(categoryKey, groupKey) {
 
 
 
+async function loadLearningCalendar(force=false){
+    if(learningCalendarLoading)return learningCalendarLoading;
+    if(learningCalendarLoaded&&!force){renderLearningCalendar();return learningCalendarEvents;}
+    learningCalendarLoading=(async()=>{
+        try{
+            const res=await fetch('/api/learning-calendar?days=90',{credentials:'same-origin',cache:'no-store'});
+            const data=await res.json().catch(()=>({}));
+            if(!res.ok)throw new Error(data.error||'無法讀取學習行事曆');
+            learningCalendarEvents=Array.isArray(data.events)?data.events:[];
+        }catch(_){learningCalendarEvents=[];}
+        finally{
+            learningCalendarLoaded=true;
+            learningCalendarLoading=null;
+            renderCourseOverview();
+        }
+        return learningCalendarEvents;
+    })();
+    return learningCalendarLoading;
+}
+
+function learningCalendarKindLabel(kind){
+    return {course_due:'必修截止',course_start:'課程開始',course_end:'建議完成',pgy_due:'PGY 截止'}[kind]||'學習行程';
+}
+
+function openLearningCalendarEvent(eventId){
+    const item=learningCalendarEvents.find(event=>event.id===eventId);if(!item)return;
+    if(item.target==='pgy-workflow'){
+        if(typeof window.switchLearningModule==='function')window.switchLearningModule('assessment');
+        window.setTimeout(()=>(document.getElementById('pgy-workflow-center')||document.getElementById('panel-assessment'))?.scrollIntoView?.({behavior:'smooth',block:'start'}),120);
+        return;
+    }
+    const card=Array.from(document.querySelectorAll('#course-overview-grid > details')).find(node=>node.dataset.courseLearningId===item.courseId);
+    if(card){card.open=true;card.scrollIntoView({behavior:'smooth',block:'start'});}
+}
+
+function renderLearningCalendar(){
+    const section=document.getElementById('learning-calendar'),list=document.getElementById('learning-calendar-list'),count=document.getElementById('learning-calendar-count');
+    if(!section||!list)return;
+    const items=learningCalendarEvents.slice(0,10);
+    section.classList.toggle('hidden',!items.length);if(count)count.textContent=`${items.length} 項`;
+    list.innerHTML=items.map(item=>{const when=new Date(item.at),date=Number.isNaN(when.getTime())?escapeHtml(item.date||''):when.toLocaleDateString('zh-TW',{month:'2-digit',day:'2-digit'});return `<div class="flex items-center gap-3 rounded-xl border ${item.overdue?'border-rose-200 bg-rose-50':'border-indigo-100 bg-white'} px-3 py-2"><div class="w-12 shrink-0 text-center"><div class="text-xs font-black ${item.overdue?'text-rose-700':'text-indigo-700'}">${date}</div></div><div class="min-w-0 flex-1"><div class="truncate text-xs font-bold text-slate-800">${escapeHtml(item.title||'學習行程')}</div><div class="mt-0.5 text-[10px] text-slate-400">${escapeHtml(learningCalendarKindLabel(item.kind))}${item.overdue?' · 已逾期':''}</div></div><button type="button" data-calendar-event-id="${escapeHtml(item.id)}" class="shrink-0 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[10px] font-bold text-indigo-700">前往</button></div>`;}).join('');
+    list.querySelectorAll('[data-calendar-event-id]').forEach(button=>button.addEventListener('click',()=>openLearningCalendarEvent(button.dataset.calendarEventId||'')));
+}
+
 function savedLearningKey(itemType,itemId){
     return `${itemType}:${itemId}`;
 }
@@ -773,6 +820,7 @@ function renderCourseOverview() {
 
     const box=document.getElementById('course-overview'),grid=document.getElementById('course-overview-grid');if(!box||!grid)return;
     if(!savedLearningLoaded&&!savedLearningLoading)void loadSavedLearningItems();
+    if(!learningCalendarLoaded&&!learningCalendarLoading)void loadLearningCalendar();
 
     const groupMaterials=cachedSlidesList.filter(m=>(m.group||'grpBio')===currentGroupKey),quizzes=(cachedQuizCategories||[]).filter(q=>(q.group||currentGroupKey)===currentGroupKey&&(q.area||currentTrainingArea)===currentTrainingArea),courses=(cachedCourses||[]).filter(c=>(c.group||c.groupKey||currentGroupKey)===currentGroupKey);
 
@@ -784,6 +832,7 @@ function renderCourseOverview() {
 
     let html=courses.map((c,i)=>renderCard(c,i,false)).join('');if(orphanMaterials.length||orphanQuizzes.length)html+=renderCard({id:'',title:'通用／未歸類資源',desc:''},courses.length,true);grid.innerHTML=html;
     courses.forEach((course,index)=>{const card=grid.children[index];if(card)card.dataset.courseLearningId=course.id||'';const group=card?.querySelector('.course-material-group');if(!group)return;const row=document.createElement('div');row.className='flex items-center justify-between gap-3 border-t border-slate-100 pt-3';row.innerHTML='<div><div class="text-xs font-black text-slate-700">💬 課程回饋與收藏</div><div class="text-[11px] text-slate-400 mt-0.5">分享學習體驗，或把課程加入跨裝置收藏。</div></div>';const actions=document.createElement('div');actions.className='flex flex-wrap justify-end gap-2';const save=document.createElement('button');save.type='button';save.className='rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700';save.textContent=savedLearningItems.has(savedLearningKey('course',course.id))?'★ 已收藏':'☆ 收藏課程';save.addEventListener('click',()=>toggleSavedLearningItem('course',course.id));const button=document.createElement('button');button.type='button';button.className='rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-800';button.textContent='填寫回饋';button.addEventListener('click',()=>openCourseFeedback(course.id,course.title||'課程'));actions.append(save,button);row.appendChild(actions);group.appendChild(row);});
+    renderLearningCalendar();
     renderSavedLearningShelf();
     bindSavedLearningButtons(grid);
     bindCourseFeedbackUI();
