@@ -119,6 +119,33 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_migration_tolerates_partial_legacy_schema(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute(
+                "CREATE TABLE materials ("
+                "id TEXT PRIMARY KEY, filename TEXT NOT NULL, title TEXT NOT NULL, "
+                "description TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT '', "
+                "group_key TEXT NOT NULL DEFAULT 'grpBio', training_area TEXT NOT NULL DEFAULT 'internal', "
+                "course_id TEXT NOT NULL DEFAULT '', folder TEXT NOT NULL, page_count INTEGER NOT NULL DEFAULT 0, "
+                "date_added TEXT NOT NULL, storage_filename TEXT NOT NULL, storage_backend TEXT NOT NULL DEFAULT 'local', "
+                "storage_key TEXT NOT NULL DEFAULT '', slides_prefix TEXT NOT NULL DEFAULT '', storage_meta TEXT NOT NULL DEFAULT '{}', "
+                "material_type TEXT NOT NULL DEFAULT 'standard', atlas_meta TEXT NOT NULL DEFAULT '{}', active INTEGER NOT NULL DEFAULT 1)"
+            )
+            conn.execute(
+                "INSERT INTO materials(id,filename,title,folder,date_added,storage_filename) "
+                "VALUES('mat-partial','x.pdf','X','x','2026-09-25','x.pdf')"
+            )
+            material_version_retraining_84(conn, "sqlite")
+            self.assertIsNotNone(
+                conn.execute(
+                    "SELECT 1 FROM material_versions WHERE material_id='mat-partial' AND version=1"
+                ).fetchone()
+            )
+        finally:
+            conn.close()
+
     def test_repository_projection_exposes_version_state(self):
         item = repository.material_row_to_dict({
             "id": "mat-1",
