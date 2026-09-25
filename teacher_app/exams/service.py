@@ -11,7 +11,9 @@ from teacher_app.assessments import repository as assessment_repository
 from teacher_app.common.auth import normalize_role
 from teacher_app.common.errors import ApiError
 from teacher_app.exams import grading
+from teacher_app.exams import remediation
 from teacher_app.exams import repository as repo
+from teacher_app.materials import repository as material_repository
 
 QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video")
 ATTEMPT_TTL_HOURS = 24
@@ -220,6 +222,20 @@ def submit_attempt(base_or_user, user_or_attempt_id, attempt_id_or_data, data: M
             )
     except repo.AttemptConflict as exc:
         raise ApiError("ATTEMPT_CONFLICT", str(exc), 409) from exc
+    try:
+        remediation_materials = material_repository.list_uploaded_materials(include_inactive=False)
+    except Exception:
+        remediation_materials = []
+    remediation_plan = remediation.build_plan(
+        score=result["score"],
+        passing_score=passing_score,
+        essay_count=result["essayCount"],
+        quiz_category_id=attempt.get("quiz_category_id"),
+        course_id=attempt.get("course_id"),
+        area=attempt.get("training_area"),
+        group=attempt.get("group_key"),
+        materials=remediation_materials,
+    )
     return {
         "ok": True, "attemptId": str(attempt["id"]), "recordId": record_id, "score": result["score"],
         "status": result["status"], "correctCount": result["correctCount"], "wrongCount": result["wrongCount"],
@@ -229,5 +245,6 @@ def submit_attempt(base_or_user, user_or_attempt_id, attempt_id_or_data, data: M
             for question in questions
             if isinstance(question, dict)
         ],
+        "remediation": remediation_plan,
         "submittedAt": submitted_at,
     }

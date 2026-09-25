@@ -214,7 +214,8 @@
 
       const href=`/system?${qs.toString()}`;
 
-      return `<a class="v56-assessment-row phase3-home-task-row" href="${href}"><span class="v56-assessment-badge">${area}考核</span><span><strong>${escapeHtml(x.title||'未命名考核')}</strong><span>${escapeHtml(g)} · 及格 ${Number(x.passingScore||80)} 分</span></span><b aria-hidden="true">›</b></a>`;
+      const remediation=!!x.remediationRequired;
+      return `<a class="v56-assessment-row phase3-home-task-row" href="${href}"><span class="v56-assessment-badge">${remediation?'補強再測':area+'考核'}</span><span><strong>${escapeHtml(x.title||'未命名考核')}</strong><span>${remediation?`上次未達標 · 先複習 ${Number(x?.remediation?.reviewMaterialCount||0)} 份教材`:`${escapeHtml(g)} · 及格 ${Number(x.passingScore||80)} 分`}</span></span><b aria-hidden="true">›</b></a>`;
     }).join('');
     box.innerHTML=retrainingTask||courseTasks||materialTask||examTasks?retrainingTask+courseTasks+materialTask+examTasks:'<div class="v56-empty">目前沒有待辦，今天可以依自己的節奏繼續學習。</div>';
   }

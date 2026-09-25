@@ -12,7 +12,7 @@ class FinalSkeletonCleanup74Tests(unittest.TestCase):
         for path in ("static/index.html", "static/area-internal.html", "static/area-pgy.html"):
             html = self.source(path)
             self.assertNotIn('class="v575-manage-direct"', html)
-            self.assertIn('/portal-v56.js?v=7400', html)
+            self.assertIn('/portal-v56.js?v=8500', html)
         pgy = self.source('static/area-pgy.html')
         self.assertNotIn('data-pgy-management-only', pgy)
         self.assertNotIn('PGY 學習層級（教學管理）', pgy)

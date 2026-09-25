@@ -101,9 +101,12 @@
 
     const pendingExams = Array.isArray(dashboard?.pendingExams) ? dashboard.pendingExams : [];
     pendingExams.filter(exam => !pendingCourseIds.has(String(exam?.courseId || ''))).forEach(exam => rows.push({
-      kind: 'exam', priority: 2, title: exam?.title || '待完成考核',
-      detail: `${exam?.area === 'pgy' ? 'PGY' : '院內'}考核 · 及格 ${Number(exam?.passingScore || 80)} 分`,
-      badge: '考核', overdue: false, href: examHref(exam), target: ''
+      kind: exam?.remediationRequired ? 'remediation' : 'exam', priority: exam?.remediationRequired ? 1 : 2,
+      title: exam?.remediationRequired ? `補強後再測｜${exam?.title || '考核'}` : (exam?.title || '待完成考核'),
+      detail: exam?.remediationRequired
+        ? `上次未達及格線 · 建議先複習 ${Number(exam?.remediation?.reviewMaterialCount || 0)} 份相關教材`
+        : `${exam?.area === 'pgy' ? 'PGY' : '院內'}考核 · 及格 ${Number(exam?.passingScore || 80)} 分`,
+      badge: exam?.remediationRequired ? '補強再測' : '考核', overdue: false, href: examHref(exam), target: ''
     }));
 
     const notices = Array.isArray(announcements) ? announcements : [];

@@ -14,6 +14,7 @@ from teacher_app.learning import completion as completion_rules
 from teacher_app.learning import versioning
 from teacher_app.learning.progress_service import assessment_to_dict, record_to_dict
 from teacher_app.materials import repository as material_repository
+from teacher_app.exams import remediation as exam_remediation
 
 
 def _record_visible_to_user(user: Mapping[str, Any], record: Mapping[str, Any]) -> bool:
@@ -149,6 +150,7 @@ def dashboard_summary(
     retraining_ids = active_material_ids & stale_completed_material_ids
 
     passed_quiz_ids = set()
+    latest_failed_record_by_quiz: dict[str, dict[str, Any]] = {}
     pending_review_count = 0
     for record in records:
         if record.get("reviewStatus") == "pending":
@@ -162,6 +164,8 @@ def dashboard_summary(
                 record.get("passingScore", 80) or 80
             ):
                 passed_quiz_ids.add(quiz_id)
+            elif quiz_id not in latest_failed_record_by_quiz:
+                latest_failed_record_by_quiz[quiz_id] = record
         except (TypeError, ValueError):
             pass
     active_quiz_ids = {
@@ -186,6 +190,19 @@ def dashboard_summary(
         quiz_id = str(quiz.get("id", "") or "")
         if not quiz_id or quiz_id in passed_quiz_ids:
             continue
+        failed_record = latest_failed_record_by_quiz.get(quiz_id)
+        remediation_plan = None
+        if failed_record:
+            remediation_plan = exam_remediation.build_plan(
+                score=failed_record.get("score"),
+                passing_score=failed_record.get("passingScore", quiz.get("passingScore", 80)),
+                essay_count=0,
+                quiz_category_id=quiz_id,
+                course_id=quiz.get("courseId"),
+                area=quiz.get("area"),
+                group=quiz.get("group"),
+                materials=all_materials,
+            )
         pending_exams.append(
             {
                 "id": quiz_id,
@@ -199,6 +216,8 @@ def dashboard_summary(
                 "publishedAt": str(
                     quiz.get("publishedAt", "") or quiz.get("dateAdded", "") or ""
                 ),
+                "remediationRequired": bool((remediation_plan or {}).get("required")),
+                "remediation": remediation_plan if (remediation_plan or {}).get("required") else None,
             }
         )
     pending_exams.sort(key=lambda item: item.get("publishedAt", ""), reverse=True)

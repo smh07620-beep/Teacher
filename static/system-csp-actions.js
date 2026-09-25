@@ -53,6 +53,7 @@
     'renderAdminTable','renderAdminUserAccounts','renderCourseOverview','renderFilteredQuestionList','renderFormalAtlas',
     'renderMaterialJobs','renderStorageStatus','renderWizardMaterialClassifier','resetAdminUserPassword','resetCurrentQuiz',
     'retryMaterialJob','reviewCurrentExam','saveAdminUserEditor','saveExamSettings','saveQuizMaterialLinks',
+    'openExamRemediationMaterials','restartExamAfterRemediation',
     'scrollToFirstFlagged','scrollToFirstUnanswered','scrollToReview','searchTeachingResources','selectEssay','selectFill',
     'selectPgyAssessmentType','setMediaRate','setMediaSize','setMediaVolume','slideViewerNext','slideViewerPrev',
     'slideViewerResetZoom','slideViewerZoom','submitEssayReview','submitPgyAssessment','submitQuiz','switchAdminWorkspace',

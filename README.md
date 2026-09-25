@@ -73,6 +73,10 @@ Migration `0083-learning-assignments` 提供院內／一般課程的正式學習
 
 Migration `0084-material-version-retraining` 為上傳教材增加版本歷史與重新訓練語意。教材預設從 V1 開始；發布一般小改版時可保留既有完成資格，重大 SOP／教材修訂則可勾選「要求重新訓練」，讓 `required_completion_version` 提升到最新版。既有完成證據不會被刪除，而是保留原 `completed_version` 供稽核，學員首頁、待辦與進度會把舊版本完成狀態重新判定為待完成。版本發布採 append-only `material_versions` 歷史，並寫入 general audit event；詳見 `docs/MATERIAL_VERSION_RETRAINING_0084.md`。
 
+### 未合格考核補強與再測
+
+考核未達及格線時，伺服器會依該次考卷的 `courseId / quizCategoryId / training area / group` 產生同範圍的補強學習建議，優先列出同課程 SOP 與教材；原始未合格成績與逐題紀錄不會被覆蓋。學員可先回教材區複習，再用既有安全考試流程建立新的重測 attempt。含問答題且尚待人工批改的紀錄不會提前判定為補強；教師完成批改後若仍未合格，首頁與通知中心會顯示「補強再測」。此流程不新增平行成績來源，也不放寬任何教材或考試 scope。
+
 ## 本機開發
 
 建議 Python 3.12：

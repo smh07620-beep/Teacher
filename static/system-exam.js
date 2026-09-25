@@ -405,6 +405,7 @@ async function submitQuiz() {
     renderQuestions();
 
     const totalScore=Number(result.score||0),correctCount=Number(result.correctCount||0),wrongCount=Number(result.wrongCount||0),passingScore=Number(result.passingScore||allQuizData[currentCatKey].passingScore||80),essayCount=Number(result.essayCount||0);
+    window.currentExamRemediationPlan=result.remediation||null;
 
     document.getElementById('result-user-info').innerText = `考核者：${nameInput} (工號：${idInput})`;
     document.getElementById('final-score-text').innerText = totalScore;
@@ -426,8 +427,11 @@ async function submitQuiz() {
     } else {
         badge.className = 'inline-block px-4 py-1.5 rounded-full text-sm font-bold bg-red-100 text-red-800';
         badge.innerText = '考核結果：未達及格線 (NEEDS REVIEW)';
-        comment.innerText = '建議您返回「教材區」複習相關教材，並檢視下方答錯題目之解析。';
+        const gap=Number(result?.remediation?.scoreGap||Math.max(0,passingScore-totalScore));
+        comment.innerText = `本次距離及格線尚差 ${gap} 分。先完成下方補強學習，再回來重新應試；原始成績紀錄會保留。`;
     }
+
+    renderExamRemediation(result.remediation||null);
 
     const resultDashboard = document.getElementById('result-dashboard');
     resultDashboard.classList.remove('hidden');
@@ -436,3 +440,36 @@ async function submitQuiz() {
     renderCategoryChart(result.categoryStats||{});
     updateProgressStats();
 }
+
+function renderExamRemediation(plan){
+    const box=document.getElementById('result-remediation');
+    if(!box)return;
+    const required=Boolean(plan?.required);
+    box.classList.toggle('hidden',!required);
+    if(!required)return;
+    const materials=Array.isArray(plan?.reviewMaterials)?plan.reviewMaterials:[];
+    const summary=document.getElementById('result-remediation-summary');
+    if(summary)summary.textContent=materials.length
+        ? `建議先複習 ${materials.length} 份同課程教材，再重新作答。系統不會覆蓋這次未合格紀錄。`
+        : '目前沒有綁定特定教材，請先回本組教材區複習相關 SOP／教材，再重新作答。';
+    const list=document.getElementById('result-remediation-list');
+    if(list)list.innerHTML=materials.length
+        ? materials.map((m,index)=>`<div class="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs text-slate-700"><b>${index+1}. ${escapeHtml(m.title||'教材')}</b><span class="ml-2 text-[10px] text-slate-400">V${Number(m.currentVersion||1)}</span></div>`).join('')
+        : '<div class="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs text-slate-500">請回教材區依課程順序重新複習。</div>';
+}
+
+window.openExamRemediationMaterials=function(){
+    const plan=window.currentExamRemediationPlan||{};
+    const qs=new URLSearchParams({
+        area:plan.area||currentTrainingArea||'internal',
+        group:plan.group||currentGroupKey||'grpBio',
+        module:'materials',
+        from:'remediation'
+    });
+    if(plan.courseId)qs.set('courseId',plan.courseId);
+    location.href=`/system?${qs.toString()}`;
+};
+
+window.restartExamAfterRemediation=function(){
+    if(typeof window.resetCurrentQuiz==='function')window.resetCurrentQuiz();
+};

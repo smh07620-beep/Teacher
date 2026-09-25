@@ -79,7 +79,7 @@ class HomeRouting66Tests(
         )
 
         self.assertIn(
-            "system-exam.js?v=6602",
+            "system-exam.js?v=8500",
             system_html,
         )
 
@@ -109,7 +109,7 @@ class HomeRouting66Tests(
         )
 
         self.assertIn(
-            "portal-v56.js?v=7400",
+            "portal-v56.js?v=8500",
             index,
         )
 

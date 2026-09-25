@@ -83,7 +83,7 @@ class LearningFlow66Tests(
 
         # Preserve M2 direct-exam asset.
         self.assertIn(
-            "system-exam.js?v=6602",
+            "system-exam.js?v=8500",
             html,
         )
 
