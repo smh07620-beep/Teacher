@@ -44,6 +44,10 @@ def material_row_to_dict(row_or_legacy_base, legacy_row=None) -> dict:
         r["atlasMeta"] = json.loads(raw_atlas_meta) if isinstance(raw_atlas_meta, str) else (raw_atlas_meta or {})
     except Exception:
         r["atlasMeta"] = {}
+    r["currentVersion"] = max(1, int(r.pop("current_version", 1) or 1))
+    r["requiredCompletionVersion"] = max(1, int(r.pop("required_completion_version", 1) or 1))
+    r["versionUpdatedAt"] = r.pop("version_updated_at", "") or ""
+    r["versionUpdatedBy"] = r.pop("version_updated_by", "") or ""
     r["active"] = bool(r.get("active", True))
     r["blindMode"] = bool(r.pop("blind_mode", False))
     r["group"] = scope.normalize_group(r.pop("group_key", scope.DEFAULT_GROUP))
@@ -92,7 +96,8 @@ MATERIAL_DB_COLUMNS = (
     "id", "filename", "title", "description", "category", "group_key",
     "training_area", "course_id", "folder", "page_count", "date_added",
     "storage_filename", "storage_backend", "storage_key", "slides_prefix",
-    "storage_meta", "material_type", "atlas_meta", "active",
+    "storage_meta", "material_type", "atlas_meta", "current_version",
+    "required_completion_version", "version_updated_at", "version_updated_by", "active",
 )
 
 
@@ -100,7 +105,19 @@ def insert_material_on_connection(conn, kind: str, entry: dict, *, ignore_confli
     ph = common_db.placeholder(kind)
     columns = ",".join(MATERIAL_DB_COLUMNS)
     marks = ",".join([ph] * len(MATERIAL_DB_COLUMNS))
-    values = tuple((bool(entry.get(name)) if name == "active" and kind == "postgres" else int(bool(entry.get(name))) if name == "active" else entry.get(name)) for name in MATERIAL_DB_COLUMNS)
+    defaults = {
+        "current_version": 1,
+        "required_completion_version": 1,
+        "version_updated_at": "",
+        "version_updated_by": "",
+    }
+    values_list = []
+    for name in MATERIAL_DB_COLUMNS:
+        value = entry.get(name, defaults.get(name))
+        if name == "active":
+            value = bool(value) if kind == "postgres" else int(bool(value))
+        values_list.append(value)
+    values = tuple(values_list)
     if kind == "sqlite" and ignore_conflict:
         sql = f"INSERT OR IGNORE INTO materials ({columns}) VALUES ({marks})"
     else:
