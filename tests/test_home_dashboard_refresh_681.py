@@ -54,7 +54,7 @@ class HomeDashboardRefresh681Tests(unittest.TestCase):
         self.assertIn("const pendingCourses=Array.isArray(d.pendingCourses)?d.pendingCourses:[]", self.runtime)
         self.assertIn("d?.scopeSource==='assignments'", self.runtime)
         self.assertIn(":materialsPending+examsPending", self.runtime)
-        self.assertIn("renderPendingExams(d.pendingExams||[],materialsPending,pendingCourses)", self.runtime)
+        self.assertIn("renderPendingExams(d.pendingExams||[],materialsPending,pendingCourses,materialsRetraining)", self.runtime)
 
     def test_visual_refresh_is_home_scoped(self):
         self.assertIn('home-dashboard-page', self.html)

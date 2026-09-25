@@ -72,6 +72,40 @@ def upsert_progress(
             )
 
 
+def set_completed_version(material_id: str, username: str, version: int) -> bool:
+    """Persist the material version that satisfied completion when 0084 is present.
+
+    Isolated compatibility fixtures may intentionally omit release migrations;
+    in that case this helper is a no-op instead of mutating schema at runtime.
+    """
+    with common_db.transaction() as (conn, kind):
+        if kind == "postgres":
+            row = conn.execute(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_schema=current_schema() AND table_name=%s AND column_name=%s",
+                ("learning_progress", "completed_version"),
+            ).fetchone()
+        else:
+            row = next(
+                (
+                    item
+                    for item in conn.execute("PRAGMA table_info(learning_progress)").fetchall()
+                    if str(dict(item).get("name", item[1] if len(item) > 1 else ""))
+                    == "completed_version"
+                ),
+                None,
+            )
+        if not row:
+            return False
+        ph = common_db.placeholder(kind)
+        conn.execute(
+            f"UPDATE learning_progress SET completed_version={ph} "
+            f"WHERE material_id={ph} AND username={ph}",
+            (max(1, int(version or 1)), material_id, username),
+        )
+    return True
+
+
 def update_media_progress(
     material_id: str,
     username: str,

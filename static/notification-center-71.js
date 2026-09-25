@@ -91,6 +91,14 @@
       });
     });
 
+    const retrainingCount = Math.max(0, Number(dashboard?.materialsRetraining || 0));
+    if (retrainingCount) rows.push({
+      kind: 'retraining', priority: 1,
+      title: `${retrainingCount} 份教材需要重新訓練`,
+      detail: '教材或 SOP 已發布重大新版，原完成紀錄仍保留，但需重新完成最新版。',
+      badge: '重新訓練', overdue: false, href: '/system?module=materials&from=notification', target: ''
+    });
+
     const pendingExams = Array.isArray(dashboard?.pendingExams) ? dashboard.pendingExams : [];
     pendingExams.filter(exam => !pendingCourseIds.has(String(exam?.courseId || ''))).forEach(exam => rows.push({
       kind: 'exam', priority: 2, title: exam?.title || '待完成考核',

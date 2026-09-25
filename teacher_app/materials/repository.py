@@ -5,6 +5,7 @@ and storage SDK/process ownership remain outside this module.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 from pathlib import Path
 
@@ -49,6 +50,16 @@ def material_row_to_dict(row_or_legacy_base, legacy_row=None) -> dict:
     r["group"] = scope.normalize_group(r.pop("group_key", scope.DEFAULT_GROUP))
     r["area"] = scope.normalize_area(r.pop("training_area", scope.DEFAULT_TRAINING_AREA))
     r["courseId"] = r.pop("course_id", "") or ""
+    r["currentVersion"] = max(1, int(r.pop("current_version", 1) or 1))
+    r["requiredCompletionVersion"] = max(
+        1,
+        min(
+            r["currentVersion"],
+            int(r.pop("required_completion_version", 1) or 1),
+        ),
+    )
+    r["versionUpdatedAt"] = str(r.pop("version_updated_at", "") or "")
+    r["versionUpdatedBy"] = str(r.pop("version_updated_by", "") or "")
     ext = Path(r.get("filename", "")).suffix.lower()
     if ext in VIDEO_EXTENSIONS:
         r["viewerMode"] = "video"
@@ -96,6 +107,71 @@ MATERIAL_DB_COLUMNS = (
 )
 
 
+def _table_exists(conn, kind: str, table: str) -> bool:
+    if kind == "postgres":
+        return bool(
+            conn.execute(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema=current_schema() AND table_name=%s",
+                (table,),
+            ).fetchone()
+        )
+    return bool(
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        ).fetchone()
+    )
+
+
+def ensure_material_version_baseline_on_connection(conn, kind: str, entry: dict) -> None:
+    """Create immutable V1 history for materials created after migration 0084."""
+    if not _table_exists(conn, kind, "material_versions"):
+        return
+    material_id = str(entry.get("id") or "").strip()
+    if not material_id:
+        return
+    ph = common_db.placeholder(kind)
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    conn.execute(
+        f"UPDATE materials SET version_updated_at={ph},version_updated_by={ph} "
+        f"WHERE id={ph} AND (version_updated_at='' OR version_updated_at IS NULL)",
+        (now, "system:create", material_id),
+    )
+    snapshot = dict(entry)
+    snapshot.update(
+        {
+            "current_version": 1,
+            "required_completion_version": 1,
+            "version_updated_at": now,
+            "version_updated_by": "system:create",
+        }
+    )
+    params = (
+        material_id,
+        1,
+        False if kind == "postgres" else 0,
+        "initial publication",
+        now,
+        "system:create",
+        json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"), default=str),
+    )
+    if kind == "postgres":
+        conn.execute(
+            "INSERT INTO material_versions "
+            "(material_id,version,requires_retraining,change_reason,published_at,published_by,snapshot) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(material_id,version) DO NOTHING",
+            params,
+        )
+    else:
+        conn.execute(
+            "INSERT OR IGNORE INTO material_versions "
+            "(material_id,version,requires_retraining,change_reason,published_at,published_by,snapshot) "
+            "VALUES (?,?,?,?,?,?,?)",
+            params,
+        )
+
+
 def insert_material_on_connection(conn, kind: str, entry: dict, *, ignore_conflict: bool = False) -> None:
     ph = common_db.placeholder(kind)
     columns = ",".join(MATERIAL_DB_COLUMNS)
@@ -108,6 +184,7 @@ def insert_material_on_connection(conn, kind: str, entry: dict, *, ignore_confli
         if kind == "postgres" and ignore_conflict:
             sql += " ON CONFLICT(id) DO NOTHING"
     conn.execute(sql, values)
+    ensure_material_version_baseline_on_connection(conn, kind, entry)
 
 
 def insert_material(entry: dict, *, ignore_conflict: bool = False) -> None:
@@ -132,6 +209,91 @@ def update_material_metadata(material_id: str, *, title: str, description: str, 
             f"title={ph}, description={ph}, category={ph}, group_key={ph}, training_area={ph}, course_id={ph}, material_type={ph}, atlas_meta={ph}, active={ph} WHERE id={ph}",
             (title, description, category, group_key, training_area, course_id, material_type, atlas_meta_json, active if kind == "postgres" else int(active), material_id),
         )
+
+
+def material_version_row_to_dict(row) -> dict:
+    item = dict(row)
+    raw_snapshot = item.pop("snapshot", "{}") or "{}"
+    try:
+        snapshot = json.loads(raw_snapshot) if isinstance(raw_snapshot, str) else dict(raw_snapshot or {})
+    except Exception:
+        snapshot = {}
+    return {
+        "materialId": str(item.get("material_id") or ""),
+        "version": max(1, int(item.get("version") or 1)),
+        "requiresRetraining": bool(item.get("requires_retraining", False)),
+        "changeReason": str(item.get("change_reason") or ""),
+        "publishedAt": str(item.get("published_at") or ""),
+        "publishedBy": str(item.get("published_by") or ""),
+        "snapshot": snapshot,
+    }
+
+
+def list_material_versions(material_id: str) -> list[dict]:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        rows = conn.execute(
+            f"SELECT * FROM material_versions WHERE material_id={ph} ORDER BY version DESC",
+            (material_id,),
+        ).fetchall()
+    return [material_version_row_to_dict(row) for row in rows]
+
+
+def publish_material_version(
+    material_id: str,
+    *,
+    published_by: str,
+    change_reason: str,
+    requires_retraining: bool,
+) -> dict | None:
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        select_sql = f"SELECT * FROM materials WHERE id={ph}"
+        if kind == "postgres":
+            select_sql += " FOR UPDATE"
+        row = conn.execute(select_sql, (material_id,)).fetchone()
+        if not row:
+            return None
+        current_row = dict(row)
+        current_version = max(1, int(current_row.get("current_version", 1) or 1))
+        new_version = current_version + 1
+        required_version = max(
+            1,
+            int(current_row.get("required_completion_version", 1) or 1),
+        )
+        if requires_retraining:
+            required_version = new_version
+        conn.execute(
+            f"UPDATE materials SET current_version={ph},required_completion_version={ph},"
+            f"version_updated_at={ph},version_updated_by={ph} WHERE id={ph}",
+            (new_version, required_version, now, published_by, material_id),
+        )
+        snapshot = dict(current_row)
+        snapshot.update(
+            {
+                "current_version": new_version,
+                "required_completion_version": required_version,
+                "version_updated_at": now,
+                "version_updated_by": published_by,
+            }
+        )
+        params = (
+            material_id,
+            new_version,
+            requires_retraining if kind == "postgres" else int(requires_retraining),
+            change_reason,
+            now,
+            published_by,
+            json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"), default=str),
+        )
+        conn.execute(
+            f"INSERT INTO material_versions "
+            f"(material_id,version,requires_retraining,change_reason,published_at,published_by,snapshot) "
+            f"VALUES ({','.join([ph] * 7)})",
+            params,
+        )
+    return get_material(material_id)
 
 
 def delete_material_record(material_id: str) -> None:

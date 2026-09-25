@@ -11,6 +11,7 @@ from teacher_app.courses import repository as course_repository
 from teacher_app.learning import access as learning_access
 from teacher_app.learning import assignment_service
 from teacher_app.learning import completion as completion_rules
+from teacher_app.learning import versioning
 from teacher_app.learning.progress_service import assessment_to_dict, record_to_dict
 from teacher_app.materials import repository as material_repository
 
@@ -52,7 +53,7 @@ def dashboard_summary(
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
         progress_rows = conn.execute(
-            f"SELECT material_id,name,completed_at FROM material_progress "
+            f"SELECT * FROM material_progress "
             f"WHERE emp_id={ph} ORDER BY completed_at DESC",
             (emp_id,),
         ).fetchall()
@@ -67,12 +68,6 @@ def dashboard_summary(
 
     all_records = [record_to_dict(row) for row in record_rows]
     assessments = [assessment_to_dict(row) for row in assessment_rows]
-    completed_material_ids = {
-        str(dict(row).get("material_id", ""))
-        for row in progress_rows
-        if dict(row).get("material_id")
-    }
-
     display_name = requested_name
     if not display_name:
         for row in list(progress_rows) + list(record_rows) + list(assessment_rows):
@@ -92,6 +87,10 @@ def dashboard_summary(
         if item.get("active", True)
     ]
     all_courses = course_repository.list_courses(None, None, False)
+    completed_material_ids, stale_completed_material_ids = versioning.valid_completed_material_ids(
+        all_materials,
+        progress_rows,
+    )
 
     assignments = assignment_service.list_for_user(user)
     assignment_mode = bool(assignments)
@@ -147,6 +146,7 @@ def dashboard_summary(
         str(item.get("id", "")) for item in materials if item.get("id")
     }
     material_done = len(active_material_ids & completed_material_ids)
+    retraining_ids = active_material_ids & stale_completed_material_ids
 
     passed_quiz_ids = set()
     pending_review_count = 0
@@ -291,6 +291,8 @@ def dashboard_summary(
         "materialsTotal": len(active_material_ids),
         "materialsCompleted": material_done,
         "materialsPending": max(0, len(active_material_ids) - material_done),
+        "materialsRetraining": len(retraining_ids),
+        "retrainingMaterialIds": sorted(retraining_ids),
         "examsTotal": len(active_quiz_ids),
         "examsPassed": quiz_done,
         "examsPending": max(0, len(active_quiz_ids) - quiz_done),

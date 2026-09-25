@@ -17,7 +17,7 @@ from flask import g, jsonify, request
 
 from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.learning import access as learning_access
-from teacher_app.learning import content, repository
+from teacher_app.learning import content, repository, versioning
 from teacher_app.materials import repository as material_repository
 
 
@@ -141,7 +141,8 @@ def register_smart_learning(
         user, denied = _user(owner)
         if denied:
             return denied
-        if not visible_material(user, material_id):
+        material = visible_material(user, material_id)
+        if not material:
             return jsonify({"error": "找不到教材"}), 404
         data = repository.get_progress(material_id, user["username"])
         if not data:
@@ -154,7 +155,20 @@ def register_smart_learning(
                 "duration": 0,
                 "watchedBuckets": [],
                 "completionThreshold": 0.9,
+                "completedVersion": 0,
+                "currentVersion": versioning.current_version(material),
+                "requiredCompletionVersion": versioning.required_completion_version(material),
+                "retrainingRequired": False,
             })
+        raw_completed = bool(data.get("completed", False))
+        completed_version = data.get("completed_version", 1)
+        version_status = versioning.classify_completion(material, completed_version)
+        data["completed"] = raw_completed and version_status["completionCurrent"]
+        data["completedVersion"] = version_status["completedVersion"] if raw_completed else 0
+        data["currentVersion"] = version_status["currentVersion"]
+        data["requiredCompletionVersion"] = version_status["requiredCompletionVersion"]
+        data["retrainingRequired"] = raw_completed and not version_status["completionCurrent"]
+        data.pop("completed_version", None)
         try:
             data["position"] = json.loads(data.get("position", "{}"))
         except Exception:
@@ -174,7 +188,8 @@ def register_smart_learning(
         user, denied = _user(owner)
         if denied:
             return denied
-        if not visible_material(user, material_id):
+        material = visible_material(user, material_id)
+        if not material:
             return jsonify({"error": "找不到教材"}), 404
 
         body = request.get_json(silent=True) or {}
@@ -227,6 +242,12 @@ def register_smart_learning(
             completion_threshold=threshold,
             updated_at=now,
         )
+        if completed:
+            repository.set_completed_version(
+                material_id,
+                user["username"],
+                versioning.current_version(material),
+            )
         return jsonify({
             "ok": True,
             "materialId": material_id,
@@ -237,6 +258,10 @@ def register_smart_learning(
             "duration": duration,
             "watchedBuckets": buckets,
             "lastViewedAt": now,
+            "completedVersion": versioning.current_version(material) if completed else 0,
+            "currentVersion": versioning.current_version(material),
+            "requiredCompletionVersion": versioning.required_completion_version(material),
+            "retrainingRequired": False,
         })
 
     @app.get("/api/material-search")

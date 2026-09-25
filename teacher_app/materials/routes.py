@@ -61,6 +61,10 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
             "materialType": str(item.get("materialType") or ""),
             "active": bool(item.get("active", True)),
             "storageBackend": str(item.get("storageBackend") or ""),
+            "currentVersion": int(item.get("currentVersion") or 1),
+            "requiredCompletionVersion": int(item.get("requiredCompletionVersion") or 1),
+            "versionUpdatedAt": str(item.get("versionUpdatedAt") or ""),
+            "versionUpdatedBy": str(item.get("versionUpdatedBy") or ""),
         }
 
     def require_admin():
@@ -123,10 +127,63 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
         )
         return jsonify(payload)
 
+    def api_list_material_versions(slide_id):
+        denied = require_admin()
+        if denied:
+            return denied
+        try:
+            return jsonify(service.list_material_versions(slide_id))
+        except ApiError as exc:
+            return _legacy_error(exc)
+
+    def api_publish_material_version(slide_id):
+        denied = require_admin()
+        if denied:
+            return denied
+        before = repository.get_material(slide_id)
+        current_actor = actor() or {}
+        try:
+            payload = service.publish_material_version(
+                slide_id,
+                request.get_json(silent=True) or {},
+                actor_username=str(current_actor.get("username") or ""),
+            )
+        except ApiError as exc:
+            return _legacy_error(exc)
+        after = repository.get_material(slide_id)
+        detail = {
+            "changeReason": str((request.get_json(silent=True) or {}).get("changeReason") or "")[:1000],
+            "requiresRetraining": bool(payload.get("requiresRetraining")),
+        }
+        audit.record_event(
+            actor=current_actor,
+            action="material.version.publish",
+            target_type="material",
+            target_id=slide_id,
+            group=str((after or before or {}).get("group") or ""),
+            before=snapshot(before),
+            after=snapshot(after),
+            detail=detail,
+        )
+        if payload.get("requiresRetraining"):
+            audit.record_event(
+                actor=current_actor,
+                action="material.retraining.require",
+                target_type="material",
+                target_id=slide_id,
+                group=str((after or before or {}).get("group") or ""),
+                before=snapshot(before),
+                after=snapshot(after),
+                detail=detail,
+            )
+        return jsonify(payload), 201
+
     app.add_url_rule("/api/slides", endpoint="api_list_slides", view_func=api_list_slides, methods=["GET"])
     app.add_url_rule("/api/slides/admin", endpoint="api_admin_slides", view_func=api_admin_slides, methods=["GET"])
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_update_slide", view_func=api_update_slide, methods=["PATCH"])
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_delete_slide", view_func=api_delete_slide, methods=["DELETE"])
+    app.add_url_rule("/api/slides/<slide_id>/versions", endpoint="api_list_material_versions", view_func=api_list_material_versions, methods=["GET"])
+    app.add_url_rule("/api/slides/<slide_id>/versions", endpoint="api_publish_material_version", view_func=api_publish_material_version, methods=["POST"])
     app.extensions["teacher_material_catalog_routes_registered"] = True
     return app
 

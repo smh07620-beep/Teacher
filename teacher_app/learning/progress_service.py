@@ -11,6 +11,7 @@ from teacher_app.common import scope
 from teacher_app.courses import repository as course_repository
 from teacher_app.learning import access as learning_access
 from teacher_app.learning import completion as completion_rules
+from teacher_app.learning import versioning
 from teacher_app.materials import repository as material_repository
 
 
@@ -94,21 +95,51 @@ def mark_material_complete(user: Mapping[str, Any], material_id: str) -> str:
         raise ProgressError("此教材不在你的授權範圍。", 403)
 
     now = dt.datetime.now(dt.timezone.utc).isoformat()
+    completed_version = versioning.current_version(material)
     with common_db.transaction() as (conn, kind):
         if kind == "postgres":
-            conn.execute(
-                "INSERT INTO material_progress (emp_id,name,material_id,completed_at) "
-                "VALUES (%s,%s,%s,%s) ON CONFLICT (emp_id,material_id) DO UPDATE SET "
-                "name=EXCLUDED.name, completed_at=EXCLUDED.completed_at",
-                (emp_id, name, material_id, now),
+            version_column = bool(
+                conn.execute(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_schema=current_schema() AND table_name=%s AND column_name=%s",
+                    ("material_progress", "completed_version"),
+                ).fetchone()
             )
         else:
-            conn.execute(
-                "INSERT INTO material_progress (emp_id,name,material_id,completed_at) "
-                "VALUES (?,?,?,?) ON CONFLICT(emp_id,material_id) DO UPDATE SET "
-                "name=excluded.name, completed_at=excluded.completed_at",
-                (emp_id, name, material_id, now),
+            version_column = any(
+                str(dict(row).get("name", row[1] if len(row) > 1 else "")) == "completed_version"
+                for row in conn.execute("PRAGMA table_info(material_progress)").fetchall()
             )
+        if kind == "postgres":
+            if version_column:
+                conn.execute(
+                    "INSERT INTO material_progress (emp_id,name,material_id,completed_at,completed_version) "
+                    "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (emp_id,material_id) DO UPDATE SET "
+                    "name=EXCLUDED.name, completed_at=EXCLUDED.completed_at, completed_version=EXCLUDED.completed_version",
+                    (emp_id, name, material_id, now, completed_version),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO material_progress (emp_id,name,material_id,completed_at) "
+                    "VALUES (%s,%s,%s,%s) ON CONFLICT (emp_id,material_id) DO UPDATE SET "
+                    "name=EXCLUDED.name, completed_at=EXCLUDED.completed_at",
+                    (emp_id, name, material_id, now),
+                )
+        else:
+            if version_column:
+                conn.execute(
+                    "INSERT INTO material_progress (emp_id,name,material_id,completed_at,completed_version) "
+                    "VALUES (?,?,?,?,?) ON CONFLICT(emp_id,material_id) DO UPDATE SET "
+                    "name=excluded.name, completed_at=excluded.completed_at, completed_version=excluded.completed_version",
+                    (emp_id, name, material_id, now, completed_version),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO material_progress (emp_id,name,material_id,completed_at) "
+                    "VALUES (?,?,?,?) ON CONFLICT(emp_id,material_id) DO UPDATE SET "
+                    "name=excluded.name, completed_at=excluded.completed_at",
+                    (emp_id, name, material_id, now),
+                )
     return now
 
 
@@ -135,7 +166,7 @@ def my_progress(
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
         progress_rows = conn.execute(
-            f"SELECT material_id,completed_at FROM material_progress WHERE emp_id={ph}",
+            f"SELECT * FROM material_progress WHERE emp_id={ph}",
             (emp_id,),
         ).fetchall()
         record_rows = conn.execute(
@@ -159,10 +190,15 @@ def my_progress(
     allowed_material_ids = {
         str(item.get("id") or "") for item in materials if item.get("id")
     }
+    valid_completed_ids, stale_completed_ids = versioning.valid_completed_material_ids(
+        materials,
+        progress_rows,
+    )
     completed = {
         str(dict(row)["material_id"]): dict(row)["completed_at"]
         for row in progress_rows
         if str(dict(row).get("material_id") or "") in allowed_material_ids
+        and str(dict(row).get("material_id") or "") in valid_completed_ids
     }
     categories = assessment_repository.list_categories(
         normalized_group,
@@ -204,6 +240,7 @@ def my_progress(
         "scope": {"area": normalized_area, "group": normalized_group},
         "courses": result,
         "materialsCompleted": completed,
+        "materialsRetraining": sorted(stale_completed_ids & allowed_material_ids),
         "records": records,
     }
 

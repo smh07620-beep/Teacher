@@ -69,6 +69,10 @@ Migration `0083-learning-assignments` 提供院內／一般課程的正式學習
 
 有正式指派時，首頁「我的課程／待辦／進度」改以指派中的必修課程為完成分母；沒有正式指派的既有帳號仍以個人 preferred area/group 作相容 fallback。詳見 `docs/LEARNING_ASSIGNMENTS_0083.md`。
 
+### 教材／SOP 版本與重新訓練
+
+Migration `0084-material-version-retraining` 為上傳教材增加版本歷史與重新訓練語意。教材預設從 V1 開始；發布一般小改版時可保留既有完成資格，重大 SOP／教材修訂則可勾選「要求重新訓練」，讓 `required_completion_version` 提升到最新版。既有完成證據不會被刪除，而是保留原 `completed_version` 供稽核，學員首頁、待辦與進度會把舊版本完成狀態重新判定為待完成。版本發布採 append-only `material_versions` 歷史，並寫入 general audit event；詳見 `docs/MATERIAL_VERSION_RETRAINING_0084.md`。
+
 ## 本機開發
 
 建議 Python 3.12：
@@ -152,3 +156,8 @@ GitHub Actions 的 `Teacher release checks` 會執行 Python compile、完整 re
 ## GitHub 安全原則
 
 不要提交 `.env`、production database URL、secret key、worker token、R2/MEGA/Google credentials、使用者上傳檔案、暫存轉檔資料或 Python cache。GitHub 用於版本控制；正式執行環境由 Render + PostgreSQL/Supabase + 外部 storage / local worker 組成。
+
+
+## Material versioning and retraining
+
+Uploaded materials and SOPs support append-only version history with optional retraining requirements. See `docs/MATERIAL_VERSION_RETRAINING_0084.md`.

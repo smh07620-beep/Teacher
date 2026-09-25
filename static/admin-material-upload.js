@@ -136,6 +136,48 @@
     await renderSlidesGrid();
   };
 
+  window.publishMaterialVersion = async function(id){
+    const materials = await fetchAdminMaterials();
+    const material = materials?.find(x=>x.id===id);
+    if(!material) return alert('找不到教材資料。');
+    const nextVersion = Number(material.currentVersion||1)+1;
+    const reason = prompt(`發布 V${nextVersion}｜請輸入本次版本變更原因：`, '');
+    if(reason===null) return;
+    if(!reason.trim()) return alert('版本變更原因不可空白。');
+    const requiresRetraining = confirm('這次改版是否要求相關學員重新完成教育訓練？\n\n「確定」＝要求重訓；「取消」＝保留既有完成資格。');
+    const finalMessage = requiresRetraining
+      ? `將發布 V${nextVersion}，並把相關學員既有完成狀態標記為需重新訓練。歷史完成紀錄不會刪除。\n\n確定繼續？`
+      : `將發布 V${nextVersion}，既有完成資格仍有效。\n\n確定繼續？`;
+    if(!confirm(finalMessage)) return;
+    const res = await fetch(`/api/slides/${encodeURIComponent(id)}/versions`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      credentials:'same-origin',
+      body:JSON.stringify({changeReason:reason.trim(),requiresRetraining})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok) return alert(data.error||'版本發布失敗');
+    invalidateAdminMaterialsCache();
+    await renderAdminMaterials(true);
+    await renderAdminCourseMaterialHub(true);
+    alert(`✅ 已發布 V${Number(data.version||nextVersion)}${requiresRetraining?'，並要求重新訓練。':'。'}`);
+  };
+
+  window.viewMaterialVersions = async function(id){
+    const res=await fetch(`/api/slides/${encodeURIComponent(id)}/versions`,{credentials:'same-origin'});
+    const data=await res.json().catch(()=>[]);
+    if(!res.ok) return alert(data.error||'讀取版本紀錄失敗');
+    const rows=Array.isArray(data)?data:[];
+    if(!rows.length) return alert('目前沒有版本紀錄。');
+    const text=rows.slice(0,20).map(v=>{
+      const retraining=v.requiresRetraining?'｜要求重訓':'';
+      const who=v.publishedBy?`｜${v.publishedBy}`:'';
+      const when=v.publishedAt?`｜${v.publishedAt}`:'';
+      return `V${Number(v.version||1)}${retraining}${who}${when}\n${v.changeReason||'未填寫變更原因'}`;
+    }).join('\n\n');
+    alert(`教材版本紀錄\n\n${text}`);
+  };
+
   window.deleteAdminMaterial = async function(id){
     if (!confirm('確定刪除這份教材嗎？教材檔案與轉換圖片都會刪除，此操作無法復原。')) return;
     const res = await fetch(`/api/slides/${id}`, {method:'DELETE',});

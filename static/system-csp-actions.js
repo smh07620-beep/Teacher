@@ -48,7 +48,7 @@
     'onAdminQuizGroupChange','openAdminUserEditor','openAtlas','openAtlasCreate','openAtlasDocxWizard','openCourseExam',
     'openEssayReview','openExternalMaterialCreateDrawer','openMaterial','openQuestionImage','openQuizMaterialLinker',
     'openTeacherContentExam','openTeachingMaterials','previewCurrentExam','publishCurrentExam','readerMaterialSearch',
-    'rebuildMaterialIndex','recommendAiMaterials','renderAdminAnnouncements','renderAdminCourseMaterialHub',
+    'publishMaterialVersion','rebuildMaterialIndex','recommendAiMaterials','renderAdminAnnouncements','renderAdminCourseMaterialHub',
     'renderAdminMaterials','renderAdminPeople','renderAdminPgyAssessments','renderAdminQuizCategories','renderAdminSystemStatus',
     'renderAdminTable','renderAdminUserAccounts','renderCourseOverview','renderFilteredQuestionList','renderFormalAtlas',
     'renderMaterialJobs','renderStorageStatus','renderWizardMaterialClassifier','resetAdminUserPassword','resetCurrentQuiz',
@@ -59,7 +59,7 @@
     'switchDynamicCategory','switchLearningModule','switchTeacherMode','syncExamDrawModeUI','syncGlobalLearningSearch',
     'teacher78FilterQuizCategories','teacher78LoadMoreQuizCategories','teacher78SetQuizStatus','teachingCloseEditor',
     'teachingEditCourse','teachingFinishReading','teachingNextMaterial','teachingSaveCourse','toggleAdminAnnouncement',
-    'toggleAdminMaterial','toggleAdminModal','toggleAdminUserAccount','toggleAiMaterialSelection','toggleAtlasFullscreen',
+    'toggleAdminMaterial','toggleAdminModal','toggleAdminUserAccount','toggleAiMaterialSelection','toggleAtlasFullscreen','viewMaterialVersions',
     'toggleFlag','toggleMediaFullscreen','toggleQuizQuestionsPanel','toggleSlideFullscreen','updateAdminMaterialTypeFields',
     'updateManualQuestionType'
   ]);
