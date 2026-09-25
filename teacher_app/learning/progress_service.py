@@ -20,6 +20,21 @@ class ProgressError(ValueError):
         self.status = status
 
 
+def _has_column(conn, kind: str, table: str, column: str) -> bool:
+    """Compatibility probe for isolated legacy-schema tests and upgrade tools."""
+    if kind == "postgres":
+        row = conn.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name=%s AND column_name=%s",
+            (table, column),
+        ).fetchone()
+        return bool(row)
+    return any(
+        str(row[1]) == column
+        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    )
+
+
 def record_to_dict(row: Mapping[str, Any] | Any) -> dict[str, Any]:
     data = dict(row)
     raw = data.pop("answers_detail", "[]")
@@ -89,22 +104,39 @@ def mark_material_complete(user: Mapping[str, Any], material_id: str) -> str:
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     completed_version = max(1, int(material.get("currentVersion") or 1))
     with common_db.transaction() as (conn, kind):
+        versioned = _has_column(conn, kind, "material_progress", "completed_version")
         if kind == "postgres":
-            conn.execute(
-                "INSERT INTO material_progress (emp_id,name,material_id,completed_at,completed_version) "
-                "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (emp_id,material_id) DO UPDATE SET "
-                "name=EXCLUDED.name, completed_at=EXCLUDED.completed_at, "
-                "completed_version=EXCLUDED.completed_version",
-                (emp_id, name, material_id, now, completed_version),
-            )
+            if versioned:
+                conn.execute(
+                    "INSERT INTO material_progress (emp_id,name,material_id,completed_at,completed_version) "
+                    "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (emp_id,material_id) DO UPDATE SET "
+                    "name=EXCLUDED.name, completed_at=EXCLUDED.completed_at, "
+                    "completed_version=EXCLUDED.completed_version",
+                    (emp_id, name, material_id, now, completed_version),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO material_progress (emp_id,name,material_id,completed_at) "
+                    "VALUES (%s,%s,%s,%s) ON CONFLICT (emp_id,material_id) DO UPDATE SET "
+                    "name=EXCLUDED.name, completed_at=EXCLUDED.completed_at",
+                    (emp_id, name, material_id, now),
+                )
         else:
-            conn.execute(
-                "INSERT INTO material_progress (emp_id,name,material_id,completed_at,completed_version) "
-                "VALUES (?,?,?,?,?) ON CONFLICT(emp_id,material_id) DO UPDATE SET "
-                "name=excluded.name, completed_at=excluded.completed_at, "
-                "completed_version=excluded.completed_version",
-                (emp_id, name, material_id, now, completed_version),
-            )
+            if versioned:
+                conn.execute(
+                    "INSERT INTO material_progress (emp_id,name,material_id,completed_at,completed_version) "
+                    "VALUES (?,?,?,?,?) ON CONFLICT(emp_id,material_id) DO UPDATE SET "
+                    "name=excluded.name, completed_at=excluded.completed_at, "
+                    "completed_version=excluded.completed_version",
+                    (emp_id, name, material_id, now, completed_version),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO material_progress (emp_id,name,material_id,completed_at) "
+                    "VALUES (?,?,?,?) ON CONFLICT(emp_id,material_id) DO UPDATE SET "
+                    "name=excluded.name, completed_at=excluded.completed_at",
+                    (emp_id, name, material_id, now),
+                )
     return now
 
 
@@ -126,8 +158,10 @@ def my_progress(
 
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
+        versioned = _has_column(conn, kind, "material_progress", "completed_version")
+        fields = "material_id,completed_at,completed_version" if versioned else "material_id,completed_at"
         progress_rows = conn.execute(
-            f"SELECT material_id,completed_at,completed_version FROM material_progress WHERE emp_id={ph}",
+            f"SELECT {fields} FROM material_progress WHERE emp_id={ph}",
             (emp_id,),
         ).fetchall()
         record_rows = conn.execute(
