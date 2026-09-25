@@ -15,6 +15,21 @@ from teacher_app.materials import repository as material_repository
 from teacher_app.materials import versioning as material_versioning
 
 
+def _has_column(conn, kind: str, table: str, column: str) -> bool:
+    """Compatibility probe for legacy dashboard fixtures not run through migrations."""
+    if kind == "postgres":
+        row = conn.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name=%s AND column_name=%s",
+            (table, column),
+        ).fetchone()
+        return bool(row)
+    return any(
+        str(row[1]) == column
+        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    )
+
+
 def _record_visible_to_user(user: Mapping[str, Any], record: Mapping[str, Any]) -> bool:
     return learning_access.can_access_learning_item(
         user,
@@ -51,8 +66,14 @@ def dashboard_summary(
 
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
+        versioned = _has_column(conn, kind, "material_progress", "completed_version")
+        progress_fields = (
+            "material_id,name,completed_at,completed_version"
+            if versioned
+            else "material_id,name,completed_at"
+        )
         progress_rows = conn.execute(
-            f"SELECT material_id,name,completed_at,completed_version FROM material_progress "
+            f"SELECT {progress_fields} FROM material_progress "
             f"WHERE emp_id={ph} ORDER BY completed_at DESC",
             (emp_id,),
         ).fetchall()
