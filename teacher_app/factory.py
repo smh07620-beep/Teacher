@@ -119,40 +119,69 @@ def _register_production(app: Flask) -> Flask:
         paths=smart_learning_paths,
         # Read the canonical app configuration dynamically so tests/runtime
         # composition can override StoragePaths without teaching the domain
-        # package about the deployment layout.
-        storage_paths_provider=lambda: app.config["STORAGE_PATHS"],
+        # layer about legacy module globals.
+        paths_provider=lambda: app.config["STORAGE_PATHS"],
+        material_getter=lambda material_id: material_repository.get_material(material_id),
     )
     app = register_progress_routes(app)
-    app = register_external_media(app)
-    app = register_legacy_office_69(app)
-    app = register_question_bank(
-        app,
-        question_runtime=build_canonical_question_runtime(),
-    )
-    app = register_course_bundle_72(app)
-    app = register_course_bundle_followup_73(app)
-    app = register_rbac_681(app)
-    app = register_admin_elevation(app)
-    app = register_sensitive_elevation(app)
+    app = register_announcement_routes(app)
     app = register_free_worker(
         app,
         runtime=build_worker_web_runtime(
             paths_provider=lambda: app.config["STORAGE_PATHS"],
         ),
     )
+    app = register_pgy_frontend(app)
+    app = register_external_media(app)
+    app = register_admin_elevation(app, current_user=current_user)
+    app = register_rbac_681(app)
+    app = register_course_bundle_72(app)
+    app = register_course_bundle_followup_73(app)
+    atlas_paths = app.config["STORAGE_PATHS"]
+
+    app = register_atlas_70(
+        app,
+        paths=atlas_paths,
+        paths_provider=lambda: app.config["STORAGE_PATHS"],
+        material_getter=lambda material_id: material_repository.get_material(material_id),
+    )
+    app = register_sensitive_elevation(app)
+    app = register_question_bank(
+        app,
+        runtime_question_runtime=build_canonical_question_runtime(
+            paths_provider=lambda: app.config["STORAGE_PATHS"],
+        ),
+    )
+    app = register_legacy_office_69(app)
     return app
 
 
-def create_app(config: dict | None = None) -> Flask:
-    app = Flask(
-        __name__.split(".")[0],
-        static_folder=str(STATIC_DIR),
-        static_url_path="/static",
-    )
-    configure_app(app, config or {})
+def _register_canonical_blueprints(app: Flask) -> Flask:
+    """Mount canonical auth/exam/PGY routes with production request bindings."""
+    # Import route modules so their decorators have populated each blueprint.
+    from teacher_app.auth import bp as auth_bp
+    from teacher_app.auth import routes as _auth_routes  # noqa: F401
+    from teacher_app.exams import bp as exams_bp
+    from teacher_app.exams import routes as _exam_routes  # noqa: F401
+    from teacher_app.pgy.routes import bp as pgy_bp
+    from teacher_app.common.request_context import register_request_context
+
+    register_request_context(app)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(exams_bp)
+    app.register_blueprint(pgy_bp)
+    return app
+
+
+def create_app() -> Flask:
+    from teacher_app.maintenance.bootstrap import run_bootstrap
+
+    app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
+    configure_app(app)
+    app = run_bootstrap(app)
+    app = _register_canonical_blueprints(app)
+    app = _register_production(app)
     register_error_handlers(app)
-    _register_production(app)
-    register_pgy_frontend(app)
     return app
 
 
