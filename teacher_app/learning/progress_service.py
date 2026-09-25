@@ -10,6 +10,7 @@ from teacher_app.common import db as common_db
 from teacher_app.common import scope
 from teacher_app.courses import repository as course_repository
 from teacher_app.learning import access as learning_access
+from teacher_app.learning import completion as completion_rules
 from teacher_app.materials import repository as material_repository
 
 
@@ -176,30 +177,27 @@ def my_progress(
         course_categories = [
             item for item in categories if item.get("courseId") == course["id"]
         ]
-        done = sum(1 for item in course_materials if item["id"] in completed)
         course_records = [
             record for record in records if record.get("courseId") == course["id"]
         ]
-        passed = any(
-            record.get("reviewStatus") == "completed"
+        passed_exam_ids = {
+            str(record.get("quizCategoryId") or "")
+            for record in course_records
+            if record.get("reviewStatus") == "completed"
             and int(record.get("score", 0))
             >= int(record.get("passingScore", 80) or 80)
-            for record in course_records
-        )
-        has_exam = len(course_categories) > 0
-        complete = (
-            done == len(course_materials)
-            and (passed if has_exam else True)
-            and (len(course_materials) > 0 or has_exam)
+        }
+        completion = completion_rules.evaluate_course_completion(
+            materials=course_materials,
+            exams=course_categories,
+            completed_material_ids=set(completed),
+            passed_exam_ids=passed_exam_ids,
+            policy=course.get("completionPolicy"),
         )
         result.append(
             {
                 **course,
-                "materialsTotal": len(course_materials),
-                "materialsCompleted": done,
-                "examRequired": has_exam,
-                "examPassed": passed,
-                "completed": complete,
+                **completion,
             }
         )
     return {

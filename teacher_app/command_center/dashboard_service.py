@@ -10,6 +10,7 @@ from teacher_app.common import scope
 from teacher_app.courses import repository as course_repository
 from teacher_app.learning import access as learning_access
 from teacher_app.learning import assignment_service
+from teacher_app.learning import completion as completion_rules
 from teacher_app.learning.progress_service import assessment_to_dict, record_to_dict
 from teacher_app.materials import repository as material_repository
 
@@ -222,27 +223,21 @@ def dashboard_summary(
         course = course_by_id.get(course_id, {})
         course_materials = all_materials_by_course.get(course_id, [])
         course_quizzes = all_quizzes_by_course.get(course_id, [])
-        materials_completed = sum(
-            1 for material in course_materials if str(material.get("id") or "") in completed_material_ids
-        )
         quiz_ids = {str(quiz.get("id") or "") for quiz in course_quizzes if quiz.get("id")}
-        exam_passed = bool(quiz_ids & passed_quiz_ids) if quiz_ids else True
-        completed = (
-            materials_completed == len(course_materials)
-            and exam_passed
-            and bool(course_materials or course_quizzes)
+        completion = completion_rules.evaluate_course_completion(
+            materials=course_materials,
+            exams=course_quizzes,
+            completed_material_ids=completed_material_ids,
+            passed_exam_ids=passed_quiz_ids,
+            policy=course.get("completionPolicy"),
         )
         due = _parse_due(assignment.get("dueAt"))
         assignment_rows.append(
             {
                 **assignment,
                 "courseTitle": str(course.get("title") or "未命名課程"),
-                "materialsTotal": len(course_materials),
-                "materialsCompleted": materials_completed,
-                "examRequired": bool(course_quizzes),
-                "examPassed": exam_passed,
-                "completed": completed,
-                "overdue": bool(due and due < current_time and not completed),
+                **completion,
+                "overdue": bool(due and due < current_time and not completion["completed"]),
             }
         )
 
