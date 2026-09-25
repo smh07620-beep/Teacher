@@ -45,6 +45,7 @@ REQUIRED_MIGRATIONS = (
     "0080-external-media-verification",
     "0081-question-version-history",
     "0082-version-aware-item-analytics",
+    "0083-learning-assignments",
 )
 
 # Backward-compatible singular name used by older release checks.  It now
