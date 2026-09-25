@@ -12,6 +12,10 @@ def _bool(value: Any) -> bool:
     return bool(value)
 
 
+def _true(kind: str) -> str:
+    return "TRUE" if kind == "postgres" else "1"
+
+
 def assignment_to_dict(row: Mapping[str, Any] | Any) -> dict[str, Any]:
     data = dict(row)
     data["courseId"] = str(data.pop("course_id", "") or "")
@@ -43,9 +47,9 @@ def get_assignment(assignment_id: str) -> dict[str, Any] | None:
 
 
 def list_active_assignments() -> list[dict[str, Any]]:
-    with common_db.read_connection() as (conn, _kind):
+    with common_db.read_connection() as (conn, kind):
         rows = conn.execute(
-            "SELECT * FROM learning_assignments WHERE active=1 "
+            f"SELECT * FROM learning_assignments WHERE active={_true(kind)} "
             "ORDER BY due_at='',due_at,assigned_at,id"
         ).fetchall()
     return [assignment_to_dict(row) for row in rows]
@@ -67,7 +71,7 @@ def list_for_user(
         rows = conn.execute(
             f"""
             SELECT * FROM learning_assignments
-            WHERE active=1
+            WHERE active={_true(kind)}
               AND (
                     (assignee_type='user' AND LOWER(assignee_key)={ph})
                  OR (assignee_type='group' AND training_area={ph} AND group_key={ph})
