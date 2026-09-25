@@ -49,6 +49,7 @@ ASSET_MANIFEST = {
             "/worker-status-70.js",
             "/admin-results.js",
             "/admin-course-material.js",
+            "/admin-learning-assignments.js",
             "/admin-people.js",
             "/admin-announcements.js",
             "/admin-system.js",
@@ -183,11 +184,6 @@ def register_pgy_frontend(app):
             response.set_data(html)
             response.content_length = len(response.get_data())
         except Exception:
-            # Asset injection is an enhancement layer and must not turn an
-            # otherwise valid HTML response into a 500. Unlike the previous
-            # silent fallback, always emit a server-side traceback so Render
-            # logs make the degradation observable without exposing details to
-            # the browser response.
             LOGGER.exception(
                 "Teacher frontend asset injection failed path=%s",
                 path or "<unknown>",

@@ -48,6 +48,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.frontend.pages import register_page_routes
     from teacher_app.learning.routes import register_smart_learning
     from teacher_app.learning.progress_routes import register_progress_routes
+    from teacher_app.learning.assignment_routes import register_learning_assignment_routes
     from teacher_app.maintenance.health import register_health
     from teacher_app.maintenance.announcement_routes import register_announcement_routes
     from teacher_app.materials.upload_routes import register_upload_hardening
@@ -94,6 +95,7 @@ def _register_production(app: Flask) -> Flask:
         r2_record_deleted=r2_ledger.record_deleted,
     )
     app = register_course_routes(app)
+    app = register_learning_assignment_routes(app)
     app = register_assessment_routes(app)
     app = register_record_routes(app)
     app = register_pgy_assessment_routes(app, paths=app.config["STORAGE_PATHS"])
