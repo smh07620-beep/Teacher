@@ -41,7 +41,32 @@ jobs:
           python -m py_compile *.py
           python -m compileall -q teacher_app tests
       - name: Full Teacher regression and integration suite
-        run: python -m unittest discover -s tests -v
+        shell: bash
+        run: |
+          set +e
+          python -m unittest discover -s tests -v 2>&1 | tee teacher-unittest.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "::group::Teacher unittest failure summary"
+            tail -n 120 teacher-unittest.log
+            echo "::endgroup::"
+            python - <<'PY'
+          from pathlib import Path
+          import re
+
+          text = Path('teacher-unittest.log').read_text(encoding='utf-8', errors='replace')
+          blocks = []
+          for marker in ('ERROR:', 'FAIL:'):
+              for match in re.finditer(rf'(?ms)^={70,}\n{marker}.*?(?=^={70,}\n(?:ERROR:|FAIL:)|^-{70,}\nRan )', text):
+                  blocks.append(match.group(0).strip())
+          if not blocks:
+              blocks = [text[-5000:].strip()]
+          for block in blocks[-8:]:
+              compact = block.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print(f'::error title=Teacher unittest failure::{compact[:7000]}')
+          PY
+          fi
+          exit "$status"
       - name: Release, schema and ownership contract tests
         run: |
           python -m unittest discover -s tests -p 'test_release_66.py' -v
@@ -149,8 +174,6 @@ jobs:
           ):
               require(text, render, 'render.yaml')
           forbid('autoDeployTrigger: commit', render, 'render.yaml')
-          # Render may run the dedicated AI worker. The hospital material worker
-          # must remain local and must never be configured as a Render worker.
           forbid('dockerCommand: python -u material_worker.py', render, 'render.yaml')
 
           require('from teacher_app import create_app', pgy, 'pgy_app.py')
