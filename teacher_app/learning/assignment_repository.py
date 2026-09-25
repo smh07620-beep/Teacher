@@ -16,6 +16,15 @@ def _true(kind: str) -> str:
     return "TRUE" if kind == "postgres" else "1"
 
 
+def _missing_table(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "learning_assignments" in text and (
+        "no such table" in text
+        or "does not exist" in text
+        or "undefinedtable" in text
+    )
+
+
 def assignment_to_dict(row: Mapping[str, Any] | Any) -> dict[str, Any]:
     data = dict(row)
     data["courseId"] = str(data.pop("course_id", "") or "")
@@ -37,21 +46,31 @@ def get_assignment(assignment_id: str) -> dict[str, Any] | None:
     assignment_id = str(assignment_id or "").strip()
     if not assignment_id:
         return None
-    with common_db.read_connection() as (conn, kind):
-        ph = common_db.placeholder(kind)
-        row = conn.execute(
-            f"SELECT * FROM learning_assignments WHERE id={ph}",
-            (assignment_id,),
-        ).fetchone()
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            row = conn.execute(
+                f"SELECT * FROM learning_assignments WHERE id={ph}",
+                (assignment_id,),
+            ).fetchone()
+    except Exception as exc:
+        if _missing_table(exc):
+            return None
+        raise
     return assignment_to_dict(row) if row else None
 
 
 def list_active_assignments() -> list[dict[str, Any]]:
-    with common_db.read_connection() as (conn, kind):
-        rows = conn.execute(
-            f"SELECT * FROM learning_assignments WHERE active={_true(kind)} "
-            "ORDER BY due_at='',due_at,assigned_at,id"
-        ).fetchall()
+    try:
+        with common_db.read_connection() as (conn, kind):
+            rows = conn.execute(
+                f"SELECT * FROM learning_assignments WHERE active={_true(kind)} "
+                "ORDER BY due_at='',due_at,assigned_at,id"
+            ).fetchall()
+    except Exception as exc:
+        if _missing_table(exc):
+            return []
+        raise
     return [assignment_to_dict(row) for row in rows]
 
 
@@ -66,21 +85,27 @@ def list_for_user(
     group = str(group or "").strip()
     if not username:
         return []
-    with common_db.read_connection() as (conn, kind):
-        ph = common_db.placeholder(kind)
-        rows = conn.execute(
-            f"""
-            SELECT * FROM learning_assignments
-            WHERE active={_true(kind)}
-              AND (
-                    (assignee_type='user' AND LOWER(assignee_key)={ph})
-                 OR (assignee_type='group' AND training_area={ph} AND group_key={ph})
-                 OR (assignee_type='all' AND training_area={ph})
-              )
-            ORDER BY required DESC,due_at='',due_at,assigned_at,id
-            """,
-            (username, area, group, area),
-        ).fetchall()
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            rows = conn.execute(
+                f"""
+                SELECT * FROM learning_assignments
+                WHERE active={_true(kind)}
+                  AND (
+                        (assignee_type='user' AND LOWER(assignee_key)={ph}
+                         AND training_area={ph} AND group_key={ph})
+                     OR (assignee_type='group' AND training_area={ph} AND group_key={ph})
+                     OR (assignee_type='all' AND training_area={ph})
+                  )
+                ORDER BY required DESC,due_at='',due_at,assigned_at,id
+                """,
+                (username, area, group, area, group, area),
+            ).fetchall()
+    except Exception as exc:
+        if _missing_table(exc):
+            return []
+        raise
     return [assignment_to_dict(row) for row in rows]
 
 
