@@ -28,17 +28,23 @@ def upsert_progress(
     position: dict,
     progress: float,
     completed: bool,
+    completed_version: int,
     last_viewed_at: str,
     completed_at: str,
 ) -> None:
     with common_db.transaction() as (conn, kind):
         if kind == "postgres":
             conn.execute(
-                "INSERT INTO learning_progress(material_id,username,position,progress,completed,last_viewed_at,completed_at) "
-                "VALUES(%s,%s,%s::jsonb,%s,%s,%s,%s) "
+                "INSERT INTO learning_progress(material_id,username,position,progress,completed,completed_version,last_viewed_at,completed_at) "
+                "VALUES(%s,%s,%s::jsonb,%s,%s,%s,%s,%s) "
                 "ON CONFLICT(material_id,username) DO UPDATE SET "
                 "position=EXCLUDED.position,progress=EXCLUDED.progress,"
-                "completed=learning_progress.completed OR EXCLUDED.completed,"
+                "completed=CASE "
+                "WHEN EXCLUDED.completed_version > learning_progress.completed_version THEN EXCLUDED.completed "
+                "ELSE learning_progress.completed OR EXCLUDED.completed END,"
+                "completed_version=CASE "
+                "WHEN EXCLUDED.completed THEN GREATEST(learning_progress.completed_version,EXCLUDED.completed_version) "
+                "ELSE learning_progress.completed_version END,"
                 "last_viewed_at=EXCLUDED.last_viewed_at,"
                 "completed_at=CASE WHEN EXCLUDED.completed THEN EXCLUDED.last_viewed_at ELSE learning_progress.completed_at END",
                 (
@@ -47,17 +53,23 @@ def upsert_progress(
                     json.dumps(position, ensure_ascii=False),
                     progress,
                     completed,
+                    completed_version,
                     last_viewed_at,
                     completed_at,
                 ),
             )
         else:
             conn.execute(
-                "INSERT INTO learning_progress(material_id,username,position,progress,completed,last_viewed_at,completed_at) "
-                "VALUES(?,?,?,?,?,?,?) "
+                "INSERT INTO learning_progress(material_id,username,position,progress,completed,completed_version,last_viewed_at,completed_at) "
+                "VALUES(?,?,?,?,?,?,?,?) "
                 "ON CONFLICT(material_id,username) DO UPDATE SET "
                 "position=excluded.position,progress=excluded.progress,"
-                "completed=MAX(learning_progress.completed,excluded.completed),"
+                "completed=CASE "
+                "WHEN excluded.completed_version > learning_progress.completed_version THEN excluded.completed "
+                "ELSE MAX(learning_progress.completed,excluded.completed) END,"
+                "completed_version=CASE "
+                "WHEN excluded.completed=1 THEN MAX(learning_progress.completed_version,excluded.completed_version) "
+                "ELSE learning_progress.completed_version END,"
                 "last_viewed_at=excluded.last_viewed_at,"
                 "completed_at=CASE WHEN excluded.completed=1 THEN excluded.last_viewed_at ELSE learning_progress.completed_at END",
                 (
@@ -66,6 +78,7 @@ def upsert_progress(
                     json.dumps(position, ensure_ascii=False),
                     progress,
                     int(completed),
+                    completed_version,
                     last_viewed_at,
                     completed_at,
                 ),
