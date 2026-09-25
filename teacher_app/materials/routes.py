@@ -12,7 +12,7 @@ from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.common import audit, scope
 from teacher_app.common.errors import ApiError
 from teacher_app.materials import bp
-from teacher_app.materials import repository, service
+from teacher_app.materials import repository, service, versioning
 from teacher_app.storage.web_runtime import WebStorageRuntime
 
 
@@ -61,6 +61,8 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
             "materialType": str(item.get("materialType") or ""),
             "active": bool(item.get("active", True)),
             "storageBackend": str(item.get("storageBackend") or ""),
+            "currentVersion": int(item.get("currentVersion") or 1),
+            "requiredCompletionVersion": int(item.get("requiredCompletionVersion") or 1),
         }
 
     def require_admin():
@@ -104,6 +106,47 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
             )
         return jsonify(payload)
 
+    def api_material_versions(slide_id):
+        denied = require_admin()
+        if denied:
+            return denied
+        if not repository.get_material(slide_id):
+            return jsonify({"error": "找不到教材。"}), 404
+        return jsonify(versioning.list_versions(slide_id))
+
+    def api_publish_material_version(slide_id):
+        denied = require_admin()
+        if denied:
+            return denied
+        before = repository.get_material(slide_id)
+        if not before:
+            return jsonify({"error": "找不到教材。"}), 404
+        data = request.get_json(silent=True) or {}
+        try:
+            payload = versioning.publish_new_version(
+                slide_id,
+                actor=actor(),
+                change_reason=data.get("changeReason", ""),
+                requires_retraining=bool(data.get("requiresRetraining", False)),
+            )
+        except ApiError as exc:
+            return _legacy_error(exc)
+        after = payload.get("material") or repository.get_material(slide_id)
+        audit.record_event(
+            actor=actor(),
+            action=(
+                "material.retraining.require"
+                if payload.get("requiresRetraining")
+                else "material.version.publish"
+            ),
+            target_type="material",
+            target_id=slide_id,
+            group=str((after or before).get("group") or ""),
+            before=snapshot(before),
+            after={**snapshot(after), "changeReason": payload.get("changeReason", "")},
+        )
+        return jsonify(payload), 201
+
     def api_delete_slide(slide_id):
         denied = require_admin()
         if denied:
@@ -126,6 +169,18 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
     app.add_url_rule("/api/slides", endpoint="api_list_slides", view_func=api_list_slides, methods=["GET"])
     app.add_url_rule("/api/slides/admin", endpoint="api_admin_slides", view_func=api_admin_slides, methods=["GET"])
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_update_slide", view_func=api_update_slide, methods=["PATCH"])
+    app.add_url_rule(
+        "/api/slides/<slide_id>/versions",
+        endpoint="api_material_versions",
+        view_func=api_material_versions,
+        methods=["GET"],
+    )
+    app.add_url_rule(
+        "/api/slides/<slide_id>/versions",
+        endpoint="api_publish_material_version",
+        view_func=api_publish_material_version,
+        methods=["POST"],
+    )
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_delete_slide", view_func=api_delete_slide, methods=["DELETE"])
     app.extensions["teacher_material_catalog_routes_registered"] = True
     return app

@@ -50,6 +50,10 @@ def init_schema(conn: Any, kind: str) -> None:
             storage_meta TEXT NOT NULL DEFAULT '{{}}',
             material_type TEXT NOT NULL DEFAULT 'standard',
             atlas_meta TEXT NOT NULL DEFAULT '{{}}',
+            current_version INTEGER NOT NULL DEFAULT 1,
+            required_completion_version INTEGER NOT NULL DEFAULT 1,
+            version_updated_at TEXT NOT NULL DEFAULT '',
+            version_updated_by TEXT NOT NULL DEFAULT '',
             active {boolean} NOT NULL DEFAULT {default_true}
         )
         """
@@ -67,6 +71,10 @@ def init_schema(conn: Any, kind: str) -> None:
             "storage_meta": "storage_meta TEXT NOT NULL DEFAULT '{}'",
             "material_type": "material_type TEXT NOT NULL DEFAULT 'standard'",
             "atlas_meta": "atlas_meta TEXT NOT NULL DEFAULT '{}'",
+            "current_version": "current_version INTEGER NOT NULL DEFAULT 1",
+            "required_completion_version": "required_completion_version INTEGER NOT NULL DEFAULT 1",
+            "version_updated_at": "version_updated_at TEXT NOT NULL DEFAULT ''",
+            "version_updated_by": "version_updated_by TEXT NOT NULL DEFAULT ''",
         },
     )
 
