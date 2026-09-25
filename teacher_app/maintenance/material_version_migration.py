@@ -11,7 +11,24 @@ import json
 from teacher_app.maintenance.migrations import migration, utcnow
 
 
+def _table_exists(conn, kind: str, table: str) -> bool:
+    if kind == "postgres":
+        row = conn.execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema=current_schema() AND table_name=%s",
+            (table,),
+        ).fetchone()
+        return bool(row)
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    ).fetchone()
+    return bool(row)
+
+
 def _columns(conn, kind: str, table: str) -> set[str]:
+    if not _table_exists(conn, kind, table):
+        return set()
     if kind == "postgres":
         rows = conn.execute(
             "SELECT column_name FROM information_schema.columns "
@@ -23,6 +40,8 @@ def _columns(conn, kind: str, table: str) -> set[str]:
 
 
 def _add_column(conn, kind: str, table: str, name: str, definition: str) -> None:
+    if not _table_exists(conn, kind, table):
+        return
     if name in _columns(conn, kind, table):
         return
     if kind == "postgres":
@@ -87,6 +106,8 @@ def material_version_retraining_84(conn, kind: str) -> None:
         "ON material_versions(requires_retraining,created_at)"
     )
 
+    if not _table_exists(conn, kind, "materials"):
+        return
     rows = conn.execute("SELECT * FROM materials").fetchall()
     ph = "%s" if kind == "postgres" else "?"
     for row in rows:
