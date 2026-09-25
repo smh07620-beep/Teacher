@@ -48,6 +48,7 @@ REQUIRED_MIGRATIONS = (
     "0083-learning-assignments",
     "0084-material-version-retraining",
     "0086-notification-read-state",
+    "0087-course-feedback",
 )
 
 # Backward-compatible singular name used by older release checks.  It now

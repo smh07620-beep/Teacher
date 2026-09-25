@@ -203,6 +203,39 @@
       });
   }
 
+  async function loadCourseFeedbackSummary(courseId,panel){
+      if(!panel||!courseId)return;
+      const output=panel.querySelector('[data-course-feedback-summary]');
+      if(output)output.innerHTML='<span class="text-slate-400">讀取回饋彙總中…</span>';
+      try{
+          const res=await fetch(`/api/course-feedback/${encodeURIComponent(courseId)}/summary`,{credentials:'same-origin',cache:'no-store'});
+          const data=await res.json().catch(()=>({}));
+          if(!res.ok)throw new Error(data.error||'無法讀取回饋彙總');
+          const count=Number(data.responseCount||0),average=Number(data.averageRating||0),counts=data.ratingCounts||{};
+          if(output)output.innerHTML=`<div class="flex flex-wrap items-center gap-2"><span class="course-stat-chip">回覆 ${count} 份</span><span class="course-stat-chip">平均 ${count?average.toFixed(1):'—'} / 5</span></div><div class="mt-2 flex flex-wrap gap-2 text-[10px] text-slate-500">${[5,4,3,2,1].map(score=>`<span>${score} 分：${Number(counts[String(score)]||0)}</span>`).join('')}</div>`;
+      }catch(error){
+          if(output)output.innerHTML=`<span class="text-amber-700">${escapeHtml(error.message||'無法讀取回饋彙總')}</span>`;
+      }
+  }
+
+  function appendCourseFeedbackSummaryPanels(box,courses){
+      const details=Array.from(box.querySelectorAll('.admin-course-list > details'));
+      courses.forEach((course,index)=>{
+          const card=details[index],body=card?.querySelector(':scope > div.border-t');
+          if(!body)return;
+          const panel=document.createElement('div');
+          panel.className='lg:col-span-2 rounded-xl border border-teal-100 bg-teal-50/50 px-3 py-3';
+          panel.innerHTML='<div class="flex items-center justify-between gap-3"><div><div class="text-xs font-black text-teal-900">💬 課程回饋彙總</div><div class="text-[10px] text-teal-700 mt-0.5">只顯示匿名統計，不列出個別學員與留言。</div></div></div><div data-course-feedback-summary class="mt-2 text-[11px] text-slate-500">尚未讀取</div>';
+          const button=document.createElement('button');
+          button.type='button';
+          button.className='mt-2 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-[10px] font-bold text-teal-800';
+          button.textContent='查看回饋彙總';
+          button.addEventListener('click',()=>loadCourseFeedbackSummary(course.id,panel));
+          panel.firstElementChild?.appendChild(button);
+          body.appendChild(panel);
+      });
+  }
+
   function paintAdminCourseMaterialHub(box,state){
       if(!box)return;
       const {area,group}=state;
@@ -237,6 +270,7 @@
       const examCount=state.loading.cats?'—':cats.length;
       const unassignedCount=state.loading.courses?'—':unassigned.length+orphanExams.length;
       box.innerHTML=`<div class="admin-course-dashboard"><div class="admin-course-summary-grid"><div><span>課程</span><strong>${courseCount}</strong><small>目前範圍</small></div><div><span>教材</span><strong>${materialCount}</strong><small>已歸入此組</small></div><div><span>考卷</span><strong>${examCount}</strong><small>含草稿與發布</small></div><div><span>待整理</span><strong>${unassignedCount}</strong><small>未歸類教材／考卷</small></div></div><div class="admin-course-sync-row"><span class="${pending.length?'is-syncing':'is-ready'}">${escapeHtml(status)}</span><span>點開課程即可管理教材、題庫與考卷。</span></div>${errors.length?`<div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">⚠️ ${errors.map(escapeHtml).join('；')}。其他已載入內容仍可使用。</div>`:''}<div class="admin-course-list mt-4 space-y-2">${empty}${(!state.loading.courses&&(unassigned.length||orphanExams.length))?`<details class="rounded-2xl border border-amber-100 bg-white overflow-hidden"><summary class="cursor-pointer list-none px-4 py-3 font-bold text-xs text-amber-800">📁 通用／未歸類：教材 ${unassigned.length} 份 · 考卷 ${orphanExams.length} 份</summary><div class="p-4 border-t border-amber-50 space-y-2">${unassigned.map(adminHubMaterialRow).join('')}${orphanExams.map(q=>`<div class="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs"><b>📝 ${escapeHtml(q.title)}</b> · ${escapeHtml(examDrawLabel(q))} · 及格 ${Number(q.passingScore||80)} 分</div>`).join('')}</div></details>`:''}</div></div>`;
+      appendCourseFeedbackSummaryPanels(box,courses);
       box.dataset.ready='1';
       bindLearningAssignmentControls(box,state);
   }

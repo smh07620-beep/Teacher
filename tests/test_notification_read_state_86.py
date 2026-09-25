@@ -38,10 +38,13 @@ class NotificationReadState86Tests(unittest.TestCase):
     def test_release_contract_registers_0086_once_after_0084(self):
         versions = [version for version, _fn in schema_migrations.MIGRATIONS]
         self.assertEqual(versions.count("0086-notification-read-state"), 1)
-        self.assertEqual(release_contract.REQUIRED_MIGRATIONS[-1], "0086-notification-read-state")
         self.assertLess(
             release_contract.REQUIRED_MIGRATIONS.index("0084-material-version-retraining"),
             release_contract.REQUIRED_MIGRATIONS.index("0086-notification-read-state"),
+        )
+        self.assertLess(
+            release_contract.REQUIRED_MIGRATIONS.index("0086-notification-read-state"),
+            release_contract.REQUIRED_MIGRATIONS.index("0087-course-feedback"),
         )
 
     def test_read_state_is_per_user_and_can_be_marked_unread_again(self):

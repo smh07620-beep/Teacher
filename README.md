@@ -81,6 +81,8 @@ Migration `0084-material-version-retraining` 為上傳教材增加版本歷史�
 
 Migration `0086-notification-read-state` 為既有通知中心增加跨裝置已讀／未讀同步。資料庫只保存登入帳號與事件級 `notification_key` 的 read marker，不複製課程、考試、PGY 或公告內容；因此 canonical source 更新後仍由原 domain 即時計算。再次未合格、課程重新指派、PGY 狀態改變、重大教材新版或公告內容更新都會產生新的事件 key，不會被舊的已讀狀態錯誤隱藏。詳見 `docs/NOTIFICATION_READ_STATE_0086.md`。
 
+Migration `0087-course-feedback` 增加一般課程學員回饋：學員可對自己可存取的啟用課程提交／更新 1–5 分與選填建議；管理端只提供回覆數、平均分與星等分布，不直接曝露個別學員身分或留言。回饋資料不會改變完成條件、考試成績、補強流程或 PGY 評核。詳見 `docs/COURSE_FEEDBACK_0087.md`。
+
 ### Accessibility regression gate
 
 現有 Playwright release workflow 已加入 deterministic accessibility regression：首頁、院內教育訓練、PGY 與 system workspace 會在 mobile / desktop 實際 DOM 下檢查 `html[lang]`、landmark、重複 ID、圖片替代文字、accessible name、正 `tabindex`、`aria-hidden` 內可聚焦元件、dialog 名稱、鍵盤 focus 可視性與橫向 overflow。這是一個高訊號的 WCAG regression guard，不宣稱取代完整 axe 或人工螢幕閱讀器稽核。詳見 `docs/ACCESSIBILITY_REGRESSION.md`。
@@ -166,6 +168,7 @@ GitHub Actions 的 `Teacher release checks` 會執行 Python compile、完整 re
 - `docs/MATERIAL_VERSION_RETRAINING_0084.md`：教材/SOP 版本歷史與重新訓練完成證據
 - `docs/NOTIFICATION_READ_STATE_0086.md`：通知中心跨裝置已讀／未讀狀態與事件 key 契約
 - `docs/ACCESSIBILITY_REGRESSION.md`：Playwright accessibility/WCAG regression gate 與涵蓋範圍
+- `docs/COURSE_FEEDBACK_0087.md`：一般課程學員回饋、scope 與匿名管理彙總契約
 - `VERSION` / `release_contract.py`：目前正式 release contract
 
 ## GitHub 安全原則

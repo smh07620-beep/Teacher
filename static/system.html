@@ -130,6 +130,20 @@
                 <div id="learning-start"></div><input id="learning-search" type="hidden" value=""><div class="v573-course-tools v573-filter-only"><label>閱讀狀態<select id="learning-filter" data-csp-change="renderCourseOverview()"><option value="all">全部課程</option><option value="todo">尚有教材未完成</option><option value="done">教材已完成</option></select></label></div><p id="learning-result-count" role="status"></p><div id="course-overview-grid" class="space-y-4"></div>
             </section>
 
+            <dialog id="course-feedback-dialog" aria-label="課程回饋" class="rounded-2xl border border-slate-200 p-0 shadow-2xl backdrop:bg-slate-900/40">
+                <form id="course-feedback-form" method="dialog" class="w-[min(92vw,34rem)] bg-white p-5 sm:p-6">
+                    <div class="flex items-start justify-between gap-4"><div><p class="edu-kicker">COURSE FEEDBACK</p><h3 class="text-lg font-black text-slate-900">💬 課程回饋</h3><p id="course-feedback-title" class="mt-1 text-xs text-slate-500"></p></div><button id="course-feedback-close" type="button" aria-label="關閉課程回饋" class="rounded-lg border border-slate-200 px-2.5 py-1.5 text-slate-500">×</button></div>
+                    <input id="course-feedback-course-id" type="hidden" value="">
+                    <label class="mt-4 block text-xs font-black text-slate-700" for="course-feedback-rating">整體學習體驗</label>
+                    <select id="course-feedback-rating" required class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="">請選擇評分</option><option value="5">5｜非常有幫助</option><option value="4">4｜有幫助</option><option value="3">3｜普通</option><option value="2">2｜需要改善</option><option value="1">1｜幫助有限</option></select>
+                    <label class="mt-4 block text-xs font-black text-slate-700" for="course-feedback-comment">學習建議（選填）</label>
+                    <textarea id="course-feedback-comment" maxlength="2000" rows="5" class="mt-2 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="例如：哪個單元最有幫助、哪裡需要補充案例或圖示。"></textarea>
+                    <p class="mt-2 text-[11px] text-slate-400">回饋可再次修改；管理端只顯示彙總統計，不直接公開個別學員留言。</p>
+                    <p id="course-feedback-status" role="status" class="mt-3 text-xs text-slate-500"></p>
+                    <div class="mt-4 flex justify-end gap-2"><button id="course-feedback-cancel" type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600">取消</button><button type="submit" class="rounded-xl bg-teal-700 px-4 py-2 text-xs font-bold text-white">儲存回饋</button></div>
+                </form>
+            </dialog>
+
             <section id="specialty-focus-zone" class="specialty-zone hidden"></section>
 
             <section id="atlas-section" class="hidden">
@@ -699,7 +713,7 @@
 <script defer src="/system-csp-actions.js?v=8500"></script>
 <script defer src="/atlas-70.js?v=7000"></script>
 <script defer src="/atlas-docx-wizard-70.js?v=7000"></script>
-<script defer src="/system-learner.js?v=6801"></script>
+<script defer src="/system-learner.js?v=8700"></script>
 <script defer src="/system-exam.js?v=8500"></script>
 <script defer src="/system-assessment.js?v=6100"></script>
 <script defer src="/system-admin.js?v=6502"></script>
