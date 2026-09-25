@@ -30,6 +30,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.assessments.question_runtime import build_canonical_question_runtime
     from teacher_app.auth.rbac_routes import register_rbac_681
     from teacher_app.maintenance.migrations import register_schema_migrations
+    from teacher_app.maintenance import learning_assignment_migration as _learning_assignment_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
