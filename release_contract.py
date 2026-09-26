@@ -50,6 +50,7 @@ REQUIRED_MIGRATIONS = (
     "0086-notification-read-state",
     "0087-course-feedback",
     "0088-saved-learning-items",
+    "0090-completion-certificates",
 )
 
 # Backward-compatible singular name used by older release checks.  It now

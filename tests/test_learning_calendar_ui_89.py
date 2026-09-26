@@ -15,7 +15,7 @@ class LearningCalendarUi89Tests(unittest.TestCase):
     def test_calendar_surface_is_present(self):
         self.assertIn('id="learning-calendar"', self.html)
         self.assertIn('id="learning-calendar-list"', self.html)
-        self.assertIn('/system-learner.js?v=8900', self.html)
+        self.assertIn('/system-learner.js?v=9000', self.html)
 
     def test_calendar_runtime_fetches_and_routes_events(self):
         self.assertIn("fetch('/api/learning-calendar?days=90'", self.learner)

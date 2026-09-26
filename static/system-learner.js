@@ -30,6 +30,9 @@ let savedLearningLoading = null;
 let learningCalendarEvents = [];
 let learningCalendarLoaded = false;
 let learningCalendarLoading = null;
+let completionCertificates = [];
+let completionCertificatesLoaded = false;
+let completionCertificatesLoading = null;
 
 
 
@@ -710,6 +713,48 @@ function renderLearningCalendar(){
     list.querySelectorAll('[data-calendar-event-id]').forEach(button=>button.addEventListener('click',()=>openLearningCalendarEvent(button.dataset.calendarEventId||'')));
 }
 
+async function loadCompletionCertificates(force=false){
+    if(completionCertificatesLoading)return completionCertificatesLoading;
+    if(completionCertificatesLoaded&&!force){renderCompletionCertificateShelf();return completionCertificates;}
+    completionCertificatesLoading=(async()=>{
+        try{
+            const res=await fetch('/api/completion-certificates',{credentials:'same-origin',cache:'no-store'});
+            const data=await res.json().catch(()=>({}));
+            if(!res.ok)throw new Error(data.error||'無法讀取完訓證明');
+            completionCertificates=Array.isArray(data.items)?data.items:[];
+        }catch(_){completionCertificates=[];}
+        finally{completionCertificatesLoaded=true;completionCertificatesLoading=null;renderCompletionCertificateShelf();}
+        return completionCertificates;
+    })();
+    return completionCertificatesLoading;
+}
+
+function renderCompletionCertificateShelf(){
+    const section=document.getElementById('completion-certificates'),list=document.getElementById('completion-certificates-list'),count=document.getElementById('completion-certificates-count');
+    if(!section||!list)return;
+    const items=completionCertificates.filter(item=>(item.area||currentTrainingArea)===currentTrainingArea&&(item.group||currentGroupKey)===currentGroupKey);
+    section.classList.toggle('hidden',!items.length);if(count)count.textContent=`${items.length} 張`;
+    list.innerHTML=items.map(item=>{const label=item.currentStatus==='current'?'目前有效':item.currentStatus==='retraining_required'?'需重新訓練':'歷史紀錄';const tone=item.currentStatus==='current'?'bg-emerald-50 text-emerald-700 border-emerald-200':item.currentStatus==='retraining_required'?'bg-rose-50 text-rose-700 border-rose-200':'bg-slate-50 text-slate-600 border-slate-200';return `<div class="rounded-xl border border-emerald-100 bg-white px-3 py-3"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><div class="truncate text-xs font-black text-slate-900">🎓 ${escapeHtml(item.courseTitle||'課程完訓證明')}</div><div class="mt-1 text-[10px] text-slate-400">證明編號 ${escapeHtml(item.id||'')}</div></div><span class="shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold ${tone}">${label}</span></div></div>`;}).join('');
+}
+
+async function issueCompletionCertificate(courseId){
+    try{
+        const res=await fetch(`/api/completion-certificates/${encodeURIComponent(courseId)}`,{method:'POST',credentials:'same-origin'});
+        const data=await res.json().catch(()=>({}));
+        if(!res.ok)throw new Error(data.error||'無法取得完訓證明');
+        await loadCompletionCertificates(true);
+        alert(`${data.issued?'✅ 完訓證明已建立':'✅ 已有相同完成條件的完訓證明'}${data.certificate?.id?`\n證明編號：${data.certificate.id}`:''}`);
+    }catch(error){alert(error.message||'無法取得完訓證明');}
+}
+
+function bindCompletionCertificateButtons(root=document){
+    root.querySelectorAll?.('[data-completion-certificate-course]').forEach(button=>{
+        if(button.dataset.certificateBound==='1')return;
+        button.dataset.certificateBound='1';
+        button.addEventListener('click',()=>issueCompletionCertificate(button.dataset.completionCertificateCourse||''));
+    });
+}
+
 function savedLearningKey(itemType,itemId){
     return `${itemType}:${itemId}`;
 }
@@ -821,6 +866,7 @@ function renderCourseOverview() {
     const box=document.getElementById('course-overview'),grid=document.getElementById('course-overview-grid');if(!box||!grid)return;
     if(!savedLearningLoaded&&!savedLearningLoading)void loadSavedLearningItems();
     if(!learningCalendarLoaded&&!learningCalendarLoading)void loadLearningCalendar();
+    if(!completionCertificatesLoaded&&!completionCertificatesLoading)void loadCompletionCertificates();
 
     const groupMaterials=cachedSlidesList.filter(m=>(m.group||'grpBio')===currentGroupKey),quizzes=(cachedQuizCategories||[]).filter(q=>(q.group||currentGroupKey)===currentGroupKey&&(q.area||currentTrainingArea)===currentTrainingArea),courses=(cachedCourses||[]).filter(c=>(c.group||c.groupKey||currentGroupKey)===currentGroupKey);
 
@@ -834,7 +880,9 @@ function renderCourseOverview() {
     courses.forEach((course,index)=>{const card=grid.children[index];if(card)card.dataset.courseLearningId=course.id||'';const group=card?.querySelector('.course-material-group');if(!group)return;const row=document.createElement('div');row.className='flex items-center justify-between gap-3 border-t border-slate-100 pt-3';row.innerHTML='<div><div class="text-xs font-black text-slate-700">💬 課程回饋與收藏</div><div class="text-[11px] text-slate-400 mt-0.5">分享學習體驗，或把課程加入跨裝置收藏。</div></div>';const actions=document.createElement('div');actions.className='flex flex-wrap justify-end gap-2';const save=document.createElement('button');save.type='button';save.className='rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700';save.textContent=savedLearningItems.has(savedLearningKey('course',course.id))?'★ 已收藏':'☆ 收藏課程';save.addEventListener('click',()=>toggleSavedLearningItem('course',course.id));const button=document.createElement('button');button.type='button';button.className='rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-800';button.textContent='填寫回饋';button.addEventListener('click',()=>openCourseFeedback(course.id,course.title||'課程'));actions.append(save,button);row.appendChild(actions);group.appendChild(row);});
     renderLearningCalendar();
     renderSavedLearningShelf();
+    renderCompletionCertificateShelf();
     bindSavedLearningButtons(grid);
+    bindCompletionCertificateButtons(grid);
     bindCourseFeedbackUI();
 
 }
@@ -875,6 +923,11 @@ async function markMaterialComplete(materialId){
 
 }
 
+function buildProgressCourseCard(c){
+    const currentCertificate=completionCertificates.find(item=>item.courseId===c.id&&item.currentValid);
+    return `<div class="bg-white border ${c.completed?'border-emerald-300':'border-slate-200'} rounded-2xl p-4 shadow-sm"><div class="flex justify-between gap-2"><h3 class="font-bold text-slate-800">${escapeHtml(c.title)}</h3><span class="text-xs font-bold ${c.completed?'text-emerald-700':'text-amber-700'}">${c.completed?'✅ 完成':'進行中'}</span></div><p class="text-xs text-slate-500 mt-1">${escapeHtml(c.desc||'')}</p><div class="mt-3 text-xs space-y-1"><div>教材：${c.materialsCompleted} / ${c.materialsTotal}</div><div>考試：${c.examRequired?(c.examPassed?'✅ 已通過':'⏳ 尚未通過'):'不要求'}</div></div>${c.completed?`<div class="mt-3 border-t border-slate-100 pt-3"><button type="button" data-completion-certificate-course="${escapeHtml(c.id||'')}" class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">${currentCertificate?'🎓 查看完訓證明':'🎓 取得完訓證明'}</button></div>`:''}</div>`;
+}
+
 
 
 async function loadMyProgress(){
@@ -890,12 +943,14 @@ async function loadMyProgress(){
     const data=await res.json().catch(()=>({})); if(!res.ok){alert(data.error||'查詢失敗');return;}
 
     myCompletedMaterials=data.materialsCompleted||{};
+    if(!completionCertificatesLoaded)await loadCompletionCertificates();
 
     document.getElementById('progress-summary').classList.remove('hidden');
 
     const cards=document.getElementById('progress-course-cards');
 
-    cards.innerHTML=(data.courses||[]).length ? data.courses.map(c=>`<div class="bg-white border ${c.completed?'border-emerald-300':'border-slate-200'} rounded-2xl p-4 shadow-sm"><div class="flex justify-between gap-2"><h3 class="font-bold text-slate-800">${escapeHtml(c.title)}</h3><span class="text-xs font-bold ${c.completed?'text-emerald-700':'text-amber-700'}">${c.completed?'✅ 完成':'進行中'}</span></div><p class="text-xs text-slate-500 mt-1">${escapeHtml(c.desc||'')}</p><div class="mt-3 text-xs space-y-1"><div>教材：${c.materialsCompleted} / ${c.materialsTotal}</div><div>考試：${c.examRequired?(c.examPassed?'✅ 已通過':'⏳ 尚未通過'):'不要求'}</div></div></div>`).join('') : '<div class="text-sm text-slate-400">目前組別尚未建立課程。</div>';
+    cards.innerHTML=(data.courses||[]).length ? data.courses.map(buildProgressCourseCard).join('') : '<div class="text-sm text-slate-400">目前組別尚未建立課程。</div>';
+    bindCompletionCertificateButtons(cards);
 
     const hist=document.getElementById('progress-exam-history');
 
