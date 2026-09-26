@@ -33,6 +33,7 @@
     },
     teacher: {icon:'👩‍🏫', title:'教師評核 Workspace', summary:'集中處理人工閱卷、問答評分與 PGY 教師評核。'},
     results: {icon:'📊', title:'成績管理 Workspace', summary:'查閱歷次成績、通過狀態、批改結果與考核分析。'},
+    compliance: {icon:'✅', title:'訓練合規 Workspace', summary:'依指派查看人員完訓、逾期、重訓、補強、考核與完訓證明狀態。'},
     word: {icon:'📝', title:'Word 範本 Workspace', summary:'維護各組正式考核表範本與套版輸出。'},
     people: {icon:'👥', title:'人員管理 Workspace', summary:'管理帳號、角色、範圍與教學存取權限。'},
     system: {icon:'⚙️', title:'系統設定 Workspace', summary:'檢查系統服務、儲存、安全設定與公告。'},
@@ -200,6 +201,11 @@
       return switchSection('results', true);
     }
     if (name === 'results') return switchSection('results', force || true);
+    if (name === 'compliance') {
+      await switchSection('compliance', true);
+      await window.renderTrainingCompliance?.(force);
+      return;
+    }
 
     if (name === 'word') return switchSection('word', force);
     if (name === 'people') {

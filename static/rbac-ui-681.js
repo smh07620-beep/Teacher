@@ -28,6 +28,7 @@ window.TeacherRBAC681Ready = (async function () {
     scoring: ['evaluation.review','result.group.read'],
     pgy: ['evaluation.submit','evaluation.review','teacher.assessment.sign','evaluation.finalize'],
     results: ['result.group.read'],
+    compliance: ['training.compliance.read'],
     word: ['template.manage'],
     people: ['user.manage'],
     system: ['system.manage']
@@ -44,6 +45,7 @@ window.TeacherRBAC681Ready = (async function () {
     'admin-nav-exams': WORKSPACE_RULES.exams,
     'admin-nav-teacher': WORKSPACE_RULES.teacher,
     'admin-nav-results': WORKSPACE_RULES.results,
+    'admin-nav-compliance': WORKSPACE_RULES.compliance,
     'admin-nav-word': WORKSPACE_RULES.word,
     'admin-nav-people': WORKSPACE_RULES.people,
     'admin-nav-system': WORKSPACE_RULES.system
@@ -231,7 +233,7 @@ window.TeacherRBAC681Ready = (async function () {
       if (!label) return;
       if (group.querySelector('#admin-nav-course-materials,#admin-nav-assessment,#admin-nav-questions,#admin-nav-exams')) {
         label.textContent = surface.teachingLabel;
-      } else if (group.querySelector('#admin-nav-teacher,#admin-nav-results')) {
+      } else if (group.querySelector('#admin-nav-teacher,#admin-nav-results,#admin-nav-compliance')) {
         label.textContent = surface.evaluationLabel;
       } else if (group.querySelector('#admin-nav-word,#admin-nav-people,#admin-nav-system')) {
         label.textContent = surface.platformLabel;
@@ -272,7 +274,7 @@ window.TeacherRBAC681Ready = (async function () {
   }
 
   function applyGroupScope() {
-    ['admin-material-group','admin-quiz-group','wizard-group'].forEach(id => applyScopedSelect(document.getElementById(id)));
+    ['admin-material-group','admin-quiz-group','wizard-group','admin-compliance-group'].forEach(id => applyScopedSelect(document.getElementById(id)));
   }
 
   function hideMatches(root, selector) {
