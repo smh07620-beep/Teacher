@@ -33,7 +33,7 @@ class CourseFeedbackUi87Tests(unittest.TestCase):
             self.assertIn(token, self.learner)
 
     def test_feedback_runtime_is_cache_busted_and_registered(self):
-        self.assertIn('system-learner.js?v=8800', self.html)
+        self.assertIn('system-learner.js?v=9000', self.html)
         self.assertIn("register_course_feedback_routes", self.factory)
         self.assertNotIn('data-csp-click="openCourseFeedback', self.html)
 

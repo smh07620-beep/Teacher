@@ -47,8 +47,9 @@ class SavedLearningItems88Tests(unittest.TestCase):
     def test_release_contract_registers_0088_after_0087(self):
         versions = [version for version, _fn in schema_migrations.MIGRATIONS]
         self.assertEqual(versions.count("0088-saved-learning-items"), 1)
-        self.assertEqual(release_contract.REQUIRED_MIGRATIONS[-1], "0088-saved-learning-items")
-        self.assertLess(release_contract.REQUIRED_MIGRATIONS.index("0087-course-feedback"), release_contract.REQUIRED_MIGRATIONS.index("0088-saved-learning-items"))
+        feedback_index = release_contract.REQUIRED_MIGRATIONS.index("0087-course-feedback")
+        saved_index = release_contract.REQUIRED_MIGRATIONS.index("0088-saved-learning-items")
+        self.assertEqual(saved_index, feedback_index + 1)
 
     def test_course_and_material_are_saved_per_account(self):
         p = self._patches()

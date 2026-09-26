@@ -14,7 +14,7 @@ class SavedLearningUi88Tests(unittest.TestCase):
         cls.factory = ROOT.joinpath("teacher_app", "factory.py").read_text(encoding="utf-8")
 
     def test_saved_shelf_and_cache_buster_are_present(self):
-        for token in ('id="saved-learning-items"', 'aria-label="我的收藏"', 'id="saved-learning-items-list"', 'system-learner.js?v=8800'):
+        for token in ('id="saved-learning-items"', 'aria-label="我的收藏"', 'id="saved-learning-items-list"', 'system-learner.js?v=9000'):
             self.assertIn(token, self.html)
 
     def test_runtime_loads_toggles_and_renders_account_saved_items(self):
