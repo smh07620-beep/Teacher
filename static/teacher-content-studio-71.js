@@ -146,13 +146,14 @@
 
   function renderCreateExam(){
     const host=document.getElementById('teacher-content-studio-body-71'); if(!host)return;
-    host.innerHTML=`<div class="mx-auto max-w-2xl"><button type="button" data-studio-action="exam" class="text-sm font-bold text-slate-500">← 返回考卷管理</button><div class="mt-4 rounded-2xl border border-indigo-200 bg-white p-5"><div class="text-xs font-black tracking-wide text-indigo-700">建立新考卷</div><h4 class="mt-1 text-lg font-black text-slate-950">先建立考卷容器</h4><p class="mt-1 text-xs leading-5 text-slate-500">建立後再進入考卷加入一般題、圖片題、影片題或 AI 題。</p><label class="mt-4 block text-sm font-bold text-slate-700">考卷名稱<input id="teacher77-exam-title" maxlength="120" class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="例如：2026 生化組基礎訓練考核"></label><div id="teacher77-exam-create-status" class="mt-2 text-xs text-slate-500"></div><div class="mt-5 flex justify-end gap-2"><button type="button" data-studio-action="exam" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">取消</button><button type="button" data-exam-create-submit class="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-black text-white">建立考卷</button></div></div></div>`;
+    host.innerHTML=`<div class="mx-auto max-w-2xl"><button type="button" data-studio-action="exam" class="text-sm font-bold text-slate-500">← 返回考卷管理</button><div class="mt-4 rounded-2xl border border-indigo-200 bg-white p-5"><div class="text-xs font-black tracking-wide text-indigo-700">建立新考卷</div><h4 class="mt-1 text-lg font-black text-slate-950">先建立考卷容器</h4><p class="mt-1 text-xs leading-5 text-slate-500">建立後再進入考卷加入一般題、圖片題、影片題或 AI 題。</p><label class="mt-4 block text-sm font-bold text-slate-700">考卷名稱<input id="teacher77-exam-title" maxlength="120" class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="例如：2026 生化組基礎訓練考核"></label><label class="mt-4 block text-sm font-bold text-slate-700">最後考核日期（選填）<input id="teacher77-exam-closes-at" type="datetime-local" class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"><span class="mt-1 block text-xs font-normal text-slate-500">設定後，截止時間過後伺服器會禁止開始新的考核，並可寄送到期提醒。</span></label><div id="teacher77-exam-create-status" class="mt-2 text-xs text-slate-500"></div><div class="mt-5 flex justify-end gap-2"><button type="button" data-studio-action="exam" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">取消</button><button type="button" data-exam-create-submit class="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-black text-white">建立考卷</button></div></div></div>`;
     setTimeout(()=>document.getElementById('teacher77-exam-title')?.focus(),50);
   }
 
   async function createExamFromStudio(){
     const title=document.getElementById('teacher77-exam-title')?.value.trim()||'';
     const status=document.getElementById('teacher77-exam-create-status');
+    const closesAt=document.getElementById('teacher77-exam-closes-at')?.value||'';
     if(!title){if(status)status.textContent='請輸入考卷名稱。';return;}
     const selectedScope=scope();
     try{
@@ -161,7 +162,8 @@
       const titleInput=document.getElementById('admin-new-category-title');
       if(!titleInput)throw new Error('考卷建立器尚未載入');
       titleInput.value=title;
-      await timeout77(window.adminCreateQuizCategory?.(),3500,'建立考卷');
+      const created=await timeout77(window.adminCreateQuizCategory?.(),3500,'建立考卷');
+      if(created?.id && closesAt){await fetch(`/api/exam-windows/${encodeURIComponent(created.id)}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({closesAt:new Date(closesAt).toISOString(),reminderEnabled:true})}).then(async r=>{if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||'考核截止日期設定失敗');}});}
       await renderExamManager(`已建立「${title}」，請進入考卷加入題目。`);
     }catch(error){if(status)status.textContent=`❌ ${error.message}`;}
   }
