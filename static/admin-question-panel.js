@@ -82,6 +82,7 @@
       window.renderAdminQuizCategories(true),
       document.getElementById('admin-material-group')?.value===group ? window.refreshAdminMaterialCategoryOptions() : Promise.resolve()
     ]);
+    return data;
   };
 
   window.adminDeleteQuizCategory = async function(catId){
