@@ -192,6 +192,24 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SMTP_STARTTLS
+        value: "true"
+      - key: EMAIL_REMINDER_DAYS
+        value: "3"
+      - key: EMAIL_REMINDER_INTERVAL_SECONDS
+        value: "21600"
       - key: AI_EXTERNAL_PROCESSING_ENABLED
         value: "true"
       - key: AI_DEIDENTIFICATION_ENABLED
