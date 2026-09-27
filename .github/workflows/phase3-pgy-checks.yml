@@ -142,7 +142,7 @@ jobs:
           schema_alias = Path('schema_migrations.py').read_text(encoding='utf-8')
 
           for text in (
-              'SECRET_KEY', 'SESSION_COOKIE_SECURE', 'autoDeployTrigger: checksPass',
+              'SECRET_KEY', 'SESSION_COOKIE_SECURE', 'autoDeployTrigger: checksPass', 'branch: main',
               'AI_DEIDENTIFICATION_ENABLED', 'AI_EXTERNAL_MEDIA_ALLOWED',
               'UPLOAD_ZIP_MAX_RATIO', 'GROQ_API_KEY', 'MATERIAL_DIRECT_UPLOAD_ENABLED',
               'MEGA_WEB_READ_TIMEOUT_SECONDS', 'GUNICORN_TIMEOUT', 'MATERIAL_WORKER_TOKEN',
