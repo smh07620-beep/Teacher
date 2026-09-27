@@ -50,7 +50,11 @@ ROLE_PERMISSIONS = {
         "training.compliance.read",
     },
     "education_admin": {
-        "material.read", "course.view", "course.manage", "course.edit", "material.manage",
+        # Education administrators keep organization-wide management while also
+        # participating in training as themselves. Learner capabilities remain
+        # self-scoped at the resource boundary.
+        "material.read", "course.view", "exam.take", "progress.self.read", "result.self.read", "student.view_self",
+        "course.manage", "course.edit", "material.manage",
         "question.manage", "question.review", "exam.manage", "result.group.read",
         "document.export", "education.cross_group.manage", "evaluation.finalize", "student.view_all",
         "learning.assign",
