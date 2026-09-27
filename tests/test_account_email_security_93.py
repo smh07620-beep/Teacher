@@ -10,6 +10,12 @@ class AccountEmailSecurity93Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _email("not-an-email")
 
+    def test_staff_email_defaults_to_smh_domain(self):
+        source=Path(__file__).parents[1].joinpath("teacher_app","maintenance","account_email_migration.py").read_text(encoding="utf-8")
+        self.assertIn("@smh.org.tw",source)
+        self.assertIn("TRIM(emp_id)",source)
+        self.assertIn("TRIM(email) = ''",source)
+
     def test_exam_window_normalizes_timezone(self):
         self.assertTrue(_parse("2026-09-30T23:59:00+08:00").endswith("+00:00"))
 
