@@ -1,6 +1,7 @@
 services:
   - type: web
     name: biochemical-training-exam
+    branch: main
     runtime: docker
     plan: free
     region: singapore
@@ -181,6 +182,7 @@ services:
 
   - type: worker
     name: biochemical-training-ai-worker
+    branch: main
     runtime: docker
     plan: 0.5c-512mb
     region: singapore
