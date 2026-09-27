@@ -26,6 +26,15 @@ class AccountEmailSecurity93Tests(unittest.TestCase):
             self.assertNotIn("onclick=",source)
             self.assertNotIn("<script>",source)
 
+    def test_free_render_blueprint_has_no_paid_worker(self):
+        root=Path(__file__).parents[1]
+        render=root.joinpath("render.yaml").read_text(encoding="utf-8")
+        workflow=root.joinpath(".github","workflows","email-reminders.yml").read_text(encoding="utf-8")
+        worker=root.joinpath("ai_question_worker.py").read_text(encoding="utf-8")
+        self.assertNotIn("type: worker",render)
+        self.assertIn("scripts/send_email_reminders.py",workflow)
+        self.assertNotIn("run_due_reminders",worker)
+
     def test_exam_creation_exposes_final_date(self):
         source=Path(__file__).parents[1].joinpath("static","teacher-content-studio-71.js").read_text(encoding="utf-8")
         self.assertIn("teacher77-exam-closes-at",source)
