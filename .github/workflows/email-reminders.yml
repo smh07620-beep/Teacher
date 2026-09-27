@@ -1,0 +1,49 @@
+name: Learning and exam email reminders
+
+on:
+  schedule:
+    # GitHub Actions cron is UTC. Run daily at 09:15 Asia/Taipei (01:15 UTC).
+    - cron: "15 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teacher-email-reminders
+  cancel-in-progress: false
+
+jobs:
+  reminders:
+    name: Send due reminders
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: "587"
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      SMTP_STARTTLS: "true"
+      EMAIL_REMINDER_DAYS: "3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install application dependencies
+        run: pip install -r requirements.txt
+      - name: Validate reminder secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in DATABASE_URL SMTP_USERNAME SMTP_PASSWORD SMTP_FROM; do
+            if [ -z "${!key:-}" ]; then
+              echo "::error::Missing required GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+      - name: Send learning and exam reminders
+        run: python -u scripts/send_email_reminders.py
