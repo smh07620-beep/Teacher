@@ -57,8 +57,6 @@ def public_user(base_or_row, row=None, *, include_roles=False):
         "createdAt": str(d.get("created_at", "")),
         "updatedAt": str(d.get("updated_at", "")),
         "lastLoginAt": str(d.get("last_login_at", "")),
-        "email": str(d.get("email", "") or ""),
-        "emailNotifications": bool(d.get("email_notifications", True)),
     }
 
     if include_roles:
