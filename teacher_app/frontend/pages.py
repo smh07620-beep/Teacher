@@ -25,6 +25,14 @@ def register_page_routes(app, *, static_dir, current_user):
             return redirect(target)
         return send_from_directory(static_dir, "login.html")
 
+    def account_page():
+        if not current_user():
+            return redirect("/login?next=%2Faccount")
+        return send_from_directory(static_dir, "account.html")
+
+    def reset_password_page():
+        return send_from_directory(static_dir, "reset-password.html")
+
     def training_system():
         # RBAC registration replaces this endpoint with the canonical protected
         # workspace guard later in composition.  Keeping the route here gives
@@ -36,6 +44,8 @@ def register_page_routes(app, *, static_dir, current_user):
         ("/internal", "internal_area", internal_area),
         ("/pgy", "pgy_area", pgy_area),
         ("/login", "login_page", login_page),
+        ("/account", "account_page", account_page),
+        ("/reset-password", "reset_password_page", reset_password_page),
         ("/system", "training_system", training_system),
     ):
         app.add_url_rule(rule, endpoint=endpoint, view_func=view, methods=["GET"])
