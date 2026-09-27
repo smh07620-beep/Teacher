@@ -137,9 +137,10 @@ def create_account(base_or_data, data: dict | None = None) -> dict:
         "created_at": now,
         "updated_at": now,
         "last_login_at": "",
-        "email": str(data.get("email", "") or "").strip().lower()[:254],
-        "email_notifications": bool(data.get("emailNotifications", True)),
     }
+    if repository.account_email_columns_available():
+        values["email"] = str(data.get("email", "") or "").strip().lower()[:254]
+        values["email_notifications"] = bool(data.get("emailNotifications", True))
     if repository.profile_columns_available():
         values["professional_title"] = professional_title
         values["responsibility_tags"] = responsibility_tags
