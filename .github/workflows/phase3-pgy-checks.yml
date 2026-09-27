@@ -149,9 +149,12 @@ jobs:
           ):
               require(text, render, 'render.yaml')
           forbid('autoDeployTrigger: commit', render, 'render.yaml')
-          # Render may run the dedicated AI worker. The hospital material worker
-          # must remain local and must never be configured as a Render worker.
+          # Free Render deployment is web-only. Background AI/material workers
+          # are not provisioned by the Blueprint; scheduled email reminders run
+          # in GitHub Actions instead.
+          forbid('type: worker', render, 'render.yaml')
           forbid('dockerCommand: python -u material_worker.py', render, 'render.yaml')
+          forbid('dockerCommand: python -u ai_question_worker.py', render, 'render.yaml')
 
           require('from teacher_app import create_app', pgy, 'pgy_app.py')
           require('app = create_app()', pgy, 'pgy_app.py')
