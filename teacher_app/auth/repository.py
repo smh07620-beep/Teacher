@@ -48,6 +48,16 @@ def profile_columns_available() -> bool:
         return {"professional_title", "responsibility_tags"}.issubset(columns)
 
 
+def account_email_columns_available() -> bool:
+    with common_db.read_connection() as (conn, kind):
+        if kind == "postgres":
+            rows = conn.execute("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='user_accounts'").fetchall()
+            columns = {str(dict(row).get("column_name", "")) for row in rows}
+        else:
+            columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(user_accounts)").fetchall()}
+        return {"email", "email_notifications"}.issubset(columns)
+
+
 def create_user(values: Mapping[str, object]) -> dict:
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
