@@ -263,8 +263,11 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         render = ROOT.joinpath("render.yaml").read_text(encoding="utf-8")
         self.assertIn("MATERIAL_WORKER_ENABLED", render)
         self.assertNotIn("biochemical-training-material-worker", render)
-        self.assertIn("biochemical-training-ai-worker", render)
-        self.assertIn("python -u ai_question_worker.py", render)
+        self.assertNotIn("biochemical-training-ai-worker", render)
+        self.assertNotIn("python -u ai_question_worker.py", render)
+        self.assertNotIn("type: worker", render)
+        reminder = ROOT.joinpath(".github", "workflows", "email-reminders.yml").read_text(encoding="utf-8")
+        self.assertIn("scripts/send_email_reminders.py", reminder)
 
 
 if __name__ == "__main__":
