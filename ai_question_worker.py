@@ -7,7 +7,6 @@ import time
 
 from teacher_app.assessments import ai_jobs
 from teacher_app.assessments.question_runtime import build_canonical_question_runtime
-from teacher_app.notifications.reminders import run_due_reminders
 
 
 def _env_int(name: str, default: int, lower: int, upper: int) -> int:
@@ -28,16 +27,10 @@ def main() -> int:
     poll_seconds = _env_int("AI_QUESTION_WORKER_POLL_SECONDS", 2, 1, 30)
     recovery_seconds = _env_int("AI_QUESTION_WORKER_RECOVERY_SECONDS", 300, 30, 3600)
     next_recovery = 0.0
-    next_reminders = 0.0
-    reminder_seconds = _env_int("EMAIL_REMINDER_INTERVAL_SECONDS", 21600, 3600, 86400)
     log("started")
     while True:
         try:
             now = time.monotonic()
-            if now >= next_reminders:
-                sent = run_due_reminders()
-                if sent: log(f"email reminders sent={sent}")
-                next_reminders = now + reminder_seconds
             if now >= next_recovery:
                 recovered = processor.recover_stale()
                 if recovered:
