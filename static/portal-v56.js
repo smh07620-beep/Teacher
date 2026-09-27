@@ -231,12 +231,12 @@
     const name=$('#v561-profile-name'), emp=$('#v561-profile-empid'), status=$('#v561-profile-status'), clear=$('#v561-profile-clear'), close=$('#v561-profile-close'), cancel=$('#v561-profile-cancel');
     if(!dialog||!trigger||!form)return;
     const shut=()=>{try{dialog.close();}catch(_){dialog.removeAttribute('open');}};
-    const open=()=>{if(!authUser){location.href='/login?next=%2F';return;}if(name){name.value=authUser.name||'';name.readOnly=true;}if(emp){emp.value=authUser.empId||'';emp.readOnly=true;}if(status)status.textContent=`已登入 ${authUser.username}；個人資料由管理者維護。`;if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();else dialog.setAttribute('open','');};
+    const open=()=>{if(!authUser){location.href='/login?next=%2F';return;}if(name){name.value=authUser.name||'';name.readOnly=true;}if(emp){emp.value=authUser.empId||'';emp.readOnly=true;}if(status)status.textContent=`已登入 ${authUser.username}；姓名、Email、職稱與密碼可由「我的帳號」自行維護，角色與組別仍由管理者設定。`;if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();else dialog.setAttribute('open','');};
     trigger.addEventListener('click',open);
     trigger.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
     close?.addEventListener('click',shut); cancel?.addEventListener('click',shut);
     dialog.addEventListener('click',e=>{if(e.target===dialog)shut();});
-    form.addEventListener('submit',e=>{e.preventDefault();shut();});
+    form.addEventListener('submit',e=>{e.preventDefault();shut();location.href='/account';});
     clear?.addEventListener('click',async()=>{await fetch('/api/auth/logout',{method:'POST'}).catch(()=>{});authUser=null;clearHomeCache();writeLocal(LEARNER_NAME_KEY,'');writeLocal(LEARNER_EMPID_KEY,'');shut();location.href='/';});
   }
 
