@@ -36,10 +36,12 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import course_feedback_migration as _course_feedback_migration  # noqa: F401
     from teacher_app.maintenance import saved_learning_items_migration as _saved_learning_items_migration  # noqa: F401
     from teacher_app.maintenance import completion_certificate_migration as _completion_certificate_migration  # noqa: F401
+    from teacher_app.maintenance import account_email_migration as _account_email_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
     from teacher_app.auth.account_routes import register_multi_role_66
+    from teacher_app.auth.self_service import register_account_self_service
     from teacher_app.auth.elevation import register_admin_elevation, register_sensitive_elevation
     from teacher_app.command_center.audience import register_training_audience_71
     from teacher_app.command_center.routes import register_training_command_center
@@ -110,6 +112,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_record_routes(app)
     app = register_pgy_assessment_routes(app, paths=app.config["STORAGE_PATHS"])
     app = register_multi_role_66(app)
+    app = register_account_self_service(app)
     app = register_general_audit_routes(app)
     app = register_training_audience_71(app)
     app = register_health(app, connection_factory=common_db.get_connection)
