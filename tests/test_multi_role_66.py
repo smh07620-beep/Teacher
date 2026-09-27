@@ -99,6 +99,33 @@ class MultiRole66Tests(
             )
         )
 
+    def test_group_leader_also_has_self_scoped_learner_capabilities(self):
+        user = {
+            "role": "group_leader",
+        }
+
+        for permission in (
+            "exam.take",
+            "progress.self.read",
+            "result.self.read",
+            "student.view_self",
+        ):
+            with self.subTest(permission=permission):
+                self.assertTrue(
+                    has_permission(
+                        user,
+                        permission,
+                    )
+                )
+
+        # Existing group-scoped management remains intact.
+        self.assertTrue(
+            has_permission(
+                user,
+                "student.view_group",
+            )
+        )
+
     def test_admin_roles_alone_still_cannot_clinically_sign(self):
         user = {
             "role": "education_admin",
