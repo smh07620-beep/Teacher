@@ -137,6 +137,8 @@ def create_account(base_or_data, data: dict | None = None) -> dict:
         "created_at": now,
         "updated_at": now,
         "last_login_at": "",
+        "email": str(data.get("email", "") or "").strip().lower()[:254],
+        "email_notifications": bool(data.get("emailNotifications", True)),
     }
     if repository.profile_columns_available():
         values["professional_title"] = professional_title
@@ -163,6 +165,7 @@ def update_account(base_or_username, username_or_data, data: dict | None = None)
         "preferredArea": "preferred_area",
         "preferredGroup": "preferred_group",
         "professionalTitle": "professional_title",
+        "email": "email",
     }
     for key, column in mapping.items():
         if key not in data:
