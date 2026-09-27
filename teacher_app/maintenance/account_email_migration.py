@@ -18,6 +18,12 @@ def account_email_security_93(conn, kind: str) -> None:
     }.items():
         if name not in existing:
             conn.execute(f"ALTER TABLE user_accounts ADD COLUMN {name} {ddl}")
+    # Existing staff accounts default to the institutional mailbox derived
+    # from the authoritative employee id. Never overwrite an explicit email.
+    conn.execute("""UPDATE user_accounts
+        SET email = LOWER(TRIM(emp_id)) || '@smh.org.tw'
+        WHERE (email IS NULL OR TRIM(email) = '')
+          AND emp_id IS NOT NULL AND TRIM(emp_id) <> ''""")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_accounts_email ON user_accounts(email)")
     conn.execute("""CREATE TABLE IF NOT EXISTS password_reset_tokens (
         token_hash TEXT PRIMARY KEY, username TEXT NOT NULL, created_at TEXT NOT NULL,
