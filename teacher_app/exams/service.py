@@ -13,6 +13,7 @@ from teacher_app.common.errors import ApiError
 from teacher_app.exams import grading
 from teacher_app.exams import remediation
 from teacher_app.exams import repository as repo
+from teacher_app.exams.windows import assert_exam_open
 from teacher_app.materials import repository as material_repository
 
 QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video")
@@ -113,6 +114,7 @@ def start_attempt(base_or_user, user_or_data, data: Mapping[str, Any] | None = N
     category_id = _text(data.get("quizCategoryId") or data.get("categoryId"), 100)
     if not category_id:
         raise ApiError("CATEGORY_REQUIRED", "缺少考卷識別碼。", 400)
+    assert_exam_open(category_id)
     category = assessment_repository.get_category_full(category_id)
     if not category or not category.get("active", True):
         raise ApiError("CATEGORY_NOT_FOUND", "找不到可使用的考卷。", 404)
