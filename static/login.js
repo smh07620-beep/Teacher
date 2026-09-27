@@ -9,4 +9,7 @@
       status.textContent=`登入成功，歡迎 ${d.user.name}。`;status.className='success';location.href=next;
     }catch(err){status.textContent=err.message;status.className='error';button.disabled=false;document.getElementById('login-password').select();}
   });
+  const toggle=document.getElementById('forgot-password-toggle'),forgot=document.getElementById('forgot-password-form'),forgotStatus=document.getElementById('forgot-status');
+  toggle?.addEventListener('click',()=>{forgot.hidden=!forgot.hidden;});
+  forgot?.addEventListener('submit',async e=>{e.preventDefault();forgotStatus.textContent='處理中…';try{const d=await AppCore.api('/api/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identity:document.getElementById('forgot-identity').value})});forgotStatus.textContent=d.message||'若資料相符，系統將寄出重設信。';}catch(err){forgotStatus.textContent=err.message;}});
 })();
