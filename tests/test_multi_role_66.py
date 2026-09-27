@@ -126,6 +126,33 @@ class MultiRole66Tests(
             )
         )
 
+    def test_education_admin_also_has_self_scoped_learner_capabilities(self):
+        user = {
+            "role": "education_admin",
+        }
+
+        for permission in (
+            "exam.take",
+            "progress.self.read",
+            "result.self.read",
+            "student.view_self",
+        ):
+            with self.subTest(permission=permission):
+                self.assertTrue(
+                    has_permission(
+                        user,
+                        permission,
+                    )
+                )
+
+        # Existing organization-wide administration remains intact.
+        self.assertTrue(
+            has_permission(
+                user,
+                "education.cross_group.manage",
+            )
+        )
+
     def test_admin_roles_alone_still_cannot_clinically_sign(self):
         user = {
             "role": "education_admin",
