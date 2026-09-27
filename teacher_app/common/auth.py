@@ -37,7 +37,11 @@ ROLE_PERMISSIONS = {
         "teacher.assessment.sign", "student.view_assigned",
     },
     "group_leader": {
-        "material.read", "course.view", "course.manage", "course.edit", "material.manage",
+        # Group leaders retain group-scoped management while also participating
+        # in training as themselves.  These learner capabilities remain self-
+        # scoped at the resource boundary and do not widen group access.
+        "material.read", "course.view", "exam.take", "progress.self.read", "result.self.read", "student.view_self",
+        "course.manage", "course.edit", "material.manage",
         "question.manage", "question.review", "exam.manage", "exam.publish",
         "result.group.read", "group.member.read", "group.content.manage",
         "group.result.read", "document.export", "evaluation.submit", "evaluation.review",
