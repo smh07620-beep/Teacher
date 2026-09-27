@@ -7,7 +7,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from teacher_app.auth import repository, service
 from teacher_app.common import audit, db as common_db
 
-EMAIL_RE=re.compile(r"^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+EMAIL_RE=re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 def _now(): return dt.datetime.now(dt.timezone.utc)
 def _iso(v): return v.isoformat()
