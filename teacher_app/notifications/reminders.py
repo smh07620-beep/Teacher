@@ -38,8 +38,8 @@ def run_due_reminders():
             with common_db.read_connection() as (conn,dbkind):
                 ph=common_db.placeholder(dbkind)
                 windows=conn.execute("SELECT w.quiz_category_id,w.closes_at,c.title FROM exam_windows w JOIN quiz_categories c ON c.id=w.quiz_category_id WHERE w.reminder_enabled="+("TRUE" if dbkind=="postgres" else "1")+" AND c.training_area="+ph+" AND c.group_key="+ph,(user["preferredArea"],user["preferredGroup"])).fetchall()
-                done=conn.execute(f"SELECT DISTINCT quiz_category_id FROM exam_records WHERE emp_id={ph}",(user["empId"],)).fetchall()
-            completed_exams={str(dict(x).get("quiz_category_id") or "") for x in done}
+                done=conn.execute(f"SELECT quiz_category_id,score,passing_score,review_status FROM exam_records WHERE emp_id={ph}",(user["empId"],)).fetchall()
+            completed_exams={str(dict(x).get("quiz_category_id") or "") for x in done if str(dict(x).get("review_status") or "completed")=="completed" and int(dict(x).get("score") or 0)>=int(dict(x).get("passing_score") or 80)}
             for raw in windows:
                 item=dict(raw); due=_parse(item.get("closes_at")); cid=str(item.get("quiz_category_id") or "")
                 if cid not in completed_exams and due and now<=due<=horizon:
