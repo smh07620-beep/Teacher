@@ -139,7 +139,7 @@ def create_account(base_or_data, data: dict | None = None) -> dict:
         "last_login_at": "",
     }
     if repository.account_email_columns_available():
-        values["email"] = str(data.get("email", "") or "").strip().lower()[:254]
+        values["email"] = str(data.get("email", "") or "").strip().lower()[:254] or f"{emp_id.lower()}@smh.org.tw"
         values["email_notifications"] = bool(data.get("emailNotifications", True))
     if repository.profile_columns_available():
         values["professional_title"] = professional_title
