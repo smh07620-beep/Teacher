@@ -24,6 +24,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.assessments.routes import register_assessment_routes
     from teacher_app.exams.routes import register_exam_integrity_guards
     from teacher_app.exams.record_routes import register_record_routes
+    from teacher_app.exams.windows import register_exam_window_routes
     from teacher_app.materials.external_media_routes import register_external_media
     from teacher_app.materials.legacy_office import register_legacy_office_69
     from teacher_app.assessments.question_bank_routes import register_question_bank
@@ -110,6 +111,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_course_routes(app)
     app = register_assessment_routes(app)
     app = register_record_routes(app)
+    app = register_exam_window_routes(app)
     app = register_pgy_assessment_routes(app, paths=app.config["STORAGE_PATHS"])
     app = register_multi_role_66(app)
     app = register_account_self_service(app)
