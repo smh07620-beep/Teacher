@@ -5,6 +5,44 @@
   let cachedTemplateBuffer = null;
   let pendingExportRecordIndex = null;
 
+  function exporterName() {
+    const user = window.TeacherRBAC681?.user || {};
+    const profileName = String(user.name || user.username || '').trim();
+    if (profileName) return profileName;
+    const visibleName = document.getElementById('v573-system-user-name')?.textContent || '';
+    return String(visibleName).trim();
+  }
+
+  function localDateTime() {
+    try {
+      return new Date().toLocaleString('zh-TW', {hour12:false});
+    } catch (_) {
+      return new Date().toISOString().replace('T', ' ').slice(0, 19);
+    }
+  }
+
+  function buildPaperRetentionMeta(record, groupLabel, quizTitle) {
+    const source = record || {};
+    const reference = String(source.id || source.attemptId || source.recordId || '').trim();
+    return {
+      documentTitle: `${groupLabel || ''}年度人員能力考核表`,
+      documentReference: reference,
+      documentVersion: String(source.quizVersion || source.version || ''),
+      groupLabel: groupLabel || '',
+      quizTitle: quizTitle || source.quizTitle || '',
+      assessmentDate: String(source.timestamp || source.assessmentDate || ''),
+      exportedAt: localDateTime(),
+      exportedBy: exporterName(),
+      paperStatus: '待列印簽核',
+      examineeSignature: '________________',
+      evaluatorSignature: '________________',
+      reviewSignature: '________________',
+      signatureDate: '____年__月__日',
+      archiveNumber: '________________',
+      archiveNote: '列印後請依院內流程完成簽核，並依科內文件管理規範歸檔留存。'
+    };
+  }
+
   window.buildRoleCheckboxText = function(role, groupKey = currentGroupKey) {
     const memberRole = getGroupMemberRole(groupKey);
     const duty = role === '值班醫檢師' ? '☑' : '□';
@@ -42,6 +80,12 @@
     const evaluationScore=quizList.length>0 ? Math.round((correctCount/quizList.length)*100) : 0;
     const passingScore=Math.max(1,Math.min(100,Number(allQuizData[currentCatKey]?.passingScore||80)));
     const evaluationStatus=essayCount>0 ? '待人工批改' : (evaluationScore>=passingScore?'合格':'不合格');
+    const groupLabel = GROUPS[currentGroupKey]?.label || currentGroupKey || '';
+    const quizTitle = allQuizData[currentCatKey]?.title || '';
+    const paperMeta = buildPaperRetentionMeta({
+      assessmentDate: localDateTime(),
+      quizVersion: allQuizData[currentCatKey]?.version || ''
+    }, groupLabel, quizTitle);
     return {
       payload:{
         name:nameInput, empId:idInput,
@@ -50,9 +94,10 @@
         evaluatorTitle:window.buildEvaluatorTitleCheckboxText(evaluatorTitleInput),
         score:evaluationScore, evaluationScore, passingScore, correctCount, wrongCount,
         totalQuestions:quizList.length, status:evaluationStatus, result:evaluationStatus,
-        questions:answersDetail
+        questions:answersDetail,
+        ...paperMeta
       },
-      filenamePart:`${GROUPS[currentGroupKey].label}年度人員能力考核表_${allQuizData[currentCatKey].title}_${nameInput}`
+      filenamePart:`${groupLabel}年度人員能力考核表_${quizTitle}_${nameInput}`
     };
   };
 
@@ -64,6 +109,7 @@
     const groupLabel = (GROUPS[rec.groupKey] || GROUPS.grpBio).label;
     const passingScore=Math.max(1,Math.min(100,Number(rec.passingScore||80)));
     const recordStatus=rec.status || (recordScore>=passingScore?'合格':'不合格');
+    const paperMeta = buildPaperRetentionMeta(rec, groupLabel, rec.quizTitle || '');
     return {
       payload:{
         name:rec.name, empId:rec.empId,
@@ -73,7 +119,8 @@
         score:recordScore, evaluationScore:recordScore, passingScore,
         correctCount:recordCorrect, wrongCount:recordWrong,
         totalQuestions:recordAnswers.length, status:recordStatus, result:recordStatus,
-        questions:recordAnswers
+        questions:recordAnswers,
+        ...paperMeta
       },
       filenamePart:`${groupLabel}年度人員能力考核表_${rec.name}_${rec.empId}`
     };
@@ -102,7 +149,7 @@
       const res = await fetch(`/api/doc-templates/${groupKey}/download`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (!silentMissing) alert(data.error || `「${GROUPS[groupKey].label}」尚未上傳 Word 匯出範本，請至管理後台「Word 範本」上傳 .docx。`);
+        if (!silentMissing) alert(data.error || `「${GROUPS[groupKey].label}」尚未設定 Word 匯出範本，請聯絡教學／系統管理者維護 .docx 範本。`);
         return false;
       }
       const buffer = await res.arrayBuffer();
