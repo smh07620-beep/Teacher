@@ -7,7 +7,7 @@ import time
 
 from teacher_app.assessments import ai_jobs
 from teacher_app.assessments.question_runtime import build_canonical_question_runtime
-from teacher_app.materials import media_script_jobs
+from teacher_app.materials import media_audio_jobs, media_script_jobs
 
 
 def _env_int(name: str, default: int, lower: int, upper: int) -> int:
@@ -26,27 +26,31 @@ def main() -> int:
     question_runtime = build_canonical_question_runtime()
     question_processor = ai_jobs.AiQuestionJobProcessor(question_runtime)
     script_processor = media_script_jobs.MediaScriptJobProcessor()
+    audio_processor = media_audio_jobs.MediaAudioJobProcessor()
     poll_seconds = _env_int("AI_QUESTION_WORKER_POLL_SECONDS", 2, 1, 30)
     recovery_seconds = _env_int("AI_QUESTION_WORKER_RECOVERY_SECONDS", 300, 30, 3600)
     next_recovery = 0.0
-    log("started queues=ai_questions,media_scripts")
+    log("started queues=ai_questions,media_scripts,media_audio")
     while True:
         try:
             now = time.monotonic()
             if now >= next_recovery:
                 recovered_questions = question_processor.recover_stale()
                 recovered_scripts = script_processor.recover_stale()
-                if recovered_questions or recovered_scripts:
+                recovered_audio = audio_processor.recover_stale()
+                if recovered_questions or recovered_scripts or recovered_audio:
                     log(
                         "requeued stale "
-                        f"question_jobs={recovered_questions} media_script_jobs={recovered_scripts}"
+                        f"question_jobs={recovered_questions} media_script_jobs={recovered_scripts} "
+                        f"media_audio_jobs={recovered_audio}"
                     )
                 next_recovery = now + recovery_seconds
 
-            # Give both domain queues one chance per loop.  Do not let a large
-            # assessment queue permanently starve teacher media-script work.
+            # Give every domain queue one chance per loop.  A large assessment
+            # queue must not starve teacher script or narration work.
             did_work = question_processor.run_next_queued()
             did_work = script_processor.run_next_queued() or did_work
+            did_work = audio_processor.run_next_queued() or did_work
             if did_work:
                 continue
             time.sleep(poll_seconds)
