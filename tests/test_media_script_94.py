@@ -18,7 +18,11 @@ ROOT = Path(__file__).resolve().parents[1]
 class MediaScriptMigration94Tests(unittest.TestCase):
     def test_release_contract_contains_0094(self):
         self.assertIn("0094-media-script-jobs", release_contract.REQUIRED_MIGRATIONS)
-        self.assertEqual(release_contract.REQUIRED_RELEASE_MIGRATION, "0094-media-script-jobs")
+        self.assertIn("0095-media-audio-jobs", release_contract.REQUIRED_MIGRATIONS)
+        self.assertLess(
+            release_contract.REQUIRED_MIGRATIONS.index("0094-media-script-jobs"),
+            release_contract.REQUIRED_MIGRATIONS.index("0095-media-audio-jobs"),
+        )
 
     def test_sqlite_migration_creates_separate_job_and_script_tables(self):
         conn = sqlite3.connect(":memory:")
@@ -134,12 +138,13 @@ class MediaScriptFrontend94Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
-    def test_ai_worker_fairly_services_question_and_media_script_queues(self):
+    def test_ai_worker_fairly_services_question_script_and_audio_queues(self):
         self.assertIn("MediaScriptJobProcessor", self.worker)
+        self.assertIn("MediaAudioJobProcessor", self.worker)
         self.assertIn("question_processor.run_next_queued()", self.worker)
         self.assertIn("script_processor.run_next_queued()", self.worker)
-        self.assertIn("Do not let a large", self.worker)
-        self.assertIn("permanently starve teacher media-script work", self.worker)
+        self.assertIn("audio_processor.run_next_queued()", self.worker)
+        self.assertIn("must not starve teacher script or narration work", self.worker)
 
     def test_frontend_does_not_fake_tts_or_auto_publish(self):
         self.assertNotIn("speechSynthesis.speak", self.source)
