@@ -9,6 +9,7 @@ from teacher_app.maintenance import course_feedback_migration as _course_feedbac
 from teacher_app.maintenance import saved_learning_items_migration as _saved_learning_items_migration  # noqa: F401
 from teacher_app.maintenance import completion_certificate_migration as _completion_certificate_migration  # noqa: F401
 from teacher_app.maintenance import account_email_migration as _account_email_migration  # noqa: F401
+from teacher_app.maintenance import media_script_migration as _media_script_migration  # noqa: F401
 
 
 sys.modules[__name__] = _migrations
