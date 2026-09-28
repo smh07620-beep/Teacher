@@ -1,0 +1,44 @@
+/* Teacher 10/14: keep multi-role persona switching reachable on narrow screens. */
+#teacher-persona-switch-1014 {
+  display: flex;
+  min-width: 0;
+  max-width: min(100%, 460px);
+  align-items: center;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+#teacher-persona-switch-1014::-webkit-scrollbar {
+  display: none;
+}
+
+#teacher-persona-switch-1014 > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  body.v56-system .v56-system-actions {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 820px) {
+  body.v56-system .v56-system-actions {
+    max-width: calc(100vw - 108px);
+    overflow: visible;
+  }
+
+  #teacher-persona-switch-1014 {
+    max-width: calc(100vw - 108px);
+    padding: 3px;
+    gap: 2px;
+  }
+
+  #teacher-persona-switch-1014 > button {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+}
