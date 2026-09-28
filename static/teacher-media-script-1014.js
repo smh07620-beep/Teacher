@@ -35,6 +35,11 @@
     if (select) select.disabled = busy;
   }
 
+  async function syncNarrationOptions() {
+    const loader = window.TeacherMediaAudio1014?.loadApprovedScripts;
+    if (typeof loader === 'function') await loader();
+  }
+
   async function fetchMaterials() {
     const response = await fetch('/api/slides/admin', {credentials:'same-origin', cache:'no-store'});
     const data = await response.json().catch(() => []);
@@ -199,6 +204,7 @@
       const script = await updateSavedScript('approved');
       status(`✅ 講稿已由 ${script.approvedBy || '目前教師'} 核准。後續 AI 語音只會使用已核准講稿。`, 'success');
       await loadSavedScripts();
+      await syncNarrationOptions();
     } catch (error) {
       if (button) button.disabled = false;
       status(`核准失敗：${error.message}`, 'error');
@@ -214,6 +220,7 @@
       status('✅ 講稿修改已儲存；因內容有變更，狀態回到草稿，請重新核准。', 'success');
       document.getElementById('teacher-script-approve-1014')?.removeAttribute('disabled');
       await loadSavedScripts();
+      await syncNarrationOptions();
       return script;
     } catch (error) {
       status(`儲存失敗：${error.message}`, 'error');
