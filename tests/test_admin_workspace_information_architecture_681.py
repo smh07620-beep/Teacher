@@ -92,7 +92,9 @@ class AdminWorkspaceInformationArchitecture681Tests(unittest.TestCase):
         self.assertIn('WORD TEMPLATES', self.html)
         self.assertIn('id="results-workspace-overview"', self.html)
         self.assertIn('RESULTS & ANALYTICS', self.html)
-        self.assertIn("resultsOverview?.classList.toggle('hidden', scoring)", self.results)
+        self.assertIn("const documents = state.resultMode === 'documents'", self.results)
+        self.assertIn("resultsOverview?.classList.toggle('hidden', scoring || documents)", self.results)
+        self.assertIn("paperDocuments?.classList.toggle('hidden', !documents)", self.results)
         self.assertIn('.admin-results-overview', self.css)
 
     def test_system_workspace_separates_health_storage_security_and_communication(self):
