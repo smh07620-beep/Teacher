@@ -64,6 +64,7 @@ ASSET_MANIFEST = {
             "/admin-jobs.js",
             "/admin-material-upload.js",
             "/material-upload-client.js",
+            "/teacher-media-recorder-1014.js",
             "/admin-ai-questions.js",
             "/admin-question-panel.js",
             "/admin-external-media.js",
