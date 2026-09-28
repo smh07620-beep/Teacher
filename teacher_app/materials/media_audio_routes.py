@@ -30,7 +30,7 @@ def register_media_audio_routes(owner):
         user = _actor(owner)
         if not user:
             return jsonify({"error": "請先登入。", "loginRequired": True}), 401
-        _user, denied = scope_filter.require_permission(owner, "material.manage")
+        denied = scope_filter.require_permission(owner, "material.manage")
         if denied:
             return denied
         return jsonify(media_audio_runtime.public_status())
