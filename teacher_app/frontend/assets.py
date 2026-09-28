@@ -35,7 +35,9 @@ ASSET_MANIFEST = {
                 ),
             ),
         ),
-        "head": (),
+        "head": (
+            "/teacher-workspace-1014.css",
+        ),
         "body": (
             "/system-csp-actions.js",
             "/pgy-workflow.js",
