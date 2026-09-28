@@ -4,7 +4,37 @@
 
   let pendingUploadGroup = null;
 
+  function ensurePaperRetentionGuide() {
+    const panel = document.getElementById('admin-section-word');
+    const workspace = panel?.querySelector('.admin-primary-workspace');
+    if (!workspace) return;
+
+    const eyebrow = workspace.querySelector('.admin-page-eyebrow');
+    const heading = workspace.querySelector('h4');
+    const description = heading?.parentElement?.querySelector('p.text-xs');
+    const chip = workspace.querySelector('.admin-workspace-chip');
+    if (eyebrow) eyebrow.textContent = 'DOCUMENT GOVERNANCE';
+    if (heading) heading.textContent = '正式紙本文件範本';
+    if (description) description.textContent = '此處只維護各組正式 .docx 範本與版本來源；老師日常輸出請從教師工作台「紙本文件與匯出」進行。';
+    if (chip) chip.textContent = '範本維護 · 版本治理';
+
+    if (document.getElementById('paper-retention-template-guide')) return;
+    const details = document.createElement('details');
+    details.id = 'paper-retention-template-guide';
+    details.className = 'text-xs text-sky-900 bg-sky-50 border border-sky-100 rounded-xl p-3';
+    details.innerHTML = `
+      <summary class="cursor-pointer font-bold">查看紙本留存建議佔位字</summary>
+      <div class="mt-2 space-y-2 leading-5">
+        <p><b>文件追溯：</b> {documentTitle} 文件名稱、{documentReference} 紀錄識別碼、{documentVersion} 文件／考卷版本、{groupLabel} 組別、{quizTitle} 考核主題。</p>
+        <p><b>時間與輸出：</b> {assessmentDate} 原始考核時間、{exportedAt} 輸出時間、{exportedBy} 輸出人、{paperStatus} 紙本狀態。</p>
+        <p><b>簽核與歸檔：</b> {examineeSignature} 受評者簽名、{evaluatorSignature} 評核者簽名、{reviewSignature} 複核簽名、{signatureDate} 簽核日期、{archiveNumber} 歸檔編號、{archiveNote} 留存說明。</p>
+        <p class="text-slate-500">這些欄位是新增的可選佔位字；既有 Word 範本沒有放入也不會影響原本匯出。</p>
+      </div>`;
+    workspace.appendChild(details);
+  }
+
   async function renderTemplates() {
+    ensurePaperRetentionGuide();
     const box = document.getElementById('admin-doc-templates-list');
     if (!box) return;
     box.innerHTML = '<p class="text-xs text-slate-400">讀取範本設定中…</p>';
@@ -63,6 +93,7 @@
   }
 
   document.getElementById('admin-doc-template-upload-input')?.addEventListener('change', uploadTemplate);
+  ensurePaperRetentionGuide();
 
   // Keep the existing HTML action contract; server-side session RBAC authorizes requests.
   window.renderAdminDocTemplates = renderTemplates;
