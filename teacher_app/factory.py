@@ -39,6 +39,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import completion_certificate_migration as _completion_certificate_migration  # noqa: F401
     from teacher_app.maintenance import account_email_migration as _account_email_migration  # noqa: F401
     from teacher_app.maintenance import media_script_migration as _media_script_migration  # noqa: F401
+    from teacher_app.maintenance import media_audio_migration as _media_audio_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
@@ -75,6 +76,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.materials.template_routes import register_doc_template_routes
     from teacher_app.materials.sync_upload_routes import register_sync_upload_routes
     from teacher_app.materials.media_script_routes import register_media_script_routes
+    from teacher_app.materials.media_audio_routes import register_media_audio_routes
     from teacher_app.storage.admin_routes import register_storage_admin_routes
     from teacher_app.storage import r2_ledger
     from teacher_app.worker.routes import register_free_worker
@@ -94,6 +96,7 @@ def _register_production(app: Flask) -> Flask:
         ),
     )
     app = register_media_script_routes(app)
+    app = register_media_audio_routes(app)
     app = register_doc_template_routes(
         app,
         paths=app.config["STORAGE_PATHS"],
