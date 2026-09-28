@@ -123,13 +123,14 @@ class TeacherRecorderWebmAudio1014Tests(unittest.TestCase):
         inserted = insert.call_args.args[0]
         self.assertEqual(inserted["filename"], "老師錄音.m4a")
 
-    def test_windows_supervisor_uses_media_safe_entrypoint(self):
+    def test_windows_supervisor_uses_packaged_media_safe_entrypoint(self):
         source = ROOT.joinpath("run_material_worker_autostart.ps1").read_text(encoding="utf-8")
-        entry = ROOT.joinpath("material_worker_entry.py").read_text(encoding="utf-8")
-        self.assertIn('Join-Path $root "material_worker_entry.py"', source)
+        entry = ROOT.joinpath("teacher_app", "worker", "material_worker_entry.py").read_text(encoding="utf-8")
+        self.assertIn("-m teacher_app.worker.material_worker_entry", source)
         self.assertIn("media_transcode_compat import install", entry)
         self.assertIn("install(worker)", entry)
         self.assertIn("worker.main()", entry)
+        self.assertFalse(ROOT.joinpath("material_worker_entry.py").exists())
 
 
 if __name__ == "__main__":
