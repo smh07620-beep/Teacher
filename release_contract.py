@@ -53,6 +53,7 @@ REQUIRED_MIGRATIONS = (
     "0090-completion-certificates",
     "0093-account-email-security",
     "0094-media-script-jobs",
+    "0095-media-audio-jobs",
 )
 
 # Backward-compatible singular name used by older release checks.  It now
