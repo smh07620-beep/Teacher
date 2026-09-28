@@ -55,6 +55,15 @@ def commit(job: dict, result: dict) -> dict:
         if page_count <= 0 or storage_meta.get("previewMode") != "single_pdf":
             raise ValueError("Office/PDF 必須有有效 preview.pdf 與 pageCount 才能完成。")
 
+    # Media can be normalized by the local Worker (for example microphone-only
+    # WebM -> M4A). Keep the human base name while persisting the normalized
+    # suffix so the canonical material viewer selects the correct player.
+    display_filename = original
+    media_kind = str(storage_meta.get("mediaKind") or "").strip().lower()
+    normalized_suffix = Path(source_name).suffix.lower()
+    if media_kind in {"audio", "video"} and normalized_suffix:
+        display_filename = Path(original).with_suffix(normalized_suffix).name
+
     # The Worker is trusted for conversion output, not for authorization scope.
     # Persist only the group/area captured and validated by the Web enqueue path;
     # malformed or stale payload scope must fail instead of silently becoming
@@ -69,7 +78,7 @@ def commit(job: dict, result: dict) -> dict:
     )
     entry = {
         "id": material_id,
-        "filename": original,
+        "filename": display_filename,
         "title": str(payload.get("title") or original)[:255],
         "description": str(
             payload.get("desc") or "管理者上傳之教育訓練補充教材"
