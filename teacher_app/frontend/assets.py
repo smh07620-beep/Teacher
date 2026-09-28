@@ -43,6 +43,7 @@ ASSET_MANIFEST = {
             "/maintenance-64.js",
             "/workspace-shell-70.js",
             "/teacher-workspace-1014.js",
+            "/teacher-media-script-1014.js",
             "/training-command-center-71.js",
             "/pgy-competency-matrix-71.js",
             "/learning-analytics-71.js",
