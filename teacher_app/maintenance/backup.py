@@ -25,7 +25,7 @@ DEFAULT_TABLES = (
     "exam_attempts", "schema_migrations", "learning_progress",
     "material_text_index", "media_processing_jobs", "atlas_import_previews",
     "audit_events", "external_media", "question_versions",
-    "question_attempt_analytics",
+    "question_attempt_analytics", "media_script_jobs", "media_scripts",
 )
 
 
@@ -90,110 +90,157 @@ def _table_rows(conn, table: str) -> list[dict[str, Any]]:
     return [dict(row) for row in conn.execute(f'SELECT * FROM "{table}"').fetchall()]
 
 
-def _table_columns(conn, kind: str, table: str) -> set[str]:
+def _json_ready(value: Any) -> Any:
+    if isinstance(value, bytes):
+        return {"__bytes__": value.hex()}
+    if isinstance(value, dict):
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    return value
+
+
+def _json_restore(value: Any) -> Any:
+    if isinstance(value, dict) and set(value) == {"__bytes__"}:
+        return bytes.fromhex(str(value["__bytes__"]))
+    if isinstance(value, dict):
+        return {key: _json_restore(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_restore(item) for item in value]
+    return value
+
+
+def create_backup_payload(connection_factory: Callable | None = None) -> dict[str, Any]:
+    with _read_scope(connection_factory) as (conn, kind):
+        existing = _existing_tables(conn, kind)
+        tables = {
+            table: [_json_ready(row) for row in _table_rows(conn, table)]
+            for table in DEFAULT_TABLES
+            if table in existing
+        }
+    return {
+        "format": BACKUP_FORMAT,
+        "createdAt": utcnow(),
+        "appVersion": app_version(),
+        "tables": tables,
+    }
+
+
+def canonical_json(payload: dict[str, Any]) -> bytes:
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def sign_payload(payload: dict[str, Any], signing_key: str) -> str:
+    return hmac.new(
+        signing_key.encode("utf-8"),
+        canonical_json(payload),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def create_archive(payload: dict[str, Any], signing_key: str) -> bytes:
+    signature = sign_payload(payload, signing_key)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("backup.json", canonical_json(payload))
+        archive.writestr("backup.sig", signature)
+    return buffer.getvalue()
+
+
+def read_archive(blob: bytes, signing_key: str) -> dict[str, Any]:
+    try:
+        with zipfile.ZipFile(io.BytesIO(blob), "r") as archive:
+            names = set(archive.namelist())
+            if names != {"backup.json", "backup.sig"}:
+                raise ValueError("備份封裝格式不正確。")
+            raw = archive.read("backup.json")
+            signature = archive.read("backup.sig").decode("utf-8").strip()
+    except (zipfile.BadZipFile, KeyError, UnicodeDecodeError) as exc:
+        raise ValueError("備份檔案損壞或格式不正確。") from exc
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("備份內容不是有效 JSON。") from exc
+    if not isinstance(payload, dict) or payload.get("format") != BACKUP_FORMAT:
+        raise ValueError("不支援的備份格式。")
+    expected = sign_payload(payload, signing_key)
+    if not hmac.compare_digest(signature, expected):
+        raise ValueError("備份簽章驗證失敗。")
+    return payload
+
+
+def _table_columns(conn, kind: str, table: str) -> list[str]:
     if kind == "postgres":
         rows = conn.execute(
             "SELECT column_name FROM information_schema.columns "
-            "WHERE table_schema = current_schema() AND table_name = %s",
+            "WHERE table_schema='public' AND table_name=%s ORDER BY ordinal_position",
             (table,),
         ).fetchall()
-        return {str(dict(row).get("column_name", "")) for row in rows}
+        return [str(dict(row).get("column_name", "")) for row in rows]
     rows = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
-    return {str(row[1]) for row in rows}
+    return [str(dict(row).get("name", "")) for row in rows]
 
 
-def compatible_restore_row(table: str, row: dict[str, Any], destination_columns: set[str]) -> dict[str, Any]:
-    compatible = {column: value for column, value in row.items() if column in destination_columns}
-    if table == "user_accounts" and "roles_json" in destination_columns and "roles_json" not in compatible:
-        compatible["roles_json"] = json.dumps(
-            normalize_roles(None, primary=row.get("role")),
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-    return compatible
+def _restore_table(conn, kind: str, table: str, rows: list[dict[str, Any]]) -> None:
+    columns = _table_columns(conn, kind, table)
+    if not columns:
+        return
+    conn.execute(f'DELETE FROM "{table}"')
+    if not rows:
+        return
+    ph = common_db.placeholder(kind)
+    for raw_row in rows:
+        if not isinstance(raw_row, dict):
+            raise ValueError(f"備份表 {table} 的資料列格式不正確。")
+        row = {key: _json_restore(value) for key, value in raw_row.items() if key in columns}
+        keys = [column for column in columns if column in row]
+        if not keys:
+            continue
+        quoted = ",".join(f'"{key}"' for key in keys)
+        values = ",".join(ph for _ in keys)
+        params = [row[key] for key in keys]
+        conn.execute(f'INSERT INTO "{table}" ({quoted}) VALUES ({values})', params)
 
 
-def build_backup(connection_factory: Callable | None = None) -> dict[str, Any]:
-    with _read_scope(connection_factory) as (conn, kind):
-        existing = _existing_tables(conn, kind)
-        tables = {name: _table_rows(conn, name) for name in DEFAULT_TABLES if name in existing}
-    payload = {
-        "format": BACKUP_FORMAT,
-        "createdAt": utcnow(),
-        "version": app_version(),
-        "tables": tables,
-    }
-    body = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
-    payload["sha256"] = hashlib.sha256(body).hexdigest()
-    return payload
+def restore_backup_payload(payload: dict[str, Any], connection_factory: Callable | None = None) -> dict[str, int]:
+    tables = payload.get("tables")
+    if not isinstance(tables, dict):
+        raise ValueError("備份內容缺少 tables。")
+    unknown = set(tables) - set(DEFAULT_TABLES)
+    if unknown:
+        raise ValueError("備份包含不允許還原的資料表：" + ", ".join(sorted(unknown)))
 
-
-def zip_payload(payload: dict[str, Any]) -> bytes:
-    raw = json.dumps(payload, ensure_ascii=False, indent=2, default=str).encode("utf-8")
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("teacher-backup.json", raw)
-    return buf.getvalue()
-
-
-def parse_backup_zip(raw: bytes, *, max_expanded_mb: int = 500) -> dict[str, Any]:
-    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
-        names = archive.namelist()
-        if names != ["teacher-backup.json"]:
-            raise ValueError("備份 ZIP 結構不正確。")
-        info = archive.getinfo(names[0])
-        max_expanded = max(1, min(2048, int(max_expanded_mb))) * 1024 * 1024
-        if info.file_size > max_expanded:
-            raise ValueError("備份解壓後大小超過限制。")
-        payload = json.loads(archive.read(names[0]).decode("utf-8"))
-
-    if payload.get("format") != BACKUP_FORMAT or not isinstance(payload.get("tables"), dict):
-        raise ValueError("不是 Teacher 備份格式。")
-    stored_sha = str(payload.get("sha256") or "").strip().lower()
-    unsigned = dict(payload)
-    unsigned.pop("sha256", None)
-    expected_sha = hashlib.sha256(
-        json.dumps(unsigned, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
-    ).hexdigest()
-    if not stored_sha or not hmac.compare_digest(stored_sha, expected_sha):
-        raise ValueError("備份 SHA256 驗證失敗。")
-    return payload
-
-
-def restore_backup(payload: dict[str, Any], connection_factory: Callable | None = None) -> dict[str, int]:
-    restored: dict[str, int] = {}
     with _write_scope(connection_factory) as (conn, kind):
-        ph = common_db.placeholder(kind)
         existing = _existing_tables(conn, kind)
-        for table, rows in payload.get("tables", {}).items():
-            if table not in DEFAULT_TABLES or table not in existing or not isinstance(rows, list):
+        restored: dict[str, int] = {}
+        for table in DEFAULT_TABLES:
+            if table not in tables or table not in existing:
                 continue
-            destination_columns = _table_columns(conn, kind, table)
-            count = 0
-            for row in rows:
-                if not isinstance(row, dict) or not row:
-                    continue
-                compatible = compatible_restore_row(table, row, destination_columns)
-                if not compatible:
-                    continue
-                cols = list(compatible)
-                placeholders = ",".join([ph] * len(cols))
-                col_sql = ",".join(f'"{column}"' for column in cols)
-                values = tuple(compatible[column] for column in cols)
-                try:
-                    if kind == "postgres":
-                        result = conn.execute(
-                            f'INSERT INTO "{table}" ({col_sql}) VALUES ({placeholders}) ON CONFLICT DO NOTHING',
-                            values,
-                        )
-                    else:
-                        result = conn.execute(
-                            f'INSERT OR IGNORE INTO "{table}" ({col_sql}) VALUES ({placeholders})',
-                            values,
-                        )
-                    count += max(0, int(result.rowcount or 0))
-                except Exception:
-                    # Restore stays conservative: incompatible individual rows are skipped.
-                    continue
-            restored[table] = count
+            rows = tables.get(table)
+            if not isinstance(rows, list):
+                raise ValueError(f"備份表 {table} 格式不正確。")
+            _restore_table(conn, kind, table, rows)
+            restored[table] = len(rows)
     return restored
+
+
+def backup_filename() -> str:
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    return f"teacher-backup-{stamp}.zip"
+
+
+__all__ = [
+    "BACKUP_FORMAT",
+    "DEFAULT_TABLES",
+    "backup_filename",
+    "create_archive",
+    "create_backup_payload",
+    "read_archive",
+    "restore_backup_payload",
+    "sign_payload",
+]
