@@ -164,7 +164,7 @@ while ($true) {
     exit 31
   }
   try {
-    & $python -u (Join-Path $root "material_worker_entry.py")
+    & $python -u -m teacher_app.worker.material_worker_entry
     $workerExit = $LASTEXITCODE
   } catch {
     Write-TeacherWorkerEvent -EntryType "Error" -EventId 3003 -Message "Worker process launch failed; supervisor stopped."
