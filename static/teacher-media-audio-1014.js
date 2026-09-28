@@ -83,6 +83,7 @@
   async function loadApprovedScripts() {
     const select = document.getElementById('teacher-audio-script-1014');
     if (!select) return;
+    const previous = select.value;
     select.innerHTML = '<option value="">讀取已核准講稿…</option>';
     const materialId = sourceMaterialId();
     if (!materialId) {
@@ -109,6 +110,8 @@
         select.innerHTML = '<option value="">這份教材尚無已核准講稿</option>';
         setStatus('這份教材目前沒有已核准講稿；請先完成講稿編修與教師核准。');
       } else {
+        if (scripts.some(script => script.id === previous)) select.value = previous;
+        else if (scripts.length === 1) select.value = scripts[0].id || '';
         setStatus(`已找到 ${scripts.length} 份已核准講稿，可選擇後產生 AI 語音。`, 'success');
       }
     } catch (error) {
@@ -151,7 +154,10 @@
       if (data.status === 'completed') {
         setBusy(false);
         showResult(data);
-        setStatus('✅ AI 語音完成，已直接保存至 R2 並加入教材。', 'success');
+        window.invalidateAdminMaterialsCache?.();
+        void window.renderAdminCourseMaterialHub?.(true);
+        void window.renderSlidesGrid?.();
+        setStatus('✅ AI 語音完成，已直接保存至 R2 並加入教材；教材清單已同步更新。', 'success');
         return;
       }
       if (data.status === 'failed') {
