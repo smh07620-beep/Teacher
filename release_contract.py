@@ -54,6 +54,7 @@ REQUIRED_MIGRATIONS = (
     "0093-account-email-security",
     "0094-media-script-jobs",
     "0095-media-audio-jobs",
+    "0096-content-audience-scope",
 )
 
 # Backward-compatible singular name used by older release checks.  It now
