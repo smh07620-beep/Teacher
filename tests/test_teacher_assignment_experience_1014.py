@@ -28,6 +28,9 @@ class TeacherAssignmentExperience1014Tests(unittest.TestCase):
         self.assertIn("搜尋姓名、工號或帳號", UI)
         self.assertIn('account.get("preferredGroup")', ASSIGNMENT_SERVICE)
         self.assertIn('allowedAssigneeTypes', ASSIGNMENT_SERVICE)
+        self.assertIn('["group", "user"]', ASSIGNMENT_SERVICE)
+        self.assertIn('ASSIGNEE_SCOPE_MISMATCH', ASSIGNMENT_SERVICE)
+        self.assertIn('指定人員目前不屬於此課程的訓練區／組別', ASSIGNMENT_SERVICE)
         self.assertIn('@app.get("/api/learning-assignments/audience-options")', ASSIGNMENT_ROUTES)
 
     def test_batch_course_assignment_is_available_and_idempotent_friendly(self):
