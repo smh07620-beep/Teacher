@@ -96,6 +96,7 @@ ASSET_MANIFEST = {
             "/teacher-ui-resilience-1014.js",
             "/teacher-persona-isolation-1014.js",
             "/teacher-interface-convergence-1014.js",
+            "/teacher-assignment-experience-1014.js",
         ),
     },
 }
@@ -216,5 +217,7 @@ def register_pgy_frontend(app):
             )
             return response
         return response
+
+    return app
 
     return app
