@@ -23,6 +23,13 @@
     return item;
   }
 
+  function hideTeacherOwnedWordEntry() {
+    const item = document.getElementById('admin-nav-word');
+    if (!item) return;
+    item.classList.add('hidden');
+    item.setAttribute('aria-hidden', 'true');
+  }
+
   function navGroup(label, buttons) {
     const usable = buttons.filter(Boolean);
     if (!usable.length) return null;
@@ -38,10 +45,19 @@
     return section;
   }
 
+  function leaveLegacyWordWorkspace() {
+    if (params.get('workspace') !== 'word') return;
+    params.set('workspace', 'people');
+    const url = new URL(window.location.href);
+    url.searchParams.set('workspace', 'people');
+    window.history?.replaceState?.(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    void window.switchAdminWorkspace?.('people', true);
+  }
+
   function rebuild() {
+    hideTeacherOwnedWordEntry();
     const groups = [
       navGroup('人員與權限', [existing('admin-nav-people', '👥 人員與權限')]),
-      navGroup('正式文件治理', [existing('admin-nav-word', '📄 紙本文件範本')]),
       navGroup('系統與儲存', [
         existing('admin-nav-system', '⚙️ 系統與服務'),
         existing('admin-nav-worker', '🖥️ Worker / Job 狀態'),
@@ -56,17 +72,18 @@
       const note = document.createElement('div');
       note.id = 'system-focus-note-1014';
       note.className = 'mt-2 text-[11px] text-slate-500';
-      note.textContent = '日常教材、媒體、出題與紙本輸出已移至「教師工作區」；系統管理只保留平台治理與高風險維運。';
+      note.textContent = '日常教材、媒體、出題、紙本輸出與範本維護已移至「教師工作區」；系統管理只保留平台治理與高風險維運。';
       banner.appendChild(note);
     }
   }
 
   rebuild();
+  leaveLegacyWordWorkspace();
 
   const observer = new MutationObserver(() => {
-    const hasTeachingButton = navHost.querySelector('#admin-nav-course-materials,#admin-nav-assessment,#admin-nav-results');
+    const hasTeacherOwnedButton = navHost.querySelector('#admin-nav-course-materials,#admin-nav-assessment,#admin-nav-results,#admin-nav-word');
     const workerReady = document.getElementById('admin-nav-worker');
-    if (hasTeachingButton || (workerReady && !navHost.contains(workerReady))) rebuild();
+    if (hasTeacherOwnedButton || (workerReady && !navHost.contains(workerReady))) rebuild();
   });
   observer.observe(navHost, { childList: true, subtree: true });
 
