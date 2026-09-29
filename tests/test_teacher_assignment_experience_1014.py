@@ -26,8 +26,7 @@ class TeacherAssignmentExperience1014Tests(unittest.TestCase):
         self.assertIn('learning-assignment-person-search-1014', UI)
         self.assertIn("指定人員", UI)
         self.assertIn("搜尋姓名、工號或帳號", UI)
-        self.assertIn('person.preferredGroup', ASSIGNMENT_SERVICE)
-        self.assertIn('preferredGroup', ASSIGNMENT_SERVICE)
+        self.assertIn('account.get("preferredGroup")', ASSIGNMENT_SERVICE)
         self.assertIn('allowedAssigneeTypes', ASSIGNMENT_SERVICE)
         self.assertIn('@app.get("/api/learning-assignments/audience-options")', ASSIGNMENT_ROUTES)
 
