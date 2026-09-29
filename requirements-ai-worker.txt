@@ -1,0 +1,7 @@
+-r requirements.txt
+
+# Local-only free TTS stack. Keep this out of Render Web so the web image stays
+# small; run_ai_worker_autostart.ps1 installs it into the shared Worker .venv.
+kokoro>=0.9.4,<1.0
+misaki[zh]>=0.9.4,<1.0
+numpy>=2.0,<3.0

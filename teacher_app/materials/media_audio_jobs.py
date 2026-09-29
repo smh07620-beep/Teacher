@@ -1,4 +1,4 @@
-"""Async orchestration for approved teacher-script AI narration."""
+"""Async orchestration for approved teacher-script local AI narration."""
 from __future__ import annotations
 
 import datetime as dt
@@ -43,7 +43,7 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
         raise LookupError("來源教材已不存在或停用")
     voice = str(data.get("voice") or "").strip().lower()
     if voice not in media_audio_runtime.ALLOWED_VOICES:
-        voice = media_audio_runtime.public_status().get("defaultVoice") or "marin"
+        voice = media_audio_runtime.public_status().get("defaultVoice") or "zf_xiaoxiao"
     return {
         "id": f"majob-{uuid.uuid4().hex}",
         "script_id": script_id,
@@ -61,7 +61,7 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
 
 def enqueue(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
     if not media_audio_runtime.configured():
-        raise RuntimeError("AI 語音尚未啟用；需設定 OPENAI_API_KEY 與 Cloudflare R2。")
+        raise RuntimeError("免費本機 AI 語音尚未啟用；請完成 Cloudflare R2 與本機 Kokoro AI Worker 設定。")
     values = prepare_request(data, actor)
     username = values["actor_username"]
     max_actor = _env_int("MEDIA_AUDIO_JOB_MAX_ACTIVE_PER_USER", 1, 1, 5)

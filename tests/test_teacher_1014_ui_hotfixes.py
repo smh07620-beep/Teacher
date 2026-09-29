@@ -21,12 +21,15 @@ class Teacher1014UiHotfixTests(unittest.TestCase):
             "/teacher-workspace-nav-fix-1014.js",
             "/teacher-paper-template-manager-1014.js",
             "/teacher-media-status-fix-1014.js",
+            "/teacher-media-free-tts-1014.js",
+            "/teacher-persona-isolation-1014.js",
             "/course-wizard-group-fix-1014.js",
         ):
             self.assertIn(asset, self.body)
         self.assertLess(self.body.index('/teacher-workspace-1014.js'), self.body.index('/teacher-workspace-nav-fix-1014.js'))
         self.assertLess(self.body.index('/teacher-media-mvp-status-1014.js'), self.body.index('/teacher-media-status-fix-1014.js'))
         self.assertLess(self.body.index('/admin-question-bank.js'), self.body.index('/course-wizard-group-fix-1014.js'))
+        self.assertLess(self.body.index('/system-admin-focus-1014.js'), self.body.index('/teacher-persona-isolation-1014.js'))
 
     def test_course_wizard_group_fix_uses_catalog_and_scope(self):
         for marker in ('rowsFor(area)', 'R.scopedTeacher', 'preferredGroup()', 'cw681-group', 'wizard-group'):
@@ -51,11 +54,11 @@ class Teacher1014UiHotfixTests(unittest.TestCase):
             self.assertIn(marker, self.paper)
         self.assertNotIn('X-Admin-Key', self.paper)
 
-    def test_ai_voice_readiness_checks_real_service_status(self):
+    def test_ai_voice_readiness_checks_free_local_service_status(self):
         self.assertIn('/api/media-audio/status', self.media)
-        self.assertIn('AI 語音待服務設定', self.media)
-        self.assertIn('AI 語音程式已完成', self.media)
-        self.assertIn('OPENAI_API_KEY', self.media)
+        self.assertIn('免費 AI 語音', self.media)
+        self.assertIn('本機 Kokoro', self.media)
+        self.assertNotIn('OPENAI_API_KEY', self.media)
         self.assertNotIn('X-Admin-Key', self.media)
 
 

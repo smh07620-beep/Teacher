@@ -52,21 +52,18 @@
     panel.innerHTML = `
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-xs leading-5 text-slate-700">
         <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">AI 講稿</b><p class="mt-1">是真功能：從已上傳教材抽取文字，建立 AI 草稿，再由老師修改與核准。課程建立畫面的「AI 草稿」是 AI 出題，不是這個講稿功能。</p></div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">AI 語音</b><p class="mt-1">只接受老師已核准的講稿。需 OPENAI_API_KEY、Cloudflare R2 與 AI Worker；完成後 MP3 會回寫教材。</p></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">免費 AI 語音</b><p class="mt-1">只接受老師已核准的講稿。語音由院內 Windows AI Worker 使用本機 Kokoro 產生，不使用 OpenAI TTS，也不產生每次生成的 TTS API 費用。</p></div>
         <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">老師錄音／錄影</b><p class="mt-1">是真功能：使用瀏覽器麥克風、攝影機或螢幕分享錄製。瀏覽器需允許權限，正式上傳沿用 Browser → R2 → Worker。</p></div>
         <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">目前沒有自動 AI 影片</b><p class="mt-1">現階段的影片功能是老師自行錄影或錄製螢幕，不是 AI 自動生成虛擬講師影片。</p></div>
       </div>
       <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
         <b>架設需求</b><br>
-        1. AI 講稿：AI_EXTERNAL_PROCESSING_ENABLED=true，並設定 AI_PROVIDER 對應金鑰（目前預設 Groq 時使用 GROQ_API_KEY）。<br>
-        2. AI 語音：Render Web 與 AI Worker 都要有 OPENAI_API_KEY；另外設定 R2_ACCOUNT_ID、R2_ACCESS_KEY_ID、R2_SECRET_ACCESS_KEY、R2_BUCKET_NAME。<br>
+        1. AI 講稿／AI 出題：AI_EXTERNAL_PROCESSING_ENABLED=true，並設定免費 AI_PROVIDER 對應金鑰（目前預設 Groq 時使用 GROQ_API_KEY）。<br>
+        2. 免費 AI 語音：AI_TTS_PROVIDER=kokoro；本機 AI Worker 安裝 requirements-ai-worker.txt，並設定既有 R2_ACCOUNT_ID、R2_ACCESS_KEY_ID、R2_SECRET_ACCESS_KEY、R2_BUCKET_NAME。<br>
         3. 背景處理：本地 AI Worker 必須持續執行 ai_question_worker.py；Web 只排工作，不執行長時間 AI 任務。<br>
         4. 真人錄音／錄影：使用 HTTPS 網站，瀏覽器允許麥克風／攝影機／螢幕分享即可；上傳仍需要既有 R2/Worker 流程正常。
       </div>`;
 
-    // Move the original explanatory cards and "start from material" guidance into
-    // the on-demand panel instead of deleting them. This keeps all context available
-    // without making the work surface look like a second layer of instructions.
     children.slice(1).forEach(node => panel.appendChild(node));
     summary.appendChild(panel);
     setPanelOpen(button, panel, false);

@@ -1,4 +1,4 @@
-/* Teacher 10/14: media readiness must reflect real AI narration service configuration. */
+/* Teacher 10/14: media readiness reflects free local Kokoro narration. */
 (async function () {
   'use strict';
 
@@ -27,22 +27,22 @@
     if (!summary) return;
     const paragraph = summary.querySelector('p.mt-1.text-xs');
     if (paragraph) paragraph.textContent = enabled
-      ? '教材轉講稿、教師核准、AI 語音、老師錄音、攝影機錄影與螢幕＋麥克風錄製已接入現有教材流程。AI 語音服務目前已啟用。'
-      : '教材轉講稿、教師核准、老師錄音、攝影機錄影與螢幕＋麥克風錄製已接入現有教材流程。AI 語音程式已完成，但需 OPENAI_API_KEY、Cloudflare R2 與 AI Worker 環境就緒後才會啟用。';
+      ? '教材轉講稿、教師核准、免費本機 AI 語音、老師錄音、攝影機錄影與螢幕＋麥克風錄製已接入現有教材流程。AI 語音由本機 Kokoro Worker 產生，不使用 OpenAI TTS。'
+      : '教材轉講稿、教師核准、老師錄音、攝影機錄影與螢幕＋麥克風錄製已接入現有教材流程。免費 AI 語音需本機 Kokoro Worker 與 Cloudflare R2 就緒後才會啟用。';
   }
 
   async function refresh() {
     if (!audioCard()) return false;
-    paintBadge('真人錄音可用｜檢查 AI 語音服務…', false);
+    paintBadge('真人錄音可用｜檢查免費 AI 語音…', false);
     try {
       const response = await fetch('/api/media-audio/status', {credentials:'same-origin', cache:'no-store'});
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'status unavailable');
       const enabled = !!data.enabled;
-      paintBadge(enabled ? '可使用｜真人錄音＋AI 語音' : '真人錄音可用｜AI 語音待服務設定', enabled);
+      paintBadge(enabled ? '可使用｜真人錄音＋免費 AI 語音' : '真人錄音可用｜免費 AI 語音待設定', enabled);
       updateSummary(enabled);
     } catch (_) {
-      paintBadge('真人錄音可用｜AI 語音狀態待確認', false);
+      paintBadge('真人錄音可用｜免費 AI 語音狀態待確認', false);
       updateSummary(false);
     }
     return true;

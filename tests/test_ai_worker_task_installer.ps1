@@ -4,6 +4,7 @@ $launcher = Join-Path $repo "run_ai_worker_autostart.ps1"
 $installer = Join-Path $repo "install_ai_worker_task.ps1"
 $bundle = Join-Path $repo "install_teacher_workers.ps1"
 $envTemplate = Join-Path $repo ".local-worker.env.example"
+$aiRequirements = Join-Path $repo "requirements-ai-worker.txt"
 
 foreach ($path in @($launcher, $installer, $bundle)) {
   $tokens = $null
@@ -22,13 +23,16 @@ $launcherSource = Get-Content -LiteralPath $launcher -Raw
 $installerSource = Get-Content -LiteralPath $installer -Raw
 $bundleSource = Get-Content -LiteralPath $bundle -Raw
 $envSource = Get-Content -LiteralPath $envTemplate -Raw
+$requirementsSource = Get-Content -LiteralPath $aiRequirements -Raw
 
 foreach ($marker in @(
   'TeacherAIWorker',
   'ai_question_worker.py',
+  'requirements-ai-worker.txt',
   'DATABASE_URL',
   'GROQ_API_KEY',
-  'OPENAI_API_KEY',
+  'AI_TTS_PROVIDER',
+  'kokoro',
   'R2_ACCOUNT_ID',
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
@@ -84,9 +88,12 @@ foreach ($marker in @(
 
 foreach ($marker in @(
   'DATABASE_URL=REPLACE_WITH_PRODUCTION_DATABASE_URL',
+  'FREE_ONLY_MODE=true',
   'AI_EXTERNAL_PROCESSING_ENABLED=true',
   'GROQ_API_KEY=REPLACE_WITH_GROQ_API_KEY',
-  'OPENAI_API_KEY=REPLACE_WITH_OPENAI_API_KEY',
+  'AI_TTS_PROVIDER=kokoro',
+  'KOKORO_REPO_ID=hexgrad/Kokoro-82M-v1.1-zh',
+  'KOKORO_VOICE=zf_xiaoxiao',
   'R2_ACCOUNT_ID=REPLACE_WITH_R2_ACCOUNT_ID',
   'R2_ACCESS_KEY_ID=REPLACE_WITH_R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY=REPLACE_WITH_R2_SECRET_ACCESS_KEY',
@@ -95,6 +102,15 @@ foreach ($marker in @(
   if (-not $envSource.Contains($marker)) {
     throw ".local-worker.env.example is missing required AI Worker marker: $marker"
   }
+}
+
+foreach ($marker in @('kokoro>=', 'misaki[zh]', 'numpy>=')) {
+  if (-not $requirementsSource.Contains($marker)) {
+    throw "requirements-ai-worker.txt is missing local TTS dependency marker: $marker"
+  }
+}
+if ($envSource.Contains('OPENAI_API_KEY') -or $requirementsSource.Contains('openai')) {
+  throw "FREE_ONLY_MODE local narration must not require OpenAI configuration."
 }
 
 $combined = $launcherSource + "`n" + $installerSource + "`n" + $bundleSource

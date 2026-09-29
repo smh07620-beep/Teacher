@@ -69,51 +69,70 @@ function Test-AIWorkerConfiguration {
     $providerReady = $true
     if ($provider -eq "groq") { $providerReady = [bool]([string]$env:GROQ_API_KEY).Trim() }
     elseif ($provider -eq "gemini") { $providerReady = [bool]([string]$env:GEMINI_API_KEY).Trim() }
-    elseif ($provider -eq "openai") { $providerReady = [bool]([string]$env:OPENAI_API_KEY).Trim() }
     elseif ($provider -eq "auto") {
-      $providerReady = [bool](
-        ([string]$env:GROQ_API_KEY).Trim() -or
-        ([string]$env:GEMINI_API_KEY).Trim() -or
-        ([string]$env:OPENAI_API_KEY).Trim()
-      )
+      $providerReady = [bool](([string]$env:GROQ_API_KEY).Trim() -or ([string]$env:GEMINI_API_KEY).Trim())
+    } else {
+      $providerReady = $false
     }
     if (-not $providerReady) {
-      Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2202 -Message "The configured external AI provider has no local credential; AI question and script jobs will remain unavailable until configuration is completed."
+      Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2202 -Message "The configured free external AI provider has no local credential; AI question and script jobs will remain unavailable until configuration is completed."
     }
   }
 
   $narrationReady = (
-    [bool]([string]$env:OPENAI_API_KEY).Trim() -and
+    ([string]$env:AI_TTS_PROVIDER).Trim().ToLowerInvariant() -in @("", "kokoro") -and
     [bool]([string]$env:R2_ACCOUNT_ID).Trim() -and
     [bool]([string]$env:R2_ACCESS_KEY_ID).Trim() -and
     [bool]([string]$env:R2_SECRET_ACCESS_KEY).Trim() -and
     [bool]([string]$env:R2_BUCKET_NAME).Trim()
   )
   if (-not $narrationReady) {
-    Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2201 -Message "AI narration is not fully configured; AI question and script queues can continue independently."
+    Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2201 -Message "Free local narration is not fully configured; AI question and script queues can continue independently."
   }
 }
 
 function Ensure-AIWorkerEnvironment {
   $python = Join-Path $root ".venv\Scripts\python.exe"
   $entry = Join-Path $root "ai_question_worker.py"
+  $requirements = Join-Path $root "requirements-ai-worker.txt"
+  $stamp = Join-Path $root ".ai-worker-requirements.sha256"
   if (-not (Test-Path $python -PathType Leaf)) {
     throw "Missing .venv\\Scripts\\python.exe; create the shared Worker virtual environment first."
   }
   if (-not (Test-Path $entry -PathType Leaf)) {
     throw "Missing ai_question_worker.py."
   }
-  & $python -c "import requests, psycopg" 2>$null
-  if ($LASTEXITCODE -ne 0) {
-    throw "AI Worker Python requirements are unavailable; run pip install -r requirements.txt in the shared .venv first."
+  if (-not (Test-Path $requirements -PathType Leaf)) {
+    throw "Missing requirements-ai-worker.txt."
+  }
+
+  $hash = (Get-FileHash -LiteralPath $requirements -Algorithm SHA256).Hash
+  $recorded = if (Test-Path $stamp) { (Get-Content -LiteralPath $stamp -Raw).Trim() } else { "" }
+  & $python -c "import requests, psycopg, kokoro; from misaki import zh; import numpy" 2>$null
+  $importsOk = $LASTEXITCODE -eq 0
+  if ($hash -ne $recorded -or -not $importsOk) {
+    Write-Host "Synchronizing AI Worker Python requirements (includes local Kokoro TTS)..."
+    & $python -m pip install -r $requirements
+    $installExit = $LASTEXITCODE
+    & $python -c "import requests, psycopg, kokoro; from misaki import zh; import numpy" 2>$null
+    $importsOk = $LASTEXITCODE -eq 0
+    if ($installExit -eq 0 -and $importsOk) {
+      Set-Content -LiteralPath $stamp -Value $hash -NoNewline -Encoding UTF8
+    } elseif (-not $importsOk) {
+      throw "AI Worker requirements are unavailable after synchronization."
+    } else {
+      Write-Warning "AI Worker dependency synchronization failed; existing importable environment will be used."
+    }
   }
   return @($python, $entry)
 }
 
 Load-LocalWorkerEnvironment
+if (-not $env:FREE_ONLY_MODE) { $env:FREE_ONLY_MODE = "true" }
+if (-not $env:AI_TTS_PROVIDER) { $env:AI_TTS_PROVIDER = "kokoro" }
 Test-AIWorkerConfiguration
-Write-TeacherAIWorkerEvent -EntryType "Information" -EventId 1100 -Message "Teacher AI Worker supervisor starting."
-Write-Host "Teacher AI Worker: ai_questions, media_scripts, media_audio"
+Write-TeacherAIWorkerEvent -EntryType "Information" -EventId 1100 -Message "Teacher AI Worker supervisor starting with free local Kokoro narration."
+Write-Host "Teacher AI Worker: ai_questions, media_scripts, media_audio (Kokoro local TTS)"
 
 $crashRestarts = 0
 $maxCrashRestarts = 5

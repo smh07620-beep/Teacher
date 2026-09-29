@@ -52,6 +52,7 @@ ASSET_MANIFEST = {
             "/teacher-media-mvp-status-1014.js",
             "/teacher-media-status-fix-1014.js",
             "/teacher-media-help-1014.js",
+            "/teacher-media-free-tts-1014.js",
             "/teacher-paper-template-manager-1014.js",
             "/training-command-center-71.js",
             "/pgy-competency-matrix-71.js",
@@ -92,6 +93,7 @@ ASSET_MANIFEST = {
             "/teacher-ux-convergence-72.js",
             "/learner-ui-cleanup-71.js",
             "/portal-navigation-73.js",
+            "/teacher-persona-isolation-1014.js",
         ),
     },
 }

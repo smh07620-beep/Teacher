@@ -1,41 +1,65 @@
-"""Approved teacher script -> AI narration -> durable R2 material."""
+"""Approved teacher script -> local Kokoro narration -> durable R2 material.
+
+The Web process only validates configuration/enqueues jobs. Kokoro inference is
+loaded lazily inside the dedicated local AI Worker so Render never needs the
+large TTS runtime and no paid OpenAI TTS request is made.
+"""
 from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import io
 import json
 import os
-from pathlib import Path
+import wave
 from typing import Any
-
-import requests
 
 from teacher_app.materials import repository as material_repository
 from teacher_app.storage import providers, r2_budget, r2_ledger
 
 
-AI_DISCLOSURE = "本音訊為 AI 合成語音，內容來源為授課教師已核准之教學講稿。"
-DEFAULT_MODEL = "gpt-4o-mini-tts"
-DEFAULT_VOICE = "marin"
+AI_DISCLOSURE = "本音訊為本機 AI 合成語音，內容來源為授課教師已核准之教學講稿。"
+DEFAULT_PROVIDER = "kokoro"
+DEFAULT_MODEL = "Kokoro-82M-v1.1-zh"
+DEFAULT_REPO_ID = "hexgrad/Kokoro-82M-v1.1-zh"
+DEFAULT_VOICE = "zf_xiaoxiao"
+DEFAULT_SAMPLE_RATE = 24000
 ALLOWED_VOICES = {
-    "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer",
-    "verse", "marin", "cedar",
+    "zf_xiaobei",
+    "zf_xiaoni",
+    "zf_xiaoxiao",
+    "zf_xiaoyi",
+    "zm_yunjian",
+    "zm_yunxi",
+    "zm_yunxia",
+    "zm_yunyang",
 }
 
 
+def _provider() -> str:
+    value = str(os.environ.get("AI_TTS_PROVIDER") or DEFAULT_PROVIDER).strip().lower()
+    # Paid/cloud TTS is intentionally disabled in FREE_ONLY_MODE. Keep the
+    # fallback local even if a stale Render variable still says "openai".
+    if str(os.environ.get("FREE_ONLY_MODE", "true")).strip().lower() in {"1", "true", "yes", "on"}:
+        return DEFAULT_PROVIDER
+    return value if value == DEFAULT_PROVIDER else DEFAULT_PROVIDER
+
+
 def configured() -> bool:
-    return bool(os.environ.get("OPENAI_API_KEY", "").strip() and providers.r2_is_configured())
+    return _provider() == DEFAULT_PROVIDER and providers.r2_is_configured()
 
 
 def public_status() -> dict[str, Any]:
     return {
         "enabled": configured(),
-        "provider": "openai" if os.environ.get("OPENAI_API_KEY", "").strip() else "",
-        "model": os.environ.get("OPENAI_TTS_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL,
-        "defaultVoice": _voice(os.environ.get("OPENAI_TTS_VOICE", DEFAULT_VOICE)),
+        "provider": "kokoro-local" if configured() else "",
+        "model": str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL,
+        "defaultVoice": _voice(os.environ.get("KOKORO_VOICE", DEFAULT_VOICE)),
         "voices": sorted(ALLOWED_VOICES),
         "requiresApprovedScript": True,
         "storesToR2": True,
+        "localWorkerRequired": True,
+        "freeOnly": True,
         "disclosure": AI_DISCLOSURE,
     }
 
@@ -57,7 +81,7 @@ def _safe_name(value: str) -> str:
 
 def _entry(*, job_id: str, script: dict, source: dict, voice: str, model: str, object_key: str, object_bytes: int) -> dict:
     material_id = _material_id(job_id)
-    filename = f"{_safe_name(script.get('title') or source.get('title') or 'AI語音教材')}-AI語音.mp3"
+    filename = f"{_safe_name(script.get('title') or source.get('title') or 'AI語音教材')}-AI語音.wav"
     stamp = dt.datetime.now(dt.timezone.utc).isoformat()
     source_desc = str(source.get("desc") or "").strip()
     description = "\n".join(filter(None, [source_desc, AI_DISCLOSURE]))[:2000]
@@ -71,7 +95,7 @@ def _entry(*, job_id: str, script: dict, source: dict, voice: str, model: str, o
         "teacherApprovedAt": str(script.get("approvedAt") or ""),
         "aiGeneratedVoice": True,
         "aiDisclosure": AI_DISCLOSURE,
-        "ttsProvider": "openai",
+        "ttsProvider": "kokoro-local",
         "ttsModel": model,
         "ttsVoice": voice,
         "objectBytes": int(object_bytes or 0),
@@ -120,42 +144,71 @@ def _existing_r2(client, key: str) -> int:
         raise
 
 
+def _tensor_to_numpy(audio):
+    value = audio
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    if hasattr(value, "numpy"):
+        value = value.numpy()
+    return value
+
+
 def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str]:
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("AI 語音尚未設定 OPENAI_API_KEY。")
-    model = os.environ.get("OPENAI_TTS_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    # Keep one approved script as one speech request so output remains one
-    # coherent MP3 and does not require FFmpeg in the lightweight AI worker.
-    max_chars = max(1000, min(50000, int(os.environ.get("OPENAI_TTS_MAX_CHARS", "12000") or 12000)))
+    del instructions  # Kokoro currently uses the approved text + configured speed/voice only.
+    try:
+        import numpy as np
+        from kokoro import KPipeline
+    except Exception as exc:
+        raise RuntimeError(
+            "本機免費語音尚未安裝完成；請在 AI Worker 執行 requirements-ai-worker.txt。"
+        ) from exc
+
+    max_chars = max(1000, min(50000, int(os.environ.get("KOKORO_TTS_MAX_CHARS", "12000") or 12000)))
     if len(text) > max_chars:
         raise RuntimeError(
-            f"已核准講稿共 {len(text)} 字，超過目前 AI 語音單次上限 {max_chars} 字；請先縮短或拆成兩份講稿。"
+            f"已核准講稿共 {len(text)} 字，超過目前本機語音單次上限 {max_chars} 字；請先縮短或拆成兩份講稿。"
         )
-    response = requests.post(
-        "https://api.openai.com/v1/audio/speech",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": model,
-            "voice": voice,
-            "input": text,
-            "instructions": instructions,
-            "response_format": "mp3",
-        },
-        timeout=300,
-    )
-    if response.status_code == 429:
-        raise RuntimeError("AI 語音服務目前已達速率或額度上限，請稍後再試。")
-    if not response.ok:
-        try:
-            detail = str((response.json() or {}).get("error", {}).get("message") or "")
-        except Exception:
-            detail = ""
-        raise RuntimeError(f"AI 語音產生失敗（HTTP {response.status_code}）{('：' + detail[:300]) if detail else ''}")
-    audio = bytes(response.content or b"")
-    if len(audio) < 1024:
-        raise RuntimeError("AI 語音服務沒有回傳有效音訊。")
-    return audio, model
+    repo_id = str(os.environ.get("KOKORO_REPO_ID") or DEFAULT_REPO_ID).strip() or DEFAULT_REPO_ID
+    model_label = str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    try:
+        speed = float(os.environ.get("KOKORO_TTS_SPEED", "1.0") or 1.0)
+    except (TypeError, ValueError):
+        speed = 1.0
+    speed = max(0.75, min(1.35, speed))
+
+    try:
+        pipeline = KPipeline(lang_code="z", repo_id=repo_id)
+        chunks = []
+        for result in pipeline(text, voice=voice, speed=speed, split_pattern=r"\n+"):
+            audio = getattr(result, "audio", None)
+            if audio is None and isinstance(result, (tuple, list)) and len(result) >= 3:
+                audio = result[2]
+            if audio is None:
+                continue
+            chunk = np.asarray(_tensor_to_numpy(audio), dtype=np.float32).reshape(-1)
+            if chunk.size:
+                chunks.append(chunk)
+        if not chunks:
+            raise RuntimeError("Kokoro 沒有產生有效音訊。")
+        waveform = np.concatenate(chunks)
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"本機 Kokoro 語音產生失敗：{str(exc)[:300]}") from exc
+
+    pcm = (np.clip(waveform, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(DEFAULT_SAMPLE_RATE)
+        wav.writeframes(pcm)
+    audio_bytes = buffer.getvalue()
+    if len(audio_bytes) < 1024:
+        raise RuntimeError("本機 Kokoro 沒有回傳有效音訊。")
+    return audio_bytes, model_label
 
 
 def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instructions: str = "", progress_callback=None) -> dict:
@@ -165,6 +218,8 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
         raise RuntimeError("講稿缺少教師核准紀錄，不能產生 AI 語音。")
     if not providers.r2_is_configured():
         raise RuntimeError("Cloudflare R2 尚未完成設定，無法保存 AI 語音教材。")
+    if _provider() != DEFAULT_PROVIDER:
+        raise RuntimeError("目前只允許免費本機 Kokoro 語音。")
 
     voice = _voice(voice)
     material_id = _material_id(job_id)
@@ -179,7 +234,7 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
             "replayed": True,
         }
 
-    filename = f"{_safe_name(script.get('title') or source.get('title') or 'AI語音教材')}-AI語音.mp3"
+    filename = f"{_safe_name(script.get('title') or source.get('title') or 'AI語音教材')}-AI語音.wav"
     object_key = f"materials/{material_id}/{filename}"
     client = providers.r2_client()
 
@@ -187,7 +242,7 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
         progress_callback(10, "檢查既有輸出", "確認是否已有相同工作產生的 R2 音訊")
     existing_bytes = _existing_r2(client, object_key)
     if existing_bytes > 0:
-        model = os.environ.get("OPENAI_TTS_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
+        model = str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
         entry = _entry(
             job_id=job_id, script=script, source=source, voice=voice, model=model,
             object_key=object_key, object_bytes=existing_bytes,
@@ -200,25 +255,22 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
         }
 
     if progress_callback:
-        progress_callback(30, "產生 AI 語音", "正在將已核准講稿轉成 MP3；此語音會標示為 AI 生成")
-    spoken_instructions = str(instructions or "").strip()[:500] or (
-        "Speak clearly and professionally in Traditional Chinese, at a calm teaching pace. "
-        "Preserve medical terms, numbers, units, and abbreviations exactly as written."
-    )
-    audio, model = _synthesize(str(script.get("body") or "").strip(), voice=voice, instructions=spoken_instructions)
+        progress_callback(30, "產生免費 AI 語音", "本機 AI Worker 正在使用 Kokoro 將已核准講稿轉成 WAV")
+    audio, model = _synthesize(str(script.get("body") or "").strip(), voice=voice, instructions=instructions)
 
     if progress_callback:
-        progress_callback(70, "保存 AI 語音", "正在將 MP3 直接寫入 Cloudflare R2")
+        progress_callback(70, "保存 AI 語音", "正在將 WAV 直接寫入 Cloudflare R2")
     r2_budget.reserve_upload(job_id, object_key, len(audio))
     try:
         client.put_object(
             Bucket=providers.R2_BUCKET_NAME,
             Key=object_key,
             Body=audio,
-            ContentType="audio/mpeg",
+            ContentType="audio/wav",
             Metadata={
                 "teacher-script-id": str(script.get("id") or "")[:200],
                 "ai-generated": "true",
+                "tts-provider": "kokoro-local",
             },
         )
         r2_ledger.record_object(object_key, len(audio), estimated_operations=1, is_staging=False)
@@ -233,7 +285,7 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
         raise
 
     if progress_callback:
-        progress_callback(95, "建立語音教材", "AI 語音已保存並加入原課程教材")
+        progress_callback(95, "建立語音教材", "免費本機 AI 語音已保存並加入原課程教材")
     return {
         "materialId": material_id,
         "material": material,

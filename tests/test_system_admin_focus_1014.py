@@ -35,6 +35,7 @@ class SystemAdminFocus1014Tests(unittest.TestCase):
         self.assertIn("item.classList.add('hidden')", self.source)
         self.assertIn("params.get('workspace') !== 'word'", self.source)
         self.assertIn("url.searchParams.set('workspace', 'people')", self.source)
+        self.assertIn("url.searchParams.set('persona', 'system')", self.source)
         self.assertIn("window.switchAdminWorkspace?.('people', true)", self.source)
         self.assertIn("紙本輸出與範本維護已移至「教師工作區」", self.source)
 
@@ -44,8 +45,10 @@ class SystemAdminFocus1014Tests(unittest.TestCase):
         self.assertNotIn("成績管理", self.source)
         self.assertIn("日常教材、媒體、出題、紙本輸出與範本維護已移至「教師工作區」", self.source)
 
-    def test_multi_role_system_admin_can_escape_focus_via_teacher_persona(self):
-        self.assertIn("params.get('persona') !== 'teacher'", self.source)
+    def test_system_focus_is_mutually_exclusive_with_teacher_persona(self):
+        self.assertIn("requestedPersona === 'system'", self.source)
+        self.assertIn("legacySystemWorkspaces.has(requestedWorkspace)", self.source)
+        self.assertNotIn("params.get('persona') !== 'teacher'", self.source)
 
     def test_module_does_not_change_server_authorization(self):
         self.assertIn("has('system.manage')", self.source)

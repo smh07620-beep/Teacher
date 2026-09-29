@@ -8,7 +8,12 @@
   const roles = R.roles instanceof Set ? R.roles : new Set();
   const has = permission => typeof R.hasPermission === 'function' && R.hasPermission(permission);
   const params = new URLSearchParams(window.location.search);
-  const systemPersona = params.get('admin') === '1' && params.get('persona') !== 'teacher';
+  const requestedPersona = params.get('persona') || '';
+  const requestedWorkspace = params.get('workspace') || '';
+  const legacySystemWorkspaces = new Set(['people','system','worker','maintenance','audit']);
+  const systemPersona = params.get('admin') === '1' && (
+    requestedPersona === 'system' || (!requestedPersona && legacySystemWorkspaces.has(requestedWorkspace))
+  );
   if (!roles.has('system_admin') || !has('system.manage') || !systemPersona) return;
 
   const navHost = document.querySelector('.v580-admin-groups');
@@ -50,6 +55,7 @@
     params.set('workspace', 'people');
     const url = new URL(window.location.href);
     url.searchParams.set('workspace', 'people');
+    url.searchParams.set('persona', 'system');
     window.history?.replaceState?.(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
     void window.switchAdminWorkspace?.('people', true);
   }
