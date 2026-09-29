@@ -53,6 +53,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.command_center.notification_routes import register_notification_state_routes
     from teacher_app.common.audit_routes import register_general_audit_routes
     from teacher_app.common.content_audience import register_content_audience
+    from teacher_app.common.content_audience_guard import register_content_audience_guard
     from teacher_app.common.privacy import register_ai_privacy
     from teacher_app.common.security import register_production_hardening
     from teacher_app.common import db as common_db
@@ -184,6 +185,7 @@ def _register_production(app: Flask) -> Flask:
         ),
     )
     app = register_content_audience(app)
+    app = register_content_audience_guard(app)
     app = register_legacy_office_69(app)
     return app
 
