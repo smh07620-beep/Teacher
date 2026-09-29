@@ -10,6 +10,22 @@ COURSE = {
     "area": "internal",
     "group": "grpBio",
 }
+STUDENT_ACCOUNT = {
+    "username": "student.bio",
+    "name": "生化學員",
+    "empId": "10001",
+    "active": True,
+    "preferredArea": "internal",
+    "preferredGroup": "grpBio",
+}
+OTHER_GROUP_ACCOUNT = {
+    "username": "student.hema",
+    "name": "血液學員",
+    "empId": "10002",
+    "active": True,
+    "preferredArea": "internal",
+    "preferredGroup": "grpHema",
+}
 
 
 class LearningAssignmentManagement83Tests(unittest.TestCase):
@@ -58,19 +74,45 @@ class LearningAssignmentManagement83Tests(unittest.TestCase):
         self.assertEqual(result["group"], "grpBio")
         insert.assert_called_once()
 
-    @patch("teacher_app.learning.assignment_service.course_repository.get_course", return_value=COURSE)
-    def test_group_leader_cannot_assign_individual(self, _course):
-        with self.assertRaises(ApiError) as caught:
-            assignment_service.create_assignment(
-                self.leader(),
-                {"courseId": "course-bio", "assigneeType": "user", "assigneeKey": "student.bio"},
-            )
-        self.assertEqual(caught.exception.status, 403)
-
+    @patch("teacher_app.learning.assignment_service.auth_accounts.list_accounts", return_value=[STUDENT_ACCOUNT])
     @patch("teacher_app.learning.assignment_service.assignment_repository.list_assignments", return_value=[])
     @patch("teacher_app.learning.assignment_service.assignment_repository.insert_assignment")
     @patch("teacher_app.learning.assignment_service.course_repository.get_course", return_value=COURSE)
-    def test_education_admin_can_assign_individual(self, _course, insert, _list):
+    def test_group_leader_can_assign_individual_in_own_group(self, _course, insert, _list, _accounts):
+        insert.side_effect = lambda values: {"id": values["id"], "assigneeType": values["assignee_type"], "assigneeKey": values["assignee_key"]}
+        result = assignment_service.create_assignment(
+            self.leader(),
+            {"courseId": "course-bio", "assigneeType": "user", "assigneeKey": "student.bio"},
+        )
+        self.assertEqual(result["assigneeType"], "user")
+        self.assertEqual(result["assigneeKey"], "student.bio")
+        insert.assert_called_once()
+
+    @patch("teacher_app.learning.assignment_service.auth_accounts.list_accounts", return_value=[OTHER_GROUP_ACCOUNT])
+    @patch("teacher_app.learning.assignment_service.course_repository.get_course", return_value=COURSE)
+    def test_group_leader_cannot_assign_individual_from_other_group(self, _course, _accounts):
+        with self.assertRaises(ApiError) as caught:
+            assignment_service.create_assignment(
+                self.leader(),
+                {"courseId": "course-bio", "assigneeType": "user", "assigneeKey": "student.hema"},
+            )
+        self.assertEqual(caught.exception.status, 400)
+        self.assertEqual(caught.exception.code, "ASSIGNEE_SCOPE_MISMATCH")
+
+    @patch("teacher_app.learning.assignment_service.course_repository.get_course", return_value=COURSE)
+    def test_group_leader_cannot_assign_all_staff(self, _course):
+        with self.assertRaises(ApiError) as caught:
+            assignment_service.create_assignment(
+                self.leader(),
+                {"courseId": "course-bio", "assigneeType": "all", "assigneeKey": ""},
+            )
+        self.assertEqual(caught.exception.status, 403)
+
+    @patch("teacher_app.learning.assignment_service.auth_accounts.list_accounts", return_value=[STUDENT_ACCOUNT])
+    @patch("teacher_app.learning.assignment_service.assignment_repository.list_assignments", return_value=[])
+    @patch("teacher_app.learning.assignment_service.assignment_repository.insert_assignment")
+    @patch("teacher_app.learning.assignment_service.course_repository.get_course", return_value=COURSE)
+    def test_education_admin_can_assign_individual(self, _course, insert, _list, _accounts):
         insert.side_effect = lambda values: {"id": values["id"], "assigneeType": values["assignee_type"]}
         result = assignment_service.create_assignment(
             self.admin(),
