@@ -45,8 +45,11 @@ def register_media_script_routes(owner):
         body = request.get_json(silent=True) or {}
         material_id = str(body.get("materialId") or "").strip()
         material = material_repository.get_material(material_id) if material_id else None
-        if not material or not material.get("active", True):
-            return jsonify({"error": "找不到指定教材，或教材目前未發布。"}), 404
+        # Media authoring is a pre-publication workflow. A teacher may prepare
+        # narration from a draft material as long as normal material.manage
+        # group scope allows it. Publication remains a separate explicit step.
+        if not material:
+            return jsonify({"error": "找不到指定教材。"}), 404
         denied = _scope(owner, str(material.get("group") or ""))
         if denied:
             return denied
