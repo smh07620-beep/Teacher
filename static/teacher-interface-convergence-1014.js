@@ -20,7 +20,9 @@
 
   const state = {
     voiceSelectObserver: null,
+    voiceSelect: null,
     voiceResultObserver: null,
+    voiceResult: null,
     courseObserver: null,
     courseBox: null,
     applyingCourses: false,
@@ -37,7 +39,8 @@
       if (!VOICE_LABELS[id]) return;
       // The raw ID is deliberately retained as the submitted value. Only the
       // teacher-facing label is translated; API/job diagnostics keep the ID.
-      option.textContent = voiceLabel(id);
+      const label = voiceLabel(id);
+      if (option.textContent !== label) option.textContent = label;
     });
   }
 
@@ -58,17 +61,23 @@
     const select = document.getElementById('teacher-audio-voice-1014');
     if (select) {
       rewriteVoiceOptions(select);
-      if (state.voiceSelectObserver) state.voiceSelectObserver.disconnect();
-      state.voiceSelectObserver = new MutationObserver(() => rewriteVoiceOptions(select));
-      state.voiceSelectObserver.observe(select, {childList: true, subtree: true});
+      if (state.voiceSelect !== select) {
+        state.voiceSelectObserver?.disconnect();
+        state.voiceSelect = select;
+        state.voiceSelectObserver = new MutationObserver(() => rewriteVoiceOptions(select));
+        state.voiceSelectObserver.observe(select, {childList: true, subtree: true});
+      }
     }
 
     const result = document.getElementById('teacher-audio-result-1014');
     if (result) {
       rewriteVoiceResult(result);
-      if (state.voiceResultObserver) state.voiceResultObserver.disconnect();
-      state.voiceResultObserver = new MutationObserver(() => rewriteVoiceResult(result));
-      state.voiceResultObserver.observe(result, {childList: true, subtree: true, characterData: true});
+      if (state.voiceResult !== result) {
+        state.voiceResultObserver?.disconnect();
+        state.voiceResult = result;
+        state.voiceResultObserver = new MutationObserver(() => rewriteVoiceResult(result));
+        state.voiceResultObserver.observe(result, {childList: true, subtree: true, characterData: true});
+      }
     }
   }
 
