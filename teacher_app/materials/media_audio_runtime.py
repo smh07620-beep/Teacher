@@ -19,6 +19,7 @@ from teacher_app.storage import providers, r2_budget, r2_ledger
 
 
 AI_DISCLOSURE = "本音訊為本機 AI 合成語音，內容來源為授課教師已核准之教學講稿。"
+VOICE_PREVIEW_TEXT = "您好，這是醫學檢驗教學平台的 AI 語音試聽。請確認這個聲音是否適合您的教學內容。"
 DEFAULT_PROVIDER = "kokoro"
 DEFAULT_MODEL = "Kokoro-82M-v1.1-zh"
 DEFAULT_REPO_ID = "hexgrad/Kokoro-82M-v1.1-zh"
@@ -56,6 +57,7 @@ def public_status() -> dict[str, Any]:
         "model": str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL,
         "defaultVoice": _voice(os.environ.get("KOKORO_VOICE", DEFAULT_VOICE)),
         "voices": sorted(ALLOWED_VOICES),
+        "previewSupported": True,
         "requiresApprovedScript": True,
         "storesToR2": True,
         "localWorkerRequired": True,
@@ -211,6 +213,82 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
     return audio_bytes, model_label
 
 
+def generate_voice_preview(*, job_id: str, voice: str, progress_callback=None) -> dict:
+    """Generate/cache a short non-material preview using the same local Kokoro voice."""
+    if not providers.r2_is_configured():
+        raise RuntimeError("Cloudflare R2 尚未完成設定，無法提供 AI 語音試聽。")
+    if _provider() != DEFAULT_PROVIDER:
+        raise RuntimeError("目前只允許免費本機 Kokoro 語音。")
+    voice = _voice(voice)
+    model = str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    model_key = hashlib.sha256(model.encode("utf-8")).hexdigest()[:10]
+    object_key = f"system/voice-previews/kokoro/{model_key}/{voice}.wav"
+    client = providers.r2_client()
+
+    if progress_callback:
+        progress_callback(15, "檢查語音試聽", "確認這個聲音是否已有快取試聽")
+    existing_bytes = _existing_r2(client, object_key)
+    if existing_bytes > 0:
+        r2_ledger.record_object(object_key, existing_bytes, estimated_operations=1, is_staging=False)
+        return {
+            "preview": True,
+            "previewObjectKey": object_key,
+            "voice": voice,
+            "model": model,
+            "replayed": True,
+        }
+
+    if progress_callback:
+        progress_callback(40, "產生語音試聽", "AI Worker 正在產生短版中文試聽")
+    audio, model = _synthesize(VOICE_PREVIEW_TEXT, voice=voice, instructions="")
+    if progress_callback:
+        progress_callback(75, "保存語音試聽", "正在保存短版試聽快取")
+    r2_budget.reserve_upload(job_id, object_key, len(audio))
+    try:
+        client.put_object(
+            Bucket=providers.R2_BUCKET_NAME,
+            Key=object_key,
+            Body=audio,
+            ContentType="audio/wav",
+            CacheControl="private, max-age=86400",
+            Metadata={
+                "ai-generated": "true",
+                "voice-preview": "true",
+                "tts-provider": "kokoro-local",
+            },
+        )
+        r2_ledger.record_object(object_key, len(audio), estimated_operations=1, is_staging=False)
+        r2_budget.release_reservation(job_id, "published")
+    except Exception:
+        r2_budget.release_reservation(job_id, "failed")
+        raise
+    if progress_callback:
+        progress_callback(95, "語音試聽完成", "短版試聽已快取，可直接播放")
+    return {
+        "preview": True,
+        "previewObjectKey": object_key,
+        "voice": voice,
+        "model": model,
+        "replayed": False,
+    }
+
+
+def preview_url(object_key: str) -> str:
+    key = str(object_key or "").strip()
+    if not key.startswith("system/voice-previews/kokoro/"):
+        return ""
+    return providers.r2_client().generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": providers.R2_BUCKET_NAME,
+            "Key": key,
+            "ResponseContentType": "audio/wav",
+            "ResponseContentDisposition": 'inline; filename="voice-preview.wav"',
+        },
+        ExpiresIn=min(3600, int(providers.R2_PRESIGN_SECONDS)),
+    )
+
+
 def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instructions: str = "", progress_callback=None) -> dict:
     if str(script.get("status") or "") != "approved":
         raise RuntimeError("只有已由授課教師核准的講稿可以產生 AI 語音。")
@@ -296,4 +374,13 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
     }
 
 
-__all__ = ["AI_DISCLOSURE", "ALLOWED_VOICES", "configured", "generate_audio", "public_status"]
+__all__ = [
+    "AI_DISCLOSURE",
+    "ALLOWED_VOICES",
+    "VOICE_PREVIEW_TEXT",
+    "configured",
+    "generate_audio",
+    "generate_voice_preview",
+    "preview_url",
+    "public_status",
+]
