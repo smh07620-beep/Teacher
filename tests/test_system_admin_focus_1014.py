@@ -20,20 +20,29 @@ class SystemAdminFocus1014Tests(unittest.TestCase):
     def test_system_admin_nav_keeps_only_platform_governance(self):
         for label in (
             "👥 人員與權限",
-            "📄 紙本文件範本",
             "⚙️ 系統與服務",
             "🖥️ Worker / Job 狀態",
             "🛡️ 備份維護",
             "🔎 稽核紀錄",
         ):
             self.assertIn(label, self.source)
+        self.assertNotIn("📄 紙本文件範本", self.source)
+        self.assertNotIn("正式文件治理", self.source)
         self.assertIn("navHost.replaceChildren(...groups)", self.source)
+
+    def test_paper_template_entry_is_owned_by_teacher_workspace(self):
+        self.assertIn("document.getElementById('admin-nav-word')", self.source)
+        self.assertIn("item.classList.add('hidden')", self.source)
+        self.assertIn("params.get('workspace') !== 'word'", self.source)
+        self.assertIn("url.searchParams.set('workspace', 'people')", self.source)
+        self.assertIn("window.switchAdminWorkspace?.('people', true)", self.source)
+        self.assertIn("紙本輸出與範本維護已移至「教師工作區」", self.source)
 
     def test_teaching_daily_work_is_not_reintroduced_into_system_nav(self):
         self.assertNotIn("教材與課程", self.source)
         self.assertNotIn("評量與出題", self.source)
         self.assertNotIn("成績管理", self.source)
-        self.assertIn("日常教材、媒體、出題與紙本輸出已移至「教師工作區」", self.source)
+        self.assertIn("日常教材、媒體、出題、紙本輸出與範本維護已移至「教師工作區」", self.source)
 
     def test_multi_role_system_admin_can_escape_focus_via_teacher_persona(self):
         self.assertIn("params.get('persona') !== 'teacher'", self.source)
