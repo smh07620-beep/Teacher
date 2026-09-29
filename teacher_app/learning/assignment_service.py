@@ -48,21 +48,67 @@ def _global_manager(user: Mapping[str, Any]) -> bool:
     return has_role(user, "education_admin") or has_role(user, "system_admin")
 
 
+def _active_account(username: str) -> dict[str, Any] | None:
+    wanted = str(username or "").strip().lower()
+    if not wanted:
+        return None
+    for account in auth_accounts.list_accounts():
+        if str(account.get("username") or "").strip().lower() != wanted:
+            continue
+        return account if account.get("active", True) else None
+    return None
+
+
+def _assert_individual_recipient_scope(assignment: Mapping[str, Any]) -> None:
+    assignee_type = str(
+        assignment.get("assigneeType") or assignment.get("assignee_type") or ""
+    )
+    if assignee_type != "user":
+        return
+    username = str(
+        assignment.get("assigneeKey") or assignment.get("assignee_key") or ""
+    ).strip().lower()
+    account = _active_account(username)
+    if not account:
+        raise ApiError("ASSIGNEE_NOT_FOUND", "找不到可指派的使用者帳號。", status=400)
+    target_area = scope.normalize_area(account.get("preferredArea"))
+    target_group = scope.normalize_group(account.get("preferredGroup"))
+    course_area = scope.normalize_area(
+        assignment.get("area") or assignment.get("training_area")
+    )
+    course_group = scope.normalize_group(
+        assignment.get("group") or assignment.get("group_key")
+    )
+    if target_area != course_area or target_group != course_group:
+        raise ApiError(
+            "ASSIGNEE_SCOPE_MISMATCH",
+            "指定人員目前不屬於此課程的訓練區／組別，請改選同組人員。",
+            status=400,
+        )
+
+
 def _assert_manager_scope(user: Mapping[str, Any], assignment: Mapping[str, Any]) -> None:
+    _assert_individual_recipient_scope(assignment)
     if _global_manager(user):
         return
     if not has_role(user, "group_leader"):
         raise ApiError("FORBIDDEN", "權限不足。", status=403)
-    _area, own_group = learning_access.preferred_learning_scope(user)
-    if str(assignment.get("group") or assignment.get("group_key") or "") != own_group:
+    own_area, own_group = learning_access.preferred_learning_scope(user)
+    assignment_area = scope.normalize_area(
+        assignment.get("area") or assignment.get("training_area")
+    )
+    assignment_group = scope.normalize_group(
+        assignment.get("group") or assignment.get("group_key")
+    )
+    if assignment_area != own_area or assignment_group != own_group:
         raise ApiError("ASSIGNMENT_SCOPE_DENIED", "此課程不在你的組別範圍。", status=403)
     assignee_type = str(
         assignment.get("assigneeType") or assignment.get("assignee_type") or ""
     )
-    if assignee_type and assignee_type != "group":
+    if assignee_type and assignee_type not in {"group", "user"}:
         raise ApiError(
             "ASSIGNMENT_SCOPE_DENIED",
-            "組長只能建立或管理自己組別的整組課程指派。",
+            "組長只能指派自己組別的整組課程或指定同組人員。",
             status=403,
         )
 
@@ -221,7 +267,8 @@ def admin_list(
         )
     except ValueError as exc:
         raise ApiError("INVALID_SCOPE", str(exc), status=400) from exc
-    if not _global_manager(user):
+    global_manager = _global_manager(user)
+    if not global_manager:
         own_area, own_group = learning_access.preferred_learning_scope(user)
         if wanted_group and wanted_group != own_group:
             raise ApiError("ASSIGNMENT_SCOPE_DENIED", "此組別不在你的授權範圍。", status=403)
@@ -234,7 +281,7 @@ def admin_list(
             continue
         if wanted_group and str(item.get("group") or "") != wanted_group:
             continue
-        if not _global_manager(user) and str(item.get("assigneeType") or "") != "group":
+        if not global_manager and str(item.get("assigneeType") or "") not in {"group", "user"}:
             continue
         values.append(item)
     return values
@@ -279,42 +326,41 @@ def audience_options(
     ]
 
     people: list[dict[str, Any]] = []
-    if global_manager:
-        for account in auth_accounts.list_accounts():
-            if not account.get("active", True):
-                continue
-            account_area = scope.normalize_area(account.get("preferredArea"))
-            account_group = scope.normalize_group(account.get("preferredGroup"))
-            # Individual course assignments are resolved in the learner's own area/group.
-            # Only show accounts that can actually receive the currently scoped course.
-            if wanted_area and account_area != wanted_area:
-                continue
-            if wanted_group and account_group != wanted_group:
-                continue
-            username = str(account.get("username") or "").strip()
-            if not username:
-                continue
-            people.append({
-                "username": username,
-                "name": str(account.get("name") or username),
-                "empId": str(account.get("empId") or ""),
-                "preferredArea": account_area,
-                "preferredGroup": account_group,
-                "groupLabel": scope.GROUPS.get(account_group, account_group),
-            })
-        people.sort(key=lambda item: (
-            0 if item.get("preferredGroup") == wanted_group else 1,
-            str(item.get("name") or "").casefold(),
-            str(item.get("empId") or "").casefold(),
-            str(item.get("username") or "").casefold(),
-        ))
+    for account in auth_accounts.list_accounts():
+        if not account.get("active", True):
+            continue
+        account_area = scope.normalize_area(account.get("preferredArea"))
+        account_group = scope.normalize_group(account.get("preferredGroup"))
+        # Individual course assignments are resolved in the learner's own area/group.
+        # Only show accounts that can actually receive the currently scoped course.
+        if wanted_area and account_area != wanted_area:
+            continue
+        if wanted_group and account_group != wanted_group:
+            continue
+        username = str(account.get("username") or "").strip()
+        if not username:
+            continue
+        people.append({
+            "username": username,
+            "name": str(account.get("name") or username),
+            "empId": str(account.get("empId") or ""),
+            "preferredArea": account_area,
+            "preferredGroup": account_group,
+            "groupLabel": scope.GROUPS.get(account_group, account_group),
+        })
+    people.sort(key=lambda item: (
+        0 if item.get("preferredGroup") == wanted_group else 1,
+        str(item.get("name") or "").casefold(),
+        str(item.get("empId") or "").casefold(),
+        str(item.get("username") or "").casefold(),
+    ))
 
     return {
         "area": wanted_area,
         "group": wanted_group,
         "groups": groups,
         "people": people,
-        "allowedAssigneeTypes": ["group", "user", "all"] if global_manager else ["group"],
+        "allowedAssigneeTypes": ["group", "user", "all"] if global_manager else ["group", "user"],
     }
 
 
