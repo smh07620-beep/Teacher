@@ -19,6 +19,70 @@
   white-space: nowrap;
 }
 
+/* 10/14 readability convergence: the /system learning/admin layer should not
+ * shrink body copy below the visual scale used on the homepage/landing pages.
+ */
+body.v56-system main {
+  font-size: 16px;
+}
+
+body.v56-system main .text-sm,
+body.v56-system #admin-modal .text-sm {
+  font-size: 1rem !important;
+  line-height: 1.55rem !important;
+}
+
+body.v56-system main .text-xs,
+body.v56-system #admin-modal .text-xs {
+  font-size: 0.875rem !important;
+  line-height: 1.4rem !important;
+}
+
+body.v56-system main [class*="text-[11px]"],
+body.v56-system #admin-modal [class*="text-[11px]"] {
+  font-size: 0.8125rem !important;
+  line-height: 1.25rem !important;
+}
+
+body.v56-system main [class*="text-[10px]"],
+body.v56-system #admin-modal [class*="text-[10px]"] {
+  font-size: 0.75rem !important;
+  line-height: 1.15rem !important;
+}
+
+/* Progressive disclosure: explanatory paragraphs are hidden by default and
+ * can be restored with the one explicit help control. Error/empty/status text
+ * is deliberately excluded by the JS classifier and remains visible.
+ */
+.teacher-context-help-copy-1014 {
+  display: none !important;
+}
+
+body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
+  display: block !important;
+}
+
+.teacher-help-toggle-1014 {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 70;
+  border: 1px solid rgb(203 213 225);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: rgb(51 65 85);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  backdrop-filter: blur(8px);
+}
+
+.teacher-help-toggle-1014:hover {
+  background: rgb(248 250 252);
+}
+
 @media (max-width: 1180px) {
   body.v56-system .v56-system-actions {
     min-width: 0;
@@ -39,6 +103,13 @@
 
   #teacher-persona-switch-1014 > button {
     padding: 6px 8px;
-    font-size: 10px;
+    font-size: 11px;
+  }
+
+  .teacher-help-toggle-1014 {
+    right: 12px;
+    bottom: 12px;
+    padding: 8px 10px;
+    font-size: 12px;
   }
 }

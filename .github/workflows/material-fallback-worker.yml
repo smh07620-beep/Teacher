@@ -1,0 +1,75 @@
+name: Material fallback worker
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: material-fallback-worker
+  cancel-in-progress: false
+
+jobs:
+  fallback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TEACHER_BASE_URL: https://teacher-j3id.onrender.com
+      MATERIAL_STORAGE_BACKEND: gdrive
+      MATERIAL_WORKER_TOKEN: ${{ secrets.MATERIAL_WORKER_TOKEN }}
+      MATERIAL_WORKER_ID: github-fallback-${{ github.run_id }}
+      MATERIAL_WORKER_AUTO_UPDATE: "false"
+      MATERIAL_FALLBACK_MAX_JOBS: "3"
+      FREE_ONLY_MODE: "true"
+      GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+      GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+      GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+      GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+      GDRIVE_TOKEN_URI: https://oauth2.googleapis.com/token
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check fallback configuration
+        id: config
+        shell: bash
+        run: |
+          missing=0
+          for name in MATERIAL_WORKER_TOKEN GDRIVE_CLIENT_ID GDRIVE_CLIENT_SECRET GDRIVE_REFRESH_TOKEN GDRIVE_FOLDER_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::warning::$name is not configured; fallback Worker will remain idle."
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install free conversion tools
+        if: steps.config.outputs.configured == 'true'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice ffmpeg qpdf
+
+      - name: Set up Python
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Worker dependencies
+        if: steps.config.outputs.configured == 'true'
+        shell: bash
+        run: python -m pip install -r requirements.txt
+
+      - name: Run bounded fallback Worker
+        if: steps.config.outputs.configured == 'true'
+        shell: bash
+        run: python -u github_fallback_worker.py
