@@ -40,6 +40,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import account_email_migration as _account_email_migration  # noqa: F401
     from teacher_app.maintenance import media_script_migration as _media_script_migration  # noqa: F401
     from teacher_app.maintenance import media_audio_migration as _media_audio_migration  # noqa: F401
+    from teacher_app.maintenance import content_audience_migration as _content_audience_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
@@ -51,6 +52,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.command_center.dashboard_routes import register_dashboard_routes
     from teacher_app.command_center.notification_routes import register_notification_state_routes
     from teacher_app.common.audit_routes import register_general_audit_routes
+    from teacher_app.common.content_audience import register_content_audience
     from teacher_app.common.privacy import register_ai_privacy
     from teacher_app.common.security import register_production_hardening
     from teacher_app.common import db as common_db
@@ -181,6 +183,7 @@ def _register_production(app: Flask) -> Flask:
             paths_provider=lambda: app.config["STORAGE_PATHS"],
         ),
     )
+    app = register_content_audience(app)
     app = register_legacy_office_69(app)
     return app
 
