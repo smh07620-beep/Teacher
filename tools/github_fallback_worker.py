@@ -1,13 +1,20 @@
 """Ephemeral GitHub Actions fallback for material jobs.
 
 The normal Windows Worker remains primary. This runner reuses the same durable
-Web queue/protocol, processes only a bounded number of already queued jobs, and
-then exits. It never receives a production database credential.
+Web queue/protocol, waits through a local-Worker grace period, processes only a
+bounded number of still-queued jobs, and then exits. It never receives a
+production database credential.
 """
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import sys
+import time
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import material_worker as worker
 from teacher_app.worker.media_transcode_compat import install
@@ -16,12 +23,20 @@ from teacher_app.worker.media_transcode_compat import install
 install(worker)
 
 
-def _max_jobs() -> int:
+def _bounded_int(name: str, default: int, minimum: int, maximum: int) -> int:
     try:
-        value = int(os.environ.get("MATERIAL_FALLBACK_MAX_JOBS", "3") or 3)
+        value = int(os.environ.get(name, str(default)) or default)
     except (TypeError, ValueError):
-        value = 3
-    return max(1, min(10, value))
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def _max_jobs() -> int:
+    return _bounded_int("MATERIAL_FALLBACK_MAX_JOBS", 3, 1, 10)
+
+
+def _grace_seconds() -> int:
+    return _bounded_int("MATERIAL_FALLBACK_GRACE_SECONDS", 300, 0, 900)
 
 
 def main() -> int:
@@ -44,6 +59,11 @@ def main() -> int:
     if not all(required.values()):
         worker.log("fallback runtime missing LibreOffice/FFmpeg capability; refusing to claim jobs")
         return 3
+
+    grace = _grace_seconds()
+    if grace:
+        worker.log(f"fallback grace period {grace}s; local Worker keeps first chance")
+        time.sleep(grace)
 
     processed = 0
     for _ in range(_max_jobs()):

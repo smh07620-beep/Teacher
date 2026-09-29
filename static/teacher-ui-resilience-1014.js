@@ -66,7 +66,8 @@
     button.className = 'teacher-help-toggle-1014';
     button.setAttribute('aria-label', '顯示或隱藏頁面說明文字');
     button.addEventListener('click', () => setHelpVisible(!document.body.classList.contains('teacher-help-visible-1014')));
-    document.body.appendChild(button);
+    const host = document.querySelector('.v56-system-actions') || document.querySelector('header .flex') || document.body;
+    host.appendChild(button);
     setHelpVisible(helpVisible());
   }
 
@@ -177,7 +178,7 @@
     const section = document.createElement('section');
     section.id = 'worker-fallback-1014';
     section.className = 'rounded-2xl border border-sky-200 bg-sky-50/60 p-4 shadow-sm';
-    section.innerHTML = `<div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-sky-950">☁ 免費備援 Worker</h5><div class="mt-1 text-sm text-sky-900">GitHub Actions 每 15 分鐘短暫啟動一次；有排隊工作才會 claim，單次最多處理 3 筆後自動關閉。</div></div><span class="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-sm font-bold text-sky-700">待命 / 自動救援</span></div><div class="mt-3 grid gap-2 sm:grid-cols-2 text-sm"><div class="rounded-xl bg-white/80 px-3 py-2">Office 備援：<b>LibreOffice</b></div><div class="rounded-xl bg-white/80 px-3 py-2">影音備援：<b>FFmpeg + FFprobe</b></div></div><div class="mt-2 text-sm text-sky-800">輸出固定使用 Google Drive；GitHub Secrets 未完成時 workflow 會安全跳過，不會接觸任何教材。</div>`;
+    section.innerHTML = `<div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-sky-950">☁ 免費備援 Worker</h5><div class="mt-1 text-sm text-sky-900">GitHub Actions 每 15 分鐘短暫啟動；先等待 5 分鐘讓本機 Worker 優先取得工作，仍在排隊才接手，單次最多處理 3 筆後自動關閉。</div></div><span class="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-sm font-bold text-sky-700">待命 / 自動救援</span></div><div class="mt-3 grid gap-2 sm:grid-cols-2 text-sm"><div class="rounded-xl bg-white/80 px-3 py-2">Office 備援：<b>LibreOffice</b></div><div class="rounded-xl bg-white/80 px-3 py-2">影音備援：<b>FFmpeg + FFprobe</b></div></div><div class="mt-2 text-sm text-sky-800">輸出固定使用 Google Drive；GitHub Secrets 未完成時 workflow 會安全跳過，不會接觸任何教材。</div>`;
     return section;
   }
 

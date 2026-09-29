@@ -63,20 +63,17 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
 }
 
 .teacher-help-toggle-1014 {
-  position: fixed;
-  right: max(16px, env(safe-area-inset-right));
-  bottom: max(16px, env(safe-area-inset-bottom));
-  z-index: 70;
+  flex: 0 0 auto;
   border: 1px solid rgb(203 213 225);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.96);
   color: rgb(51 65 85);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
-  padding: 8px 12px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  padding: 7px 11px;
   font-size: 13px;
   font-weight: 800;
   line-height: 1.2;
-  backdrop-filter: blur(8px);
+  white-space: nowrap;
 }
 
 .teacher-help-toggle-1014:hover {
@@ -107,9 +104,7 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
   }
 
   .teacher-help-toggle-1014 {
-    right: 12px;
-    bottom: 12px;
-    padding: 8px 10px;
-    font-size: 12px;
+    padding: 6px 8px;
+    font-size: 11px;
   }
 }

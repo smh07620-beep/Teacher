@@ -15,7 +15,7 @@ concurrency:
 jobs:
   fallback:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       TEACHER_BASE_URL: https://teacher-j3id.onrender.com
       MATERIAL_STORAGE_BACKEND: gdrive
@@ -23,6 +23,7 @@ jobs:
       MATERIAL_WORKER_ID: github-fallback-${{ github.run_id }}
       MATERIAL_WORKER_AUTO_UPDATE: "false"
       MATERIAL_FALLBACK_MAX_JOBS: "3"
+      MATERIAL_FALLBACK_GRACE_SECONDS: "300"
       FREE_ONLY_MODE: "true"
       GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
       GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
@@ -72,4 +73,4 @@ jobs:
       - name: Run bounded fallback Worker
         if: steps.config.outputs.configured == 'true'
         shell: bash
-        run: python -u github_fallback_worker.py
+        run: python -u tools/github_fallback_worker.py

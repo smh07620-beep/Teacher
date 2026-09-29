@@ -93,8 +93,8 @@ ASSET_MANIFEST = {
             "/teacher-ux-convergence-72.js",
             "/learner-ui-cleanup-71.js",
             "/portal-navigation-73.js",
-            "/teacher-persona-isolation-1014.js",
             "/teacher-ui-resilience-1014.js",
+            "/teacher-persona-isolation-1014.js",
         ),
     },
 }
