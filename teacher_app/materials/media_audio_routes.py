@@ -35,6 +35,33 @@ def register_media_audio_routes(owner):
             return denied
         return jsonify(media_audio_runtime.public_status())
 
+    @app.post("/api/media-audio/preview")
+    def media_audio_preview():
+        user = _actor(owner)
+        if not user:
+            return jsonify({"error": "請先登入。", "loginRequired": True}), 401
+        denied = scope_filter.require_permission(owner, "material.manage")
+        if denied:
+            return denied
+        body = request.get_json(silent=True) or {}
+        try:
+            job = media_audio_jobs.enqueue_preview(body, user)
+        except media_audio_jobs.MediaAudioLimitError as exc:
+            return jsonify({"error": str(exc), "rateLimited": True}), 429
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc), "notConfigured": True}), 503
+        audit.record_event(
+            actor=user,
+            action="media.audio.preview",
+            target_type="media_audio_voice",
+            target_id=str((job.get("request") or {}).get("voice") or ""),
+            group=str(job.get("group") or ""),
+            detail={"jobId": job.get("id", ""), "preview": True},
+        )
+        return jsonify(media_audio_jobs.public_job(job)), 202
+
     @app.post("/api/media-audio/generate")
     def media_audio_generate():
         user = _actor(owner)
