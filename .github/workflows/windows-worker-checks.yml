@@ -24,7 +24,10 @@ jobs:
             'install_material_worker_task.ps1',
             'run_material_worker.ps1',
             'run_material_worker_autostart.ps1',
-            'update_material_worker.ps1'
+            'update_material_worker.ps1',
+            'install_ai_worker_task.ps1',
+            'run_ai_worker_autostart.ps1',
+            'install_teacher_workers.ps1'
           )
           foreach ($file in $files) {
             $tokens = $null
@@ -47,6 +50,10 @@ jobs:
         shell: pwsh
         run: ./tests/test_material_worker_event_log.ps1
 
+      - name: Same-host AI Worker Task Scheduler regressions
+        shell: pwsh
+        run: ./tests/test_ai_worker_task_installer.ps1
+
       - name: Stable Worker identity source contract
         shell: pwsh
         run: |
@@ -62,9 +69,11 @@ jobs:
           }
           if (-not $gitignore.Contains('.worker-id')) { throw '.worker-id must remain gitignored.' }
 
-      - name: Do not create a persistent scheduled task in CI
+      - name: Do not create persistent scheduled tasks in CI
         shell: pwsh
         run: |
-          if (Get-ScheduledTask -TaskName 'Teacher Material Worker' -ErrorAction SilentlyContinue) {
-            throw 'CI must not register the production Teacher Material Worker task.'
+          foreach ($taskName in @('Teacher Material Worker', 'Teacher AI Worker')) {
+            if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+              throw "CI must not register the production scheduled task: $taskName"
+            }
           }
