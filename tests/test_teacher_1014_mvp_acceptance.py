@@ -39,10 +39,11 @@ class Teacher1014MvpAcceptanceTests(unittest.TestCase):
         self.assertIn("navHost.replaceChildren(navGroup('教師工作台', buttons))", self.workspace)
 
     def test_acceptance_system_admin_does_not_duplicate_daily_teaching_navigation(self):
-        for label in ("人員與權限", "正式文件治理", "系統與儲存", "資料保護", "安全與稽核"):
+        for label in ("人員與權限", "系統與儲存", "資料保護", "安全與稽核"):
             self.assertIn(label, self.system_focus)
-        self.assertIn("日常教材、媒體、出題與紙本輸出已移至「教師工作區」", self.system_focus)
-        self.assertIn("#admin-nav-course-materials,#admin-nav-assessment,#admin-nav-results", self.system_focus)
+        self.assertNotIn("正式文件治理", self.system_focus)
+        self.assertIn("紙本輸出與範本維護已移至「教師工作區」", self.system_focus)
+        self.assertIn("#admin-nav-course-materials,#admin-nav-assessment,#admin-nav-results,#admin-nav-word", self.system_focus)
 
     def test_acceptance_media_chain_requires_teacher_approved_script(self):
         self.assertIn("AI 草稿 → 教師核准", self.script_studio)
