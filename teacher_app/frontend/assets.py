@@ -78,6 +78,7 @@ ASSET_MANIFEST = {
             "/admin-ai-questions.js",
             "/admin-question-panel.js",
             "/content-audience-1014.js",
+            "/learner-content-audience-1014.js",
             "/admin-external-media.js",
             "/admin-results-export.js",
             "/learner-exam-controls.js",
