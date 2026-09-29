@@ -219,5 +219,3 @@ def register_pgy_frontend(app):
         return response
 
     return app
-
-    return app
