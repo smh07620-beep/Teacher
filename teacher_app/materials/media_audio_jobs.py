@@ -6,6 +6,7 @@ import os
 import uuid
 from typing import Any, Mapping
 
+from teacher_app.common import scope
 from teacher_app.materials import media_audio_repository, media_audio_runtime, media_script_repository
 from teacher_app.materials import repository as material_repository
 
@@ -26,6 +27,13 @@ def _username(actor: Mapping[str, Any] | None) -> str:
     return str((actor or {}).get("username") or "").strip()[:100]
 
 
+def _voice(value: Any) -> str:
+    voice = str(value or "").strip().lower()
+    if voice not in media_audio_runtime.ALLOWED_VOICES:
+        voice = media_audio_runtime.public_status().get("defaultVoice") or "zf_xiaoxiao"
+    return voice
+
+
 def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
     username = _username(actor)
     if not username:
@@ -41,9 +49,6 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
     source = material_repository.get_material(str(script.get("materialId") or ""))
     if not source or not source.get("active", True):
         raise LookupError("來源教材已不存在或停用")
-    voice = str(data.get("voice") or "").strip().lower()
-    if voice not in media_audio_runtime.ALLOWED_VOICES:
-        voice = media_audio_runtime.public_status().get("defaultVoice") or "zf_xiaoxiao"
     return {
         "id": f"majob-{uuid.uuid4().hex}",
         "script_id": script_id,
@@ -53,20 +58,36 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
         "actor_username": username,
         "request": {
             "scriptId": script_id,
-            "voice": voice,
+            "voice": _voice(data.get("voice")),
             "instructions": str(data.get("instructions") or "").strip()[:500],
         },
     }
 
 
-def enqueue(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
-    if not media_audio_runtime.configured():
-        raise RuntimeError("免費本機 AI 語音尚未啟用；請完成 Cloudflare R2 與本機 Kokoro AI Worker 設定。")
-    values = prepare_request(data, actor)
-    username = values["actor_username"]
+def prepare_preview_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
+    username = _username(actor)
+    if not username:
+        raise ValueError("無法確認目前登入帳號")
+    actor = actor or {}
+    return {
+        "id": f"majob-{uuid.uuid4().hex}",
+        "script_id": "",
+        "material_id": "",
+        "group_key": scope.normalize_group(actor.get("preferredGroup")),
+        "training_area": scope.normalize_area(actor.get("preferredArea")),
+        "actor_username": username,
+        "request": {
+            "preview": True,
+            "voice": _voice(data.get("voice")),
+        },
+    }
+
+
+def _enforce_queue_limits(username: str, *, preview: bool = False) -> None:
     max_actor = _env_int("MEDIA_AUDIO_JOB_MAX_ACTIVE_PER_USER", 1, 1, 5)
     max_total = _env_int("MEDIA_AUDIO_JOB_MAX_ACTIVE_TOTAL", 5, 1, 50)
-    max_per_minute = _env_int("MEDIA_AUDIO_JOB_MAX_PER_MINUTE", 2, 1, 10)
+    per_minute_name = "MEDIA_AUDIO_PREVIEW_MAX_PER_MINUTE" if preview else "MEDIA_AUDIO_JOB_MAX_PER_MINUTE"
+    max_per_minute = _env_int(per_minute_name, 10 if preview else 2, 1, 20)
     if media_audio_repository.active_count_for_actor(username) >= max_actor:
         raise MediaAudioLimitError("目前已有 AI 語音工作排隊或執行中，請完成後再送出")
     if media_audio_repository.total_active_count() >= max_total:
@@ -74,6 +95,21 @@ def enqueue(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)).isoformat()
     if media_audio_repository.recent_count_for_actor(username, since) >= max_per_minute:
         raise MediaAudioLimitError("AI 語音送出過於頻繁，請稍後再試")
+
+
+def enqueue(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
+    if not media_audio_runtime.configured():
+        raise RuntimeError("免費本機 AI 語音尚未啟用；請完成 Cloudflare R2 與本機 Kokoro AI Worker 設定。")
+    values = prepare_request(data, actor)
+    _enforce_queue_limits(values["actor_username"])
+    return media_audio_repository.create_job(values)
+
+
+def enqueue_preview(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
+    if not media_audio_runtime.configured():
+        raise RuntimeError("免費本機 AI 語音尚未啟用；請完成 Cloudflare R2 與本機 Kokoro AI Worker 設定。")
+    values = prepare_preview_request(data, actor)
+    _enforce_queue_limits(values["actor_username"], preview=True)
     return media_audio_repository.create_job(values)
 
 
@@ -89,20 +125,27 @@ class MediaAudioJobProcessor:
 
         try:
             request = job.get("request") or {}
-            script = media_script_repository.get_script(str(job.get("scriptId") or request.get("scriptId") or ""))
-            if not script:
-                raise RuntimeError("講稿已不存在")
-            source = material_repository.get_material(str(job.get("materialId") or script.get("materialId") or ""))
-            if not source:
-                raise RuntimeError("來源教材已不存在")
-            result = media_audio_runtime.generate_audio(
-                job_id=job_id,
-                script=script,
-                source=source,
-                voice=str(request.get("voice") or ""),
-                instructions=str(request.get("instructions") or ""),
-                progress_callback=progress,
-            )
+            if bool(request.get("preview")):
+                result = media_audio_runtime.generate_voice_preview(
+                    job_id=job_id,
+                    voice=str(request.get("voice") or ""),
+                    progress_callback=progress,
+                )
+            else:
+                script = media_script_repository.get_script(str(job.get("scriptId") or request.get("scriptId") or ""))
+                if not script:
+                    raise RuntimeError("講稿已不存在")
+                source = material_repository.get_material(str(job.get("materialId") or script.get("materialId") or ""))
+                if not source:
+                    raise RuntimeError("來源教材已不存在")
+                result = media_audio_runtime.generate_audio(
+                    job_id=job_id,
+                    script=script,
+                    source=source,
+                    voice=str(request.get("voice") or ""),
+                    instructions=str(request.get("instructions") or ""),
+                    progress_callback=progress,
+                )
             media_audio_repository.complete(job_id, token, result)
         except Exception as exc:
             media_audio_repository.fail(job_id, token, str(exc))
@@ -123,11 +166,13 @@ class MediaAudioJobProcessor:
 
 def public_job(job: Mapping[str, Any]) -> dict:
     status = str(job.get("status") or "queued")
+    request_data = job.get("request") or {}
     result = {
         "jobId": job.get("id"),
         "status": status,
         "scriptId": job.get("scriptId"),
         "materialId": job.get("materialId"),
+        "preview": bool(request_data.get("preview")),
         "progress": {
             "percent": job.get("progressPercent", 0),
             "stage": job.get("progressStage", ""),
@@ -139,10 +184,25 @@ def public_job(job: Mapping[str, Any]) -> dict:
         "completedAt": job.get("completedAt", ""),
     }
     if status == "completed":
-        result["result"] = job.get("result") or {}
+        payload = dict(job.get("result") or {})
+        if payload.get("preview") and payload.get("previewObjectKey"):
+            try:
+                payload["previewUrl"] = media_audio_runtime.preview_url(str(payload.get("previewObjectKey") or ""))
+            except Exception:
+                payload["previewUrl"] = ""
+            payload.pop("previewObjectKey", None)
+        result["result"] = payload
     elif status == "failed":
         result["error"] = str(job.get("error") or "AI 語音產生失敗")
     return result
 
 
-__all__ = ["MediaAudioJobProcessor", "MediaAudioLimitError", "enqueue", "prepare_request", "public_job"]
+__all__ = [
+    "MediaAudioJobProcessor",
+    "MediaAudioLimitError",
+    "enqueue",
+    "enqueue_preview",
+    "prepare_preview_request",
+    "prepare_request",
+    "public_job",
+]
