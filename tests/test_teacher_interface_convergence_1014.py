@@ -8,11 +8,11 @@ UI = (ROOT / "static" / "teacher-interface-convergence-1014.js").read_text(encod
 
 
 class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
-    def test_asset_is_loaded_after_teacher_persona_layer(self):
+    def test_asset_is_loaded_before_final_teacher_persona_guard(self):
         self.assertIn('"/teacher-interface-convergence-1014.js"', ASSETS)
         self.assertLess(
-            ASSETS.index('"/teacher-persona-isolation-1014.js"'),
             ASSETS.index('"/teacher-interface-convergence-1014.js"'),
+            ASSETS.index('"/teacher-persona-isolation-1014.js"'),
         )
 
     def test_kokoro_ids_are_internal_values_but_not_teacher_labels(self):
