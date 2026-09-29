@@ -1,9 +1,9 @@
 """Canonical learner-facing content visibility helpers.
 
-Until general course assignments exist, a learner's persisted preferred training
-area/group is the authoritative personal learning scope. Organization/system
-administrators may inspect all learning content, but ordinary learner/teacher
-surfaces must not silently mix other groups into progress or completion data.
+A learner's persisted preferred training area/group remains the authoritative
+personal learning scope. Content ownership and learner visibility are separate:
+all materials/questions keep an owning group, while audience metadata may make
+an item available to all staff or selected additional groups.
 
 Production session users always carry preferred area/group. Isolated legacy
 compatibility fixtures may omit both fields; those fixtures retain their prior
@@ -12,6 +12,7 @@ uses.
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Mapping
 
 from teacher_app.common import scope
@@ -25,6 +26,7 @@ _SCOPE_KEYS = (
     "preferredGroup",
     "preferred_group",
 )
+_AUDIENCE_SCOPES = {"group_only", "all_staff", "multi_group"}
 
 
 def has_global_learning_access(user: Mapping[str, Any] | None) -> bool:
@@ -61,12 +63,39 @@ def item_learning_scope(item: Mapping[str, Any] | None) -> tuple[str, str]:
         or scope.DEFAULT_TRAINING_AREA
     )
     group = scope.normalize_group(
-        item.get("group")
+        item.get("ownerGroup")
+        or item.get("owner_group")
+        or item.get("group")
         or item.get("groupKey")
         or item.get("group_key")
         or scope.DEFAULT_GROUP
     )
     return area, group
+
+
+def _audience_scope(item: Mapping[str, Any] | None) -> str:
+    item = item or {}
+    candidate = str(
+        item.get("audienceScope")
+        or item.get("audience_scope")
+        or "group_only"
+    ).strip().lower()
+    return candidate if candidate in _AUDIENCE_SCOPES else "group_only"
+
+
+def _audience_groups(item: Mapping[str, Any] | None) -> set[str]:
+    item = item or {}
+    raw = item.get("audienceGroups")
+    if raw is None:
+        raw = item.get("audience_groups")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw or "[]")
+        except (TypeError, ValueError):
+            raw = [part.strip() for part in raw.split(",") if part.strip()]
+    if not isinstance(raw, (list, tuple, set)):
+        return set()
+    return {str(value).strip() for value in raw if str(value).strip() in scope.GROUPS}
 
 
 def can_access_learning_item(
@@ -79,7 +108,20 @@ def can_access_learning_item(
         return True
     if not has_explicit_learning_scope(user):
         return True
-    return item_learning_scope(item) == preferred_learning_scope(user)
+
+    item_area, owner_group = item_learning_scope(item)
+    user_area, user_group = preferred_learning_scope(user)
+    if item_area != user_area:
+        return False
+    if owner_group == user_group:
+        return True
+
+    audience = _audience_scope(item)
+    if audience == "all_staff":
+        return True
+    if audience == "multi_group":
+        return user_group in _audience_groups(item)
+    return False
 
 
 def can_access_requested_scope(
