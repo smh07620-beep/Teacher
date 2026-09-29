@@ -34,8 +34,11 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
     if not material_id:
         raise ValueError("請選擇教材")
     material = material_repository.get_material(material_id)
-    if not material or not material.get("active", True):
-        raise LookupError("找不到指定教材，或教材目前未發布")
+    # Draft material is a valid authoring source. Publication state is enforced
+    # when the resulting teaching material is formally released, not while a
+    # teacher prepares/reviews narration.
+    if not material:
+        raise LookupError("找不到指定教材")
     try:
         target_minutes = int(data.get("targetMinutes", 5) or 5)
     except (TypeError, ValueError):
@@ -78,8 +81,8 @@ def enqueue(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
 def run_generation_sync(snapshot: Mapping[str, Any], *, progress_callback=None) -> dict:
     material_id = str(snapshot.get("materialId") or "")
     material = material_repository.get_material(material_id)
-    if not material or not material.get("active", True):
-        raise RuntimeError("教材已不存在或停用，請重新選擇教材。")
+    if not material:
+        raise RuntimeError("教材已不存在，請重新選擇教材。")
     return media_script_runtime.generate_script(
         material,
         focus=str(snapshot.get("focus") or "")[:500],
