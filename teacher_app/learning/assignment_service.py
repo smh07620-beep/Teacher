@@ -5,6 +5,7 @@ import datetime as dt
 import uuid
 from typing import Any, Mapping, Sequence
 
+from teacher_app.auth import accounts as auth_accounts
 from teacher_app.common import scope
 from teacher_app.common.auth import has_permission, has_role
 from teacher_app.common.errors import ApiError
@@ -239,6 +240,84 @@ def admin_list(
     return values
 
 
+def audience_options(
+    actor: Mapping[str, Any] | None,
+    *,
+    area: str = "",
+    group: str = "",
+) -> dict[str, Any]:
+    """Return scoped group/person choices for assignment UIs without exposing admin APIs."""
+    user = _require_manager(actor)
+    try:
+        wanted_area = (
+            scope.validate_area(area, default=None) if str(area or "").strip() else ""
+        )
+        wanted_group = (
+            scope.validate_group(group, default=None) if str(group or "").strip() else ""
+        )
+    except ValueError as exc:
+        raise ApiError("INVALID_SCOPE", str(exc), status=400) from exc
+
+    global_manager = _global_manager(user)
+    if not global_manager:
+        own_area, own_group = learning_access.preferred_learning_scope(user)
+        if wanted_group and wanted_group != own_group:
+            raise ApiError("ASSIGNMENT_SCOPE_DENIED", "此組別不在你的授權範圍。", status=403)
+        wanted_area = wanted_area or own_area
+        wanted_group = own_group
+
+    group_keys = [
+        key for key in scope.GROUPS
+        if wanted_area != "internal" or key not in scope.PGY_ONLY_GROUPS
+    ]
+    if not global_manager:
+        group_keys = [wanted_group]
+    group_keys.sort(key=lambda key: (0 if key == wanted_group else 1, list(scope.GROUPS).index(key)))
+    groups = [
+        {"key": key, "label": scope.GROUPS.get(key, key), "preferred": key == wanted_group}
+        for key in group_keys
+    ]
+
+    people: list[dict[str, Any]] = []
+    if global_manager:
+        for account in auth_accounts.list_accounts():
+            if not account.get("active", True):
+                continue
+            account_area = scope.normalize_area(account.get("preferredArea"))
+            account_group = scope.normalize_group(account.get("preferredGroup"))
+            # Individual course assignments are resolved in the learner's own area/group.
+            # Only show accounts that can actually receive the currently scoped course.
+            if wanted_area and account_area != wanted_area:
+                continue
+            if wanted_group and account_group != wanted_group:
+                continue
+            username = str(account.get("username") or "").strip()
+            if not username:
+                continue
+            people.append({
+                "username": username,
+                "name": str(account.get("name") or username),
+                "empId": str(account.get("empId") or ""),
+                "preferredArea": account_area,
+                "preferredGroup": account_group,
+                "groupLabel": scope.GROUPS.get(account_group, account_group),
+            })
+        people.sort(key=lambda item: (
+            0 if item.get("preferredGroup") == wanted_group else 1,
+            str(item.get("name") or "").casefold(),
+            str(item.get("empId") or "").casefold(),
+            str(item.get("username") or "").casefold(),
+        ))
+
+    return {
+        "area": wanted_area,
+        "group": wanted_group,
+        "groups": groups,
+        "people": people,
+        "allowedAssigneeTypes": ["group", "user", "all"] if global_manager else ["group"],
+    }
+
+
 def assigned_course_ids(user: Mapping[str, Any]) -> set[str]:
     return assignment_repository.course_ids(list_for_user(user))
 
@@ -319,6 +398,7 @@ __all__ = [
     "ASSIGNEE_TYPES",
     "TYPE_PRIORITY",
     "assigned_course_ids",
+    "audience_options",
     "build_assignment",
     "create_assignment",
     "deactivate_assignment",
