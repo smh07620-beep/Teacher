@@ -38,6 +38,17 @@ def register_learning_assignment_routes(owner):
         except ApiError as exc:
             return _error(exc)
 
+    @app.get("/api/learning-assignments/audience-options")
+    def learning_assignments_audience_options():
+        try:
+            return jsonify(assignment_service.audience_options(
+                _user(owner),
+                area=request.args.get("area", ""),
+                group=request.args.get("group", ""),
+            ))
+        except ApiError as exc:
+            return _error(exc)
+
     @app.get("/api/learning-assignments")
     def learning_assignments_admin_list():
         try:
