@@ -137,7 +137,11 @@ def set_progress(job_id: str, token: str, percent: float, stage: str, detail: st
 
 def complete(job_id: str, token: str, result: Mapping[str, Any]) -> bool:
     stamp = now()
-    payload = json.dumps(dict(result), ensure_ascii=False)
+    normalized = dict(result)
+    payload = json.dumps(normalized, ensure_ascii=False)
+    preview = bool(normalized.get("preview"))
+    stage = "語音試聽完成" if preview else "AI 語音教材完成"
+    detail = "短版試聽已可播放" if preview else "WAV 已存入教材庫"
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
         result_expr = f"{ph}::jsonb" if kind == "postgres" else ph
@@ -145,7 +149,7 @@ def complete(job_id: str, token: str, result: Mapping[str, Any]) -> bool:
             f"UPDATE media_audio_jobs SET status={ph},progress_percent={ph},progress_stage={ph},progress_detail={ph},"
             f"result_json={result_expr},error={ph},completed_at={ph},updated_at={ph} "
             f"WHERE id={ph} AND status={ph} AND claim_token={ph}",
-            ("completed", 100, "AI 語音教材完成", "MP3 已存入教材庫", payload, "", stamp, stamp, job_id, "processing", token),
+            ("completed", 100, stage, detail, payload, "", stamp, stamp, job_id, "processing", token),
         )
     return bool(int(getattr(cursor, "rowcount", 0) or 0))
 
