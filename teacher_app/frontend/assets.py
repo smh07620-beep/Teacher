@@ -94,9 +94,9 @@ ASSET_MANIFEST = {
             "/learner-ui-cleanup-71.js",
             "/portal-navigation-73.js",
             "/teacher-ui-resilience-1014.js",
-            "/teacher-persona-isolation-1014.js",
             "/teacher-interface-convergence-1014.js",
             "/teacher-assignment-experience-1014.js",
+            "/teacher-persona-isolation-1014.js",
         ),
     },
 }
@@ -186,9 +186,6 @@ def register_pgy_frontend(app):
             if response.direct_passthrough:
                 response.direct_passthrough = False
 
-            # Teacher 7.2/7.3 portal presentation is intentionally one-shot:
-            # identity and navigation can enhance public learning pages without
-            # adding another MutationObserver or changing authorization.
             if path in {"/", "/internal", "/pgy"}:
                 html = response.get_data(as_text=True)
                 html = _apply_asset_manifest(html, "portal")
@@ -206,11 +203,6 @@ def register_pgy_frontend(app):
             response.set_data(html)
             response.content_length = len(response.get_data())
         except Exception:
-            # Asset injection is an enhancement layer and must not turn an
-            # otherwise valid HTML response into a 500. Unlike the previous
-            # silent fallback, always emit a server-side traceback so Render
-            # logs make the degradation observable without exposing details to
-            # the browser response.
             LOGGER.exception(
                 "Teacher frontend asset injection failed path=%s",
                 path or "<unknown>",
