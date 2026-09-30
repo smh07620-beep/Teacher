@@ -2,19 +2,25 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from teacher_app.assessments import free_ai_fallback
+from teacher_app.assessments import ai_runtime, free_ai_fallback
 
 
 class FreeAIFallbackTests(unittest.TestCase):
     def _settings(self):
-        return SimpleNamespace(
+        return ai_runtime.AISettings(
             provider="groq",
             groq_api_key="g",
             groq_model="groq-model",
+            groq_transcribe_model="whisper-model",
             gemini_api_key="gm",
             gemini_model="gemini-model",
             openai_api_key="",
             openai_model="openai-model",
+            source_max_chars=50000,
+            max_questions=15,
+            media_max_mb=300,
+            max_materials=4,
+            video_frame_count=3,
             free_only_mode=True,
         )
 
