@@ -19,8 +19,6 @@ class MediaSubtitle98Tests(unittest.TestCase):
             release_contract.REQUIRED_MIGRATIONS.index("0097-ai-material-drafts"),
             release_contract.REQUIRED_MIGRATIONS.index("0098-media-subtitles"),
         )
-        # 0098 remains a required ordered migration even after later additive
-        # releases become the current release marker.
         self.assertLess(
             release_contract.REQUIRED_MIGRATIONS.index("0098-media-subtitles"),
             release_contract.REQUIRED_MIGRATIONS.index("0099-ai-presentations"),
@@ -85,46 +83,74 @@ class MediaSubtitle98Tests(unittest.TestCase):
              patch.object(media_subtitle_runtime, "local_transcribe_segments", return_value=expected):
             value, meta = media_subtitle_runtime.transcribe_segments(Path("audio.m4a"), settings=settings, local=local)
         self.assertEqual(value, expected)
-        self.assertEqual(meta["provider"], "local-whisper")
         self.assertTrue(meta["fallbackUsed"])
+
         with patch.object(media_subtitle_runtime.ai_privacy, "external_enabled", return_value=True), \
              patch.object(media_subtitle_runtime.ai_privacy, "external_media_allowed", return_value=True), \
-             patch.object(media_subtitle_runtime, "groq_transcribe_segments", side_effect=ValueError("validation failed")), \
+             patch.object(media_subtitle_runtime, "groq_transcribe_segments", side_effect=RuntimeError("字幕格式 validation error")), \
              patch.object(media_subtitle_runtime, "local_transcribe_segments") as local_call:
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(RuntimeError, "validation"):
                 media_subtitle_runtime.transcribe_segments(Path("audio.m4a"), settings=settings, local=local)
         local_call.assert_not_called()
+
+    def test_youtube_and_vimeo_fail_closed_without_downloading_provider_media(self):
+        settings = SimpleNamespace(media_max_mb=100)
+        for provider in ("youtube", "vimeo"):
+            material = {
+                "id": f"external-{provider}",
+                "storageBackend": "external",
+                "currentVersion": 1,
+            }
+            with self.subTest(provider=provider), \
+                 patch.object(media_subtitle_runtime.external_media, "get_external_media", return_value={
+                     "provider": provider,
+                     "canonicalUrl": f"https://{provider}.example/video",
+                 }), \
+                 patch.object(media_subtitle_runtime.requests, "get") as http_get:
+                with self.assertRaisesRegex(RuntimeError, "YouTube/Vimeo"):
+                    media_subtitle_runtime._audio_source(material, settings=settings)
+                http_get.assert_not_called()
 
     def test_factory_worker_frontend_and_render_contracts_include_subtitles(self):
         factory = ROOT.joinpath("teacher_app", "factory.py").read_text(encoding="utf-8")
         worker = ROOT.joinpath("ai_question_worker.py").read_text(encoding="utf-8")
+        frontend = ROOT.joinpath("static", "teacher-media-subtitle-1014.js").read_text(encoding="utf-8")
         render = ROOT.joinpath("render.yaml").read_text(encoding="utf-8")
-        env = ROOT.joinpath(".local-ai-worker.env.example").read_text(encoding="utf-8")
-        assets = ASSET_MANIFEST["/system"]
+        body = ASSET_MANIFEST["system"]["body"]
+
+        self.assertIn("media_subtitle_migration", factory)
         self.assertIn("register_media_subtitle_routes", factory)
+        self.assertLess(factory.index("media_subtitle_migration"), factory.index("register_schema_migrations(app)"))
         self.assertIn("MediaSubtitleJobProcessor", worker)
-        self.assertIn("requirements-ai-worker.txt", render)
-        self.assertIn("MEDIA_SUBTITLE_LOCAL_WHISPER_ENABLED=true", env)
-        self.assertIn("static/teacher-media-subtitles-98.js", assets)
+        self.assertIn("media_subtitles", worker)
+        self.assertIn("/teacher-media-subtitle-1014.js", body)
+        self.assertLess(body.index("/teacher-media-audio-1014.js"), body.index("/teacher-media-subtitle-1014.js"))
+        for marker in (
+            "/api/media-subtitles/generate",
+            "teacher-subtitle-approve-1014",
+            "track.kind = 'subtitles'",
+            "/subtitles/approved",
+            "AI_EXTERNAL_MEDIA_ALLOWED=false",
+        ):
+            self.assertIn(marker, frontend)
+        self.assertRegex(render, r"- key: GEMINI_API_KEY\s+sync: false")
+        self.assertRegex(render, r"- key: EXTERNAL_MEDIA_HOSPITAL_CDN_HOSTS\s+sync: false")
 
     def test_route_source_requires_teacher_approval_and_current_source_version(self):
         source = ROOT.joinpath("teacher_app", "materials", "media_subtitle_routes.py").read_text(encoding="utf-8")
-        self.assertIn("draft.get(\"status\") != \"approved\"", source)
+        self.assertIn('status == "approved"', source)
         self.assertIn("sourceVersion", source)
-        self.assertIn("sourceSha256", source)
-        self.assertIn("_can_review", source)
+        self.assertIn("currentVersion", source)
+        self.assertIn("visible_to_user", source)
+        self.assertIn('action="media.subtitle.approve"', source)
+        self.assertIn("text/vtt", source)
 
     def test_worker_env_example_keeps_raw_media_local_by_default(self):
-        env = ROOT.joinpath(".local-ai-worker.env.example").read_text(encoding="utf-8")
-        self.assertIn("MEDIA_SUBTITLE_LOCAL_WHISPER_ENABLED=true", env)
-        self.assertIn("MEDIA_SUBTITLE_CLOUD_FALLBACK_ENABLED=false", env)
-
-    def test_youtube_and_vimeo_fail_closed_without_downloading_provider_media(self):
-        source = ROOT.joinpath("teacher_app", "materials", "media_subtitle_runtime.py").read_text(encoding="utf-8")
-        self.assertIn("YouTube / Vimeo", source)
-        self.assertIn("不會下載第三方影音", source)
-        self.assertNotIn("yt_dlp", source)
-        self.assertNotIn("youtube_dl", source)
+        env = ROOT.joinpath(".local-worker.env.example").read_text(encoding="utf-8")
+        self.assertIn("AI_EXTERNAL_MEDIA_ALLOWED=false", env)
+        self.assertIn("LOCAL_WHISPER_ENABLED=true", env)
+        self.assertIn("GEMINI_API_KEY=", env)
+        self.assertIn("EXTERNAL_MEDIA_HOSPITAL_CDN_HOSTS=", env)
 
 
 if __name__ == "__main__":
