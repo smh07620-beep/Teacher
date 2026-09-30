@@ -109,7 +109,9 @@ def provider_chain(primary: str, *, settings=None, local: LocalFallbackSettings 
 
 _RETRYABLE_MARKERS = (
     "429", "too many requests", "rate limit", "rate_limit", "resource_exhausted", "quota",
+    "額度/速率已達上限", "額度已達上限", "速率已達上限",
     "temporarily unavailable", "service unavailable", "provider unavailable", "upstream unavailable",
+    "服務暫時不可用", "服務暫時無法使用",
     "deadline exceeded", "timed out", "timeout", "connection reset", "connection aborted",
     "connection refused", "connection error", "502", "503", "504",
 )
