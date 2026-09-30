@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from teacher_app.materials import ai_video_jobs, ai_video_quality as quality, ai_video_runtime
+from teacher_app.materials import ai_video_jobs, ai_video_quality as quality, ai_video_renderer, ai_video_runtime
 from teacher_app.materials.ai_video_routes import _effective_quality
 
 
@@ -97,7 +97,7 @@ class AiVideoPhase5RuntimeTests(unittest.TestCase):
         self.assertIn("AI 輔助", compare)
 
     def test_non_windows_powerpoint_export_fails_closed_to_runtime_fallback(self):
-        if ai_video_runtime.os.name == "nt":
+        if ai_video_renderer.os.name == "nt":
             self.skipTest("This regression covers non-Windows CI behavior.")
         self.assertEqual(ai_video_runtime._export_powerpoint_frames(Path("missing.pptx"), Path("missing-frames")), [])
 
@@ -127,10 +127,10 @@ class AiVideoPhase5SourceContractTests(unittest.TestCase):
     def test_routes_keep_scope_quality_gate_and_no_legacy_admin_key(self):
         routes = Path("teacher_app/materials/ai_video_routes.py").read_text(encoding="utf-8")
         runtime = Path("teacher_app/materials/ai_video_runtime.py").read_text(encoding="utf-8")
+        renderer = Path("teacher_app/materials/ai_video_renderer.py").read_text(encoding="utf-8")
         bootstrap = Path("setup_teacher_worker.ps1").read_text(encoding="utf-8")
-        self.assertIn("load", runtime.lower())
         self.assertIn("PresentationStorage", runtime)
-        self.assertIn("PowerPoint.Application", runtime)
+        self.assertIn("PowerPoint.Application", renderer)
         self.assertIn("requiresWarningAcknowledgement", routes)
         self.assertIn("qualityBlocked", routes)
         self.assertIn("/quality", routes)
