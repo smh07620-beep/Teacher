@@ -7,8 +7,6 @@ from flask import Flask, g
 
 import release_contract
 from teacher_app.frontend.assets import ASSET_MANIFEST
-from teacher_app.maintenance.ai_material_migration import ai_material_drafts_97
-from teacher_app.maintenance.media_script_migration import media_script_jobs_94
 from teacher_app.materials import media_audio_jobs, media_script_jobs, media_script_runtime
 from teacher_app.materials.ai_material_routes import register_ai_material_routes
 
@@ -26,6 +24,14 @@ class AIMaterialMigration97Tests(unittest.TestCase):
         )
 
     def test_sqlite_migration_generalizes_reviewed_drafts_without_second_store(self):
+        # Keep migration imports out of module discovery. The global migration
+        # registry is intentionally populated by the factory in release order;
+        # importing 0097 while unittest is still collecting modules can append
+        # it before 0094 has created media_scripts and make unrelated factory
+        # tests fail during bootstrap.
+        from teacher_app.maintenance.media_script_migration import media_script_jobs_94
+        from teacher_app.maintenance.ai_material_migration import ai_material_drafts_97
+
         conn = sqlite3.connect(":memory:")
         try:
             media_script_jobs_94(conn, "sqlite")
