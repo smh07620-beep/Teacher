@@ -49,6 +49,7 @@ ASSET_MANIFEST = {
             "/teacher-media-script-1014.js",
             "/teacher-media-source-fix-1014.js",
             "/teacher-media-audio-1014.js",
+            "/teacher-media-subtitle-1014.js",
             "/teacher-media-mvp-status-1014.js",
             "/teacher-media-status-fix-1014.js",
             "/teacher-media-help-1014.js",

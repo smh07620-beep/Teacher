@@ -56,6 +56,7 @@ REQUIRED_MIGRATIONS = (
     "0095-media-audio-jobs",
     "0096-content-audience-scope",
     "0097-ai-material-drafts",
+    "0098-media-subtitles",
 )
 
 # Backward-compatible singular name used by older release checks.  It now

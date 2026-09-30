@@ -26,6 +26,7 @@ DEFAULT_TABLES = (
     "material_text_index", "media_processing_jobs", "atlas_import_previews",
     "audit_events", "external_media", "question_versions",
     "question_attempt_analytics", "media_script_jobs", "media_scripts",
+    "media_audio_jobs", "media_subtitle_jobs", "media_subtitles",
 )
 
 

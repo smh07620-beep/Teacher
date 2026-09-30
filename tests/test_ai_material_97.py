@@ -17,7 +17,6 @@ ROOT = Path(__file__).resolve().parents[1]
 class AIMaterialMigration97Tests(unittest.TestCase):
     def test_release_contract_advances_after_content_audience(self):
         self.assertIn("0097-ai-material-drafts", release_contract.REQUIRED_MIGRATIONS)
-        self.assertEqual(release_contract.REQUIRED_RELEASE_MIGRATION, "0097-ai-material-drafts")
         self.assertLess(
             release_contract.REQUIRED_MIGRATIONS.index("0096-content-audience-scope"),
             release_contract.REQUIRED_MIGRATIONS.index("0097-ai-material-drafts"),

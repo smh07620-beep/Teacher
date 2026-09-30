@@ -13,6 +13,7 @@ from teacher_app.maintenance import media_script_migration as _media_script_migr
 from teacher_app.maintenance import media_audio_migration as _media_audio_migration  # noqa: F401
 from teacher_app.maintenance import content_audience_migration as _content_audience_migration  # noqa: F401
 from teacher_app.maintenance import ai_material_migration as _ai_material_migration  # noqa: F401
+from teacher_app.maintenance import media_subtitle_migration as _media_subtitle_migration  # noqa: F401
 
 
 sys.modules[__name__] = _migrations

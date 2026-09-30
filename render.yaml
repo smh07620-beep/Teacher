@@ -157,6 +157,8 @@ services:
         value: "20"
       - key: MAX_PGY_TEMPLATE_MB
         value: "20"
+      - key: EXTERNAL_MEDIA_HOSPITAL_CDN_HOSTS
+        sync: false
       - key: AI_EXTERNAL_PROCESSING_ENABLED
         value: "true"
       - key: AI_DEIDENTIFICATION_ENABLED
@@ -171,6 +173,10 @@ services:
         value: qwen/qwen3.6-27b
       - key: GROQ_TRANSCRIBE_MODEL
         value: whisper-large-v3-turbo
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
       - key: AI_TTS_PROVIDER
         value: kokoro
       - key: KOKORO_MODEL
