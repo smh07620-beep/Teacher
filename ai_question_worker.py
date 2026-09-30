@@ -66,8 +66,9 @@ def main() -> int:
                     )
                 next_recovery = now + recovery_seconds
 
-            # Give every domain queue one chance per loop.  A large assessment
-            # queue must not starve teacher script, PowerPoint, narration, or subtitle work.
+            # Give every domain queue one chance per loop. A large assessment queue
+            # must not starve teacher script or narration work; PowerPoint and subtitle
+            # queues receive the same one-job-per-loop fairness guarantee.
             did_work = question_processor.run_next_queued()
             did_work = script_processor.run_next_queued() or did_work
             did_work = presentation_processor.run_next_queued() or did_work
