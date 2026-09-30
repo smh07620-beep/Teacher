@@ -1,0 +1,58 @@
+name: AI presentation production checks
+
+on:
+  pull_request:
+    paths:
+      - 'ai_question_worker.py'
+      - 'requirements-ai-worker.txt'
+      - 'requirements.txt'
+      - 'teacher_app/materials/ai_presentation_*.py'
+      - 'teacher_app/maintenance/ai_presentation_migration.py'
+      - 'tests/test_ai_presentation_0100.py'
+      - 'docs/AI_PRESENTATIONS_0099_0100.md'
+      - '.github/workflows/ai-presentation-checks.yml'
+  push:
+    branches:
+      - work/ai-presentation-video-20260930
+    paths:
+      - 'ai_question_worker.py'
+      - 'requirements-ai-worker.txt'
+      - 'requirements.txt'
+      - 'teacher_app/materials/ai_presentation_*.py'
+      - 'teacher_app/maintenance/ai_presentation_migration.py'
+      - 'tests/test_ai_presentation_0100.py'
+      - 'docs/AI_PRESENTATIONS_0099_0100.md'
+      - '.github/workflows/ai-presentation-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  pptx-production:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Web test baseline and worker PPTX renderer
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install 'python-pptx>=1.0,<2.0'
+      - name: Worker-only dependency contract
+        run: |
+          grep -q 'python-pptx' requirements-ai-worker.txt
+          if grep -q 'python-pptx' requirements.txt; then
+            echo 'python-pptx must stay off the Render Web dependency set'
+            exit 1
+          fi
+      - name: Focused 0100 PowerPoint regressions
+        run: python -m unittest discover -s tests -p 'test_ai_presentation_0100.py' -v
+      - name: Python compile checks
+        run: |
+          python -m py_compile ai_question_worker.py
+          python -m compileall -q teacher_app/materials teacher_app/maintenance tests/test_ai_presentation_0100.py
+      - name: Patch whitespace check
+        run: git diff --check HEAD^ HEAD
