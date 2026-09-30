@@ -9,6 +9,7 @@ import uuid
 from typing import Any, Mapping
 
 from teacher_app.common import db as common_db
+from teacher_app.materials import ai_presentation_quality as quality
 
 PRESENTATION_STATUSES = {"draft", "approved", "published", "superseded"}
 PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -72,7 +73,7 @@ def sanitize_provenance(value: Mapping[str, Any] | None) -> dict[str, Any]:
 
 
 def sanitize_layout_profile(value: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Keep template layout mapping declarative and independent of template internals."""
+    """Keep template mapping semantic; never persist arbitrary placeholder internals."""
     payload = dict(value or {})
     mapping = payload.get("layoutMap") if isinstance(payload.get("layoutMap"), Mapping) else {}
     result = {}
@@ -80,7 +81,10 @@ def sanitize_layout_profile(value: Mapping[str, Any] | None) -> dict[str, Any]:
         name = str(layout_name or "").replace("\x00", " ").strip()[:120]
         if str(kind) in _LAYOUT_KINDS and name:
             result[str(kind)] = name
-    return {"layoutMap": result}
+    placeholder_map = quality.sanitize_placeholder_map(
+        payload.get("placeholderMap") if isinstance(payload.get("placeholderMap"), Mapping) else {}
+    )
+    return {"layoutMap": result, "placeholderMap": placeholder_map}
 
 
 def _json(kind: str, ph: str) -> str:
@@ -116,9 +120,9 @@ def _job(row):
         "result": _decode(r.get("result_json"), {}), "progressPercent": float(r.get("progress_percent") or 0),
         "progressStage": str(r.get("progress_stage") or ""), "progressDetail": str(r.get("progress_detail") or ""),
         "error": str(r.get("error") or ""), "claimToken": str(r.get("claim_token") or ""),
-        "attempts": int(r.get("attempts") or 0), "createdAt": str(r.get("created_at") or ""),
-        "updatedAt": str(r.get("updated_at") or ""), "startedAt": str(r.get("started_at") or ""),
-        "completedAt": str(r.get("completed_at") or ""),
+        "attempts": int(r.get("attempts") or 0), "idempotencyKey": str(r.get("idempotency_key") or ""),
+        "createdAt": str(r.get("created_at") or ""), "updatedAt": str(r.get("updated_at") or ""),
+        "startedAt": str(r.get("started_at") or ""), "completedAt": str(r.get("completed_at") or ""),
     }
 
 
@@ -140,6 +144,9 @@ def _presentation(row):
         "artifactMimeType": str(r.get("artifact_mime_type") or ""), "provider": str(r.get("provider") or ""),
         "model": str(r.get("model") or ""), "sourceJobId": str(r.get("source_job_id") or ""),
         "provenance": sanitize_provenance(_decode(r.get("provenance_json"), {})),
+        "qualityManifest": quality.sanitize_quality_manifest(_decode(r.get("quality_manifest_json"), {})),
+        "renderMetrics": quality.sanitize_render_metrics(_decode(r.get("render_metrics_json"), {})),
+        "renderRulesetVersion": str(r.get("render_ruleset_version") or ""),
         "createdBy": str(r.get("created_by") or ""), "updatedBy": str(r.get("updated_by") or ""),
         "approvedBy": str(r.get("approved_by") or ""), "approvedAt": str(r.get("approved_at") or ""),
         "publishedAt": str(r.get("published_at") or ""), "createdAt": str(r.get("created_at") or ""),
@@ -194,16 +201,35 @@ def list_templates(*, group_key="", training_area="", include_inactive=False):
     return [_template(row) for row in rows]
 
 
-def create_job(*, draft_id, template_id, group_key, training_area, actor_username, request_payload=None):
+def get_job_by_idempotency_key(key: str):
+    value = str(key or "").strip()
+    if not value:
+        return None
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(f"SELECT * FROM ai_presentation_jobs WHERE idempotency_key={ph} LIMIT 1", (value,)).fetchone()
+    return _job(row)
+
+
+def create_job(*, draft_id, template_id, group_key, training_area, actor_username, request_payload=None, idempotency_key=""):
+    key = str(idempotency_key or "").strip()[:180] or None
+    if key:
+        existing = get_job_by_idempotency_key(key)
+        if existing:
+            return existing
     jid, stamp = f"pptjob-{uuid.uuid4().hex}", _now(); payload = json.dumps(dict(request_payload or {}), ensure_ascii=False, separators=(",", ":"))
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind); j = _json(kind, ph)
+        prefix = "INSERT INTO"
+        if kind != "postgres" and key:
+            prefix = "INSERT OR IGNORE INTO"
+        suffix = " ON CONFLICT(idempotency_key) DO NOTHING" if kind == "postgres" and key else ""
         conn.execute(
-            "INSERT INTO ai_presentation_jobs(id,draft_id,template_id,group_key,training_area,actor_username,status,request_json,progress_percent,progress_stage,progress_detail,result_json,error,claim_token,attempts,created_at,updated_at,started_at,completed_at) VALUES("
-            f"{ph},{ph},{ph},{ph},{ph},{ph},{ph},{j},{ph},{ph},{ph},{j},{ph},{ph},{ph},{ph},{ph},{ph},{ph})",
-            (jid,draft_id,template_id,group_key,training_area,actor_username,"queued",payload,0,"等待產生 PowerPoint","工作已排入 AI Worker 佇列","{}","","",0,stamp,stamp,"",""),
+            prefix + " ai_presentation_jobs(id,draft_id,template_id,group_key,training_area,actor_username,status,request_json,progress_percent,progress_stage,progress_detail,result_json,error,claim_token,attempts,created_at,updated_at,started_at,completed_at,idempotency_key) VALUES("
+            f"{ph},{ph},{ph},{ph},{ph},{ph},{ph},{j},{ph},{ph},{ph},{j},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})" + suffix,
+            (jid,draft_id,template_id,group_key,training_area,actor_username,"queued",payload,0,"等待產生 PowerPoint","工作已排入 AI Worker 佇列","{}","","",0,stamp,stamp,"","",key),
         )
-    return get_job(jid) or {}
+    return get_job_by_idempotency_key(key) if key else (get_job(jid) or {})
 
 
 def get_job(job_id: str):
@@ -283,10 +309,14 @@ def retry_failed_job(job_id: str, *, max_attempts: int = 3):
 
 def create_presentation(*, material_id, draft_id, template_id, group_key, training_area, title, slides,
                         actor_username, source_job_id, provider="", model="", artifact=None,
-                        presentation_family_id="", parent_version_id="", revision_number=1, provenance=None):
+                        presentation_family_id="", parent_version_id="", revision_number=1, provenance=None,
+                        quality_manifest=None, render_metrics=None, render_ruleset_version=""):
     pid, stamp = f"ppt-{uuid.uuid4().hex}", _now(); family = presentation_family_id or pid; artifact = dict(artifact or {})
     slides_json = json.dumps(slides or [], ensure_ascii=False, separators=(",", ":"))
     provenance_json = json.dumps(sanitize_provenance(provenance), ensure_ascii=False, separators=(",", ":"))
+    quality_json = json.dumps(quality.sanitize_quality_manifest(quality_manifest), ensure_ascii=False, separators=(",", ":"))
+    metrics_json = json.dumps(quality.sanitize_render_metrics(render_metrics), ensure_ascii=False, separators=(",", ":"))
+    ruleset = str(render_ruleset_version or "")[:40]
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind); j = _json(kind, ph)
         conn.execute(
@@ -295,8 +325,10 @@ def create_presentation(*, material_id, draft_id, template_id, group_key, traini
             (pid,family,parent_version_id,max(1,int(revision_number)),material_id,draft_id,template_id,group_key,training_area,title,"draft",slides_json,
              str(artifact.get("backend") or ""),str(artifact.get("key") or ""),str(artifact.get("filename") or ""),str(artifact.get("sha256") or ""),
              int(artifact.get("byteSize") or 0),str(artifact.get("mimeType") or ""),provider,model,source_job_id,actor_username,actor_username,"","","",stamp,stamp),)
-        # 0102 adds this field without replacing any existing revision rows.
-        conn.execute(f"UPDATE ai_presentations SET provenance_json={j} WHERE id={ph}", (provenance_json, pid))
+        conn.execute(
+            f"UPDATE ai_presentations SET provenance_json={j},quality_manifest_json={j},render_metrics_json={j},render_ruleset_version={ph} WHERE id={ph}",
+            (provenance_json, quality_json, metrics_json, ruleset, pid),
+        )
     return get_presentation(pid) or {}
 
 
@@ -313,7 +345,6 @@ def get_presentation_by_source_job_id(source_job_id: str):
 
 
 def list_family_revisions(family_id: str, *, limit=100):
-    """Return immutable revision rows oldest first for a scoped history view."""
     limit = max(1, min(100, int(limit)))
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -355,17 +386,19 @@ def create_revision(current: Mapping[str,Any], *, actor_username: str, title=Non
     """Create an immutable new draft. Structural edits never inherit a stale PPTX artifact."""
     family=str(current.get("presentationFamilyId") or current.get("id") or "")
     selected_slides = list(current.get("slides") or []) if slides is None else list(slides)
+    revision_number = next_revision_number(family)
+    provenance_payload = dict(current.get("provenance") or {}) if provenance is None else dict(provenance or {})
+    provenance_payload["revisionNumber"] = revision_number
     return create_presentation(
         material_id=str(current.get("materialId") or ""), draft_id=str(current.get("draftId") or ""), template_id=str(current.get("templateId") or ""),
         group_key=str(current.get("group") or ""), training_area=str(current.get("area") or ""), title=str(current.get("title") if title is None else title),
         slides=selected_slides, actor_username=actor_username, source_job_id=str(current.get("sourceJobId") or ""),
         provider=str(current.get("provider") or ""), model=str(current.get("model") or ""), artifact=dict(artifact or {}),
-        presentation_family_id=family, parent_version_id=str(current.get("id") or ""), revision_number=next_revision_number(family),
-        provenance=current.get("provenance") if provenance is None else provenance)
+        presentation_family_id=family, parent_version_id=str(current.get("id") or ""), revision_number=revision_number,
+        provenance=provenance_payload)
 
 
 def update_presentation_artifact(presentation_id: str, *, artifact: Mapping[str, Any], actor_username: str):
-    """Attach a freshly rendered durable PPTX only to an editable draft revision."""
     backend=str(artifact.get("backend") or "").lower(); key=str(artifact.get("key") or "").strip()
     digest=str(artifact.get("sha256") or "").strip().lower(); filename=str(artifact.get("filename") or "").strip()
     mime=str(artifact.get("mimeType") or "").strip(); size=int(artifact.get("byteSize") or 0)
@@ -381,6 +414,23 @@ def update_presentation_artifact(presentation_id: str, *, artifact: Mapping[str,
             existing=conn.execute(f"SELECT id,status FROM ai_presentations WHERE id={ph}",(presentation_id,)).fetchone()
             if not existing: return None
             raise ValueError("只有 draft PowerPoint revision 可以更新 artifact。")
+    return get_presentation(presentation_id)
+
+
+def update_presentation_quality(presentation_id: str, *, quality_manifest, render_metrics, render_ruleset_version: str, actor_username: str):
+    manifest = json.dumps(quality.sanitize_quality_manifest(quality_manifest), ensure_ascii=False, separators=(",", ":"))
+    metrics = json.dumps(quality.sanitize_render_metrics(render_metrics), ensure_ascii=False, separators=(",", ":"))
+    stamp = _now(); ruleset = str(render_ruleset_version or "")[:40]
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind); j = _json(kind, ph)
+        cur = conn.execute(
+            f"UPDATE ai_presentations SET quality_manifest_json={j},render_metrics_json={j},render_ruleset_version={ph},updated_by={ph},updated_at={ph} WHERE id={ph} AND status={ph}",
+            (manifest, metrics, ruleset, actor_username, stamp, presentation_id, "draft"),
+        )
+        if not int(getattr(cur, "rowcount", 0) or 0):
+            existing = conn.execute(f"SELECT id FROM ai_presentations WHERE id={ph}", (presentation_id,)).fetchone()
+            if not existing: return None
+            raise ValueError("只有 draft PowerPoint revision 可以更新 render quality。")
     return get_presentation(presentation_id)
 
 
@@ -423,9 +473,9 @@ def create_publication(*, presentation_id, publication_material_id, actor_userna
 
 
 __all__ = [
-    "create_template","get_template","list_templates","create_job","get_job","list_queued","claim_job","set_job_progress",
+    "create_template","get_template","list_templates","create_job","get_job","get_job_by_idempotency_key","list_queued","claim_job","set_job_progress",
     "complete_job","fail_job","requeue_stale_processing","retry_failed_job","create_presentation","get_presentation","get_presentation_by_source_job_id",
-    "list_presentations","list_family_revisions","latest_published","next_revision_number","create_revision","update_presentation_artifact","set_status",
+    "list_presentations","list_family_revisions","latest_published","next_revision_number","create_revision","update_presentation_artifact","update_presentation_quality","set_status",
     "publication_receipt_key","get_publication_by_key","create_publication",
     "sanitize_provenance","sanitize_layout_profile",
 ]

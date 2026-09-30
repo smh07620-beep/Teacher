@@ -1,6 +1,7 @@
 """Teacher-facing APIs for reviewed AI PowerPoint authoring."""
 from __future__ import annotations
 
+import datetime as dt
 import os
 import json
 import re
@@ -16,6 +17,7 @@ from teacher_app.common.auth import has_role
 from teacher_app.materials import ai_presentation_jobs
 from teacher_app.materials import ai_presentation_repository as repository
 from teacher_app.materials import ai_presentation_runtime
+from teacher_app.materials import ai_presentation_quality as quality
 from teacher_app.materials.ai_presentation_storage import PPTX_MIME, PresentationStorage, safe_filename
 from teacher_app.materials import media_script_repository
 from teacher_app.materials import repository as material_repository
@@ -69,20 +71,74 @@ def _public_template(item: dict) -> dict:
     return {key: item.get(key) for key in keys}
 
 
+def _effective_quality(item: dict) -> dict:
+    persisted = quality.sanitize_quality_manifest(item.get("qualityManifest") or {})
+    if str(item.get("renderRulesetVersion") or "") == quality.RULESET_VERSION and int(persisted.get("slideCount") or 0) > 0:
+        return persisted
+    try:
+        _prepared, manifest = quality.prepare_slides(
+            ai_presentation_runtime.normalize_slides(list(item.get("slides") or [])),
+            provenance_present=bool((item.get("provenance") or {}).get("sourceMaterialId") and (item.get("provenance") or {}).get("sourceDraftId")),
+        )
+        return manifest
+    except ValueError:
+        return quality.sanitize_quality_manifest({
+            "rulesetVersion": quality.RULESET_VERSION,
+            "errors": [{"code":"NO_RENDERABLE_SLIDES","detail":"沒有可產生的投影片。"}],
+        })
+
+
+def _render_observability(item: dict) -> dict:
+    metrics = quality.sanitize_render_metrics(item.get("renderMetrics") or {})
+    job_id = str(metrics.get("jobId") or "")
+    job = repository.get_job(job_id) if job_id else None
+    if job:
+        metrics["attempts"] = int(job.get("attempts") or metrics.get("attempts") or 0)
+        metrics["lastError"] = str(job.get("error") or metrics.get("lastError") or "")[:500]
+        metrics["jobStatus"] = str(job.get("status") or "")
+    else:
+        metrics["jobStatus"] = ""
+    return metrics
+
+
 def _public_presentation(item: dict) -> dict:
     keys = (
         "id","presentationFamilyId","parentVersionId","revisionNumber","materialId","draftId","templateId",
         "group","area","title","status","slides","artifactSha256","artifactBytes","artifactMimeType",
         "provider","model","sourceJobId","createdBy","updatedBy","approvedBy","approvedAt","publishedAt",
-        "createdAt","updatedAt",
+        "createdAt","updatedAt","renderRulesetVersion",
     )
     payload = {key: item.get(key) for key in keys}
+    manifest = _effective_quality(item)
     payload["artifactReady"] = _artifact_ready(item)
     payload["provenanceAvailable"] = bool(item.get("provenance", {}).get("sourceMaterialId"))
+    payload["qualityManifest"] = manifest
+    payload["qualityStatus"] = manifest.get("status")
+    payload["renderMetrics"] = _render_observability(item)
     return payload
 
 
-def _publication_snapshot(item: dict) -> dict:
+def _quality_snapshot(manifest: dict, *, warning_ack: dict | None = None) -> dict:
+    safe = quality.sanitize_quality_manifest(manifest)
+    payload = {
+        "rulesetVersion": safe.get("rulesetVersion"),
+        "status": safe.get("status"),
+        "slideCount": safe.get("slideCount"),
+        "warningCount": safe.get("warningCount"),
+        "errorCount": safe.get("errorCount"),
+        "warningCodes": [str(item.get("code") or "") for item in safe.get("warnings", [])],
+        "errorCodes": [str(item.get("code") or "") for item in safe.get("errors", [])],
+    }
+    if warning_ack:
+        payload["warningAcknowledgement"] = {
+            "acknowledged": True,
+            "actor": str(warning_ack.get("actor") or "")[:120],
+            "at": str(warning_ack.get("at") or "")[:80],
+        }
+    return payload
+
+
+def _publication_snapshot(item: dict, *, manifest: dict | None = None, warning_ack: dict | None = None) -> dict:
     """A public-safe immutable record of precisely what the release points at."""
     return {
         "presentationId": str(item.get("id") or ""), "presentationFamilyId": str(item.get("presentationFamilyId") or ""),
@@ -92,6 +148,7 @@ def _publication_snapshot(item: dict) -> dict:
                      "mimeType": str(item.get("artifactMimeType") or "")},
         "templateId": str(item.get("templateId") or ""), "provenance": item.get("provenance") or {},
         "approvedBy": str(item.get("approvedBy") or ""), "approvedAt": str(item.get("approvedAt") or ""),
+        "quality": _quality_snapshot(manifest or _effective_quality(item), warning_ack=warning_ack),
     }
 
 
@@ -170,6 +227,7 @@ def register_ai_presentation_routes(owner):
         return jsonify({
             "storage": PresentationStorage().capability(), "workerRequired": True,
             "requiresApprovedSlideDraft": True, "teacherApprovalRoles": sorted(_TEACHER_APPROVAL_ROLES),
+            "qualityRulesetVersion": quality.RULESET_VERSION,
             "capabilities": {name: _presentation_allowed(user, name) for name in _PRESENTATION_CAPABILITIES},
         })
 
@@ -245,7 +303,7 @@ def register_ai_presentation_routes(owner):
         except (ValueError, RuntimeError) as exc:
             return jsonify({"error":str(exc)}), 400
         audit.record_event(actor=user, action="presentation.create", target_type="ai_presentation_job", target_id=str(job.get("id") or ""),
-                           group=str(draft.get("group") or ""), detail={"draftId":draft.get("id"),"templateId":template_id})
+                           group=str(draft.get("group") or ""), detail={"draftId":draft.get("id"),"templateId":template_id,"ruleset":quality.RULESET_VERSION})
         return jsonify(ai_presentation_jobs.public_job(job)), 202
 
     @app.get("/api/ai-presentations/jobs/<job_id>")
@@ -291,6 +349,20 @@ def register_ai_presentation_routes(owner):
         item, denied = load_scoped(presentation_id, user)
         return denied if denied else jsonify(_public_presentation(item))
 
+    @app.get("/api/ai-presentations/<presentation_id>/quality")
+    def presentation_quality(presentation_id):
+        user = _actor(owner)
+        if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
+        item, denied = load_scoped(presentation_id, user)
+        if denied: return denied
+        manifest = _effective_quality(item)
+        return jsonify({
+            "presentationId": item.get("id"), "rulesetVersion": quality.RULESET_VERSION,
+            "quality": manifest, "renderMetrics": _render_observability(item),
+            "publishable": manifest.get("status") != "error",
+            "requiresWarningAcknowledgement": manifest.get("status") == "warning",
+        })
+
     @app.get("/api/ai-presentations/<presentation_id>/download")
     def presentation_download(presentation_id):
         user = _actor(owner)
@@ -308,7 +380,6 @@ def register_ai_presentation_routes(owner):
 
     @app.get("/api/ai-presentations/<presentation_id>/provenance")
     def presentation_provenance(presentation_id):
-        """Expose only persisted allow-listed identifiers for a scoped revision."""
         user = _actor(owner)
         if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
         item, denied = load_scoped(presentation_id, user)
@@ -374,8 +445,41 @@ def register_ai_presentation_routes(owner):
         audit.record_event(actor=user, action="presentation.edit", target_type="ai_presentation", target_id=str(revision.get("id") or ""),
                            group=str(current.get("group") or ""), before={"revision":current.get("revisionNumber"),"status":current.get("status")},
                            after={"revision":revision.get("revisionNumber"),"status":revision.get("status")},
-                           detail={"parentVersionId":current.get("id"),"renderJobId":job.get("id"),"renderedInWeb":False})
+                           detail={"parentVersionId":current.get("id"),"renderJobId":job.get("id"),"renderedInWeb":False,"ruleset":quality.RULESET_VERSION})
         return jsonify({"ok":True,"presentation":_public_presentation(revision),"job":ai_presentation_jobs.public_job(job)}), 202
+
+    @app.post("/api/ai-presentations/<presentation_id>/regenerate")
+    def presentation_regenerate(presentation_id):
+        user = _actor(owner)
+        if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
+        current, denied = load_scoped(presentation_id, user)
+        if denied: return denied
+        try:
+            PresentationStorage().backend()
+            idempotency_key = quality.regenerate_key(current)
+            existing_job = repository.get_job_by_idempotency_key(idempotency_key)
+            if existing_job:
+                target_id = str((existing_job.get("request") or {}).get("presentationId") or "")
+                target = repository.get_presentation(target_id) if target_id else None
+                return jsonify({"ok":True,"replayed":True,"presentation":_public_presentation(target or current),"job":ai_presentation_jobs.public_job(existing_job)}), 202
+            normalized = ai_presentation_runtime.normalize_slides(list(current.get("slides") or []))
+            revision = repository.create_revision(current, actor_username=str(user.get("username") or ""), slides=normalized)
+            job = ai_presentation_jobs.enqueue_revision(
+                presentation=revision, actor_username=str(user.get("username") or ""),
+                idempotency_key=idempotency_key, regenerate=True,
+            )
+            provisional = _effective_quality(revision)
+            repository.update_presentation_quality(
+                str(revision.get("id") or ""), quality_manifest=provisional,
+                render_metrics={"rulesetVersion":quality.RULESET_VERSION,"jobId":job.get("id"),"attempts":job.get("attempts",0)},
+                render_ruleset_version=quality.RULESET_VERSION, actor_username=str(user.get("username") or ""),
+            )
+            revision = repository.get_presentation(str(revision.get("id") or "")) or revision
+        except (ValueError, RuntimeError) as exc:
+            return jsonify({"error":str(exc)}), 400
+        audit.record_event(actor=user, action="presentation.regenerate", target_type="ai_presentation", target_id=str(revision.get("id") or ""),
+                           group=str(current.get("group") or ""), detail={"sourcePresentationId":current.get("id"),"renderJobId":job.get("id"),"ruleset":quality.RULESET_VERSION})
+        return jsonify({"ok":True,"replayed":False,"presentation":_public_presentation(revision),"job":ai_presentation_jobs.public_job(job)}), 202
 
     @app.post("/api/ai-presentations/jobs/<job_id>/retry")
     def presentation_retry_job(job_id):
@@ -407,12 +511,20 @@ def register_ai_presentation_routes(owner):
             family = str(current.get("presentationFamilyId") or current.get("id") or ""); revision_no = repository.next_revision_number(family)
             artifact = PresentationStorage().store(path, namespace="artifacts", object_id=f"{family}-r{revision_no}", filename=upload.filename or f"teacher-edit-r{revision_no}.pptx")
             revision = repository.create_revision(current, actor_username=str(user.get("username") or ""), artifact=artifact)
+            manifest = _effective_quality(revision)
+            manifest = quality.add_warning(manifest, "MANUAL_ARTIFACT_UNCHECKED", detail="教師上傳的 PPTX 未由 Worker 重新排版，發布前需人工確認版面。")
+            repository.update_presentation_quality(
+                str(revision.get("id") or ""), quality_manifest=manifest,
+                render_metrics={"rulesetVersion":quality.RULESET_VERSION,"renderedSlideCount":manifest.get("slideCount",0)},
+                render_ruleset_version=quality.RULESET_VERSION, actor_username=str(user.get("username") or ""),
+            )
+            revision = repository.get_presentation(str(revision.get("id") or "")) or revision
         except (ValueError, RuntimeError) as exc:
             return jsonify({"error":str(exc)}), 400
         finally:
             if path: path.unlink(missing_ok=True)
         audit.record_event(actor=user, action="presentation.edit", target_type="ai_presentation", target_id=str(revision.get("id") or ""),
-                           group=str(current.get("group") or ""), detail={"parentVersionId":current.get("id"),"teacherPptxReupload":True})
+                           group=str(current.get("group") or ""), detail={"parentVersionId":current.get("id"),"teacherPptxReupload":True,"qualityWarning":"MANUAL_ARTIFACT_UNCHECKED"})
         return jsonify({"ok":True,"presentation":_public_presentation(revision)}), 201
 
     @app.post("/api/ai-presentations/<presentation_id>/approve")
@@ -435,7 +547,7 @@ def register_ai_presentation_routes(owner):
             return jsonify({"error":str(exc)}), 409
         audit.record_event(actor=user, action="presentation.approve", target_type="ai_presentation", target_id=str(presentation_id),
                            group=str(current.get("group") or ""), before={"status":current.get("status")},
-                           after={"status":"approved","approvedBy":(approved or {}).get("approvedBy"),"artifactSha256":current.get("artifactSha256")})
+                           after={"status":"approved","approvedBy":(approved or {}).get("approvedBy"),"artifactSha256":current.get("artifactSha256"),"qualityStatus":_effective_quality(current).get("status")})
         return jsonify({"ok":True,"presentation":_public_presentation(approved or {})})
 
     @app.post("/api/ai-presentations/<presentation_id>/publish-link")
@@ -452,7 +564,18 @@ def register_ai_presentation_routes(owner):
             return jsonify({"error":"PowerPoint 必須先由授課教師核准。"}), 409
         if not _artifact_ready(current):
             return jsonify({"error":"PowerPoint artifact durable metadata 不完整，不能發布。"}), 409
-        material_id = str((request.get_json(silent=True) or {}).get("publicationMaterialId") or "").strip()
+        body = request.get_json(silent=True) or {}
+        manifest = _effective_quality(current)
+        if manifest.get("status") == "error":
+            return jsonify({"error":"發布前品質檢查有阻擋錯誤，請先重新產生或修正。","quality":manifest,"qualityBlocked":True}), 409
+        warning_ack = None
+        if manifest.get("status") == "warning":
+            if body.get("acknowledgeWarnings") is not True:
+                return jsonify({"error":"此版本有品質警告；請由授權發布者確認警告後再發布。","quality":manifest,"requiresWarningAcknowledgement":True}), 409
+            warning_ack = {"actor":str(user.get("username") or ""),"at":dt.datetime.now(dt.timezone.utc).isoformat()}
+            audit.record_event(actor=user, action="presentation.quality-warning-acknowledge", target_type="ai_presentation", target_id=str(current.get("id") or ""),
+                               group=str(current.get("group") or ""), detail={"ruleset":manifest.get("rulesetVersion"),"warningCodes":[item.get("code") for item in manifest.get("warnings",[])]})
+        material_id = str(body.get("publicationMaterialId") or "").strip()
         material = material_repository.get_material(material_id) if material_id else None
         if not material: return jsonify({"error":"找不到正式發布教材。"}), 404
         denied = _scope(owner, str(material.get("group") or ""))
@@ -467,19 +590,18 @@ def register_ai_presentation_routes(owner):
                      "presentationBackend":str(current.get("artifactBackend") or ""),"presentationStorageKey":str(current.get("artifactStorageKey") or ""),
                      "presentationSha256":str(current.get("artifactSha256") or ""),"presentationBytes":int(current.get("artifactBytes") or 0),
                      "presentationMimeType":str(current.get("artifactMimeType") or ""),"publicationMaterialId":material_id,
-                     "publicationBackend":str(material.get("storageBackend") or ""),"publicationStorageKey":str(material.get("storageKey") or "")},
+                     "publicationBackend":str(material.get("storageBackend") or ""),"publicationStorageKey":str(material.get("storageKey") or ""),
+                     "qualityStatus":manifest.get("status"),"qualityRulesetVersion":manifest.get("rulesetVersion")},
             presentation_family_id=str(current.get("presentationFamilyId") or current.get("id") or ""),
-            presentation_revision_number=int(current.get("revisionNumber") or 1), snapshot=_publication_snapshot(current))
+            presentation_revision_number=int(current.get("revisionNumber") or 1), snapshot=_publication_snapshot(current, manifest=manifest, warning_ack=warning_ack))
         try:
-            # Replaying a completed publish returns the same immutable receipt;
-            # it must not rewrite the historical publication timestamp.
             published = current if str(current.get("status") or "") == "published" else repository.set_status(
                 str(current.get("id") or ""), status="published", actor_username=str(user.get("username") or "")
             )
         except ValueError as exc:
             return jsonify({"error":str(exc)}), 409
         audit.record_event(actor=user, action="presentation.publish", target_type="ai_presentation", target_id=str(current.get("id") or ""),
-                           group=str(current.get("group") or ""), after={"status":"published","publicationMaterialId":material_id,"receiptKey":receipt.get("receiptKey")})
+                           group=str(current.get("group") or ""), after={"status":"published","publicationMaterialId":material_id,"receiptKey":receipt.get("receiptKey"),"qualityStatus":manifest.get("status")})
         return jsonify({"ok":True,"presentation":_public_presentation(published or {}),"publicationReceipt":receipt})
 
     app.extensions["teacher_ai_presentation_routes_registered"] = True

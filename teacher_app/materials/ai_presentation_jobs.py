@@ -7,6 +7,7 @@ import uuid
 
 from teacher_app.materials import ai_presentation_repository as repository
 from teacher_app.materials import ai_presentation_runtime
+from teacher_app.materials import ai_presentation_quality as quality
 
 
 def _env_int(name: str, default: int, lower: int, upper: int) -> int:
@@ -27,6 +28,9 @@ def public_job(job: dict) -> dict:
     if request_payload.get("presentationId"):
         payload["presentationId"] = str(request_payload.get("presentationId") or "")
         payload["revisionRender"] = bool(request_payload.get("renderRevision"))
+    if request_payload.get("regenerate"):
+        payload["regenerate"] = True
+        payload["rulesetVersion"] = str(request_payload.get("rulesetVersion") or quality.RULESET_VERSION)
     payload["retryable"] = str(job.get("status") or "") == "failed" and int(job.get("attempts") or 0) < _env_int("AI_PRESENTATION_JOB_MAX_ATTEMPTS", 3, 1, 10)
     return payload
 
@@ -39,19 +43,23 @@ def enqueue(*, draft: dict, template_id: str, actor_username: str, slides: list[
     )
 
 
-def enqueue_revision(*, presentation: dict, actor_username: str) -> dict:
+def enqueue_revision(*, presentation: dict, actor_username: str, idempotency_key: str = "", regenerate: bool = False) -> dict:
     """Queue a draft revision render; Web never invokes python-pptx or provider upload inline."""
     if str(presentation.get("status") or "") != "draft":
         raise ValueError("只有 draft PowerPoint revision 可以排入重新產生工作。")
     if str(presentation.get("artifactStorageKey") or ""):
         raise ValueError("此 PowerPoint revision 已經有 artifact，不需重複排入。")
+    request_payload = {"presentationId": str(presentation.get("id") or ""), "renderRevision": True}
+    if regenerate:
+        request_payload.update({"regenerate": True, "rulesetVersion": quality.RULESET_VERSION})
     return repository.create_job(
         draft_id=str(presentation.get("draftId") or ""),
         template_id=str(presentation.get("templateId") or ""),
         group_key=str(presentation.get("group") or ""),
         training_area=str(presentation.get("area") or ""),
         actor_username=actor_username,
-        request_payload={"presentationId": str(presentation.get("id") or ""), "renderRevision": True},
+        request_payload=request_payload,
+        idempotency_key=idempotency_key,
     )
 
 
