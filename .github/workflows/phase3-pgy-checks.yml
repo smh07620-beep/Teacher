@@ -41,7 +41,19 @@ jobs:
           python -m py_compile *.py
           python -m compileall -q teacher_app tests
       - name: Full Teacher regression and integration suite
-        run: python -m unittest discover -s tests -v
+        id: full_regression
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -v 2>&1 | tee teacher-regression.log
+      - name: Upload full regression failure log
+        if: failure() && steps.full_regression.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teacher-regression-failure-${{ github.run_id }}
+          path: teacher-regression.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Release, schema and ownership contract tests
         run: |
           python -m unittest discover -s tests -p 'test_release_66.py' -v
@@ -149,9 +161,6 @@ jobs:
           ):
               require(text, render, 'render.yaml')
           forbid('autoDeployTrigger: commit', render, 'render.yaml')
-          # Free Render deployment is web-only. Background AI/material workers
-          # are not provisioned by the Blueprint; scheduled email reminders run
-          # in GitHub Actions instead.
           forbid('type: worker', render, 'render.yaml')
           forbid('dockerCommand: python -u material_worker.py', render, 'render.yaml')
           forbid('dockerCommand: python -u ai_question_worker.py', render, 'render.yaml')
