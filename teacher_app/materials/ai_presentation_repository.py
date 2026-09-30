@@ -84,7 +84,10 @@ def sanitize_layout_profile(value: Mapping[str, Any] | None) -> dict[str, Any]:
     placeholder_map = quality.sanitize_placeholder_map(
         payload.get("placeholderMap") if isinstance(payload.get("placeholderMap"), Mapping) else {}
     )
-    return {"layoutMap": result, "placeholderMap": placeholder_map}
+    profile = {"layoutMap": result}
+    if placeholder_map:
+        profile["placeholderMap"] = placeholder_map
+    return profile
 
 
 def _json(kind: str, ph: str) -> str:
