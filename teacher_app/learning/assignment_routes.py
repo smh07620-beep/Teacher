@@ -4,6 +4,7 @@ from __future__ import annotations
 from flask import g, jsonify, request
 
 from teacher_app.common import audit
+from teacher_app.common.auth import has_role
 from teacher_app.common.errors import ApiError
 from teacher_app.learning import assignment_service
 
@@ -26,6 +27,41 @@ def _error(exc: ApiError):
     return jsonify(body), exc.status
 
 
+def _group_leader_scoped(actor) -> bool:
+    """True for a group leader without organization/system-wide assignment scope."""
+    return bool(
+        actor
+        and has_role(actor, "group_leader")
+        and not has_role(actor, "education_admin")
+        and not has_role(actor, "system_admin")
+    )
+
+
+def _normalize_create_payload(actor, payload):
+    """Map leader-facing 'all' to the course's existing group scope.
+
+    ``assignment_service`` remains authoritative for course lookup and scope
+    validation. A leader's 'all personnel' therefore means everyone eligible
+    inside that course/group scope; it never creates an organization-wide row.
+    """
+    data = dict(payload or {})
+    if _group_leader_scoped(actor) and str(data.get("assigneeType") or "").strip().lower() == "all":
+        data["assigneeType"] = "group"
+        data["assigneeKey"] = ""
+    return data
+
+
+def _audience_options_for_actor(actor, options):
+    body = dict(options or {})
+    if _group_leader_scoped(actor):
+        allowed = [str(value) for value in (body.get("allowedAssigneeTypes") or [])]
+        if "all" not in allowed:
+            allowed.append("all")
+        body["allowedAssigneeTypes"] = allowed
+        body["allScope"] = "course_group"
+    return body
+
+
 def register_learning_assignment_routes(owner):
     app = _app(owner)
     if app.extensions.get("teacher_learning_assignment_routes_registered"):
@@ -40,12 +76,14 @@ def register_learning_assignment_routes(owner):
 
     @app.get("/api/learning-assignments/audience-options")
     def learning_assignments_audience_options():
+        actor = _user(owner)
         try:
-            return jsonify(assignment_service.audience_options(
-                _user(owner),
+            options = assignment_service.audience_options(
+                actor,
                 area=request.args.get("area", ""),
                 group=request.args.get("group", ""),
-            ))
+            )
+            return jsonify(_audience_options_for_actor(actor, options))
         except ApiError as exc:
             return _error(exc)
 
@@ -72,7 +110,7 @@ def register_learning_assignment_routes(owner):
         try:
             assignment = assignment_service.create_assignment(
                 actor,
-                request.get_json(silent=True) or {},
+                _normalize_create_payload(actor, request.get_json(silent=True) or {}),
             )
         except ApiError as exc:
             return _error(exc)
