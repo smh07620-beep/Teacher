@@ -1,12 +1,13 @@
-"""Phase 5 quality, idempotency, and render metrics for AI presentation videos."""
+"""Phase 6 quality, idempotency, and render metrics for AI presentation videos."""
 from __future__ import annotations
 
 import hashlib
 import json
 from typing import Any, Mapping
 
-RULESET_VERSION = "video-phase5-v1"
+RULESET_VERSION = "video-phase6-v1"
 _MAX_ISSUES = 60
+_MAX_RENDERER_ATTEMPTS = 8
 
 
 def _clean(value: Any, limit: int = 500) -> str:
@@ -56,6 +57,25 @@ def sanitize_quality_manifest(value: Mapping[str, Any] | None) -> dict[str, Any]
     }
 
 
+def _renderer_attempts(value: Any) -> list[dict[str, str]]:
+    output: list[dict[str, str]] = []
+    for raw in list(value or [])[:_MAX_RENDERER_ATTEMPTS]:
+        if not isinstance(raw, Mapping):
+            continue
+        renderer = _clean(raw.get("renderer"), 80)
+        status = _clean(raw.get("status"), 40)
+        if not renderer or not status:
+            continue
+        output.append(
+            {
+                "renderer": renderer,
+                "status": status,
+                "detail": _clean(raw.get("detail"), 160),
+            }
+        )
+    return output
+
+
 def sanitize_render_metrics(value: Mapping[str, Any] | None) -> dict[str, Any]:
     payload = dict(value or {})
 
@@ -74,6 +94,7 @@ def sanitize_render_metrics(value: Mapping[str, Any] | None) -> dict[str, Any]:
         "ttsSegmentCount": integer("ttsSegmentCount", 500),
         "ffmpegSegmentCount": integer("ffmpegSegmentCount", 500),
         "frameRenderer": _clean(payload.get("frameRenderer"), 80),
+        "rendererAttempts": _renderer_attempts(payload.get("rendererAttempts")),
         "jobId": _clean(payload.get("jobId"), 120),
     }
 
@@ -128,12 +149,25 @@ def evaluate_render(*, prepared_slides: list[Mapping[str, Any]], timeline: list[
         manifest = add_error(manifest, "VTT_MISSING", detail="WebVTT 字幕未完整產生。")
     if "-->" not in str(srt_text or ""):
         manifest = add_error(manifest, "SRT_MISSING", detail="SRT 字幕未完整產生。")
+
     renderer = _clean(frame_renderer, 80)
-    if renderer != "powerpoint-com":
+    if renderer == "libreoffice-headless":
+        manifest = add_warning(
+            manifest,
+            "FRAME_RENDERER_COMPATIBILITY",
+            detail="PowerPoint COM 不可用或未成功，已由 LibreOffice headless 完整匯出投影片；字型與排版相容性請於發布前預覽確認。",
+        )
+    elif renderer == "text-fallback":
         manifest = add_warning(
             manifest,
             "FRAME_RENDERER_FALLBACK",
-            detail="Worker 未能使用 PowerPoint 原始投影片匯出畫面，已改用安全文字畫面；發布前需人工確認。",
+            detail="PowerPoint 與 LibreOffice 都未能完成投影片匯出，已改用安全文字畫面；發布前必須人工確認。",
+        )
+    elif renderer != "powerpoint-com":
+        manifest = add_error(
+            manifest,
+            "FRAME_RENDERER_UNKNOWN",
+            detail="影片使用了未列入允許清單的投影片 renderer。",
         )
     return sanitize_quality_manifest(manifest)
 
