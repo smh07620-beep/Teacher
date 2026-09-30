@@ -4,6 +4,7 @@ gunicorn>=22,<24
 psycopg[binary,pool]>=3.2,<4.0
 boto3>=1.35,<2.0
 requests>=2.32,<3.0
+python-pptx>=1.0,<2.0
 
 google-auth>=2.35,<3.0
 google-api-python-client>=2.150,<3.0
