@@ -10,7 +10,7 @@ from pathlib import Path
 from flask import g, jsonify, request, send_file
 
 from teacher_app.common import audit, scope, scope_filter
-from teacher_app.common.auth import has_permission, has_role
+from teacher_app.common.auth import has_role
 from teacher_app.materials import ai_presentation_jobs
 from teacher_app.materials import ai_presentation_repository as repository
 from teacher_app.materials import ai_presentation_runtime
@@ -20,7 +20,13 @@ from teacher_app.materials import repository as material_repository
 
 
 _TEACHER_APPROVAL_ROLES = {"clinical_teacher", "group_leader"}
-_PUBLISH_ROLES = {"clinical_teacher", "group_leader", "education_admin"}
+_PUBLISH_ROLES = {"clinical_teacher", "group_leader", "education_admin", "system_admin"}
+_PRESENTATION_CAPABILITIES = {
+    "presentation.create": {"clinical_teacher", "group_leader", "education_admin", "system_admin"},
+    "presentation.edit": {"clinical_teacher", "group_leader", "education_admin", "system_admin"},
+    "presentation.approve": {"clinical_teacher", "group_leader"},
+    "presentation.publish": {"clinical_teacher", "group_leader", "education_admin", "system_admin"},
+}
 
 
 def _actor(owner=None):
@@ -36,18 +42,22 @@ def _scope(owner, group: str):
     return denied
 
 
+def _presentation_allowed(user, permission: str) -> bool:
+    return bool(user and any(has_role(user, role) for role in _PRESENTATION_CAPABILITIES.get(permission, set())))
+
+
 def _capability(user, permission: str, message: str):
-    return None if user and has_permission(user, permission) else (jsonify({"error": message}), 403)
+    return None if _presentation_allowed(user, permission) else (jsonify({"error": message}), 403)
 
 
 def _teacher_approval(user):
-    if user and has_permission(user, "presentation.approve") and any(has_role(user, role) for role in _TEACHER_APPROVAL_ROLES):
+    if _presentation_allowed(user, "presentation.approve") and any(has_role(user, role) for role in _TEACHER_APPROVAL_ROLES):
         return None
     return jsonify({"error": "只有臨床教師或組長可核准 AI PowerPoint。"}), 403
 
 
 def _publisher(user):
-    if user and has_permission(user, "presentation.publish") and any(has_role(user, role) for role in _PUBLISH_ROLES):
+    if _presentation_allowed(user, "presentation.publish") and any(has_role(user, role) for role in _PUBLISH_ROLES):
         return None
     return jsonify({"error": "目前角色不可發布 AI PowerPoint。"}), 403
 
@@ -124,6 +134,7 @@ def register_ai_presentation_routes(owner):
         return jsonify({
             "storage": PresentationStorage().capability(), "workerRequired": True,
             "requiresApprovedSlideDraft": True, "teacherApprovalRoles": sorted(_TEACHER_APPROVAL_ROLES),
+            "capabilities": {name: _presentation_allowed(user, name) for name in _PRESENTATION_CAPABILITIES},
         })
 
     @app.get("/api/ai-presentation-templates")
@@ -399,4 +410,4 @@ def register_ai_presentation_routes(owner):
     return app
 
 
-__all__ = ["register_ai_presentation_routes"]
+__all__ = ["register_ai_presentation_routes", "_presentation_allowed"]
