@@ -417,13 +417,34 @@ def _branding_footer(slide, branding: dict[str, Any] | None) -> None:
         value = _clean((branding or {}).get(key), 80)
         if value: parts.append(value)
     revision = str((branding or {}).get("revisionNumber") or "").strip()
-    published = _clean((branding or {}).get("publishedDate"), 40)
+    rendered_date = _clean((branding or {}).get("renderedDate") or (branding or {}).get("publishedDate"), 40)
     if revision: parts.append(f"r{revision}")
-    if published: parts.append(published)
+    if rendered_date: parts.append(rendered_date)
     if not parts:
         return
     frame = _textbox(slide, 0.6, 7.05, 12.0, 0.25, " · ".join(parts))
     for paragraph in frame.paragraphs: paragraph.font.size = Pt(8)
+
+
+def _with_formal_cover(title: str, slides: list[dict]) -> list[dict]:
+    """Prepend a deterministic title cover when authored content does not already start with one."""
+    prepared = list(slides or [])
+    if prepared and str(prepared[0].get("layout") or "").strip().lower() == "title":
+        return prepared
+    cover = {
+        "id": "phase4-cover",
+        "order": 1,
+        "enabled": True,
+        "title": _clean(title, 180) or "AI 教學投影片",
+        "bullets": [],
+        "layout": "title",
+        "blocks": [],
+        "speakerNotes": "",
+    }
+    output = [cover, *prepared]
+    for index, item in enumerate(output, 1):
+        item["order"] = index
+    return output
 
 
 def render_pptx(*, title: str, slides: list[dict], output_path: Path,
@@ -437,6 +458,7 @@ def render_pptx(*, title: str, slides: list[dict], output_path: Path,
         normalize_slides(slides),
         provenance_present=bool(safe_provenance.get("sourceMaterialId") and safe_provenance.get("sourceDraftId")),
     )
+    prepared = _with_formal_cover(title, prepared)
     prs = Presentation(str(template_path)) if template_path else Presentation()
     if template_path:
         _clear_template_slides(prs)
@@ -498,6 +520,7 @@ def _branding_context(*, title: str, group: str, area: str, teacher: str, revisi
         "areaLabel": _clean(area, 80),
         "teacherName": _clean(teacher, 80),
         "revisionNumber": max(1, int(revision or 1)),
+        "renderedDate": time.strftime("%Y-%m-%d", time.gmtime()),
     }
 
 
