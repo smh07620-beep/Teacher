@@ -5,6 +5,9 @@
 google-genai>=1.30,<2.0
 faster-whisper>=1.2,<2.0
 
+# AI PowerPoint rendering stays worker-only; Render Web only validates/enqueues.
+python-pptx>=1.0,<2.0
+
 # Local-only free TTS stack. run_ai_worker_autostart.ps1 installs/synchronizes
 # this file into the shared Worker .venv.
 kokoro>=0.9.4,<1.0
