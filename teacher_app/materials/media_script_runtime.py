@@ -12,7 +12,7 @@ from typing import Any
 
 import requests
 
-from teacher_app.assessments import ai_runtime
+from teacher_app.assessments import ai_runtime, free_ai_fallback
 from teacher_app.common import privacy as ai_privacy
 
 
@@ -77,22 +77,27 @@ def _prompt(*, source_title: str, context: str, focus: str, tone: str, target_mi
 def _groq(settings, prompt: str) -> str:
     if not settings.groq_api_key:
         raise RuntimeError("Groq AI 尚未設定。")
-    response = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers={"Authorization": f"Bearer {settings.groq_api_key}", "Content-Type": "application/json"},
-        json={
-            "model": settings.groq_model,
-            "messages": [
-                {"role": "system", "content": "只根據提供的教材整理醫學檢驗教學講稿，不得補造醫療內容。"},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.2,
-            "max_tokens": 5000,
-        },
-        timeout=180,
-    )
+    try:
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {settings.groq_api_key}", "Content-Type": "application/json"},
+            json={
+                "model": settings.groq_model,
+                "messages": [
+                    {"role": "system", "content": "只根據提供的教材整理醫學檢驗教學講稿，不得補造醫療內容。"},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.2,
+                "max_tokens": 5000,
+            },
+            timeout=180,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Groq provider unavailable：{exc}") from exc
     if response.status_code == 429:
-        raise RuntimeError("Groq 免費 AI 額度/速率已達上限，請稍後再試。")
+        raise RuntimeError("Groq 免費 AI quota/rate limit 已達上限。")
+    if response.status_code in {502, 503, 504}:
+        raise RuntimeError(f"Groq provider unavailable HTTP {response.status_code}。")
     response.raise_for_status()
     data = response.json()
     text = str((((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "")).strip()
@@ -129,23 +134,81 @@ def _gemini(settings, prompt: str) -> str:
     config = None
     if ai_runtime.google_genai_types is not None:
         config = ai_runtime.google_genai_types.GenerateContentConfig(temperature=0.2)
-    response = client.models.generate_content(
-        model=settings.gemini_model,
-        contents=prompt,
-        config=config,
-    )
+    try:
+        response = client.models.generate_content(
+            model=settings.gemini_model,
+            contents=prompt,
+            config=config,
+        )
+    except Exception as exc:
+        if free_ai_fallback.is_retryable_provider_error(exc):
+            raise RuntimeError(f"Gemini provider unavailable/rate limit：{exc}") from exc
+        raise
     text = str(getattr(response, "text", None) or "").strip()
     if not text:
         raise RuntimeError("AI 沒有回傳講稿內容。")
     return text
 
 
+def _generate_body_with_fallback(settings, provider: str, prompt: str, progress_callback=None) -> tuple[str, dict[str, Any]]:
+    local = free_ai_fallback.LocalFallbackSettings.from_env()
+    chain = [provider]
+    if local.enabled:
+        for candidate in free_ai_fallback.provider_chain(provider, settings=settings, local=local):
+            if candidate not in chain:
+                chain.append(candidate)
+
+    last_error: Exception | None = None
+    for index, candidate in enumerate(chain):
+        try:
+            if candidate == "groq":
+                body = _groq(settings, prompt)
+            elif candidate == "gemini":
+                body = _gemini(settings, prompt)
+            elif candidate == "openai":
+                body = _openai(settings, prompt)
+            elif candidate == "ollama":
+                body = free_ai_fallback.generate_text_with_fallback(
+                    prompt,
+                    settings=settings,
+                    primary="ollama",
+                    cloud_callers={},
+                )[0]
+            else:
+                raise RuntimeError("未支援的 AI provider。")
+            model = (
+                ai_runtime.ai_model_name(settings)
+                if candidate == provider
+                else free_ai_fallback.provider_model(candidate, settings=settings, local=local)
+            )
+            return body, {
+                "provider": candidate,
+                "model": model,
+                "fallbackUsed": index > 0,
+                "attemptedProviders": chain[: index + 1],
+            }
+        except Exception as exc:
+            last_error = exc
+            if not free_ai_fallback.is_retryable_provider_error(exc):
+                raise
+            if index + 1 < len(chain) and progress_callback:
+                progress_callback(
+                    60,
+                    "切換免費 AI 備援",
+                    "主要免費 AI 額度/速率或服務暫時不可用，正在改用下一個免費備援。",
+                )
+    raise RuntimeError(
+        "免費 AI 目前暫時無法使用：雲端額度/速率已達限制，且本機 AI 備援尚未完成工作。"
+    ) from last_error
+
+
 def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", target_minutes: int = 5,
                     progress_callback=None) -> dict[str, Any]:
-    if not ai_privacy.external_enabled():
-        raise RuntimeError("院方目前已停用外部 AI 處理。")
     settings = ai_runtime.ai_settings()
-    provider = ai_runtime.active_ai_provider(settings)
+    local_ready = free_ai_fallback.local_ai_is_configured()
+    if not ai_privacy.external_enabled() and not local_ready:
+        raise RuntimeError("院方目前已停用外部 AI 處理，且本機 AI 備援尚未啟用。")
+    provider = ai_runtime.active_ai_provider(settings) if ai_privacy.external_enabled() else "ollama"
 
     if progress_callback:
         progress_callback(15, "讀取教材", "正在讀取 Worker 產生的文字索引或原始教材文字")
@@ -168,12 +231,12 @@ def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", tar
 
     if progress_callback:
         progress_callback(55, "AI 產生講稿", f"使用 {ai_runtime.ai_model_name(settings)} 整理講稿草稿")
-    if provider == "groq":
-        body = _groq(settings, prompt)
-    elif provider == "gemini":
-        body = _gemini(settings, prompt)
-    else:
-        body = _openai(settings, prompt)
+    body, provider_meta = _generate_body_with_fallback(
+        settings,
+        provider,
+        prompt,
+        progress_callback=progress_callback,
+    )
 
     body = ai_privacy.deidentify_external_text(body).strip()
     if len(body) < 80:
@@ -196,8 +259,9 @@ def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", tar
         "sourceTitle": title,
         "sourceChars": int(source_chars or len(text)),
         "sourceChunks": source_chunks,
-        "provider": provider,
-        "model": ai_runtime.ai_model_name(settings),
+        "provider": provider_meta["provider"],
+        "model": provider_meta["model"],
+        "fallbackUsed": bool(provider_meta.get("fallbackUsed")),
         "targetMinutes": int(target_minutes),
         "tone": tone,
         "requiresTeacherReview": True,
