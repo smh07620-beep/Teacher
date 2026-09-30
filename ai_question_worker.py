@@ -10,6 +10,7 @@ from teacher_app.assessments.question_runtime import build_canonical_question_ru
 from teacher_app.materials import (
     ai_presentation_jobs,
     ai_video_jobs,
+    ai_video_renderer,
     media_audio_jobs,
     media_script_jobs,
     media_subtitle_jobs,
@@ -28,6 +29,15 @@ def log(message: str) -> None:
     print(f"[teacher-ai-worker] {message}", flush=True)
 
 
+def _renderer_status_line() -> str:
+    summary = ai_video_renderer.capability_summary()
+    states = ",".join(
+        f"{item.get('id')}:{'candidate' if item.get('candidate') else 'unavailable'}"
+        for item in summary.get("candidates", [])
+    )
+    return f"video_renderers={states} selected_candidate={summary.get('selectedCandidate') or 'text-fallback'}"
+
+
 def main() -> int:
     question_runtime = build_canonical_question_runtime()
     free_ai_fallback.install_question_runtime_fallback(question_runtime)
@@ -44,6 +54,7 @@ def main() -> int:
         "started queues=ai_questions,media_scripts,ai_presentations,ai_videos,media_audio,media_subtitles "
         "free_fallback=enabled"
     )
+    log(_renderer_status_line())
     while True:
         try:
             now = time.monotonic()
