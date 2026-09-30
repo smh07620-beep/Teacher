@@ -1,13 +1,12 @@
-"""AI-assisted lecture-script generation from existing teaching materials.
+"""AI-assisted teacher draft generation from existing teaching materials.
 
-The runtime deliberately reuses the canonical AI material extraction/privacy
-helpers but owns a separate prompt/output contract from assessment questions.
-Generated text is always a draft and must be reviewed by a teacher before it
-can become an approved media script.
+The runtime reuses canonical AI extraction/privacy helpers and the dedicated AI
+Worker.  It supports several teacher-authoring draft types while preserving the
+original lecture-script contract.  Every result is a draft and must be reviewed
+by a teacher before approval or publication.
 """
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import requests
@@ -18,6 +17,25 @@ from teacher_app.common import privacy as ai_privacy
 
 MAX_SCRIPT_SOURCE_CHARS = 22000
 MAX_SCRIPT_CHUNKS = 14
+OUTPUT_TYPES = {
+    "handout": "教學講義",
+    "summary": "重點摘要",
+    "slides": "投影片大綱",
+    "script": "教學講稿",
+    "quiz": "測驗題草稿",
+    "objectives": "課程學習目標",
+}
+
+
+def normalize_output_type(value: Any) -> str:
+    output_type = str(value or "script").strip().lower()
+    if output_type not in OUTPUT_TYPES:
+        raise ValueError("不支援的 AI 教材產出類型。")
+    return output_type
+
+
+def output_type_label(value: Any) -> str:
+    return OUTPUT_TYPES.get(str(value or "").strip().lower(), "AI 教材草稿")
 
 
 def _bounded_source_chunks(entry: dict, text: str, focus: str) -> list[dict]:
@@ -44,8 +62,39 @@ def _bounded_source_chunks(entry: dict, text: str, focus: str) -> list[dict]:
     return selected
 
 
-def _prompt(*, source_title: str, context: str, focus: str, tone: str, target_minutes: int) -> str:
+def _draft_instruction(output_type: str, *, target_minutes: int) -> str:
     target_chars = max(700, min(9000, int(target_minutes) * 280))
+    return {
+        "handout": (
+            "整理成可供學員閱讀的教學講義草稿。使用清楚標題、重點條列、必要步驟與警示；"
+            "不可補造來源沒有的內容。"
+        ),
+        "summary": (
+            "整理成精簡重點摘要。先列 5–10 個核心重點，再整理必要流程、數值、警示與易錯點；"
+            "不要為了篇幅加入來源沒有的資訊。"
+        ),
+        "slides": (
+            "整理成投影片大綱。請用「第 1 張、第 2 張……」方式規劃每張標題與 3–6 個重點；"
+            "只做大綱，不虛構圖片、病例或數據。"
+        ),
+        "quiz": (
+            "整理成教師可再審核的測驗題草稿。產生 5 題，混合單選、是非或簡答；"
+            "每題附答案與簡短依據，題目只能取材自提供來源。不要直接發布到正式題庫。"
+        ),
+        "objectives": (
+            "整理成課程學習目標草稿。列出 3–8 項可觀察、可評量的學習目標，必要時分為知識、技能、"
+            "態度；不得加入來源未涵蓋的能力要求。"
+        ),
+        "script": (
+            f"整理成老師可再編修、可自然朗讀的繁體中文口語講稿草稿。目標約 {target_minutes} 分鐘，"
+            f"約 {target_chars} 個中文字上下；可依教材資訊量縮短，不可為湊長度而新增內容。"
+        ),
+    }[output_type]
+
+
+def _prompt(*, source_title: str, context: str, focus: str, tone: str, target_minutes: int,
+            output_type: str = "script") -> str:
+    output_type = normalize_output_type(output_type)
     focus_line = ai_privacy.deidentify_external_text(focus).strip()
     tone = str(tone or "clinical").strip().lower()
     tone_rule = {
@@ -53,20 +102,26 @@ def _prompt(*, source_title: str, context: str, focus: str, tone: str, target_mi
         "friendly": "口語自然但維持醫療專業，不使用過度娛樂化或誇大語氣。",
         "brief": "精簡直接，只保留核心概念、步驟、警示與結論。",
     }.get(tone, "專業、清楚、像臨床教師實際授課。")
-    return f"""你是醫學檢驗教學講稿編輯助手。請只根據下方【教材來源】整理一份老師可再編修的繁體中文口語講稿草稿。
+    draft_rule = _draft_instruction(output_type, target_minutes=target_minutes)
+    final_note = (
+        "※ 本講稿需由授課教師確認後方可用於正式教學影音。"
+        if output_type == "script"
+        else "※ 本內容為 AI 草稿，需由教師確認後方可發布。"
+    )
+    return f"""你是醫學檢驗教師的教材編輯助手。請只根據下方【教材來源】產生「{output_type_label(output_type)}」草稿。
 
 必要規則：
 1. 不得加入教材來源沒有支持的醫療事實、數值、步驟、法規、診斷或治療建議。
 2. 教材中的數字、單位、警示、條件與流程不得自行改寫成不同意思。
 3. 如果教材資訊不足，直接寫「【需教師補充】」，不要猜測。
 4. 病人或人員可識別資訊不得出現在輸出；來源已經過系統去識別化，仍請避免重新推測身份。
-5. 這只是草稿，結尾加入「※ 本講稿需由授課教師確認後方可用於正式教學影音。」
+5. 這只是草稿，結尾加入「{final_note}」
 6. 不要輸出 JSON，不要使用 markdown code fence。
-7. 可使用短標題與自然段落，讓老師容易直接修改與朗讀。
+7. 可使用短標題、條列與自然段落，讓老師容易直接修改。
 
+產出要求：{draft_rule}
 教材名稱：{source_title}
-希望語氣：{tone_rule}
-目標長度：約 {target_minutes} 分鐘，約 {target_chars} 個中文字上下，可依教材資訊量縮短，不可為湊長度而新增內容。
+文字風格：{tone_rule}
 特別聚焦：{focus_line or '依教材順序完整整理'}
 
 【教材來源】
@@ -84,7 +139,7 @@ def _groq(settings, prompt: str) -> str:
             json={
                 "model": settings.groq_model,
                 "messages": [
-                    {"role": "system", "content": "只根據提供的教材整理醫學檢驗教學講稿，不得補造醫療內容。"},
+                    {"role": "system", "content": "只根據提供的教材整理醫學檢驗教學內容，不得補造醫療內容。"},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.2,
@@ -102,7 +157,7 @@ def _groq(settings, prompt: str) -> str:
     data = response.json()
     text = str((((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "")).strip()
     if not text:
-        raise RuntimeError("AI 沒有回傳講稿內容。")
+        raise RuntimeError("AI 沒有回傳教材草稿內容。")
     return text
 
 
@@ -123,7 +178,7 @@ def _openai(settings, prompt: str) -> str:
     response.raise_for_status()
     text = ai_runtime._response_output_text(response.json()).strip()
     if not text:
-        raise RuntimeError("AI 沒有回傳講稿內容。")
+        raise RuntimeError("AI 沒有回傳教材草稿內容。")
     return text
 
 
@@ -146,7 +201,7 @@ def _gemini(settings, prompt: str) -> str:
         raise
     text = str(getattr(response, "text", None) or "").strip()
     if not text:
-        raise RuntimeError("AI 沒有回傳講稿內容。")
+        raise RuntimeError("AI 沒有回傳教材草稿內容。")
     return text
 
 
@@ -203,7 +258,9 @@ def _generate_body_with_fallback(settings, provider: str, prompt: str, progress_
 
 
 def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", target_minutes: int = 5,
-                    progress_callback=None) -> dict[str, Any]:
+                    output_type: str = "script", progress_callback=None) -> dict[str, Any]:
+    output_type = normalize_output_type(output_type)
+    label = output_type_label(output_type)
     settings = ai_runtime.ai_settings()
     local_ready = free_ai_fallback.local_ai_is_configured()
     if not ai_privacy.external_enabled() and not local_ready:
@@ -216,7 +273,7 @@ def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", tar
     focus = ai_privacy.deidentify_external_text(focus).strip()[:500]
     chunks = _bounded_source_chunks(entry, text, focus)
     if not chunks:
-        raise RuntimeError("教材沒有足夠的可用文字，無法產生講稿。")
+        raise RuntimeError(f"教材沒有足夠的可用文字，無法產生{label}。")
     context = ai_runtime.format_retrieval_context(chunks)
     title = ai_privacy.deidentify_external_text(
         entry.get("title") or entry.get("filename") or "教材"
@@ -227,10 +284,11 @@ def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", tar
         focus=focus,
         tone=tone,
         target_minutes=target_minutes,
+        output_type=output_type,
     )
 
     if progress_callback:
-        progress_callback(55, "AI 產生講稿", f"使用 {ai_runtime.ai_model_name(settings)} 整理講稿草稿")
+        progress_callback(55, f"AI 產生{label}", f"使用免費 AI 產生{label}草稿")
     body, provider_meta = _generate_body_with_fallback(
         settings,
         provider,
@@ -239,8 +297,8 @@ def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", tar
     )
 
     body = ai_privacy.deidentify_external_text(body).strip()
-    if len(body) < 80:
-        raise RuntimeError("AI 回傳的講稿內容過短，請調整教材或聚焦內容後再試。")
+    if len(body) < 60:
+        raise RuntimeError(f"AI 回傳的{label}內容過短，請調整教材或聚焦內容後再試。")
     if progress_callback:
         progress_callback(90, "整理來源", "正在附上教材來源與教師確認標記")
 
@@ -253,8 +311,10 @@ def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", tar
         for chunk in chunks
     ]
     return {
-        "title": f"{title}｜教學講稿",
+        "title": f"{title}｜{label}",
         "body": body[:40000],
+        "outputType": output_type,
+        "outputLabel": label,
         "sourceMaterialId": str(entry.get("id") or ""),
         "sourceTitle": title,
         "sourceChars": int(source_chars or len(text)),
@@ -268,4 +328,6 @@ def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", tar
     }
 
 
-__all__ = ["generate_script"]
+__all__ = [
+    "OUTPUT_TYPES", "generate_script", "normalize_output_type", "output_type_label",
+]

@@ -1,4 +1,4 @@
-"""Persistence for teacher media-script generation jobs and reviewed drafts."""
+"""Persistence for teacher AI material-generation jobs and reviewed drafts."""
 from __future__ import annotations
 
 import datetime as dt
@@ -11,6 +11,7 @@ from teacher_app.common import db as common_db
 
 ACTIVE_STATUSES = ("queued", "processing")
 SCRIPT_STATUSES = {"draft", "approved"}
+DRAFT_TYPES = {"handout", "summary", "slides", "script", "quiz", "objectives"}
 
 
 def now() -> str:
@@ -59,6 +60,11 @@ def project_script(row) -> dict | None:
     item["area"] = item.pop("training_area", "")
     item["sourceJobId"] = item.pop("source_job_id", "")
     item["sourceChunks"] = _decode(item.pop("source_chunks_json", []), [])
+    item["draftType"] = str(item.pop("draft_type", "script") or "script")
+    item["provider"] = str(item.pop("provider", "") or "")
+    item["model"] = str(item.pop("model", "") or "")
+    item["fallbackUsed"] = bool(item.pop("fallback_used", False))
+    item["publicationMaterialId"] = str(item.pop("publication_material_id", "") or "")
     item["createdBy"] = item.pop("created_by", "")
     item["updatedBy"] = item.pop("updated_by", "")
     item["approvedBy"] = item.pop("approved_by", "")
@@ -71,6 +77,9 @@ def project_script(row) -> dict | None:
 def create_job(values: Mapping[str, Any]) -> dict:
     stamp = str(values.get("created_at") or now())
     request_json = json.dumps(values.get("request") or {}, ensure_ascii=False)
+    output_type = str((values.get("request") or {}).get("outputType") or "script")
+    stage = "等待產生講稿" if output_type == "script" else "等待 AI 教材草稿"
+    detail = "工作已排入 AI 佇列"
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
         json_expr = f"{ph}::jsonb" if kind == "postgres" else ph
@@ -82,7 +91,7 @@ def create_job(values: Mapping[str, Any]) -> dict:
             f"{ph},{ph},{ph},{ph},{ph},{ph},{json_expr},{ph},{ph},{ph},{json_expr},{ph},{ph},{ph},{ph},{ph},{ph},{ph})",
             (
                 values["id"], values["material_id"], values["group_key"], values["training_area"],
-                values["actor_username"], "queued", request_json, 0, "等待產生講稿", "工作已排入 AI 佇列",
+                values["actor_username"], "queued", request_json, 0, stage, detail,
                 "{}", "", "", 0, stamp, stamp, "", "",
             ),
         )
@@ -132,7 +141,7 @@ def claim(job_id: str, token: str) -> dict | None:
         cursor = conn.execute(
             f"UPDATE media_script_jobs SET status={ph},claim_token={ph},attempts=attempts+1,started_at={ph},updated_at={ph},"
             f"progress_stage={ph},progress_detail={ph} WHERE id={ph} AND status={ph}",
-            ("processing", token, stamp, stamp, "講稿處理中", "AI Worker 已取得工作", job_id, "queued"),
+            ("processing", token, stamp, stamp, "AI 教材處理中", "AI Worker 已取得工作", job_id, "queued"),
         )
         if not int(getattr(cursor, "rowcount", 0) or 0):
             return None
@@ -156,6 +165,7 @@ def set_progress(job_id: str, token: str, percent: float, stage: str, detail: st
 def complete(job_id: str, token: str, result: Mapping[str, Any]) -> bool:
     stamp = now()
     payload = json.dumps(dict(result), ensure_ascii=False)
+    label = str(result.get("outputLabel") or "AI 教材草稿")
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
         result_expr = f"{ph}::jsonb" if kind == "postgres" else ph
@@ -163,20 +173,20 @@ def complete(job_id: str, token: str, result: Mapping[str, Any]) -> bool:
             f"UPDATE media_script_jobs SET status={ph},progress_percent={ph},progress_stage={ph},progress_detail={ph},"
             f"result_json={result_expr},error={ph},completed_at={ph},updated_at={ph} "
             f"WHERE id={ph} AND status={ph} AND claim_token={ph}",
-            ("completed", 100, "講稿草稿完成", "請由老師確認、編修並核准後再進行語音生成", payload, "", stamp, stamp, job_id, "processing", token),
+            ("completed", 100, f"{label}完成", "請由老師確認、編修並核准後再發布", payload, "", stamp, stamp, job_id, "processing", token),
         )
     return bool(int(getattr(cursor, "rowcount", 0) or 0))
 
 
 def fail(job_id: str, token: str, error: str) -> bool:
     stamp = now()
-    message = str(error or "講稿產生失敗")[:2000]
+    message = str(error or "AI 教材草稿產生失敗")[:2000]
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
         cursor = conn.execute(
             f"UPDATE media_script_jobs SET status={ph},progress_percent={ph},progress_stage={ph},progress_detail={ph},error={ph},"
             f"completed_at={ph},updated_at={ph} WHERE id={ph} AND status={ph} AND claim_token={ph}",
-            ("failed", 0, "講稿產生失敗", message[:1000], message, stamp, stamp, job_id, "processing", token),
+            ("failed", 0, "AI 教材產生失敗", message[:1000], message, stamp, stamp, job_id, "processing", token),
         )
     return bool(int(getattr(cursor, "rowcount", 0) or 0))
 
@@ -199,25 +209,34 @@ def requeue_stale_processing(cutoff: str) -> int:
         cursor = conn.execute(
             f"UPDATE media_script_jobs SET status={ph},claim_token={ph},started_at={ph},updated_at={ph},progress_percent={ph},"
             f"progress_stage={ph},progress_detail={ph} WHERE status={ph} AND updated_at<{ph}",
-            ("queued", "", "", stamp, 0, "等待產生講稿", "前一個 AI Worker 已中斷，工作已重新排入佇列", "processing", cutoff),
+            ("queued", "", "", stamp, 0, "等待 AI 教材草稿", "前一個 AI Worker 已中斷，工作已重新排入佇列", "processing", cutoff),
         )
     return int(getattr(cursor, "rowcount", 0) or 0)
 
 
 def create_script(*, material_id: str, group_key: str, training_area: str, title: str, body: str,
-                  source_job_id: str, source_chunks: list, actor_username: str) -> dict:
+                  source_job_id: str, source_chunks: list, actor_username: str,
+                  draft_type: str = "script", provider: str = "", model: str = "",
+                  fallback_used: bool = False, publication_material_id: str = "") -> dict:
+    draft_type = str(draft_type or "script").strip().lower()
+    if draft_type not in DRAFT_TYPES:
+        raise ValueError("不支援的 AI 教材草稿類型")
     script_id = f"mscript-{uuid.uuid4().hex}"
     stamp = now()
     chunks = json.dumps(source_chunks or [], ensure_ascii=False)
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
         chunks_expr = f"{ph}::jsonb" if kind == "postgres" else ph
+        fallback_value = bool(fallback_used) if kind == "postgres" else int(bool(fallback_used))
         conn.execute(
             "INSERT INTO media_scripts(id,material_id,group_key,training_area,title,body,status,source_job_id,source_chunks_json,"
-            "created_by,updated_by,approved_by,created_at,updated_at,approved_at) VALUES("
-            f"{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{chunks_expr},{ph},{ph},{ph},{ph},{ph},{ph})",
-            (script_id, material_id, group_key, training_area, title, body, "draft", source_job_id, chunks,
-             actor_username, actor_username, "", stamp, stamp, ""),
+            "draft_type,provider,model,fallback_used,publication_material_id,created_by,updated_by,approved_by,created_at,updated_at,approved_at) VALUES("
+            f"{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{chunks_expr},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})",
+            (
+                script_id, material_id, group_key, training_area, title, body, "draft", source_job_id, chunks,
+                draft_type, str(provider or "")[:80], str(model or "")[:160], fallback_value,
+                str(publication_material_id or "")[:120], actor_username, actor_username, "", stamp, stamp, "",
+            ),
         )
     return get_script(script_id) or {}
 
@@ -230,6 +249,18 @@ def get_script(script_id: str) -> dict | None:
 
 
 def list_scripts(material_id: str, limit: int = 30) -> list[dict]:
+    """Return only real lecture scripts so narration cannot see other AI drafts."""
+    safe_limit = max(1, min(100, int(limit)))
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        rows = conn.execute(
+            f"SELECT * FROM media_scripts WHERE material_id={ph} AND draft_type={ph} ORDER BY updated_at DESC LIMIT {ph}",
+            (material_id, "script", safe_limit),
+        ).fetchall()
+    return [project_script(row) for row in rows]
+
+
+def list_drafts(material_id: str, limit: int = 50) -> list[dict]:
     safe_limit = max(1, min(100, int(limit)))
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -240,17 +271,26 @@ def list_scripts(material_id: str, limit: int = 30) -> list[dict]:
     return [project_script(row) for row in rows]
 
 
-def update_script(script_id: str, *, title: str, body: str, status: str, actor_username: str) -> dict | None:
+def update_script(script_id: str, *, title: str, body: str, status: str, actor_username: str,
+                  publication_material_id: str | None = None) -> dict | None:
     status = status if status in SCRIPT_STATUSES else "draft"
     stamp = now()
     approved_by = actor_username if status == "approved" else ""
     approved_at = stamp if status == "approved" else ""
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
+        fields = [
+            f"title={ph}", f"body={ph}", f"status={ph}", f"updated_by={ph}", f"updated_at={ph}",
+            f"approved_by={ph}", f"approved_at={ph}",
+        ]
+        params: list[Any] = [title, body, status, actor_username, stamp, approved_by, approved_at]
+        if publication_material_id is not None:
+            fields.append(f"publication_material_id={ph}")
+            params.append(str(publication_material_id or "")[:120])
+        params.append(script_id)
         cursor = conn.execute(
-            f"UPDATE media_scripts SET title={ph},body={ph},status={ph},updated_by={ph},updated_at={ph},approved_by={ph},approved_at={ph} "
-            f"WHERE id={ph}",
-            (title, body, status, actor_username, stamp, approved_by, approved_at, script_id),
+            f"UPDATE media_scripts SET {','.join(fields)} WHERE id={ph}",
+            tuple(params),
         )
         if not int(getattr(cursor, "rowcount", 0) or 0):
             return None
@@ -258,7 +298,7 @@ def update_script(script_id: str, *, title: str, body: str, status: str, actor_u
 
 
 __all__ = [
-    "ACTIVE_STATUSES", "SCRIPT_STATUSES", "active_count_for_actor", "claim", "complete", "create_job",
-    "create_script", "fail", "get_job", "get_script", "list_queued", "list_scripts", "now",
+    "ACTIVE_STATUSES", "DRAFT_TYPES", "SCRIPT_STATUSES", "active_count_for_actor", "claim", "complete", "create_job",
+    "create_script", "fail", "get_job", "get_script", "list_drafts", "list_queued", "list_scripts", "now",
     "recent_count_for_actor", "requeue_stale_processing", "set_progress", "total_active_count", "update_script",
 ]

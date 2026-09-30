@@ -4,7 +4,6 @@ from __future__ import annotations
 from flask import g, jsonify, request
 
 from teacher_app.common import audit, scope_filter
-from teacher_app.common.auth import has_role
 from teacher_app.materials import media_script_jobs, media_script_repository
 from teacher_app.materials import repository as material_repository
 
@@ -26,8 +25,9 @@ def _public_script(script: dict) -> dict:
     return {
         key: script.get(key)
         for key in (
-            "id", "materialId", "group", "area", "title", "body", "status", "sourceJobId",
-            "sourceChunks", "createdBy", "updatedBy", "approvedBy", "createdAt", "updatedAt", "approvedAt",
+            "id", "materialId", "group", "area", "draftType", "title", "body", "status", "sourceJobId",
+            "sourceChunks", "provider", "model", "fallbackUsed", "publicationMaterialId",
+            "createdBy", "updatedBy", "approvedBy", "createdAt", "updatedAt", "approvedAt",
         )
     }
 
@@ -43,6 +43,7 @@ def register_media_script_routes(owner):
         if not user:
             return jsonify({"error": "請先登入。", "loginRequired": True}), 401
         body = request.get_json(silent=True) or {}
+        body["outputType"] = "script"
         material_id = str(body.get("materialId") or "").strip()
         material = material_repository.get_material(material_id) if material_id else None
         # Media authoring is a pre-publication workflow. A teacher may prepare
@@ -127,6 +128,10 @@ def register_media_script_routes(owner):
             source_job_id=job_id,
             source_chunks=list(result.get("sourceChunks") or []),
             actor_username=str(user.get("username") or ""),
+            draft_type="script",
+            provider=str(result.get("provider") or ""),
+            model=str(result.get("model") or ""),
+            fallback_used=bool(result.get("fallbackUsed")),
         )
         audit.record_event(
             actor=user,
@@ -144,7 +149,7 @@ def register_media_script_routes(owner):
         if not user:
             return jsonify({"error": "請先登入。", "loginRequired": True}), 401
         current = media_script_repository.get_script(str(script_id))
-        if not current:
+        if not current or str(current.get("draftType") or "script") != "script":
             return jsonify({"error": "找不到講稿"}), 404
         denied = _scope(owner, str(current.get("group") or ""))
         if denied:

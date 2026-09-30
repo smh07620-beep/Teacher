@@ -1,0 +1,426 @@
+/* Teacher AI material assistant: source upload/material -> AI draft -> teacher review -> explicit publication. */
+(async function () {
+  'use strict';
+
+  const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));
+  const roles = R.roles instanceof Set ? R.roles : new Set();
+  const has = permission => typeof R.hasPermission === 'function' && R.hasPermission(permission);
+  const teacherRole = ['clinical_teacher','group_leader','education_admin'].some(role => roles.has(role));
+  if (!teacherRole || !has('material.manage')) return;
+
+  const TYPE_LABELS = Object.freeze({
+    handout: '教學講義',
+    summary: '重點摘要',
+    slides: '投影片大綱',
+    script: '教學講稿',
+    quiz: '測驗題草稿',
+    objectives: '課程學習目標',
+  });
+
+  let materials = [];
+  let activeJobId = '';
+  let activeDraft = null;
+  let pollToken = 0;
+
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[char]));
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  function currentScope() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      area: params.get('area') || window.currentTrainingArea || 'internal',
+      group: params.get('group') || window.currentGroupKey || 'grpBio',
+    };
+  }
+
+  function status(message, tone = 'normal') {
+    const node = document.getElementById('teacher-ai-material-status-1014');
+    if (!node) return;
+    node.textContent = message;
+    node.className = tone === 'error'
+      ? 'text-sm font-bold text-rose-700'
+      : tone === 'success'
+        ? 'text-sm font-bold text-emerald-700'
+        : 'text-sm text-slate-600';
+  }
+
+  function setBusy(busy) {
+    ['teacher-ai-material-generate-1014','teacher-ai-material-upload-1014','teacher-ai-material-save-1014',
+     'teacher-ai-material-approve-1014','teacher-ai-material-publish-1014'].forEach(id => {
+      const button = document.getElementById(id);
+      if (button) button.disabled = busy;
+    });
+  }
+
+  function materialLabel(item) {
+    const scope = item.groupLabel || item.group || '';
+    const state = item.active === false ? '｜草稿來源' : '';
+    return `${scope ? `${scope}｜` : ''}${item.title || item.filename || item.id}${state}`;
+  }
+
+  async function fetchMaterials() {
+    const response = await fetch('/api/slides/admin', {credentials:'same-origin', cache:'no-store'});
+    const data = await response.json().catch(() => []);
+    if (!response.ok) throw new Error(data.error || '無法讀取教材清單');
+    materials = (Array.isArray(data) ? data : []).filter(item => !item.isBuiltin);
+    return materials;
+  }
+
+  async function paintMaterialOptions(preferredId = '') {
+    const select = document.getElementById('teacher-ai-material-source-1014');
+    if (!select) return;
+    const previous = preferredId || select.value;
+    select.innerHTML = '<option value="">選擇既有教材…</option>';
+    try {
+      await fetchMaterials();
+      const {area, group} = currentScope();
+      const ordered = [...materials].sort((a, b) => {
+        const score = item => (String(item.area || '') === String(area) ? 2 : 0) + (String(item.group || '') === String(group) ? 4 : 0);
+        return score(b) - score(a) || materialLabel(a).localeCompare(materialLabel(b), 'zh-Hant');
+      });
+      ordered.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.id || '';
+        option.textContent = materialLabel(item);
+        select.appendChild(option);
+      });
+      if ([...select.options].some(option => option.value === previous)) select.value = previous;
+    } catch (error) {
+      status(`教材清單讀取失敗：${error.message}`, 'error');
+    }
+  }
+
+  async function pollMaterialJob(jobId, token, label) {
+    for (let attempt = 0; attempt < 180 && token === pollToken; attempt += 1) {
+      const response = await fetch(`/api/material-jobs/${encodeURIComponent(jobId)}`, {credentials:'same-origin', cache:'no-store'});
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || '無法讀取教材背景工作');
+      const state = String(data.status || 'queued');
+      status(`${label}｜${data.stage || state}${data.detail ? `｜${data.detail}` : ''}`);
+      if (state === 'completed') return data;
+      if (['failed','cancelled'].includes(state)) throw new Error(data.error || data.detail || `${label}失敗`);
+      await sleep(2200);
+    }
+    throw new Error(`${label}等待逾時，工作仍可能在背景繼續。`);
+  }
+
+  async function uploadSource() {
+    const input = document.getElementById('teacher-ai-material-file-1014');
+    const file = input?.files?.[0];
+    if (!file) return status('請先選擇 PDF、Word、PPT、圖片或文字資料。', 'error');
+    if (!window.MaterialUploadClient?.enqueue) return status('教材安全上傳元件尚未載入。', 'error');
+    const {area, group} = currentScope();
+    const title = file.name.replace(/\.[^.]+$/, '') || file.name;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('title', title);
+    fd.append('desc', 'AI 教材助手來源；教師確認前不提供學員使用。');
+    fd.append('group', group);
+    fd.append('area', area);
+    fd.append('courseId', '');
+    fd.append('category', '');
+    fd.append('materialType', 'standard');
+    setBusy(true);
+    const token = ++pollToken;
+    try {
+      status(`正在安全上傳「${file.name}」…`);
+      const queued = await window.MaterialUploadClient.enqueue(fd, {
+        fileName: file.name,
+        onProgress: event => status(`安全上傳 ${event.percent}%｜${file.name}`),
+      });
+      const jobId = queued.jobId || '';
+      const materialId = queued.materialId || '';
+      if (!jobId || !materialId) throw new Error('伺服器沒有回傳教材工作 ID');
+      await pollMaterialJob(jobId, token, '來源教材處理中');
+      // AI authoring source must not become learner-visible merely because a
+      // teacher uploaded it for drafting. Publication remains explicit.
+      const patch = await fetch(`/api/slides/${encodeURIComponent(materialId)}`, {
+        method:'PATCH', credentials:'same-origin', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({active:false, title}),
+      });
+      const patchBody = await patch.json().catch(() => ({}));
+      if (!patch.ok) throw new Error(patchBody.error || '無法將來源教材保持為草稿狀態');
+      await paintMaterialOptions(materialId);
+      input.value = '';
+      status('✅ 來源資料已完成處理並保持為草稿，可直接產生 AI 教材。', 'success');
+    } catch (error) {
+      status(`來源資料處理失敗：${error.message}`, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function renderSource(result) {
+    const host = document.getElementById('teacher-ai-material-source-info-1014');
+    if (!host) return;
+    const chunks = Array.isArray(result?.sourceChunks) ? result.sourceChunks : [];
+    const fallback = result?.fallbackUsed ? '｜已使用免費備援' : '';
+    host.innerHTML = `
+      <div><b>來源教材：</b>${escapeHtml(result?.sourceTitle || '')}</div>
+      <div><b>產出：</b>${escapeHtml(result?.outputLabel || TYPE_LABELS[result?.outputType] || '')}</div>
+      <div><b>AI：</b>${escapeHtml(result?.provider || '')} / ${escapeHtml(result?.model || '')}${escapeHtml(fallback)}</div>
+      <details class="mt-2"><summary class="cursor-pointer font-bold">？查看來源段落</summary><div class="mt-1">${chunks.length ? chunks.map(chunk => escapeHtml(chunk.chunkId || chunk.section || '')).join('、') : '—'}</div></details>
+      <div class="mt-2 font-bold text-amber-800">⚠️ AI 只產生草稿；必須由教師確認後才能核准或發布。</div>`;
+    host.classList.remove('hidden');
+  }
+
+  function showEditor(result) {
+    const editor = document.getElementById('teacher-ai-material-editor-1014');
+    const title = document.getElementById('teacher-ai-material-title-1014');
+    const body = document.getElementById('teacher-ai-material-body-1014');
+    if (title) title.value = result?.title || 'AI 教材草稿';
+    if (body) body.value = result?.body || '';
+    editor?.classList.remove('hidden');
+    activeDraft = null;
+    renderSource(result || {});
+    syncEditorButtons();
+  }
+
+  function syncEditorButtons() {
+    const approve = document.getElementById('teacher-ai-material-approve-1014');
+    const publish = document.getElementById('teacher-ai-material-publish-1014');
+    if (approve) approve.disabled = !activeDraft || activeDraft.status === 'approved';
+    if (publish) publish.disabled = !activeDraft || activeDraft.status !== 'approved' || Boolean(activeDraft.publicationMaterialId);
+  }
+
+  async function pollAiJob(jobId, token) {
+    while (token === pollToken && activeJobId === jobId) {
+      const response = await fetch(`/api/ai-material-drafts/jobs/${encodeURIComponent(jobId)}`, {
+        credentials:'same-origin', cache:'no-store'
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || '無法讀取 AI 教材進度');
+      const progress = data.progress || {};
+      status(`${progress.stage || 'AI 教材處理中'}｜${Math.round(Number(progress.percent || 0))}%${progress.detail ? `｜${progress.detail}` : ''}`);
+      if (data.status === 'completed') {
+        showEditor(data.result || {});
+        status('✅ AI 草稿完成。請先編修與儲存，再由教師核准。', 'success');
+        return;
+      }
+      if (data.status === 'failed') throw new Error(data.error || 'AI 教材產生失敗');
+      await sleep(1800);
+    }
+  }
+
+  async function generateDraft() {
+    const materialId = document.getElementById('teacher-ai-material-source-1014')?.value || '';
+    if (!materialId) return status('請先上傳來源資料或選擇既有教材。', 'error');
+    const outputType = document.getElementById('teacher-ai-material-type-1014')?.value || 'summary';
+    const payload = {
+      materialId,
+      outputType,
+      targetMinutes: Number(document.getElementById('teacher-ai-material-minutes-1014')?.value || 5),
+      tone: document.getElementById('teacher-ai-material-tone-1014')?.value || 'clinical',
+      focus: document.getElementById('teacher-ai-material-focus-1014')?.value || '',
+    };
+    setBusy(true);
+    activeDraft = null;
+    activeJobId = '';
+    document.getElementById('teacher-ai-material-editor-1014')?.classList.add('hidden');
+    try {
+      status(`正在建立「${TYPE_LABELS[outputType] || 'AI 教材'}」工作…`);
+      const response = await fetch('/api/ai-material-drafts/generate', {
+        method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || '無法建立 AI 教材工作');
+      activeJobId = data.jobId || '';
+      if (!activeJobId) throw new Error('伺服器沒有回傳 AI 教材工作 ID');
+      const token = ++pollToken;
+      await pollAiJob(activeJobId, token);
+    } catch (error) {
+      status(`AI 教材產生失敗：${error.message}`, 'error');
+    } finally {
+      setBusy(false);
+      syncEditorButtons();
+    }
+  }
+
+  async function saveDraft() {
+    if (!activeJobId && !activeDraft) return status('目前沒有可儲存的 AI 教材草稿。', 'error');
+    const title = String(document.getElementById('teacher-ai-material-title-1014')?.value || '').trim();
+    const body = String(document.getElementById('teacher-ai-material-body-1014')?.value || '').trim();
+    if (body.length < 60) return status('草稿內容太短，請確認後再儲存。', 'error');
+    setBusy(true);
+    try {
+      let response;
+      if (activeDraft) {
+        response = await fetch(`/api/ai-material-drafts/${encodeURIComponent(activeDraft.id)}`, {
+          method:'PATCH', credentials:'same-origin', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({title, body, status:'draft'}),
+        });
+      } else {
+        response = await fetch('/api/ai-material-drafts', {
+          method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({jobId:activeJobId, title, body}),
+        });
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'AI 教材草稿儲存失敗');
+      activeDraft = data.draft || null;
+      status('✅ 草稿已儲存。確認內容正確後再按「教師核准」。', 'success');
+      await loadDrafts();
+    } catch (error) {
+      status(`儲存失敗：${error.message}`, 'error');
+    } finally {
+      setBusy(false);
+      syncEditorButtons();
+    }
+  }
+
+  async function approveDraft() {
+    if (!activeDraft) return status('請先儲存草稿。', 'error');
+    if (!confirm('確認已檢查這份 AI 草稿的內容、數值、步驟與來源，可以核准嗎？')) return;
+    const title = String(document.getElementById('teacher-ai-material-title-1014')?.value || '').trim();
+    const body = String(document.getElementById('teacher-ai-material-body-1014')?.value || '').trim();
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/ai-material-drafts/${encodeURIComponent(activeDraft.id)}`, {
+        method:'PATCH', credentials:'same-origin', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({title, body, status:'approved'}),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || '教師核准失敗');
+      activeDraft = data.draft || activeDraft;
+      status(activeDraft.draftType === 'script'
+        ? '✅ 已核准。此教學講稿現在也可作為 AI 語音來源。'
+        : '✅ 已由教師核准；需要時可發布成正式文字教材。', 'success');
+      await loadDrafts();
+    } catch (error) {
+      status(`核准失敗：${error.message}`, 'error');
+    } finally {
+      setBusy(false);
+      syncEditorButtons();
+    }
+  }
+
+  function safeTextFilename(title) {
+    const safe = String(title || 'AI教材').replace(/[\\/:*?"<>|\r\n]+/g, '_').trim().slice(0, 80) || 'AI教材';
+    return `${safe}.txt`;
+  }
+
+  async function publishDraft() {
+    if (!activeDraft || activeDraft.status !== 'approved') return status('必須先由教師核准草稿才能發布。', 'error');
+    if (activeDraft.publicationMaterialId) return status('此草稿已經連結正式教材。', 'success');
+    if (!window.MaterialUploadClient?.enqueue) return status('教材安全上傳元件尚未載入。', 'error');
+    if (!confirm('將目前核准內容建立為正式文字教材。發布後學員可依原有課程／教材權限看到它，確定繼續？')) return;
+    const title = String(document.getElementById('teacher-ai-material-title-1014')?.value || activeDraft.title || '').trim();
+    const body = String(document.getElementById('teacher-ai-material-body-1014')?.value || activeDraft.body || '').trim();
+    const source = materials.find(item => item.id === activeDraft.materialId) || {};
+    const file = new File([body], safeTextFilename(title), {type:'text/plain;charset=utf-8', lastModified:Date.now()});
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('title', title);
+    fd.append('desc', `教師核准 AI ${TYPE_LABELS[activeDraft.draftType] || '教材'}；來源：${source.title || source.filename || activeDraft.materialId}`);
+    fd.append('group', activeDraft.group || source.group || currentScope().group);
+    fd.append('area', activeDraft.area || source.area || currentScope().area);
+    fd.append('courseId', source.courseId || '');
+    fd.append('category', '');
+    fd.append('materialType', 'standard');
+    setBusy(true);
+    const token = ++pollToken;
+    try {
+      status('正在發布教師核准內容…');
+      const queued = await window.MaterialUploadClient.enqueue(fd, {
+        fileName: file.name,
+        onProgress: event => status(`發布教材 ${event.percent}%｜${file.name}`),
+      });
+      if (!queued.jobId || !queued.materialId) throw new Error('伺服器沒有回傳正式教材工作 ID');
+      await pollMaterialJob(queued.jobId, token, '正式教材處理中');
+      const link = await fetch(`/api/ai-material-drafts/${encodeURIComponent(activeDraft.id)}`, {
+        method:'PATCH', credentials:'same-origin', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({title, body, status:'approved', publicationMaterialId:queued.materialId}),
+      });
+      const linkData = await link.json().catch(() => ({}));
+      if (!link.ok) throw new Error(linkData.error || '正式教材已完成，但無法連結 AI 草稿紀錄');
+      activeDraft = linkData.draft || activeDraft;
+      await paintMaterialOptions();
+      await loadDrafts();
+      status('✅ 已建立正式教材並保留 AI 來源／教師核准紀錄。', 'success');
+    } catch (error) {
+      status(`發布失敗：${error.message}`, 'error');
+    } finally {
+      setBusy(false);
+      syncEditorButtons();
+    }
+  }
+
+  async function loadDrafts() {
+    const materialId = document.getElementById('teacher-ai-material-source-1014')?.value || '';
+    const host = document.getElementById('teacher-ai-material-saved-1014');
+    if (!host) return;
+    if (!materialId) {
+      host.innerHTML = '<p class="text-sm text-slate-500">選擇來源教材後會顯示已儲存 AI 草稿。</p>';
+      return;
+    }
+    try {
+      const response = await fetch(`/api/ai-material-drafts?materialId=${encodeURIComponent(materialId)}`, {credentials:'same-origin', cache:'no-store'});
+      const list = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(list.error || '無法讀取 AI 草稿');
+      host.innerHTML = Array.isArray(list) && list.length
+        ? list.map(draft => `<button type="button" data-ai-draft-id="${escapeHtml(draft.id)}" class="w-full text-left rounded-xl border ${draft.status==='approved'?'border-emerald-200 bg-emerald-50/60':'border-slate-200 bg-white'} p-3"><div class="flex flex-wrap items-center justify-between gap-2"><b class="text-sm text-slate-900">${escapeHtml(draft.title)}</b><span class="text-xs font-bold ${draft.status==='approved'?'text-emerald-700':'text-amber-700'}">${escapeHtml(TYPE_LABELS[draft.draftType] || draft.draftType || '草稿')}｜${draft.status==='approved'?'已核准':'草稿'}${draft.publicationMaterialId?'｜已發布':''}</span></div><p class="mt-1 text-sm text-slate-500">更新：${escapeHtml(draft.updatedAt || '')}</p></button>`).join('')
+        : '<p class="text-sm text-slate-500">這份來源教材目前沒有已儲存 AI 草稿。</p>';
+      host.querySelectorAll('[data-ai-draft-id]').forEach(button => button.addEventListener('click', () => {
+        const draft = list.find(item => item.id === button.dataset.aiDraftId);
+        if (!draft) return;
+        activeDraft = draft;
+        activeJobId = draft.sourceJobId || '';
+        document.getElementById('teacher-ai-material-title-1014').value = draft.title || '';
+        document.getElementById('teacher-ai-material-body-1014').value = draft.body || '';
+        document.getElementById('teacher-ai-material-editor-1014')?.classList.remove('hidden');
+        renderSource({sourceTitle:(materials.find(item=>item.id===materialId)||{}).title || '', outputType:draft.draftType, outputLabel:TYPE_LABELS[draft.draftType] || '', sourceChunks:draft.sourceChunks || [], provider:draft.provider, model:draft.model, fallbackUsed:draft.fallbackUsed});
+        syncEditorButtons();
+        status(draft.publicationMaterialId ? '此草稿已核准並發布成正式教材。' : (draft.status === 'approved' ? '此草稿已核准，可發布成正式教材。' : '已載入草稿，可繼續編修。'));
+      }));
+    } catch (error) {
+      host.innerHTML = `<p class="text-sm font-bold text-rose-700">${escapeHtml(error.message)}</p>`;
+    }
+  }
+
+  function install() {
+    const box = document.getElementById('admin-course-material-hub');
+    if (!box || document.getElementById('teacher-ai-material-1014')) return false;
+    const section = document.createElement('section');
+    section.id = 'teacher-ai-material-1014';
+    section.className = 'mb-5 rounded-2xl border border-violet-200 bg-white p-5 shadow-sm space-y-5';
+    section.innerHTML = `
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-violet-700">AI AUTHORING</p><h4 class="text-xl font-black text-slate-950">✨ AI 教材助手</h4><p class="mt-1 text-sm text-slate-600">直接丟資料或選既有教材，先產生草稿；教師編修、核准後才可發布。</p></div><details class="text-sm text-slate-600"><summary class="cursor-pointer font-bold text-violet-700">？使用說明</summary><p class="mt-2 max-w-xl leading-6">來源可使用 PDF、Word、PPT、圖片或文字教材。AI 只根據教材可擷取內容產生草稿；正式內容仍需教師確認。若雲端免費額度不足，AI Worker 會依設定切換 Gemini／本機備援。</p></details></div>
+      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div class="flex flex-col lg:flex-row lg:items-end gap-3"><label class="flex-1 text-sm font-bold text-slate-700">直接上傳來源資料<input id="teacher-ai-material-file-1014" type="file" class="mt-1 block w-full text-sm" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp"></label><button id="teacher-ai-material-upload-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-black text-violet-700">⬆️ 上傳並選取</button></div></div>
+      <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-sm font-bold text-slate-700 xl:col-span-2">來源教材<select id="teacher-ai-material-source-1014" class="learning-input mt-1"><option value="">讀取教材中…</option></select></label><label class="text-sm font-bold text-slate-700">產出類型<select id="teacher-ai-material-type-1014" class="learning-input mt-1"><option value="handout">教學講義</option><option value="summary" selected>重點摘要</option><option value="slides">投影片大綱</option><option value="script">教學講稿</option><option value="quiz">測驗題草稿</option><option value="objectives">課程學習目標</option></select></label><label class="text-sm font-bold text-slate-700">文字風格<select id="teacher-ai-material-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
+      <div class="grid md:grid-cols-[1fr_auto] gap-3"><div class="grid sm:grid-cols-[1fr_160px] gap-3"><input id="teacher-ai-material-focus-1014" class="learning-input" maxlength="500" placeholder="選填：特別聚焦的重點"><select id="teacher-ai-material-minutes-1014" class="learning-input" title="教學講稿目標長度；其他產出類型會作為篇幅參考"><option value="3">精簡</option><option value="5" selected>標準</option><option value="10">較完整</option><option value="15">深入</option></select></div><button id="teacher-ai-material-generate-1014" type="button" class="rounded-xl bg-violet-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40">✨ 產生 AI 草稿</button></div>
+      <div id="teacher-ai-material-status-1014" class="text-sm text-slate-600">可先上傳來源資料，或直接選擇既有教材。</div>
+      <div id="teacher-ai-material-source-info-1014" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-slate-700"></div>
+      <div id="teacher-ai-material-editor-1014" class="hidden space-y-3"><label class="block text-sm font-bold text-slate-700">標題<input id="teacher-ai-material-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-sm font-bold text-slate-700">內容<textarea id="teacher-ai-material-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-base leading-7" placeholder="AI 草稿會出現在這裡；請由教師逐段確認與修改。"></textarea></label><div class="flex flex-wrap gap-2"><button id="teacher-ai-material-save-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-black text-violet-700">💾 儲存草稿</button><button id="teacher-ai-material-approve-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-40">✅ 教師核准</button><button id="teacher-ai-material-publish-1014" type="button" disabled class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-40">📚 發布成教材</button></div><p class="text-sm text-slate-500">測驗題草稿若要進正式題庫，仍請到「評量與出題」完成審核與建立。</p></div>
+      <div class="border-t border-slate-100 pt-4"><h5 class="text-base font-black text-slate-900">已儲存 AI 草稿</h5><div id="teacher-ai-material-saved-1014" class="mt-2 grid gap-2"><p class="text-sm text-slate-500">選擇來源教材後會顯示已儲存草稿。</p></div></div>`;
+    const dashboard = box.querySelector('.admin-course-dashboard');
+    box.insertBefore(section, dashboard || box.firstChild);
+    document.getElementById('teacher-ai-material-upload-1014')?.addEventListener('click', uploadSource);
+    document.getElementById('teacher-ai-material-generate-1014')?.addEventListener('click', generateDraft);
+    document.getElementById('teacher-ai-material-save-1014')?.addEventListener('click', saveDraft);
+    document.getElementById('teacher-ai-material-approve-1014')?.addEventListener('click', approveDraft);
+    document.getElementById('teacher-ai-material-publish-1014')?.addEventListener('click', publishDraft);
+    document.getElementById('teacher-ai-material-source-1014')?.addEventListener('change', () => {
+      activeDraft = null;
+      activeJobId = '';
+      pollToken += 1;
+      document.getElementById('teacher-ai-material-editor-1014')?.classList.add('hidden');
+      void loadDrafts();
+    });
+    // The old standalone script studio remains loaded for compatibility, but
+    // the teacher-facing entry is now consolidated into this assistant.
+    document.getElementById('teacher-media-script-1014')?.classList.add('hidden');
+    void paintMaterialOptions();
+    return true;
+  }
+
+  if (!install()) {
+    const observer = new MutationObserver(() => {
+      if (install()) observer.disconnect();
+    });
+    observer.observe(document.body, {childList:true, subtree:true});
+  }
+
+  window.TeacherAIMaterial1014 = Object.freeze({paintMaterialOptions, loadDrafts});
+})();

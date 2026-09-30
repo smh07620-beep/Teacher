@@ -1,4 +1,4 @@
-"""Async orchestration for AI-assisted teacher media scripts."""
+"""Async orchestration for AI-assisted teacher material drafts and scripts."""
 from __future__ import annotations
 
 import datetime as dt
@@ -35,8 +35,7 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
         raise ValueError("請選擇教材")
     material = material_repository.get_material(material_id)
     # Draft material is a valid authoring source. Publication state is enforced
-    # when the resulting teaching material is formally released, not while a
-    # teacher prepares/reviews narration.
+    # only when the reviewed output is later published as a formal material.
     if not material:
         raise LookupError("找不到指定教材")
     try:
@@ -47,6 +46,7 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
     tone = str(data.get("tone") or "clinical").strip().lower()
     if tone not in {"clinical", "friendly", "brief"}:
         tone = "clinical"
+    output_type = media_script_runtime.normalize_output_type(data.get("outputType") or "script")
     return {
         "id": f"msjob-{uuid.uuid4().hex}",
         "material_id": material_id,
@@ -58,6 +58,7 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
             "targetMinutes": target_minutes,
             "tone": tone,
             "focus": str(data.get("focus") or "").strip()[:500],
+            "outputType": output_type,
         },
     }
 
@@ -69,12 +70,12 @@ def enqueue(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
     max_total = _env_int("MEDIA_SCRIPT_JOB_MAX_ACTIVE_TOTAL", 10, 2, 100)
     max_per_minute = _env_int("MEDIA_SCRIPT_JOB_MAX_PER_MINUTE", 4, 1, 30)
     if media_script_repository.active_count_for_actor(username) >= max_actor:
-        raise MediaScriptLimitError(f"目前已有 {max_actor} 個講稿工作排隊或執行中，請完成後再送出")
+        raise MediaScriptLimitError(f"目前已有 {max_actor} 個 AI 教材工作排隊或執行中，請完成後再送出")
     if media_script_repository.total_active_count() >= max_total:
-        raise MediaScriptLimitError("講稿產生佇列目前已滿，請稍後再試")
+        raise MediaScriptLimitError("AI 教材產生佇列目前已滿，請稍後再試")
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)).isoformat()
     if media_script_repository.recent_count_for_actor(username, since) >= max_per_minute:
-        raise MediaScriptLimitError("講稿產生送出過於頻繁，請稍後再試")
+        raise MediaScriptLimitError("AI 教材產生送出過於頻繁，請稍後再試")
     return media_script_repository.create_job(values)
 
 
@@ -88,6 +89,7 @@ def run_generation_sync(snapshot: Mapping[str, Any], *, progress_callback=None) 
         focus=str(snapshot.get("focus") or "")[:500],
         tone=str(snapshot.get("tone") or "clinical")[:30],
         target_minutes=int(snapshot.get("targetMinutes") or 5),
+        output_type=str(snapshot.get("outputType") or "script"),
         progress_callback=progress_callback,
     )
 
@@ -103,7 +105,9 @@ class MediaScriptJobProcessor:
             media_script_repository.set_progress(job_id, token, percent, stage, detail)
 
         try:
-            media_script_repository.set_progress(job_id, token, 2, "準備講稿", "正在確認教材與文字來源")
+            output_type = str((job.get("request") or {}).get("outputType") or "script")
+            label = media_script_runtime.output_type_label(output_type)
+            media_script_repository.set_progress(job_id, token, 2, f"準備{label}", "正在確認教材與文字來源")
             result = run_generation_sync(job.get("request") or {}, progress_callback=progress)
             media_script_repository.complete(job_id, token, result)
         except Exception as exc:
@@ -125,10 +129,12 @@ class MediaScriptJobProcessor:
 
 def public_job(job: Mapping[str, Any]) -> dict:
     status = str(job.get("status") or "queued")
+    request_data = job.get("request") or {}
     result = {
         "jobId": job.get("id"),
         "status": status,
         "materialId": job.get("materialId"),
+        "outputType": str(request_data.get("outputType") or "script"),
         "progress": {
             "percent": job.get("progressPercent", 0),
             "stage": job.get("progressStage", ""),
@@ -142,7 +148,7 @@ def public_job(job: Mapping[str, Any]) -> dict:
     if status == "completed":
         result["result"] = job.get("result") or {}
     elif status == "failed":
-        result["error"] = str(job.get("error") or "講稿產生失敗")
+        result["error"] = str(job.get("error") or "AI 教材草稿產生失敗")
     return result
 
 
