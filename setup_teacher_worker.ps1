@@ -91,10 +91,14 @@ function Invoke-ApprovedReleaseUpdate {
   }
   $effectiveRef = $ReleaseRef.Trim()
   if (-not $effectiveRef) {
+    if (-not (Test-Enabled ([string]$env:MATERIAL_WORKER_AUTO_UPDATE) $false)) {
+      Write-Step "Repository update was not requested; current approved checkout is preserved."
+      return
+    }
     $effectiveRef = ([string]$env:MATERIAL_WORKER_RELEASE_REF).Trim()
   }
   if (-not $effectiveRef) {
-    Add-Warning "No approved release ref was supplied; repository checkout was left unchanged. Use -ReleaseRef with an annotated approved tag when upgrading code."
+    Add-Warning "Automatic release update is enabled but no approved release ref is configured; repository checkout was left unchanged."
     return
   }
   if ($DryRun) {
