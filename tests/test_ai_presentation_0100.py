@@ -11,10 +11,6 @@ from teacher_app.materials import ai_presentation_jobs
 from teacher_app.materials import ai_presentation_repository as presentation_repository
 from teacher_app.materials import ai_presentation_runtime
 from teacher_app.materials.ai_presentation_routes import _artifact_ready, _presentation_allowed
-from teacher_app.maintenance.ai_presentation_migration import (
-    ai_presentation_production_hardening_100,
-    ai_presentations_99,
-)
 from teacher_app.materials.ai_presentation_repository import publication_receipt_key
 from teacher_app.materials.ai_presentation_runtime import (
     normalize_slides,
@@ -24,12 +20,25 @@ from teacher_app.materials.ai_presentation_runtime import (
 from teacher_app.materials.ai_presentation_storage import PPTX_MIME, PresentationStorage
 
 
+def _presentation_migration():
+    """Import migrations only while the test runs, not during unittest discovery.
+
+    The global migration registry is order-sensitive.  Importing 0099/0100 at
+    module discovery time would register them before older additive migration
+    modules are loaded through the canonical production compatibility chain.
+    """
+    from teacher_app.maintenance import ai_presentation_migration
+
+    return ai_presentation_migration
+
+
 class AiPresentationMigrationTests(unittest.TestCase):
     def test_fresh_0099_then_0100_creates_required_tables(self):
+        migration = _presentation_migration()
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
-        ai_presentations_99(conn, "sqlite")
-        ai_presentation_production_hardening_100(conn, "sqlite")
+        migration.ai_presentations_99(conn, "sqlite")
+        migration.ai_presentation_production_hardening_100(conn, "sqlite")
         tables = {
             row[0]
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
@@ -40,6 +49,7 @@ class AiPresentationMigrationTests(unittest.TestCase):
         self.assertIn("ai_presentation_publications", tables)
 
     def test_0100_upgrades_local_only_0099_additively(self):
+        migration = _presentation_migration()
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
         conn.execute(
@@ -54,7 +64,7 @@ class AiPresentationMigrationTests(unittest.TestCase):
             "INSERT INTO ai_presentations(id,title,group_key,training_area) VALUES(?,?,?,?)",
             ("legacy-ppt", "Legacy", "grpBio", "internal"),
         )
-        ai_presentation_production_hardening_100(conn, "sqlite")
+        migration.ai_presentation_production_hardening_100(conn, "sqlite")
         columns = {
             row[1] for row in conn.execute("PRAGMA table_info(ai_presentations)").fetchall()
         }
