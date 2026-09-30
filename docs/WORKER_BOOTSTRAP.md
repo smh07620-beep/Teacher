@@ -16,14 +16,16 @@ One command can safely coordinate:
 
 1. optional approved release-tag update through the existing updater;
 2. `.venv` creation and `requirements-ai-worker.txt` synchronization;
-3. Python version/import self-test (`python-pptx`, Kokoro, faster-whisper, Gemini client, PostgreSQL client);
+3. Python version/import self-test (`python-pptx`, PyMuPDF, Kokoro, faster-whisper, Gemini client, PostgreSQL client);
 4. FFmpeg availability;
-5. optional Ollama installation and configured model availability;
-6. required Worker configuration without printing secret values;
-7. stable `MATERIAL_WORKER_ID` recommendation;
-8. PowerPoint/video shared durable-provider readiness;
-9. existing Material + AI Worker Task Scheduler installation;
-10. optional Worker task restart and state summary.
+5. LibreOffice availability for the Phase 6 free PowerPoint renderer fallback;
+6. safe video renderer candidate summary (`PowerPoint COM -> LibreOffice -> text fallback`) without printing executable paths;
+7. optional Ollama installation and configured model availability;
+8. required Worker configuration without printing secret values;
+9. stable `MATERIAL_WORKER_ID` recommendation;
+10. PowerPoint/video shared durable-provider readiness;
+11. existing Material + AI Worker Task Scheduler installation;
+12. optional Worker task restart and state summary.
 
 The script does **not** install NVIDIA/CUDA/display drivers. GPU driver management remains a host-admin action.
 
@@ -39,7 +41,7 @@ powershell -ExecutionPolicy Bypass -File .\setup_teacher_worker.ps1 `
   -StartNow
 ```
 
-`-InstallOptionalTools` allows the script to use `winget` for missing FFmpeg and, only when `OLLAMA_ENABLED=true`, missing Ollama. It never downloads an Ollama model that `ollama list` already reports as installed.
+`-InstallOptionalTools` allows the script to use `winget` for missing FFmpeg and LibreOffice and, only when `OLLAMA_ENABLED=true`, missing Ollama. LibreOffice uses package ID `TheDocumentFoundation.LibreOffice`. It never downloads an Ollama model that `ollama list` already reports as installed.
 
 If `.local-worker.env` does not exist, the script copies `.local-worker.env.example` and exits with warnings until required placeholders are filled locally. Re-run the same command after filling the file.
 
@@ -87,12 +89,28 @@ The bootstrap follows `.local-worker.env`:
 - text generation fallback: Groq -> Gemini -> Ollama when configured;
 - local speech-to-text: faster-whisper;
 - local narration: Kokoro;
-- PowerPoint rendering: python-pptx;
+- PowerPoint creation: python-pptx;
+- approved PPTX video frame renderer: PowerPoint COM -> LibreOffice headless -> warning-gated safe text fallback;
+- LibreOffice PDF rasterization: Worker-only PyMuPDF;
 - video composition: FFmpeg.
 
 Provider fallback behavior remains in application code: validation/malformed-input errors do not trigger provider hopping.
 
 When `OLLAMA_ENABLED=false`, the bootstrap does not install/pull a local LLM merely because Ollama support exists. When it is enabled, an existing configured model is reused; a pull happens only when the model is absent and downloads are allowed.
+
+## PowerPoint expired / unlicensed behavior
+
+A working Microsoft PowerPoint installation is optional for AI video production.
+
+Phase 6 uses a bounded COM attempt. If PowerPoint is expired, unlicensed, unavailable, fails COM automation, or hangs until the configured timeout, the video job continues to `libreoffice-headless`. If the Worker is known to have unusable PowerPoint, set:
+
+```dotenv
+AI_VIDEO_POWERPOINT_COM_ENABLED=false
+```
+
+This skips COM immediately and makes LibreOffice the first full-deck renderer. `AI_VIDEO_POWERPOINT_COM_TIMEOUT_SECONDS` defaults to 45 seconds. `AI_VIDEO_LIBREOFFICE_TIMEOUT_SECONDS` defaults to 120 seconds. `AI_VIDEO_LIBREOFFICE_PATH` may point to `soffice.exe` when LibreOffice is installed in a non-standard location.
+
+LibreOffice render output receives a compatibility warning because fonts/placement can differ slightly from Microsoft PowerPoint; formal publication therefore requires preview/acknowledgement. The safe text fallback has an even stronger warning. Source PPTX download/checksum failures remain blocking and never downgrade to fallback frames.
 
 ## Production verification
 
@@ -100,22 +118,21 @@ After setup/restart:
 
 1. both `Teacher Material Worker` and `Teacher AI Worker` scheduled tasks should exist;
 2. the AI Worker should emit its normal startup/heartbeat events without exposing configuration values;
-3. Web and Worker must use the same production `DATABASE_URL` and shared durable storage configuration;
-4. FFmpeg must be discoverable in the scheduled-task environment before AI video jobs are relied on;
-5. run one controlled `approved PowerPoint -> AI video -> preview -> teacher approval -> publish` smoke test.
+3. AI Worker startup should report candidate states for `powerpoint-com`, `libreoffice-headless`, and `text-fallback` without local paths;
+4. Web and Worker must use the same production `DATABASE_URL` and shared durable storage configuration;
+5. FFmpeg must be discoverable in the scheduled-task environment before AI video jobs are relied on;
+6. LibreOffice should be detected on the Worker when PowerPoint cannot be relied on;
+7. run one controlled `approved PowerPoint -> renderer chain -> AI video -> preview -> teacher approval -> publish` smoke test.
 
-## Phase 2 readiness
+## Phase 6 teacher workflow
 
-Video Phase 1 is sufficient to enter the next authoring stage. Phase 1 already provides the durable job/artifact, worker-only TTS/FFmpeg rendering, preview, teacher approval, publication receipt, scope enforcement, and provenance boundaries.
+The existing teacher media workspace now exposes the Phase 6 renderer policy and the actual renderer used for each generated video. Teachers can:
 
-The next coherent slice is **AI Video Phase 2 authoring**, not another Phase 1 pipeline:
+- select an approved PowerPoint revision and Kokoro voice;
+- generate an MP4 through the Worker;
+- inspect renderer attempts and quality warnings;
+- preview MP4 and VTT/SRT;
+- have a clinical teacher or group leader approve the draft;
+- publish only after any renderer warning is explicitly acknowledged.
 
-- editable narration per slide;
-- bounded voice/speed controls;
-- regenerate one slide's narration/audio without changing the approved source PowerPoint;
-- edit subtitle text/timing and slide hold duration;
-- rebuild the full MP4 through the Worker;
-- immutable video revision lineage (`parentRevisionId` / `videoFamilyId`) rather than overwriting a published artifact;
-- preview -> clinical-teacher/group-leader approval -> idempotent publication using the existing RBAC/storage model.
-
-Phase 2 should remain additive and reuse `ai_video_*`, the current AI Worker queue, durable provider, heartbeat/stale recovery, and existing approval boundary. It should not introduce a browser-side video renderer or a second media queue architecture.
+This remains additive and reuses `ai_video_*`, the current AI Worker queue, durable provider, heartbeat/stale recovery, and existing approval boundary. It does not introduce browser-side video rendering or a second media queue architecture.
