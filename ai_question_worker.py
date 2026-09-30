@@ -9,6 +9,7 @@ from teacher_app.assessments import ai_jobs, free_ai_fallback
 from teacher_app.assessments.question_runtime import build_canonical_question_runtime
 from teacher_app.materials import (
     ai_presentation_jobs,
+    ai_video_jobs,
     media_audio_jobs,
     media_script_jobs,
     media_subtitle_jobs,
@@ -33,13 +34,14 @@ def main() -> int:
     question_processor = ai_jobs.AiQuestionJobProcessor(question_runtime)
     script_processor = media_script_jobs.MediaScriptJobProcessor()
     presentation_processor = ai_presentation_jobs.AiPresentationJobProcessor()
+    video_processor = ai_video_jobs.AiVideoJobProcessor()
     audio_processor = media_audio_jobs.MediaAudioJobProcessor()
     subtitle_processor = media_subtitle_jobs.MediaSubtitleJobProcessor()
     poll_seconds = _env_int("AI_QUESTION_WORKER_POLL_SECONDS", 2, 1, 30)
     recovery_seconds = _env_int("AI_QUESTION_WORKER_RECOVERY_SECONDS", 300, 30, 3600)
     next_recovery = 0.0
     log(
-        "started queues=ai_questions,media_scripts,ai_presentations,media_audio,media_subtitles "
+        "started queues=ai_questions,media_scripts,ai_presentations,ai_videos,media_audio,media_subtitles "
         "free_fallback=enabled"
     )
     while True:
@@ -49,12 +51,14 @@ def main() -> int:
                 recovered_questions = question_processor.recover_stale()
                 recovered_scripts = script_processor.recover_stale()
                 recovered_presentations = presentation_processor.recover_stale()
+                recovered_videos = video_processor.recover_stale()
                 recovered_audio = audio_processor.recover_stale()
                 recovered_subtitles = subtitle_processor.recover_stale()
                 if (
                     recovered_questions
                     or recovered_scripts
                     or recovered_presentations
+                    or recovered_videos
                     or recovered_audio
                     or recovered_subtitles
                 ):
@@ -62,6 +66,7 @@ def main() -> int:
                         "requeued stale "
                         f"question_jobs={recovered_questions} media_script_jobs={recovered_scripts} "
                         f"ai_presentation_jobs={recovered_presentations} media_audio_jobs={recovered_audio} "
+                        f"ai_video_jobs={recovered_videos} "
                         f"media_subtitle_jobs={recovered_subtitles}"
                     )
                 next_recovery = now + recovery_seconds
@@ -72,6 +77,7 @@ def main() -> int:
             did_work = question_processor.run_next_queued()
             did_work = script_processor.run_next_queued() or did_work
             did_work = presentation_processor.run_next_queued() or did_work
+            did_work = video_processor.run_next_queued() or did_work
             did_work = audio_processor.run_next_queued() or did_work
             did_work = subtitle_processor.run_next_queued() or did_work
             if did_work:

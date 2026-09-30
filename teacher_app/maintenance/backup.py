@@ -27,6 +27,8 @@ DEFAULT_TABLES = (
     "audit_events", "external_media", "question_versions",
     "question_attempt_analytics", "media_script_jobs", "media_scripts",
     "media_audio_jobs", "media_subtitle_jobs", "media_subtitles",
+    "ai_presentation_templates", "ai_presentation_jobs", "ai_presentations", "ai_presentation_publications",
+    "ai_video_jobs", "ai_presentation_videos", "ai_video_publications",
 )
 
 
