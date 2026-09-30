@@ -3,10 +3,11 @@ $repo = Split-Path -Parent $PSScriptRoot
 $launcher = Join-Path $repo "run_ai_worker_autostart.ps1"
 $installer = Join-Path $repo "install_ai_worker_task.ps1"
 $bundle = Join-Path $repo "install_teacher_workers.ps1"
+$bootstrap = Join-Path $repo "setup_teacher_worker.ps1"
 $envTemplate = Join-Path $repo ".local-worker.env.example"
 $aiRequirements = Join-Path $repo "requirements-ai-worker.txt"
 
-foreach ($path in @($launcher, $installer, $bundle)) {
+foreach ($path in @($launcher, $installer, $bundle, $bootstrap)) {
   $tokens = $null
   $parseErrors = $null
   [void][System.Management.Automation.Language.Parser]::ParseFile(
@@ -22,6 +23,7 @@ foreach ($path in @($launcher, $installer, $bundle)) {
 $launcherSource = Get-Content -LiteralPath $launcher -Raw
 $installerSource = Get-Content -LiteralPath $installer -Raw
 $bundleSource = Get-Content -LiteralPath $bundle -Raw
+$bootstrapSource = Get-Content -LiteralPath $bootstrap -Raw
 $envSource = Get-Content -LiteralPath $envTemplate -Raw
 $requirementsSource = Get-Content -LiteralPath $aiRequirements -Raw
 
@@ -87,6 +89,31 @@ foreach ($marker in @(
 }
 
 foreach ($marker in @(
+  'update_material_worker.ps1',
+  'install_teacher_workers.ps1',
+  'requirements-ai-worker.txt',
+  'MATERIAL_WORKER_ID',
+  'AI_VIDEO_STORAGE_BACKEND',
+  'AI_PRESENTATION_STORAGE_BACKEND',
+  'Gyan.FFmpeg',
+  'Ollama.Ollama',
+  'OLLAMA_MODEL',
+  'SkipDownloads',
+  'InstallOptionalTools',
+  'Working tree is dirty',
+  'Non-interactive task installation requires -ServiceAccount'
+)) {
+  if (-not $bootstrapSource.Contains($marker)) {
+    throw "One-click Worker bootstrap is missing required marker: $marker"
+  }
+}
+foreach ($forbidden in @('git pull', 'git reset', 'git clean', 'git stash')) {
+  if ($bootstrapSource.ToLowerInvariant().Contains($forbidden)) {
+    throw "One-click Worker bootstrap must not bypass safe release/update boundaries: $forbidden"
+  }
+}
+
+foreach ($marker in @(
   'DATABASE_URL=REPLACE_WITH_PRODUCTION_DATABASE_URL',
   'FREE_ONLY_MODE=true',
   'AI_EXTERNAL_PROCESSING_ENABLED=true',
@@ -94,6 +121,7 @@ foreach ($marker in @(
   'AI_TTS_PROVIDER=kokoro',
   'KOKORO_REPO_ID=hexgrad/Kokoro-82M-v1.1-zh',
   'KOKORO_VOICE=zf_xiaoxiao',
+  'MATERIAL_WORKER_ID=lab-worker-01',
   'R2_ACCOUNT_ID=REPLACE_WITH_R2_ACCOUNT_ID',
   'R2_ACCESS_KEY_ID=REPLACE_WITH_R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY=REPLACE_WITH_R2_SECRET_ACCESS_KEY',
@@ -104,16 +132,16 @@ foreach ($marker in @(
   }
 }
 
-foreach ($marker in @('kokoro>=', 'misaki[zh]', 'numpy>=')) {
+foreach ($marker in @('kokoro>=', 'misaki[zh]', 'numpy>=', 'python-pptx>=')) {
   if (-not $requirementsSource.Contains($marker)) {
-    throw "requirements-ai-worker.txt is missing local TTS dependency marker: $marker"
+    throw "requirements-ai-worker.txt is missing AI Worker dependency marker: $marker"
   }
 }
 if ($envSource.Contains('OPENAI_API_KEY') -or $requirementsSource.Contains('openai')) {
   throw "FREE_ONLY_MODE local narration must not require OpenAI configuration."
 }
 
-$combined = $launcherSource + "`n" + $installerSource + "`n" + $bundleSource
+$combined = $launcherSource + "`n" + $installerSource + "`n" + $bundleSource + "`n" + $bootstrapSource
 foreach ($forbidden in @(
   'gsk_',
   'postgresql://postgres.',
@@ -126,4 +154,4 @@ foreach ($forbidden in @(
   }
 }
 
-Write-Output "AI Worker same-host Task Scheduler regression passed."
+Write-Output "AI Worker same-host Task Scheduler/bootstrap regression passed."
