@@ -88,3 +88,35 @@ before enabling the Phase 2 interface.  Existing 0099/0100 rows are preserved;
 their provenance may be empty until a new revision is made.  Web and Worker
 continue to require the same shared provider—Phase 2 does not make local
 storage valid in a split deployment.
+
+## Phase 3: teaching-quality layouts and immutable publishing (0103)
+
+Apply `0103-ai-presentation-publishing-workflow` through the normal Web
+startup before enabling Phase 3. It is additive: existing templates,
+revisions, artifacts, and publication receipts remain intact.
+
+- Each slide may declare `layout` as `title`, `section`, `content`, `image`,
+  `comparison`, `table`, or `summary`, plus declarative `blocks` for images,
+  charts, tables, comparisons, and callouts. Template `layoutProfile.layoutMap`
+  can map those names to layouts already inside the group/area template; an
+  unavailable layout falls back safely to the template's standard content
+  layout.
+- Image blocks never fetch browser-supplied URLs, HTML, or iframes. They only
+  accept a checksummed PNG/JPEG in the shared provider under
+  `ai-presentations/images/`; missing or invalid media becomes a labelled
+  placeholder rather than a failed PPT render. Charts and tables are rendered
+  from bounded declarative values.
+- The Worker writes allow-listed provenance to PowerPoint core properties and
+  speaker notes, including the revision number. No source text, credentials,
+  provider keys, URLs, or local paths are written into the file.
+- Publishing requires an approved, scope-authorized revision and a matching
+  durable formal material. The receipt now retains an immutable artifact and
+  provenance snapshot. Replaying the same request reuses its receipt without
+  updating a prior publication timestamp. The workspace can show every family
+  revision, identify the latest published revision, and download either a
+  selected draft/history revision or the published family artifact.
+- Failed render jobs preserve their error and attempt count. An authorized,
+  scoped editor may retry the same failed job through
+  `POST /api/ai-presentations/jobs/<job_id>/retry`; it does not create a second
+  job or bypass the existing worker claim/idempotency checks. The default limit
+  is three attempts and may be bounded with `AI_PRESENTATION_JOB_MAX_ATTEMPTS`.

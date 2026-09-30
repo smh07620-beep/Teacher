@@ -105,6 +105,19 @@ class AiPresentationMigrationTests(unittest.TestCase):
         self.assertIn("provenance_json", columns)
         self.assertEqual(conn.execute("SELECT title FROM ai_presentations WHERE id='ppt-old'").fetchone()[0], "Old")
 
+    def test_0103_adds_layout_profile_and_publication_snapshot_additively(self):
+        migration = _presentation_migration()
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        migration.ai_presentations_99(conn, "sqlite")
+        migration.ai_presentation_production_hardening_100(conn, "sqlite")
+        from teacher_app.maintenance.ai_presentation_phase3_migration import ai_presentation_publishing_workflow_103
+        ai_presentation_publishing_workflow_103(conn, "sqlite")
+        template_columns = {row[1] for row in conn.execute("PRAGMA table_info(ai_presentation_templates)").fetchall()}
+        publication_columns = {row[1] for row in conn.execute("PRAGMA table_info(ai_presentation_publications)").fetchall()}
+        self.assertIn("layout_profile_json", template_columns)
+        self.assertTrue({"presentation_family_id", "presentation_revision_number", "snapshot_json"}.issubset(publication_columns))
+
 
 class AiPresentationRuntimeTests(unittest.TestCase):
     def test_numbered_bullets_are_not_misread_as_slide_headers(self):
@@ -125,6 +138,23 @@ class AiPresentationRuntimeTests(unittest.TestCase):
         self.assertEqual([item["order"] for item in slides], [1, 2])
         self.assertFalse(slides[0]["enabled"])
         self.assertTrue(slides[1]["enabled"])
+
+    def test_layout_and_safe_content_blocks_are_normalized_without_urls(self):
+        slides = normalize_slides([{
+            "layout": "comparison", "title": "方法比較", "bullets": [],
+            "blocks": [
+                {"type": "comparison", "leftTitle": "A", "rightTitle": "B", "leftItems": ["快"], "rightItems": ["準"]},
+                {"type": "chart", "labels": ["一", "二"], "values": [1, 2]},
+                {"type": "image", "url": "https://not-allowed.example/a.png", "altText": "缺圖"},
+            ],
+        }])
+        self.assertEqual(slides[0]["layout"], "comparison")
+        self.assertEqual([block["type"] for block in slides[0]["blocks"]], ["comparison", "chart", "image"])
+        self.assertNotIn("url", slides[0]["blocks"][2])
+
+    def test_layout_profile_is_allowlisted(self):
+        profile = presentation_repository.sanitize_layout_profile({"layoutMap": {"content": "Title and Content", "evil": "ignored"}})
+        self.assertEqual(profile, {"layoutMap": {"content": "Title and Content"}})
 
     @unittest.skipIf(ai_presentation_runtime.Presentation is None, "python-pptx is installed only on the AI Worker")
     def test_rendered_pptx_contains_allowlisted_provenance(self):
@@ -150,6 +180,21 @@ class AiPresentationRuntimeTests(unittest.TestCase):
             self.assertIn("mat-1", rendered.core_properties.comments)
             self.assertNotIn("token=", rendered.core_properties.comments.lower())
 
+    @unittest.skipIf(ai_presentation_runtime.Presentation is None, "python-pptx is installed only on the AI Worker")
+    def test_renderer_handles_quality_blocks_and_missing_image_as_fallback(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "blocks.pptx"
+            render_pptx(
+                title="Blocks", output_path=output, provenance={"sourceMaterialId": "mat-1"},
+                slides=normalize_slides([{"title": "比較", "layout": "comparison", "blocks": [
+                    {"type": "comparison", "leftTitle": "舊流程", "rightTitle": "新流程", "leftItems": ["慢"], "rightItems": ["快"]},
+                    {"type": "table", "headers": ["項目", "值"], "rows": [["QC", "Pass"]]},
+                    {"type": "chart", "labels": ["一", "二"], "values": [1, 2]},
+                    {"type": "image", "altText": "尚未上傳的圖"},
+                ]}]),
+            )
+            self.assertGreater(output.stat().st_size, 1024)
+
     def test_provenance_rejects_secret_like_allowlisted_value(self):
         with self.assertRaises(ValueError):
             ai_presentation_runtime._provenance(
@@ -168,6 +213,9 @@ class AiPresentationRuntimeTests(unittest.TestCase):
         self.assertNotIn("ignored", result)
         with self.assertRaisesRegex(ValueError, "敏感資訊"):
             sanitize_provenance({"sourceJobId": "token=do-not-store"})
+
+    def test_provenance_includes_bounded_revision_identity(self):
+        self.assertEqual(sanitize_provenance({"revisionNumber": 7})["revisionNumber"], 7)
 
     def test_revision_worker_rechecks_group_and_area_scope(self):
         current = {
@@ -323,6 +371,13 @@ class AiPresentationWorkerQueueTests(unittest.TestCase):
         revision.assert_called_once()
         initial.assert_not_called()
 
+    def test_failed_job_retry_reuses_the_same_idempotency_job(self):
+        failed = {"id": "pptjob-failed", "status": "failed", "attempts": 1}
+        with patch.object(presentation_repository, "retry_failed_job", return_value={**failed, "status": "queued"}) as retry:
+            result = ai_presentation_jobs.retry(job=failed)
+        self.assertEqual(result["id"], "pptjob-failed")
+        retry.assert_called_once()
+
 
 class AiPresentationRbacTests(unittest.TestCase):
     def test_system_admin_can_operate_but_cannot_teacher_approve(self):
@@ -394,6 +449,17 @@ class AiPresentationDeploymentContractTests(unittest.TestCase):
         for marker in ('/download', '/provenance', '/reupload', 'immutable revision'):
             self.assertIn(marker, frontend)
         self.assertIn('/api/ai-presentations/<presentation_id>/provenance', routes)
+
+    def test_phase3_contract_keeps_worker_rendering_and_exposes_history(self):
+        runtime = Path("teacher_app/materials/ai_presentation_runtime.py").read_text(encoding="utf-8")
+        routes = Path("teacher_app/materials/ai_presentation_routes.py").read_text(encoding="utf-8")
+        frontend = Path("static/teacher-ai-presentation-1016.js").read_text(encoding="utf-8")
+        self.assertIn("0103-ai-presentation-publishing-workflow", __import__("release_contract").REQUIRED_MIGRATIONS)
+        self.assertIn("_layout_for", runtime)
+        self.assertIn("_render_blocks", runtime)
+        self.assertIn("/history", routes)
+        self.assertIn("/published/download", routes)
+        self.assertIn("版型／區塊編輯", frontend)
 
 
 if __name__ == "__main__":

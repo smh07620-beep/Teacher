@@ -14,10 +14,13 @@ from teacher_app.materials import repository as material_repository
 
 try:
     from pptx import Presentation
-    from pptx.util import Inches
+    from pptx.util import Inches, Pt
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE
 except ImportError:  # pragma: no cover
     Presentation = None
-    Inches = None
+    Inches = Pt = MSO_SHAPE = CategoryChartData = XL_CHART_TYPE = None
 
 _MAX_SLIDES = 60
 _MAX_BULLETS = 8
@@ -26,6 +29,10 @@ _SECRET_MARKERS = (
     "bearer ", "database_url=", "r2_secret", "mega_password", "client_secret=",
 )
 _LOCAL_PATH_PATTERN = re.compile(r"(?:[a-z]:[\\/]|/(?:home|tmp|var|mnt|etc)/|file://)", re.I)
+_LAYOUT_KINDS = {"title", "section", "content", "image", "comparison", "table", "summary"}
+_BLOCK_KINDS = {"image", "chart", "table", "comparison", "callout"}
+_IMAGE_MIME_TYPES = {"image/png", "image/jpeg"}
+_IMAGE_KEY = re.compile(r"^ai-presentations/images/[a-z0-9][a-z0-9._/-]{0,220}$", re.I)
 
 
 def _clean(value: Any, limit: int) -> str:
@@ -98,15 +105,62 @@ def normalize_slides(slides: list[dict]) -> list[dict]:
     for index, raw in enumerate(list(slides or [])[:_MAX_SLIDES], 1):
         if not isinstance(raw, dict):
             continue
+        layout = str(raw.get("layout") or raw.get("layoutKind") or "content").strip().lower()
+        if layout not in _LAYOUT_KINDS:
+            layout = "content"
+        blocks = _normalize_blocks(raw.get("blocks"))
         normalized.append({
             "id": _clean(raw.get("id") or f"s{index}", 80), "order": index,
             "enabled": bool(raw.get("enabled", True)), "title": _clean(raw.get("title"), 180) or f"第 {index} 張",
             "bullets": [_clean(v, 500) for v in list(raw.get("bullets") or [])[:_MAX_BULLETS] if _clean(v, 500)],
-            "speakerNotes": _clean(raw.get("speakerNotes"), 4000),
+            "layout": layout, "blocks": blocks, "speakerNotes": _clean(raw.get("speakerNotes"), 4000),
         })
     if not normalized or not any(item["enabled"] for item in normalized):
         raise ValueError("至少要保留一張啟用的投影片。")
     return normalized
+
+
+def _normalize_blocks(raw_blocks: Any) -> list[dict]:
+    """Normalize declarative, safe blocks. URLs and HTML are deliberately absent."""
+    blocks = []
+    for raw in list(raw_blocks or [])[:8]:
+        if not isinstance(raw, dict):
+            continue
+        kind = str(raw.get("type") or "").strip().lower()
+        if kind not in _BLOCK_KINDS:
+            continue
+        block = {"type": kind, "title": _clean(raw.get("title"), 140), "caption": _clean(raw.get("caption"), 300)}
+        if kind == "image":
+            asset = raw.get("asset") if isinstance(raw.get("asset"), dict) else {}
+            backend = _clean(asset.get("backend"), 20).lower()
+            key = _clean(asset.get("key"), 260)
+            digest = _clean(asset.get("sha256"), 64).lower()
+            mime = _clean(asset.get("mimeType"), 80).lower()
+            if backend in {"r2", "oci", "gdrive", "mega"} and _IMAGE_KEY.fullmatch(key) and re.fullmatch(r"[0-9a-f]{64}", digest or "") and mime in _IMAGE_MIME_TYPES:
+                block["asset"] = {"backend": backend, "key": key, "sha256": digest, "mimeType": mime}
+            block["altText"] = _clean(raw.get("altText"), 300)
+        elif kind == "chart":
+            chart_type = _clean(raw.get("chartType") or "bar", 20).lower()
+            labels = [_clean(v, 60) for v in list(raw.get("labels") or [])[:8] if _clean(v, 60)]
+            values = []
+            for value in list(raw.get("values") or [])[:8]:
+                try: values.append(max(-1000000, min(1000000, float(value))))
+                except (TypeError, ValueError): values.append(0)
+            block.update({"chartType": chart_type if chart_type in {"bar", "column", "line"} else "bar", "labels": labels, "values": values[:len(labels)]})
+        elif kind == "table":
+            headers = [_clean(v, 80) for v in list(raw.get("headers") or [])[:6] if _clean(v, 80)]
+            rows = []
+            for row in list(raw.get("rows") or [])[:8]:
+                if isinstance(row, list): rows.append([_clean(v, 160) for v in row[:len(headers)]])
+            block.update({"headers": headers, "rows": rows})
+        elif kind == "comparison":
+            block.update({"leftTitle": _clean(raw.get("leftTitle"), 100), "rightTitle": _clean(raw.get("rightTitle"), 100),
+                          "leftItems": [_clean(v, 160) for v in list(raw.get("leftItems") or [])[:5] if _clean(v, 160)],
+                          "rightItems": [_clean(v, 160) for v in list(raw.get("rightItems") or [])[:5] if _clean(v, 160)]})
+        else:
+            block["text"] = _clean(raw.get("text"), 800)
+        blocks.append(block)
+    return blocks
 
 
 def _write_notes(slide, text: str) -> None:
@@ -128,8 +182,93 @@ def _clear_template_slides(prs) -> None:
             pass
 
 
+def _layout_for(prs, kind: str, profile: dict | None = None):
+    """Resolve a template layout by explicit profile, friendly name, then safe index fallback."""
+    layouts = prs.slide_layouts
+    if not layouts:
+        raise RuntimeError("PowerPoint 範本沒有可用 layout。")
+    profile_map = dict((profile or {}).get("layoutMap") or {})
+    desired = str(profile_map.get(kind) or "").strip().lower()
+    aliases = {
+        "title": ("title slide", "title"), "section": ("section header", "section", "title and content"),
+        "content": ("title and content", "content"), "image": ("picture", "title only", "blank"),
+        "comparison": ("comparison", "two content", "title and content"), "table": ("title and content", "comparison"),
+        "summary": ("title and content", "section header"),
+    }
+    candidates = ((desired,) if desired else ()) + aliases.get(kind, aliases["content"])
+    for candidate in candidates:
+        for layout in layouts:
+            if candidate and candidate in str(layout.name or "").lower():
+                return layout
+    preferred = 0 if kind == "title" else (1 if len(layouts) > 1 else 0)
+    return layouts[preferred]
+
+
+def _textbox(slide, left, top, width, height, text=""):
+    shape = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
+    shape.text_frame.text = text
+    return shape.text_frame
+
+
+def _placeholder_block(slide, block: dict, message: str) -> None:
+    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(7.05), Inches(1.65), Inches(5.2), Inches(4.55))
+    shape.text_frame.text = "素材待補\n" + _clean(block.get("title") or block.get("altText") or message, 220)
+    for paragraph in shape.text_frame.paragraphs:
+        paragraph.font.size = Pt(14)
+
+
+def _render_table(slide, block: dict) -> None:
+    headers, rows = block.get("headers") or [], block.get("rows") or []
+    if not headers:
+        _placeholder_block(slide, block, "表格欄位不足"); return
+    table = slide.shapes.add_table(len(rows) + 1, len(headers), Inches(0.75), Inches(2.0), Inches(11.8), Inches(4.7)).table
+    for col, text in enumerate(headers): table.cell(0, col).text = text
+    for row_idx, row in enumerate(rows, 1):
+        for col, text in enumerate(row): table.cell(row_idx, col).text = text
+
+
+def _render_chart(slide, block: dict) -> None:
+    labels, values = block.get("labels") or [], block.get("values") or []
+    if not labels or len(values) != len(labels):
+        _placeholder_block(slide, block, "圖表資料不足"); return
+    data = CategoryChartData(); data.categories = labels; data.add_series(block.get("title") or "數值", values)
+    chart_type = {"line": XL_CHART_TYPE.LINE_MARKERS, "column": XL_CHART_TYPE.COLUMN_CLUSTERED}.get(block.get("chartType"), XL_CHART_TYPE.BAR_CLUSTERED)
+    chart = slide.shapes.add_chart(chart_type, Inches(0.75), Inches(2.0), Inches(11.8), Inches(4.7), data).chart
+    chart.has_legend = False
+
+
+def _render_comparison(slide, block: dict) -> None:
+    for left, title, items in ((0.75, block.get("leftTitle"), block.get("leftItems") or []), (6.75, block.get("rightTitle"), block.get("rightItems") or [])):
+        shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(left), Inches(2.0), Inches(5.1), Inches(4.5))
+        shape.text_frame.text = _clean(title or "比較項目", 100) + "\n" + "\n".join("• " + value for value in items)
+
+
+def _render_image(slide, block: dict, image_resolver=None) -> None:
+    asset = block.get("asset") if isinstance(block.get("asset"), dict) else None
+    path = None
+    try:
+        path = image_resolver(asset) if asset and callable(image_resolver) else None
+        if path and Path(path).is_file():
+            slide.shapes.add_picture(str(path), Inches(1.0), Inches(1.8), width=Inches(10.9), height=Inches(4.9)); return
+    except Exception:
+        # A missing/invalid allowed asset is presentation content, not a worker failure.
+        pass
+    _placeholder_block(slide, block, "允許的圖片素材尚未提供")
+
+
+def _render_blocks(slide, blocks: list[dict], image_resolver=None) -> None:
+    for block in blocks:
+        kind = block.get("type")
+        if kind == "image": _render_image(slide, block, image_resolver)
+        elif kind == "chart": _render_chart(slide, block)
+        elif kind == "table": _render_table(slide, block)
+        elif kind == "comparison": _render_comparison(slide, block)
+        elif kind == "callout": _textbox(slide, 0.9, 5.8, 11.4, 0.7, block.get("text") or block.get("caption") or "")
+
+
 def render_pptx(*, title: str, slides: list[dict], output_path: Path,
-                provenance: dict[str, Any], template_path: Path | None = None) -> Path:
+                provenance: dict[str, Any], template_path: Path | None = None,
+                layout_profile: dict | None = None, image_resolver=None) -> Path:
     if Presentation is None or Inches is None:
         raise RuntimeError("AI Worker 尚未安裝 python-pptx；請更新 requirements 後重新啟動。")
     prs = Presentation(str(template_path)) if template_path else Presentation()
@@ -143,8 +282,7 @@ def render_pptx(*, title: str, slides: list[dict], output_path: Path,
     for item in normalize_slides(slides):
         if not item["enabled"]:
             continue
-        layouts = prs.slide_layouts
-        slide = prs.slides.add_slide(layouts[1] if len(layouts) > 1 else layouts[0])
+        slide = prs.slides.add_slide(_layout_for(prs, item.get("layout") or "content", layout_profile))
         if slide.shapes.title is not None:
             slide.shapes.title.text = item["title"]
         body = next((p for p in slide.placeholders if p != slide.shapes.title and hasattr(p, "text_frame")), None)
@@ -154,6 +292,7 @@ def render_pptx(*, title: str, slides: list[dict], output_path: Path,
         for index, bullet in enumerate(item["bullets"]):
             paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
             paragraph.text = bullet; paragraph.level = 0
+        _render_blocks(slide, item.get("blocks") or [], image_resolver=image_resolver)
         notes = "\n\n".join(filter(None, [_clean(item.get("speakerNotes"), 4000), "PROVENANCE " + core.comments]))
         _write_notes(slide, notes)
     output_path = Path(output_path); output_path.parent.mkdir(parents=True, exist_ok=True); prs.save(str(output_path))
@@ -166,7 +305,7 @@ def _template_location(item: dict) -> dict:
     return {"backend": item.get("storageBackend"), "key": item.get("storageKey"), "sha256": item.get("sha256")}
 
 
-def _source_context(draft: dict, source: dict, *, template_id: str = "") -> dict[str, Any]:
+def _source_context(draft: dict, source: dict, *, template_id: str = "", revision_number: int = 1) -> dict[str, Any]:
     chunk_ids = []
     for chunk in list(draft.get("sourceChunks") or []):
         value = str((chunk or {}).get("chunkId") or (chunk or {}).get("id") or "") if isinstance(chunk, dict) else str(chunk or "")
@@ -177,7 +316,7 @@ def _source_context(draft: dict, source: dict, *, template_id: str = "") -> dict
         "sourceJobId": str(draft.get("sourceJobId") or ""), "sourceChunkIds": chunk_ids,
         "provider": str(draft.get("provider") or ""), "model": str(draft.get("model") or ""),
         "templateId": str(template_id or ""), "teacherApprovedBy": str(draft.get("approvedBy") or ""),
-        "teacherApprovedAt": str(draft.get("approvedAt") or ""),
+        "teacherApprovedAt": str(draft.get("approvedAt") or ""), "revisionNumber": max(1, int(revision_number or 1)),
     }
 
 
@@ -186,6 +325,22 @@ def _validated_template(template_id: str, *, group: str, area: str):
     if template_id and (not template or not template.get("active") or template.get("group") != group or template.get("area") != area):
         raise RuntimeError("PowerPoint 範本不存在、已停用或超出允許範圍。")
     return template
+
+
+def _image_resolver(storage: PresentationStorage, root: Path):
+    """Resolve only normalized shared-provider image assets; failures become slide fallbacks."""
+    counter = 0
+    def resolve(asset):
+        nonlocal counter
+        if not isinstance(asset, dict):
+            return None
+        key = str(asset.get("key") or "")
+        if not _IMAGE_KEY.fullmatch(key):
+            return None
+        counter += 1
+        suffix = ".png" if str(asset.get("mimeType") or "") == "image/png" else ".jpg"
+        return storage.download(asset, root / f"image-{counter}{suffix}")
+    return resolve
 
 
 def generate_presentation(*, job: dict, progress_callback=None, storage: PresentationStorage | None = None) -> dict:
@@ -217,7 +372,8 @@ def generate_presentation(*, job: dict, progress_callback=None, storage: Present
         output = root / "presentation.pptx"
         if progress_callback: progress_callback(55, "建立 PowerPoint", "寫入投影片、speaker notes 與 provenance")
         render_pptx(title=str(draft.get("title") or source.get("title") or "AI 教學投影片"), slides=slides,
-                    output_path=output, provenance=_source_context(draft, source, template_id=template_id), template_path=template_path)
+                    output_path=output, provenance=_source_context(draft, source, template_id=template_id), template_path=template_path,
+                    layout_profile=(template or {}).get("layoutProfile"), image_resolver=_image_resolver(storage, root))
         if progress_callback: progress_callback(80, "保存 PowerPoint", "將產出檔保存至共享 provider")
         artifact = storage.store(output, namespace="artifacts", object_id=str(job.get("id") or ""), filename=f"{str(draft.get('title') or 'AI教學投影片')[:60]}.pptx")
     provenance = repository.sanitize_provenance(_source_context(draft, source, template_id=template_id))
@@ -268,7 +424,8 @@ def generate_revision(*, job: dict, progress_callback=None, storage: Presentatio
         output = root / "presentation.pptx"
         if progress_callback: progress_callback(55, "建立 PowerPoint revision", "寫入教師調整後內容與安全 provenance")
         render_pptx(title=str(current.get("title") or "AI 教學投影片"), slides=slides, output_path=output,
-                    provenance=_source_context(draft, source, template_id=template_id), template_path=template_path)
+                    provenance=_source_context(draft, source, template_id=template_id, revision_number=int(current.get("revisionNumber") or 1)), template_path=template_path,
+                    layout_profile=(template or {}).get("layoutProfile"), image_resolver=_image_resolver(storage, root))
         if progress_callback: progress_callback(80, "保存 PowerPoint revision", "將新 revision artifact 保存至共享 provider")
         artifact = storage.store(output, namespace="artifacts", object_id=presentation_id,
                                  filename=f"{str(current.get('title') or 'AI教學投影片')[:60]}-r{int(current.get('revisionNumber') or 1)}.pptx")

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 import tempfile
 import uuid
@@ -64,7 +65,7 @@ def _publisher(user):
 
 
 def _public_template(item: dict) -> dict:
-    keys = ("id","name","group","area","active","sha256","byteSize","mimeType","createdBy","createdAt","updatedAt")
+    keys = ("id","name","group","area","active","sha256","byteSize","mimeType","layoutProfile","createdBy","createdAt","updatedAt")
     return {key: item.get(key) for key in keys}
 
 
@@ -79,6 +80,19 @@ def _public_presentation(item: dict) -> dict:
     payload["artifactReady"] = _artifact_ready(item)
     payload["provenanceAvailable"] = bool(item.get("provenance", {}).get("sourceMaterialId"))
     return payload
+
+
+def _publication_snapshot(item: dict) -> dict:
+    """A public-safe immutable record of precisely what the release points at."""
+    return {
+        "presentationId": str(item.get("id") or ""), "presentationFamilyId": str(item.get("presentationFamilyId") or ""),
+        "revisionNumber": int(item.get("revisionNumber") or 1), "title": str(item.get("title") or "")[:255],
+        "artifact": {"backend": str(item.get("artifactBackend") or ""), "key": str(item.get("artifactStorageKey") or ""),
+                     "sha256": str(item.get("artifactSha256") or ""), "byteSize": int(item.get("artifactBytes") or 0),
+                     "mimeType": str(item.get("artifactMimeType") or "")},
+        "templateId": str(item.get("templateId") or ""), "provenance": item.get("provenance") or {},
+        "approvedBy": str(item.get("approvedBy") or ""), "approvedAt": str(item.get("approvedAt") or ""),
+    }
 
 
 def _validated_pptx_upload(upload, *, max_mb: int) -> Path:
@@ -190,12 +204,14 @@ def register_ai_presentation_routes(owner):
         try:
             path = _validated_pptx_upload(upload, max_mb=int(os.environ.get("AI_PRESENTATION_TEMPLATE_MAX_MB","25") or 25))
             location = PresentationStorage().store(path, namespace="templates", object_id=f"tpl-{uuid.uuid4().hex}", filename=upload.filename or "template.pptx")
+            raw_profile = request.form.get("layoutProfile") or "{}"
+            profile = repository.sanitize_layout_profile(json.loads(raw_profile) if isinstance(raw_profile, str) else {})
             created = repository.create_template(
                 name=str(request.form.get("name") or Path(upload.filename or "PowerPoint 範本").stem).strip()[:160],
                 group_key=group, training_area=area, actor_username=str(user.get("username") or ""),
                 storage_backend=location["backend"], storage_key=location["key"], storage_filename=location["filename"],
-                sha256=location["sha256"], byte_size=location["byteSize"], mime_type=location["mimeType"],)
-        except (ValueError, RuntimeError) as exc:
+                sha256=location["sha256"], byte_size=location["byteSize"], mime_type=location["mimeType"], layout_profile=profile)
+        except (ValueError, RuntimeError, json.JSONDecodeError) as exc:
             return jsonify({"error":str(exc)}), 400
         finally:
             if path: path.unlink(missing_ok=True)
@@ -302,6 +318,44 @@ def register_ai_presentation_routes(owner):
             "revisionNumber": item.get("revisionNumber"), "provenance": item.get("provenance") or {},
         })
 
+    @app.get("/api/ai-presentations/<presentation_id>/history")
+    def presentation_history(presentation_id):
+        user = _actor(owner)
+        if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
+        item, denied = load_scoped(presentation_id, user)
+        if denied: return denied
+        family = str(item.get("presentationFamilyId") or item.get("id") or "")
+        history = repository.list_family_revisions(family)
+        published = repository.latest_published(family)
+        return jsonify({"presentationFamilyId": family, "currentPresentationId": item.get("id"),
+                        "published": _public_presentation(published) if published else None,
+                        "revisions": [_public_presentation(revision) for revision in history]})
+
+    @app.get("/api/ai-presentation-families/<family_id>/published")
+    def presentation_published(family_id):
+        user = _actor(owner)
+        if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
+        item = repository.latest_published(str(family_id))
+        if not item: return jsonify({"error":"此 PowerPoint 尚無正式發布版本。"}), 404
+        denied = _scope(owner, str(item.get("group") or ""))
+        return denied if denied else jsonify(_public_presentation(item))
+
+    @app.get("/api/ai-presentation-families/<family_id>/published/download")
+    def presentation_published_download(family_id):
+        user = _actor(owner)
+        if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
+        item = repository.latest_published(str(family_id))
+        if not item: return jsonify({"error":"此 PowerPoint 尚無正式發布版本。"}), 404
+        denied = _scope(owner, str(item.get("group") or ""))
+        if denied: return denied
+        if not _artifact_ready(item): return jsonify({"error":"已發布 artifact metadata 不完整。"}), 409
+        try:
+            download_name = safe_filename(f"{item.get('title') or 'AI教學投影片'}-published-r{item.get('revisionNumber') or 1}.pptx")
+            response = PresentationStorage().browser_response(_artifact(item), download_name=download_name)
+        except RuntimeError as exc:
+            return jsonify({"error":str(exc)}), 503
+        return send_file(response, as_attachment=True, download_name=download_name, mimetype=PPTX_MIME) if isinstance(response, Path) else response
+
     @app.patch("/api/ai-presentations/<presentation_id>")
     def presentation_edit(presentation_id):
         user = _actor(owner)
@@ -322,6 +376,22 @@ def register_ai_presentation_routes(owner):
                            after={"revision":revision.get("revisionNumber"),"status":revision.get("status")},
                            detail={"parentVersionId":current.get("id"),"renderJobId":job.get("id"),"renderedInWeb":False})
         return jsonify({"ok":True,"presentation":_public_presentation(revision),"job":ai_presentation_jobs.public_job(job)}), 202
+
+    @app.post("/api/ai-presentations/jobs/<job_id>/retry")
+    def presentation_retry_job(job_id):
+        user = _actor(owner)
+        if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
+        denied = _capability(user, "presentation.edit", "目前角色不可重試 AI PowerPoint 工作。")
+        if denied: return denied
+        job = repository.get_job(str(job_id))
+        if not job: return jsonify({"error":"找不到 PowerPoint 工作。"}), 404
+        denied = _scope(owner, str(job.get("group") or ""))
+        if denied: return denied
+        retried = ai_presentation_jobs.retry(job=job)
+        if not retried: return jsonify({"error":"此工作不是可安全重試的失敗狀態，或已達重試上限。"}), 409
+        audit.record_event(actor=user, action="presentation.retry", target_type="ai_presentation_job", target_id=str(job_id),
+                           group=str(job.get("group") or ""), detail={"attempts": job.get("attempts"), "idempotentJobId": job_id})
+        return jsonify(ai_presentation_jobs.public_job(retried)), 202
 
     @app.post("/api/ai-presentations/<presentation_id>/reupload")
     def presentation_reupload(presentation_id):
@@ -397,9 +467,15 @@ def register_ai_presentation_routes(owner):
                      "presentationBackend":str(current.get("artifactBackend") or ""),"presentationStorageKey":str(current.get("artifactStorageKey") or ""),
                      "presentationSha256":str(current.get("artifactSha256") or ""),"presentationBytes":int(current.get("artifactBytes") or 0),
                      "presentationMimeType":str(current.get("artifactMimeType") or ""),"publicationMaterialId":material_id,
-                     "publicationBackend":str(material.get("storageBackend") or ""),"publicationStorageKey":str(material.get("storageKey") or "")},)
+                     "publicationBackend":str(material.get("storageBackend") or ""),"publicationStorageKey":str(material.get("storageKey") or "")},
+            presentation_family_id=str(current.get("presentationFamilyId") or current.get("id") or ""),
+            presentation_revision_number=int(current.get("revisionNumber") or 1), snapshot=_publication_snapshot(current))
         try:
-            published = repository.set_status(str(current.get("id") or ""), status="published", actor_username=str(user.get("username") or ""))
+            # Replaying a completed publish returns the same immutable receipt;
+            # it must not rewrite the historical publication timestamp.
+            published = current if str(current.get("status") or "") == "published" else repository.set_status(
+                str(current.get("id") or ""), status="published", actor_username=str(user.get("username") or "")
+            )
         except ValueError as exc:
             return jsonify({"error":str(exc)}), 409
         audit.record_event(actor=user, action="presentation.publish", target_type="ai_presentation", target_id=str(current.get("id") or ""),

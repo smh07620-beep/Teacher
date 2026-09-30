@@ -27,6 +27,7 @@ def public_job(job: dict) -> dict:
     if request_payload.get("presentationId"):
         payload["presentationId"] = str(request_payload.get("presentationId") or "")
         payload["revisionRender"] = bool(request_payload.get("renderRevision"))
+    payload["retryable"] = str(job.get("status") or "") == "failed" and int(job.get("attempts") or 0) < _env_int("AI_PRESENTATION_JOB_MAX_ATTEMPTS", 3, 1, 10)
     return payload
 
 
@@ -51,6 +52,14 @@ def enqueue_revision(*, presentation: dict, actor_username: str) -> dict:
         training_area=str(presentation.get("area") or ""),
         actor_username=actor_username,
         request_payload={"presentationId": str(presentation.get("id") or ""), "renderRevision": True},
+    )
+
+
+def retry(*, job: dict) -> dict | None:
+    """Reuse the existing worker protocol and idempotency key; never clone a failed job."""
+    return repository.retry_failed_job(
+        str(job.get("id") or ""),
+        max_attempts=_env_int("AI_PRESENTATION_JOB_MAX_ATTEMPTS", 3, 1, 10),
     )
 
 
@@ -87,4 +96,4 @@ class AiPresentationJobProcessor:
         return True
 
 
-__all__ = ["public_job", "enqueue", "enqueue_revision", "AiPresentationJobProcessor"]
+__all__ = ["public_job", "enqueue", "enqueue_revision", "retry", "AiPresentationJobProcessor"]

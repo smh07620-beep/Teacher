@@ -18,6 +18,7 @@ _PROVENANCE_SECRET_MARKERS = (
     "bearer ", "database_url=", "r2_secret", "mega_password", "client_secret=",
 )
 _PROVENANCE_LOCAL_PATH = re.compile(r"(?:[a-z]:[\\/]|/(?:home|tmp|var|mnt|etc)/|file://)", re.I)
+_LAYOUT_KINDS = {"title", "section", "content", "image", "comparison", "table", "summary"}
 
 
 def _now() -> str:
@@ -44,6 +45,10 @@ def sanitize_provenance(value: Mapping[str, Any] | None) -> dict[str, Any]:
         text = str(raw or "").replace("\x00", " ").strip()
         return "\n".join(" ".join(line.split()) for line in text.splitlines())[:limit]
 
+    try:
+        revision_number = int(payload.get("revisionNumber") or 1)
+    except (TypeError, ValueError):
+        revision_number = 1
     result = {
         "sourceMaterialId": clean(payload.get("sourceMaterialId"), 120),
         "sourceDraftId": clean(payload.get("sourceDraftId"), 120),
@@ -54,14 +59,28 @@ def sanitize_provenance(value: Mapping[str, Any] | None) -> dict[str, Any]:
         "templateId": clean(payload.get("templateId"), 120),
         "teacherApprovedBy": clean(payload.get("teacherApprovedBy"), 120),
         "teacherApprovedAt": clean(payload.get("teacherApprovedAt"), 80),
+        "revisionNumber": max(1, min(100000, revision_number)),
     }
     result["sourceChunkIds"] = [item for item in result["sourceChunkIds"] if item]
     for item in result.values():
         for text in (item if isinstance(item, list) else [item]):
-            lowered = text.lower()
-            if any(marker in lowered for marker in _PROVENANCE_SECRET_MARKERS) or _PROVENANCE_LOCAL_PATH.search(text):
+            checked = str(text or "")
+            lowered = checked.lower()
+            if any(marker in lowered for marker in _PROVENANCE_SECRET_MARKERS) or _PROVENANCE_LOCAL_PATH.search(checked):
                 raise ValueError("PowerPoint provenance 含有不允許的敏感資訊或本機路徑。")
     return result
+
+
+def sanitize_layout_profile(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Keep template layout mapping declarative and independent of template internals."""
+    payload = dict(value or {})
+    mapping = payload.get("layoutMap") if isinstance(payload.get("layoutMap"), Mapping) else {}
+    result = {}
+    for kind, layout_name in mapping.items():
+        name = str(layout_name or "").replace("\x00", " ").strip()[:120]
+        if str(kind) in _LAYOUT_KINDS and name:
+            result[str(kind)] = name
+    return {"layoutMap": result}
 
 
 def _json(kind: str, ph: str) -> str:
@@ -80,6 +99,7 @@ def _template(row):
         "storageKey": str(r.get("storage_key") or ""), "storageFilename": str(r.get("storage_filename") or ""),
         "sha256": str(r.get("sha256") or ""), "byteSize": int(r.get("byte_size") or 0),
         "mimeType": str(r.get("mime_type") or ""), "createdBy": str(r.get("created_by") or ""),
+        "layoutProfile": sanitize_layout_profile(_decode(r.get("layout_profile_json"), {})),
         "createdAt": str(r.get("created_at") or ""), "updatedAt": str(r.get("updated_at") or ""),
     }
 
@@ -135,6 +155,9 @@ def _publication(row):
         "id": str(r.get("id") or ""), "presentationId": str(r.get("presentation_id") or ""),
         "publicationMaterialId": str(r.get("publication_material_id") or ""),
         "receiptKey": str(r.get("receipt_key") or ""), "receipt": _decode(r.get("receipt_json"), {}),
+        "presentationFamilyId": str(r.get("presentation_family_id") or ""),
+        "presentationRevisionNumber": int(r.get("presentation_revision_number") or 1),
+        "snapshot": _decode(r.get("snapshot_json"), {}),
         "createdBy": str(r.get("created_by") or ""), "createdAt": str(r.get("created_at") or ""),
     }
 
@@ -149,6 +172,8 @@ def create_template(**data) -> dict:
              data["storage_backend"], data["storage_key"], data["storage_filename"], data["sha256"], int(data["byte_size"]),
              data["mime_type"], data["actor_username"], stamp, stamp),
         )
+        profile = json.dumps(sanitize_layout_profile(data.get("layout_profile")), ensure_ascii=False, separators=(",", ":"))
+        conn.execute(f"UPDATE ai_presentation_templates SET layout_profile_json={_json(kind, ph)} WHERE id={ph}", (profile, tid))
     return get_template(tid) or {}
 
 
@@ -241,6 +266,21 @@ def requeue_stale_processing(cutoff: str) -> int:
     return int(getattr(cur,"rowcount",0) or 0)
 
 
+def retry_failed_job(job_id: str, *, max_attempts: int = 3):
+    """Requeue only a terminal failed job, preserving its error/attempt history."""
+    stamp = _now(); limit = max(1, min(10, int(max_attempts)))
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        cur = conn.execute(
+            f"UPDATE ai_presentation_jobs SET status={ph},claim_token={ph},updated_at={ph},progress_percent={ph},progress_stage={ph},progress_detail={ph},completed_at={ph} "
+            f"WHERE id={ph} AND status={ph} AND attempts<{ph}",
+            ("queued", "", stamp, 0, "等待安全重試", "保留前次錯誤，已重新排入 AI Worker", "", job_id, "failed", limit),
+        )
+        if not int(getattr(cur, "rowcount", 0) or 0):
+            return None
+    return get_job(job_id)
+
+
 def create_presentation(*, material_id, draft_id, template_id, group_key, training_area, title, slides,
                         actor_username, source_job_id, provider="", model="", artifact=None,
                         presentation_family_id="", parent_version_id="", revision_number=1, provenance=None):
@@ -269,6 +309,28 @@ def get_presentation(presentation_id: str):
 def get_presentation_by_source_job_id(source_job_id: str):
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind); row = conn.execute(f"SELECT * FROM ai_presentations WHERE source_job_id={ph} ORDER BY created_at DESC LIMIT 1",(source_job_id,)).fetchone()
+    return _presentation(row)
+
+
+def list_family_revisions(family_id: str, *, limit=100):
+    """Return immutable revision rows oldest first for a scoped history view."""
+    limit = max(1, min(100, int(limit)))
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        rows = conn.execute(
+            f"SELECT * FROM ai_presentations WHERE presentation_family_id={ph} ORDER BY revision_number ASC, created_at ASC LIMIT {ph}",
+            (family_id, limit),
+        ).fetchall()
+    return [_presentation(row) for row in rows]
+
+
+def latest_published(family_id: str):
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT * FROM ai_presentations WHERE presentation_family_id={ph} AND status={ph} ORDER BY published_at DESC, revision_number DESC LIMIT 1",
+            (family_id, "published"),
+        ).fetchone()
     return _presentation(row)
 
 
@@ -348,21 +410,22 @@ def get_publication_by_key(key: str):
     return _publication(row)
 
 
-def create_publication(*, presentation_id, publication_material_id, actor_username, receipt):
+def create_publication(*, presentation_id, publication_material_id, actor_username, receipt, presentation_family_id="", presentation_revision_number=1, snapshot=None):
     key=publication_receipt_key(presentation_id,publication_material_id); existing=get_publication_by_key(key)
     if existing: return existing
     stamp=_now(); payload=json.dumps(dict(receipt or {}),ensure_ascii=False,separators=(",",":")); pub_id=f"pptpub-{uuid.uuid4().hex}"
+    snapshot_payload=json.dumps(dict(snapshot or receipt or {}),ensure_ascii=False,separators=(",",":"))
     with common_db.transaction() as (conn,kind):
         ph=common_db.placeholder(kind); j=_json(kind,ph); prefix="INSERT INTO" if kind=="postgres" else "INSERT OR IGNORE INTO"; suffix=" ON CONFLICT(receipt_key) DO NOTHING" if kind=="postgres" else ""
-        conn.execute(prefix+" ai_presentation_publications(id,presentation_id,publication_material_id,receipt_key,receipt_json,created_by,created_at) VALUES("
-                     f"{ph},{ph},{ph},{ph},{j},{ph},{ph})"+suffix,(pub_id,presentation_id,publication_material_id,key,payload,actor_username,stamp))
+        conn.execute(prefix+" ai_presentation_publications(id,presentation_id,publication_material_id,receipt_key,receipt_json,presentation_family_id,presentation_revision_number,snapshot_json,created_by,created_at) VALUES("
+                     f"{ph},{ph},{ph},{ph},{j},{ph},{ph},{j},{ph},{ph})"+suffix,(pub_id,presentation_id,publication_material_id,key,payload,presentation_family_id,int(presentation_revision_number or 1),snapshot_payload,actor_username,stamp))
     return get_publication_by_key(key) or {}
 
 
 __all__ = [
     "create_template","get_template","list_templates","create_job","get_job","list_queued","claim_job","set_job_progress",
-    "complete_job","fail_job","requeue_stale_processing","create_presentation","get_presentation","get_presentation_by_source_job_id",
-    "list_presentations","next_revision_number","create_revision","update_presentation_artifact","set_status",
+    "complete_job","fail_job","requeue_stale_processing","retry_failed_job","create_presentation","get_presentation","get_presentation_by_source_job_id",
+    "list_presentations","list_family_revisions","latest_published","next_revision_number","create_revision","update_presentation_artifact","set_status",
     "publication_receipt_key","get_publication_by_key","create_publication",
-    "sanitize_provenance",
+    "sanitize_provenance","sanitize_layout_profile",
 ]
