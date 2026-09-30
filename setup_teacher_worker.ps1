@@ -68,7 +68,7 @@ function Assert-RepositorySafe {
   }
   foreach ($path in @($requirements, $workerInstaller, $releaseUpdater, $envTemplate)) {
     if (-not (Test-Path $path -PathType Leaf)) {
-      throw "Required Worker file is missing: $([IO.Path]::GetFileName($path))"
+      throw "Required Worker file is missing."
     }
   }
 }
@@ -98,7 +98,7 @@ function Invoke-ApprovedReleaseUpdate {
     return
   }
   if ($DryRun) {
-    Write-Step "Dry-run: would invoke canonical signed-release updater for tag '$effectiveRef'."
+    Write-Step "Dry-run: would invoke canonical signed-release updater for the configured tag."
     return
   }
   $dirty = & git status --porcelain --untracked-files=all
@@ -255,10 +255,11 @@ function Test-SharedStorageConfiguration {
   }
 
   $r2Ready = (Test-ConfiguredValue "R2_ACCOUNT_ID") -and (Test-ConfiguredValue "R2_ACCESS_KEY_ID") -and (Test-ConfiguredValue "R2_SECRET_ACCESS_KEY") -and (Test-ConfiguredValue "R2_BUCKET_NAME")
+  $ociReady = (Test-ConfiguredValue "OCI_NAMESPACE") -and (Test-ConfiguredValue "OCI_REGION") -and (Test-ConfiguredValue "OCI_ACCESS_KEY_ID") -and (Test-ConfiguredValue "OCI_SECRET_ACCESS_KEY") -and (Test-ConfiguredValue "OCI_BUCKET_NAME")
   $gdriveReady = (Test-ConfiguredValue "GDRIVE_CLIENT_ID") -and (Test-ConfiguredValue "GDRIVE_CLIENT_SECRET") -and (Test-ConfiguredValue "GDRIVE_REFRESH_TOKEN") -and (Test-ConfiguredValue "GDRIVE_FOLDER_ID")
   $megaReady = (Test-ConfiguredValue "MEGA_EMAIL") -and (Test-ConfiguredValue "MEGA_PASSWORD")
-  if (-not ($r2Ready -or $gdriveReady -or $megaReady -or $localVideo -or $localPpt)) {
-    Add-Warning "No complete R2/Google Drive/MEGA shared provider configuration was detected. PowerPoint/video durable publication may remain unavailable."
+  if (-not ($r2Ready -or $ociReady -or $gdriveReady -or $megaReady -or $localVideo -or $localPpt)) {
+    Add-Warning "No complete R2/OCI/Google Drive/MEGA shared provider configuration was detected. PowerPoint/video durable publication may remain unavailable."
   }
 }
 
@@ -275,8 +276,6 @@ function Test-WorkerConfiguration {
     Add-Warning "MATERIAL_WORKER_ID is not set. Configure a stable host ID so heartbeat/observability survives process restarts."
   }
 
-  $provider = ([string]$env:AI_PROVIDER).Trim().ToLowerInvariant()
-  if (-not $provider) { $provider = "groq" }
   $cloudReady = (Test-ConfiguredValue "GROQ_API_KEY") -or (Test-ConfiguredValue "GEMINI_API_KEY")
   $localReady = (Test-Enabled ([string]$env:OLLAMA_ENABLED) $false) -and (Test-ConfiguredValue "OLLAMA_MODEL")
   if (-not ($cloudReady -or $localReady)) {
@@ -362,9 +361,9 @@ try {
   Write-Output "Teacher Worker bootstrap completed successfully. Material Worker + AI Worker prerequisites are ready."
   exit 0
 } catch {
-  # Never echo environment values or raw exception objects: they can include
-  # local paths, credentials, provider URLs, or command arguments.
-  [Console]::Error.WriteLine("Teacher Worker bootstrap failed safely. No reset/clean/stash operation was performed.")
-  [Console]::Error.WriteLine(([string]$_.Exception.Message -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(240, ([string]$_.Exception.Message).Length)))
+  # Intentionally generic: exception text may contain local paths, URLs, command
+  # arguments, or provider configuration. Details belong in the preceding safe
+  # validation messages, not in bootstrap output.
+  [Console]::Error.WriteLine("Teacher Worker bootstrap failed safely. No reset/clean/stash operation was performed; no secret values were printed.")
   exit 1
 }
