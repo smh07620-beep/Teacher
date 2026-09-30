@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -54,5 +54,5 @@ jobs:
         run: |
           python -m py_compile ai_question_worker.py
           python -m compileall -q teacher_app/materials teacher_app/maintenance tests/test_ai_presentation_0100.py
-      - name: Patch whitespace check
-        run: git diff --check HEAD^ HEAD
+      - name: Full branch whitespace check
+        run: git diff --check origin/main...HEAD
