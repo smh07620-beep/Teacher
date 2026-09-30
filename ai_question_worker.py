@@ -12,6 +12,7 @@ from teacher_app.materials import (
     media_audio_jobs,
     media_script_jobs,
     media_subtitle_jobs,
+    media_video_jobs,
 )
 
 
@@ -35,11 +36,12 @@ def main() -> int:
     presentation_processor = ai_presentation_jobs.AiPresentationJobProcessor()
     audio_processor = media_audio_jobs.MediaAudioJobProcessor()
     subtitle_processor = media_subtitle_jobs.MediaSubtitleJobProcessor()
+    video_processor = media_video_jobs.MediaVideoJobProcessor()
     poll_seconds = _env_int("AI_QUESTION_WORKER_POLL_SECONDS", 2, 1, 30)
     recovery_seconds = _env_int("AI_QUESTION_WORKER_RECOVERY_SECONDS", 300, 30, 3600)
     next_recovery = 0.0
     log(
-        "started queues=ai_questions,media_scripts,ai_presentations,media_audio,media_subtitles "
+        "started queues=ai_questions,media_scripts,ai_presentations,media_audio,media_subtitles,media_videos "
         "free_fallback=enabled"
     )
     while True:
@@ -51,29 +53,32 @@ def main() -> int:
                 recovered_presentations = presentation_processor.recover_stale()
                 recovered_audio = audio_processor.recover_stale()
                 recovered_subtitles = subtitle_processor.recover_stale()
+                recovered_videos = video_processor.recover_stale()
                 if (
                     recovered_questions
                     or recovered_scripts
                     or recovered_presentations
                     or recovered_audio
                     or recovered_subtitles
+                    or recovered_videos
                 ):
                     log(
                         "requeued stale "
                         f"question_jobs={recovered_questions} media_script_jobs={recovered_scripts} "
                         f"ai_presentation_jobs={recovered_presentations} media_audio_jobs={recovered_audio} "
-                        f"media_subtitle_jobs={recovered_subtitles}"
+                        f"media_subtitle_jobs={recovered_subtitles} media_video_jobs={recovered_videos}"
                     )
                 next_recovery = now + recovery_seconds
 
             # Give every domain queue one chance per loop. A large assessment queue
-            # must not starve teacher script or narration work; PowerPoint and subtitle
-            # queues receive the same one-job-per-loop fairness guarantee.
+            # must not starve teacher script or narration work; PowerPoint, subtitle,
+            # and video queues receive the same one-job-per-loop fairness guarantee.
             did_work = question_processor.run_next_queued()
             did_work = script_processor.run_next_queued() or did_work
             did_work = presentation_processor.run_next_queued() or did_work
             did_work = audio_processor.run_next_queued() or did_work
             did_work = subtitle_processor.run_next_queued() or did_work
+            did_work = video_processor.run_next_queued() or did_work
             if did_work:
                 continue
             time.sleep(poll_seconds)
