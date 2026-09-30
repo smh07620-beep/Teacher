@@ -45,8 +45,4 @@ def ai_presentation_videos_101(conn, kind: str) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_presentation_videos_presentation ON ai_presentation_videos(presentation_id,revision_number)")
 
 
-# Register additive Phase 5 migration whenever the canonical video migration module is imported.
-from teacher_app.maintenance import ai_video_phase5_migration as _ai_video_phase5_migration  # noqa: E402,F401
-
-
 __all__ = ["ai_presentation_videos_101"]
