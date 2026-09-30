@@ -30,6 +30,8 @@ class WorkerBootstrap0101Tests(unittest.TestCase):
         self.assertNotIn("git stash", lowered)
         self.assertIn("approved-release updater", lowered)
         self.assertIn("working tree is dirty", lowered)
+        self.assertIn("MATERIAL_WORKER_AUTO_UPDATE", self.script)
+        self.assertIn("current approved checkout is preserved", self.script)
 
     def test_worker_local_ai_prerequisites_are_covered(self):
         for marker in (
@@ -54,6 +56,7 @@ class WorkerBootstrap0101Tests(unittest.TestCase):
             "GROQ_API_KEY",
             "GEMINI_API_KEY",
             "R2_SECRET_ACCESS_KEY",
+            "OCI_SECRET_ACCESS_KEY",
             "MEGA_PASSWORD",
             "GDRIVE_CLIENT_SECRET",
             "GDRIVE_REFRESH_TOKEN",
@@ -71,6 +74,11 @@ class WorkerBootstrap0101Tests(unittest.TestCase):
             "R2_ACCESS_KEY_ID",
             "R2_SECRET_ACCESS_KEY",
             "R2_BUCKET_NAME",
+            "OCI_NAMESPACE",
+            "OCI_REGION",
+            "OCI_ACCESS_KEY_ID",
+            "OCI_SECRET_ACCESS_KEY",
+            "OCI_BUCKET_NAME",
             "GDRIVE_REFRESH_TOKEN",
             "MEGA_EMAIL",
             "AI_VIDEO_STORAGE_BACKEND",
