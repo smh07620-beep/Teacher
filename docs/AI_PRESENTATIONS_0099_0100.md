@@ -63,3 +63,28 @@ Publishing is a separate operational action after teacher approval. The linked f
 8. Verify the `AI presentation production checks` workflow and the normal Teacher release checks are green before merging.
 
 The next production phase can consume an **approved presentation revision** for narration/subtitles/video rendering; it must not bypass this teacher approval boundary.
+
+## Phase 2: review workspace and persisted provenance (0102)
+
+Phase 2 adds the teacher-facing PowerPoint workspace and an additive
+`provenance_json` record on every new presentation revision.  The record is
+not a copy of source content: it contains only allow-listed identifiers for
+the source material, approved AI slides draft and job, RAG chunk identifiers,
+provider/model/template identifiers, and the source-draft approval identity
+and time.  Credentials, prompts, local Worker paths, and provider keys are
+rejected before they can be saved.
+
+The workspace uses the existing protected APIs to:
+
+1. enqueue an approved `slides` draft for the dedicated AI Worker;
+2. list revisions and download the finished `.pptx` through the Web service;
+3. view the persisted provenance for the selected, scope-authorized revision;
+4. create a structural/text revision for a fresh Worker render; and
+5. upload a teacher-edited macro-free `.pptx` as another immutable draft
+   revision, then explicitly approve it.
+
+Apply migration `0102-ai-presentation-provenance` with the normal Web startup
+before enabling the Phase 2 interface.  Existing 0099/0100 rows are preserved;
+their provenance may be empty until a new revision is made.  Web and Worker
+continue to require the same shared provider—Phase 2 does not make local
+storage valid in a split deployment.

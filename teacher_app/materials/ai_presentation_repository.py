@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import re
 import uuid
 from typing import Any, Mapping
 
@@ -12,6 +13,11 @@ from teacher_app.common import db as common_db
 PRESENTATION_STATUSES = {"draft", "approved", "published", "superseded"}
 PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 _DURABLE_BACKENDS = {"r2", "oci", "gdrive", "mega", "local"}
+_PROVENANCE_SECRET_MARKERS = (
+    "token=", "password=", "secret=", "api_key=", "apikey=", "authorization:",
+    "bearer ", "database_url=", "r2_secret", "mega_password", "client_secret=",
+)
+_PROVENANCE_LOCAL_PATH = re.compile(r"(?:[a-z]:[\\/]|/(?:home|tmp|var|mnt|etc)/|file://)", re.I)
 
 
 def _now() -> str:
@@ -28,6 +34,34 @@ def _decode(value: Any, default):
         except Exception:
             pass
     return default
+
+
+def sanitize_provenance(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Allow-list the identifiers that may be persisted or returned to Web."""
+    payload = dict(value or {})
+
+    def clean(raw: Any, limit: int) -> str:
+        text = str(raw or "").replace("\x00", " ").strip()
+        return "\n".join(" ".join(line.split()) for line in text.splitlines())[:limit]
+
+    result = {
+        "sourceMaterialId": clean(payload.get("sourceMaterialId"), 120),
+        "sourceDraftId": clean(payload.get("sourceDraftId"), 120),
+        "sourceJobId": clean(payload.get("sourceJobId"), 120),
+        "sourceChunkIds": [clean(item, 160) for item in list(payload.get("sourceChunkIds") or [])[:30]],
+        "provider": clean(payload.get("provider"), 80),
+        "model": clean(payload.get("model"), 160),
+        "templateId": clean(payload.get("templateId"), 120),
+        "teacherApprovedBy": clean(payload.get("teacherApprovedBy"), 120),
+        "teacherApprovedAt": clean(payload.get("teacherApprovedAt"), 80),
+    }
+    result["sourceChunkIds"] = [item for item in result["sourceChunkIds"] if item]
+    for item in result.values():
+        for text in (item if isinstance(item, list) else [item]):
+            lowered = text.lower()
+            if any(marker in lowered for marker in _PROVENANCE_SECRET_MARKERS) or _PROVENANCE_LOCAL_PATH.search(text):
+                raise ValueError("PowerPoint provenance 含有不允許的敏感資訊或本機路徑。")
+    return result
 
 
 def _json(kind: str, ph: str) -> str:
@@ -85,6 +119,7 @@ def _presentation(row):
         "artifactSha256": str(r.get("artifact_sha256") or ""), "artifactBytes": int(r.get("artifact_bytes") or 0),
         "artifactMimeType": str(r.get("artifact_mime_type") or ""), "provider": str(r.get("provider") or ""),
         "model": str(r.get("model") or ""), "sourceJobId": str(r.get("source_job_id") or ""),
+        "provenance": sanitize_provenance(_decode(r.get("provenance_json"), {})),
         "createdBy": str(r.get("created_by") or ""), "updatedBy": str(r.get("updated_by") or ""),
         "approvedBy": str(r.get("approved_by") or ""), "approvedAt": str(r.get("approved_at") or ""),
         "publishedAt": str(r.get("published_at") or ""), "createdAt": str(r.get("created_at") or ""),
@@ -208,9 +243,10 @@ def requeue_stale_processing(cutoff: str) -> int:
 
 def create_presentation(*, material_id, draft_id, template_id, group_key, training_area, title, slides,
                         actor_username, source_job_id, provider="", model="", artifact=None,
-                        presentation_family_id="", parent_version_id="", revision_number=1):
+                        presentation_family_id="", parent_version_id="", revision_number=1, provenance=None):
     pid, stamp = f"ppt-{uuid.uuid4().hex}", _now(); family = presentation_family_id or pid; artifact = dict(artifact or {})
     slides_json = json.dumps(slides or [], ensure_ascii=False, separators=(",", ":"))
+    provenance_json = json.dumps(sanitize_provenance(provenance), ensure_ascii=False, separators=(",", ":"))
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind); j = _json(kind, ph)
         conn.execute(
@@ -219,6 +255,8 @@ def create_presentation(*, material_id, draft_id, template_id, group_key, traini
             (pid,family,parent_version_id,max(1,int(revision_number)),material_id,draft_id,template_id,group_key,training_area,title,"draft",slides_json,
              str(artifact.get("backend") or ""),str(artifact.get("key") or ""),str(artifact.get("filename") or ""),str(artifact.get("sha256") or ""),
              int(artifact.get("byteSize") or 0),str(artifact.get("mimeType") or ""),provider,model,source_job_id,actor_username,actor_username,"","","",stamp,stamp),)
+        # 0102 adds this field without replacing any existing revision rows.
+        conn.execute(f"UPDATE ai_presentations SET provenance_json={j} WHERE id={ph}", (provenance_json, pid))
     return get_presentation(pid) or {}
 
 
@@ -251,7 +289,7 @@ def next_revision_number(family_id: str) -> int:
     return int((dict(row).get("n") if row else 0) or 0)+1
 
 
-def create_revision(current: Mapping[str,Any], *, actor_username: str, title=None, slides=None, artifact=None):
+def create_revision(current: Mapping[str,Any], *, actor_username: str, title=None, slides=None, artifact=None, provenance=None):
     """Create an immutable new draft. Structural edits never inherit a stale PPTX artifact."""
     family=str(current.get("presentationFamilyId") or current.get("id") or "")
     selected_slides = list(current.get("slides") or []) if slides is None else list(slides)
@@ -260,7 +298,8 @@ def create_revision(current: Mapping[str,Any], *, actor_username: str, title=Non
         group_key=str(current.get("group") or ""), training_area=str(current.get("area") or ""), title=str(current.get("title") if title is None else title),
         slides=selected_slides, actor_username=actor_username, source_job_id=str(current.get("sourceJobId") or ""),
         provider=str(current.get("provider") or ""), model=str(current.get("model") or ""), artifact=dict(artifact or {}),
-        presentation_family_id=family, parent_version_id=str(current.get("id") or ""), revision_number=next_revision_number(family))
+        presentation_family_id=family, parent_version_id=str(current.get("id") or ""), revision_number=next_revision_number(family),
+        provenance=current.get("provenance") if provenance is None else provenance)
 
 
 def update_presentation_artifact(presentation_id: str, *, artifact: Mapping[str, Any], actor_username: str):
@@ -325,4 +364,5 @@ __all__ = [
     "complete_job","fail_job","requeue_stale_processing","create_presentation","get_presentation","get_presentation_by_source_job_id",
     "list_presentations","next_revision_number","create_revision","update_presentation_artifact","set_status",
     "publication_receipt_key","get_publication_by_key","create_publication",
+    "sanitize_provenance",
 ]

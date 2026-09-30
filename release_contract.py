@@ -60,6 +60,7 @@ REQUIRED_MIGRATIONS = (
     "0099-ai-presentations",
     "0100-ai-presentation-production-hardening",
     "0101-ai-presentation-videos",
+    "0102-ai-presentation-provenance",
 )
 
 # Backward-compatible singular name used by older release checks.  It now

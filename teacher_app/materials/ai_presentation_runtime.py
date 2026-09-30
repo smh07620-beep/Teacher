@@ -43,20 +43,7 @@ def _sensitive_provenance_value(value: Any) -> bool:
 
 
 def _provenance(payload: dict[str, Any]) -> str:
-    clean = {
-        "sourceMaterialId": _clean(payload.get("sourceMaterialId"), 120),
-        "sourceDraftId": _clean(payload.get("sourceDraftId"), 120),
-        "sourceJobId": _clean(payload.get("sourceJobId"), 120),
-        "sourceChunkIds": [_clean(v, 160) for v in list(payload.get("sourceChunkIds") or [])[:30] if _clean(v, 160)],
-        "provider": _clean(payload.get("provider"), 80),
-        "model": _clean(payload.get("model"), 160),
-        "templateId": _clean(payload.get("templateId"), 120),
-        "teacherApprovedBy": _clean(payload.get("teacherApprovedBy"), 120),
-        "teacherApprovedAt": _clean(payload.get("teacherApprovedAt"), 80),
-    }
-    if any(_sensitive_provenance_value(value) for value in clean.values()):
-        raise ValueError("PowerPoint provenance 含有不允許的敏感資訊或本機路徑。")
-    return json.dumps(clean, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(repository.sanitize_provenance(payload), ensure_ascii=False, separators=(",", ":"))
 
 
 def _slide_header(line: str):
@@ -233,12 +220,14 @@ def generate_presentation(*, job: dict, progress_callback=None, storage: Present
                     output_path=output, provenance=_source_context(draft, source, template_id=template_id), template_path=template_path)
         if progress_callback: progress_callback(80, "保存 PowerPoint", "將產出檔保存至共享 provider")
         artifact = storage.store(output, namespace="artifacts", object_id=str(job.get("id") or ""), filename=f"{str(draft.get('title') or 'AI教學投影片')[:60]}.pptx")
+    provenance = repository.sanitize_provenance(_source_context(draft, source, template_id=template_id))
     created = repository.create_presentation(
         material_id=str(source.get("id") or ""), draft_id=str(draft.get("id") or ""), template_id=template_id,
         group_key=str(draft.get("group") or ""), training_area=str(draft.get("area") or ""),
         title=str(draft.get("title") or source.get("title") or "AI 教學投影片")[:255], slides=slides,
         actor_username=str(job.get("actorUsername") or ""), source_job_id=str(job.get("id") or ""),
-        provider=str(draft.get("provider") or ""), model=str(draft.get("model") or ""), artifact=artifact)
+        provider=str(draft.get("provider") or ""), model=str(draft.get("model") or ""), artifact=artifact,
+        provenance=provenance)
     if progress_callback: progress_callback(95, "PowerPoint 已保存", "等待授課教師檢查、編修與核准")
     return {"presentationId": str(created.get("id") or ""), "artifactSha256": str(created.get("artifactSha256") or ""),
             "artifactBytes": int(created.get("artifactBytes") or 0), "replayed": False}

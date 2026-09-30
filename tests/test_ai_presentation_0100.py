@@ -5,13 +5,18 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+
+from flask import Flask
 
 from teacher_app.materials import ai_presentation_jobs
 from teacher_app.materials import ai_presentation_repository as presentation_repository
 from teacher_app.materials import ai_presentation_runtime
+from teacher_app.materials import ai_presentation_routes
 from teacher_app.materials.ai_presentation_routes import _artifact_ready, _presentation_allowed
 from teacher_app.materials.ai_presentation_repository import publication_receipt_key
+from teacher_app.materials.ai_presentation_repository import sanitize_provenance
 from teacher_app.materials.ai_presentation_runtime import (
     normalize_slides,
     parse_slide_outline,
@@ -84,6 +89,22 @@ class AiPresentationMigrationTests(unittest.TestCase):
         row = conn.execute("SELECT id,title FROM ai_presentations WHERE id='legacy-ppt'").fetchone()
         self.assertEqual((row["id"], row["title"]), ("legacy-ppt", "Legacy"))
 
+    def test_0102_adds_persisted_provenance_without_replacing_rows(self):
+        migration = _presentation_migration()
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        migration.ai_presentations_99(conn, "sqlite")
+        migration.ai_presentation_production_hardening_100(conn, "sqlite")
+        conn.execute("INSERT INTO ai_presentations(id,material_id,draft_id,group_key,training_area,title,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)", ("ppt-old", "mat-1", "draft-1", "grpBio", "internal", "Old", "now", "now"))
+        # Preserve global migration registration order even when this focused
+        # test runs before the AI-video test module.
+        from teacher_app.maintenance import ai_video_migration as _ai_video_migration  # noqa: F401
+        from teacher_app.maintenance.ai_presentation_phase2_migration import ai_presentation_provenance_102
+        ai_presentation_provenance_102(conn, "sqlite")
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(ai_presentations)").fetchall()}
+        self.assertIn("provenance_json", columns)
+        self.assertEqual(conn.execute("SELECT title FROM ai_presentations WHERE id='ppt-old'").fetchone()[0], "Old")
+
 
 class AiPresentationRuntimeTests(unittest.TestCase):
     def test_numbered_bullets_are_not_misread_as_slide_headers(self):
@@ -139,6 +160,14 @@ class AiPresentationRuntimeTests(unittest.TestCase):
         for path in (r"C:\Users\worker\presentation.pptx", "/home/worker/presentation.pptx"):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 ai_presentation_runtime._provenance({"sourceMaterialId": path})
+
+    def test_persisted_provenance_is_allowlisted_and_rejects_secrets(self):
+        result = sanitize_provenance({"sourceMaterialId": "mat-1", "sourceChunkIds": ["chunk-1"], "ignored": "nope"})
+        self.assertEqual(result["sourceMaterialId"], "mat-1")
+        self.assertEqual(result["sourceChunkIds"], ["chunk-1"])
+        self.assertNotIn("ignored", result)
+        with self.assertRaisesRegex(ValueError, "敏感資訊"):
+            sanitize_provenance({"sourceJobId": "token=do-not-store"})
 
     def test_revision_worker_rechecks_group_and_area_scope(self):
         current = {
@@ -303,6 +332,31 @@ class AiPresentationRbacTests(unittest.TestCase):
         self.assertFalse(_presentation_allowed(user, "presentation.approve"))
         self.assertTrue(_presentation_allowed(user, "presentation.publish"))
 
+
+class AiPresentationProvenanceRouteTests(unittest.TestCase):
+    def test_scoped_teacher_can_read_allowlisted_persisted_provenance(self):
+        app = Flask(__name__)
+        owner = SimpleNamespace(
+            app=app,
+            _current_user=lambda: {"username": "teacher-a", "role": "clinical_teacher"},
+        )
+        ai_presentation_routes.register_ai_presentation_routes(owner)
+        revision = {
+            "id": "ppt-r2", "presentationFamilyId": "ppt-family", "revisionNumber": 2,
+            "group": "grpBio", "provenance": {
+                "sourceMaterialId": "mat-1", "sourceDraftId": "draft-1", "sourceJobId": "job-1",
+                "sourceChunkIds": ["chunk-1"], "provider": "local", "model": "test-model",
+                "templateId": "", "teacherApprovedBy": "teacher-a", "teacherApprovedAt": "2026-09-30T00:00:00+00:00",
+            },
+        }
+        with patch.object(ai_presentation_routes.repository, "get_presentation", return_value=revision), \
+             patch.object(ai_presentation_routes, "_scope", return_value=None):
+            response = app.test_client().get("/api/ai-presentations/ppt-r2/provenance")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["presentationId"], "ppt-r2")
+        self.assertEqual(body["provenance"]["sourceChunkIds"], ["chunk-1"])
+
     def test_teacher_and_group_leader_have_full_presentation_permissions(self):
         for role in ("clinical_teacher", "group_leader"):
             user = {"role": role}
@@ -330,6 +384,16 @@ class AiPresentationDeploymentContractTests(unittest.TestCase):
         worker = Path("ai_question_worker.py").read_text(encoding="utf-8")
         self.assertIn("AiPresentationJobProcessor", worker)
         self.assertIn("presentation_processor.run_next_queued()", worker)
+
+    def test_phase2_workspace_and_provenance_endpoint_are_registered(self):
+        assets = Path("teacher_app/frontend/assets.py").read_text(encoding="utf-8")
+        frontend = Path("static/teacher-ai-presentation-1016.js").read_text(encoding="utf-8")
+        routes = Path("teacher_app/materials/ai_presentation_routes.py").read_text(encoding="utf-8")
+        self.assertIn("0102-ai-presentation-provenance", __import__("release_contract").REQUIRED_MIGRATIONS)
+        self.assertIn('/teacher-ai-presentation-1016.js', assets)
+        for marker in ('/download', '/provenance', '/reupload', 'immutable revision'):
+            self.assertIn(marker, frontend)
+        self.assertIn('/api/ai-presentations/<presentation_id>/provenance', routes)
 
 
 if __name__ == "__main__":

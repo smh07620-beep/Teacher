@@ -15,7 +15,7 @@ from teacher_app.common.auth import has_role
 from teacher_app.materials import ai_presentation_jobs
 from teacher_app.materials import ai_presentation_repository as repository
 from teacher_app.materials import ai_presentation_runtime
-from teacher_app.materials.ai_presentation_storage import PPTX_MIME, PresentationStorage
+from teacher_app.materials.ai_presentation_storage import PPTX_MIME, PresentationStorage, safe_filename
 from teacher_app.materials import media_script_repository
 from teacher_app.materials import repository as material_repository
 
@@ -77,6 +77,7 @@ def _public_presentation(item: dict) -> dict:
     )
     payload = {key: item.get(key) for key in keys}
     payload["artifactReady"] = _artifact_ready(item)
+    payload["provenanceAvailable"] = bool(item.get("provenance", {}).get("sourceMaterialId"))
     return payload
 
 
@@ -283,10 +284,23 @@ def register_ai_presentation_routes(owner):
         if not _artifact_ready(item):
             return jsonify({"error":"PowerPoint artifact 尚未由 AI Worker 完成或 durable metadata 不完整。"}), 409
         try:
-            response = PresentationStorage().browser_response(_artifact(item), download_name=f"{item.get('title') or 'AI教學投影片'}-r{item.get('revisionNumber') or 1}.pptx")
+            download_name = safe_filename(f"{item.get('title') or 'AI教學投影片'}-r{item.get('revisionNumber') or 1}.pptx")
+            response = PresentationStorage().browser_response(_artifact(item), download_name=download_name)
         except RuntimeError as exc:
             return jsonify({"error":str(exc)}), 503
-        return send_file(response, as_attachment=True, download_name=response.name, mimetype=PPTX_MIME) if isinstance(response, Path) else response
+        return send_file(response, as_attachment=True, download_name=download_name, mimetype=PPTX_MIME) if isinstance(response, Path) else response
+
+    @app.get("/api/ai-presentations/<presentation_id>/provenance")
+    def presentation_provenance(presentation_id):
+        """Expose only persisted allow-listed identifiers for a scoped revision."""
+        user = _actor(owner)
+        if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
+        item, denied = load_scoped(presentation_id, user)
+        if denied: return denied
+        return jsonify({
+            "presentationId": item.get("id"), "presentationFamilyId": item.get("presentationFamilyId"),
+            "revisionNumber": item.get("revisionNumber"), "provenance": item.get("provenance") or {},
+        })
 
     @app.patch("/api/ai-presentations/<presentation_id>")
     def presentation_edit(presentation_id):

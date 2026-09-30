@@ -16,6 +16,7 @@ from teacher_app.maintenance import ai_material_migration as _ai_material_migrat
 from teacher_app.maintenance import media_subtitle_migration as _media_subtitle_migration  # noqa: F401
 from teacher_app.maintenance import ai_presentation_migration as _ai_presentation_migration  # noqa: F401
 from teacher_app.maintenance import ai_video_migration as _ai_video_migration  # noqa: F401
+from teacher_app.maintenance import ai_presentation_phase2_migration as _ai_presentation_phase2_migration  # noqa: F401
 
 
 sys.modules[__name__] = _migrations

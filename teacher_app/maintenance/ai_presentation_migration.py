@@ -123,7 +123,6 @@ def ai_presentation_production_hardening_100(conn, kind: str) -> None:
         "ON ai_presentation_publications(presentation_id,created_at)"
     )
 
-
 __all__ = [
     "ai_presentations_99",
     "ai_presentation_production_hardening_100",
