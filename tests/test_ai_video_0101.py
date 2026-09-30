@@ -65,26 +65,38 @@ class AiVideoRuntimeTests(unittest.TestCase):
             output.writeframes(b"\0\0" * 24000)
         presentation = {
             "id": "ppt-1", "status": "approved", "group": "g", "area": "a", "title": "CBC 教學",
-            "presentationFamilyId": "family-1", "revisionNumber": 2, "artifactStorageKey": "ppt.pptx",
+            "presentationFamilyId": "family-1", "revisionNumber": 2, "artifactBackend": "r2", "artifactStorageKey": "ppt.pptx",
             "artifactSha256": "a" * 64, "artifactBytes": 4096,
+            "artifactMimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "slides": [{"id": "s1", "enabled": True, "title": "CBC", "bullets": ["確認 QC"], "speakerNotes": "先確認品質管制"}],
         }
         class Storage:
             def store(self, path, **_kwargs):
                 return {"backend": "r2", "key": "ai-videos/test.mp4", "filename": "test.mp4", "sha256": "b" * 64, "byteSize": Path(path).stat().st_size, "mimeType": "video/mp4"}
-        created = {"id": "vid-1", "artifactSha256": "b" * 64, "artifactBytes": 100, "durationSeconds": 1}
+        class PresentationStorage:
+            def download(self, _location, _target):
+                raise RuntimeError("PowerPoint desktop renderer unavailable in test")
+        created = {
+            "id": "vid-1", "artifactSha256": "b" * 64, "artifactBytes": 100, "durationSeconds": 2,
+            "qualityManifest": {"status": "warning"}, "frameRenderer": "text-fallback",
+        }
         with (
             patch.object(ai_video_runtime.repository, "get_video_by_source_job", return_value=None),
             patch.object(ai_video_runtime.presentation_repository, "get_presentation", return_value=presentation),
             patch.object(ai_video_runtime, "_synthesize", return_value=(audio.getvalue(), "Kokoro-test")),
             patch.object(ai_video_runtime.repository, "create_video", return_value=created) as create,
         ):
-            result = ai_video_runtime.generate_video(job={"id": "vidjob-1", "presentationId": "ppt-1", "group": "g", "area": "a", "actorUsername": "teacher", "request": {}}, storage=Storage())
+            result = ai_video_runtime.generate_video(
+                job={"id": "vidjob-1", "presentationId": "ppt-1", "group": "g", "area": "a", "actorUsername": "teacher", "request": {}},
+                storage=Storage(), presentation_storage=PresentationStorage(),
+            )
         self.assertEqual(result["videoId"], "vid-1")
         kwargs = create.call_args.kwargs
-        self.assertEqual(len(kwargs["timeline"]), 1)
+        self.assertEqual(len(kwargs["timeline"]), 2)
+        self.assertEqual(kwargs["timeline"][0]["slideId"], "phase4-cover")
         self.assertIn("WEBVTT", kwargs["vtt_text"])
         self.assertIn("先確認品質管制", kwargs["srt_text"])
+        self.assertEqual(kwargs["frame_renderer"], "text-fallback")
 
 
 class AiVideoQueueTests(unittest.TestCase):
