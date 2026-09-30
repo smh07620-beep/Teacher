@@ -18,12 +18,58 @@ The Material Worker remains the only local release-update owner. `run_ai_worker_
 
 Production keeps `FREE_ONLY_MODE=true`.
 
-- AI question generation / teacher script drafting uses the configured free provider (`AI_PROVIDER=groq` by default).
+- AI question generation and teacher script drafting use a free-first chain. The normal priority is **Groq → Gemini → local Ollama** when each provider is configured.
+- Provider switching is deliberately narrow: only quota exhausted / rate limit / timeout / provider unavailable errors may fall through. Prompt validation, malformed JSON, unsupported material, authorization, or other deterministic errors do **not** silently switch providers.
 - AI narration uses **local Kokoro** on the hospital Worker PC.
-- OpenAI TTS is not required, not declared in `render.yaml`, and is not called by `media_audio_runtime.py`.
+- Audio/video transcription can use **local faster-whisper** when the cloud path is unavailable and the final local LLM fallback is used.
+- OpenAI is not inserted into the automatic free fallback chain.
 - Narration output is WAV and is stored in the existing Cloudflare R2 bucket.
 
-Kokoro is installed only on the local Worker host through `requirements-ai-worker.txt`; Render Web stays lightweight and only validates/enqueues narration jobs.
+The local fallback stack is installed only on the Worker host through `requirements-ai-worker.txt`; Render Web stays lightweight and only validates/enqueues AI jobs.
+
+### What happens when free cloud quota is exhausted
+
+```text
+AI question / teacher script
+        ↓
+Groq
+        ↓ quota / 429 / temporary unavailable only
+Gemini
+        ↓ quota / 429 / temporary unavailable only
+Ollama on the trusted Worker
+        ↓
+result keeps the actual provider/model provenance
+```
+
+If a provider returns a normal validation/content/JSON error, the job fails with that error instead of hiding it by hopping providers. This prevents a malformed request from being retried across every service.
+
+Local Ollama is optional and **disabled by default**. Before enabling it, install Ollama on the Worker, pull the configured model, and confirm the local service is reachable. The example uses a small Chinese-capable model suitable as a CPU fallback:
+
+```powershell
+ollama pull qwen3:4b
+ollama run qwen3:4b "請回覆：本機 AI 正常"
+```
+
+Then set locally in `.local-worker.env`:
+
+```text
+AI_FREE_FALLBACK_ENABLED=true
+OLLAMA_ENABLED=true
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen3:4b
+OLLAMA_TIMEOUT_SECONDS=240
+```
+
+For local speech-to-text:
+
+```text
+LOCAL_WHISPER_ENABLED=true
+LOCAL_WHISPER_MODEL=small
+LOCAL_WHISPER_DEVICE=cpu
+LOCAL_WHISPER_COMPUTE_TYPE=int8
+```
+
+`faster-whisper` downloads its selected model on first use. That first local transcription can therefore take longer than later jobs. The local fallback currently handles text, subtitle, audio, and video content that can be reduced to text/transcript. Pure image-only teaching material remains fail-closed until a hospital-approved local vision/OCR model is configured; it is not guessed from unsupported pixels.
 
 ## Required local configuration
 
@@ -43,7 +89,9 @@ DATABASE_URL=postgresql://...
 FREE_ONLY_MODE=true
 AI_EXTERNAL_PROCESSING_ENABLED=true
 AI_PROVIDER=groq
+AI_FREE_FALLBACK_ENABLED=true
 GROQ_API_KEY=...
+GEMINI_API_KEY=...
 ```
 
 Free local narration uses:
@@ -82,7 +130,7 @@ py -3.12 -m venv .venv
 Copy-Item .local-worker.env.example .local-worker.env
 ```
 
-Edit `.local-worker.env` locally. `run_ai_worker_autostart.ps1` automatically synchronizes `requirements-ai-worker.txt` the first time it starts (and again only when that file changes or required imports are unavailable), so Kokoro stays out of the Render Web dependency set.
+Edit `.local-worker.env` locally. `run_ai_worker_autostart.ps1` automatically synchronizes `requirements-ai-worker.txt` the first time it starts (and again only when that file changes or required imports are unavailable), so Kokoro, Gemini SDK, and faster-whisper stay out of the Render Web dependency set.
 
 Then install **both** startup tasks with one command. The simplest deployment for a dedicated Worker PC is SYSTEM, provided SYSTEM can read the checkout/env file and use the configured storage providers:
 
@@ -113,6 +161,13 @@ Get-ScheduledTaskInfo -TaskName "Teacher AI Worker"
 Get-Process python,pythonw -ErrorAction SilentlyContinue
 ```
 
+For the optional local LLM fallback:
+
+```powershell
+ollama list
+Invoke-RestMethod http://127.0.0.1:11434/api/tags
+```
+
 In Event Viewer, inspect **Windows Logs → Application** and filter the `TeacherAIWorker` source. Event 1100 indicates the AI supervisor started. Warnings 2201/2202 mean narration or free-provider configuration is incomplete without exposing secret values. Errors 3101/3103/3104/3105 indicate missing production DB, missing runtime prerequisites, launch failure, or restart exhaustion.
 
-A working AI Worker prints `started queues=ai_questions,media_scripts,media_audio`. The first Kokoro narration may also download the open model/voice files to the normal local model cache. Web remains responsible only for enqueue/status APIs; long AI execution stays off the Render Web process.
+A working AI Worker prints `started queues=ai_questions,media_scripts,media_audio free_fallback=enabled`. The first Kokoro narration, faster-whisper transcription, or local model initialization can be slower because model files may be entering the normal local cache. Web remains responsible only for enqueue/status APIs; long AI execution stays off the Render Web process.
