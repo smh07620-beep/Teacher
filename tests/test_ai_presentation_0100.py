@@ -7,7 +7,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from teacher_app.materials.ai_presentation_routes import _presentation_allowed
+from teacher_app.materials import ai_presentation_jobs
+from teacher_app.materials import ai_presentation_repository as presentation_repository
+from teacher_app.materials import ai_presentation_runtime
+from teacher_app.materials.ai_presentation_routes import _artifact_ready, _presentation_allowed
 from teacher_app.maintenance.ai_presentation_migration import (
     ai_presentation_production_hardening_100,
     ai_presentations_99,
@@ -18,7 +21,7 @@ from teacher_app.materials.ai_presentation_runtime import (
     parse_slide_outline,
     render_pptx,
 )
-from teacher_app.materials.ai_presentation_storage import PresentationStorage
+from teacher_app.materials.ai_presentation_storage import PPTX_MIME, PresentationStorage
 
 
 class AiPresentationMigrationTests(unittest.TestCase):
@@ -92,6 +95,7 @@ class AiPresentationRuntimeTests(unittest.TestCase):
         self.assertFalse(slides[0]["enabled"])
         self.assertTrue(slides[1]["enabled"])
 
+    @unittest.skipIf(ai_presentation_runtime.Presentation is None, "python-pptx is installed only on the AI Worker")
     def test_rendered_pptx_contains_allowlisted_provenance(self):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp) / "test.pptx"
@@ -115,6 +119,44 @@ class AiPresentationRuntimeTests(unittest.TestCase):
             self.assertIn("mat-1", rendered.core_properties.comments)
             self.assertNotIn("token=", rendered.core_properties.comments.lower())
 
+    def test_provenance_rejects_secret_like_allowlisted_value(self):
+        with self.assertRaises(ValueError):
+            ai_presentation_runtime._provenance(
+                {"sourceMaterialId": "mat-1", "sourceJobId": "token=do-not-embed"}
+            )
+
+    def test_provenance_rejects_local_filesystem_paths(self):
+        for path in (r"C:\Users\worker\presentation.pptx", "/home/worker/presentation.pptx"):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                ai_presentation_runtime._provenance({"sourceMaterialId": path})
+
+    def test_revision_worker_rechecks_group_and_area_scope(self):
+        current = {
+            "id": "ppt-r2",
+            "status": "draft",
+            "artifactStorageKey": "",
+            "artifactSha256": "",
+            "artifactBytes": 0,
+            "group": "grpBio",
+            "area": "internal",
+            "draftId": "draft-1",
+            "materialId": "mat-1",
+        }
+        job = {
+            "group": "grpBio",
+            "area": "internal",
+            "request": {"presentationId": "ppt-r2", "renderRevision": True},
+        }
+        draft = {"id": "draft-1", "group": "grpBio", "area": "pgy"}
+        source = {"id": "mat-1", "group": "grpBio", "area": "internal"}
+        with (
+            patch.object(ai_presentation_runtime.repository, "get_presentation", return_value=current),
+            patch.object(ai_presentation_runtime.media_script_repository, "get_script", return_value=draft),
+            patch.object(ai_presentation_runtime.material_repository, "get_material", return_value=source),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "授權範圍已改變"):
+                ai_presentation_runtime.generate_revision(job=job, storage=object())
+
     def test_local_storage_is_fail_closed_without_explicit_development_opt_in(self):
         with patch.dict(
             os.environ,
@@ -127,11 +169,120 @@ class AiPresentationRuntimeTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 PresentationStorage().backend()
 
+
+class AiPresentationRevisionTests(unittest.TestCase):
+    def test_structural_edit_creates_new_revision_without_stale_artifact(self):
+        current = {
+            "id": "ppt-r1",
+            "presentationFamilyId": "ppt-family",
+            "revisionNumber": 1,
+            "materialId": "mat-1",
+            "draftId": "draft-1",
+            "templateId": "tpl-1",
+            "group": "grpBio",
+            "area": "internal",
+            "title": "Original",
+            "slides": [{"title": "A", "bullets": ["one"]}],
+            "sourceJobId": "pptjob-1",
+            "provider": "groq",
+            "model": "model-1",
+            "artifactBackend": "r2",
+            "artifactStorageKey": "old.pptx",
+            "artifactSha256": "a" * 64,
+            "artifactBytes": 1234,
+            "artifactMimeType": PPTX_MIME,
+        }
+        expected = {"id": "ppt-r2"}
+        with (
+            patch.object(presentation_repository, "next_revision_number", return_value=2),
+            patch.object(presentation_repository, "create_presentation", return_value=expected) as create,
+        ):
+            result = presentation_repository.create_revision(
+                current,
+                actor_username="teacher-a",
+                title="Edited",
+                slides=[{"title": "B", "bullets": ["two"]}],
+            )
+        self.assertEqual(result, expected)
+        kwargs = create.call_args.kwargs
+        self.assertEqual(kwargs["presentation_family_id"], "ppt-family")
+        self.assertEqual(kwargs["parent_version_id"], "ppt-r1")
+        self.assertEqual(kwargs["revision_number"], 2)
+        self.assertEqual(kwargs["artifact"], {})
+
+    def test_artifact_metadata_must_be_complete_before_attaching(self):
+        with self.assertRaises(ValueError):
+            presentation_repository.update_presentation_artifact(
+                "ppt-r2",
+                artifact={
+                    "backend": "r2",
+                    "key": "ai-presentations/artifacts/ppt-r2/file.pptx",
+                    "sha256": "bad",
+                    "byteSize": 123,
+                    "mimeType": PPTX_MIME,
+                },
+                actor_username="teacher-a",
+            )
+
+    def test_artifact_ready_requires_shared_provider_and_complete_metadata(self):
+        artifact = {
+            "artifactBackend": "r2",
+            "artifactStorageKey": "ai-presentations/artifacts/ppt-r2/file.pptx",
+            "artifactSha256": "a" * 64,
+            "artifactBytes": 4096,
+            "artifactMimeType": PPTX_MIME,
+        }
+        self.assertTrue(_artifact_ready(artifact))
+        with patch.dict(os.environ, {"AI_PRESENTATION_ALLOW_LOCAL_STORAGE": "false"}, clear=False):
+            self.assertFalse(_artifact_ready({**artifact, "artifactBackend": "local"}))
+
+
+class AiPresentationPublicationTests(unittest.TestCase):
     def test_publication_receipt_key_is_deterministic(self):
         first = publication_receipt_key("ppt-1", "mat-1")
         second = publication_receipt_key("ppt-1", "mat-1")
         self.assertEqual(first, second)
         self.assertNotEqual(first, publication_receipt_key("ppt-1", "mat-2"))
+
+    def test_replayed_publication_returns_existing_receipt_without_new_write(self):
+        existing = {
+            "id": "pub-1",
+            "presentationId": "ppt-1",
+            "publicationMaterialId": "mat-1",
+            "receiptKey": publication_receipt_key("ppt-1", "mat-1"),
+        }
+        with (
+            patch.object(presentation_repository, "get_publication_by_key", return_value=existing),
+            patch.object(presentation_repository.common_db, "transaction") as transaction,
+        ):
+            result = presentation_repository.create_publication(
+                presentation_id="ppt-1",
+                publication_material_id="mat-1",
+                actor_username="teacher-a",
+                receipt={"presentationSha256": "a" * 64},
+            )
+        self.assertEqual(result, existing)
+        transaction.assert_not_called()
+
+
+class AiPresentationWorkerQueueTests(unittest.TestCase):
+    def test_revision_job_dispatches_to_worker_revision_renderer(self):
+        queued = {"id": "pptjob-1"}
+        claimed = {
+            "id": "pptjob-1",
+            "request": {"presentationId": "ppt-r2", "renderRevision": True},
+        }
+        processor = ai_presentation_jobs.AiPresentationJobProcessor()
+        with (
+            patch.object(presentation_repository, "list_queued", return_value=[queued]),
+            patch.object(presentation_repository, "claim_job", return_value=claimed),
+            patch.object(presentation_repository, "complete_job", return_value=True),
+            patch.object(ai_presentation_jobs.ai_presentation_runtime, "generate_revision", return_value={"presentationId": "ppt-r2"}) as revision,
+            patch.object(ai_presentation_jobs.ai_presentation_runtime, "generate_presentation") as initial,
+        ):
+            self.assertTrue(processor.run_next_queued())
+        revision.assert_called_once()
+        initial.assert_not_called()
 
 
 class AiPresentationRbacTests(unittest.TestCase):
@@ -156,6 +307,19 @@ class AiPresentationRbacTests(unittest.TestCase):
         self.assertTrue(_presentation_allowed(user, "presentation.edit"))
         self.assertFalse(_presentation_allowed(user, "presentation.approve"))
         self.assertTrue(_presentation_allowed(user, "presentation.publish"))
+
+
+class AiPresentationDeploymentContractTests(unittest.TestCase):
+    def test_python_pptx_is_worker_only_dependency(self):
+        web = Path("requirements.txt").read_text(encoding="utf-8").lower()
+        worker = Path("requirements-ai-worker.txt").read_text(encoding="utf-8").lower()
+        self.assertNotIn("python-pptx", web)
+        self.assertIn("python-pptx", worker)
+
+    def test_ai_worker_consumes_presentation_queue(self):
+        worker = Path("ai_question_worker.py").read_text(encoding="utf-8")
+        self.assertIn("AiPresentationJobProcessor", worker)
+        self.assertIn("presentation_processor.run_next_queued()", worker)
 
 
 if __name__ == "__main__":
