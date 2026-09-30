@@ -136,3 +136,7 @@ The existing teacher media workspace now exposes the Phase 6 renderer policy and
 - publish only after any renderer warning is explicitly acknowledged.
 
 This remains additive and reuses `ai_video_*`, the current AI Worker queue, durable provider, heartbeat/stale recovery, and existing approval boundary. It does not introduce browser-side video rendering or a second media queue architecture.
+
+## Compatibility lineage: AI Video Phase 2 authoring
+
+Phase 6 intentionally preserves the earlier AI Video Phase 2 authoring contract instead of replacing it. The authoring lineage still supports **editable narration per slide**, keeps immutable revision links through `parentRevisionId` and `videoFamilyId`, retains the **clinical-teacher/group-leader approval** boundary, and continues to **reuse `ai_video_*`** persistence/queue/runtime ownership. Phase 6 only strengthens renderer resilience, observability, teacher preview, and publication quality gates on top of that existing pipeline.
