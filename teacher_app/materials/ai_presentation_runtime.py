@@ -19,12 +19,11 @@ except ImportError:  # pragma: no cover
     Presentation = None
     Inches = None
 
-
 _MAX_SLIDES = 60
 _MAX_BULLETS = 8
 _SECRET_MARKERS = (
     "token=", "password=", "secret=", "api_key=", "apikey=", "authorization:",
-    "bearer ", "database_url=", "r2_secret", "mega_password",
+    "bearer ", "database_url=", "r2_secret", "mega_password", "client_secret=",
 )
 
 
@@ -40,11 +39,15 @@ def _provenance(payload: dict[str, Any]) -> str:
         "sourceDraftId": _clean(payload.get("sourceDraftId"), 120),
         "sourceJobId": _clean(payload.get("sourceJobId"), 120),
         "sourceChunkIds": [_clean(v, 160) for v in list(payload.get("sourceChunkIds") or [])[:30] if _clean(v, 160)],
+        "provider": _clean(payload.get("provider"), 80),
+        "model": _clean(payload.get("model"), 160),
+        "templateId": _clean(payload.get("templateId"), 120),
         "teacherApprovedBy": _clean(payload.get("teacherApprovedBy"), 120),
         "teacherApprovedAt": _clean(payload.get("teacherApprovedAt"), 80),
     }
     text = json.dumps(clean, ensure_ascii=False, separators=(",", ":"))
-    if any(marker in text.lower() for marker in _SECRET_MARKERS):
+    lowered = text.lower()
+    if any(marker in lowered for marker in _SECRET_MARKERS):
         raise ValueError("PowerPoint provenance 含有不允許的敏感資訊。")
     return text
 
@@ -119,11 +122,25 @@ def _write_notes(slide, text: str) -> None:
         pass
 
 
+def _clear_template_slides(prs) -> None:
+    """Keep the template theme/layouts but remove authoring/sample slide instances."""
+    slide_ids = list(prs.slides._sldIdLst)
+    for slide_id in slide_ids:
+        rel_id = slide_id.rId
+        prs.slides._sldIdLst.remove(slide_id)
+        try:
+            prs.part.drop_rel(rel_id)
+        except KeyError:
+            pass
+
+
 def render_pptx(*, title: str, slides: list[dict], output_path: Path,
                 provenance: dict[str, Any], template_path: Path | None = None) -> Path:
     if Presentation is None or Inches is None:
         raise RuntimeError("AI Worker 尚未安裝 python-pptx；請更新 requirements 後重新啟動。")
     prs = Presentation(str(template_path)) if template_path else Presentation()
+    if template_path:
+        _clear_template_slides(prs)
     core = prs.core_properties
     core.title = _clean(title, 255)
     core.subject = "Teacher AI reviewed teaching presentation"
@@ -155,7 +172,7 @@ def _template_location(item: dict) -> dict:
     return {"backend": item.get("storageBackend"), "key": item.get("storageKey"), "sha256": item.get("sha256")}
 
 
-def _source_context(draft: dict, source: dict) -> dict[str, Any]:
+def _source_context(draft: dict, source: dict, *, template_id: str = "") -> dict[str, Any]:
     chunk_ids = []
     for chunk in list(draft.get("sourceChunks") or []):
         value = str((chunk or {}).get("chunkId") or (chunk or {}).get("id") or "") if isinstance(chunk, dict) else str(chunk or "")
@@ -164,8 +181,17 @@ def _source_context(draft: dict, source: dict) -> dict[str, Any]:
     return {
         "sourceMaterialId": str(source.get("id") or ""), "sourceDraftId": str(draft.get("id") or ""),
         "sourceJobId": str(draft.get("sourceJobId") or ""), "sourceChunkIds": chunk_ids,
-        "teacherApprovedBy": str(draft.get("approvedBy") or ""), "teacherApprovedAt": str(draft.get("approvedAt") or ""),
+        "provider": str(draft.get("provider") or ""), "model": str(draft.get("model") or ""),
+        "templateId": str(template_id or ""), "teacherApprovedBy": str(draft.get("approvedBy") or ""),
+        "teacherApprovedAt": str(draft.get("approvedAt") or ""),
     }
+
+
+def _validated_template(template_id: str, *, group: str, area: str):
+    template = repository.get_template(template_id) if template_id else None
+    if template_id and (not template or not template.get("active") or template.get("group") != group or template.get("area") != area):
+        raise RuntimeError("PowerPoint 範本不存在、已停用或超出允許範圍。")
+    return template
 
 
 def generate_presentation(*, job: dict, progress_callback=None, storage: PresentationStorage | None = None) -> dict:
@@ -183,9 +209,8 @@ def generate_presentation(*, job: dict, progress_callback=None, storage: Present
     source = material_repository.get_material(str(draft.get("materialId") or ""))
     if not source or source.get("group") != draft.get("group") or source.get("area") != draft.get("area"):
         raise RuntimeError("來源教材不存在或範圍與 AI 草稿不一致。")
-    template_id = str(job.get("templateId") or ""); template = repository.get_template(template_id) if template_id else None
-    if template_id and (not template or not template.get("active") or template.get("group") != draft.get("group") or template.get("area") != draft.get("area")):
-        raise RuntimeError("PowerPoint 範本不存在、已停用或超出允許範圍。")
+    template_id = str(job.get("templateId") or "")
+    template = _validated_template(template_id, group=str(draft.get("group") or ""), area=str(draft.get("area") or ""))
     if progress_callback:
         progress_callback(15, "解析投影片大綱", "整理教師已核准的投影片內容")
     supplied = dict(job.get("request") or {}).get("slides")
@@ -193,16 +218,13 @@ def generate_presentation(*, job: dict, progress_callback=None, storage: Present
     with tempfile.TemporaryDirectory(prefix="teacher-ppt-") as temp:
         root = Path(temp); template_path = None
         if template:
-            if progress_callback:
-                progress_callback(30, "下載簡報範本", "從共享 provider 下載組別範本")
+            if progress_callback: progress_callback(30, "下載簡報範本", "從共享 provider 下載組別範本")
             template_path = storage.download(_template_location(template), root / "template.pptx")
         output = root / "presentation.pptx"
-        if progress_callback:
-            progress_callback(55, "建立 PowerPoint", "寫入投影片、speaker notes 與 provenance")
+        if progress_callback: progress_callback(55, "建立 PowerPoint", "寫入投影片、speaker notes 與 provenance")
         render_pptx(title=str(draft.get("title") or source.get("title") or "AI 教學投影片"), slides=slides,
-                    output_path=output, provenance=_source_context(draft, source), template_path=template_path)
-        if progress_callback:
-            progress_callback(80, "保存 PowerPoint", "將產出檔保存至共享 provider")
+                    output_path=output, provenance=_source_context(draft, source, template_id=template_id), template_path=template_path)
+        if progress_callback: progress_callback(80, "保存 PowerPoint", "將產出檔保存至共享 provider")
         artifact = storage.store(output, namespace="artifacts", object_id=str(job.get("id") or ""), filename=f"{str(draft.get('title') or 'AI教學投影片')[:60]}.pptx")
     created = repository.create_presentation(
         material_id=str(source.get("id") or ""), draft_id=str(draft.get("id") or ""), template_id=template_id,
@@ -210,24 +232,49 @@ def generate_presentation(*, job: dict, progress_callback=None, storage: Present
         title=str(draft.get("title") or source.get("title") or "AI 教學投影片")[:255], slides=slides,
         actor_username=str(job.get("actorUsername") or ""), source_job_id=str(job.get("id") or ""),
         provider=str(draft.get("provider") or ""), model=str(draft.get("model") or ""), artifact=artifact)
-    if progress_callback:
-        progress_callback(95, "PowerPoint 已保存", "等待授課教師檢查、編修與核准")
+    if progress_callback: progress_callback(95, "PowerPoint 已保存", "等待授課教師檢查、編修與核准")
     return {"presentationId": str(created.get("id") or ""), "artifactSha256": str(created.get("artifactSha256") or ""),
             "artifactBytes": int(created.get("artifactBytes") or 0), "replayed": False}
 
 
-def rerender_revision(current: dict, *, actor_username: str, title: str, slides: list[dict], storage: PresentationStorage | None = None) -> dict:
-    storage = storage or PresentationStorage(); normalized = normalize_slides(slides)
-    template = repository.get_template(str(current.get("templateId") or "")) if current.get("templateId") else None
+def generate_revision(*, job: dict, progress_callback=None, storage: PresentationStorage | None = None) -> dict:
+    """Worker-only render path for an already-created immutable draft revision."""
+    storage = storage or PresentationStorage(); request_payload = dict(job.get("request") or {})
+    presentation_id = str(request_payload.get("presentationId") or "").strip()
+    current = repository.get_presentation(presentation_id)
+    if not current:
+        raise RuntimeError("找不到待重新產生的 PowerPoint revision。")
+    if current.get("status") != "draft":
+        raise RuntimeError("只有 draft PowerPoint revision 可以重新產生 artifact。")
+    if current.get("artifactStorageKey") and current.get("artifactSha256") and int(current.get("artifactBytes") or 0) > 0:
+        return {"presentationId": presentation_id, "artifactSha256": current.get("artifactSha256"), "artifactBytes": current.get("artifactBytes"), "replayed": True}
+    if current.get("group") != job.get("group") or current.get("area") != job.get("area"):
+        raise RuntimeError("PowerPoint revision 工作範圍不一致。")
     draft = media_script_repository.get_script(str(current.get("draftId") or "")) or {}
     source = material_repository.get_material(str(current.get("materialId") or "")) or {}
-    family = str(current.get("presentationFamilyId") or current.get("id") or ""); revision = repository.next_revision_number(family)
+    if not draft or not source or draft.get("group") != current.get("group") or source.get("group") != current.get("group"):
+        raise RuntimeError("PowerPoint revision 來源不存在或授權範圍已改變。")
+    template_id = str(current.get("templateId") or "")
+    template = _validated_template(template_id, group=str(current.get("group") or ""), area=str(current.get("area") or ""))
+    slides = normalize_slides(list(current.get("slides") or []))
+    if progress_callback: progress_callback(25, "準備 PowerPoint revision", "由 AI Worker 重新建立教師編修版本")
     with tempfile.TemporaryDirectory(prefix="teacher-ppt-revision-") as temp:
-        root = Path(temp); template_path = storage.download(_template_location(template), root / "template.pptx") if template else None
+        root = Path(temp); template_path = None
+        if template:
+            template_path = storage.download(_template_location(template), root / "template.pptx")
         output = root / "presentation.pptx"
-        render_pptx(title=title, slides=normalized, output_path=output, provenance=_source_context(draft, source), template_path=template_path)
-        artifact = storage.store(output, namespace="artifacts", object_id=f"{family}-r{revision}", filename=f"{title[:60] or 'AI教學投影片'}-r{revision}.pptx")
-    return repository.create_revision(current, actor_username=actor_username, title=title, slides=normalized, artifact=artifact)
+        if progress_callback: progress_callback(55, "建立 PowerPoint revision", "寫入教師調整後內容與安全 provenance")
+        render_pptx(title=str(current.get("title") or "AI 教學投影片"), slides=slides, output_path=output,
+                    provenance=_source_context(draft, source, template_id=template_id), template_path=template_path)
+        if progress_callback: progress_callback(80, "保存 PowerPoint revision", "將新 revision artifact 保存至共享 provider")
+        artifact = storage.store(output, namespace="artifacts", object_id=presentation_id,
+                                 filename=f"{str(current.get('title') or 'AI教學投影片')[:60]}-r{int(current.get('revisionNumber') or 1)}.pptx")
+    updated = repository.update_presentation_artifact(presentation_id, artifact=artifact, actor_username=str(job.get("actorUsername") or ""))
+    if not updated:
+        raise RuntimeError("PowerPoint revision 已不存在。")
+    if progress_callback: progress_callback(95, "PowerPoint revision 已保存", "等待授課教師檢查與核准")
+    return {"presentationId": presentation_id, "artifactSha256": updated.get("artifactSha256"),
+            "artifactBytes": int(updated.get("artifactBytes") or 0), "replayed": False}
 
 
-__all__ = ["parse_slide_outline", "normalize_slides", "render_pptx", "generate_presentation", "rerender_revision"]
+__all__ = ["parse_slide_outline", "normalize_slides", "render_pptx", "generate_presentation", "generate_revision"]
