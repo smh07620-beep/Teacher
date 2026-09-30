@@ -163,7 +163,7 @@ function Ensure-PythonEnvironment {
   Write-Step "Synchronizing AI Worker Python requirements."
   & $venvPython -m pip install --disable-pip-version-check -r $requirements
   if ($LASTEXITCODE -ne 0) { throw "requirements-ai-worker.txt installation failed." }
-  & $venvPython -c "import requests, psycopg, pptx, kokoro, faster_whisper, numpy; from google import genai; from misaki import zh; print('AI Worker Python imports OK')"
+  & $venvPython -c "import requests, psycopg, pptx, fitz, kokoro, faster_whisper, numpy; from google import genai; from misaki import zh; print('AI Worker Python imports OK')"
   if ($LASTEXITCODE -ne 0) { throw "AI Worker dependency import self-test failed." }
 }
 
@@ -205,6 +205,52 @@ function Ensure-FFmpeg {
     return
   }
   & $ffmpeg.Source -version 2>$null | Select-Object -First 1 | ForEach-Object { Write-Step $_ }
+}
+
+function Resolve-LibreOffice {
+  $override = ([string]$env:AI_VIDEO_LIBREOFFICE_PATH).Trim()
+  if ($override -and (Test-Path $override -PathType Leaf)) { return $override }
+  $command = Get-Command soffice.exe -CommandType Application -ErrorAction SilentlyContinue
+  if ($command) { return $command.Source }
+  foreach ($candidate in @(
+    (Join-Path $env:ProgramFiles "LibreOffice\program\soffice.exe"),
+    $(if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} "LibreOffice\program\soffice.exe" } else { "" })
+  )) {
+    if ($candidate -and (Test-Path $candidate -PathType Leaf)) { return $candidate }
+  }
+  return ""
+}
+
+function Ensure-LibreOffice {
+  $soffice = Resolve-LibreOffice
+  if (-not $soffice) {
+    [void](Install-WingetPackage "TheDocumentFoundation.LibreOffice" "LibreOffice")
+    $soffice = Resolve-LibreOffice
+  }
+  if (-not $soffice) {
+    Add-Warning "LibreOffice is unavailable. Phase 6 can still try a working licensed PowerPoint COM renderer, then the warning-gated safe text fallback."
+    return
+  }
+  if ($DryRun) {
+    Write-Step "LibreOffice candidate detected; dry-run skips version execution."
+    return
+  }
+  & $soffice --headless --version 2>$null | Select-Object -First 1 | ForEach-Object { Write-Step $_ }
+  if ($LASTEXITCODE -ne 0) {
+    Add-Warning "LibreOffice is installed but its headless version check failed; the runtime will try it and record the renderer result safely."
+  }
+}
+
+function Show-VideoRendererCapabilities {
+  if (-not (Test-Path $venvPython -PathType Leaf)) { return }
+  if ($DryRun) {
+    Write-Step "Dry-run: would inspect safe video renderer candidates."
+    return
+  }
+  & $venvPython -c "from teacher_app.materials.ai_video_renderer import capability_summary; s=capability_summary(); print('Video renderer order:', ' -> '.join(s['order'])); print('Selected candidate:', s['selectedCandidate']); print('Candidates:', ', '.join(i['id'] + '=' + ('yes' if i['candidate'] else 'no') for i in s['candidates']))"
+  if ($LASTEXITCODE -ne 0) {
+    Add-Warning "Video renderer capability self-test failed; AI Worker startup will retry the safe capability check."
+  }
 }
 
 function Ensure-Ollama {
@@ -352,6 +398,8 @@ try {
   Import-WorkerEnvironment
   Ensure-PythonEnvironment
   Ensure-FFmpeg
+  Ensure-LibreOffice
+  Show-VideoRendererCapabilities
   Ensure-Ollama
   Test-WorkerConfiguration
   Install-WorkerTasks
