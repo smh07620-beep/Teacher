@@ -5,7 +5,7 @@ import os
 import sys
 import time
 
-from teacher_app.assessments import ai_jobs
+from teacher_app.assessments import ai_jobs, free_ai_fallback
 from teacher_app.assessments.question_runtime import build_canonical_question_runtime
 from teacher_app.materials import media_audio_jobs, media_script_jobs
 
@@ -24,13 +24,14 @@ def log(message: str) -> None:
 
 def main() -> int:
     question_runtime = build_canonical_question_runtime()
+    free_ai_fallback.install_question_runtime_fallback(question_runtime)
     question_processor = ai_jobs.AiQuestionJobProcessor(question_runtime)
     script_processor = media_script_jobs.MediaScriptJobProcessor()
     audio_processor = media_audio_jobs.MediaAudioJobProcessor()
     poll_seconds = _env_int("AI_QUESTION_WORKER_POLL_SECONDS", 2, 1, 30)
     recovery_seconds = _env_int("AI_QUESTION_WORKER_RECOVERY_SECONDS", 300, 30, 3600)
     next_recovery = 0.0
-    log("started queues=ai_questions,media_scripts,media_audio")
+    log("started queues=ai_questions,media_scripts,media_audio free_fallback=enabled")
     while True:
         try:
             now = time.monotonic()
