@@ -63,20 +63,25 @@ function Test-AIWorkerConfiguration {
   }
 
   $externalEnabled = Test-Enabled ([string]$env:AI_EXTERNAL_PROCESSING_ENABLED) $true
+  $fallbackEnabled = Test-Enabled ([string]$env:AI_FREE_FALLBACK_ENABLED) $true
+  $ollamaEnabled = Test-Enabled ([string]$env:OLLAMA_ENABLED) $false
   $provider = ([string]$env:AI_PROVIDER).Trim().ToLowerInvariant()
   if (-not $provider) { $provider = "groq" }
+
+  $groqReady = [bool]([string]$env:GROQ_API_KEY).Trim()
+  $geminiReady = [bool]([string]$env:GEMINI_API_KEY).Trim()
+  $localReady = $fallbackEnabled -and $ollamaEnabled -and [bool]([string]$env:OLLAMA_MODEL).Trim()
+  $providerReady = $false
   if ($externalEnabled) {
-    $providerReady = $true
-    if ($provider -eq "groq") { $providerReady = [bool]([string]$env:GROQ_API_KEY).Trim() }
-    elseif ($provider -eq "gemini") { $providerReady = [bool]([string]$env:GEMINI_API_KEY).Trim() }
-    elseif ($provider -eq "auto") {
-      $providerReady = [bool](([string]$env:GROQ_API_KEY).Trim() -or ([string]$env:GEMINI_API_KEY).Trim())
-    } else {
-      $providerReady = $false
-    }
-    if (-not $providerReady) {
-      Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2202 -Message "The configured free external AI provider has no local credential; AI question and script jobs will remain unavailable until configuration is completed."
-    }
+    if ($provider -eq "groq") { $providerReady = $groqReady }
+    elseif ($provider -eq "gemini") { $providerReady = $geminiReady }
+    elseif ($provider -eq "auto") { $providerReady = $groqReady -or $geminiReady }
+  }
+  if ($fallbackEnabled) {
+    $providerReady = $providerReady -or ($externalEnabled -and ($groqReady -or $geminiReady)) -or $localReady
+  }
+  if (-not $providerReady) {
+    Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2202 -Message "No configured free AI provider is ready; question and script jobs will remain unavailable until Groq, Gemini, or local Ollama is configured."
   }
 
   $narrationReady = (
@@ -108,13 +113,13 @@ function Ensure-AIWorkerEnvironment {
 
   $hash = (Get-FileHash -LiteralPath $requirements -Algorithm SHA256).Hash
   $recorded = if (Test-Path $stamp) { (Get-Content -LiteralPath $stamp -Raw).Trim() } else { "" }
-  & $python -c "import requests, psycopg, kokoro; from misaki import zh; import numpy" 2>$null
+  & $python -c "import requests, psycopg, kokoro, faster_whisper; from google import genai; from misaki import zh; import numpy" 2>$null
   $importsOk = $LASTEXITCODE -eq 0
   if ($hash -ne $recorded -or -not $importsOk) {
-    Write-Host "Synchronizing AI Worker Python requirements (includes local Kokoro TTS)..."
+    Write-Host "Synchronizing AI Worker Python requirements (Kokoro, Gemini fallback, local Whisper)..."
     & $python -m pip install -r $requirements
     $installExit = $LASTEXITCODE
-    & $python -c "import requests, psycopg, kokoro; from misaki import zh; import numpy" 2>$null
+    & $python -c "import requests, psycopg, kokoro, faster_whisper; from google import genai; from misaki import zh; import numpy" 2>$null
     $importsOk = $LASTEXITCODE -eq 0
     if ($installExit -eq 0 -and $importsOk) {
       Set-Content -LiteralPath $stamp -Value $hash -NoNewline -Encoding UTF8
@@ -129,10 +134,11 @@ function Ensure-AIWorkerEnvironment {
 
 Load-LocalWorkerEnvironment
 if (-not $env:FREE_ONLY_MODE) { $env:FREE_ONLY_MODE = "true" }
+if (-not $env:AI_FREE_FALLBACK_ENABLED) { $env:AI_FREE_FALLBACK_ENABLED = "true" }
 if (-not $env:AI_TTS_PROVIDER) { $env:AI_TTS_PROVIDER = "kokoro" }
 Test-AIWorkerConfiguration
-Write-TeacherAIWorkerEvent -EntryType "Information" -EventId 1100 -Message "Teacher AI Worker supervisor starting with free local Kokoro narration."
-Write-Host "Teacher AI Worker: ai_questions, media_scripts, media_audio (Kokoro local TTS)"
+Write-TeacherAIWorkerEvent -EntryType "Information" -EventId 1100 -Message "Teacher AI Worker supervisor starting with free provider fallback and local Kokoro narration."
+Write-Host "Teacher AI Worker: ai_questions, media_scripts, media_audio (Groq/Gemini/Ollama fallback; Kokoro local TTS)"
 
 $crashRestarts = 0
 $maxCrashRestarts = 5
