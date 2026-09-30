@@ -18,11 +18,16 @@ def _env_int(name: str, default: int, lower: int, upper: int) -> int:
 
 
 def public_job(job: dict) -> dict:
-    return {key: job.get(key) for key in (
+    payload = {key: job.get(key) for key in (
         "id", "draftId", "templateId", "group", "area", "status", "progressPercent",
         "progressStage", "progressDetail", "result", "error", "attempts",
         "createdAt", "updatedAt", "startedAt", "completedAt",
     )}
+    request_payload = dict(job.get("request") or {})
+    if request_payload.get("presentationId"):
+        payload["presentationId"] = str(request_payload.get("presentationId") or "")
+        payload["revisionRender"] = bool(request_payload.get("renderRevision"))
+    return payload
 
 
 def enqueue(*, draft: dict, template_id: str, actor_username: str, slides: list[dict] | None = None) -> dict:
@@ -30,6 +35,22 @@ def enqueue(*, draft: dict, template_id: str, actor_username: str, slides: list[
         draft_id=str(draft.get("id") or ""), template_id=str(template_id or ""),
         group_key=str(draft.get("group") or ""), training_area=str(draft.get("area") or ""),
         actor_username=actor_username, request_payload={"slides": slides} if isinstance(slides, list) else {},
+    )
+
+
+def enqueue_revision(*, presentation: dict, actor_username: str) -> dict:
+    """Queue a draft revision render; Web never invokes python-pptx or provider upload inline."""
+    if str(presentation.get("status") or "") != "draft":
+        raise ValueError("只有 draft PowerPoint revision 可以排入重新產生工作。")
+    if str(presentation.get("artifactStorageKey") or ""):
+        raise ValueError("此 PowerPoint revision 已經有 artifact，不需重複排入。")
+    return repository.create_job(
+        draft_id=str(presentation.get("draftId") or ""),
+        template_id=str(presentation.get("templateId") or ""),
+        group_key=str(presentation.get("group") or ""),
+        training_area=str(presentation.get("area") or ""),
+        actor_username=actor_username,
+        request_payload={"presentationId": str(presentation.get("id") or ""), "renderRevision": True},
     )
 
 
@@ -54,7 +75,11 @@ class AiPresentationJobProcessor:
             repository.set_job_progress(job_id, token, percent, stage, detail)
 
         try:
-            result = ai_presentation_runtime.generate_presentation(job=job, progress_callback=progress)
+            request_payload = dict(job.get("request") or {})
+            if request_payload.get("renderRevision") and request_payload.get("presentationId"):
+                result = ai_presentation_runtime.generate_revision(job=job, progress_callback=progress)
+            else:
+                result = ai_presentation_runtime.generate_presentation(job=job, progress_callback=progress)
             if not repository.complete_job(job_id, token, result):
                 raise RuntimeError("PowerPoint 工作完成狀態已失效，未覆寫其他 Worker。")
         except Exception as exc:
@@ -62,4 +87,4 @@ class AiPresentationJobProcessor:
         return True
 
 
-__all__ = ["public_job", "enqueue", "AiPresentationJobProcessor"]
+__all__ = ["public_job", "enqueue", "enqueue_revision", "AiPresentationJobProcessor"]
