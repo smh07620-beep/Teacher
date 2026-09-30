@@ -30,4 +30,9 @@ def ai_presentation_quality_automation_104(conn, kind: str) -> None:
     )
 
 
+# Keep the additive video hardening migration after all presentation phases in
+# the canonical import chain so the registered schema order is 0101..0105.
+from teacher_app.maintenance import ai_video_phase5_migration as _ai_video_phase5_migration  # noqa: E402,F401
+
+
 __all__ = ["ai_presentation_quality_automation_104"]
