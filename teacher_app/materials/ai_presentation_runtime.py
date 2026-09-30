@@ -25,12 +25,21 @@ _SECRET_MARKERS = (
     "token=", "password=", "secret=", "api_key=", "apikey=", "authorization:",
     "bearer ", "database_url=", "r2_secret", "mega_password", "client_secret=",
 )
+_LOCAL_PATH_PATTERN = re.compile(r"(?:[a-z]:[\\/]|/(?:home|tmp|var|mnt|etc)/|file://)", re.I)
 
 
 def _clean(value: Any, limit: int) -> str:
     text = str(value or "").replace("\x00", " ").strip()
     text = "\n".join(" ".join(line.split()) for line in text.splitlines())
     return text[:limit]
+
+
+def _sensitive_provenance_value(value: Any) -> bool:
+    if isinstance(value, list):
+        return any(_sensitive_provenance_value(item) for item in value)
+    text = str(value or "")
+    lowered = text.lower()
+    return any(marker in lowered for marker in _SECRET_MARKERS) or bool(_LOCAL_PATH_PATTERN.search(text))
 
 
 def _provenance(payload: dict[str, Any]) -> str:
@@ -45,11 +54,9 @@ def _provenance(payload: dict[str, Any]) -> str:
         "teacherApprovedBy": _clean(payload.get("teacherApprovedBy"), 120),
         "teacherApprovedAt": _clean(payload.get("teacherApprovedAt"), 80),
     }
-    text = json.dumps(clean, ensure_ascii=False, separators=(",", ":"))
-    lowered = text.lower()
-    if any(marker in lowered for marker in _SECRET_MARKERS):
-        raise ValueError("PowerPoint provenance 含有不允許的敏感資訊。")
-    return text
+    if any(_sensitive_provenance_value(value) for value in clean.values()):
+        raise ValueError("PowerPoint provenance 含有不允許的敏感資訊或本機路徑。")
+    return json.dumps(clean, ensure_ascii=False, separators=(",", ":"))
 
 
 def _slide_header(line: str):
@@ -252,7 +259,14 @@ def generate_revision(*, job: dict, progress_callback=None, storage: Presentatio
         raise RuntimeError("PowerPoint revision 工作範圍不一致。")
     draft = media_script_repository.get_script(str(current.get("draftId") or "")) or {}
     source = material_repository.get_material(str(current.get("materialId") or "")) or {}
-    if not draft or not source or draft.get("group") != current.get("group") or source.get("group") != current.get("group"):
+    if (
+        not draft
+        or not source
+        or draft.get("group") != current.get("group")
+        or source.get("group") != current.get("group")
+        or draft.get("area") != current.get("area")
+        or source.get("area") != current.get("area")
+    ):
         raise RuntimeError("PowerPoint revision 來源不存在或授權範圍已改變。")
     template_id = str(current.get("templateId") or "")
     template = _validated_template(template_id, group=str(current.get("group") or ""), area=str(current.get("area") or ""))
