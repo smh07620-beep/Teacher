@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -62,8 +63,20 @@ class AiPresentationPhase4RendererTests(unittest.TestCase):
         self.assertIn("TEMPLATE_FALLBACK", {item["code"] for item in manifest["warnings"]})
         self.assertEqual(manifest["warnings"][0]["slideId"], "s-table")
 
+    def test_branding_context_uses_render_date_not_fake_publish_date(self):
+        branding = runtime._branding_context(
+            title="Phase 4",
+            group="生化組",
+            area="內部教育訓練",
+            teacher="Teacher A",
+            revision=4,
+        )
+        self.assertRegex(branding["renderedDate"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertNotIn("publishedDate", branding)
+        self.assertEqual(branding["revisionNumber"], 4)
+
     @unittest.skipIf(runtime.Presentation is None, "python-pptx is installed only on the AI Worker")
-    def test_rendered_pptx_applies_pagination_branding_and_metadata(self):
+    def test_rendered_pptx_applies_cover_pagination_branding_and_metadata(self):
         slides = [
             {
                 "id": "s-text",
@@ -111,13 +124,14 @@ class AiPresentationPhase4RendererTests(unittest.TestCase):
                     "areaLabel": "內部教育訓練",
                     "teacherName": "Teacher A",
                     "revisionNumber": 3,
-                    "publishedDate": "2026-09-30",
+                    "renderedDate": "2026-09-30",
                 },
                 quality_report=report,
             )
 
             rendered = runtime.Presentation(str(output))
-            self.assertEqual(len(rendered.slides), 7)
+            self.assertEqual(len(rendered.slides), 8)
+            self.assertIn("Phase 4 Regression", _slide_text(rendered.slides[0]))
             warning_codes = {item["code"] for item in report["warnings"]}
             self.assertTrue(
                 {"TEXT_SPLIT", "TABLE_SPLIT", "COMPARISON_SPLIT"}.issubset(warning_codes)
@@ -132,8 +146,37 @@ class AiPresentationPhase4RendererTests(unittest.TestCase):
                 "Teacher AI reviewed teaching presentation",
             )
             self.assertIn(quality.RULESET_VERSION, rendered.core_properties.keywords)
-            self.assertEqual(report["slideCount"], 7)
+            self.assertEqual(report["slideCount"], 8)
             self.assertEqual(report["errorCount"], 0)
+
+    @unittest.skipIf(runtime.Presentation is None, "python-pptx is installed only on the AI Worker")
+    def test_existing_title_layout_is_not_duplicated(self):
+        report: dict = {}
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "existing-cover.pptx"
+            runtime.render_pptx(
+                title="既有封面",
+                slides=[
+                    {
+                        "id": "cover",
+                        "title": "既有封面",
+                        "layout": "title",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "content",
+                        "title": "內容",
+                        "bullets": ["重點"],
+                        "enabled": True,
+                    },
+                ],
+                output_path=output,
+                provenance={"sourceMaterialId": "mat-1", "sourceDraftId": "draft-1"},
+                quality_report=report,
+            )
+            rendered = runtime.Presentation(str(output))
+            self.assertEqual(len(rendered.slides), 2)
+            self.assertEqual(report["slideCount"], 2)
 
     @unittest.skipIf(
         runtime.Presentation is None or runtime.Image is None,
@@ -180,7 +223,8 @@ class AiPresentationPhase4RendererTests(unittest.TestCase):
 
             self.assertTrue((root / "source-crop.png").is_file())
             rendered = runtime.Presentation(str(output))
-            slide = rendered.slides[0]
+            self.assertEqual(len(rendered.slides), 2)
+            slide = rendered.slides[1]
             from pptx.enum.shapes import MSO_SHAPE_TYPE
 
             pictures = [shape for shape in slide.shapes if shape.shape_type == MSO_SHAPE_TYPE.PICTURE]
@@ -188,6 +232,7 @@ class AiPresentationPhase4RendererTests(unittest.TestCase):
             text = _slide_text(slide)
             self.assertIn("血球形態影像｜院內教學素材", text)
             self.assertNotIn("MISSING_IMAGE", {item["code"] for item in report["warnings"]})
+            self.assertEqual(report["slideCount"], 2)
             self.assertEqual(report["errorCount"], 0)
 
 
