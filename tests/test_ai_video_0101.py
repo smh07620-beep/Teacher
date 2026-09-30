@@ -74,16 +74,23 @@ class AiVideoRuntimeTests(unittest.TestCase):
             def store(self, path, **_kwargs):
                 return {"backend": "r2", "key": "ai-videos/test.mp4", "filename": "test.mp4", "sha256": "b" * 64, "byteSize": Path(path).stat().st_size, "mimeType": "video/mp4"}
         class PresentationStorage:
-            def download(self, _location, _target):
-                raise RuntimeError("PowerPoint desktop renderer unavailable in test")
+            def download(self, _location, target):
+                target = Path(target)
+                target.write_bytes(b"phase6-test-pptx")
+                return target
         created = {
             "id": "vid-1", "artifactSha256": "b" * 64, "artifactBytes": 100, "durationSeconds": 2,
             "qualityManifest": {"status": "warning"}, "frameRenderer": "text-fallback",
         }
+        renderer_attempts = [
+            {"renderer": "powerpoint-com", "status": "failed", "detail": "test"},
+            {"renderer": "libreoffice-headless", "status": "failed", "detail": "test"},
+        ]
         with (
             patch.object(ai_video_runtime.repository, "get_video_by_source_job", return_value=None),
             patch.object(ai_video_runtime.presentation_repository, "get_presentation", return_value=presentation),
             patch.object(ai_video_runtime, "_synthesize", return_value=(audio.getvalue(), "Kokoro-test")),
+            patch.object(ai_video_runtime.renderer, "render_exact_frames", return_value=([], "", renderer_attempts)),
             patch.object(ai_video_runtime.repository, "create_video", return_value=created) as create,
         ):
             result = ai_video_runtime.generate_video(
@@ -97,6 +104,7 @@ class AiVideoRuntimeTests(unittest.TestCase):
         self.assertIn("WEBVTT", kwargs["vtt_text"])
         self.assertIn("先確認品質管制", kwargs["srt_text"])
         self.assertEqual(kwargs["frame_renderer"], "text-fallback")
+        self.assertEqual(kwargs["render_metrics"]["rendererAttempts"][-1]["renderer"], "text-fallback")
 
 
 class AiVideoQueueTests(unittest.TestCase):
