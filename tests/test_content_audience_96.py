@@ -23,10 +23,15 @@ class ContentAudience96Tests(unittest.TestCase):
 
     def test_release_contract_requires_additive_audience_migration(self):
         self.assertIn("0096-content-audience-scope", release_contract.REQUIRED_MIGRATIONS)
-        self.assertEqual(release_contract.REQUIRED_RELEASE_MIGRATION, "0096-content-audience-scope")
         self.assertLess(
             release_contract.REQUIRED_MIGRATIONS.index("0095-media-audio-jobs"),
             release_contract.REQUIRED_MIGRATIONS.index("0096-content-audience-scope"),
+        )
+        # 0096 remains a required additive migration even after later schema
+        # generations advance REQUIRED_RELEASE_MIGRATION (for example 0097).
+        self.assertLessEqual(
+            release_contract.REQUIRED_MIGRATIONS.index("0096-content-audience-scope"),
+            release_contract.REQUIRED_MIGRATIONS.index(release_contract.REQUIRED_RELEASE_MIGRATION),
         )
         self.assertIn("content_audience_migration", self.factory)
         self.assertLess(
