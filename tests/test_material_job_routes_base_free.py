@@ -187,6 +187,17 @@ class MaterialJobRoutesBaseFreeTests(unittest.TestCase):
         self.assertEqual(rejected.status_code, 400)
         self.assertIn("巨集", rejected.get_json()["error"])
 
+    def test_web_byte_compatibility_receiver_has_a_separate_small_file_cap(self):
+        with patch("teacher_app.materials.job_routes.material_web_byte_upload_max_mb", return_value=1):
+            response = self.client.post(
+                "/api/material-jobs/upload",
+                data={"file": (io.BytesIO(b"x" * (1024 * 1024 + 1)), "lesson.pdf")},
+                content_type="multipart/form-data",
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("僅支援 25MB 以下教材", response.get_json()["error"])
+        self.assertEqual(self.events, [])
+
     def test_create_failure_cleans_staging_once_before_error_response(self):
         with patch.object(
             worker_repository,

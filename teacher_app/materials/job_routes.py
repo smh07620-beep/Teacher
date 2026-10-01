@@ -13,7 +13,7 @@ from flask import jsonify, request
 
 from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.common import scope
-from teacher_app.config import max_upload_mb
+from teacher_app.config import material_web_byte_upload_max_mb
 from teacher_app.materials.job_runtime import MaterialJobRuntime, from_compat_owner
 from teacher_app.materials.validation import ALLOWED_MATERIAL_EXTENSIONS, normalize_material_filename
 from teacher_app.worker import repository as worker_repository
@@ -150,6 +150,11 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             return jsonify({"error": "背景教材佇列未啟用，請改用同步上傳端點。"}), 409
         if "file" not in request.files:
             return jsonify({"error": "未收到檔案"}), 400
+        compatibility_limit = material_web_byte_upload_max_mb() * 1024 * 1024
+        # Reject clearly oversized multipart bodies before writing the file to
+        # the Web instance.  The post-save check below remains authoritative.
+        if request.content_length and request.content_length > compatibility_limit + 1024 * 1024:
+            return jsonify({"error": "此相容接收路徑僅支援 25MB 以下教材；請改用雲端直傳。"}), 413
         upload = request.files["file"]
         try:
             original_name, ext = normalize_material_filename(upload.filename or "untitled")
@@ -166,8 +171,8 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
                 source_bytes = staged.stat().st_size
                 if source_bytes <= 0:
                     raise ValueError("教材檔案為空白檔案")
-                if source_bytes > max_upload_mb() * 1024 * 1024:
-                    raise ValueError("教材檔案超過上傳大小限制。")
+                if source_bytes > compatibility_limit:
+                    raise ValueError("此相容接收路徑僅支援 25MB 以下教材；請改用雲端直傳。")
                 source_sha256 = _sha256_file(staged)
                 payload = {
                     "originalName": original_name,

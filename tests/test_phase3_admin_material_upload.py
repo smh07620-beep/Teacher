@@ -67,7 +67,9 @@ class Phase3AdminMaterialUploadTests(unittest.TestCase):
         self.assertNotIn('32*1024*1024', source)
         persisted = source[source.index('function saveResume'):source.index('function findResume')]
         self.assertNotIn('etag', persisted.lower())
-        self.assertNotIn('/api/material-jobs/upload', source)
+        self.assertIn('/api/material-jobs/upload', source)
+        self.assertIn('COMPAT_QUEUE_FALLBACK_MAX_BYTES=25*1024*1024', source)
+        self.assertIn('fallbackToSameOriginQueue', source)
         self.assertNotIn('XMLHttpRequest', source)
 
     def test_streaming_sha256_matches_node_reference_for_multi_chunk_blob(self):

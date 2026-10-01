@@ -309,6 +309,15 @@ def max_upload_mb() -> int:
     return max(1, min(512, value))
 
 
+def material_web_byte_upload_max_mb() -> int:
+    """Bound the emergency same-origin material receiver below the global limit."""
+    try:
+        value = int(os.environ.get("MATERIAL_WEB_BYTE_UPLOAD_MAX_MB", "25"))
+    except ValueError:
+        value = 25
+    return max(1, min(25, max_upload_mb(), value))
+
+
 def material_preview_cache_mb() -> int:
     try:
         value = int(os.environ.get("MATERIAL_PREVIEW_CACHE_MB", "512"))

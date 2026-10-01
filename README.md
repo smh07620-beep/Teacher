@@ -39,7 +39,7 @@ Worker 使用獨立的 `MATERIAL_WORKER_TOKEN`，不需要 production `DATABASE_
 
 目前 Web image 仍不能移除全部媒體工具。`/api/slides/upload` 的同步相容路徑仍可用 LibreOffice / qpdf 處理 Office/PDF；Groq 影片 AI 出題仍在 Web process 以 FFmpeg/ffprobe 擷取音訊與代表畫面；舊 Office 格式的 AI 文字擷取也會使用 LibreOffice。MEGAcmd 則同時服務 Web 端的 MEGA 教材讀取、下載、刪除與容量狀態查詢。等這些 Web caller 全部遷移後，才可把 LibreOffice / FFmpeg 從 Web Docker image 拆到 Worker-only 安裝流程。
 
-大型檔案採 Browser → Cloudflare R2 multipart direct upload。R2 是 shared staging；Worker claim job 後再下載、驗證 byte count / SHA-256 / 檔案格式並處理。小型檔案保留 Web compatible upload path，但轉檔仍由 Worker 負責。正式內容儲存沿用目前 provider policy；相關細節請見 `ARCHITECTURE.md` 與 `LOCAL_WORKER_6_7.md`。
+大型檔案採 Browser → Cloudflare R2 multipart direct upload。R2 是 shared staging；Worker claim job 後再下載、驗證 byte count / SHA-256 / 檔案格式並處理。若瀏覽器對 R2 直傳發生 CORS／網路失敗，課程建立精靈可把 25MB 以下的小型教材改由同源、RBAC 保護的相容接收端點安全排入背景 Worker；這不是同步轉檔，也不適用於大型檔案。`MATERIAL_WEB_BYTE_UPLOAD_MAX_MB` 的上限固定不超過 25MB。正式內容儲存沿用目前 provider policy；相關細節請見 `ARCHITECTURE.md` 與 `LOCAL_WORKER_6_7.md`。
 
 ## 考試與成績
 

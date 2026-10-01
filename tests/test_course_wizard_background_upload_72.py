@@ -13,7 +13,7 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertNotIn('X-Admin-Key', source)
         self.assertNotIn('getAdminKey', source)
 
-    def test_shared_transport_is_r2_direct_only_without_web_byte_fallback(self):
+    def test_shared_transport_keeps_r2_primary_with_guarded_web_fallback(self):
         source = ROOT.joinpath('static', 'material-upload-client.js').read_text(encoding='utf-8')
         self.assertIn("/api/material-upload/init", source)
         self.assertIn("hashStrategy:'sha256-parts-v1'", source)
@@ -21,11 +21,18 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertNotIn('X-Admin-Key', source)
         self.assertNotIn('getAdminKey', source)
         self.assertIn('directUpload(formData,options)', source)
-        self.assertNotIn("/api/material-jobs/upload", source)
-        self.assertNotIn('allowLegacyWebFallback', source)
+        self.assertIn("/api/material-jobs/upload", source)
+        self.assertIn('fallbackToSameOriginQueue', source)
+        self.assertIn('COMPAT_QUEUE_FALLBACK_MAX_BYTES=25*1024*1024', source)
+        self.assertIn('isDirectNetworkFailure', source)
         self.assertNotIn('XMLHttpRequest', source)
         self.assertIn('onProgress', source)
         self.assertIn('response.status', ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8'))
+
+    def test_wizard_opts_into_network_only_small_file_fallback(self):
+        source = ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8')
+        self.assertIn('fallbackToSameOriginQueue:true', source)
+        self.assertIn('雲端直傳暫時無法連線', source)
 
     def test_admin_upload_delegates_to_shared_transport(self):
         source = ROOT.joinpath('static', 'admin-material-upload.js').read_text(encoding='utf-8')

@@ -10,6 +10,10 @@
   const PART_MB=16;
   const CONCURRENCY=3;
   const MAX_RETRIES=3;
+  // Direct-to-R2 is the normal route.  This deliberately small limit is only
+  // for recovering from a browser/R2 CORS or network failure through the
+  // same-origin, server-authorized background queue.
+  const COMPAT_QUEUE_FALLBACK_MAX_BYTES=25*1024*1024;
   const FINGERPRINT_STRATEGY='sha256-part-tree-v1';
   const RESUME_STORAGE_KEY='teacher.materialUpload.multipart.v1';
   const SHA256_INITIAL=new Uint32Array([
@@ -394,23 +398,53 @@
 
     const saved=findResume(identity);
     if(saved){
-      const resumed=await resumeMultipart(saved,identity,options);
-      if(resumed?.completed)return resumed.result;
-      if(resumed?.session)return uploadMultipart(file,fileName,resumed.session,options,identity);
+      try{
+        const resumed=await resumeMultipart(saved,identity,options);
+        if(resumed?.completed)return resumed.result;
+        if(resumed?.session)return await uploadMultipart(file,fileName,resumed.session,options,identity);
+      }catch(error){
+        error.uploadId=error.uploadId||saved.uploadId;
+        throw error;
+      }
     }
 
     const session=await createDirectSession(formData,file,fileName,identity,options);
     if(session.mode==='single'){
       try{return await uploadSingle(file,fileName,session,options);}
-      catch(error){await abortUpload(session.uploadId,options).catch(()=>null);throw error;}
+      catch(error){
+        error.uploadId=error.uploadId||session.uploadId;
+        await abortUpload(session.uploadId,options).catch(()=>null);
+        throw error;
+      }
     }
     if(session.mode==='multipart'||!session.mode){
       if(!session.resumable)throw new Error('伺服器未啟用安全 multipart 續傳');
       saveResume(session,identity);
-      return uploadMultipart(file,fileName,session,options,identity);
+      try{return await uploadMultipart(file,fileName,session,options,identity);}
+      catch(error){error.uploadId=error.uploadId||session.uploadId;throw error;}
     }
     await abortUpload(session.uploadId,options).catch(()=>null);
     throw new Error(`不支援的 R2 直傳模式：${session.mode}`);
+  }
+
+  function isDirectNetworkFailure(error){
+    if(Number.isFinite(Number(error?.status)))return false;
+    const message=String(error?.message||'').toLowerCase();
+    return error?.name==='TypeError'||/failed to fetch|network(?:error| request failed)|load failed/.test(message);
+  }
+
+  async function queueCompatibilityUpload(formData,options={}){
+    const response=await fetch('/api/material-jobs/upload',{
+      method:'POST',
+      credentials:'same-origin',
+      body:formData
+    });
+    if(!response.ok)throw await bodyError(response,'教材相容接收失敗');
+    return await response.json();
+  }
+
+  function directNetworkError(){
+    return new Error('瀏覽器無法連線至雲端直傳服務。請檢查網路，或請管理員確認 R2 bucket CORS 已允許目前網站來源並公開 ETag。');
   }
 
   async function enqueue(formData,options={}){
@@ -418,9 +452,19 @@
     catch(error){
       if(error?.status===401){options.onUnauthorized?.();throw new Error('登入已逾時，請重新登入。');}
       if(error?.status===403)throw error;
+      const file=formData.get('file');
+      if(options.fallbackToSameOriginQueue&&file instanceof Blob&&file.size<=COMPAT_QUEUE_FALLBACK_MAX_BYTES&&isDirectNetworkFailure(error)){
+        // A multipart upload is normally resumable.  Once we deliberately
+        // switch routes, retire its opaque session so it cannot later create
+        // a duplicate worker job.
+        if(error.uploadId)await abortUpload(error.uploadId,options).catch(()=>null);
+        options.onFallback?.({fileName:options.fileName||file.name||'教材',maxBytes:COMPAT_QUEUE_FALLBACK_MAX_BYTES});
+        return queueCompatibilityUpload(formData,options);
+      }
+      if(isDirectNetworkFailure(error))throw directNetworkError();
       throw error;
     }
   }
 
-  window.MaterialUploadClient={enqueue,directUpload,abort:abortUpload,sha256Blob,fingerprintFile};
+  window.MaterialUploadClient={enqueue,directUpload,abort:abortUpload,sha256Blob,fingerprintFile,COMPAT_QUEUE_FALLBACK_MAX_BYTES};
 })();

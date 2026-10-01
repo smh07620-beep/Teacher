@@ -114,7 +114,9 @@ services:
       - key: MATERIAL_DIRECT_UPLOAD_ENABLED
         value: "true"
       - key: MATERIAL_WEB_BYTE_UPLOAD_ENABLED
-        value: "false"
+        value: "true"
+      - key: MATERIAL_WEB_BYTE_UPLOAD_MAX_MB
+        value: "25"
       - key: MATERIAL_SYNC_UPLOAD_ENABLED
         value: "false"
       - key: MATERIAL_DIRECT_UPLOAD_MAX_MB

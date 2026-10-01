@@ -206,7 +206,7 @@ async function create(){
       status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name}`;
       const form=new FormData();form.append('file',file);form.append('title',String(meta.title||file.name.replace(/\.[^.]+$/,'')).trim());form.append('desc',desc);form.append('group',group);form.append('area',area);form.append('courseId',course.id);form.append('category',state.categoryId);form.append('materialType',meta.materialType||'auto');form.append('bundleWorkflowId',bundlePayload.workflowId);form.append('bundleFileIndex',String(index));form.append('bundleFileSize',String(file.size||0));form.append('bundleFileLastModified',String(file.lastModified||0));
       try{
-        await window.MaterialUploadClient.enqueue(form,{fileName:file.name,onUnauthorized:loginRedirect,onProgress:progress=>{status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name} ${progress.percent}%（完成後交由背景 Worker 處理）`;}});
+        await window.MaterialUploadClient.enqueue(form,{fileName:file.name,fallbackToSameOriginQueue:true,onUnauthorized:loginRedirect,onFallback:()=>{status.textContent=`⬆️ 雲端直傳暫時無法連線，正以安全相容方式接收小型教材 ${index+1}/${files.length}：${file.name}（完成後仍交由背景 Worker 處理）`;},onProgress:progress=>{status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name} ${progress.percent}%（完成後交由背景 Worker 處理）`;}});
         uploaded++;
       }catch(error){
         failed++;
