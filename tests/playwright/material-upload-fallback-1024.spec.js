@@ -2,11 +2,19 @@ const { test, expect } = require('playwright/test');
 const path = require('path');
 
 const asset = name => path.resolve(__dirname, '../../static', name);
+const secureHarnessUrl = process.env.TEACHER_UI_BASE_URL || 'http://127.0.0.1:4173/';
 if (process.env.TEACHER_PLAYWRIGHT_BROWSER) {
   test.use({ launchOptions: { executablePath: process.env.TEACHER_PLAYWRIGHT_BROWSER } });
 }
 
 test('a small course upload falls back to the authorized queue only after R2 network failure', async ({ page }) => {
+  // Web Crypto is intentionally required by the production upload client for
+  // authenticated file fingerprints/resume safety.  Playwright's about:blank
+  // document is not a trustworthy origin, so run this regression on the
+  // deterministic localhost harness (localhost is a secure context) before
+  // replacing the document body with the minimal fixture.
+  await page.goto(secureHarnessUrl);
+  await expect.poll(() => page.evaluate(() => Boolean(window.isSecureContext && window.crypto?.subtle))).toBe(true);
   await page.setContent('<main></main>');
   await page.evaluate(() => {
     window.uploadCalls = [];
