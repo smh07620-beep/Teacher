@@ -48,7 +48,73 @@ for (const viewport of viewports) {
 test('teacher persona full-page workspace never collapses to a blank surface', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const pageErrors = [];
+  const domTraces = [];
   page.on('pageerror', error => pageErrors.push(String(error?.message || error)));
+  page.on('console', message => {
+    const text = message.text();
+    if (text.includes('ADMIN_WIPE_TRACE')) domTraces.push(text);
+  });
+  await page.addInitScript(() => {
+    const relevant = node => {
+      if (!node || node.nodeType !== 1) return false;
+      if (node.id === 'admin-modal' || node.classList?.contains('admin-workspace-shell')) return true;
+      try { return Boolean(node.querySelector?.('#admin-workspace-header')); } catch (_) { return false; }
+    };
+    const trace = (operation, node) => {
+      if (!relevant(node)) return;
+      console.log(`ADMIN_WIPE_TRACE ${operation} ${new Error().stack || ''}`);
+    };
+
+    const nativeReplaceChildren = Element.prototype.replaceChildren;
+    Element.prototype.replaceChildren = function(...nodes) {
+      trace('replaceChildren', this);
+      return nativeReplaceChildren.apply(this, nodes);
+    };
+
+    const nativeRemove = Element.prototype.remove;
+    Element.prototype.remove = function() {
+      trace('remove', this);
+      return nativeRemove.call(this);
+    };
+
+    const nativeReplaceWith = Element.prototype.replaceWith;
+    Element.prototype.replaceWith = function(...nodes) {
+      trace('replaceWith', this);
+      return nativeReplaceWith.apply(this, nodes);
+    };
+
+    const nativeRemoveChild = Node.prototype.removeChild;
+    Node.prototype.removeChild = function(child) {
+      if (relevant(this) || relevant(child)) trace('removeChild', relevant(this) ? this : child);
+      return nativeRemoveChild.call(this, child);
+    };
+
+    const inner = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    if (inner?.get && inner?.set) {
+      Object.defineProperty(Element.prototype, 'innerHTML', {
+        configurable: inner.configurable,
+        enumerable: inner.enumerable,
+        get: inner.get,
+        set(value) {
+          trace('innerHTML', this);
+          return inner.set.call(this, value);
+        },
+      });
+    }
+
+    const text = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+    if (text?.get && text?.set) {
+      Object.defineProperty(Node.prototype, 'textContent', {
+        configurable: text.configurable,
+        enumerable: text.enumerable,
+        get: text.get,
+        set(value) {
+          trace('textContent', this);
+          return text.set.call(this, value);
+        },
+      });
+    }
+  });
 
   await open(page, '/system?area=internal&group=grpBio&module=materials&from=home&admin=1&workspace=course-materials&persona=teacher');
   await page.waitForFunction(() => Boolean(window.TeacherRBAC681Ready));
@@ -68,6 +134,7 @@ test('teacher persona full-page workspace never collapses to a blank surface', a
     };
   });
   debug.pageErrors = pageErrors;
+  debug.domTraces = domTraces;
   console.log('TEACHER_WORKSPACE_DEBUG', JSON.stringify(debug));
 
   await expect(page.locator('#admin-modal')).toBeVisible({ timeout: 10000 });
