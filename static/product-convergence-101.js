@@ -1,13 +1,11 @@
 /* Product Convergence 10.1
- * Presentation-only navigation convergence. Canonical server-side RBAC and
- * existing workspace implementations remain authoritative.
+ * Presentation-only convergence. Canonical server-side RBAC and existing
+ * workspace implementations remain authoritative.
  *
- * Goal:
- * - Teacher persona exposes two primary jobs: 教材與課程 / 評量與出題.
- * - Media production and paper export remain available as contextual tools,
- *   not separate top-level workspaces.
- * - System persona groups platform operations under one health/maintenance
- *   surface instead of exposing infrastructure concepts as separate groups.
+ * The final teacher persona navigation is owned by teacher-persona-isolation-
+ * 1014.js. This layer adds contextual teaching tools and converges system
+ * administration groups without introducing a second competing teacher-nav
+ * observer.
  */
 (async function () {
   'use strict';
@@ -26,23 +24,7 @@
   const isSystemPersona = () => surfaceKey === 'system' && (
     persona() === 'system' || (!persona() && systemWorkspaceNames.has(workspace()))
   );
-  // TeacherWorkspace1014 is exported only when the existing persona layer has
-  // actually activated a teaching surface. This also covers multi-role
-  // system_admin + teacher accounts whose global surface key remains `system`.
   const isTeacherPersona = () => Boolean(window.TeacherWorkspace1014) && persona() !== 'system';
-
-  function makeButton(id, label, handler) {
-    let button = document.getElementById(id);
-    if (!button) {
-      button = document.createElement('button');
-      button.id = id;
-      button.type = 'button';
-    }
-    button.textContent = label;
-    button.className = 'admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200';
-    button.onclick = handler;
-    return button;
-  }
 
   function navGroup(label, buttons, compact = false) {
     const usable = buttons.filter(Boolean);
@@ -59,21 +41,10 @@
     return section;
   }
 
-  function markPrimary(activeId) {
-    navHost.querySelectorAll('.admin-nav-btn').forEach(button => {
-      const active = button.id === activeId;
-      button.classList.toggle('bg-teal-700', active);
-      button.classList.toggle('text-white', active);
-      button.classList.toggle('shadow-sm', active);
-      button.classList.toggle('bg-slate-100', !active);
-      button.classList.toggle('text-slate-600', !active);
-    });
-  }
-
   function ensureTeacherContextTools() {
-    if (!isTeacherPersona()) return;
+    if (!isTeacherPersona()) return false;
     const panel = document.getElementById('admin-section-content');
-    if (!panel) return;
+    if (!panel) return false;
 
     let tools = document.getElementById('teacher-context-tools-101');
     if (!tools) {
@@ -97,32 +68,10 @@
     const documents = tools.querySelector('#teacher-context-documents-101');
     if (media) media.onclick = () => api.openMedia?.();
     if (documents) documents.onclick = () => api.openDocuments?.();
-  }
-
-  function convergeTeacherNavigation() {
-    if (!isTeacherPersona()) return false;
-    const api = window.TeacherWorkspace1014;
-    if (!api) return false;
-
-    const desiredIds = ['product-nav-course-101', 'product-nav-assessment-101'];
-    const currentIds = [...navHost.querySelectorAll('.admin-nav-btn')].map(button => button.id);
-    const alreadyConverged = desiredIds.length === currentIds.length && desiredIds.every((id, index) => currentIds[index] === id);
-
-    if (!alreadyConverged) {
-      const group = navGroup('教師工作區', [
-        makeButton('product-nav-course-101', '📚 教材與課程', () => api.openCourse?.()),
-        makeButton('product-nav-assessment-101', '📝 評量與出題', () => api.openAssessment?.()),
-      ]);
-      navHost.replaceChildren(group);
-    }
-
-    const current = workspace();
-    const teacherMode = new URLSearchParams(window.location.search).get('teacherMode') || '';
-    markPrimary(current === 'assessment' && !teacherMode ? 'product-nav-assessment-101' : 'product-nav-course-101');
-    ensureTeacherContextTools();
 
     const summary = document.getElementById('admin-workspace-summary');
-    if (summary && current === 'course-materials' && !teacherMode) {
+    const now = new URLSearchParams(window.location.search);
+    if (summary && now.get('workspace') === 'course-materials' && !now.get('teacherMode')) {
       summary.textContent = '主要工作只保留「教材與課程」與「評量與出題」；媒體、紙本等延伸能力從流程內開啟。';
     }
     return true;
@@ -154,14 +103,14 @@
       && expected.every((id, index) => current[index] === id)
       && desiredLabels.every(label => labels.includes(label));
 
-    if (alreadyConverged) return true;
-
-    const groups = [
-      navGroup('人員與權限', [people], true),
-      navGroup('系統健康與維運', [system, worker, maintenance], true),
-      navGroup('安全與稽核', [audit], true),
-    ].filter(Boolean);
-    navHost.replaceChildren(...groups);
+    if (!alreadyConverged) {
+      const groups = [
+        navGroup('人員與權限', [people], true),
+        navGroup('系統健康與維運', [system, worker, maintenance], true),
+        navGroup('安全與稽核', [audit], true),
+      ].filter(Boolean);
+      navHost.replaceChildren(...groups);
+    }
 
     const note = document.getElementById('system-focus-note-1014');
     if (note) {
@@ -177,19 +126,22 @@
     queueMicrotask(() => {
       refreshQueued = false;
       if (isSystemPersona()) convergeSystemNavigation();
-      else convergeTeacherNavigation();
+      else ensureTeacherContextTools();
     });
   }
 
   refresh();
   window.AdminWorkspaceShell?.addAfterWorkspace?.(() => refresh());
 
+  // System modules may insert Worker/maintenance entries asynchronously. The
+  // observer is safe for teacher persona because teacher refresh only ensures
+  // contextual tools and never rewrites the navigation host.
   const observer = new MutationObserver(() => refresh());
   observer.observe(navHost, {childList: true, subtree: true});
 
   window.ProductConvergence101 = Object.freeze({
     refresh,
-    convergeTeacherNavigation,
+    ensureTeacherContextTools,
     convergeSystemNavigation,
   });
 })();
