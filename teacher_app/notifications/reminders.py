@@ -10,7 +10,7 @@ from typing import Any, Mapping
 from teacher_app.auth import repository as auth_repository
 from teacher_app.auth.self_service import _send
 from teacher_app.common import db as common_db
-from teacher_app.notifications import events
+from teacher_app.notifications import events, preferences
 
 TAIPEI = dt.timezone(dt.timedelta(hours=8))
 
@@ -76,11 +76,16 @@ def run_due_reminders() -> int:
     days = max(1, int(os.getenv("EMAIL_REMINDER_DAYS", "3") or 3))
     sent = 0
     for row in auth_repository.list_users():
-        if not row.get("active") or not row.get("email") or not row.get("email_notifications", True):
+        if not row.get("active") or not row.get("email"):
             continue
         user = _user_from_row(row)
         try:
             candidates = events.email_events(user, now=now, days=days)
+            candidates = preferences.filter_email_events(
+                candidates,
+                user,
+                general_enabled=bool(row.get("email_notifications", True)),
+            )
         except Exception:
             continue
         claimed = [event for event in candidates if _claim(user["username"], event["key"], event["kind"])]
