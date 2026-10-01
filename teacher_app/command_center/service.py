@@ -106,6 +106,7 @@ def _teacher_review_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
             continue
         values.append({
             "id": str(row.get("id") or ""),
+            "resourceId": str(row.get("id") or ""),
             "domain": "assessment",
             "kind": "review",
             "title": str(row.get("quizTitle") or "待人工批改考核"),
@@ -146,6 +147,7 @@ def _teacher_material_failure_items(user: Mapping[str, Any]) -> list[dict[str, A
         retained = str(full.get("stagingBackend") or "") == "r2" and bool(full.get("stagingKey"))
         values.append({
             "id": str(full.get("id") or ""),
+            "resourceId": str(full.get("id") or ""),
             "domain": "materials",
             "kind": "material_failure",
             "title": str(payload.get("title") or full.get("originalName") or "教材處理失敗"),
@@ -184,6 +186,8 @@ def _teacher_due_items(user: Mapping[str, Any], current: dt.datetime) -> list[di
         title = str(course.get("title") or course_id or "課程")
         values.append({
             "id": str(assignment.get("id") or ""),
+            "resourceId": course_id,
+            "courseId": course_id,
             "domain": "assignments",
             "kind": "due",
             "title": title,
@@ -214,8 +218,11 @@ def _teacher_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
             continue
         if not _visible_to_teacher(user, course):
             continue
+        course_id = str(course.get("id") or "")
         values.append({
-            "id": str(course.get("id") or ""),
+            "id": course_id,
+            "resourceId": course_id,
+            "courseId": course_id,
             "domain": "courses",
             "kind": "draft",
             "title": str(course.get("title") or "未命名課程草稿"),
