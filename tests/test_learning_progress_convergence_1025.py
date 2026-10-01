@@ -78,6 +78,11 @@ class LearningProgressConvergence1025Tests(unittest.TestCase):
         self.assertNotIn('X-Admin-Key',source)
         self.assertNotIn('getAdminKey',source)
 
+    def test_portal_async_dashboard_cannot_be_the_final_progress_writer(self):
+        source=ROOT.joinpath('static','learning-progress-convergence-1025.js').read_text(encoding='utf-8')
+        self.assertIn("window.setTimeout(()=>load(true).catch(()=>{}),900)", source)
+        self.assertIn("canonical progress projection must be the final visible owner", source)
+
 
 if __name__ == '__main__':
     unittest.main()
