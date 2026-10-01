@@ -13,6 +13,39 @@
   const USER_ROLE_LABELS={student:'學員',clinical_teacher:'臨床教師',group_leader:'組長',education_admin:'教學管理者',system_admin:'系統管理者',auditor:'稽核／唯讀',learner:'學員',teacher:'臨床教師',manager:'教學管理者'};
   const USER_AREA_LABELS={internal:'院內',pgy:'PGY'};
 
+
+  function ensureAdminUserCreatePanel(){
+    const existing=document.getElementById('admin-user-create-panel');
+    if(existing)return existing;
+    const host=document.querySelector('#admin-section-people .admin-people-workspace');
+    if(!host)return null;
+
+    const panel=document.createElement('details');
+    panel.id='admin-user-create-panel';
+    panel.className='admin-secondary-panel';
+    panel.innerHTML=\`
+      <summary><span><b>＋ 建立登入帳號</b><small>只在新增人員時展開；密碼只在建立或重設時輸入。</small></span><span>展開</span></summary>
+      <div class="admin-secondary-panel-body"><div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <label class="text-xs font-bold text-slate-600">登入帳號<input id="admin-user-username" class="learning-input mt-1" autocomplete="off" placeholder="例如 lab0123"></label>
+        <label class="text-xs font-bold text-slate-600">初始密碼<input id="admin-user-password" class="learning-input mt-1" type="password" autocomplete="new-password" placeholder="至少 4 碼"></label>
+        <label class="text-xs font-bold text-slate-600">姓名<input id="admin-user-name" class="learning-input mt-1" placeholder="顯示姓名"></label>
+        <label class="text-xs font-bold text-slate-600">工號<input id="admin-user-empid" class="learning-input mt-1" placeholder="唯一工號"></label>
+        <label class="text-xs font-bold text-slate-600">系統角色<select id="admin-user-role" class="learning-input mt-1"><option value="student">學員</option><option value="clinical_teacher">臨床教師</option><option value="group_leader">組長</option><option value="education_admin">教學管理者</option><option value="system_admin">系統管理者</option><option value="auditor">稽核／唯讀</option></select></label>
+        <label class="text-xs font-bold text-slate-600">預設訓練區<select id="admin-user-area" class="learning-input mt-1"><option value="internal">院內訓練</option><option value="pgy">PGY</option></select></label>
+        <label class="text-xs font-bold text-slate-600">預設組別<select id="admin-user-group" class="learning-input mt-1"><option value="grpBio">生化組</option><option value="grpMicro">鏡檢組</option><option value="grpSero">血清組</option><option value="grpBB">血庫組</option><option value="grpBact">細菌組</option><option value="grpHema">血液組</option><option value="grpNew">新人共通</option><option value="grpPgyDocs">PGY 資料</option></select></label>
+        <label class="text-xs font-bold text-slate-600">主要職稱<input id="admin-user-professional-title" class="learning-input mt-1" placeholder="例如：品管醫檢師"></label>
+        <label class="text-xs font-bold text-slate-600">額外職責標籤<input id="admin-user-responsibility-tags" class="learning-input mt-1" placeholder="以逗號分隔，例如：品管、POCT"></label>
+        <div class="flex items-end"><button data-csp-click="createAdminUserAccount()" class="w-full bg-teal-700 hover:bg-teal-600 text-white text-sm font-bold px-4 py-3 rounded-xl">建立登入帳號</button></div>
+      </div></div>\`;
+    host.appendChild(panel);
+    return panel;
+  }
+
+  // Static system.html owns this form. This guard is recovery-only: if an
+  // asynchronous presentation layer removes it, restore the canonical IDs
+  // before multi-role/account scripts enhance the people workspace.
+  ensureAdminUserCreatePanel();
+
   function adminProfileTags(value){
     const raw=Array.isArray(value)?value:String(value||'').split(/[,，、;；\n]+/);
     const out=[];
@@ -181,9 +214,11 @@
   }
 
   async function renderAdminPeople(force=false){
+      ensureAdminUserCreatePanel();
       await renderAdminUserAccounts();
   }
 
+  window.ensureAdminUserCreatePanel=ensureAdminUserCreatePanel;
   window.renderAdminUserAccounts=renderAdminUserAccounts;
   window.filterAdminUserAccounts=paintAdminUserAccounts;
   window.paintAdminUserAccounts=paintAdminUserAccounts;
