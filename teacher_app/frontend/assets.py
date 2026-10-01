@@ -62,6 +62,7 @@ ASSET_MANIFEST = {
             "/learning-analytics-71.js",
             "/notification-center-71.js",
             "/worker-status-70.js",
+            "/worker-status-convergence-101.js",
             "/system-admin-focus-1014.js",
             "/admin-results.js",
             "/admin-course-material.js",
