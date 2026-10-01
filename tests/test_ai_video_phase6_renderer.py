@@ -183,7 +183,11 @@ class AiVideoPhase6ProductContracts(unittest.TestCase):
     def test_phase6_requires_no_new_schema_migration(self):
         import release_contract
 
-        self.assertEqual(release_contract.REQUIRED_MIGRATIONS[-1], "0105-ai-video-production-hardening")
+        self.assertIn("0105-ai-video-production-hardening", release_contract.REQUIRED_MIGRATIONS)
+        self.assertLess(
+            release_contract.REQUIRED_MIGRATIONS.index("0105-ai-video-production-hardening"),
+            release_contract.REQUIRED_MIGRATIONS.index("0106-notification-email-preferences"),
+        )
         self.assertEqual(quality.RULESET_VERSION, "video-phase6-v1")
 
 
