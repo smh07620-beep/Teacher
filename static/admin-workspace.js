@@ -237,11 +237,14 @@
     paintWorkspaceHeader(workspace);
     const modal = document.getElementById('admin-modal');
     if (modal) modal.dataset.workspace = workspace;
+    // Keep the requested deep-link stable before slower workspace renderers run.
+    // This prevents a valid system workspace URL from briefly falling back to
+    // course-materials while account/job data is still loading.
+    syncWorkspaceUrl(requested || workspace);
     const extension = workspaceHandlers.get(requested) || workspaceHandlers.get(workspace);
     const result = extension
       ? await extension(context)
       : await switchCoreWorkspace(context);
-    syncWorkspaceUrl(requested || workspace);
     for (const hook of afterWorkspaceHooks) await hook({...context, result});
     return result;
   }
@@ -261,7 +264,8 @@
       if (materialSelect) materialSelect.value = window.currentGroupKey || materialSelect.value;
       if (quizSelect) quizSelect.value = window.currentGroupKey || quizSelect.value;
       modal.classList.remove('hidden');
-      await window.switchAdminWorkspace?.('course-materials', false);
+      const requestedWorkspace = new URLSearchParams(window.location.search).get('workspace');
+      await window.switchAdminWorkspace?.(requestedWorkspace || state.workspace || 'course-materials', false);
       return true;
     }
     if (isPageMode()) {
