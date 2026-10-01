@@ -6,8 +6,10 @@ import json
 from typing import Any, Mapping
 
 from teacher_app.assessments import repository as assessment_repository
+from teacher_app.common import audit
 from teacher_app.common import db as common_db
 from teacher_app.common import scope
+from teacher_app.common.auth import has_permission, user_roles
 from teacher_app.learning.progress_service import record_to_dict
 
 
@@ -48,6 +50,70 @@ def _reviewer_identity(reviewer_user: Mapping[str, Any] | None) -> tuple[str, st
     return reviewer, reviewer_title
 
 
+def _username(value: Any) -> str:
+    return str(value or "").strip().lower()[:100]
+
+
+def _table_exists(conn, kind: str, table: str) -> bool:
+    if kind == "postgres":
+        return bool(conn.execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema=current_schema() AND table_name=%s",
+            (table,),
+        ).fetchone())
+    return bool(conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    ).fetchone())
+
+
+def _review_scope(conn, kind: str, reviewer_user: Mapping[str, Any], record: Mapping[str, Any]) -> str:
+    """Resolve the authoritative scope that permits this review, or fail closed."""
+    roles = set(user_roles(reviewer_user))
+    target_group = scope.normalize_group(record.get("groupKey") or record.get("group_key"))
+    reviewer_group = scope.normalize_group(
+        reviewer_user.get("preferredGroup") or reviewer_user.get("preferred_group")
+    )
+
+    # A group leader's authority is strictly bounded to the authenticated
+    # account's own group. Browser-supplied record/group fields are irrelevant.
+    if "group_leader" in roles and target_group == reviewer_group:
+        return "group"
+
+    if "clinical_teacher" not in roles:
+        raise RecordError("此帳號不在這筆考核紀錄的批改範圍內", 403)
+
+    # A clinical teacher may receive group-level access only through an actual
+    # server permission. The default clinical_teacher role does not have it.
+    if has_permission(reviewer_user, "student.view_group") and target_group == reviewer_group:
+        return "group_permission"
+
+    teacher_username = _username(reviewer_user.get("username"))
+    target_emp_id = str(record.get("empId") or record.get("emp_id") or "").strip()[:100]
+    if not teacher_username or not target_emp_id:
+        raise RecordError("無法確認此考核紀錄的教師指派範圍", 403)
+    if not _table_exists(conn, kind, "user_accounts") or not _table_exists(conn, kind, "pgy_assignments"):
+        raise RecordError("無法確認此考核紀錄的教師指派範圍", 403)
+
+    ph = common_db.placeholder(kind)
+    learner = conn.execute(
+        f"SELECT username FROM user_accounts WHERE emp_id={ph}",
+        (target_emp_id,),
+    ).fetchone()
+    if not learner:
+        raise RecordError("找不到此考核紀錄對應的學員帳號", 403)
+    learner_username = _username(dict(learner).get("username"))
+    assignment = conn.execute(
+        f"SELECT 1 FROM pgy_assignments "
+        f"WHERE learner_username={ph} AND teacher_username={ph} "
+        "AND status<>'cancelled' LIMIT 1",
+        (learner_username, teacher_username),
+    ).fetchone()
+    if not assignment:
+        raise RecordError("此學員未指派給目前登入的臨床教師", 403)
+    return "assigned_student"
+
+
 def review_record(
     record_id: str,
     data: Mapping[str, Any],
@@ -57,12 +123,20 @@ def review_record(
     scores = data.get("essayScores", {}) if isinstance(data.get("essayScores", {}), dict) else {}
     reviewer, reviewer_title = _reviewer_identity(reviewer_user)
     comment = str(data.get("reviewComment", "")).strip()[:2000]
+    scope_kind = ""
+    target_group = ""
+    target_emp_id = ""
+    final_score = 0
+    status = ""
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
         row = conn.execute(f"SELECT * FROM exam_records WHERE id={ph}", (record_id,)).fetchone()
         if not row:
             raise RecordError("找不到考試紀錄", 404)
         record = record_to_dict(row)
+        scope_kind = _review_scope(conn, kind, reviewer_user or {}, record)
+        target_group = scope.normalize_group(record.get("groupKey"))
+        target_emp_id = str(record.get("empId") or "")[:100]
         answers = record.get("answersDetail", [])
         if not answers:
             raise RecordError("此紀錄沒有題目明細", 400)
@@ -97,6 +171,15 @@ def review_record(
             f"review_status='completed',reviewed_at={ph},reviewer_name={ph},review_comment={ph} WHERE id={ph}",
             (final_score, status, payload, reviewed_at, reviewer, comment, record_id),
         )
+    audit.record_event(
+        actor=reviewer_user,
+        action="exam.record.review",
+        target_type="exam_record",
+        target_id=record_id,
+        group=target_group,
+        scope={"kind": scope_kind, "empId": target_emp_id},
+        after={"score": final_score, "status": status, "reviewStatus": "completed"},
+    )
     return {
         "ok": True,
         "score": final_score,
