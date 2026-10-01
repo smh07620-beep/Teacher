@@ -26,7 +26,6 @@
     courseObserver: null,
     courseBox: null,
     applyingCourses: false,
-    courseScheduled: false,
   };
 
   function voiceLabel(id) {
@@ -228,12 +227,12 @@
       state.courseObserver?.disconnect();
       state.courseBox = box;
       state.courseObserver = new MutationObserver(() => {
-        if (state.courseScheduled) return;
-        state.courseScheduled = true;
-        requestAnimationFrame(() => {
-          state.courseScheduled = false;
-          convergeCourseSurface();
-        });
+        // A course refresh replaces the card list in one DOM task.  Deferring
+        // convergence to requestAnimationFrame leaves a visible/readable
+        // frame where fresh cards have no singleton management button.  Run
+        // in this mutation microtask instead; the observer is disconnected
+        // while we apply our own changes, so this remains loop-safe.
+        convergeCourseSurface();
       });
     }
     // MutationObserver callbacks run after this function returns; a boolean
