@@ -18,9 +18,11 @@ if str(ROOT) not in sys.path:
 
 import material_worker as worker
 from teacher_app.worker.media_transcode_compat import install
+from teacher_app.worker.protocol_version import install_capability
 
 
 install(worker)
+install_capability(worker)
 
 
 def _bounded_int(name: str, default: int, minimum: int, maximum: int) -> int:
