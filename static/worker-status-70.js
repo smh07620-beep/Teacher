@@ -34,11 +34,27 @@
     return `${(seconds / 3600).toFixed(1)} 小時`;
   };
 
+  const elapsedFrom = value => {
+    if (!value) return '—';
+    const started = new Date(value).getTime();
+    if (!Number.isFinite(started)) return '—';
+    return formatDuration(Math.max(0, (Date.now() - started) / 1000));
+  };
+
   const statusMeta = status => ({
     online: ['🟢', '在線', 'text-emerald-700 bg-emerald-50 border-emerald-200'],
     busy: ['🔵', '處理中', 'text-sky-700 bg-sky-50 border-sky-200'],
     offline: ['⚪', '離線', 'text-slate-600 bg-slate-50 border-slate-200']
   }[status] || ['⚪', status || '未知', 'text-slate-600 bg-slate-50 border-slate-200']);
+
+  const jobMeta = status => ({
+    queued: ['⏳', '等待處理', 'text-slate-700 bg-slate-50 border-slate-200'],
+    processing: ['⚙️', '處理中', 'text-sky-700 bg-sky-50 border-sky-200'],
+    retry_wait: ['🔁', '等待重試', 'text-amber-700 bg-amber-50 border-amber-200'],
+    completed: ['✅', '已完成', 'text-emerald-700 bg-emerald-50 border-emerald-200'],
+    failed: ['❌', '失敗', 'text-rose-700 bg-rose-50 border-rose-200'],
+    cancelled: ['⏹', '已取消', 'text-slate-600 bg-slate-50 border-slate-200']
+  }[status] || ['•', status || '未知', 'text-slate-600 bg-slate-50 border-slate-200']);
 
   let panel = document.getElementById('admin-section-worker');
   if (!panel) {
@@ -104,7 +120,7 @@
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = null;
     if (!panel.classList.contains('hidden') && !modal.classList.contains('hidden')) {
-      refreshTimer = setTimeout(() => renderWorkerStatus(false), 15000);
+      refreshTimer = setTimeout(() => renderWorkerStatus(false), 8000);
     }
   }
 
@@ -145,14 +161,38 @@
   }
 
   function jobRows(jobs) {
-    if (!jobs.length) return '<tr><td colspan="5" class="p-5 text-center text-slate-400">目前沒有背景教材工作。</td></tr>';
-    return jobs.map(job => `<tr>
-      <td class="p-3 font-mono text-[11px] break-all">${escapeHtml(job.id || '')}</td>
-      <td class="p-3"><div class="font-semibold text-slate-800">${escapeHtml(job.title || job.originalName || '未命名教材')}</div><div class="text-[10px] text-slate-400">${escapeHtml(job.originalName || '')}</div></td>
-      <td class="p-3 whitespace-nowrap font-bold">${escapeHtml(job.status || '')}</td>
-      <td class="p-3 text-slate-500">${escapeHtml(job.stage || '')}</td>
-      <td class="p-3 whitespace-nowrap text-slate-500">${formatWhen(job.updatedAt || job.createdAt)}</td>
-    </tr>`).join('');
+    if (!jobs.length) return '<tr><td colspan="6" class="p-5 text-center text-slate-400">目前沒有背景教材工作。</td></tr>';
+    return jobs.map(job => {
+      const [icon,label,classes]=jobMeta(job.status);
+      const detail=String(job.detail||'').trim();
+      const error=String(job.error||'').trim();
+      const timerBase=job.startedAt||job.createdAt;
+      const duration=job.finishedAt&&timerBase
+        ? formatDuration(Math.max(0,(new Date(job.finishedAt)-new Date(timerBase))/1000))
+        : elapsedFrom(timerBase);
+      return `<tr class="align-top">
+        <td class="p-3 font-mono text-[11px] break-all">${escapeHtml(job.id || '')}</td>
+        <td class="p-3"><div class="font-semibold text-slate-800">${escapeHtml(job.title || job.originalName || '未命名教材')}</div><div class="text-[10px] text-slate-400">${escapeHtml(job.originalName || '')}</div>${job.workerId?`<div class="text-[10px] text-slate-400 mt-1">Worker：${escapeHtml(job.workerId)}</div>`:''}</td>
+        <td class="p-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-[10px] font-bold ${classes}">${icon} ${label}</span><div class="mt-1 text-[10px] text-slate-400">第 ${Number(job.attempts||0)}/${Number(job.maxAttempts||3)} 次</div></td>
+        <td class="p-3 text-slate-600"><div class="font-semibold">${escapeHtml(job.stage || '—')}</div>${detail?`<div class="mt-1 text-[11px]">${escapeHtml(detail)}</div>`:''}${error?`<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] font-semibold text-rose-700">失敗原因：${escapeHtml(error)}</div>`:''}</td>
+        <td class="p-3 whitespace-nowrap text-slate-500"><div>${escapeHtml(duration)}</div><div class="mt-1 text-[10px] text-slate-400">開始：${formatWhen(job.startedAt||job.createdAt)}</div></td>
+        <td class="p-3 whitespace-nowrap text-slate-500">${formatWhen(job.updatedAt || job.createdAt)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function failureCards(jobs) {
+    const failed=jobs.filter(job=>['failed','retry_wait'].includes(job.status));
+    if(!failed.length)return '<div class="rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">目前最近工作沒有失敗或等待重試紀錄。</div>';
+    return failed.map(job=>{
+      const [icon,label,classes]=jobMeta(job.status);
+      return `<article class="rounded-xl border ${job.status==='failed'?'border-rose-200 bg-rose-50':'border-amber-200 bg-amber-50'} p-3 text-sm">
+        <div class="flex flex-wrap items-start justify-between gap-2"><div><b>${escapeHtml(job.title||job.originalName||job.id)}</b><div class="mt-1 font-mono text-[10px] text-slate-500">${escapeHtml(job.id||'')}</div></div><span class="rounded-full border px-2 py-1 text-[10px] font-bold ${classes}">${icon} ${label}</span></div>
+        <div class="mt-2 text-xs text-slate-700"><b>階段：</b>${escapeHtml(job.stage||'—')}　<b>嘗試：</b>${Number(job.attempts||0)}/${Number(job.maxAttempts||3)}</div>
+        <div class="mt-2 rounded-lg bg-white/80 px-2 py-2 text-xs ${job.error?'text-rose-700':'text-slate-600'}"><b>${job.error?'失敗原因':'詳細資訊'}：</b>${escapeHtml(job.error||job.detail||'Worker 未提供詳細原因')}</div>
+        <div class="mt-2 text-[10px] text-slate-500">建立 ${formatWhen(job.createdAt)} · 更新 ${formatWhen(job.updatedAt)} · Worker ${escapeHtml(job.workerId||'—')}</div>
+      </article>`;
+    }).join('');
   }
 
   function firstRunGuide() {
@@ -165,7 +205,7 @@
           <li>把 Teacher repository 放在固定目錄，例如 <code>C:\\TeacherWorker</code>，並保持在 <code>main</code> branch。</li>
           <li>建立虛擬環境：<code>py -3.12 -m venv .venv</code>。</li>
           <li>安裝依賴：<code>.venv\\Scripts\\python.exe -m pip install -r requirements.txt</code>。</li>
-          <li>建立只存在本機的 <code>.local-worker.env</code>，至少填入 <code>TEACHER_BASE_URL</code>、<code>MATERIAL_WORKER_TOKEN</code> 與 MEGA 登入資料；若未指定 <code>MATERIAL_WORKER_ID</code>，啟動器會建立 gitignored 的固定 <code>.worker-id</code>。</li>
+          <li>建立只存在本機的 <code>.local-worker.env</code>，至少填入 <code>TEACHER_BASE_URL</code>、<code>MATERIAL_WORKER_TOKEN</code> 與正式儲存 provider 的設定；若未指定 <code>MATERIAL_WORKER_ID</code>，啟動器會建立 gitignored 的固定 <code>.worker-id</code>。</li>
           <li>第一次手動啟動：<code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\TeacherWorker\\run_material_worker_autostart.ps1"</code>，確認本頁顯示 🟢 在線。</li>
           <li>確認正常後，以系統管理員 PowerShell 執行 <code>install_material_worker_task.ps1 -ServiceAccount -TaskUser SYSTEM -StartNow</code>，由 Windows Task Scheduler 的「開機時」觸發器接手；PowerShell 不需常駐。</li>
         </ol>
@@ -179,7 +219,7 @@
     loading = true;
     panel.innerHTML = `<section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div class="animate-pulse text-sm text-slate-400">讀取 Worker 與佇列狀態中…</div></section>${firstRunGuide()}`;
     try {
-      const response = await fetch(`/api/material-jobs?limit=12${force ? '&refresh=1' : ''}`, {
+      const response = await fetch(`/api/material-jobs?limit=30${force ? '&refresh=1' : ''}`, {
         credentials: 'same-origin', cache: 'no-store'
       });
       const data = await response.json().catch(() => ({}));
@@ -209,14 +249,14 @@
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div><h4 class="font-black text-slate-950 text-lg">🖥️ Worker / Job 狀態</h4>
-            <p class="text-xs text-slate-500 mt-1">只顯示非敏感營運資訊；Worker 與 Web 之間只有 outbound HTTPS，不開放院內電腦 inbound port。</p></div>
+            <p class="text-xs text-slate-500 mt-1">失敗原因、Worker、處理時間與重試次數會保留在工作紀錄中；頁面會定期更新。</p></div>
             <button id="worker-refresh-70" type="button" class="text-xs border border-slate-300 bg-white px-3 py-2 rounded-xl">↻ 立即更新</button>
           </div>
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
             ${queueCard('⏳', '待處理', data.pendingJobs, 'queued + retry_wait')}
             ${queueCard('⚙️', '處理中', data.processingJobs, '正在由本機 Worker 執行')}
             ${queueCard('🔁', '等待重試', data.retryJobs, '保留原始檔後再次處理')}
-            ${queueCard('❌', '失敗', data.failedJobs, '需要檢查錯誤或人工重試')}
+            ${queueCard('❌', '失敗', data.failedJobs, '下方直接顯示失敗原因')}
           </div>
           <div class="grid sm:grid-cols-3 gap-2 text-xs">
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">最舊待處理等待：</span><b>${formatDuration(data.oldestPendingAgeSeconds)}</b>${data.oldestPendingAt ? ` · ${formatWhen(data.oldestPendingAt)}` : ''}</div>
@@ -229,9 +269,13 @@
           <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
           ${workerBody}
         </section>
+        <section class="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm space-y-3">
+          <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">❌ 最近失敗／等待重試</h5><span class="text-[11px] text-slate-400">${jobs.filter(job=>['failed','retry_wait'].includes(job.status)).length} 筆</span></div>
+          <div class="space-y-2">${failureCards(jobs)}</div>
+        </section>
         <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
           <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">最近背景工作</h5><span class="text-[11px] text-slate-400">最近 ${jobs.length} 筆</span></div>
-          <div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs"><thead class="bg-slate-50"><tr><th class="p-3">Job ID</th><th class="p-3">教材</th><th class="p-3">狀態</th><th class="p-3">階段</th><th class="p-3">更新時間</th></tr></thead><tbody class="divide-y divide-slate-100">${jobRows(jobs)}</tbody></table></div>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs"><thead class="bg-slate-50"><tr><th class="p-3">Job ID</th><th class="p-3">教材</th><th class="p-3">狀態</th><th class="p-3">階段／原因</th><th class="p-3">耗時</th><th class="p-3">更新時間</th></tr></thead><tbody class="divide-y divide-slate-100">${jobRows(jobs)}</tbody></table></div>
         </section>
         ${firstRunGuide()}`;
       document.getElementById('worker-refresh-70').onclick = () => renderWorkerStatus(true);
@@ -250,7 +294,7 @@
       modal.dataset.section = 'worker';
       markActive();
       const status = document.getElementById('admin-workspace-status');
-      if (status) status.textContent = '系統管理者唯讀檢視 Worker heartbeat、背景佇列與自動更新訊號。';
+      if (status) status.textContent = '系統管理者唯讀檢視 Worker heartbeat、背景佇列、處理時間與失敗原因。';
       await renderWorkerStatus(Boolean(force));
       return true;
   });
