@@ -64,17 +64,18 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
             "transaction",
             side_effect=lambda: self._transaction(),
         )
-        self.audit_patch = patch.object(records.audit, "record_event", return_value={"id": "audit1"})
         for active_patch in (
             self.category_patch,
             self.questions_patch,
             self.window_patch,
             self.shuffle_patch,
             self.transaction_patch,
-            self.audit_patch,
         ):
             active_patch.start()
             self.addCleanup(active_patch.stop)
+        self.audit_patch = patch.object(records.audit, "record_event", return_value={"id": "audit1"})
+        self.audit_mock = self.audit_patch.start()
+        self.addCleanup(self.audit_patch.stop)
 
     def tearDown(self):
         self.base.close()
@@ -118,7 +119,7 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
             "essayComments": {"1": "內容完整"},
             "reviewComment": "完成人工批改",
             "reviewerName": "Browser Fake Reviewer",
-            "groupKey": "grpBlood",
+            "groupKey": "grpHema",
             "empId": "SPOOFED",
         }
 
@@ -133,7 +134,7 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
             "name": "王老師",
             "title": "資深醫檢師",
             "role": "clinical_teacher",
-            "preferredGroup": "grpBlood",
+            "preferredGroup": "grpHema",
         }
         reviewed = records.review_record(
             submitted["recordId"],
@@ -165,8 +166,8 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
         self.assertEqual(essay["reviewerName"], "王老師")
         self.assertEqual(essay["reviewerTitle"], "資深醫檢師")
         self.assertNotEqual(essay["reviewerName"], "Browser Fake Reviewer")
-        self.audit_patch.assert_called_once()
-        audit_call = self.audit_patch.call_args.kwargs
+        self.audit_mock.assert_called_once()
+        audit_call = self.audit_mock.call_args.kwargs
         self.assertEqual(audit_call["action"], "exam.record.review")
         self.assertEqual(audit_call["scope"]["kind"], "assigned_student")
         self.assertEqual(audit_call["scope"]["empId"], "S001")
@@ -209,7 +210,7 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
             "username": "leader2",
             "name": "血液組長",
             "role": "group_leader",
-            "preferredGroup": "grpBlood",
+            "preferredGroup": "grpHema",
         }
         with self.assertRaises(records.RecordError) as denied:
             records.review_record(
