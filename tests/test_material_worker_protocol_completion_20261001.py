@@ -134,14 +134,16 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
             "等待教材正式完成後才能返回",
             "beforeunload",
             "averageCompletedDurationSeconds",
-            "R2 原始檔仍保留",
+            "原始檔仍安全保留",
+            "不必重新上傳",
             "canLeaveCourse()",
         ):
             self.assertIn(marker, wizard)
         for marker in (
             "近期 Worker 錯誤／重試",
             "protocolCompatible===false",
-            "R2 原始檔仍保留",
+            "原始檔仍安全保留",
+            "不必重新上傳",
             "估計剩餘約",
         ):
             self.assertIn(marker, jobs)
