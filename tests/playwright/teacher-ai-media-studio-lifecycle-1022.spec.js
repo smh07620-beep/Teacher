@@ -6,6 +6,36 @@ if (process.env.TEACHER_PLAYWRIGHT_BROWSER) {
   test.use({ launchOptions: { executablePath: process.env.TEACHER_PLAYWRIGHT_BROWSER } });
 }
 
+test('media shell removes the legacy source placeholder across workspace hydration', async ({ page }) => {
+  await page.setContent('<main id="admin-section-content"><section id="course-workspace">課程內容</section></main>');
+  await page.evaluate(() => {
+    const NativeSearchParams = window.URLSearchParams;
+    window.URLSearchParams = class extends NativeSearchParams {
+      get(key) { return super.get(key) || ({ admin: '1', persona: 'teacher', teacherMode: 'media' }[key] || null); }
+    };
+    window.TeacherRBAC681Ready = Promise.resolve({
+      roles: new Set(['clinical_teacher']),
+      hasPermission: permission => ['course.manage', 'material.manage'].includes(permission)
+    });
+    window.switchAdminWorkspace = async () => {};
+    window.AdminWorkspaceShell = { addAfterWorkspace(callback) { window.afterWorkspace = callback; } };
+  });
+
+  await page.addScriptTag({ path: asset('teacher-workspace-1014.js') });
+  await expect(page.locator('#teacher-media-studio-shell-1018')).toHaveCount(1);
+  await expect(page.getByText('準備媒體來源', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '📚 回教材與課程' })).toHaveCount(1);
+  await expect(page.locator('#teacher-media-studio-shell-1018 > .rounded-2xl')).toHaveCount(0);
+
+  await page.evaluate(() => {
+    document.getElementById('teacher-media-studio-shell-1018').insertAdjacentHTML('beforeend',
+      '<div data-teacher-media-source-placeholder-1014 class="rounded-2xl"><b>準備媒體來源</b><button id="teacher-media-pick-material-1014">回教材與課程選擇</button></div>');
+    window.afterWorkspace({ workspace: 'course-materials' });
+  });
+  await expect(page.getByText('準備媒體來源', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '📚 回教材與課程' })).toHaveCount(1);
+});
+
 test('AI media studio hydrates when legacy panels arrive after the shell', async ({ page }) => {
   await page.setContent(`
     <main>

@@ -131,7 +131,10 @@
     const content = document.getElementById('admin-section-content');
     if (!content) return null;
     let section = document.getElementById('teacher-media-production-1014');
-    if (section) return section;
+    if (section) {
+      normalizeMediaShell(section);
+      return section;
+    }
 
     section = document.createElement('section');
     section.id = 'teacher-media-production-1014';
@@ -140,13 +143,55 @@
       <section id="teacher-media-studio-shell-1018" class="bg-white border border-cyan-200 rounded-2xl p-5 shadow-sm space-y-5">
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div><p class="admin-page-eyebrow text-cyan-700">AI MEDIA STUDIO</p><h4 class="text-xl font-black text-slate-950">🎬 AI 媒體製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">從教材建立語音、字幕與教學影片。</p></div>
-          <span class="admin-workspace-chip">本機 AI｜隱私模式</span>
+          <div class="flex flex-wrap items-center gap-2"><span class="admin-workspace-chip">本機 AI｜隱私模式</span><button id="teacher-media-pick-material-1014" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">📚 回教材與課程</button></div>
         </div>
-        <div class="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><b class="text-sm text-teal-950">準備媒體來源</b><p class="mt-1 text-xs text-teal-800">選擇來源後，製作室會帶入可使用的下一步；正式核准與發布規則維持不變。</p></div><button id="teacher-media-pick-material-1014" type="button" class="shrink-0 rounded-xl bg-teal-700 px-4 py-2 text-xs font-black text-white">📚 回教材與課程選擇</button></div>
       </section>`;
     content.appendChild(section);
-    section.querySelector('#teacher-media-pick-material-1014')?.addEventListener('click', () => openCourse());
+    normalizeMediaShell(section);
     return section;
+  }
+
+  function normalizeMediaShell(section) {
+    const shell = section?.querySelector('#teacher-media-studio-shell-1018');
+    if (!shell) return;
+
+    // Earlier media shells rendered a second, large "準備媒體來源" card here.
+    // The shared selector in TeacherAIMediaStudio1018 is the sole source picker.
+    shell.querySelectorAll('[data-teacher-media-source-placeholder-1014], #teacher-media-pick-material-1014').forEach(node => {
+      const legacyCard = node.closest('[data-teacher-media-source-placeholder-1014]')
+        || (node.id === 'teacher-media-pick-material-1014' && node.closest('.rounded-2xl'));
+      if (legacyCard && legacyCard !== shell) legacyCard.remove();
+    });
+    shell.querySelectorAll('b').forEach(heading => {
+      if (heading.textContent?.trim() === '準備媒體來源') heading.closest('.rounded-2xl')?.remove();
+    });
+
+    const header = shell.querySelector(':scope > div');
+    const existingButton = shell.querySelector('#teacher-media-pick-material-1014');
+    if (existingButton) {
+      if (existingButton.dataset.teacherMediaBackBound !== '1') {
+        existingButton.dataset.teacherMediaBackBound = '1';
+        existingButton.addEventListener('click', () => openCourse());
+      }
+      return;
+    }
+    if (!header) return;
+    let actions = header.querySelector(':scope > .teacher-media-shell-actions-1014');
+    if (!actions) {
+      actions = document.createElement('div');
+      actions.className = 'teacher-media-shell-actions-1014 flex flex-wrap items-center gap-2';
+      const privacy = header.querySelector('.admin-workspace-chip');
+      if (privacy) actions.appendChild(privacy);
+      header.appendChild(actions);
+    }
+    const button = document.createElement('button');
+    button.id = 'teacher-media-pick-material-1014';
+    button.type = 'button';
+    button.className = 'rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50';
+    button.textContent = '📚 回教材與課程';
+    button.dataset.teacherMediaBackBound = '1';
+    button.addEventListener('click', () => openCourse());
+    actions.appendChild(button);
   }
 
   function showMediaWorkspace() {
