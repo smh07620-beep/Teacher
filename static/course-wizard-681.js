@@ -9,7 +9,7 @@ const MODE_META={
   blueprint:{label:'Blueprint',next:'建立考卷後直接前往「題庫與考卷」設定 Blueprint 與題型配額。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],resultHtml:'',watchToken:0};
+const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -34,6 +34,24 @@ function scope(){
 }
 
 function mode(){return MODE_META[state.examMode]||MODE_META.later;}
+function queuedIds(){return [...new Set((state.queuedJobs||[]).filter(Boolean).map(String))];}
+function canLeaveCourse(){
+  if(!state.created||state.failedUploads.length)return false;
+  if(state.expectedJobs<=0)return true;
+  const ids=queuedIds();
+  if(ids.length<state.expectedJobs)return false;
+  const byId=new Map((state.jobRows||[]).map(row=>[String(row.id||''),row]));
+  return ids.every(id=>byId.get(id)?.status==='completed');
+}
+function syncCompletionControls(){
+  const ready=canLeaveCourse();
+  const finish=el('cw681-finish');
+  if(finish){
+    finish.disabled=!ready;
+    finish.textContent=ready?'✅ 教材已完成，返回教材與課程':state.failedUploads.length?'⚠️ 先完成教材上傳':'⏳ 等待教材正式完成後才能返回';
+  }
+  ['cw681-next-destination','cw681-reset-next'].forEach(id=>{const node=el(id);if(node)node.disabled=!ready;});
+}
 function setBusy(value){
   state.busy=!!value;
   const button=el('cw681-create');
@@ -97,7 +115,9 @@ function actionFooter(){
   if(state.step<4)return `<button ${state.busy||state.created?'disabled':''} data-csp-click="courseWizard681Next()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">下一步</button>`;
   if(!state.created)return `<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681Create()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">${state.busy?'⏳ 建立中…':'建立課程與關聯'}</button>`;
   const retry=state.failedUploads.length?`<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681Create()" class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800 disabled:opacity-50">${state.busy?'⏳ 重試上傳中…':'重試未完成教材'}</button>`:'';
-  return `<div class="flex flex-wrap justify-end gap-2">${retry}<button type="button" data-csp-click="courseWizard681OpenCourse()" class="rounded bg-teal-700 px-4 py-2 text-sm font-bold text-white">完成／返回教材與課程</button></div>`;
+  const ready=canLeaveCourse();
+  const label=ready?'✅ 教材已完成，返回教材與課程':state.failedUploads.length?'⚠️ 先完成教材上傳':'⏳ 等待教材正式完成後才能返回';
+  return `<div class="flex flex-wrap justify-end gap-2">${retry}<button id="cw681-finish" type="button" ${ready?'':'disabled'} data-csp-click="courseWizard681OpenCourse()" class="rounded bg-teal-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">${label}</button></div>`;
 }
 
 function render(){
@@ -110,6 +130,7 @@ function render(){
   if(state.step===3)box.innerHTML=stepThree();
   if(state.step===4)box.innerHTML=stepFour();
   const status=el('cw681-status');if(status&&state.resultHtml)status.innerHTML=state.resultHtml;
+  syncCompletionControls();
 }
 
 function stepOne(){
@@ -127,7 +148,8 @@ function stepThree(){
 
 function stepFour(){
   const s=scope(),title=el('wizard-course-title')?.value||'',desc=el('wizard-course-desc')?.value||'',exam=el('wizard-exam-title')?.value||'';
-  return `<h5 class="font-black">4. ${state.created?'建立完成':'確認建立'}</h5><div class="mt-3 rounded-xl border border-violet-100 bg-white p-4"><dl class="grid gap-3 text-sm md:grid-cols-2"><div><dt class="text-xs text-slate-500">課程</dt><dd class="font-bold">${esc(title||state.course?.title||'（未填）')}</dd></div><div><dt class="text-xs text-slate-500">範圍</dt><dd>${esc(s.area)} · ${esc(el('wizard-group')?.selectedOptions?.[0]?.textContent||s.group)}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">說明</dt><dd>${esc(desc||'—')}</dd></div><div><dt class="text-xs text-slate-500">教材</dt><dd>新上傳 ${state.files.length} 份；既有關聯 ${state.existing.length} 份</dd></div><div><dt class="text-xs text-slate-500">出題流程</dt><dd class="font-bold">${esc(mode().label)}${exam?' · '+esc(exam):''}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">既有教材</dt><dd>${state.existing.map(id=>esc((state.materials||[]).find(m=>String(m.id)===String(id))?.title||id)).join('、')||'—'}</dd></div></dl><p class="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">${state.created?'課程已鎖定完成，不會因再次點擊而重複建立。':'建立完成後：'+esc(mode().next)}</p></div>`;
+  const completionNote=state.created?(canLeaveCourse()?'✅ 教材已正式完成並掛入課程，現在可以離開。':'⏳ 課程已建立，但新教材仍在上傳／排隊／轉檔／發布；全部完成前請留在此頁。'):'建立完成後：'+esc(mode().next);
+  return `<h5 class="font-black">4. ${state.created?'建立完成':'確認建立'}</h5><div class="mt-3 rounded-xl border border-violet-100 bg-white p-4"><dl class="grid gap-3 text-sm md:grid-cols-2"><div><dt class="text-xs text-slate-500">課程</dt><dd class="font-bold">${esc(title||state.course?.title||'（未填）')}</dd></div><div><dt class="text-xs text-slate-500">範圍</dt><dd>${esc(s.area)} · ${esc(el('wizard-group')?.selectedOptions?.[0]?.textContent||s.group)}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">說明</dt><dd>${esc(desc||'—')}</dd></div><div><dt class="text-xs text-slate-500">教材</dt><dd>新上傳 ${state.files.length} 份；既有關聯 ${state.existing.length} 份</dd></div><div><dt class="text-xs text-slate-500">出題流程</dt><dd class="font-bold">${esc(mode().label)}${exam?' · '+esc(exam):''}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">既有教材</dt><dd>${state.existing.map(id=>esc((state.materials||[]).find(m=>String(m.id)===String(id))?.title||id)).join('、')||'—'}</dd></div></dl><p class="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs font-bold text-violet-800">${completionNote}</p></div>`;
 }
 
 function fileMeta(index,file){return {title:file.name.replace(/\.[^.]+$/,''),materialType:'auto',...(state.fileMeta[index]||{})};}
@@ -190,33 +212,63 @@ async function refreshWorkspaceData(){
   if(typeof window.renderAdminCourseMaterialHub==='function')await window.renderAdminCourseMaterialHub(true).catch(()=>{});
 }
 
-function elapsedLabel(value){
+function elapsedSeconds(value){
   const then=new Date(value||Date.now()).getTime();
-  const seconds=Math.max(0,Math.round((Date.now()-then)/1000));
-  if(seconds<60)return `${seconds} 秒`;
-  if(seconds<3600)return `${Math.floor(seconds/60)} 分 ${seconds%60} 秒`;
-  return `${(seconds/3600).toFixed(1)} 小時`;
+  return Number.isFinite(then)?Math.max(0,Math.round((Date.now()-then)/1000)):0;
 }
 
-function backgroundJobsHtml(rows){
+function elapsedLabel(value){
+  const seconds=typeof value==='number'?Math.max(0,Math.round(value)):elapsedSeconds(value);
+  if(seconds<60)return `${seconds} 秒`;
+  if(seconds<3600)return `${Math.floor(seconds/60)} 分 ${seconds%60} 秒`;
+  return `${Math.floor(seconds/3600)} 小時 ${Math.floor((seconds%3600)/60)} 分`;
+}
+
+function progressProjection(row,estimateSeconds){
+  const elapsed=elapsedSeconds(row.startedAt||row.createdAt);
+  const estimate=Math.max(0,Number(estimateSeconds||0));
+  if(row.status==='completed')return {pct:100,timing:`完成 · ${elapsedLabel(elapsed)}`};
+  if(row.status==='failed')return {pct:100,timing:`失敗前已處理 ${elapsedLabel(elapsed)}`};
+  if(row.status==='cancelled')return {pct:100,timing:'已取消'};
+  if(row.status==='queued')return {pct:8,timing:`等待 Worker ${elapsedLabel(elapsed)}`};
+  if(row.status==='retry_wait')return {pct:18,timing:`等待自動重試 · 已經過 ${elapsedLabel(elapsed)}`};
+  const pct=estimate>0?Math.max(25,Math.min(92,Math.round(25+(elapsed/estimate)*65))):45;
+  const eta=estimate>elapsed?`估計剩餘約 ${elapsedLabel(estimate-elapsed)}`:'已超過近期平均，Worker 仍在處理';
+  return {pct,timing:`已處理 ${elapsedLabel(elapsed)} · ${estimate>0?eta:'估計時間資料累積中'}`};
+}
+
+function backgroundJobsHtml(rows,metrics={}){
   if(!rows.length)return '';
-  const terminal=rows.every(row=>['completed','failed','cancelled'].includes(row.status));
-  return `<div class="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-left text-sky-950"><div class="flex items-center justify-between gap-2"><b>${terminal?'背景處理結果':'⚙️ 背景教材處理中'}</b><span class="text-[11px] text-sky-700">可離開此頁，Worker 會繼續</span></div><div class="mt-2 space-y-2">${rows.map(row=>{const failed=row.status==='failed';const done=row.status==='completed';const label=done?'✅ 已完成':failed?'❌ 失敗':row.status==='retry_wait'?'🔁 等待重試':row.status==='processing'?'⚙️ 轉檔／發布中':'⏳ 等待 Worker';const detail=failed?(row.error||row.detail||'未提供失敗原因'):(row.detail||row.stage||'');return `<div class="rounded-lg border ${failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white'} p-2"><div class="flex flex-wrap justify-between gap-2"><span><b>${esc(row.title||row.originalName||row.id)}</b> · ${label}</span><span class="text-[11px] text-slate-500">已等待／處理 ${esc(elapsedLabel(row.createdAt))}</span></div><div class="mt-1 text-[11px] ${failed?'text-rose-700':'text-slate-600'}">${esc(row.stage||'')} ${detail?`｜${esc(detail)}`:''}</div></div>`;}).join('')}</div></div>`;
+  const allDone=rows.every(row=>row.status==='completed');
+  const hasProblem=rows.some(row=>['retry_wait','failed','cancelled'].includes(row.status));
+  const workers=Array.isArray(metrics.workers)?metrics.workers:[];
+  const protocolBlocked=workers.some(worker=>worker.protocolCompatible===false&&['online','busy'].includes(worker.status));
+  const heading=allDone?'✅ 所有教材已正式完成':hasProblem?'⚠️ 教材處理需要注意':'⚙️ 背景教材處理中';
+  const leaveHint=allDone?'現在可以安全返回課程。':'請等到全部教材顯示「已完成」再離開；系統會每 3 秒更新。';
+  const protocolWarning=protocolBlocked?'<div class="mb-2 rounded-lg border border-rose-200 bg-rose-50 p-2 font-bold text-rose-800">本機 Worker 協議版本過舊，系統已停止派發新工作。教材會保持排隊，不會因版本問題反覆失敗；請更新 Worker 後再等待自動接續。</div>':'';
+  return `<div class="mt-3 rounded-xl border ${hasProblem&&!allDone?'border-amber-200 bg-amber-50':'border-sky-200 bg-sky-50'} p-3 text-left text-sky-950"><div class="flex flex-wrap items-center justify-between gap-2"><b>${heading}</b><span class="text-[11px] text-sky-700">${leaveHint}</span></div>${protocolWarning}<div class="mt-2 space-y-2">${rows.map(row=>{const failed=row.status==='failed';const done=row.status==='completed';const projection=progressProjection(row,metrics.averageCompletedDurationSeconds);const label=done?'✅ 已完成':failed?'❌ 失敗':row.status==='retry_wait'?'🔁 等待重試':row.status==='processing'?'⚙️ 轉檔／發布中':row.status==='cancelled'?'⛔ 已取消':'⏳ 等待 Worker';const detail=(failed||row.status==='retry_wait')?(row.error||row.detail||'未提供失敗原因'):(row.detail||row.stage||'');const retained=row.stagingBackend==='r2'&&['retry_wait','failed'].includes(row.status)?'<div class="mt-1 font-bold text-violet-700">☁ R2 原始檔仍保留，可直接重新處理，不必重新上傳；成功後才會清除 staging。</div>':'';const retry=failed&&Number(row.attempts||0)>=Number(row.maxAttempts||0)?`<button type="button" data-csp-click="retryMaterialJob('${esc(row.id)}')" class="mt-2 rounded border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-800">直接重新處理</button>`:'';const barClass=failed?'bg-rose-500':row.status==='retry_wait'?'bg-amber-500':done?'bg-emerald-500':'bg-sky-600';return `<div class="rounded-lg border ${failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white'} p-2"><div class="flex flex-wrap justify-between gap-2"><span><b>${esc(row.title||row.originalName||row.id)}</b> · ${label}</span><span class="text-[11px] text-slate-500">${esc(projection.timing)}</span></div><div class="mt-1 text-[11px] ${failed?'text-rose-700':'text-slate-600'}">${esc(row.stage||'')} ${detail?`｜${esc(detail)}`:''}</div>${retained}<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 ${projection.pct}%</span><span>依實際狀態＋近期平均耗時計算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full ${barClass} transition-all" style="width:${projection.pct}%"></div></div>${retry}</div>`;}).join('')}</div></div>`;
 }
 
 async function watchQueuedJobs(jobIds){
-  const unique=[...new Set((jobIds||[]).filter(Boolean))];
-  if(!unique.length)return;
+  const unique=[...new Set((jobIds||[]).filter(Boolean).map(String))];
+  if(!unique.length){state.jobRows=[];syncCompletionControls();return;}
   const token=++state.watchToken;
   while(token===state.watchToken){
+    let metrics={};
+    try{metrics=await api('/api/material-jobs?limit=20');}catch(_e){}
     const rows=(await Promise.all(unique.map(async id=>{
       try{return await api(`/api/material-jobs/${encodeURIComponent(id)}`);}
       catch(error){return {id,status:'unknown',stage:'狀態讀取失敗',detail:error.message,createdAt:new Date().toISOString()};}
     }))).filter(Boolean);
+    state.jobRows=rows;
+    state.jobEstimateSeconds=Math.max(0,Number(metrics.averageCompletedDurationSeconds||0));
+    state.workerProtocolBlocked=(Array.isArray(metrics.workers)?metrics.workers:[]).some(worker=>worker.protocolCompatible===false&&['online','busy'].includes(worker.status));
     const host=el('cw681-background-jobs');
-    if(host)host.innerHTML=backgroundJobsHtml(rows);
-    if(rows.every(row=>['completed','failed','cancelled'].includes(row.status))){
+    if(host)host.innerHTML=backgroundJobsHtml(rows,metrics);
+    syncCompletionControls();
+    if(rows.length===unique.length&&rows.every(row=>row.status==='completed')){
       await refreshWorkspaceData();
+      syncCompletionControls();
       break;
     }
     await new Promise(resolve=>setTimeout(resolve,3000));
@@ -259,7 +311,7 @@ async function uploadEntries(entries,context,status){
           loaded.set(item.index,Math.max(0,Math.min(Number(file.size||0),Number(progress.loaded||0))));
           const totalLoaded=[...loaded.values()].reduce((sum,value)=>sum+value,0);
           const overall=Math.max(0,Math.min(100,Math.round(totalLoaded/totalBytes*100)));
-          status.innerHTML=`<div class="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-950"><div class="flex justify-between gap-2"><b>⬆️ 上傳至 R2：${esc(file.name)}</b><span>${overall}%</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-sky-100"><div class="h-full bg-sky-600 transition-all" style="width:${overall}%"></div></div><div class="mt-1 text-[11px]">檔案 ${order+1}/${entries.length}；完成後會自動交給背景 Worker 轉檔與發布。</div></div>`;
+          status.innerHTML=`<div class="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-950"><div class="flex justify-between gap-2"><b>⬆️ 上傳至 R2：${esc(file.name)}</b><span>${overall}%</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-sky-100"><div class="h-full bg-sky-600 transition-all" style="width:${overall}%"></div></div><div class="mt-1 text-[11px]">檔案 ${order+1}/${entries.length}；R2 完成後還會等待 Worker 轉檔與正式發布，請勿提前離開。</div></div>`;
         }
       });
       loaded.set(item.index,Number(file.size||0));
@@ -282,11 +334,12 @@ async function retryFailedUploads(){
     const entries=state.failedUploads.map(item=>({index:item.index,file:state.files[item.index]})).filter(item=>item.file);
     const result=await uploadEntries(entries,{area,group,desc,courseId:state.course.id,categoryId:state.categoryId,workflowId:state.workflowId},status);
     state.failedUploads=result.errors;
+    state.expectedJobs+=result.uploaded;
     state.queuedJobs.push(...result.jobs);
-    const retryText=state.failedUploads.length?`仍有 ${state.failedUploads.length} 份教材上傳失敗。`:'未完成教材已重新送入背景佇列。';
-    state.resultHtml=`<span class="font-bold ${state.failedUploads.length?'text-amber-700':'text-emerald-700'}">${state.failedUploads.length?'⚠️':'✅'} ${esc(retryText)}</span><div id="cw681-background-jobs"></div><button type="button" data-csp-click="courseWizard681Reset()" class="mt-2 text-slate-500 underline">建立下一門課</button>`;
+    const retryText=state.failedUploads.length?`仍有 ${state.failedUploads.length} 份教材上傳失敗。`:'未完成教材已重新送入背景佇列；請等到 Worker 正式完成。';
+    state.resultHtml=`<span class="font-bold ${state.failedUploads.length?'text-amber-700':'text-sky-700'}">${state.failedUploads.length?'⚠️':'⏳'} ${esc(retryText)}</span><div id="cw681-background-jobs"></div><button id="cw681-reset-next" type="button" disabled data-csp-click="courseWizard681Reset()" class="mt-2 text-slate-500 underline disabled:cursor-not-allowed disabled:opacity-40">建立下一門課</button>`;
     render();
-    watchQueuedJobs(state.queuedJobs);
+    watchQueuedJobs(queuedIds());
   }catch(error){
     state.resultHtml=`<span class="font-bold text-rose-700">❌ ${esc(error.message)}</span>`;render();
   }finally{setBusy(false);}
@@ -318,16 +371,19 @@ async function create(){
     const upload=await uploadEntries(entries,{area,group,desc,courseId:course.id,categoryId:state.categoryId,workflowId:bundlePayload.workflowId},status);
     state.failedUploads=upload.errors;
     state.queuedJobs=upload.jobs;
+    state.expectedJobs=upload.uploaded;
+    state.jobRows=[];
     status.textContent='⏳ 同步課程、教材與考卷清單…';await refreshWorkspaceData();
     state.created=true;
-    const nextButton=state.categoryId?'<button type="button" data-csp-click="courseWizard681Continue()" class="rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white">前往題庫與考卷 →</button>':'<button type="button" data-csp-click="courseWizard681OpenCourse()" class="rounded-lg bg-teal-700 px-3 py-1.5 font-bold text-white">查看課程總覽 →</button>';
+    const ready=canLeaveCourse();
+    const nextButton=state.categoryId?`<button id="cw681-next-destination" type="button" ${ready?'':'disabled'} data-csp-click="courseWizard681Continue()" class="rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">前往題庫與考卷 →</button>`:`<button id="cw681-next-destination" type="button" ${ready?'':'disabled'} data-csp-click="courseWizard681OpenCourse()" class="rounded-lg bg-teal-700 px-3 py-1.5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">查看課程總覽 →</button>`;
     const retryNote=bundle.reused?'（本次安全沿用既有建立結果，未重複建立課程／考卷）':'';
     const uploadErrors=state.failedUploads.length?`<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-amber-900"><b>⚠️ 以下教材尚未進入 Worker：</b><ul class="mt-1 list-disc pl-5">${state.failedUploads.map(item=>`<li><b>${esc(item.fileName)}</b>：${esc(item.reason)}</li>`).join('')}</ul><p class="mt-2">請使用下方「重試未完成教材」。課程本身已鎖定完成，不會重複建立。</p></div>`:'';
     const failed=state.failedUploads.length;
-    const summaryClass=failed?'font-bold text-amber-700':'font-bold text-emerald-700';
-    const summaryIcon=failed?'⚠️':'✅';
-    const uploadSummary=failed?`已排入背景佇列 ${upload.uploaded} 份新教材；${failed} 份上傳失敗`:`已排入背景佇列 ${upload.uploaded} 份新教材`;
-    state.resultHtml=`<div class="space-y-2"><div><span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程${failed?'已建立，但教材上傳未完整完成':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。</div>${uploadErrors}<div class="flex flex-wrap gap-2">${nextButton}<button type="button" data-csp-click="courseWizard681Reset()" class="text-slate-500 underline">建立下一門課</button></div><div id="cw681-background-jobs"></div></div>`;
+    const summaryClass=failed?'font-bold text-amber-700':upload.uploaded?'font-bold text-sky-700':'font-bold text-emerald-700';
+    const summaryIcon=failed?'⚠️':upload.uploaded?'⏳':'✅';
+    const uploadSummary=failed?`已排入背景佇列 ${upload.uploaded} 份新教材；${failed} 份上傳失敗`:upload.uploaded?`R2 上傳已完成／排入背景佇列 ${upload.uploaded} 份，現在等待 Worker 正式處理`:'沒有新教材需要背景處理';
+    state.resultHtml=`<div class="space-y-2"><div><span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程${failed?'已建立，但教材上傳未完整完成':upload.uploaded?'已建立，教材仍在背景處理':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。</div>${uploadErrors}<div class="rounded-lg border border-sky-200 bg-sky-50 p-2 font-bold text-sky-900">新教材必須全部顯示「已完成」後，返回課程與下一步按鈕才會解鎖。</div><div class="flex flex-wrap gap-2">${nextButton}<button id="cw681-reset-next" type="button" ${ready?'':'disabled'} data-csp-click="courseWizard681Reset()" class="text-slate-500 underline disabled:cursor-not-allowed disabled:opacity-40">建立下一門課</button></div><div id="cw681-background-jobs"></div></div>`;
     render();
     watchQueuedJobs(state.queuedJobs);
   }catch(error){
@@ -336,7 +392,9 @@ async function create(){
 }
 
 async function continueToAssessment(){
+  if(!canLeaveCourse())return alert('新教材尚未全部完成處理。請等到所有教材顯示「已完成」後再前往下一步。');
   if(!state.categoryId)return openCourseWorkspace();
+  state.watchToken++;
   if(typeof window.switchAdminWorkspace==='function')await window.switchAdminWorkspace('assessment',true);
   if(typeof window.renderAdminQuizCategories==='function')await window.renderAdminQuizCategories(true).catch(()=>{});
   const targets=[`qpanel-${state.categoryId}`,`qcard-${state.categoryId}`,`quiz-${state.categoryId}`];
@@ -345,6 +403,7 @@ async function continueToAssessment(){
 }
 
 async function openCourseWorkspace(){
+  if(!canLeaveCourse())return alert('教材尚未正式完成。請留在此頁等待 Worker 完成，避免回到課程後看不到教材。');
   state.watchToken++;
   if(typeof window.switchAdminWorkspace==='function')await window.switchAdminWorkspace('course-materials',true);
   if(typeof window.renderAdminCourseMaterialHub==='function')await window.renderAdminCourseMaterialHub(true).catch(()=>{});
@@ -352,11 +411,18 @@ async function openCourseWorkspace(){
 }
 
 function reset(){
+  if(state.created&&!canLeaveCourse())return alert('目前教材尚未全部完成，請先等待或處理失敗工作。');
   state.watchToken++;
-  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.resultHtml='';clearWorkflowId();
+  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
+
+window.addEventListener('beforeunload',event=>{
+  if(!state.created||canLeaveCourse())return;
+  event.preventDefault();
+  event.returnValue='';
+});
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount);else mount();
 })();
