@@ -53,9 +53,9 @@
       const buttons=[...document.querySelectorAll('[data-csp-click="courseWizard681OpenCourse()"]')];
       buttons.forEach(button=>{button.disabled=true;button.setAttribute('aria-busy','true');});
       try{
-        // Switching the workspace already owns its render lifecycle. Calling
-        // renderAdminCourseMaterialHub() a second time here caused a re-entry
-        // race/blank screen while the background-job watcher was still alive.
+        // Switching the workspace already owns its render lifecycle. Avoid a
+        // second explicit course-hub render here because it can re-enter while
+        // the background-job watcher still has callbacks in flight.
         if(typeof window.switchAdminWorkspace==='function'){
           await window.switchAdminWorkspace('course-materials',true);
         }else{
