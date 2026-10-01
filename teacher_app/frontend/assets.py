@@ -14,6 +14,7 @@ ASSET_MANIFEST = {
             "/home-profile-title-71.js",
             "/portal-navigation-73.js",
             "/learner-todo-convergence-1025.js",
+            "/learning-progress-convergence-1025.js",
         ),
     },
     "system": {
@@ -61,6 +62,7 @@ ASSET_MANIFEST = {
             "/training-command-center-71.js",
             "/pgy-competency-matrix-71.js",
             "/learning-analytics-71.js",
+            "/learning-progress-convergence-1025.js",
             "/notification-center-71.js",
             "/worker-status-70.js",
             "/worker-status-convergence-101.js",
