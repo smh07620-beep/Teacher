@@ -22,6 +22,16 @@ class TeacherPaperDocumentWorkspaceTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.workspace)
 
+    def test_paper_document_mode_hides_redundant_teacher_subnav(self):
+        self.assertIn("function syncTeacherSubnavVisibility()", self.workspace)
+        self.assertIn("document.getElementById('admin-teacher-subnav')", self.workspace)
+        self.assertIn("state.teacherMode === 'documents'", self.workspace)
+        self.assertIn("subnav.classList.toggle('hidden'", self.workspace)
+        # Generic section switching can repaint workspace chrome, so the paper
+        # mode must re-apply the hidden state after the section switch.
+        self.assertIn("const result = await window.switchAdminSection?.('results', true);", self.workspace)
+        self.assertIn("syncTeacherSubnavVisibility();\n    return result;", self.workspace)
+
     def test_paper_document_mode_keeps_results_as_source_of_truth(self):
         self.assertIn("window.switchAdminSection?.('results', true)", self.workspace)
         self.assertIn("下方列表就是正式考核紀錄來源", self.workspace)
