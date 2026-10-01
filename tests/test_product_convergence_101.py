@@ -11,6 +11,7 @@ class ProductConvergence101Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.shell = (ROOT / "static" / "product-convergence-101.js").read_text(encoding="utf-8")
+        cls.persona = (ROOT / "static" / "teacher-persona-isolation-1014.js").read_text(encoding="utf-8")
         cls.plan = (ROOT / "PRODUCT_CONVERGENCE_20261001.md").read_text(encoding="utf-8")
 
     def test_convergence_asset_loads_after_existing_persona_shell(self):
@@ -19,11 +20,12 @@ class ProductConvergence101Tests(unittest.TestCase):
         self.assertLess(body.index("/teacher-persona-isolation-1014.js"), body.index("/product-convergence-101.js"))
 
     def test_teacher_primary_navigation_has_only_two_product_jobs(self):
-        self.assertIn("product-nav-course-101", self.shell)
-        self.assertIn("product-nav-assessment-101", self.shell)
-        self.assertEqual(self.shell.count("makeButton('product-nav-"), 2)
-        self.assertIn("📚 教材與課程", self.shell)
-        self.assertIn("📝 評量與出題", self.shell)
+        self.assertIn("teacher-nav-course-1014", self.persona)
+        self.assertIn("teacher-nav-assessment-1014", self.persona)
+        self.assertEqual(self.persona.count("['teacher-nav-"), 2)
+        self.assertIn("📚 教材與課程", self.persona)
+        self.assertIn("📝 評量與出題", self.persona)
+        self.assertIn("teacherButtons.length !== 2", self.persona)
 
     def test_media_and_paper_export_remain_contextual_not_removed(self):
         self.assertIn("teacher-context-tools-101", self.shell)
@@ -32,6 +34,11 @@ class ProductConvergence101Tests(unittest.TestCase):
         self.assertIn("api.openMedia?.()", self.shell)
         self.assertIn("api.openDocuments?.()", self.shell)
         self.assertIn("不再各自佔一個主導覽", self.shell)
+
+    def test_teacher_and_convergence_layers_do_not_compete_for_navigation(self):
+        self.assertIn("final teacher persona navigation is owned by teacher-persona-isolation", self.shell)
+        self.assertNotIn("navHost.replaceChildren(group)", self.shell)
+        self.assertIn("contextual tools and never rewrites the navigation host", self.shell)
 
     def test_system_navigation_groups_infrastructure_by_human_job(self):
         for label in ("人員與權限", "系統健康與維運", "安全與稽核"):
