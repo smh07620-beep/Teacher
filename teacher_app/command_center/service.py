@@ -1,8 +1,8 @@
 """Read-only aggregation for Teacher 7.1 Training Command Center.
 
-PGY learner content is opt-in through the explicit admin-managed audience flag.
-Online/course/exam tasks are composed by the frontend from existing canonical
-read APIs; no mutation workflow is duplicated here.
+The command center is the single read projection for learner/teacher work that
+needs attention. Canonical domain stores remain authoritative; this module does
+not duplicate mutation workflows or authorization decisions.
 """
 
 from __future__ import annotations
@@ -11,9 +11,14 @@ import datetime as dt
 from typing import Any, Mapping, Optional
 
 from teacher_app.command_center import audience
-from teacher_app.common.auth import normalize_role
+from teacher_app.common.auth import has_permission, normalize_role
 from teacher_app.common.errors import ApiError
+from teacher_app.courses import repository as course_repository
+from teacher_app.exams import records as exam_records
+from teacher_app.learning import access as learning_access
+from teacher_app.learning import assignment_service
 from teacher_app.pgy import service as pgy_service
+from teacher_app.worker import repository as worker_repository
 
 
 ACTIONABLE_PGY = {
@@ -38,6 +43,8 @@ STATUS_LABELS = {
     "group_countersigned": "待最終確認",
 }
 
+TEACHER_DUE_WINDOW = dt.timedelta(days=7)
+
 
 def _parse_datetime(value: Any) -> Optional[dt.datetime]:
     text = str(value or "").strip()
@@ -60,12 +67,183 @@ def _is_overdue(value: Any, now: dt.datetime) -> bool:
 
 
 def _task_sort_key(item: Mapping[str, Any]):
+    priority = {
+        "review": 0,
+        "material_failure": 1,
+        "due": 2,
+        "draft": 3,
+    }.get(str(item.get("kind") or ""), 4)
     due = _parse_datetime(item.get("dueAt"))
     return (
         0 if item.get("overdue") else 1,
+        priority,
         due or dt.datetime.max.replace(tzinfo=dt.timezone.utc),
         str(item.get("title") or ""),
     )
+
+
+def _visible_to_teacher(user: Mapping[str, Any], item: Mapping[str, Any]) -> bool:
+    try:
+        return learning_access.can_access_learning_item(user, item)
+    except Exception:
+        return False
+
+
+def _teacher_review_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
+    if not has_permission(user, "evaluation.review"):
+        return []
+    values = []
+    try:
+        rows = exam_records.list_records()
+    except Exception:
+        return values
+    for row in rows:
+        if str(row.get("reviewStatus") or "completed") != "pending":
+            continue
+        area = str(row.get("trainingArea") or "internal")
+        group = str(row.get("groupKey") or "grpBio")
+        if not _visible_to_teacher(user, {"area": area, "group": group}):
+            continue
+        values.append({
+            "id": str(row.get("id") or ""),
+            "domain": "assessment",
+            "kind": "review",
+            "title": str(row.get("quizTitle") or "待人工批改考核"),
+            "status": "pending_review",
+            "statusLabel": "待批改",
+            "group": group,
+            "area": area,
+            "dueAt": "",
+            "overdue": False,
+            "detail": f"{str(row.get('name') or row.get('empId') or '學員')} 的作答等待人工批改",
+            "action": "review",
+            "actionLabel": "前往批改",
+            "target": "assessment",
+        })
+    return values
+
+
+def _teacher_material_failure_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
+    if not has_permission(user, "material.manage"):
+        return []
+    values = []
+    try:
+        jobs = worker_repository.list_material_jobs(80)
+    except Exception:
+        return values
+    for job in jobs:
+        if str(job.get("status") or "") != "failed":
+            continue
+        try:
+            full = worker_repository.get_material_job(str(job.get("id") or ""), include_payload=True) or job
+        except Exception:
+            full = job
+        payload = full.get("payload") if isinstance(full.get("payload"), Mapping) else {}
+        area = str(payload.get("area") or full.get("area") or "internal")
+        group = str(payload.get("group") or full.get("group") or "grpBio")
+        if not _visible_to_teacher(user, {"area": area, "group": group}):
+            continue
+        retained = str(full.get("stagingBackend") or "") == "r2" and bool(full.get("stagingKey"))
+        values.append({
+            "id": str(full.get("id") or ""),
+            "domain": "materials",
+            "kind": "material_failure",
+            "title": str(payload.get("title") or full.get("originalName") or "教材處理失敗"),
+            "status": "needs_attention",
+            "statusLabel": "教材需要處理",
+            "group": group,
+            "area": area,
+            "dueAt": "",
+            "overdue": False,
+            "detail": str(full.get("error") or full.get("detail") or "背景教材處理失敗"),
+            "sourceRetained": retained,
+            "action": "material_jobs",
+            "actionLabel": "查看並重新處理",
+            "target": "course-materials",
+        })
+    return values
+
+
+def _teacher_due_items(user: Mapping[str, Any], current: dt.datetime) -> list[dict[str, Any]]:
+    if not has_permission(user, "learning.assign"):
+        return []
+    values = []
+    try:
+        assignments = assignment_service.admin_list(user, include_inactive=False)
+    except Exception:
+        return values
+    course_cache: dict[str, dict[str, Any]] = {}
+    for assignment in assignments:
+        due = _parse_datetime(assignment.get("dueAt"))
+        if not due or due > current + TEACHER_DUE_WINDOW:
+            continue
+        course_id = str(assignment.get("courseId") or "")
+        if course_id not in course_cache:
+            course_cache[course_id] = course_repository.get_course(course_id) or {}
+        course = course_cache[course_id]
+        title = str(course.get("title") or course_id or "課程")
+        values.append({
+            "id": str(assignment.get("id") or ""),
+            "domain": "assignments",
+            "kind": "due",
+            "title": title,
+            "status": "overdue" if due < current else "due_soon",
+            "statusLabel": "已逾期" if due < current else "即將到期",
+            "group": str(assignment.get("group") or course.get("group") or ""),
+            "area": str(assignment.get("area") or course.get("area") or ""),
+            "dueAt": due.isoformat(),
+            "overdue": due < current,
+            "detail": "課程指派截止時間已到" if due < current else "課程指派將在 7 天內到期",
+            "action": "assignment",
+            "actionLabel": "查看課程指派",
+            "target": "course-materials",
+        })
+    return values
+
+
+def _teacher_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
+    if not has_permission(user, "course.manage"):
+        return []
+    values = []
+    try:
+        courses = course_repository.list_courses(None, None, True)
+    except Exception:
+        return values
+    for course in courses:
+        if course.get("active", True):
+            continue
+        if not _visible_to_teacher(user, course):
+            continue
+        values.append({
+            "id": str(course.get("id") or ""),
+            "domain": "courses",
+            "kind": "draft",
+            "title": str(course.get("title") or "未命名課程草稿"),
+            "status": "draft",
+            "statusLabel": "未發布草稿",
+            "group": str(course.get("group") or ""),
+            "area": str(course.get("area") or ""),
+            "dueAt": "",
+            "overdue": False,
+            "detail": "此課程目前未啟用，學員尚無法使用。",
+            "action": "draft",
+            "actionLabel": "繼續編輯",
+            "target": "course-materials",
+        })
+    return values
+
+
+def _teacher_action_items(user: Mapping[str, Any], current: dt.datetime) -> list[dict[str, Any]]:
+    if not any(has_permission(user, permission) for permission in (
+        "course.manage", "material.manage", "evaluation.review", "learning.assign"
+    )):
+        return []
+    values = []
+    values.extend(_teacher_review_items(user))
+    values.extend(_teacher_material_failure_items(user))
+    values.extend(_teacher_due_items(user, current))
+    values.extend(_teacher_draft_items(user))
+    return values
 
 
 def build_summary(
@@ -119,8 +297,16 @@ def build_summary(
             }
         )
 
+    teacher_items = _teacher_action_items(user, current)
+    items.extend(teacher_items)
     items.sort(key=_task_sort_key)
     overdue = sum(1 for item in items if item["overdue"])
+    teacher_counts = {
+        "review": sum(1 for item in teacher_items if item.get("kind") == "review"),
+        "materialFailure": sum(1 for item in teacher_items if item.get("kind") == "material_failure"),
+        "due": sum(1 for item in teacher_items if item.get("kind") == "due"),
+        "draft": sum(1 for item in teacher_items if item.get("kind") == "draft"),
+    }
     return {
         "role": role,
         "audience": profile["audience"],
@@ -130,7 +316,9 @@ def build_summary(
         "counts": {
             "total": len(items),
             "overdue": overdue,
-            "pgy": len(items),
+            "pgy": sum(1 for item in items if item.get("domain") == "pgy"),
+            "teacher": len(teacher_items),
+            **teacher_counts,
         },
         "items": items,
     }
