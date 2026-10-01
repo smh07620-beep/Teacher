@@ -13,6 +13,9 @@ def test_question_delete_actions_are_visible_and_explicit():
     assert "🗑️ 刪除已選題目" in source
     assert "🗑️ 刪除" in source
     assert "MutationObserver" in source
+    direct_delete = source.index('data-csp-click="adminDeleteQuizCategory')
+    overflow_menu = source.index('<details data-quiz-overflow-78')
+    assert direct_delete < overflow_menu
 
 
 def test_existing_question_delete_contract_keeps_confirmation_and_delete_method():

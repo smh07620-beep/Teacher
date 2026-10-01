@@ -47,6 +47,9 @@ def test_media_studio_reuses_existing_generate_review_publish_lanes_without_inte
     assert "replaceVideoIdInput" in source
     assert "/api/media-audio/preview" in audio
     assert "▶ 試聽" in audio
+    assert "/api/media-audio/preview" in video
+    assert "teacher-ai-video-voice-preview-1015" in video
+    assert "teacher-ai-video-voice-player-1015" in video
     assert "/api/media-audio/generate" in audio
     assert "/api/ai-videos/generate" in video
     assert "/approve" in video and "/publish" in video
