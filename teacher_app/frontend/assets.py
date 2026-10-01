@@ -13,6 +13,7 @@ ASSET_MANIFEST = {
         "body": (
             "/home-profile-title-71.js",
             "/portal-navigation-73.js",
+            "/learner-todo-convergence-1025.js",
         ),
     },
     "system": {
@@ -219,7 +220,6 @@ def register_pgy_frontend(app):
                 "Teacher frontend asset injection failed path=%s",
                 path or "<unknown>",
             )
-            return response
         return response
 
     return app
