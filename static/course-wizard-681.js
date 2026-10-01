@@ -200,6 +200,7 @@ async function create(){
     }
     if(!window.MaterialUploadClient?.enqueue)throw new Error('教材背景上傳元件尚未載入，請重新整理後再試。');
     let uploaded=0,failed=0;
+    const uploadErrors=[];
     for(let index=0;index<files.length;index++){
       const file=files[index],meta=fileMeta(index,file);
       status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name}`;
@@ -207,13 +208,21 @@ async function create(){
       try{
         await window.MaterialUploadClient.enqueue(form,{fileName:file.name,onUnauthorized:loginRedirect,onProgress:progress=>{status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name} ${progress.percent}%（完成後交由背景 Worker 處理）`;}});
         uploaded++;
-      }catch(error){failed++;console.warn('Course wizard material upload failed',file.name,error);}
+      }catch(error){
+        failed++;
+        const reason=String(error?.message||'未知上傳錯誤');
+        uploadErrors.push({fileName:file.name,reason});
+        console.warn('Course wizard material upload failed',file.name,error);
+      }
     }
     status.textContent='⏳ 同步課程、教材與考卷清單…';await refreshWorkspaceData();
     const nextButton=state.categoryId?'<button type="button" data-csp-click="courseWizard681Continue()" class="ml-2 rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white">前往題庫與考卷 →</button>':'<button type="button" data-csp-click="courseWizard681OpenCourse()" class="ml-2 rounded-lg bg-teal-700 px-3 py-1.5 font-bold text-white">查看課程總覽 →</button>';
-    const uploadNote=failed?`；${failed} 份教材未能排入佇列，可重新選取後再試` : '';
     const retryNote=bundle.reused?'（本次安全沿用既有建立結果，未重複建立課程／考卷）':'';
-    status.innerHTML=`<span class="font-bold text-emerald-700">✅ 「${esc(title)}」建立完成${retryNote}。</span> 已關聯 ${linked} 份既有教材、已排入背景佇列 ${uploaded} 份新教材${uploadNote}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。${nextButton}<button type="button" data-csp-click="courseWizard681Reset()" class="ml-2 text-slate-500 underline">建立下一門課</button>`;
+    const uploadErrorDetails=uploadErrors.length?`<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-amber-900"><b>⚠️ 課程已建立，但以下教材尚未進入 Worker：</b><ul class="mt-1 list-disc pl-5">${uploadErrors.map(item=>`<li><b>${esc(item.fileName)}</b>：${esc(item.reason)}</li>`).join('')}</ul><p class="mt-2">修正上傳問題後可直接用相同建立流程重試；系統會沿用既有課程／考卷，不會重複建立。</p></div>`:'';
+    const summaryClass=failed?'font-bold text-amber-700':'font-bold text-emerald-700';
+    const summaryIcon=failed?'⚠️':'✅';
+    const uploadSummary=failed?`已排入背景佇列 ${uploaded} 份新教材；${failed} 份上傳失敗`:`已排入背景佇列 ${uploaded} 份新教材`;
+    status.innerHTML=`<span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程${failed?'已建立，但教材上傳未完整完成':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。${uploadErrorDetails}${nextButton}<button type="button" data-csp-click="courseWizard681Reset()" class="ml-2 text-slate-500 underline">建立下一門課</button>`;
   }catch(error){status.textContent='❌ '+error.message+'（未變更內容時可直接重試，系統會沿用同一建立流程。）';}
   finally{setBusy(false);}
 }
