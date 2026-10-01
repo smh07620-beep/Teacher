@@ -293,8 +293,10 @@
     const url=String(session.url||session.parts?.[0]?.url||'');
     if(!url)throw new Error('R2 單檔直傳沒有可用網址');
     const [sha256,response]=await Promise.all([sha256Blob(file),retryPut(url,file,session.headers||undefined)]);
-    const etag=response.headers.get('etag');
-    if(!etag)throw new Error('R2 未回傳 ETag，請檢查 bucket CORS ExposeHeaders');
+    // Browser CORS does not need to expose ETag. The server HEADs the R2
+    // object and treats that server-side ETag as authoritative; a visible
+    // browser ETag is sent only as an optional cross-check.
+    const etag=response.headers.get('etag')||'';
     options.onProgress?.({loaded:file.size,total:file.size,percent:100,fileName});
     return completeUpload(session,[{partNumber:1,etag,sha256}],options);
   }
@@ -329,8 +331,7 @@
         const start=(number-1)*partSize;
         const end=Math.min(file.size,start+partSize);
         const chunk=file.slice(start,end);
-        const response=await retryPut(part.url,chunk,part.headers||undefined);
-        if(!response.headers.get('etag'))throw new Error('R2 未回傳 ETag，請檢查 bucket CORS ExposeHeaders');
+        await retryPut(part.url,chunk,part.headers||undefined);
         uploadedSet.add(number);
         uploaded+=chunk.size;
         options.onProgress?.({loaded:Math.min(uploaded,file.size),total:file.size,percent:Math.min(100,Math.round(uploaded/file.size*100)),fileName});
@@ -430,7 +431,7 @@
   function isDirectNetworkFailure(error){
     if(Number.isFinite(Number(error?.status)))return false;
     const message=String(error?.message||'').toLowerCase();
-    return error?.name==='TypeError'||/failed to fetch|network(?:error| request failed)|load failed|r2 未回傳 etag|cors exposeheaders/.test(message);
+    return error?.name==='TypeError'||/failed to fetch|network(?:error| request failed)|load failed/.test(message);
   }
 
   async function queueCompatibilityUpload(formData,options={}){
@@ -444,7 +445,7 @@
   }
 
   function directNetworkError(){
-    return new Error('瀏覽器無法連線至雲端直傳服務。請檢查網路，或請管理員確認 R2 bucket CORS 已允許目前網站來源並公開 ETag。');
+    return new Error('瀏覽器無法連線至雲端直傳服務。請檢查網路，或請管理員確認 R2 bucket CORS 已允許目前網站來源與 PUT。');
   }
 
   async function enqueue(formData,options={}){
