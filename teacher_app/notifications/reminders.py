@@ -1,55 +1,108 @@
-"""Periodic email reminders for unfinished assigned learning and exams."""
+"""Scheduled email delivery for canonical actionable notification events."""
 from __future__ import annotations
-import datetime as dt, os, uuid
+
+import datetime as dt
+import json
+import os
+import uuid
+from typing import Any, Mapping
+
 from teacher_app.auth import repository as auth_repository
 from teacher_app.auth.self_service import _send
 from teacher_app.common import db as common_db
-from teacher_app.learning import assignment_service, progress_service
+from teacher_app.notifications import events
 
-def _parse(v):
-    if not v:return None
-    try:return dt.datetime.fromisoformat(str(v).replace("Z","+00:00"))
-    except Exception:return None
+TAIPEI = dt.timezone(dt.timedelta(hours=8))
 
-def _claim(username,key,kind):
-    with common_db.transaction() as (conn,dbkind):
-        ph=common_db.placeholder(dbkind)
-        try:conn.execute(f"INSERT INTO email_notification_log(id,username,notification_key,kind,sent_at) VALUES ({','.join([ph]*5)})",(uuid.uuid4().hex,username,key,kind,dt.datetime.now(dt.timezone.utc).isoformat()));return True
-        except Exception:return False
 
-def run_due_reminders():
-    now=dt.datetime.now(dt.timezone.utc); horizon=now+dt.timedelta(days=max(1,int(os.getenv("EMAIL_REMINDER_DAYS","3") or 3))); sent=0
+def _user_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    roles = row.get("roles") or row.get("roles_json") or []
+    if isinstance(roles, str):
+        try:
+            decoded = json.loads(roles)
+            roles = decoded if isinstance(decoded, list) else [roles]
+        except Exception:
+            roles = [roles]
+    return {
+        "username": row["username"],
+        "name": row.get("display_name", ""),
+        "empId": row.get("emp_id", ""),
+        "role": row.get("role", "student"),
+        "roles": roles,
+        "preferredArea": row.get("preferred_area", "internal"),
+        "preferredGroup": row.get("preferred_group", "grpBio"),
+        "permissions": row.get("permissions") or [],
+        "pgyLearner": bool(row.get("pgy_learner", False)),
+    }
+
+
+def _claim(username: str, key: str, kind: str) -> bool:
+    with common_db.transaction() as (conn, dbkind):
+        ph = common_db.placeholder(dbkind)
+        try:
+            conn.execute(
+                f"INSERT INTO email_notification_log(id,username,notification_key,kind,sent_at) VALUES ({','.join([ph] * 5)})",
+                (uuid.uuid4().hex, username, key, kind, dt.datetime.now(dt.timezone.utc).isoformat()),
+            )
+            return True
+        except Exception:
+            return False
+
+
+def _release_claim(username: str, key: str) -> None:
+    try:
+        with common_db.transaction() as (conn, dbkind):
+            ph = common_db.placeholder(dbkind)
+            conn.execute(
+                f"DELETE FROM email_notification_log WHERE username={ph} AND notification_key={ph}",
+                (username, key),
+            )
+    except Exception:
+        pass
+
+
+def _line(event: Mapping[str, Any]) -> str:
+    label = str(event.get("badge") or event.get("kind") or "待辦")
+    title = str(event.get("title") or "待處理項目")
+    due = events._parse_datetime(event.get("dueAt"))
+    suffix = f"（截止 {due.astimezone(TAIPEI).strftime('%Y-%m-%d %H:%M')}）" if due else ""
+    detail = str(event.get("detail") or "").strip()
+    return f"[{label}] {title}{suffix}" + (f" — {detail}" if detail else "")
+
+
+def run_due_reminders() -> int:
+    """Send one digest per eligible user from the same events used in-app."""
+    now = dt.datetime.now(dt.timezone.utc)
+    days = max(1, int(os.getenv("EMAIL_REMINDER_DAYS", "3") or 3))
+    sent = 0
     for row in auth_repository.list_users():
-        if not row.get("active") or not row.get("email") or not row.get("email_notifications",True):continue
-        user={"username":row["username"],"name":row.get("display_name",""),"empId":row.get("emp_id",""),"role":row.get("role","student"),"roles":row.get("roles_json"),"preferredArea":row.get("preferred_area","internal"),"preferredGroup":row.get("preferred_group","grpBio")}
+        if not row.get("active") or not row.get("email") or not row.get("email_notifications", True):
+            continue
+        user = _user_from_row(row)
         try:
-            assignments=assignment_service.list_for_user(user)
-            progress=progress_service.my_progress(user,area=user["preferredArea"],group=user["preferredGroup"])
-        except Exception:continue
-        completed={str(c.get("id")) for c in progress.get("courses",[]) if c.get("completed")}
-        lines=[]
-        for a in assignments:
-            due=_parse(a.get("dueAt"))
-            if a.get("required") and a.get("courseId") not in completed and due and now<=due<=horizon:
-                lines.append(f"課程 {a.get('courseId')}：截止 {due.astimezone(dt.timezone(dt.timedelta(hours=8))).strftime('%Y-%m-%d %H:%M')}")
-        # Published exams with an upcoming close date are reminded when the
-        # learner has not yet submitted a passing/completed record.
+            candidates = events.email_events(user, now=now, days=days)
+        except Exception:
+            continue
+        claimed = [event for event in candidates if _claim(user["username"], event["key"], event["kind"])]
+        if not claimed:
+            continue
+        name = str(row.get("display_name") or row["username"])
+        body = (
+            f"您好 {name}：\n\n"
+            "以下是教學平台目前需要你注意的事項：\n"
+            + "\n".join(_line(event) for event in claimed)
+            + "\n\n請登入教學平台查看或處理。"
+        )
         try:
-            with common_db.read_connection() as (conn,dbkind):
-                ph=common_db.placeholder(dbkind)
-                windows=conn.execute("SELECT w.quiz_category_id,w.closes_at,c.title FROM exam_windows w JOIN quiz_categories c ON c.id=w.quiz_category_id WHERE w.reminder_enabled="+("TRUE" if dbkind=="postgres" else "1")+" AND c.training_area="+ph+" AND c.group_key="+ph,(user["preferredArea"],user["preferredGroup"])).fetchall()
-                done=conn.execute(f"SELECT quiz_category_id,score,passing_score,review_status FROM exam_records WHERE emp_id={ph}",(user["empId"],)).fetchall()
-            completed_exams={str(dict(x).get("quiz_category_id") or "") for x in done if str(dict(x).get("review_status") or "completed")=="completed" and int(dict(x).get("score") or 0)>=int(dict(x).get("passing_score") or 80)}
-            for raw in windows:
-                item=dict(raw); due=_parse(item.get("closes_at")); cid=str(item.get("quiz_category_id") or "")
-                if cid not in completed_exams and due and now<=due<=horizon:
-                    lines.append(f"考核 {item.get('title') or cid}：最後作答 {due.astimezone(dt.timezone(dt.timedelta(hours=8))).strftime('%Y-%m-%d %H:%M')}")
-        except Exception:pass
-        if not lines:continue
-        day=now.astimezone(dt.timezone(dt.timedelta(hours=8))).date().isoformat(); key=f"learning-due:{day}"
-        if not _claim(row["username"],key,"learning_due"):continue
-        try:
-            if _send(row["email"],"醫學檢驗教學平台｜待完成學習提醒","您好 "+str(row.get("display_name") or row["username"])+"：\n\n以下項目即將到期：\n"+"\n".join(lines)+"\n\n請登入教學平台完成。"):sent+=1
-        except Exception:pass
+            delivered = bool(_send(row["email"], "醫學檢驗教學平台｜需要處理的學習與教學提醒", body))
+        except Exception:
+            delivered = False
+        if delivered:
+            sent += 1
+        else:
+            for event in claimed:
+                _release_claim(user["username"], event["key"])
     return sent
-__all__=["run_due_reminders"]
+
+
+__all__ = ["run_due_reminders"]
