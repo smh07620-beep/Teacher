@@ -255,6 +255,12 @@
   }
 
   window.AdminWorkspaceShell?.addAfterWorkspace?.(() => queueMicrotask(convergeAll));
+  // The canonical course renderer announces a completed replacement so card
+  // decoration happens in the same task.  MutationObserver remains as the
+  // compatibility fallback for legacy renderers and third-party extensions.
+  document.addEventListener('teacher-course-surface-rendered-1014', event => {
+    if (event.target === document.getElementById('admin-course-material-hub')) convergeCourseSurface();
+  });
   document.addEventListener('click', event => {
     if (event.target.closest?.('#teacher-nav-course-1014')) setTimeout(convergeAll, 0);
   });

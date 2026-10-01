@@ -50,6 +50,11 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
         self.assertIn("convergeCourseSurface();", observer)
         self.assertNotIn("requestAnimationFrame(()", observer)
 
+    def test_course_renderer_announces_completed_card_replacement(self):
+        course_hub = (ROOT / "static" / "admin-course-material.js").read_text(encoding="utf-8")
+        self.assertIn("teacher-course-surface-rendered-1014", course_hub)
+        self.assertIn("teacher-course-surface-rendered-1014", UI)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -294,6 +294,9 @@
       appendCourseFeedbackSummaryPanels(box,visibleCourses);
       box.dataset.ready='1';
       bindLearningAssignmentControls(box,state);
+      // Consumers that decorate each card can settle synchronously after the
+      // complete replacement above, rather than racing a later observer turn.
+      box.dispatchEvent(new CustomEvent('teacher-course-surface-rendered-1014',{bubbles:true}));
   }
 
   async function renderAdminCourseMaterialHub(force=false){
