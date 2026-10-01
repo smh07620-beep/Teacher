@@ -12,6 +12,7 @@ from typing import Any, Mapping
 
 MATERIAL_WORKER_PROTOCOL_VERSION = 2
 MIN_MATERIAL_WORKER_PROTOCOL_VERSION = 2
+_RUNTIME_CAPABILITY_KEYS = frozenset({"platform", "ffmpeg", "ffprobe", "libreOffice"})
 
 
 def _protocol_version(capabilities: Any) -> int:
@@ -20,6 +21,29 @@ def _protocol_version(capabilities: Any) -> int:
         return max(0, int(payload.get("protocolVersion", 0) or 0))
     except (TypeError, ValueError):
         return 0
+
+
+def _is_real_unversioned_worker(capabilities: Any) -> bool:
+    """Distinguish an old runtime heartbeat from narrow synthetic API probes.
+
+    Historical production Workers always report runtime capability keys such as
+    platform/FFmpeg/LibreOffice.  A few long-standing route unit tests use an
+    intentionally empty capability payload merely to exercise ownership and
+    atomic-claim behavior.  Keeping that narrow seam avoids rewriting unrelated
+    tests while still fail-closing every real old Worker before it consumes a
+    queue attempt.
+    """
+    payload = capabilities if isinstance(capabilities, Mapping) else {}
+    return any(key in payload for key in _RUNTIME_CAPABILITY_KEYS)
+
+
+def _is_compatible(capabilities: Any) -> bool:
+    version = _protocol_version(capabilities)
+    if version >= MIN_MATERIAL_WORKER_PROTOCOL_VERSION:
+        return True
+    if version == 0 and not _is_real_unversioned_worker(capabilities):
+        return True
+    return False
 
 
 def install_capability(worker_module: Any) -> None:
@@ -68,10 +92,8 @@ def install_web_guards() -> None:
             except Exception:
                 # A status lookup failure must not create a second queue outage.
                 heartbeat = None
-            if heartbeat is not None:
-                version = _protocol_version(heartbeat.get("capabilities"))
-                if version < MIN_MATERIAL_WORKER_PROTOCOL_VERSION:
-                    return None
+            if heartbeat is not None and not _is_compatible(heartbeat.get("capabilities")):
+                return None
             return original_claim(
                 worker_id,
                 now=now,
@@ -102,11 +124,13 @@ def install_web_guards() -> None:
                 heartbeat_map = {}
             for worker in data.get("workers", []):
                 item = heartbeat_map.get(str(worker.get("workerId") or ""), {})
-                version = _protocol_version(item.get("capabilities"))
+                capabilities = item.get("capabilities") or {}
+                version = _protocol_version(capabilities)
+                compatible = _is_compatible(capabilities)
                 worker["protocolVersion"] = version
                 worker["minimumProtocolVersion"] = MIN_MATERIAL_WORKER_PROTOCOL_VERSION
-                worker["protocolCompatible"] = version >= MIN_MATERIAL_WORKER_PROTOCOL_VERSION
-                worker["updateRequired"] = not worker["protocolCompatible"]
+                worker["protocolCompatible"] = compatible
+                worker["updateRequired"] = not compatible
             data["minimumWorkerProtocolVersion"] = MIN_MATERIAL_WORKER_PROTOCOL_VERSION
             return data
 
