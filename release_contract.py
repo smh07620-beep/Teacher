@@ -64,6 +64,7 @@ REQUIRED_MIGRATIONS = (
     "0103-ai-presentation-publishing-workflow",
     "0104-ai-presentation-quality-automation",
     "0105-ai-video-production-hardening",
+    "0106-notification-email-preferences",
 )
 
 # Backward-compatible singular name used by older release checks.  It now
