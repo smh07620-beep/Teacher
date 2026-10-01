@@ -48,8 +48,12 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         def visible(_user, item):
             return str(item.get("area") or "") == "internal" and str(item.get("group") or "") == "grpBio"
 
+        def can_review(_user, record):
+            return record.get("id") == "r-bio"
+
         with patch.object(service.audience, "current_profile", return_value={"audience": "online", "pgyLearner": False}), \
              patch.object(service.exam_records, "list_records", return_value=records), \
+             patch.object(service.exam_records, "can_review_record", side_effect=can_review) as review_scope, \
              patch.object(service.worker_repository, "list_material_jobs", return_value=jobs), \
              patch.object(service.worker_repository, "get_material_job", side_effect=lambda job_id, include_payload=True: full_jobs[job_id]), \
              patch.object(service.assignment_service, "admin_list", return_value=assignments), \
@@ -68,6 +72,7 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         self.assertNotIn("r-micro", {item["id"] for item in teacher_items})
         self.assertNotIn("job-micro", {item["id"] for item in teacher_items})
         self.assertNotIn("course-micro", {item["id"] for item in teacher_items})
+        self.assertEqual(review_scope.call_count, 2)
 
         review = next(item for item in teacher_items if item["kind"] == "review")
         failure = next(item for item in teacher_items if item["kind"] == "material_failure")
@@ -80,6 +85,29 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         self.assertEqual(due["resourceId"], "course-bio")
         self.assertEqual(draft["courseId"], "course-bio")
         self.assertEqual(draft["resourceId"], "course-bio")
+
+    def test_review_queue_fails_closed_when_record_scope_is_not_authorized(self):
+        teacher = {
+            "username": "teacher2",
+            "name": "未指派教師",
+            "role": "clinical_teacher",
+            "roles": ["clinical_teacher"],
+            "preferredArea": "internal",
+            "preferredGroup": "grpBio",
+        }
+        records = [
+            {"id": "r-unassigned", "reviewStatus": "pending", "quizTitle": "同組但未指派", "name": "學員甲", "empId": "S001", "trainingArea": "internal", "groupKey": "grpBio"},
+        ]
+        with patch.object(service.audience, "current_profile", return_value={"audience": "online", "pgyLearner": False}), \
+             patch.object(service.exam_records, "list_records", return_value=records), \
+             patch.object(service.exam_records, "can_review_record", return_value=False) as review_scope, \
+             patch.object(service.worker_repository, "list_material_jobs", return_value=[]), \
+             patch.object(service.course_repository, "list_courses", return_value=[]):
+            result = service.build_summary(teacher, now=self.now)
+        self.assertEqual(result["counts"]["review"], 0)
+        self.assertEqual(result["counts"]["teacher"], 0)
+        self.assertFalse(any(item.get("resourceId") == "r-unassigned" for item in result["items"]))
+        review_scope.assert_called_once_with(teacher, records[0])
 
     def test_student_never_receives_teacher_queue(self):
         student = {"username": "s1", "role": "student", "roles": ["student"], "name": "學員", "empId": "E1"}
