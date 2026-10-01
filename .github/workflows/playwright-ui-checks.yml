@@ -48,6 +48,13 @@ jobs:
           cat ui-harness.log
           exit 1
 
+      - name: Generate isolated browser fixture password
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import secrets
+          print(f"TEACHER_CI_BROWSER_PASSWORD={secrets.token_urlsafe(24)}")
+          PY
+
       - name: Start real canonical Flask app
         run: |
           python tests/real_flask_ui_server.py > real-flask.log 2>&1 &
@@ -83,6 +90,11 @@ jobs:
         env:
           TEACHER_FLASK_BASE_URL: http://127.0.0.1:4174
         run: npx playwright test tests/playwright/real-flask-smoke.spec.js --reporter=line --workers=1
+
+      - name: Run GP-07 and GP-08 real Flask browser Golden Paths
+        env:
+          TEACHER_FLASK_BASE_URL: http://127.0.0.1:4174
+        run: npx playwright test tests/playwright/product-golden-path-p1-real-flask.spec.js --reporter=line --workers=1
 
       - name: Show harness logs on failure
         if: failure()
