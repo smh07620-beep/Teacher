@@ -3,6 +3,10 @@ const { test, expect } = require('@playwright/test');
 const baseURL = process.env.TEACHER_UI_BASE_URL || 'http://127.0.0.1:4173';
 
 async function assertNoHorizontalOverflow(page) {
+  // Navigation URL assertions can resolve while Chromium is between documents.
+  // Wait for the destination body before reading layout metrics so this gate
+  // measures real overflow rather than a transient null document body.
+  await page.locator('body').waitFor({ state: 'attached' });
   const metrics = await page.evaluate(() => ({
     viewport: window.innerWidth,
     documentWidth: document.documentElement.scrollWidth,
