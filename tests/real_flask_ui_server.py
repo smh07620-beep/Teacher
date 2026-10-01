@@ -7,6 +7,7 @@ headers, migrations and runtime asset injection together.
 """
 from __future__ import annotations
 
+import datetime as dt
 import os
 import sys
 import tempfile
@@ -36,9 +37,55 @@ os.environ["AI_EXTERNAL_PROCESSING_ENABLED"] = "false"
 os.environ["ASSET_VERSION"] = "realflaskci"
 
 from teacher_app import create_app  # noqa: E402
+from teacher_app.auth import accounts, elevation, repository as auth_repository  # noqa: E402
 
 
 app = create_app()
+
+
+def _seed_browser_account(payload: dict) -> None:
+    """Create deterministic browser-only fixtures through canonical account rules."""
+    if auth_repository.find_user(payload["username"]):
+        return
+    accounts.create_account(payload)
+
+
+_fixture_password = str(os.environ.get("TEACHER_CI_BROWSER_PASSWORD") or "").strip()
+if _fixture_password:
+    _seed_browser_account(
+        {
+            "username": "gp08admin",
+            "password": _fixture_password,
+            "name": "GP08 系統管理者",
+            "empId": "GP0800",
+            "role": "system_admin",
+            "roles": ["system_admin"],
+            "preferredArea": "internal",
+            "preferredGroup": "grpBio",
+        }
+    )
+    _seed_browser_account(
+        {
+            "username": "gp07dual",
+            "password": _fixture_password,
+            "name": "GP07 雙角色",
+            "empId": "GP0701",
+            "role": "student",
+            "roles": ["student", "clinical_teacher"],
+            "preferredArea": "internal",
+            "preferredGroup": "grpBio",
+        }
+    )
+    # GP-08 tests account provisioning, not the separate elevation challenge.
+    # Pre-authorize only the isolated browser fixture in the disposable CI DB.
+    admin_row = auth_repository.find_user("gp08admin") or {}
+    stamp = elevation.now()
+    elevation.store_elevation(
+        "gp08admin",
+        elevated_at=stamp.isoformat(),
+        expires_at=(stamp + dt.timedelta(hours=1)).isoformat(),
+        session_version=int(admin_row.get("session_version") or 1),
+    )
 
 
 if __name__ == "__main__":
