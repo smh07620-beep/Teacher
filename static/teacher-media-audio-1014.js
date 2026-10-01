@@ -35,12 +35,15 @@
   }
 
   function setBusy(busy) {
+    const section = document.getElementById('teacher-media-audio-1014');
     const button = document.getElementById('teacher-audio-generate-1014');
     const script = document.getElementById('teacher-audio-script-1014');
     const voice = document.getElementById('teacher-audio-voice-1014');
     if (button) button.disabled = busy || !statusInfo?.enabled;
     if (script) script.disabled = busy;
     if (voice) voice.disabled = busy;
+    if (section) section.dataset.formalJobBusy = busy ? 'true' : 'false';
+    window.dispatchEvent(new CustomEvent('teacher-media-audio-formal-busy-1014', {detail:{busy:!!busy}}));
   }
 
   function sourceMaterialId() {
@@ -75,7 +78,20 @@
       if (provider) provider.textContent = data.enabled
         ? '本機 AI｜隱私模式｜媒體安全保存'
         : 'AI 語音服務尚未啟用';
-      setBusy(false);
+      const formalJob = data.activeJob || null;
+      setBusy(Boolean(formalJob));
+      if (formalJob) {
+        const progress = formalJob.progress || {};
+        setStatus(`正式 AI 語音工作處理中｜${Math.round(Number(progress.percent || 0))}%${progress.stage ? `｜${progress.stage}` : ''}`);
+        activeJobId = String(formalJob.jobId || '');
+        if (activeJobId) {
+          const token = ++pollToken;
+          void pollJob(activeJobId, token).catch(error => {
+            setBusy(false);
+            setStatus(`AI 語音工作狀態讀取失敗：${error.message}`, 'error');
+          });
+        }
+      }
       if (!data.enabled) setStatus('AI 語音尚未啟用；老師錄音／錄影功能仍可正常使用。', 'error');
       return data;
     } catch (error) {
@@ -216,38 +232,6 @@
     }
   }
 
-  async function previewVoice() {
-    const voice = document.getElementById('teacher-audio-voice-1014')?.value || statusInfo?.defaultVoice || '';
-    if (!voice || !statusInfo?.enabled) return setStatus('AI 語音尚未啟用，暫時無法試聽。', 'error');
-    const button = document.getElementById('teacher-audio-preview-1018');
-    if (button) button.disabled = true;
-    setStatus('正在準備語音試聽…');
-    try {
-      const response = await fetch('/api/media-audio/preview', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({voice})});
-      const job = await response.json().catch(() => ({}));
-      if (!response.ok || !job.jobId) throw new Error(job.error || '無法建立語音試聽');
-      for (let attempt = 0; attempt < 90; attempt += 1) {
-        const statusResponse = await fetch(`/api/media-audio/jobs/${encodeURIComponent(job.jobId)}`, {credentials:'same-origin', cache:'no-store'});
-        const status = await statusResponse.json().catch(() => ({}));
-        if (!statusResponse.ok) throw new Error(status.error || '無法讀取語音試聽進度');
-        if (status.status === 'completed') {
-          const url = status.result?.previewUrl;
-          if (!url) throw new Error('語音試聽已完成，但暫時沒有可播放檔案');
-          window.open(url, '_blank', 'noopener');
-          setStatus('已開啟語音試聽。', 'success');
-          return;
-        }
-        if (status.status === 'failed') throw new Error(status.error || '語音試聽失敗');
-        await new Promise(resolve => setTimeout(resolve, 1200));
-      }
-      throw new Error('語音試聽仍在處理，可稍後再試。');
-    } catch (error) {
-      setStatus(`語音試聽失敗：${error.message}`, 'error');
-    } finally {
-      if (button) button.disabled = false;
-    }
-  }
-
   function markCardReady() {
     document.querySelectorAll('#teacher-media-production-1014 article').forEach(card => {
       const heading = card.querySelector('h5')?.textContent || '';
@@ -272,10 +256,10 @@
       </div>
       <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
         <label class="text-xs font-bold text-slate-600 xl:col-span-2">已核准講稿<select id="teacher-audio-script-1014" class="learning-input mt-1"><option value="">請先選擇來源教材</option></select></label>
-        <label class="text-xs font-bold text-slate-600">AI 聲音<select id="teacher-audio-voice-1014" class="learning-input mt-1"><option value="">讀取中…</option></select></label>
+        <label class="text-xs font-bold text-slate-600">AI 聲音<select id="teacher-audio-voice-1014" class="learning-input mt-1"><option value="">讀取中…</option></select><span id="teacher-audio-status-1014" class="mt-2 block text-xs text-slate-600" role="status" aria-live="polite">檢查 AI 語音服務中…</span></label>
       </div>
       <label class="block text-xs font-bold text-slate-600">語音風格指示（選填）<input id="teacher-audio-instructions-1014" maxlength="500" class="learning-input mt-1" placeholder="例如：清楚、沉穩、繁體中文教學語氣；醫療數值與縮寫照稿件念"></label>
-      <div class="flex flex-col sm:flex-row sm:items-center gap-3"><button id="teacher-audio-generate-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">🎙️ 產生 AI 語音</button><button id="teacher-audio-preview-1018" type="button" class="rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-xs font-black text-emerald-700">▶ 試聽</button><span id="teacher-audio-status-1014" class="text-xs text-slate-600">檢查 AI 語音服務中…</span></div>
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3"><button id="teacher-audio-generate-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">🎙️ 產生 AI 語音</button></div>
       <div id="teacher-audio-result-1014" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4"></div>
       <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] leading-5 text-amber-900"><b>AI 語音揭露：</b><span id="teacher-audio-disclosure-1014">本音訊為 AI 合成語音。</span><br>正式內容仍以老師已核准講稿為準；講稿一旦修改即回到草稿狀態，需重新核准後才能再次產生語音。</div>`;
 
@@ -284,7 +268,6 @@
     else media.prepend(section);
 
     document.getElementById('teacher-audio-generate-1014')?.addEventListener('click', generateAudio);
-    document.getElementById('teacher-audio-preview-1018')?.addEventListener('click', () => void previewVoice());
     document.getElementById('teacher-script-material-1014')?.addEventListener('change', () => {
       activeJobId = '';
       pollToken += 1;
@@ -302,5 +285,5 @@
     observer.observe(document.body, {childList:true, subtree:true});
   }
 
-  window.TeacherMediaAudio1014 = Object.freeze({loadApprovedScripts, generateAudio, previewVoice});
+  window.TeacherMediaAudio1014 = Object.freeze({loadApprovedScripts, generateAudio});
 })();

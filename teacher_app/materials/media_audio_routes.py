@@ -33,7 +33,11 @@ def register_media_audio_routes(owner):
         denied = scope_filter.require_permission(owner, "material.manage")
         if denied:
             return denied
-        return jsonify(media_audio_runtime.public_status())
+        payload = media_audio_runtime.public_status()
+        active_job = media_audio_repository.active_formal_job_for_actor(str(user.get("username") or ""))
+        if active_job:
+            payload["activeJob"] = media_audio_jobs.public_job(active_job)
+        return jsonify(payload)
 
     @app.post("/api/media-audio/preview")
     def media_audio_preview():

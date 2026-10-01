@@ -88,6 +88,18 @@ def active_count_for_actor(username: str) -> int:
     return int(dict(row).get("n", 0) or 0)
 
 
+def active_formal_job_for_actor(username: str) -> dict | None:
+    """Return the caller's in-flight narration, never a preview job."""
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT * FROM media_audio_jobs WHERE actor_username={ph} AND status IN ({ph},{ph}) "
+            f"AND script_id<>{ph} ORDER BY created_at DESC LIMIT 1",
+            (username, *ACTIVE_STATUSES, ""),
+        ).fetchone()
+    return project_job(row)
+
+
 def total_active_count() -> int:
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -191,6 +203,6 @@ def requeue_stale_processing(cutoff: str) -> int:
 
 
 __all__ = [
-    "ACTIVE_STATUSES", "active_count_for_actor", "claim", "complete", "create_job", "fail", "get_job",
+    "ACTIVE_STATUSES", "active_count_for_actor", "active_formal_job_for_actor", "claim", "complete", "create_job", "fail", "get_job",
     "list_queued", "now", "recent_count_for_actor", "requeue_stale_processing", "set_progress", "total_active_count",
 ]

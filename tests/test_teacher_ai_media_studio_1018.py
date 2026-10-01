@@ -43,11 +43,13 @@ def test_media_shell_has_no_duplicate_source_placeholder_and_keeps_a_small_retur
 def test_media_studio_reuses_existing_generate_review_publish_lanes_without_internal_id_entry():
     source = ROOT.joinpath("static", "teacher-ai-media-studio-1018.js").read_text(encoding="utf-8")
     audio = ROOT.joinpath("static", "teacher-media-audio-1014.js").read_text(encoding="utf-8")
+    assignment = ROOT.joinpath("static", "teacher-assignment-experience-1014.js").read_text(encoding="utf-8")
     video = ROOT.joinpath("static", "teacher-ai-video-1015.js").read_text(encoding="utf-8")
     assert "/api/ai-presentations?materialId=" in source
     assert "replaceVideoIdInput" in source
-    assert "/api/media-audio/preview" in audio
-    assert "▶ 試聽" in audio
+    assert "/api/media-audio/preview" not in audio
+    assert "teacher-audio-preview-1018" not in audio
+    assert "▶ 試聽聲音" in assignment
     assert "/api/media-audio/preview" in video
     assert "teacher-ai-video-voice-preview-1015" in video
     assert "teacher-ai-video-voice-player-1015" in video

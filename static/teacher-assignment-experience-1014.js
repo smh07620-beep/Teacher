@@ -398,14 +398,17 @@
       const jobId = first.jobId || '';
       if (!jobId) throw new Error('沒有取得試聽工作 ID');
       let completed = null;
-      for (let attempt = 0; attempt < 80; attempt += 1) {
+      for (let attempt = 0; attempt < 150; attempt += 1) {
         await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 500 : 1200));
         const poll = await fetch(`/api/media-audio/jobs/${encodeURIComponent(jobId)}`, {credentials:'same-origin', cache:'no-store'});
         const data = await poll.json().catch(() => ({}));
         if (!poll.ok) throw new Error(data.error || '無法讀取試聽進度');
         if (data.status === 'failed') throw new Error(data.error || '語音試聽產生失敗');
         if (data.status === 'completed') { completed = data; break; }
-        if (status) status.textContent = data.progress?.stage || 'AI 語音試聽處理中…';
+        if (status) {
+          const progress = data.progress || {};
+          status.textContent = `${progress.stage || 'AI 語音試聽處理中…'}｜${Math.round(Number(progress.percent || 0))}%${progress.detail ? `｜${progress.detail}` : ''}`;
+        }
       }
       const url = completed?.result?.previewUrl || '';
       if (!url) throw new Error('語音試聽尚未完成，請稍後再試');
@@ -426,6 +429,7 @@
     if (!canManageMaterial || document.getElementById('teacher-audio-preview-1014')) return;
     const select = document.getElementById('teacher-audio-voice-1014');
     if (!select) return;
+    const sharedStatus = document.getElementById('teacher-audio-status-1014');
     const host = document.createElement('div');
     host.id = 'teacher-audio-preview-1014';
     host.className = 'mt-2 flex flex-wrap items-center gap-2';
@@ -433,19 +437,24 @@
     button.type = 'button';
     button.className = 'rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-black text-emerald-700';
     button.textContent = '▶ 試聽聲音';
-    const status = document.createElement('span');
-    status.className = 'text-[11px] text-slate-500';
-    status.textContent = '使用免費本機 AI Worker 產生短版試聽';
     const audio = document.createElement('audio');
     audio.controls = true;
     audio.preload = 'none';
     audio.className = 'hidden h-9 max-w-full';
-    host.append(button, status, audio);
+    host.append(button, audio);
     select.insertAdjacentElement('afterend', host);
+    const setFormalBusy = event => {
+      const busy = Boolean(event?.detail?.busy);
+      button.disabled = busy;
+      if (busy && sharedStatus) sharedStatus.textContent = '正式 AI 語音工作正在排隊或處理中；完成後即可再次試聽。';
+    };
+    window.addEventListener('teacher-media-audio-formal-busy-1014', setFormalBusy);
+    setFormalBusy({detail:{busy:document.getElementById('teacher-media-audio-1014')?.dataset.formalJobBusy === 'true'}});
     button.addEventListener('click', () => {
+      if (document.getElementById('teacher-media-audio-1014')?.dataset.formalJobBusy === 'true') return;
       if (previewAudio && previewAudio !== audio) previewAudio.pause?.();
       previewAudio = audio;
-      void playVoicePreview(select.value, button, status, audio);
+      void playVoicePreview(select.value, button, sharedStatus, audio);
     });
   }
 
