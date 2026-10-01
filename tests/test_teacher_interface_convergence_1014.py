@@ -44,6 +44,7 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
         self.assertIn("學習指派", UI)
         self.assertIn("刪除課程", UI)
         self.assertIn("button.classList.add('hidden')", UI)
+        self.assertIn("setAttribute('data-teacher-manage-course-1014', '1')", UI)
 
     def test_course_card_reconciliation_is_not_deferred_to_animation_frame(self):
         observer = UI[UI.index("state.courseObserver = new MutationObserver"):UI.index("    // MutationObserver callbacks run")]

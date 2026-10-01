@@ -204,7 +204,9 @@
     if (!manage) {
       manage = document.createElement('button');
       manage.type = 'button';
-      manage.dataset.teacherManageCourse1014 = '1';
+      // Keep the public selector stable. dataset camel-casing cannot express
+      // the separator before the numeric suffix in data-*-1014.
+      manage.setAttribute('data-teacher-manage-course-1014', '1');
       manage.className = 'teaching-primary';
       manage.textContent = '管理課程';
       manage.addEventListener('click', event => {
