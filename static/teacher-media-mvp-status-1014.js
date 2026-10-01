@@ -1,4 +1,4 @@
-/* Teacher 10/14 MVP readiness: keep media studio labels aligned with shipped capabilities. */
+/* Teacher 10/14 MVP readiness: keep legacy media cards aligned without duplicating the primary studio UI. */
 (async function () {
   'use strict';
 
@@ -27,6 +27,11 @@
   function syncCards() {
     const media = document.getElementById('teacher-media-production-1014');
     if (!media) return false;
+
+    // AI 媒體製作室現在是正式主介面；舊的大型 MVP 摘要與主介面重複，
+    // 若舊 render 留下節點就移除，且不再重新建立。
+    document.getElementById('teacher-media-mvp-summary-1014')?.remove();
+
     const cards = [...media.querySelectorAll('article')];
     cards.forEach(card => {
       const title = card.querySelector('h5')?.textContent || '';
@@ -34,26 +39,6 @@
       else if (title.includes('老師錄音／AI 語音')) badge(card, '可使用｜真人錄音＋AI 語音', 'ready');
       else if (title.includes('老師錄影／教學影片')) badge(card, '可使用｜攝影機＋螢幕錄影', 'ready');
     });
-
-    let summary = document.getElementById('teacher-media-mvp-summary-1014');
-    if (!summary) {
-      summary = document.createElement('section');
-      summary.id = 'teacher-media-mvp-summary-1014';
-      summary.className = 'rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4';
-      summary.innerHTML = `
-        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-          <div><p class="text-[11px] font-black tracking-wide text-emerald-700">10/14 MVP READY</p><h5 class="mt-1 text-sm font-black text-emerald-950">媒體製作第一階段已可操作</h5><p class="mt-1 text-xs leading-5 text-emerald-900">教材轉講稿、教師核准、AI 語音、老師錄音、攝影機錄影與螢幕＋麥克風錄製已接入現有教材流程。產生或上傳完成後會回到原課程教材。</p></div>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] font-bold text-emerald-900">
-            <span class="rounded-lg bg-white/80 px-2.5 py-1.5">✓ 講稿</span>
-            <span class="rounded-lg bg-white/80 px-2.5 py-1.5">✓ AI 語音</span>
-            <span class="rounded-lg bg-white/80 px-2.5 py-1.5">✓ 真人錄音</span>
-            <span class="rounded-lg bg-white/80 px-2.5 py-1.5">✓ 攝影機錄影</span>
-            <span class="rounded-lg bg-white/80 px-2.5 py-1.5">✓ 螢幕錄製</span>
-            <span class="rounded-lg bg-white/80 px-2.5 py-1.5">✓ 回流教材</span>
-          </div>
-        </div>`;
-      media.prepend(summary);
-    }
     return true;
   }
 
