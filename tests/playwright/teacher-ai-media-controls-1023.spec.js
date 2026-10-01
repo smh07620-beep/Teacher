@@ -6,6 +6,16 @@ if (process.env.TEACHER_PLAYWRIGHT_BROWSER) {
   test.use({ launchOptions: { executablePath: process.env.TEACHER_PLAYWRIGHT_BROWSER } });
 }
 
+async function installTeacherRBAC(page) {
+  await page.evaluate(() => {
+    window.TeacherRBAC681Ready = Promise.resolve({
+      roles: new Set(['clinical_teacher']),
+      user: { preferredGroup: 'grpBio' },
+      hasPermission: permission => permission === 'material.manage'
+    });
+  });
+}
+
 test('shared AI media source loads directly and drives narration subtitle and video inputs', async ({ page }) => {
   await page.setContent(`
     <main>
@@ -25,12 +35,8 @@ test('shared AI media source loads directly and drives narration subtitle and vi
       </section>
     </main>
   `);
+  await installTeacherRBAC(page);
   await page.evaluate(() => {
-    window.TeacherRBAC681Ready = Promise.resolve({
-      roles: new Set(['clinical_teacher']),
-      user: { preferredGroup: 'grpBio' },
-      hasPermission: permission => permission === 'material.manage'
-    });
     window.TeacherMediaSubtitle1014 = {
       selectMaterial: value => { window.subtitleMaterial1023 = value; }
     };
@@ -70,7 +76,7 @@ test('shared AI media source loads directly and drives narration subtitle and vi
   await expect(page.locator('#teacher-subtitle-language-1014')).toHaveJSProperty('tagName', 'SELECT');
   await expect(page.locator('#teacher-subtitle-language-1014')).toHaveValue('zh-TW');
   await expect(page.locator('#teacher-media-open-powerpoint-1018')).toHaveText('🖥️ 多資料 AI PowerPoint');
-  await expect(page.locator('#teacher-media-powerpoint-entry-1018')).toContainText('一次加入多份 PDF、Word、PPT');
+  await expect(page.locator('#teacher-media-powerpoint-entry-1018')).toContainText('不再跳回教材區');
 
   await source.selectOption('doc-1');
   await expect.poll(() => page.evaluate(() => window.subtitleMaterial1023)).toBe('doc-1');
@@ -80,18 +86,101 @@ test('shared AI media source loads directly and drives narration subtitle and vi
   await expect(page.locator('#teacher-ai-video-presentation-1015')).toHaveValue('ppt-1');
 });
 
-test('shared AI media source shows a useful empty state instead of hanging on loading', async ({ page }) => {
-  await page.setContent('<select id="teacher-media-source-1018" disabled><option>正在載入可用教材…</option></select><p id="teacher-media-next-step-1018"></p>');
+test('empty media source becomes an actionable choice instead of a dead disabled select', async ({ page }) => {
+  await page.setContent(`
+    <section id="teacher-media-production-1014">
+      <label>來源教材／來源內容<select id="teacher-media-source-1018" disabled><option>正在載入可用教材…</option></select></label>
+      <p id="teacher-media-next-step-1018"></p>
+    </section>
+  `);
+  await installTeacherRBAC(page);
   await page.evaluate(() => {
-    window.TeacherRBAC681Ready = Promise.resolve({
-      roles: new Set(['clinical_teacher']),
-      user: { preferredGroup: 'grpBio' },
-      hasPermission: permission => permission === 'material.manage'
-    });
     window.fetch = async () => ({ ok: true, json: async () => [] });
   });
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+
   await expect(page.locator('#teacher-media-source-1018')).toBeDisabled();
-  await expect(page.locator('#teacher-media-source-1018')).toContainText('目前沒有可用教材');
-  await expect(page.locator('#teacher-media-next-step-1018')).toContainText('請先上傳教材或建立 AI PowerPoint 來源');
+  await expect(page.locator('#teacher-media-source-empty-1024')).toBeVisible();
+  await expect(page.locator('#teacher-media-source-empty-1024')).toContainText('沒有可選的已完成教材');
+  await expect(page.locator('#teacher-media-empty-powerpoint-1024')).toHaveText('🖥️ 直接製作 AI PowerPoint');
+  await expect(page.locator('#teacher-media-empty-upload-1024')).toHaveText('📚 上傳一般教材');
+  await expect(page.locator('#teacher-media-source-refresh-1024')).toBeVisible();
+  await expect(page.locator('#teacher-media-next-step-1018')).toContainText('沒有既有教材也可以製作');
+});
+
+test('multi-source PowerPoint opens inline and does not run the old jump-back handler', async ({ page }) => {
+  await page.setContent(`
+    <main>
+      <section id="admin-course-material-hub">
+        <section id="teacher-ai-material-1014">
+          <h4>AI PowerPoint 原始資料工作台</h4>
+          <input id="teacher-ai-material-file-1014" type="file" multiple>
+        </section>
+      </section>
+      <section id="teacher-media-production-1014">
+        <section id="teacher-ai-media-studio-1018">
+          <label>來源教材／來源內容<select id="teacher-media-source-1018"><option value="">來源</option></select></label>
+          <p id="teacher-media-next-step-1018"></p>
+          <section id="teacher-media-powerpoint-entry-1018">
+            <div><b>PowerPoint</b><p>舊說明</p></div>
+            <button id="teacher-media-open-powerpoint-1018" type="button">AI PowerPoint 製作</button>
+          </section>
+          <div id="teacher-media-tabs-placeholder">媒體頁籤</div>
+        </section>
+      </section>
+    </main>
+  `);
+  await installTeacherRBAC(page);
+  await page.evaluate(() => {
+    window.oldJumpCalls = 0;
+    document.getElementById('teacher-media-open-powerpoint-1018').addEventListener('click', () => {
+      window.oldJumpCalls += 1;
+    });
+    window.fetch = async () => ({ ok: true, json: async () => [] });
+    window.TeacherAIMaterial1014 = { paintMaterialOptions: async () => {} };
+  });
+
+  await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  await page.locator('#teacher-media-open-powerpoint-1018').click();
+
+  await expect.poll(() => page.evaluate(() => window.oldJumpCalls)).toBe(0);
+  await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toBeVisible();
+  await expect(page.locator('#teacher-media-powerpoint-body-1024 > #teacher-ai-material-1014')).toBeVisible();
+  await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toContainText('一次加入多份原始資料');
+
+  await page.locator('#teacher-media-powerpoint-close-1024').click();
+  await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toBeHidden();
+  await expect(page.locator('#admin-course-material-hub > #teacher-ai-material-1014')).toHaveCount(1);
+});
+
+test('course wizard upload is forced to Browser to R2 and cannot fall back to disabled web byte upload', async ({ page }) => {
+  await page.setContent('<select id="teacher-media-source-1018"><option value="">來源</option></select><p id="teacher-media-next-step-1018"></p>');
+  await installTeacherRBAC(page);
+  await page.evaluate(() => {
+    window.fetch = async () => ({ ok: true, json: async () => [] });
+    window.MaterialUploadClient = {
+      enqueue: async (_form, options) => {
+        window.wizardUploadOptions1024 = { ...options };
+        return { accepted: true, status: 'queued', jobId: 'job-1', materialId: 'material-1' };
+      }
+    };
+  });
+
+  await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+
+  const result = await page.evaluate(async () => {
+    const form = new FormData();
+    form.append('file', new File(['ppt'], 'c503.pptx', { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }));
+    form.append('bundleWorkflowId', 'cw-safe-1');
+    return window.MaterialUploadClient.enqueue(form, {
+      fileName: 'c503.pptx',
+      fallbackToSameOriginQueue: true,
+      onFallback: () => { window.fallbackCalled1024 = true; }
+    });
+  });
+
+  expect(result).toMatchObject({ accepted: true, jobId: 'job-1' });
+  await expect.poll(() => page.evaluate(() => window.wizardUploadOptions1024?.fallbackToSameOriginQueue)).toBe(false);
+  await expect.poll(() => page.evaluate(() => Boolean(window.wizardUploadOptions1024?.onFallback))).toBe(false);
+  await expect.poll(() => page.evaluate(() => Boolean(window.fallbackCalled1024))).toBe(false);
 });
