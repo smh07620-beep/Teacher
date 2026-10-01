@@ -142,8 +142,6 @@ def _learner_action_items(user: Mapping[str, Any], current: dt.datetime) -> list
         material_id = str(material.get("id") or "")
         course_id = str(material.get("courseId") or "")
         retraining = bool(material.get("retrainingRequired"))
-        # Normal course material work is already represented by the course row.
-        # A major-version retraining remains explicit even when it belongs to a course.
         if course_id in pending_course_ids and not retraining:
             continue
         values.append({
@@ -208,10 +206,10 @@ def _teacher_review_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
     for row in rows:
         if str(row.get("reviewStatus") or "completed") != "pending":
             continue
+        if not exam_records.can_review_record(user, row):
+            continue
         area = str(row.get("trainingArea") or "internal")
         group = str(row.get("groupKey") or "grpBio")
-        if not _visible_to_teacher(user, {"area": area, "group": group}):
-            continue
         values.append({
             "id": str(row.get("id") or ""),
             "resourceId": str(row.get("id") or ""),
@@ -388,8 +386,6 @@ def build_summary(
 
     learner_items = _learner_action_items(user, current) if _has_learner_persona(user, role) else []
 
-    # Fail closed: a normal/online user never receives PGY workflow content,
-    # even if stale PGY rows happen to exist for the same account.
     actionable = ACTIONABLE_PGY.get(role, {}) if profile["pgyLearner"] else {}
     assignments = pgy_service.list_assignments(user) if actionable else []
     pgy_items: list[dict[str, Any]] = []
