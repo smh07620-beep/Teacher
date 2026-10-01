@@ -68,8 +68,18 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         self.assertNotIn("r-micro", {item["id"] for item in teacher_items})
         self.assertNotIn("job-micro", {item["id"] for item in teacher_items})
         self.assertNotIn("course-micro", {item["id"] for item in teacher_items})
+
+        review = next(item for item in teacher_items if item["kind"] == "review")
         failure = next(item for item in teacher_items if item["kind"] == "material_failure")
+        due = next(item for item in teacher_items if item["kind"] == "due")
+        draft = next(item for item in teacher_items if item["kind"] == "draft")
+        self.assertEqual(review["resourceId"], "r-bio")
+        self.assertEqual(failure["resourceId"], "job-bio")
         self.assertTrue(failure["sourceRetained"])
+        self.assertEqual(due["courseId"], "course-bio")
+        self.assertEqual(due["resourceId"], "course-bio")
+        self.assertEqual(draft["courseId"], "course-bio")
+        self.assertEqual(draft["resourceId"], "course-bio")
 
     def test_student_never_receives_teacher_queue(self):
         student = {"username": "s1", "role": "student", "roles": ["student"], "name": "學員", "empId": "E1"}
@@ -86,11 +96,31 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         self.assertIn("/teacher-action-queue-1024.js", body)
         self.assertLess(body.index("/product-convergence-101.js"), body.index("/teacher-action-queue-1024.js"))
         source = ROOT.joinpath("static", "teacher-action-queue-1024.js").read_text(encoding="utf-8")
-        for phrase in ("需要我處理", "待批改", "教材需要處理", "未發布草稿", "/api/training-command-center"):
+        for phrase in (
+            "需要我處理",
+            "待批改",
+            "教材需要處理",
+            "未發布草稿",
+            "/api/training-command-center",
+            "switchTeacherMode?.('scoring')",
+            "openEssayReview",
+            "renderMaterialJobs",
+            "data-learning-assign-course",
+            "teachingEditCourse",
+            "renderAdminCourseMaterialHub",
+        ):
             self.assertIn(phrase, source)
         self.assertNotIn("X-Admin-Key", source)
         self.assertNotIn("getAdminKey", source)
         self.assertNotIn("localStorage", source)
+
+    def test_review_ui_uses_server_derived_reviewer_identity(self):
+        source = ROOT.joinpath("static", "admin-results.js").read_text(encoding="utf-8")
+        self.assertIn("完成批改時由目前登入教師自動帶入", source)
+        self.assertIn("reviewerInput.disabled = true", source)
+        self.assertNotIn("請填寫批改者姓名", source)
+        self.assertNotIn("reviewerName,", source)
+        self.assertIn("TeacherActionQueue1024?.refresh?.()", source)
 
 
 if __name__ == "__main__":
