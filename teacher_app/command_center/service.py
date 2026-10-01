@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any, Mapping, Optional
 
-from teacher_app.command_center import audience
+from teacher_app.command_center import audience, dashboard_service
 from teacher_app.common.auth import has_permission, normalize_role
 from teacher_app.common.errors import ApiError
 from teacher_app.courses import repository as course_repository
@@ -70,9 +70,13 @@ def _task_sort_key(item: Mapping[str, Any]):
     priority = {
         "review": 0,
         "material_failure": 1,
-        "due": 2,
-        "draft": 3,
-    }.get(str(item.get("kind") or ""), 4)
+        "retraining": 2,
+        "course": 3,
+        "exam": 4,
+        "material": 5,
+        "due": 6,
+        "draft": 7,
+    }.get(str(item.get("kind") or ""), 8)
     due = _parse_datetime(item.get("dueAt"))
     return (
         0 if item.get("overdue") else 1,
@@ -87,6 +91,110 @@ def _visible_to_teacher(user: Mapping[str, Any], item: Mapping[str, Any]) -> boo
         return learning_access.can_access_learning_item(user, item)
     except Exception:
         return False
+
+
+def _has_learner_persona(user: Mapping[str, Any], role: str) -> bool:
+    if role == "student":
+        return True
+    raw_roles = user.get("roles") or []
+    if isinstance(raw_roles, str):
+        raw_roles = [raw_roles]
+    return any(normalize_role(value) == "student" for value in raw_roles)
+
+
+def _learner_action_items(user: Mapping[str, Any], current: dt.datetime) -> list[dict[str, Any]]:
+    """Project canonical dashboard learning state into one learner task list."""
+    try:
+        dashboard = dashboard_service.dashboard_summary(user, now=current)
+    except Exception:
+        return []
+
+    values: list[dict[str, Any]] = []
+    pending_courses = list(dashboard.get("pendingCourses") or [])
+    pending_course_ids = {str(item.get("id") or "") for item in pending_courses}
+
+    for course in pending_courses:
+        course_id = str(course.get("id") or "")
+        values.append({
+            "id": str(course.get("assignmentId") or course_id),
+            "resourceId": course_id,
+            "courseId": course_id,
+            "persona": "learner",
+            "domain": "learning",
+            "kind": "course",
+            "title": str(course.get("title") or "待完成課程"),
+            "status": "overdue" if course.get("overdue") else "pending",
+            "statusLabel": "已逾期" if course.get("overdue") else "待完成課程",
+            "group": str(course.get("group") or ""),
+            "area": str(course.get("area") or "internal"),
+            "dueAt": str(course.get("dueAt") or ""),
+            "overdue": bool(course.get("overdue")),
+            "detail": (
+                f"教材 {int(course.get('materialsCompleted') or 0)}/{int(course.get('materialsTotal') or 0)}"
+                + (" · 考核已通過" if course.get("examRequired") and course.get("examPassed") else " · 尚待考核" if course.get("examRequired") else "")
+            ),
+            "action": "course",
+            "actionLabel": "繼續學習",
+            "target": "materials",
+        })
+
+    for material in list(dashboard.get("pendingMaterials") or []):
+        material_id = str(material.get("id") or "")
+        course_id = str(material.get("courseId") or "")
+        retraining = bool(material.get("retrainingRequired"))
+        # Normal course material work is already represented by the course row.
+        # A major-version retraining remains explicit even when it belongs to a course.
+        if course_id in pending_course_ids and not retraining:
+            continue
+        values.append({
+            "id": material_id,
+            "resourceId": material_id,
+            "courseId": course_id,
+            "persona": "learner",
+            "domain": "learning",
+            "kind": "retraining" if retraining else "material",
+            "title": str(material.get("title") or "待完成教材"),
+            "status": "retraining" if retraining else "pending",
+            "statusLabel": "需重新訓練" if retraining else "待完成教材",
+            "group": str(material.get("group") or ""),
+            "area": str(material.get("area") or "internal"),
+            "dueAt": "",
+            "overdue": False,
+            "detail": "教材或 SOP 已更新重大版本，請完成最新版。" if retraining else "此教材尚未完成。",
+            "action": "material",
+            "actionLabel": "重新學習" if retraining else "前往教材",
+            "target": "materials",
+        })
+
+    for exam in list(dashboard.get("pendingExams") or []):
+        course_id = str(exam.get("courseId") or "")
+        if course_id and course_id in pending_course_ids:
+            continue
+        remediation = bool(exam.get("remediationRequired"))
+        values.append({
+            "id": str(exam.get("id") or ""),
+            "resourceId": str(exam.get("id") or ""),
+            "courseId": course_id,
+            "persona": "learner",
+            "domain": "learning",
+            "kind": "exam",
+            "title": str(exam.get("title") or "待完成考核"),
+            "status": "remediation" if remediation else "pending",
+            "statusLabel": "補強再測" if remediation else "待完成考核",
+            "group": str(exam.get("group") or ""),
+            "area": str(exam.get("area") or "internal"),
+            "dueAt": "",
+            "overdue": False,
+            "detail": (
+                f"上次未達標 · 建議先複習 {int((exam.get('remediation') or {}).get('reviewMaterialCount') or 0)} 份教材"
+                if remediation else f"及格標準 {int(exam.get('passingScore') or 80)} 分"
+            ),
+            "action": "exam",
+            "actionLabel": "前往補強再測" if remediation else "前往考核",
+            "target": "exam",
+        })
+
+    return values
 
 
 def _teacher_review_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -107,6 +215,7 @@ def _teacher_review_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
         values.append({
             "id": str(row.get("id") or ""),
             "resourceId": str(row.get("id") or ""),
+            "persona": "teacher",
             "domain": "assessment",
             "kind": "review",
             "title": str(row.get("quizTitle") or "待人工批改考核"),
@@ -148,6 +257,7 @@ def _teacher_material_failure_items(user: Mapping[str, Any]) -> list[dict[str, A
         values.append({
             "id": str(full.get("id") or ""),
             "resourceId": str(full.get("id") or ""),
+            "persona": "teacher",
             "domain": "materials",
             "kind": "material_failure",
             "title": str(payload.get("title") or full.get("originalName") or "教材處理失敗"),
@@ -188,6 +298,7 @@ def _teacher_due_items(user: Mapping[str, Any], current: dt.datetime) -> list[di
             "id": str(assignment.get("id") or ""),
             "resourceId": course_id,
             "courseId": course_id,
+            "persona": "teacher",
             "domain": "assignments",
             "kind": "due",
             "title": title,
@@ -223,6 +334,7 @@ def _teacher_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
             "id": course_id,
             "resourceId": course_id,
             "courseId": course_id,
+            "persona": "teacher",
             "domain": "courses",
             "kind": "draft",
             "title": str(course.get("title") or "未命名課程草稿"),
@@ -274,11 +386,13 @@ def build_summary(
         current = current.replace(tzinfo=dt.timezone.utc)
     current = current.astimezone(dt.timezone.utc)
 
+    learner_items = _learner_action_items(user, current) if _has_learner_persona(user, role) else []
+
     # Fail closed: a normal/online user never receives PGY workflow content,
     # even if stale PGY rows happen to exist for the same account.
     actionable = ACTIONABLE_PGY.get(role, {}) if profile["pgyLearner"] else {}
     assignments = pgy_service.list_assignments(user) if actionable else []
-    items: list[dict[str, Any]] = []
+    pgy_items: list[dict[str, Any]] = []
 
     for assignment in assignments:
         status = str(assignment.get("status") or "")
@@ -287,15 +401,18 @@ def build_summary(
             continue
         action, action_label = action_spec
         due_at = str(assignment.get("dueAt") or "")
-        items.append(
+        pgy_items.append(
             {
                 "id": str(assignment.get("id") or ""),
+                "resourceId": str(assignment.get("id") or ""),
+                "persona": "learner" if role == "student" else "teacher",
                 "domain": "pgy",
                 "kind": "assignment",
                 "title": str(assignment.get("title") or "PGY 訓練指派"),
                 "status": status,
                 "statusLabel": STATUS_LABELS.get(status, status),
                 "group": str(assignment.get("group") or ""),
+                "area": "pgy",
                 "dueAt": due_at,
                 "overdue": _is_overdue(due_at, current),
                 "action": action,
@@ -305,9 +422,10 @@ def build_summary(
         )
 
     teacher_items = _teacher_action_items(user, current)
-    items.extend(teacher_items)
+    items = [*learner_items, *pgy_items, *teacher_items]
     items.sort(key=_task_sort_key)
-    overdue = sum(1 for item in items if item["overdue"])
+    overdue = sum(1 for item in items if item.get("overdue"))
+    learner_count = sum(1 for item in items if item.get("persona") == "learner")
     teacher_counts = {
         "review": sum(1 for item in teacher_items if item.get("kind") == "review"),
         "materialFailure": sum(1 for item in teacher_items if item.get("kind") == "material_failure"),
@@ -323,7 +441,8 @@ def build_summary(
         "counts": {
             "total": len(items),
             "overdue": overdue,
-            "pgy": sum(1 for item in items if item.get("domain") == "pgy"),
+            "pgy": len(pgy_items),
+            "learner": learner_count,
             "teacher": len(teacher_items),
             **teacher_counts,
         },
