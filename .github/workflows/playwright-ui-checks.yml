@@ -71,6 +71,9 @@ jobs:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
         run: npx playwright test tests/playwright/accessibility-regression.spec.js --reporter=line --workers=1
 
+      - name: Run large teacher course workspace regression
+        run: npx playwright test tests/playwright/teacher-course-hub-freeze-1021.spec.js --reporter=line --workers=1
+
       - name: Run real Flask browser smoke regressions
         env:
           TEACHER_FLASK_BASE_URL: http://127.0.0.1:4174

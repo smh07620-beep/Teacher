@@ -179,6 +179,11 @@
   function courseRowsFromHub() {
     const box = document.getElementById('admin-course-material-hub');
     if (!box) return [];
+    const scopedCourses = box._learningAssignmentState?.courses;
+    if (Array.isArray(scopedCourses)) return scopedCourses.map(course => ({
+      id: String(course.id || '').trim(),
+      title: String(course.title || '未命名課程').trim()
+    })).filter(course => course.id);
     return Array.from(box.querySelectorAll('.admin-course-list > details')).map(details => {
       const assign = details.querySelector('[data-learning-assign-course]');
       const id = String(assign?.dataset.learningAssignCourse || '').trim();

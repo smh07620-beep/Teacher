@@ -26,6 +26,7 @@
     courseObserver: null,
     courseBox: null,
     applyingCourses: false,
+    courseScheduled: false,
   };
 
   function voiceLabel(id) {
@@ -135,12 +136,13 @@
 
   function convergeCourseCard(details) {
     const summary = details?.querySelector(':scope > summary');
-    const body = details?.querySelector(':scope > div.border-t');
+    const body = details?.querySelector(':scope > div.grid.border-t');
     if (!summary || !body) return;
 
-    const assignment = summary.querySelector('[data-learning-assign-course]');
-    const edit = summary.querySelector('button[data-csp-click*="teachingEditCourse("]');
-    const remove = summary.querySelector('button[data-csp-click*="adminDeleteCourse("]');
+    const actionBar = details.querySelector(':scope > [data-course-card-actions]') || summary;
+    const assignment = actionBar.querySelector('[data-learning-assign-course]');
+    const edit = actionBar.querySelector('button[data-csp-click*="teachingEditCourse("]');
+    const remove = actionBar.querySelector('button[data-csp-click*="adminDeleteCourse("]');
     if (!edit && !assignment && !remove) return;
 
     const actionHost = (edit || assignment || remove)?.parentElement;
@@ -215,22 +217,29 @@
   function convergeCourseSurface() {
     const box = document.getElementById('admin-course-material-hub');
     if (!box || state.applyingCourses) return;
+    if (state.courseBox !== box) {
+      state.courseObserver?.disconnect();
+      state.courseBox = box;
+      state.courseObserver = new MutationObserver(() => {
+        if (state.courseScheduled) return;
+        state.courseScheduled = true;
+        requestAnimationFrame(() => {
+          state.courseScheduled = false;
+          convergeCourseSurface();
+        });
+      });
+    }
+    // MutationObserver callbacks run after this function returns; a boolean
+    // applying flag alone cannot suppress notifications from our own inserts.
+    state.courseObserver.disconnect();
     state.applyingCourses = true;
     try {
       ensureCourseMediaEntry(box);
       box.querySelectorAll('.admin-course-list > details').forEach(convergeCourseCard);
     } finally {
       state.applyingCourses = false;
+      state.courseObserver.observe(box, {childList: true, subtree: true});
     }
-
-    if (state.courseBox === box && state.courseObserver) return;
-    state.courseObserver?.disconnect();
-    state.courseBox = box;
-    state.courseObserver = new MutationObserver(() => {
-      if (state.applyingCourses) return;
-      queueMicrotask(convergeCourseSurface);
-    });
-    state.courseObserver.observe(box, {childList: true, subtree: true});
   }
 
   function convergeAll() {

@@ -240,11 +240,13 @@
       if(!box)return;
       const {area,group}=state;
       const courses=Array.isArray(state.courses)?state.courses:[];
+      const visibleLimit=Math.max(30,Number(box.dataset.courseVisibleLimit)||30);
+      const visibleCourses=courses.slice(0,visibleLimit);
       const materials=Array.isArray(state.materials)?state.materials:[];
       const cats=Array.isArray(state.cats)?state.cats:[];
       const scoped=materials.filter(m=>(m.area||'internal')===area&&(m.group||'grpBio')===group);
       const cards=[];
-      for(const c of courses){
+      for(const c of visibleCourses){
           const mats=teachingOrderedMaterials(c,scoped.filter(m=>m.courseId===c.id));
           const exams=cats.filter(q=>q.courseId===c.id);
           const qcount=exams.reduce((n,q)=>n+examBankCount(q),0);
@@ -254,6 +256,14 @@
           const assignmentChip=state.loading.assignments?'👥 指派 · 同步中':`👥 指派 ${assignments.length} 筆`;
           const assignmentButton=state.assignmentAccess===false?'':`<button type="button" data-learning-assign-course="${escapeHtml(c.id||'')}" class="text-[10px] rounded-lg bg-teal-700 text-white px-2.5 py-1.5">指派學習</button>`;
           cards.push(`<details class="group rounded-2xl border border-violet-100 bg-white overflow-hidden" ${c.id===box.dataset.lastCreated?'open':''}><summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3 hover:bg-violet-50/50 transition-colors"><div class="min-w-0"><div class="font-black text-sm text-slate-900 truncate">📘 ${escapeHtml(c.title||'未命名課程')}</div>${c.desc&&c.desc.trim()!==c.title?.trim()?`<div class="text-[11px] text-slate-500 mt-1">${escapeHtml(c.desc)}</div>`:''}<div class="flex flex-wrap gap-1.5 mt-2"><span class="course-stat-chip">${materialChip}</span><span class="course-stat-chip">📝 題庫 ${qcount} 題</span><span class="course-stat-chip">${examChip}</span><span class="course-stat-chip">${assignmentChip}</span></div></div><div class="flex items-center gap-2 shrink-0"><span class="course-stat-chip">${c.active?"已啟用":"已停用"}</span>${assignmentButton}<button data-csp-click="event.preventDefault();event.stopPropagation();teachingEditCourse('${c.id}')" class="teaching-primary">編排課程</button><button data-csp-click="event.preventDefault();event.stopPropagation();adminDeleteCourse('${c.id}')" class="text-[10px] text-rose-600 px-2 py-1">刪除課程</button></div></summary><div class="border-t border-violet-50 p-4 grid lg:grid-cols-2 gap-4"><div><div class="text-xs font-black text-slate-700 mb-2">📚 教材</div><div class="space-y-2">${mats.length?mats.map(adminHubMaterialRow).join(''):(state.loading.materials?'<div class="text-xs text-slate-400 animate-pulse">教材資料同步中…</div>':'<div class="text-xs text-slate-400">尚未關聯教材</div>')}</div></div><div><div class="text-xs font-black text-slate-700 mb-2">📋 考卷與出題設定</div><div class="space-y-2">${exams.length?exams.map(q=>`<div class="rounded-xl bg-indigo-50/60 border border-indigo-100 px-3 py-2.5"><div class="flex items-start justify-between gap-2"><div><div class="text-xs font-bold text-indigo-950">${escapeHtml(q.title||'未命名考卷')}</div><div class="flex flex-wrap gap-1.5 mt-1.5"><span class="text-[10px] text-indigo-700">👤 ${escapeHtml(examAudienceLabel(q))}</span><span class="text-[10px] text-indigo-700">🧠 題庫 ${examBankCount(q)} 題</span><span class="text-[10px] text-indigo-700">📋 ${escapeHtml(examDrawLabel(q))}</span><span class="text-[10px] text-indigo-700">🎯 ${Number(q.passingScore||80)} 分</span>${q.blindMode?'<span class="text-[10px] text-slate-700">🕶️ 盲測</span>':''}</div></div><button data-csp-click="jumpToAdminQuiz('${q.id}','${area}','${group}')" class="text-[10px] bg-indigo-700 text-white rounded-lg px-2.5 py-1.5 shrink-0">管理題庫</button></div></div>`).join(''):(state.loading.cats?'<div class="text-xs text-slate-400 animate-pulse">考卷資料同步中…</div>':'<div class="text-xs text-slate-400">尚未建立考卷</div>')}</div></div></div></details>`);
+      }
+      // A summary is a disclosure control, not a toolbar. Keep action buttons
+      // outside it so browser accessibility validation and click routing agree.
+      for(let index=0;index<cards.length;index+=1){
+          cards[index]=cards[index].replace(
+              /<div class="flex items-center gap-2 shrink-0">(<span class="course-stat-chip">[^<]*<\/span>)([\s\S]*?)<\/div><\/summary>/,
+              (_match,status,actions)=>`${status}</summary><div data-course-card-actions class="flex flex-wrap gap-2 px-4 py-2 border-t border-violet-50">${actions}</div>`
+          );
       }
       const unassigned=state.loading.courses?[]:scoped.filter(m=>!m.courseId);
       const orphanExams=state.loading.courses?[]:cats.filter(q=>!q.courseId);
@@ -270,7 +280,18 @@
       const examCount=state.loading.cats?'—':cats.length;
       const unassignedCount=state.loading.courses?'—':unassigned.length+orphanExams.length;
       box.innerHTML=`<div class="admin-course-dashboard"><div class="admin-course-summary-grid"><div><span>課程</span><strong>${courseCount}</strong><small>目前範圍</small></div><div><span>教材</span><strong>${materialCount}</strong><small>已歸入此組</small></div><div><span>考卷</span><strong>${examCount}</strong><small>含草稿與發布</small></div><div><span>待整理</span><strong>${unassignedCount}</strong><small>未歸類教材／考卷</small></div></div><div class="admin-course-sync-row"><span class="${pending.length?'is-syncing':'is-ready'}">${escapeHtml(status)}</span><span>點開課程即可管理教材、題庫與考卷。</span></div>${errors.length?`<div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">⚠️ ${errors.map(escapeHtml).join('；')}。其他已載入內容仍可使用。</div>`:''}<div class="admin-course-list mt-4 space-y-2">${empty}${(!state.loading.courses&&(unassigned.length||orphanExams.length))?`<details class="rounded-2xl border border-amber-100 bg-white overflow-hidden"><summary class="cursor-pointer list-none px-4 py-3 font-bold text-xs text-amber-800">📁 通用／未歸類：教材 ${unassigned.length} 份 · 考卷 ${orphanExams.length} 份</summary><div class="p-4 border-t border-amber-50 space-y-2">${unassigned.map(adminHubMaterialRow).join('')}${orphanExams.map(q=>`<div class="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs"><b>📝 ${escapeHtml(q.title)}</b> · ${escapeHtml(examDrawLabel(q))} · 及格 ${Number(q.passingScore||80)} 分</div>`).join('')}</div></details>`:''}</div></div>`;
-      appendCourseFeedbackSummaryPanels(box,courses);
+      if(courses.length>visibleCourses.length){
+          const more=document.createElement('button');
+          more.type='button';
+          more.className='mt-3 rounded-xl border border-violet-200 bg-white px-4 py-2 text-xs font-bold text-violet-800';
+          more.textContent=`顯示更多課程（已顯示 ${visibleCourses.length}／${courses.length}）`;
+          more.addEventListener('click',()=>{
+              box.dataset.courseVisibleLimit=String(visibleLimit+30);
+              paintAdminCourseMaterialHub(box,box._learningAssignmentState||state);
+          });
+          box.querySelector('.admin-course-list')?.appendChild(more);
+      }
+      appendCourseFeedbackSummaryPanels(box,visibleCourses);
       box.dataset.ready='1';
       bindLearningAssignmentControls(box,state);
   }
@@ -281,6 +302,15 @@
       const area=document.getElementById('wizard-area')?.value||currentTrainingArea;
       const group=document.getElementById('wizard-group')?.value||currentGroupKey;
       const key=adminScopeKey(area,group);
+      if(box.dataset.courseScope!==key){
+          box.dataset.courseScope=key;
+          box.dataset.courseVisibleLimit='30';
+      }
+      const generation=String((Number(box.dataset.courseRenderGeneration)||0)+1);
+      box.dataset.courseRenderGeneration=generation;
+      const paintCurrent=()=>{
+          if(box.dataset.courseRenderGeneration===generation && box.dataset.courseScope===key) paintAdminCourseMaterialHub(box,state);
+      };
       const courseCache=adminCoursesCache.get(key);
       const materialCache=Array.isArray(adminMaterialsCache.data)?adminMaterialsCache.data:[];
       const state={
@@ -298,27 +328,27 @@
           },
           errors:{courses:'',materials:'',cats:'',assignments:''}
       };
-      paintAdminCourseMaterialHub(box,state);
+      paintCurrent();
       const jobs=[];
 
       if(state.loading.courses){
           jobs.push(fetch(`/api/courses/admin?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`,{})
               .then(async res=>{const data=await res.json().catch(()=>[]);if(!res.ok)throw new Error(data.error||'讀取課程失敗');state.courses=Array.isArray(data)?data:[];adminCoursesCache.set(key,{data:state.courses,at:Date.now()});})
               .catch(error=>{state.errors.courses=error.message||'讀取失敗';})
-              .finally(()=>{state.loading.courses=false;paintAdminCourseMaterialHub(box,state);}));
+              .finally(()=>{state.loading.courses=false;paintCurrent();}));
       }
 
       if(state.loading.materials){
           jobs.push(Promise.resolve(fetchAdminMaterials(force))
               .then(data=>{if(Array.isArray(data))state.materials=data;else if(data==null)throw new Error('教材清單未回傳資料');})
               .catch(error=>{state.errors.materials=error.message||'讀取失敗';})
-              .finally(()=>{state.loading.materials=false;paintAdminCourseMaterialHub(box,state);}));
+              .finally(()=>{state.loading.materials=false;paintCurrent();}));
       }
 
       jobs.push(fetch(`/api/quiz-categories?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`,{credentials:'same-origin',cache:'no-store'})
           .then(async res=>{const data=await res.json().catch(()=>[]);if(!res.ok)throw new Error(data.error||'讀取考卷失敗');state.cats=Array.isArray(data)?data:[];})
           .catch(error=>{state.errors.cats=error.message||'讀取失敗';})
-          .finally(()=>{state.loading.cats=false;paintAdminCourseMaterialHub(box,state);}));
+          .finally(()=>{state.loading.cats=false;paintCurrent();}));
 
       jobs.push(fetch(`/api/learning-assignments?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`,{credentials:'same-origin',cache:'no-store'})
           .then(async res=>{
@@ -329,7 +359,7 @@
               state.assignments=Array.isArray(data)?data:[];
           })
           .catch(error=>{state.assignmentAccess=false;state.errors.assignments=error.message||'讀取失敗';})
-          .finally(()=>{state.loading.assignments=false;paintAdminCourseMaterialHub(box,state);}));
+          .finally(()=>{state.loading.assignments=false;paintCurrent();}));
 
       // Presentation refresh is deliberately nonblocking. Keep a handle for
       // diagnostics without forcing every caller to wait for a slow provider.
