@@ -31,17 +31,18 @@
   if (!navHost) return;
   let syncing = false;
 
+  // Product convergence: only the two human jobs remain primary navigation.
+  // Media production and paper export are still available from contextual
+  // teaching tools inside the course/material workflow.
   const buttonSpec = [
     ['teacher-nav-course-1014', '📚 教材與課程', () => T.openCourse?.()],
-    ['teacher-nav-media-1014', '🎙️ 媒體製作', () => T.openMedia?.()],
     ['teacher-nav-assessment-1014', '📝 評量與出題', () => T.openAssessment?.()],
-    ['teacher-nav-documents-1014', '📄 紙本文件與匯出', () => T.openDocuments?.()],
   ];
 
   function currentMode() {
     const now = new URLSearchParams(window.location.search);
     const mode = now.get('teacherMode') || '';
-    if (mode === 'media' || mode === 'documents') return mode;
+    if (mode === 'media' || mode === 'documents') return 'course';
     return now.get('workspace') === 'assessment' ? 'assessment' : 'course';
   }
 
@@ -67,7 +68,7 @@
     if (icon) icon.textContent = '👨‍🏫';
     if (title && !title.textContent.includes('媒體製作')) title.textContent = '檢驗科教學平台｜教師工作區';
     if (summary && !title?.textContent?.includes('媒體製作')) {
-      summary.textContent = '教材、媒體、評量與正式紙本輸出集中於教師工作區；平台維運與 Worker 狀態只在系統管理顯示。';
+      summary.textContent = '主要工作只保留教材與課程、評量與出題；媒體與紙本輸出從教材流程內開啟。';
     }
 
     const banner = document.getElementById('rbac-workspace-banner');
@@ -76,7 +77,7 @@
       const scope = R.scopedTeacher && group
         ? `<span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">目前管理範圍：${group.replace(/[<>&"']/g, '')}</span>`
         : '';
-      banner.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-2"><div class="flex flex-wrap items-center gap-2"><span class="text-xs font-black text-slate-800">👨‍🏫 教師工作區</span><span class="text-[11px] text-slate-400">從左側選擇教學工作項目</span></div>${scope}</div>`;
+      banner.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-2"><div class="flex flex-wrap items-center gap-2"><span class="text-xs font-black text-slate-800">👨‍🏫 教師工作區</span><span class="text-[11px] text-slate-400">從左側選擇主要教學工作</span></div>${scope}</div>`;
     }
   }
 
@@ -87,15 +88,13 @@
       const mode = currentMode();
       const activeByMode = {
         course: 'teacher-nav-course-1014',
-        media: 'teacher-nav-media-1014',
         assessment: 'teacher-nav-assessment-1014',
-        documents: 'teacher-nav-documents-1014',
       };
       const group = document.createElement('section');
       group.className = 'v580-admin-group';
       const label = document.createElement('span');
       label.className = 'v580-admin-group-label';
-      label.textContent = '教師工作台';
+      label.textContent = '教師工作區';
       const actions = document.createElement('div');
       actions.className = 'v580-admin-group-actions';
       buttonSpec.forEach(([id, text, handler]) => {
@@ -114,15 +113,19 @@
 
   rebuildTeacherNav();
 
-  // An older system-admin script and Worker status module can both mutate the
-  // same navigation host. Keep teacher persona final and deterministic.
+  // Older workspace/system scripts may mutate the same navigation host. Keep
+  // the teacher persona final, deterministic, and limited to the two primary
+  // human jobs instead of re-exposing implementation-specific tools.
   const observer = new MutationObserver(() => {
     if (syncing) return;
     const leakedSystemControl = navHost.querySelector(
       '#admin-nav-worker,#admin-nav-people,#admin-nav-system,#admin-nav-maintenance,#admin-nav-audit'
     );
     const teacherButtons = navHost.querySelectorAll('[id^="teacher-nav-"]');
-    if (leakedSystemControl || teacherButtons.length !== 4) rebuildTeacherNav();
+    const unexpectedTeacherButton = [...teacherButtons].some(button => !new Set([
+      'teacher-nav-course-1014', 'teacher-nav-assessment-1014'
+    ]).has(button.id));
+    if (leakedSystemControl || teacherButtons.length !== 2 || unexpectedTeacherButton) rebuildTeacherNav();
   });
   observer.observe(navHost, {childList:true, subtree:true});
 
