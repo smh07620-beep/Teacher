@@ -6,6 +6,7 @@ stdlib-only so browser CI does not need production Python dependencies.
 """
 from __future__ import annotations
 
+import ast
 import json
 import mimetypes
 import os
@@ -19,74 +20,35 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "static"
 PORT = int(os.environ.get("TEACHER_UI_HARNESS_PORT", "4173"))
 
-PORTAL_ASSETS = (
-    "/home-profile-title-71.js",
-    "/portal-navigation-73.js",
-)
-SYSTEM_ORDERED = (
-    ("/shared-core.js", ("/api-client.js",)),
-    (
-        "/system-admin.js",
-        (
-            "/admin-workspace.js",
-            "/admin-results-data.js",
-            "/admin-results-workspace.js",
-            "/admin-exam-settings.js",
-            "/admin-doc-templates.js",
-            "/admin-pgy-assessments.js",
-        ),
-    ),
-)
-SYSTEM_ASSETS = (
-    "/system-csp-actions.js",
-    "/pgy-workflow.js",
-    "/roles-signing-66.js",
-    "/maintenance-64.js",
-    "/workspace-shell-70.js",
-    "/training-command-center-71.js",
-    "/pgy-competency-matrix-71.js",
-    "/learning-analytics-71.js",
-    "/notification-center-71.js",
-    "/worker-status-70.js",
-    "/admin-results.js",
-    "/admin-course-material.js",
-    "/admin-people.js",
-    "/admin-announcements.js",
-    "/admin-system.js",
-    "/admin-materials.js",
-    "/admin-question-bank.js",
-    "/admin-quiz-materials.js",
-    "/admin-question-editor-ui.js",
-    "/admin-question-actions.js",
-    "/review-links-66.js",
-    "/admin-jobs.js",
-    "/admin-material-upload.js",
-    "/material-upload-client.js",
-    "/admin-ai-questions.js",
-    "/admin-question-panel.js",
-    "/admin-external-media.js",
-    "/admin-results-export.js",
-    "/learner-exam-controls.js",
-    "/learner-result-chart.js",
-    "/teacher-content-studio-71.js",
-    "/teacher-content-tool-panels-710.js",
-    "/teacher-content-latency-712.js",
-    "/teacher-content-composer-72.js",
-    "/teacher-ux-convergence-72.js",
-    "/learner-ui-cleanup-71.js",
-    "/portal-navigation-73.js",
-)
+
+def _load_asset_manifest():
+    """Read the production frontend manifest without importing the Flask app."""
+    source = (ROOT / "teacher_app" / "frontend" / "assets.py").read_text(encoding="utf-8")
+    module = ast.parse(source)
+    for node in module.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(isinstance(target, ast.Name) and target.id == "ASSET_MANIFEST" for target in node.targets):
+            return ast.literal_eval(node.value)
+    raise RuntimeError("ASSET_MANIFEST not found")
+
+
+ASSET_MANIFEST = _load_asset_manifest()
 
 SYSTEM_ADMIN = {
     "username": "ci-admin",
     "name": "CI 系統管理者",
     "role": "system_admin",
-    "roles": ["system_admin"],
+    # Exercise the real dual-role path used by accounts that can switch between
+    # learning, teacher and system personas. rbac-ui still resolves this account
+    # to the system surface first because system_admin remains present.
+    "roles": ["system_admin", "education_admin"],
     "preferredGroup": "grpBio",
     "permissions": [
         "material.read", "course.view", "course.manage", "course.edit",
         "material.manage", "question.manage", "question.review", "exam.manage",
-        "exam.publish", "result.group.read", "document.export",
+        "exam.publish", "exam.take", "progress.self.read", "learning.assign",
+        "result.group.read", "document.export",
         "education.cross_group.manage", "group.member.read", "group.content.manage",
         "group.result.read", "user.manage", "role.manage", "audit.read", "audit.view",
         "system.manage", "storage.manage", "backup.manage", "template.manage",
@@ -95,6 +57,8 @@ SYSTEM_ADMIN = {
 
 
 def _asset_tag(path: str) -> str:
+    if path.endswith(".css"):
+        return f'<link rel="stylesheet" href="{path}">'
     return f'<script defer src="{path}"></script>'
 
 
@@ -102,7 +66,7 @@ def _asset_present(html: str, path: str) -> bool:
     return bool(re.search(rf'(?:src|href)=["\']{re.escape(path)}(?:\?[^"\']*)?["\']', html))
 
 
-def _append_missing(html: str, paths, closing_tag: str = "</body>") -> str:
+def _append_missing(html: str, paths, closing_tag: str) -> str:
     tags = [_asset_tag(path) for path in paths if not _asset_present(html, path)]
     if tags and closing_tag in html:
         html = html.replace(closing_tag, "\n".join(tags) + f"\n{closing_tag}", 1)
@@ -128,11 +92,12 @@ def _ensure_ordered_after(html: str, anchor_path: str, paths) -> str:
 
 
 def apply_assets(html: str, name: str) -> str:
-    if name == "portal":
-        return _append_missing(html, PORTAL_ASSETS)
-    for anchor, paths in SYSTEM_ORDERED:
+    manifest = ASSET_MANIFEST[name]
+    for anchor, paths in manifest.get("ordered", ()):
         html = _ensure_ordered_after(html, anchor, paths)
-    return _append_missing(html, SYSTEM_ASSETS)
+    html = _append_missing(html, manifest.get("head", ()), "</head>")
+    html = _append_missing(html, manifest.get("body", ()), "</body>")
+    return html
 
 
 def json_bytes(value) -> bytes:
