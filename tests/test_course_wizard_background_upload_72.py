@@ -29,10 +29,22 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertIn('onProgress', source)
         self.assertIn('response.status', ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8'))
 
-    def test_wizard_opts_into_network_only_small_file_fallback(self):
+    def test_course_wizard_forces_direct_r2_and_surfaces_progress(self):
         source = ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8')
-        self.assertIn('fallbackToSameOriginQueue:true', source)
-        self.assertIn('雲端直傳暫時無法連線', source)
+        self.assertIn('fallbackToSameOriginQueue:false', source)
+        self.assertNotIn('fallbackToSameOriginQueue:true', source)
+        self.assertIn('上傳至 R2', source)
+        self.assertIn('/api/material-jobs/${encodeURIComponent(id)}', source)
+        self.assertIn('背景教材處理中', source)
+        self.assertIn('row.error||row.detail', source)
+
+    def test_successful_course_creation_is_locked_and_has_finish_action(self):
+        source = ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8')
+        self.assertIn('state.created=true', source)
+        self.assertIn('完成／返回教材與課程', source)
+        self.assertIn('課程已鎖定完成，不會因再次點擊而重複建立', source)
+        self.assertIn("if(state.created)return retryFailedUploads();", source)
+        self.assertIn('重試未完成教材', source)
 
     def test_admin_upload_delegates_to_shared_transport(self):
         source = ROOT.joinpath('static', 'admin-material-upload.js').read_text(encoding='utf-8')
