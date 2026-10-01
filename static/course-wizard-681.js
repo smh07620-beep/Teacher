@@ -9,7 +9,7 @@ const MODE_META={
   blueprint:{label:'Blueprint',next:'建立考卷後直接前往「題庫與考卷」設定 Blueprint 與題型配額。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false,workflowId:'',workflowFingerprint:''};
+const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -34,7 +34,14 @@ function scope(){
 }
 
 function mode(){return MODE_META[state.examMode]||MODE_META.later;}
-function setBusy(value){state.busy=!!value;const button=el('cw681-create');if(button){button.disabled=state.busy;button.textContent=state.busy?'⏳ 建立中…':'建立課程與關聯';}}
+function setBusy(value){
+  state.busy=!!value;
+  const button=el('cw681-create');
+  if(button){
+    button.disabled=state.busy;
+    button.textContent=state.busy?(state.created?'⏳ 重試上傳中…':'⏳ 建立中…'):(state.created?'重試未完成教材':'建立課程與關聯');
+  }
+}
 
 function bundleFingerprint(payload){
   return JSON.stringify([payload.area,payload.group,payload.title,payload.desc,payload.examMode,payload.examTitle]);
@@ -74,27 +81,35 @@ function mount(){
   host.insertAdjacentHTML('beforebegin','<div id="course-wizard-681" class="space-y-4"></div>');
   window.courseWizard681Next=next;
   window.courseWizard681Back=back;
-  window.courseWizard681SetMode=value=>{state.examMode=value;syncExamInput();render();};
+  window.courseWizard681SetMode=value=>{if(state.created)return;state.examMode=value;syncExamInput();render();};
   window.courseWizard681Create=create;
   window.courseWizard681RefreshMaterials=loadMaterials;
-  window.courseWizard681SelectExisting=()=>{state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);};
-  window.courseWizard681FilesChanged=input=>{state.files=[...(input?.files||[])];state.fileMeta={};renderFileSummary();};
-  window.courseWizard681SetFileMeta=(index,field,value)=>{state.fileMeta[index]={...(state.fileMeta[index]||{}),[field]:value};};
+  window.courseWizard681SelectExisting=()=>{if(!state.created)state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);};
+  window.courseWizard681FilesChanged=input=>{if(state.created)return;state.files=[...(input?.files||[])];state.fileMeta={};renderFileSummary();};
+  window.courseWizard681SetFileMeta=(index,field,value)=>{if(!state.created)state.fileMeta[index]={...(state.fileMeta[index]||{}),[field]:value};};
   window.courseWizard681Continue=continueToAssessment;
   window.courseWizard681OpenCourse=openCourseWorkspace;
   window.courseWizard681Reset=reset;
   render();loadMaterials();
 }
 
+function actionFooter(){
+  if(state.step<4)return `<button ${state.busy||state.created?'disabled':''} data-csp-click="courseWizard681Next()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">下一步</button>`;
+  if(!state.created)return `<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681Create()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">${state.busy?'⏳ 建立中…':'建立課程與關聯'}</button>`;
+  const retry=state.failedUploads.length?`<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681Create()" class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800 disabled:opacity-50">${state.busy?'⏳ 重試上傳中…':'重試未完成教材'}</button>`:'';
+  return `<div class="flex flex-wrap justify-end gap-2">${retry}<button type="button" data-csp-click="courseWizard681OpenCourse()" class="rounded bg-teal-700 px-4 py-2 text-sm font-bold text-white">完成／返回教材與課程</button></div>`;
+}
+
 function render(){
   const root=el('course-wizard-681');if(!root)return;
   const steps=['基本資料','教材','題目與考卷','確認建立'];
-  root.innerHTML=`<div class="flex flex-wrap gap-2">${steps.map((name,i)=>`<span class="rounded-full px-3 py-1 text-xs font-bold ${state.step===i+1?'bg-violet-700 text-white':state.step>i+1?'bg-violet-100 text-violet-800':'bg-slate-100 text-slate-500'}">${i+1} ${name}</span>`).join('')}</div><div class="rounded-xl border border-violet-200 bg-violet-50/30 p-4"><div id="cw681-step"></div><div class="mt-4 flex justify-between gap-2"><button ${state.step===1||state.busy?'disabled':''} data-csp-click="courseWizard681Back()" class="rounded border px-4 py-2 text-sm disabled:opacity-40">返回</button>${state.step<4?`<button ${state.busy?'disabled':''} data-csp-click="courseWizard681Next()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">下一步</button>`:`<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681Create()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">${state.busy?'⏳ 建立中…':'建立課程與關聯'}</button>`}</div><div id="cw681-status" class="mt-3 text-xs text-violet-900"></div></div>`;
+  root.innerHTML=`<div class="flex flex-wrap gap-2">${steps.map((name,i)=>`<span class="rounded-full px-3 py-1 text-xs font-bold ${state.step===i+1?'bg-violet-700 text-white':state.step>i+1?'bg-violet-100 text-violet-800':'bg-slate-100 text-slate-500'}">${i+1} ${name}</span>`).join('')}</div><div class="rounded-xl border border-violet-200 bg-violet-50/30 p-4"><div id="cw681-step"></div><div class="mt-4 flex justify-between gap-2"><button ${state.step===1||state.busy||state.created?'disabled':''} data-csp-click="courseWizard681Back()" class="rounded border px-4 py-2 text-sm disabled:opacity-40">返回</button>${actionFooter()}</div><div id="cw681-status" class="mt-3 text-xs text-violet-900"></div></div>`;
   const box=el('cw681-step');
   if(state.step===1)box.innerHTML=stepOne();
   if(state.step===2){box.innerHTML=stepTwo();paintMaterials();renderFileSummary();}
   if(state.step===3)box.innerHTML=stepThree();
   if(state.step===4)box.innerHTML=stepFour();
+  const status=el('cw681-status');if(status&&state.resultHtml)status.innerHTML=state.resultHtml;
 }
 
 function stepOne(){
@@ -112,7 +127,7 @@ function stepThree(){
 
 function stepFour(){
   const s=scope(),title=el('wizard-course-title')?.value||'',desc=el('wizard-course-desc')?.value||'',exam=el('wizard-exam-title')?.value||'';
-  return `<h5 class="font-black">4. 確認建立</h5><div class="mt-3 rounded-xl border border-violet-100 bg-white p-4"><dl class="grid gap-3 text-sm md:grid-cols-2"><div><dt class="text-xs text-slate-500">課程</dt><dd class="font-bold">${esc(title||'（未填）')}</dd></div><div><dt class="text-xs text-slate-500">範圍</dt><dd>${esc(s.area)} · ${esc(el('wizard-group')?.selectedOptions?.[0]?.textContent||s.group)}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">說明</dt><dd>${esc(desc||'—')}</dd></div><div><dt class="text-xs text-slate-500">教材</dt><dd>新上傳 ${state.files.length} 份；既有關聯 ${state.existing.length} 份</dd></div><div><dt class="text-xs text-slate-500">出題流程</dt><dd class="font-bold">${esc(mode().label)}${exam?' · '+esc(exam):''}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">既有教材</dt><dd>${state.existing.map(id=>esc((state.materials||[]).find(m=>String(m.id)===String(id))?.title||id)).join('、')||'—'}</dd></div></dl><p class="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">建立完成後：${esc(mode().next)}</p></div>`;
+  return `<h5 class="font-black">4. ${state.created?'建立完成':'確認建立'}</h5><div class="mt-3 rounded-xl border border-violet-100 bg-white p-4"><dl class="grid gap-3 text-sm md:grid-cols-2"><div><dt class="text-xs text-slate-500">課程</dt><dd class="font-bold">${esc(title||state.course?.title||'（未填）')}</dd></div><div><dt class="text-xs text-slate-500">範圍</dt><dd>${esc(s.area)} · ${esc(el('wizard-group')?.selectedOptions?.[0]?.textContent||s.group)}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">說明</dt><dd>${esc(desc||'—')}</dd></div><div><dt class="text-xs text-slate-500">教材</dt><dd>新上傳 ${state.files.length} 份；既有關聯 ${state.existing.length} 份</dd></div><div><dt class="text-xs text-slate-500">出題流程</dt><dd class="font-bold">${esc(mode().label)}${exam?' · '+esc(exam):''}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">既有教材</dt><dd>${state.existing.map(id=>esc((state.materials||[]).find(m=>String(m.id)===String(id))?.title||id)).join('、')||'—'}</dd></div></dl><p class="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">${state.created?'課程已鎖定完成，不會因再次點擊而重複建立。':'建立完成後：'+esc(mode().next)}</p></div>`;
 }
 
 function fileMeta(index,file){return {title:file.name.replace(/\.[^.]+$/,''),materialType:'auto',...(state.fileMeta[index]||{})};}
@@ -143,7 +158,7 @@ function syncInputs(){
 }
 
 function next(){
-  if(state.busy)return;
+  if(state.busy||state.created)return;
   if(state.step===2){state.files=[...(el('cw681-files')?.files||state.files)];state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);}
   syncInputs();
   if(state.step===1&&!String(el('wizard-course-title')?.value||'').trim())return alert('請輸入課程名稱');
@@ -152,7 +167,7 @@ function next(){
   if(state.step===2)loadMaterials();
 }
 
-function back(){if(state.busy)return;syncInputs();state.step=Math.max(1,state.step-1);render();if(state.step===2)loadMaterials();}
+function back(){if(state.busy||state.created)return;syncInputs();state.step=Math.max(1,state.step-1);render();if(state.step===2)loadMaterials();}
 
 async function loadMaterials(){
   const box=el('cw681-materials');if(box)box.textContent='讀取中…';
@@ -175,8 +190,111 @@ async function refreshWorkspaceData(){
   if(typeof window.renderAdminCourseMaterialHub==='function')await window.renderAdminCourseMaterialHub(true).catch(()=>{});
 }
 
+function elapsedLabel(value){
+  const then=new Date(value||Date.now()).getTime();
+  const seconds=Math.max(0,Math.round((Date.now()-then)/1000));
+  if(seconds<60)return `${seconds} 秒`;
+  if(seconds<3600)return `${Math.floor(seconds/60)} 分 ${seconds%60} 秒`;
+  return `${(seconds/3600).toFixed(1)} 小時`;
+}
+
+function backgroundJobsHtml(rows){
+  if(!rows.length)return '';
+  const terminal=rows.every(row=>['completed','failed','cancelled'].includes(row.status));
+  return `<div class="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-left text-sky-950"><div class="flex items-center justify-between gap-2"><b>${terminal?'背景處理結果':'⚙️ 背景教材處理中'}</b><span class="text-[11px] text-sky-700">可離開此頁，Worker 會繼續</span></div><div class="mt-2 space-y-2">${rows.map(row=>{const failed=row.status==='failed';const done=row.status==='completed';const label=done?'✅ 已完成':failed?'❌ 失敗':row.status==='retry_wait'?'🔁 等待重試':row.status==='processing'?'⚙️ 轉檔／發布中':'⏳ 等待 Worker';const detail=failed?(row.error||row.detail||'未提供失敗原因'):(row.detail||row.stage||'');return `<div class="rounded-lg border ${failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white'} p-2"><div class="flex flex-wrap justify-between gap-2"><span><b>${esc(row.title||row.originalName||row.id)}</b> · ${label}</span><span class="text-[11px] text-slate-500">已等待／處理 ${esc(elapsedLabel(row.createdAt))}</span></div><div class="mt-1 text-[11px] ${failed?'text-rose-700':'text-slate-600'}">${esc(row.stage||'')} ${detail?`｜${esc(detail)}`:''}</div></div>`;}).join('')}</div></div>`;
+}
+
+async function watchQueuedJobs(jobIds){
+  const unique=[...new Set((jobIds||[]).filter(Boolean))];
+  if(!unique.length)return;
+  const token=++state.watchToken;
+  while(token===state.watchToken){
+    const rows=(await Promise.all(unique.map(async id=>{
+      try{return await api(`/api/material-jobs/${encodeURIComponent(id)}`);}
+      catch(error){return {id,status:'unknown',stage:'狀態讀取失敗',detail:error.message,createdAt:new Date().toISOString()};}
+    }))).filter(Boolean);
+    const host=el('cw681-background-jobs');
+    if(host)host.innerHTML=backgroundJobsHtml(rows);
+    if(rows.every(row=>['completed','failed','cancelled'].includes(row.status))){
+      await refreshWorkspaceData();
+      break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,3000));
+  }
+}
+
+function buildUploadForm(file,index,meta,{area,group,desc,courseId,categoryId,workflowId}){
+  const form=new FormData();
+  form.append('file',file);
+  form.append('title',String(meta.title||file.name.replace(/\.[^.]+$/,'')).trim());
+  form.append('desc',desc);
+  form.append('group',group);
+  form.append('area',area);
+  form.append('courseId',courseId);
+  form.append('category',categoryId);
+  form.append('materialType',meta.materialType||'auto');
+  form.append('bundleWorkflowId',workflowId);
+  form.append('bundleFileIndex',String(index));
+  form.append('bundleFileSize',String(file.size||0));
+  form.append('bundleFileLastModified',String(file.lastModified||0));
+  return form;
+}
+
+async function uploadEntries(entries,context,status){
+  if(!entries.length)return {uploaded:0,errors:[],jobs:[]};
+  if(!window.MaterialUploadClient?.enqueue)throw new Error('教材背景上傳元件尚未載入，請重新整理後再試。');
+  const loaded=new Map();
+  const totalBytes=Math.max(1,entries.reduce((sum,item)=>sum+Number(item.file.size||0),0));
+  const errors=[],jobs=[];
+  let uploaded=0;
+  for(let order=0;order<entries.length;order++){
+    const item=entries[order],file=item.file,meta=fileMeta(item.index,file);
+    const form=buildUploadForm(file,item.index,meta,context);
+    try{
+      const result=await window.MaterialUploadClient.enqueue(form,{
+        fileName:file.name,
+        fallbackToSameOriginQueue:false,
+        onUnauthorized:loginRedirect,
+        onProgress:progress=>{
+          loaded.set(item.index,Math.max(0,Math.min(Number(file.size||0),Number(progress.loaded||0))));
+          const totalLoaded=[...loaded.values()].reduce((sum,value)=>sum+value,0);
+          const overall=Math.max(0,Math.min(100,Math.round(totalLoaded/totalBytes*100)));
+          status.innerHTML=`<div class="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-950"><div class="flex justify-between gap-2"><b>⬆️ 上傳至 R2：${esc(file.name)}</b><span>${overall}%</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-sky-100"><div class="h-full bg-sky-600 transition-all" style="width:${overall}%"></div></div><div class="mt-1 text-[11px]">檔案 ${order+1}/${entries.length}；完成後會自動交給背景 Worker 轉檔與發布。</div></div>`;
+        }
+      });
+      loaded.set(item.index,Number(file.size||0));
+      uploaded++;
+      if(result?.jobId)jobs.push(String(result.jobId));
+    }catch(error){
+      const reason=String(error?.message||'未知上傳錯誤');
+      errors.push({index:item.index,fileName:file.name,reason});
+      console.warn('Course wizard material upload failed',file.name,error);
+    }
+  }
+  return {uploaded,errors,jobs};
+}
+
+async function retryFailedUploads(){
+  if(state.busy||!state.created||!state.course?.id||!state.failedUploads.length)return;
+  const status=el('cw681-status');setBusy(true);
+  try{
+    const {area,group}=scope(),desc=String(el('wizard-course-desc')?.value||'').trim();
+    const entries=state.failedUploads.map(item=>({index:item.index,file:state.files[item.index]})).filter(item=>item.file);
+    const result=await uploadEntries(entries,{area,group,desc,courseId:state.course.id,categoryId:state.categoryId,workflowId:state.workflowId},status);
+    state.failedUploads=result.errors;
+    state.queuedJobs.push(...result.jobs);
+    const retryText=state.failedUploads.length?`仍有 ${state.failedUploads.length} 份教材上傳失敗。`:'未完成教材已重新送入背景佇列。';
+    state.resultHtml=`<span class="font-bold ${state.failedUploads.length?'text-amber-700':'text-emerald-700'}">${state.failedUploads.length?'⚠️':'✅'} ${esc(retryText)}</span><div id="cw681-background-jobs"></div><button type="button" data-csp-click="courseWizard681Reset()" class="mt-2 text-slate-500 underline">建立下一門課</button>`;
+    render();
+    watchQueuedJobs(state.queuedJobs);
+  }catch(error){
+    state.resultHtml=`<span class="font-bold text-rose-700">❌ ${esc(error.message)}</span>`;render();
+  }finally{setBusy(false);}
+}
+
 async function create(){
   if(state.busy)return;
+  if(state.created)return retryFailedUploads();
   syncInputs();
   const {area,group}=scope(),title=String(el('wizard-course-title')?.value||'').trim(),desc=String(el('wizard-course-desc')?.value||'').trim(),exam=String(el('wizard-exam-title')?.value||'').trim(),files=state.files;
   if(!title)return alert('請輸入課程名稱');
@@ -190,41 +308,31 @@ async function create(){
     const course=bundle.course||{};
     if(!course.id)throw new Error('課程建立結果不完整，請使用相同流程重新嘗試。');
     state.course=course;state.categoryId=String(bundle.quizCategory?.id||'');
-    if(bundle.reused)status.textContent='✅ 已回復先前完成的課程／考卷建立結果，繼續處理教材。';
-
     let linked=0;
     for(const id of state.existing){
       const material=state.materials.find(m=>String(m.id)===String(id));if(!material)continue;
       status.textContent=`⏳ 關聯既有教材 ${linked+1}/${state.existing.length}…`;
       await api('/api/slides/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({title:material.title||material.filename||'',desc:material.desc||'',courseId:course.id,category:state.categoryId||material.category||'',active:material.active!==false,group,area,materialType:material.materialType||'standard',atlasMeta:material.atlasMeta||{},bundleWorkflowId:bundlePayload.workflowId,bundleLinkKey:String(id)})});linked++;
     }
-    if(!window.MaterialUploadClient?.enqueue)throw new Error('教材背景上傳元件尚未載入，請重新整理後再試。');
-    let uploaded=0,failed=0;
-    const uploadErrors=[];
-    for(let index=0;index<files.length;index++){
-      const file=files[index],meta=fileMeta(index,file);
-      status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name}`;
-      const form=new FormData();form.append('file',file);form.append('title',String(meta.title||file.name.replace(/\.[^.]+$/,'')).trim());form.append('desc',desc);form.append('group',group);form.append('area',area);form.append('courseId',course.id);form.append('category',state.categoryId);form.append('materialType',meta.materialType||'auto');form.append('bundleWorkflowId',bundlePayload.workflowId);form.append('bundleFileIndex',String(index));form.append('bundleFileSize',String(file.size||0));form.append('bundleFileLastModified',String(file.lastModified||0));
-      try{
-        await window.MaterialUploadClient.enqueue(form,{fileName:file.name,fallbackToSameOriginQueue:true,onUnauthorized:loginRedirect,onFallback:()=>{status.textContent=`⬆️ 雲端直傳暫時無法連線，正以安全相容方式接收小型教材 ${index+1}/${files.length}：${file.name}（完成後仍交由背景 Worker 處理）`;},onProgress:progress=>{status.textContent=`⬆️ 安全接收新教材 ${index+1}/${files.length}：${file.name} ${progress.percent}%（完成後交由背景 Worker 處理）`;}});
-        uploaded++;
-      }catch(error){
-        failed++;
-        const reason=String(error?.message||'未知上傳錯誤');
-        uploadErrors.push({fileName:file.name,reason});
-        console.warn('Course wizard material upload failed',file.name,error);
-      }
-    }
+    const entries=files.map((file,index)=>({file,index}));
+    const upload=await uploadEntries(entries,{area,group,desc,courseId:course.id,categoryId:state.categoryId,workflowId:bundlePayload.workflowId},status);
+    state.failedUploads=upload.errors;
+    state.queuedJobs=upload.jobs;
     status.textContent='⏳ 同步課程、教材與考卷清單…';await refreshWorkspaceData();
-    const nextButton=state.categoryId?'<button type="button" data-csp-click="courseWizard681Continue()" class="ml-2 rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white">前往題庫與考卷 →</button>':'<button type="button" data-csp-click="courseWizard681OpenCourse()" class="ml-2 rounded-lg bg-teal-700 px-3 py-1.5 font-bold text-white">查看課程總覽 →</button>';
+    state.created=true;
+    const nextButton=state.categoryId?'<button type="button" data-csp-click="courseWizard681Continue()" class="rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white">前往題庫與考卷 →</button>':'<button type="button" data-csp-click="courseWizard681OpenCourse()" class="rounded-lg bg-teal-700 px-3 py-1.5 font-bold text-white">查看課程總覽 →</button>';
     const retryNote=bundle.reused?'（本次安全沿用既有建立結果，未重複建立課程／考卷）':'';
-    const uploadErrorDetails=uploadErrors.length?`<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-amber-900"><b>⚠️ 課程已建立，但以下教材尚未進入 Worker：</b><ul class="mt-1 list-disc pl-5">${uploadErrors.map(item=>`<li><b>${esc(item.fileName)}</b>：${esc(item.reason)}</li>`).join('')}</ul><p class="mt-2">修正上傳問題後可直接用相同建立流程重試；系統會沿用既有課程／考卷，不會重複建立。</p></div>`:'';
+    const uploadErrors=state.failedUploads.length?`<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-amber-900"><b>⚠️ 以下教材尚未進入 Worker：</b><ul class="mt-1 list-disc pl-5">${state.failedUploads.map(item=>`<li><b>${esc(item.fileName)}</b>：${esc(item.reason)}</li>`).join('')}</ul><p class="mt-2">請使用下方「重試未完成教材」。課程本身已鎖定完成，不會重複建立。</p></div>`:'';
+    const failed=state.failedUploads.length;
     const summaryClass=failed?'font-bold text-amber-700':'font-bold text-emerald-700';
     const summaryIcon=failed?'⚠️':'✅';
-    const uploadSummary=failed?`已排入背景佇列 ${uploaded} 份新教材；${failed} 份上傳失敗`:`已排入背景佇列 ${uploaded} 份新教材`;
-    status.innerHTML=`<span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程${failed?'已建立，但教材上傳未完整完成':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。${uploadErrorDetails}${nextButton}<button type="button" data-csp-click="courseWizard681Reset()" class="ml-2 text-slate-500 underline">建立下一門課</button>`;
-  }catch(error){status.textContent='❌ '+error.message+'（未變更內容時可直接重試，系統會沿用同一建立流程。）';}
-  finally{setBusy(false);}
+    const uploadSummary=failed?`已排入背景佇列 ${upload.uploaded} 份新教材；${failed} 份上傳失敗`:`已排入背景佇列 ${upload.uploaded} 份新教材`;
+    state.resultHtml=`<div class="space-y-2"><div><span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程${failed?'已建立，但教材上傳未完整完成':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。</div>${uploadErrors}<div class="flex flex-wrap gap-2">${nextButton}<button type="button" data-csp-click="courseWizard681Reset()" class="text-slate-500 underline">建立下一門課</button></div><div id="cw681-background-jobs"></div></div>`;
+    render();
+    watchQueuedJobs(state.queuedJobs);
+  }catch(error){
+    state.resultHtml=`<span class="font-bold text-rose-700">❌ ${esc(error.message)}（未變更內容時可直接重試，系統會沿用同一建立流程。）</span>`;render();
+  }finally{setBusy(false);}
 }
 
 async function continueToAssessment(){
@@ -237,13 +345,15 @@ async function continueToAssessment(){
 }
 
 async function openCourseWorkspace(){
+  state.watchToken++;
   if(typeof window.switchAdminWorkspace==='function')await window.switchAdminWorkspace('course-materials',true);
   if(typeof window.renderAdminCourseMaterialHub==='function')await window.renderAdminCourseMaterialHub(true).catch(()=>{});
   el('admin-course-material-hub')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 function reset(){
-  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;clearWorkflowId();
+  state.watchToken++;
+  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
