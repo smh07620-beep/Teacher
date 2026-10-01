@@ -6,31 +6,18 @@
   const roles = R.roles instanceof Set ? R.roles : new Set();
   const canManage = ['clinical_teacher', 'group_leader', 'education_admin'].some(role => roles.has(role))
     && typeof R.hasPermission === 'function' && R.hasPermission('material.manage');
-  if (!canManage || document.getElementById('teacher-ai-media-studio-1018')) return;
+  if (!canManage) return;
 
   const $ = id => document.getElementById(id);
   let sourceMaterials = [];
   let activeMode = 'narration';
+  let retryGeneration = 0;
 
   function isCaptionSource(item) {
     const text = [item?.materialType, item?.mimeType, item?.sourceMimeType, item?.filename, item?.title]
       .filter(Boolean).join(' ').toLowerCase();
     return /video\/|audio\/|\.(mp4|webm|mov|m4v|avi|mkv|mp3|wav|m4a|aac|ogg|oga|flac)\b/.test(text)
       || String(item?.storageBackend || '').toLowerCase() === 'external';
-  }
-
-  function syncSourceOptions() {
-    const legacy = $('teacher-script-material-1014');
-    const shared = $('teacher-media-source-1018');
-    if (!legacy || !shared) return;
-    const previous = shared.value || legacy.value;
-    shared.replaceChildren(...[...legacy.options].map(option => {
-      const clone = option.cloneNode(true);
-      clone.disabled = option.disabled;
-      return clone;
-    }));
-    if ([...shared.options].some(option => option.value === previous)) shared.value = previous;
-    updateRecommendation();
   }
 
   function selectedMaterial() {
@@ -56,6 +43,27 @@
       return;
     }
     message.textContent = '推薦下一步：先在「AI 配音」建立並核准講稿，再產生 AI 語音。';
+  }
+
+  function syncSourceOptions() {
+    const legacy = $('teacher-script-material-1014');
+    const shared = $('teacher-media-source-1018');
+    if (!shared) return;
+    if (!legacy) {
+      if (!shared.options.length) shared.replaceChildren(new Option('正在載入可用教材…', ''));
+      shared.disabled = true;
+      updateRecommendation();
+      return;
+    }
+    const previous = shared.value || legacy.value;
+    shared.replaceChildren(...[...legacy.options].map(option => {
+      const clone = option.cloneNode(true);
+      clone.disabled = option.disabled;
+      return clone;
+    }));
+    if ([...shared.options].some(option => option.value === previous)) shared.value = previous;
+    shared.disabled = legacy.disabled || shared.options.length <= 1;
+    updateRecommendation();
   }
 
   function syncSharedSource() {
@@ -126,6 +134,7 @@
   }
 
   function installTabs(studio) {
+    if ($('teacher-media-tab-narration-1018')) return;
     const tabs = document.createElement('div');
     tabs.className = 'teacher-media-tabs-1018 flex gap-2 overflow-x-auto';
     tabs.setAttribute('role', 'tablist');
@@ -205,76 +214,157 @@
     select.addEventListener('change', updateRecommendation);
   }
 
-  function movePanels(studio) {
+  function waiting(panel, id, text) {
+    if (!panel || $(id)) return;
+    const note = document.createElement('div');
+    note.id = id;
+    note.className = 'rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500';
+    note.textContent = text;
+    panel.appendChild(note);
+  }
+
+  function attachPanels(studio) {
     const narration = $('teacher-media-panel-narration-1018');
     const subtitle = $('teacher-media-panel-subtitle-1018');
     const video = $('teacher-media-panel-video-1018');
-    const audioPanel = $('teacher-media-audio-1014');
-    const subtitlePanel = $('teacher-media-subtitle-1014');
-    const videoPanel = $('teacher-ai-video-1015');
-    const scriptPanel = $('teacher-media-script-1014');
-    const presentationPanel = $('teacher-ai-presentation-1016');
-    if (!narration || !subtitle || !video || !audioPanel || !subtitlePanel || !videoPanel || !scriptPanel) return false;
+    if (!narration || !subtitle || !video) return false;
 
     humanizeExistingPanels();
     replaceVideoIdInput();
-    narration.appendChild(audioPanel);
-    const scriptDetails = makeDetails('講稿草稿與版本', 'teacher-media-script-history-1018');
-    scriptPanel.classList.remove('hidden');
-    scriptPanel.removeAttribute('aria-hidden');
-    const scriptSource = $('teacher-script-material-1014')?.closest('label');
-    scriptSource?.classList.add('teacher-media-legacy-source-1018');
-    $('teacher-script-refresh-materials-1014')?.parentElement?.classList.add('teacher-media-legacy-source-1018');
-    scriptDetails.appendChild(scriptPanel);
-    narration.appendChild(scriptDetails);
 
-    subtitle.appendChild(subtitlePanel);
-    $('teacher-subtitle-material-1017')?.closest('label')?.classList.add('teacher-media-legacy-source-1018');
-    video.appendChild(videoPanel);
-    const advanced = makeDetails('PowerPoint 版本、歷史與進階資訊', 'teacher-media-advanced-1018');
-    if (presentationPanel) advanced.appendChild(presentationPanel);
-    const technical = document.createElement('p');
-    technical.className = 'mt-3 text-xs leading-5 text-slate-600';
-    technical.textContent = '此處保留版本、來源追溯、品質檢查與發布紀錄。背景服務與儲存設定不會顯示敏感識別值。';
-    advanced.appendChild(technical);
-    studio.appendChild(advanced);
+    const audioPanel = $('teacher-media-audio-1014');
+    if (audioPanel) {
+      $('teacher-media-waiting-audio-1018')?.remove();
+      if (audioPanel.parentElement !== narration) narration.appendChild(audioPanel);
+    } else {
+      waiting(narration, 'teacher-media-waiting-audio-1018', 'AI 配音功能載入中…');
+    }
+
+    const scriptPanel = $('teacher-media-script-1014');
+    if (scriptPanel) {
+      let scriptDetails = $('teacher-media-script-history-1018');
+      if (!scriptDetails) {
+        scriptDetails = makeDetails('講稿草稿與版本', 'teacher-media-script-history-1018');
+        narration.appendChild(scriptDetails);
+      }
+      scriptPanel.classList.remove('hidden');
+      scriptPanel.removeAttribute('aria-hidden');
+      const scriptSource = $('teacher-script-material-1014')?.closest('label');
+      scriptSource?.classList.add('teacher-media-legacy-source-1018');
+      $('teacher-script-refresh-materials-1014')?.parentElement?.classList.add('teacher-media-legacy-source-1018');
+      if (scriptPanel.parentElement !== scriptDetails) scriptDetails.appendChild(scriptPanel);
+    }
+
+    const subtitlePanel = $('teacher-media-subtitle-1014');
+    if (subtitlePanel) {
+      $('teacher-media-waiting-subtitle-1018')?.remove();
+      if (subtitlePanel.parentElement !== subtitle) subtitle.appendChild(subtitlePanel);
+      $('teacher-subtitle-material-1017')?.closest('label')?.classList.add('teacher-media-legacy-source-1018');
+    } else {
+      waiting(subtitle, 'teacher-media-waiting-subtitle-1018', 'AI 字幕功能載入中…');
+    }
+
+    const videoPanel = $('teacher-ai-video-1015');
+    if (videoPanel) {
+      $('teacher-media-waiting-video-1018')?.remove();
+      if (videoPanel.parentElement !== video) video.appendChild(videoPanel);
+    } else {
+      waiting(video, 'teacher-media-waiting-video-1018', '教學影片功能載入中…');
+    }
+
+    let advanced = $('teacher-media-advanced-1018');
+    if (!advanced) {
+      advanced = makeDetails('PowerPoint 版本、歷史與進階資訊', 'teacher-media-advanced-1018');
+      const technical = document.createElement('p');
+      technical.id = 'teacher-media-advanced-note-1018';
+      technical.className = 'mt-3 text-xs leading-5 text-slate-600';
+      technical.textContent = '此處保留版本、來源追溯、品質檢查與發布紀錄。背景服務與儲存設定不會顯示敏感識別值。';
+      advanced.appendChild(technical);
+      studio.appendChild(advanced);
+    }
+    const presentationPanel = $('teacher-ai-presentation-1016');
+    const note = $('teacher-media-advanced-note-1018');
+    if (presentationPanel && presentationPanel.parentElement !== advanced) advanced.insertBefore(presentationPanel, note || null);
     return true;
+  }
+
+  function fullyHydrated() {
+    const studio = $('teacher-ai-media-studio-1018');
+    if (!studio) return false;
+    return ['teacher-media-audio-1014', 'teacher-media-subtitle-1014', 'teacher-ai-video-1015', 'teacher-media-script-1014']
+      .every(id => $(id)?.closest('#teacher-ai-media-studio-1018'));
+  }
+
+  function bindSharedSource() {
+    const shared = $('teacher-media-source-1018');
+    if (!shared || shared.dataset.mediaStudioBound === '1') return;
+    shared.dataset.mediaStudioBound = '1';
+    shared.addEventListener('change', syncSharedSource);
   }
 
   function install() {
     const shell = $('teacher-media-studio-shell-1018');
     const media = $('teacher-media-production-1014');
-    const legacySource = $('teacher-script-material-1014');
-    if (!shell || !media || !legacySource) return false;
-    const studio = document.createElement('section');
-    studio.id = 'teacher-ai-media-studio-1018';
-    studio.dataset.teacherMediaStudioPrimary = '1';
-    studio.className = 'space-y-4';
-    const sourceBox = document.createElement('div');
-    sourceBox.className = 'rounded-2xl border border-cyan-100 bg-cyan-50/50 p-4';
-    sourceBox.innerHTML = '<label class="block text-sm font-black text-slate-800">來源教材／來源內容<select id="teacher-media-source-1018" class="learning-input mt-2"></select></label><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
-    studio.appendChild(sourceBox);
-    installTabs(studio);
-    shell.insertAdjacentElement('afterend', studio);
-    if (!movePanels(studio)) { studio.remove(); return false; }
+    if (!shell || !media) return false;
+
+    let studio = $('teacher-ai-media-studio-1018');
+    if (!studio) {
+      studio = document.createElement('section');
+      studio.id = 'teacher-ai-media-studio-1018';
+      studio.dataset.teacherMediaStudioPrimary = '1';
+      studio.className = 'space-y-4';
+      const sourceBox = document.createElement('div');
+      sourceBox.className = 'rounded-2xl border border-cyan-100 bg-cyan-50/50 p-4';
+      sourceBox.innerHTML = '<label class="block text-sm font-black text-slate-800">來源教材／來源內容<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
+      studio.appendChild(sourceBox);
+      installTabs(studio);
+      shell.insertAdjacentElement('afterend', studio);
+    } else {
+      installTabs(studio);
+    }
+
+    attachPanels(studio);
     syncSourceOptions();
-    $('teacher-media-source-1018')?.addEventListener('change', syncSharedSource);
-    window.addEventListener('teacher-media-source-options-1014', event => {
-      sourceMaterials = Array.isArray(event.detail?.materials) ? event.detail.materials : [];
-      syncSourceOptions();
-      if (event.detail?.selectedId) $('teacher-media-source-1018').value = event.detail.selectedId;
-      syncSharedSource();
-    });
-    void window.TeacherMediaSourceFix1014?.refreshMaterials?.();
+    bindSharedSource();
     showMode(activeMode);
-    syncSharedSource();
+    if ($('teacher-script-material-1014')) {
+      void window.TeacherMediaSourceFix1014?.refreshMaterials?.();
+      syncSharedSource();
+    }
     return true;
   }
 
-  // All contributing panels are loaded before this manifest entry.  A bounded
-  // retry covers an asynchronous RBAC bootstrap without retaining an observer.
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    if (install()) break;
-    await new Promise(resolve => setTimeout(resolve, 100));
+  function handleSourceOptions(event) {
+    sourceMaterials = Array.isArray(event.detail?.materials) ? event.detail.materials : [];
+    install();
+    syncSourceOptions();
+    const shared = $('teacher-media-source-1018');
+    if (event.detail?.selectedId && shared) shared.value = event.detail.selectedId;
+    syncSharedSource();
   }
+
+  window.addEventListener('teacher-media-source-options-1014', handleSourceOptions);
+
+  async function hydrate(generation) {
+    for (let attempt = 0; attempt < 48 && generation === retryGeneration; attempt += 1) {
+      install();
+      if (fullyHydrated()) return;
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+  }
+
+  function refreshLifecycle() {
+    const generation = ++retryGeneration;
+    void hydrate(generation);
+  }
+
+  window.AdminWorkspaceShell?.addAfterWorkspace?.(() => refreshLifecycle());
+  document.addEventListener('click', event => {
+    if (event.target.closest?.('#teacher-course-media-entry-1014 button,#teacher-nav-media-1014')) {
+      setTimeout(refreshLifecycle, 0);
+    }
+  });
+
+  window.TeacherAIMediaStudio1018 = Object.freeze({ refresh: refreshLifecycle });
+  refreshLifecycle();
 })();
