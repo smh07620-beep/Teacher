@@ -37,5 +37,15 @@ class ProductGoldenPathP1BrowserContractTests(unittest.TestCase):
         self.assertNotIn("page.request.get(`${baseURL}/api/auth/me`)", self.browser_gp)
 
 
+    def test_dual_role_switcher_reconciles_existing_container(self):
+        self.assertIn("host.replaceChildren(...expected)", self.teacher_workspace)
+        self.assertIn("setTimeout(ensurePersonaSwitcher, 0)", self.teacher_workspace)
+
+    def test_people_workspace_can_recover_missing_create_panel(self):
+        self.assertIn("function ensureAdminUserCreatePanel()", self.people)
+        self.assertIn("if(existing)return existing", self.people)
+        self.assertIn("ensureAdminUserCreatePanel();", self.people)
+
+
 if __name__ == "__main__":
     unittest.main()
