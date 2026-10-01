@@ -153,6 +153,9 @@ def upload_claim(
     original_name: str,
     file_size: str,
     last_modified: str,
+    fingerprint: str = "",
+    fingerprint_strategy: str = "",
+    fingerprint_part_size: str = "",
 ) -> tuple[str, str]:
     payload = {
         "workflowId": workflow_id,
@@ -166,6 +169,9 @@ def upload_claim(
         "originalName": str(original_name or ""),
         "fileSize": str(file_size or "").strip(),
         "lastModified": str(last_modified or "").strip(),
+        "fingerprint": str(fingerprint or "").strip().lower(),
+        "fingerprintStrategy": str(fingerprint_strategy or "").strip(),
+        "fingerprintPartSize": str(fingerprint_part_size or "").strip(),
     }
     return f"upload:{index}", _hash_payload(payload)
 
@@ -277,6 +283,29 @@ def release(
             f"DELETE FROM course_bundle_followups WHERE username={ph} AND workflow_id={ph} "
             f"AND item_key={ph} AND request_hash={ph} AND status={ph}",
             (username, workflow_id, item_key, request_hash, "processing"),
+        )
+
+
+def reset_claim(
+    *,
+    username: str,
+    workflow_id: str,
+    item_key: str,
+    request_hash: str,
+) -> None:
+    """Release a terminal direct-upload claim after the upload itself is retired.
+
+    Completed queue jobs deliberately keep their claim forever so retrying the
+    same Course Wizard step cannot enqueue a duplicate.  Only the direct-upload
+    adapter calls this after an aborted/failed upload session that never became
+    a queue job.
+    """
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        conn.execute(
+            f"DELETE FROM course_bundle_followups WHERE username={ph} AND workflow_id={ph} "
+            f"AND item_key={ph} AND request_hash={ph}",
+            (username, workflow_id, item_key, request_hash),
         )
 
 
