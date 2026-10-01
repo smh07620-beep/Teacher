@@ -32,6 +32,16 @@
     host.appendChild(button);
   }
 
+  function syncTeacherSubnavVisibility() {
+    const subnav = document.getElementById('admin-teacher-subnav');
+    if (!subnav) return;
+    // The left teacher workspace navigation already exposes "紙本文件與匯出".
+    // Hide the older horizontal teacher-mode strip while paper export is open so
+    // the same destination is not presented twice. Other teacher modes keep the
+    // legacy strip because PGY/scoring still use it as a local mode switcher.
+    subnav.classList.toggle('hidden', state.teacherMode === 'documents');
+  }
+
   function ensurePaperDocumentWorkspace() {
     const resultsPanel = document.getElementById('admin-section-results');
     if (!resultsPanel) return null;
@@ -115,6 +125,7 @@
     if (scoring) scoring.className = modeButtonClass(state.teacherMode === 'scoring');
     if (pgy) pgy.className = modeButtonClass(state.teacherMode === 'pgy');
     if (documents) documents.className = modeButtonClass(state.teacherMode === 'documents');
+    syncTeacherSubnavVisibility();
   }
 
   function updateResultsWorkspacePresentation() {
@@ -145,6 +156,7 @@
           ? '選擇要留存的正式考核紀錄，直接使用「匯出 Word」產生紙本表單；列印後完成簽核與歸檔。'
           : '顯示全部歷次成績，可匯出 Word / CSV。');
     }
+    syncTeacherSubnavVisibility();
   }
 
   async function renderAdminTableWithMode(...args) {
@@ -174,26 +186,40 @@
     state.teacherMode = mode === 'pgy' ? 'pgy' : (mode === 'documents' ? 'documents' : 'scoring');
     paintTeacherMode();
     if (state.teacherMode === 'pgy') {
-      return window.switchAdminSection?.('pgy', true);
+      const result = await window.switchAdminSection?.('pgy', true);
+      syncTeacherSubnavVisibility();
+      return result;
     }
     state.resultMode = state.teacherMode === 'documents' ? 'documents' : 'scoring';
     updateResultsWorkspacePresentation();
-    return window.switchAdminSection?.('results', true);
+    const result = await window.switchAdminSection?.('results', true);
+    // switchAdminSection updates generic workspace chrome and may reveal the old
+    // horizontal teacher subnav again; enforce the paper-mode presentation last.
+    syncTeacherSubnavVisibility();
+    return result;
   }
 
   async function switchWorkspace({requested, workspace, force, switchSection}) {
     if (workspace === 'teacher') {
       state.teacherMode = requested === 'pgy' ? 'pgy' : 'scoring';
       paintTeacherMode();
-      if (state.teacherMode === 'pgy') return switchSection('pgy', true);
+      if (state.teacherMode === 'pgy') {
+        const result = await switchSection('pgy', true);
+        syncTeacherSubnavVisibility();
+        return result;
+      }
       state.resultMode = 'scoring';
       updateResultsWorkspacePresentation();
-      return switchSection('results', true);
+      const result = await switchSection('results', true);
+      syncTeacherSubnavVisibility();
+      return result;
     }
     if (workspace === 'results') {
       state.resultMode = 'results';
       updateResultsWorkspacePresentation();
-      return switchSection('results', force || true);
+      const result = await switchSection('results', force || true);
+      syncTeacherSubnavVisibility();
+      return result;
     }
   }
 
