@@ -26,10 +26,12 @@ class TeacherPersonaIsolation1014Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
-    def test_legacy_persona_is_canonicalized_and_final_asset_runs_last(self):
+    def test_legacy_persona_is_canonicalized_before_final_convergence_asset(self):
         self.assertIn("url.searchParams.set('persona', 'teacher')", self.source)
-        self.assertEqual(self.body[-1], "/teacher-persona-isolation-1014.js")
+        self.assertIn("/product-convergence-101.js", self.body)
+        self.assertEqual(self.body[-1], "/product-convergence-101.js")
         self.assertLess(self.body.index('/system-admin-focus-1014.js'), self.body.index('/teacher-persona-isolation-1014.js'))
+        self.assertLess(self.body.index('/teacher-persona-isolation-1014.js'), self.body.index('/product-convergence-101.js'))
 
     def test_system_focus_only_runs_for_system_persona_or_legacy_system_workspace(self):
         self.assertIn("requestedPersona === 'system'", self.system_focus)
