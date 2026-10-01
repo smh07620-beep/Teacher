@@ -9,12 +9,21 @@
 
   window.uploadAdminMaterialRequest = function(fd,progressId,fileName,status){
     if(!window.MaterialUploadClient?.enqueue) return Promise.reject(new Error('教材上傳元件尚未載入'));
-    return window.MaterialUploadClient.enqueue(fd,{fileName,onProgress:e=>{
+    return window.MaterialUploadClient.enqueue(fd,{
+      fileName,
+      fallbackToSameOriginQueue:true,
+      onFallback:()=>{
+        if(status){
+          status.innerHTML=`⬆️ ${escapeHtml(fileName)}｜雲端直傳暫時無法使用，改由安全相容接收<span class="block text-[11px] text-slate-500 mt-1">25MB 以下教材會由網站安全接收後排入同一個背景 Worker；不會改成同步轉檔。</span>`;
+        }
+      },
+      onProgress:e=>{
         if(status){
           const pct=e.percent;
           status.innerHTML=`⬆️ ${escapeHtml(fileName)}｜安全接收 ${pct}%<span class="block text-[11px] text-slate-500 mt-1">${(e.loaded/1024/1024).toFixed(1)} / ${(e.total/1024/1024).toFixed(1)} MB；接收後會立刻排入背景佇列，不再占住 Web worker。</span>`;
         }
-      }});
+      }
+    });
   };
 
   window.sha256File = async function(file){
