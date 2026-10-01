@@ -10,7 +10,7 @@ from tests.exam_support import ExamBase
 
 
 class AssessmentGoldenPathOperationalTests(unittest.TestCase):
-    """GP-04: learner submission must become a server-attributed reviewed result."""
+    """GP-04: learner submission must become a scoped, server-attributed reviewed result."""
 
     def setUp(self):
         self.base = ExamBase()
@@ -20,6 +20,22 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
             conn.execute("ALTER TABLE exam_records ADD COLUMN reviewed_at TEXT NOT NULL DEFAULT ''")
             conn.execute("ALTER TABLE exam_records ADD COLUMN reviewer_name TEXT NOT NULL DEFAULT ''")
             conn.execute("ALTER TABLE exam_records ADD COLUMN review_comment TEXT NOT NULL DEFAULT ''")
+            conn.execute("""CREATE TABLE user_accounts (
+                username TEXT PRIMARY KEY, emp_id TEXT NOT NULL, preferred_group TEXT NOT NULL DEFAULT 'grpBio'
+            )""")
+            conn.execute("""CREATE TABLE pgy_assignments (
+                id TEXT PRIMARY KEY, learner_username TEXT NOT NULL, teacher_username TEXT NOT NULL,
+                group_key TEXT NOT NULL DEFAULT 'grpBio', training_area TEXT NOT NULL DEFAULT 'pgy',
+                status TEXT NOT NULL DEFAULT 'assigned'
+            )""")
+            conn.execute(
+                "INSERT INTO user_accounts(username,emp_id,preferred_group) VALUES (?,?,?)",
+                ("student1", "S001", "grpBio"),
+            )
+            conn.execute(
+                "INSERT INTO pgy_assignments(id,learner_username,teacher_username,group_key,status) VALUES (?,?,?,?,?)",
+                ("assign1", "student1", "teacher1", "grpBio", "assigned"),
+            )
         finally:
             conn.close()
 
@@ -48,12 +64,14 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
             "transaction",
             side_effect=lambda: self._transaction(),
         )
+        self.audit_patch = patch.object(records.audit, "record_event", return_value={"id": "audit1"})
         for active_patch in (
             self.category_patch,
             self.questions_patch,
             self.window_patch,
             self.shuffle_patch,
             self.transaction_patch,
+            self.audit_patch,
         ):
             active_patch.start()
             self.addCleanup(active_patch.stop)
@@ -74,15 +92,12 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
         finally:
             conn.close()
 
-    def test_submit_review_and_result_use_server_authoritative_identity(self):
+    def _submit_essay(self):
         started = service.start_attempt(
             self.base,
             self.base.user,
             {"quizCategoryId": "quiz1"},
         )
-        self.assertEqual(started["evaluatorName"], "考卷設定教師")
-        self.assertEqual(started["evaluatorTitle"], "醫檢師")
-
         submitted = service.submit_attempt(
             self.base,
             self.base.user,
@@ -94,6 +109,23 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
                 "examineeRole": "student",
             },
         )
+        return started, submitted
+
+    @staticmethod
+    def _review_payload():
+        return {
+            "essayScores": {"1": 100},
+            "essayComments": {"1": "內容完整"},
+            "reviewComment": "完成人工批改",
+            "reviewerName": "Browser Fake Reviewer",
+            "groupKey": "grpBlood",
+            "empId": "SPOOFED",
+        }
+
+    def test_submit_review_and_result_use_server_authoritative_identity_and_assignment(self):
+        started, submitted = self._submit_essay()
+        self.assertEqual(started["evaluatorName"], "考卷設定教師")
+        self.assertEqual(started["evaluatorTitle"], "醫檢師")
         self.assertEqual(submitted["status"], "待人工批改")
 
         reviewer_user = {
@@ -101,15 +133,11 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
             "name": "王老師",
             "title": "資深醫檢師",
             "role": "clinical_teacher",
+            "preferredGroup": "grpBlood",
         }
         reviewed = records.review_record(
             submitted["recordId"],
-            {
-                "essayScores": {"1": 100},
-                "essayComments": {"1": "內容完整"},
-                "reviewComment": "完成人工批改",
-                "reviewerName": "Browser Fake Reviewer",
-            },
+            self._review_payload(),
             reviewer_user=reviewer_user,
         )
         self.assertTrue(reviewed["ok"])
@@ -137,15 +165,62 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
         self.assertEqual(essay["reviewerName"], "王老師")
         self.assertEqual(essay["reviewerTitle"], "資深醫檢師")
         self.assertNotEqual(essay["reviewerName"], "Browser Fake Reviewer")
+        self.audit_patch.assert_called_once()
+        audit_call = self.audit_patch.call_args.kwargs
+        self.assertEqual(audit_call["action"], "exam.record.review")
+        self.assertEqual(audit_call["scope"]["kind"], "assigned_student")
+        self.assertEqual(audit_call["scope"]["empId"], "S001")
+
+    def test_unassigned_clinical_teacher_cannot_review_or_spoof_scope(self):
+        _started, submitted = self._submit_essay()
+        reviewer_user = {
+            "username": "teacher2",
+            "name": "未指派教師",
+            "role": "clinical_teacher",
+            "preferredGroup": "grpBio",
+        }
+        with self.assertRaises(records.RecordError) as denied:
+            records.review_record(
+                submitted["recordId"],
+                self._review_payload(),
+                reviewer_user=reviewer_user,
+            )
+        self.assertEqual(denied.exception.status, 403)
+        self.assertIn("未指派", str(denied.exception))
+
+    def test_group_leader_can_review_own_group_but_not_cross_group(self):
+        _started, submitted = self._submit_essay()
+        leader = {
+            "username": "leader1",
+            "name": "生化組長",
+            "role": "group_leader",
+            "preferredGroup": "grpBio",
+        }
+        reviewed = records.review_record(
+            submitted["recordId"],
+            self._review_payload(),
+            reviewer_user=leader,
+        )
+        self.assertTrue(reviewed["ok"])
+
+        # A second pending record in grpBio remains protected from another group's leader.
+        _started2, submitted2 = self._submit_essay()
+        other_leader = {
+            "username": "leader2",
+            "name": "血液組長",
+            "role": "group_leader",
+            "preferredGroup": "grpBlood",
+        }
+        with self.assertRaises(records.RecordError) as denied:
+            records.review_record(
+                submitted2["recordId"],
+                self._review_payload(),
+                reviewer_user=other_leader,
+            )
+        self.assertEqual(denied.exception.status, 403)
 
     def test_manual_review_requires_authenticated_reviewer_identity(self):
-        started = service.start_attempt(self.base, self.base.user, {"quizCategoryId": "quiz1"})
-        submitted = service.submit_attempt(
-            self.base,
-            self.base.user,
-            started["attemptId"],
-            {"answers": [1, "申論作答"], "examineeRole": "student"},
-        )
+        _started, submitted = self._submit_essay()
         with self.assertRaises(records.RecordError) as denied:
             records.review_record(
                 submitted["recordId"],
