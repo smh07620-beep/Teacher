@@ -168,13 +168,17 @@
 
     // Earlier media shells rendered a second, large "準備媒體來源" card here.
     // The shared selector in TeacherAIMediaStudio1018 is the sole source picker.
+    // Never walk past this media shell: the surrounding full-page admin shell
+    // also uses rounded-2xl and must never be removed during media cleanup.
     shell.querySelectorAll('[data-teacher-media-source-placeholder-1014], #teacher-media-pick-material-1014').forEach(node => {
       const legacyCard = node.closest('[data-teacher-media-source-placeholder-1014]')
         || (node.id === 'teacher-media-pick-material-1014' && node.closest('.rounded-2xl'));
-      if (legacyCard && legacyCard !== shell) legacyCard.remove();
+      if (legacyCard && legacyCard !== shell && shell.contains(legacyCard)) legacyCard.remove();
     });
     shell.querySelectorAll('b').forEach(heading => {
-      if (heading.textContent?.trim() === '準備媒體來源') heading.closest('.rounded-2xl')?.remove();
+      if (heading.textContent?.trim() !== '準備媒體來源') return;
+      const legacyCard = heading.closest('.rounded-2xl');
+      if (legacyCard && legacyCard !== shell && shell.contains(legacyCard)) legacyCard.remove();
     });
 
     const existingButton = shell.querySelector('#teacher-media-pick-material-1014');
