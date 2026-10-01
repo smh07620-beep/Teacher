@@ -102,6 +102,7 @@ ASSET_MANIFEST = {
             "/teacher-interface-convergence-1014.js",
             "/teacher-authoring-source-fix-1017.js",
             "/teacher-ai-media-studio-1018.js",
+            "/teacher-ai-media-controls-1023.js",
             "/teacher-assignment-experience-1014.js",
             "/teacher-persona-isolation-1014.js",
         ),
