@@ -38,6 +38,19 @@ class Phase3AdminJobsTests(unittest.TestCase):
         self.assertNotIn('localStorage.setItem', source)
         self.assertNotIn('sessionStorage.setItem', source)
 
+    def test_jobs_module_exposes_only_four_human_product_states(self):
+        source = ROOT.joinpath('static/admin-jobs.js').read_text(encoding='utf-8')
+        self.assertIn("queued:'等待處理'", source)
+        self.assertIn("retry_wait:'等待處理'", source)
+        self.assertIn("processing:'處理中'", source)
+        self.assertIn("completed:'可使用'", source)
+        self.assertIn("failed:'需要處理'", source)
+        self.assertIn("cancelled:'需要處理'", source)
+        self.assertIn('查看處理細節', source)
+        self.assertIn('查看 Worker 技術狀態', source)
+        self.assertIn('Worker 上線後會自動開始，不需要重新上傳', source)
+        self.assertIn('原始檔仍安全保留，可直接重新處理，不必重新上傳', source)
+
 
 if __name__ == '__main__':
     unittest.main()
