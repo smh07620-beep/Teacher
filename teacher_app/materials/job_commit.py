@@ -52,8 +52,19 @@ def commit(job: dict, result: dict) -> dict:
         result.get("storageMeta") if isinstance(result.get("storageMeta"), dict) else {}
     )
     if Path(original).suffix.lower() in _OFFICE_EXTENSIONS:
-        if page_count <= 0 or storage_meta.get("previewMode") != "single_pdf":
-            raise ValueError("Office/PDF 必須有有效 preview.pdf 與 pageCount 才能完成。")
+        preview_mode = str(storage_meta.get("previewMode") or "").strip().lower()
+        slides_prefix = str(result.get("slidesPrefix") or "").strip()
+        slide_format = str(storage_meta.get("slideFormat") or "").strip().lower()
+        has_single_preview = page_count > 0 and preview_mode == "single_pdf"
+        has_paginated_preview = (
+            page_count > 0
+            and bool(slides_prefix)
+            and slide_format in {"webp", "png", "jpg", "jpeg"}
+        )
+        if not (has_single_preview or has_paginated_preview):
+            raise ValueError(
+                "Office/PDF 必須有有效 preview.pdf，或完整的分頁預覽與 pageCount 才能完成。"
+            )
 
     # Media can be normalized by the local Worker (for example microphone-only
     # WebM -> M4A). Keep the human base name while persisting the normalized
