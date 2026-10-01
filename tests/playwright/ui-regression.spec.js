@@ -65,9 +65,9 @@ test('teacher persona full-page workspace never collapses to a blank surface', a
       shellChildren: shell ? [...shell.children].map(node => ({ tag: node.tagName, id: node.id, cls: node.className })) : [],
       bodyClasses: document.body.className,
       knownIds: ['admin-workspace-header','admin-workspace-title','admin-workspace-content','admin-workspace-footer'].map(id => [id, Boolean(document.getElementById(id))]),
-      pageErrors,
     };
   });
+  debug.pageErrors = pageErrors;
   console.log('TEACHER_WORKSPACE_DEBUG', JSON.stringify(debug));
 
   await expect(page.locator('#admin-modal')).toBeVisible({ timeout: 10000 });
