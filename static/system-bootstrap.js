@@ -35,7 +35,27 @@ window.addEventListener('DOMContentLoaded', () => {
     switchGroup(GROUPS[initialGroupFromUrl] ? initialGroupFromUrl : 'grpBio');
     const initialModule=(LEARNING_MODULES[initialModuleFromUrl] && !(initialModuleFromUrl==='assessment' && currentTrainingArea!=='pgy')) ? initialModuleFromUrl : 'materials';
     switchLearningModule(initialModule);
-    if(urlParams.get('admin')==='1') setTimeout(async()=>{await toggleAdminModal(true);const ws=urlParams.get('workspace');if(['course-materials','courses','materials','assessment','questions','exams','teacher','scoring','results','compliance','pgy','word','people','system','maintenance','audit','worker'].includes(ws))await switchAdminWorkspace(ws,true);},0);
+    if(urlParams.get('admin')==='1') setTimeout(async()=>{
+        // Deferred workspace integrations may register after this bootstrap
+        // handler. Wait briefly for the canonical router rather than applying
+        // admin-page styling and leaving the user with an empty surface.
+        for(let attempt=0;attempt<20 && typeof window.toggleAdminModal!=='function';attempt+=1){
+            await new Promise(resolve=>setTimeout(resolve,25));
+        }
+        if(typeof window.toggleAdminModal!=='function'){
+            document.body?.classList.remove('admin-page-mode');
+            return;
+        }
+        const opened=await window.toggleAdminModal(true);
+        if(opened===false){
+            document.body?.classList.remove('admin-page-mode');
+            return;
+        }
+        const ws=urlParams.get('workspace');
+        if(['course-materials','courses','materials','assessment','questions','exams','teacher','scoring','results','compliance','pgy','word','people','system','maintenance','audit','worker'].includes(ws) && typeof window.switchAdminWorkspace==='function'){
+            await window.switchAdminWorkspace(ws,true);
+        }
+    },0);
 });
 document.addEventListener('change', (e) => {
     if (e.target?.id === 'admin-material-area') { refreshAdminMaterialCategoryOptions(); refreshAdminMaterialCourses(); }

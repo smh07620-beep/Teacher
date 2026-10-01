@@ -329,5 +329,9 @@
   window.__teacherAdminWorkspaceRouter = {
     getState: () => ({workspace:state.workspace, section:state.section, loaded:{...state.loaded}})
   };
-  syncPageModeClass();
+  // Do not hide the learning page merely because the URL contains admin=1.
+  // The bootstrapper opens the workspace after all deferred integrations are
+  // available.  Keeping the normal page visible until that succeeds prevents
+  // a timing failure from becoming an unrecoverable blank screen.
+  syncPageModeClass(false);
 })();
