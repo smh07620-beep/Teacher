@@ -99,6 +99,7 @@ ASSET_MANIFEST = {
             "/learner-ui-cleanup-71.js",
             "/portal-navigation-73.js",
             "/teacher-ui-resilience-1014.js",
+            "/course-wizard-runtime-fix-1014.js",
             "/teacher-interface-convergence-1014.js",
             "/teacher-authoring-source-fix-1017.js",
             "/teacher-ai-media-studio-1018.js",
