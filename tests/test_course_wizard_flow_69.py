@@ -41,6 +41,13 @@ class CourseWizardFlow69Tests(unittest.TestCase):
         self.assertIn("MaterialUploadClient.enqueue", self.source)
         self.assertNotIn("/api/slides/upload", self.source)
 
+    def test_upload_failures_are_visible_instead_of_console_only(self):
+        self.assertIn('const uploadErrors=[]', self.source)
+        self.assertIn("uploadErrors.push({fileName:file.name,reason})", self.source)
+        self.assertIn('課程已建立，但以下教材尚未進入 Worker', self.source)
+        self.assertIn('教材上傳未完整完成', self.source)
+        self.assertIn('error?.message', self.source)
+
     def test_exam_is_created_as_skeleton_without_auto_publish(self):
         create = self.source[self.source.index('async function create()'):self.source.index('async function continueToAssessment()')]
         self.assertIn("api('/api/course-bundles'", create)
