@@ -135,8 +135,11 @@ class WorkerOfflineRecoveryGoldenPathTests(unittest.TestCase):
             self.assertTrue(queued["stagingKey"])
             self.assertEqual(queued["sourceSha256"], source_sha)
             self.assertEqual(int(queued.get("attempts") or 0), 0)
+            staging_key = queued["stagingKey"]
 
             # Worker comes back later and must claim the exact queued job/source.
+            # The claim response intentionally does not expose stagingKey; verify
+            # persistence through the repository instead of weakening the API.
             claim = client.post(
                 "/api/material-worker/claim",
                 json={
@@ -154,8 +157,14 @@ class WorkerOfflineRecoveryGoldenPathTests(unittest.TestCase):
             claimed = claim.get_json()["job"]
             self.assertEqual(claimed["id"], upload["jobId"])
             self.assertEqual(claimed["sourceSha256"], source_sha)
-            self.assertEqual(claimed["stagingKey"], queued["stagingKey"])
             self.assertEqual(claimed["attempts"], 1)
+
+            persisted = worker_repository.get_material_job(
+                upload["jobId"], include_payload=True, connection_factory=self.connect
+            )
+            self.assertEqual(persisted["status"], "processing")
+            self.assertEqual(persisted["stagingKey"], staging_key)
+            self.assertEqual(persisted["sourceSha256"], source_sha)
 
 
 if __name__ == "__main__":
