@@ -45,6 +45,32 @@ for (const viewport of viewports) {
   });
 }
 
+test('teacher persona full-page workspace never collapses to a blank surface', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(String(error?.message || error)));
+
+  await open(page, '/system?area=internal&group=grpBio&module=materials&from=home&admin=1&workspace=course-materials&persona=teacher');
+  await page.waitForFunction(() => Boolean(window.TeacherRBAC681Ready));
+  await page.evaluate(() => window.TeacherRBAC681Ready);
+  await page.waitForTimeout(500);
+
+  await expect(page.locator('#admin-modal')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#admin-workspace-header')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#admin-workspace-title')).toContainText('教師工作區');
+  await expect(page.locator('#admin-workspace-content')).toBeVisible();
+  await expect(page.locator('.v580-admin-groups')).toBeVisible();
+
+  const geometry = await page.locator('.admin-workspace-shell').evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    return { width: rect.width, height: rect.height, text: (node.innerText || '').trim() };
+  });
+  expect(geometry.width, JSON.stringify(geometry)).toBeGreaterThan(600);
+  expect(geometry.height, JSON.stringify(geometry)).toBeGreaterThan(500);
+  expect(geometry.text.length, JSON.stringify(geometry)).toBeGreaterThan(20);
+  expect(pageErrors).toEqual([]);
+});
+
 test('teacher workspace renders Worker status without layout overflow', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await open(page, '/system?area=internal&group=grpBio&module=materials');
