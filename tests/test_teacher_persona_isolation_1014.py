@@ -34,12 +34,13 @@ class TeacherPersonaIsolation1014Tests(unittest.TestCase):
         self.assertIn("api.openMedia?.()", self.product_convergence)
         self.assertIn("api.openDocuments?.()", self.product_convergence)
 
-    def test_legacy_persona_is_canonicalized_before_final_convergence_asset(self):
+    def test_legacy_persona_is_canonicalized_before_product_and_p1_layers(self):
         self.assertIn("url.searchParams.set('persona', 'teacher')", self.source)
-        self.assertIn("/product-convergence-101.js", self.body)
-        self.assertEqual(self.body[-1], "/product-convergence-101.js")
+        for asset in ("/product-convergence-101.js", "/teacher-action-queue-1024.js"):
+            self.assertIn(asset, self.body)
         self.assertLess(self.body.index('/system-admin-focus-1014.js'), self.body.index('/teacher-persona-isolation-1014.js'))
         self.assertLess(self.body.index('/teacher-persona-isolation-1014.js'), self.body.index('/product-convergence-101.js'))
+        self.assertLess(self.body.index('/product-convergence-101.js'), self.body.index('/teacher-action-queue-1024.js'))
 
     def test_system_focus_only_runs_for_system_persona_or_legacy_system_workspace(self):
         self.assertIn("requestedPersona === 'system'", self.system_focus)
