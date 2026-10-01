@@ -13,6 +13,7 @@ class ExamRemediationUi85Tests(unittest.TestCase):
         cls.csp = ROOT.joinpath("static", "system-csp-actions.js").read_text(encoding="utf-8")
         cls.portal = ROOT.joinpath("static", "portal-v56.js").read_text(encoding="utf-8")
         cls.notifications = ROOT.joinpath("static", "notification-center-71.js").read_text(encoding="utf-8")
+        cls.notification_events = ROOT.joinpath("teacher_app", "notifications", "events.py").read_text(encoding="utf-8")
 
     def test_result_dashboard_has_remediation_surface(self):
         for token in (
@@ -38,8 +39,11 @@ class ExamRemediationUi85Tests(unittest.TestCase):
     def test_home_and_notification_distinguish_remediation_retry(self):
         self.assertIn("x.remediationRequired", self.portal)
         self.assertIn("補強再測", self.portal)
-        self.assertIn("exam?.remediationRequired", self.notifications)
-        self.assertIn("補強後再測", self.notifications)
+        self.assertIn('exam.get("remediationRequired")', self.notification_events)
+        self.assertIn('"remediation" if exam.get("remediationRequired") else "pending"', self.notification_events)
+        self.assertIn('"補強再測"', self.notification_events)
+        self.assertIn("item.kind==='exam'", self.notifications)
+        self.assertIn("item.badge", self.notifications)
 
 
 if __name__ == "__main__":
