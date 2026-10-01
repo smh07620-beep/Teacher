@@ -17,6 +17,19 @@ class RecordError(ValueError):
         self.status = status
 
 
+def get_record(record_id: str) -> dict | None:
+    record_id = str(record_id or "").strip()
+    if not record_id:
+        return None
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT * FROM exam_records WHERE id={ph}",
+            (record_id,),
+        ).fetchone()
+    return record_to_dict(row) if row else None
+
+
 def list_records() -> list[dict]:
     with common_db.read_connection() as (conn, _kind):
         rows = conn.execute("SELECT * FROM exam_records ORDER BY created_at DESC").fetchall()
@@ -28,11 +41,25 @@ def clear_records() -> None:
         conn.execute("DELETE FROM exam_records")
 
 
-def review_record(record_id: str, data: Mapping[str, Any]) -> dict:
+def review_record(
+    record_id: str,
+    data: Mapping[str, Any],
+    *,
+    reviewer_name: str,
+    reviewer_title: str = "",
+) -> dict:
+    """Finalize manual grading with a server-derived reviewer identity.
+
+    Browser-supplied ``reviewerName`` / ``reviewerTitle`` values are never used.
+    The HTTP adapter resolves the authenticated account and supplies the name and
+    professional title explicitly.  On completion the final evaluator snapshot
+    is updated to the person who actually performed the review.
+    """
     scores = data.get("essayScores", {}) if isinstance(data.get("essayScores", {}), dict) else {}
-    reviewer = str(data.get("reviewerName", "")).strip()[:100]
+    reviewer = str(reviewer_name or "").strip()[:100]
+    title = str(reviewer_title or "").strip()[:100]
     if not reviewer:
-        raise RecordError("問答題批改必須填寫批改者姓名", 400)
+        raise RecordError("無法確認批改者身分，請重新登入後再試。", 401)
     comment = str(data.get("reviewComment", "")).strip()[:2000]
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -59,6 +86,7 @@ def review_record(record_id: str, data: Mapping[str, Any]) -> dict:
                 answer["reviewScore"] = grade
                 answer["reviewComment"] = str((data.get("essayComments") or {}).get(str(index), ""))[:1000]
                 answer["reviewerName"] = reviewer
+                answer["reviewerTitle"] = title
                 answer["reviewedAt"] = reviewed_at
                 points += grade / 100.0
             else:
@@ -70,10 +98,28 @@ def review_record(record_id: str, data: Mapping[str, Any]) -> dict:
         answers_expr = "%s::jsonb" if kind == "postgres" else "?"
         conn.execute(
             f"UPDATE exam_records SET score={ph},status={ph},answers_detail={answers_expr},"
-            f"review_status='completed',reviewed_at={ph},reviewer_name={ph},review_comment={ph} WHERE id={ph}",
-            (final_score, status, payload, reviewed_at, reviewer, comment, record_id),
+            f"review_status='completed',reviewed_at={ph},reviewer_name={ph},review_comment={ph},"
+            f"evaluator_name={ph},evaluator_title={ph} WHERE id={ph}",
+            (
+                final_score,
+                status,
+                payload,
+                reviewed_at,
+                reviewer,
+                comment,
+                reviewer,
+                title,
+                record_id,
+            ),
         )
-    return {"ok": True, "score": final_score, "status": status}
+    return {
+        "ok": True,
+        "score": final_score,
+        "status": status,
+        "reviewerName": reviewer,
+        "reviewerTitle": title,
+        "reviewedAt": reviewed_at,
+    }
 
 
 def create_record(user: Mapping[str, Any], data: Mapping[str, Any]) -> str:
@@ -143,4 +189,4 @@ def create_record(user: Mapping[str, Any], data: Mapping[str, Any]) -> str:
     return record_id
 
 
-__all__ = ["RecordError", "clear_records", "create_record", "list_records", "review_record"]
+__all__ = ["RecordError", "clear_records", "create_record", "get_record", "list_records", "review_record"]
