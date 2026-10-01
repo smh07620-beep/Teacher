@@ -35,16 +35,19 @@ class CourseWizardFlow69Tests(unittest.TestCase):
     def test_created_course_links_existing_and_queues_new_materials(self):
         self.assertIn("courseId:course.id", self.source)
         self.assertIn("for(const id of state.existing)", self.source)
-        self.assertIn("for(let index=0;index<files.length;index++)", self.source)
-        self.assertIn("form.append('courseId',course.id)", self.source)
-        self.assertIn("form.append('category',state.categoryId)", self.source)
+        # Uploading is now centralized in uploadEntries so the same safe
+        # queueing path can be reused for retries.
+        self.assertIn("const entries=files.map((file,index)=>({file,index}));", self.source)
+        self.assertIn("await uploadEntries(entries", self.source)
+        self.assertIn("form.append('courseId',courseId)", self.source)
+        self.assertIn("form.append('category',categoryId)", self.source)
         self.assertIn("MaterialUploadClient.enqueue", self.source)
         self.assertNotIn("/api/slides/upload", self.source)
 
     def test_upload_failures_are_visible_instead_of_console_only(self):
-        self.assertIn('const uploadErrors=[]', self.source)
-        self.assertIn("uploadErrors.push({fileName:file.name,reason})", self.source)
-        self.assertIn('課程已建立，但以下教材尚未進入 Worker', self.source)
+        self.assertIn('const errors=[],jobs=[]', self.source)
+        self.assertIn("errors.push({index:item.index,fileName:file.name,reason})", self.source)
+        self.assertIn('以下教材尚未進入 Worker', self.source)
         self.assertIn('教材上傳未完整完成', self.source)
         self.assertIn('error?.message', self.source)
 
