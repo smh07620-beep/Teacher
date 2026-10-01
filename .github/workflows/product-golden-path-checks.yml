@@ -81,3 +81,47 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Offline queue → same job/source → Worker returns and claims
         run: python -m unittest discover -s tests -p 'test_golden_path_worker_offline_recovery_20261001.py' -v
+
+  persona-and-provisioning-browser:
+    name: GP-07 + GP-08 real browser persona and RBAC provisioning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Generate isolated browser fixture password
+        shell: bash
+        run: |
+          PASSWORD="$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
+          echo "::add-mask::$PASSWORD"
+          echo "TEACHER_CI_BROWSER_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+      - name: Start real canonical Flask app
+        run: |
+          python tests/real_flask_ui_server.py > real-flask-golden-path.log 2>&1 &
+          echo $! > real-flask-golden-path.pid
+          for i in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:4174/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat real-flask-golden-path.log
+          exit 1
+      - name: Dual-role persona isolation → system-admin provisioning → new scoped teacher login
+        env:
+          TEACHER_FLASK_BASE_URL: http://127.0.0.1:4174
+        run: npx playwright test tests/playwright/product-golden-path-p1-real-flask.spec.js --reporter=line --workers=1
+      - name: Show real Flask logs on failure
+        if: failure()
+        run: cat real-flask-golden-path.log || true
