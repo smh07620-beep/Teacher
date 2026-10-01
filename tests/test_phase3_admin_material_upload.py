@@ -62,7 +62,8 @@ class Phase3AdminMaterialUploadTests(unittest.TestCase):
         self.assertIn('CONCURRENCY=3', source)
         self.assertIn('Promise.all(', source)
         self.assertIn('partNumber', source)
-        self.assertIn("response.headers.get('etag')", source)
+        self.assertIn("response.headers.get('etag')||''", source)
+        self.assertIn('await retryPut(part.url,chunk,part.headers||undefined);', source)
         self.assertNotIn('completed[index]', source)
         self.assertNotIn('32*1024*1024', source)
         persisted = source[source.index('function saveResume'):source.index('function findResume')]
@@ -70,8 +71,8 @@ class Phase3AdminMaterialUploadTests(unittest.TestCase):
         self.assertIn('/api/material-jobs/upload', source)
         self.assertIn('COMPAT_QUEUE_FALLBACK_MAX_BYTES=25*1024*1024', source)
         self.assertIn('fallbackToSameOriginQueue', source)
-        self.assertIn('r2 未回傳 etag', source)
-        self.assertIn('cors exposeheaders', source)
+        self.assertNotIn('R2 未回傳 ETag', source)
+        self.assertNotIn('cors exposeheaders', source.lower())
         self.assertNotIn('XMLHttpRequest', source)
 
     def test_streaming_sha256_matches_node_reference_for_multi_chunk_blob(self):
