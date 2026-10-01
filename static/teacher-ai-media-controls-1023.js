@@ -1,6 +1,6 @@
 /* Teacher media controls 10/23 reliability pass.
  * The visible shared source picker must work independently of the hidden legacy
- * script picker.  Existing server RBAC/scope remains authoritative.
+ * script picker. Existing server RBAC/scope remains authoritative.
  */
 (async function () {
   'use strict';
@@ -53,7 +53,7 @@
   function setSharedHint(message, error = false) {
     const hint = $('teacher-media-next-step-1018');
     if (!hint) return;
-    hint.textContent = message;
+    if (hint.textContent !== message) hint.textContent = message;
     hint.classList.toggle('text-rose-700', Boolean(error));
     hint.classList.toggle('text-cyan-900', !error);
   }
@@ -83,12 +83,14 @@
       else if (usable.length === 1) select.value = String(usable[0].id || '');
       select.disabled = !usable.length;
       const status = $('teacher-ai-video-status-1015');
-      if (status && !usable.length) status.textContent = '這份教材尚無已核准 PowerPoint。可先使用上方「多資料 AI PowerPoint」建立並核准。';
+      const noPpt = '這份教材尚無已核准 PowerPoint。可先使用上方「多資料 AI PowerPoint」建立並核准。';
+      if (status && !usable.length && status.textContent !== noPpt) status.textContent = noPpt;
     } catch (error) {
       select.replaceChildren(new Option('PowerPoint 版本讀取失敗', ''));
       select.disabled = true;
       const status = $('teacher-ai-video-status-1015');
-      if (status) status.textContent = `PowerPoint 讀取失敗：${error.message}`;
+      const message = `PowerPoint 讀取失敗：${error.message}`;
+      if (status && status.textContent !== message) status.textContent = message;
     }
   }
 
@@ -164,17 +166,20 @@
     select.value = options.some(([value]) => value === input.value) ? input.value : 'zh-TW';
     input.replaceWith(select);
     const label = select.closest('label');
-    if (label?.firstChild?.nodeType === Node.TEXT_NODE) label.firstChild.textContent = '字幕語言';
+    if (label?.firstChild?.nodeType === Node.TEXT_NODE && label.firstChild.textContent !== '字幕語言') {
+      label.firstChild.textContent = '字幕語言';
+    }
     return true;
   }
 
   function improvePowerPointEntry() {
     const entry = $('teacher-media-powerpoint-entry-1018');
     if (!entry) return;
+    const desired = '可一次加入多份 PDF、Word、PPT、圖片或文字，先由 AI Worker 統整／RAG 產生大綱，教師核准後再真正建立 .pptx。';
     const text = entry.querySelector('p');
-    if (text) text.textContent = '可一次加入多份 PDF、Word、PPT、圖片或文字，先由 AI Worker 統整／RAG 產生大綱，教師核准後再真正建立 .pptx。';
+    if (text && text.textContent !== desired) text.textContent = desired;
     const button = $('teacher-media-open-powerpoint-1018');
-    if (button) button.textContent = '🖥️ 多資料 AI PowerPoint';
+    if (button && button.textContent !== '🖥️ 多資料 AI PowerPoint') button.textContent = '🖥️ 多資料 AI PowerPoint';
   }
 
   function improveVideoHelp() {
@@ -209,12 +214,12 @@
   });
 
   observer = new MutationObserver(() => {
-    if ($('teacher-media-source-1018')) {
-      replaceSubtitleLanguageInput();
-      improvePowerPointEntry();
-      improveVideoHelp();
-      if ($('teacher-media-source-1018').dataset.mediaControls1023 !== '1') void enhance();
-    }
+    const shared = $('teacher-media-source-1018');
+    if (!shared) return;
+    replaceSubtitleLanguageInput();
+    improvePowerPointEntry();
+    improveVideoHelp();
+    if (shared.dataset.mediaControls1023 !== '1') void enhance();
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
