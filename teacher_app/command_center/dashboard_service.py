@@ -244,7 +244,6 @@ def dashboard_summary(
         course = course_by_id.get(course_id, {})
         course_materials = all_materials_by_course.get(course_id, [])
         course_quizzes = all_quizzes_by_course.get(course_id, [])
-        quiz_ids = {str(quiz.get("id") or "") for quiz in course_quizzes if quiz.get("id")}
         completion = completion_rules.evaluate_course_completion(
             materials=course_materials,
             exams=course_quizzes,
@@ -300,6 +299,26 @@ def dashboard_summary(
     material_by_id = {
         str(item.get("id") or ""): item for item in materials if item.get("id")
     }
+    pending_materials = []
+    for material_id in sorted(active_material_ids - completed_material_ids):
+        material = material_by_id.get(material_id, {})
+        pending_materials.append(
+            {
+                "id": material_id,
+                "title": str(material.get("title") or material.get("filename") or "待完成教材"),
+                "area": str(material.get("area") or preferred_area),
+                "group": str(material.get("group") or preferred_group),
+                "courseId": str(material.get("courseId") or ""),
+                "retrainingRequired": material_id in retraining_ids,
+                "requiredCompletionVersion": int(material.get("requiredCompletionVersion") or 1),
+            }
+        )
+    pending_materials.sort(
+        key=lambda item: (
+            0 if item.get("retrainingRequired") else 1,
+            str(item.get("title") or ""),
+        )
+    )
     retraining_version_keys = [
         f"{material_id}@{int(material_by_id.get(material_id, {}).get('requiredCompletionVersion') or 1)}"
         for material_id in sorted(retraining_ids)
@@ -322,13 +341,14 @@ def dashboard_summary(
         "materialsCompleted": material_done,
         "materialsPending": max(0, len(active_material_ids) - material_done),
         "materialsRetraining": len(retraining_ids),
+        "pendingMaterials": pending_materials,
         "retrainingMaterialIds": sorted(retraining_ids),
         "retrainingVersionKeys": retraining_version_keys,
         "examsTotal": len(active_quiz_ids),
         "examsPassed": quiz_done,
         "examsPending": max(0, len(active_quiz_ids) - quiz_done),
-        "pendingExams": pending_exams[:5],
-        "pendingCourses": pending_courses[:5],
+        "pendingExams": pending_exams,
+        "pendingCourses": pending_courses,
         "essayReviewsPending": pending_review_count,
         "teacherAssessmentsCompleted": len(assessments),
         "progressPercent": progress_percent,
