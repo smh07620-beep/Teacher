@@ -53,3 +53,45 @@ test('a small course upload falls back to the authorized queue only after R2 net
     expect.objectContaining({ target: '/api/material-jobs/upload', method: 'POST', form: true })
   ]));
 });
+
+test('a small upload also falls back when R2 PUT succeeds but ETag is hidden by CORS', async ({ page }) => {
+  await page.goto(secureHarnessUrl);
+  await expect.poll(() => page.evaluate(() => Boolean(window.isSecureContext && window.crypto?.subtle))).toBe(true);
+  await page.setContent('<main></main>');
+  await page.evaluate(() => {
+    window.uploadCalls = [];
+    window.fetch = async (url, options = {}) => {
+      const target = String(url);
+      window.uploadCalls.push({ target, method: options.method || 'GET', form: options.body instanceof FormData });
+      if (target === '/api/material-upload/init') {
+        return new Response(JSON.stringify({
+          mode: 'single', uploadId: 'direct-etag', jobId: 'direct-job-etag', materialId: 'direct-material-etag',
+          url: 'https://r2.example/upload-no-etag', singlePutMaxBytes: 1024 * 1024
+        }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (target === 'https://r2.example/upload-no-etag') return new Response('', { status: 200 });
+      if (target === '/api/material-upload/direct-etag/abort') return new Response('{}', { status: 200 });
+      if (target === '/api/material-jobs/upload') {
+        return new Response(JSON.stringify({ accepted: true, status: 'queued', jobId: 'fallback-etag-job' }), {
+          status: 202, headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      throw new Error(`unexpected request: ${target}`);
+    };
+  });
+  await page.addScriptTag({ path: asset('material-upload-client.js') });
+
+  const result = await page.evaluate(async () => {
+    const form = new FormData();
+    form.append('file', new File(['lesson'], 'lesson.pdf', { type: 'application/pdf' }));
+    form.append('title', 'Lesson');
+    return window.MaterialUploadClient.enqueue(form, { fileName: 'lesson.pdf', fallbackToSameOriginQueue: true });
+  });
+
+  expect(result).toMatchObject({ accepted: true, status: 'queued', jobId: 'fallback-etag-job' });
+  await expect.poll(() => page.evaluate(() => window.uploadCalls)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ target: '/api/material-upload/init', method: 'POST' }),
+    expect.objectContaining({ target: 'https://r2.example/upload-no-etag', method: 'PUT' }),
+    expect.objectContaining({ target: '/api/material-jobs/upload', method: 'POST', form: true })
+  ]));
+});
