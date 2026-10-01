@@ -28,11 +28,34 @@ def clear_records() -> None:
         conn.execute("DELETE FROM exam_records")
 
 
-def review_record(record_id: str, data: Mapping[str, Any]) -> dict:
-    scores = data.get("essayScores", {}) if isinstance(data.get("essayScores", {}), dict) else {}
-    reviewer = str(data.get("reviewerName", "")).strip()[:100]
+def _reviewer_identity(reviewer_user: Mapping[str, Any] | None) -> tuple[str, str]:
+    if not reviewer_user:
+        raise RecordError("無法確認批改者登入身分", 401)
+    reviewer = str(
+        reviewer_user.get("name")
+        or reviewer_user.get("displayName")
+        or reviewer_user.get("username")
+        or ""
+    ).strip()[:100]
+    reviewer_title = str(
+        reviewer_user.get("title")
+        or reviewer_user.get("jobTitle")
+        or reviewer_user.get("position")
+        or ""
+    ).strip()[:100]
     if not reviewer:
-        raise RecordError("問答題批改必須填寫批改者姓名", 400)
+        raise RecordError("批改者帳號缺少可辨識姓名", 400)
+    return reviewer, reviewer_title
+
+
+def review_record(
+    record_id: str,
+    data: Mapping[str, Any],
+    *,
+    reviewer_user: Mapping[str, Any] | None,
+) -> dict:
+    scores = data.get("essayScores", {}) if isinstance(data.get("essayScores", {}), dict) else {}
+    reviewer, reviewer_title = _reviewer_identity(reviewer_user)
     comment = str(data.get("reviewComment", "")).strip()[:2000]
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -59,6 +82,7 @@ def review_record(record_id: str, data: Mapping[str, Any]) -> dict:
                 answer["reviewScore"] = grade
                 answer["reviewComment"] = str((data.get("essayComments") or {}).get(str(index), ""))[:1000]
                 answer["reviewerName"] = reviewer
+                answer["reviewerTitle"] = reviewer_title
                 answer["reviewedAt"] = reviewed_at
                 points += grade / 100.0
             else:
@@ -73,7 +97,13 @@ def review_record(record_id: str, data: Mapping[str, Any]) -> dict:
             f"review_status='completed',reviewed_at={ph},reviewer_name={ph},review_comment={ph} WHERE id={ph}",
             (final_score, status, payload, reviewed_at, reviewer, comment, record_id),
         )
-    return {"ok": True, "score": final_score, "status": status}
+    return {
+        "ok": True,
+        "score": final_score,
+        "status": status,
+        "reviewerName": reviewer,
+        "reviewerTitle": reviewer_title,
+    }
 
 
 def create_record(user: Mapping[str, Any], data: Mapping[str, Any]) -> str:
