@@ -41,6 +41,7 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
                 if include_inactive or question.get("active", True)
             ],
         )
+        self.window_patch = patch.object(service, "assert_exam_open", return_value=None)
         self.shuffle_patch = patch.object(service.random, "shuffle", side_effect=lambda items: None)
         self.transaction_patch = patch.object(
             records.common_db,
@@ -50,6 +51,7 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
         for active_patch in (
             self.category_patch,
             self.questions_patch,
+            self.window_patch,
             self.shuffle_patch,
             self.transaction_patch,
         ):
