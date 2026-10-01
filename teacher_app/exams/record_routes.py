@@ -42,6 +42,19 @@ def _require_reviewer(owner=None):
     return user, None
 
 
+def _require_record_reader(owner=None):
+    """Allow system-wide readers or clinical reviewers with resource scope."""
+    user = _current_user(owner)
+    if not user:
+        return None, (jsonify({
+            "error": "請先登入後再查看考核紀錄。",
+            "loginRequired": True,
+        }), 401)
+    if has_permission(user, "system.manage") or has_permission(user, "evaluation.review"):
+        return user, None
+    return None, (jsonify({"error": "權限不足：此帳號不可查看考核批改紀錄。"}), 403)
+
+
 def register_record_routes(owner):
     app = _app(owner)
     if app.extensions.get("teacher_record_routes_registered"):
@@ -71,10 +84,18 @@ def register_record_routes(owner):
         return jsonify({"ok": True, "id": record_id})
 
     def api_list_records():
-        denied = _require_admin(owner)
+        user, denied = _require_record_reader(owner)
         if denied:
             return denied
-        return jsonify(records.list_records())
+        rows = records.list_records()
+        # System administration retains the existing full read-only overview.
+        # Clinical reviewers receive only records that the same canonical
+        # resource-scope guard would allow them to review. This keeps the
+        # teacher action queue -> scoring workspace handoff from leaking other
+        # learners or failing after the teacher clicks an authorized task.
+        if has_permission(user, "system.manage"):
+            return jsonify(rows)
+        return jsonify([row for row in rows if records.can_review_record(user, row)])
 
     def api_clear_records():
         denied = _require_admin(owner)
