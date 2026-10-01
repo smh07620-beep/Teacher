@@ -25,7 +25,7 @@ async function logout(page) {
 test('GP-07 dual-role account switches learner and teacher personas without system leakage', async ({ page }) => {
   await login(page, 'gp07dual');
 
-  const meResponse = await page.request.get(`${baseURL}/api/auth/me`);
+  const meResponse = await page.request.get(`${baseURL}/api/auth/profile`);
   expect(meResponse.status()).toBe(200);
   const me = await meResponse.json();
   expect(me.authenticated).toBeTruthy();
@@ -83,7 +83,7 @@ test('GP-08 system administrator provisions scoped teacher who gets only canonic
   await logout(page);
   await login(page, 'gp08target');
 
-  const targetResponse = await page.request.get(`${baseURL}/api/auth/me`);
+  const targetResponse = await page.request.get(`${baseURL}/api/auth/profile`);
   expect(targetResponse.status()).toBe(200);
   const target = await targetResponse.json();
   expect(target.user.role).toBe('clinical_teacher');
