@@ -30,17 +30,33 @@ def _require_admin(owner=None):
     return None
 
 
+def _require_reviewer(owner=None):
+    user = _current_user(owner)
+    if not user:
+        return None, (jsonify({
+            "error": "請先登入後再進行考核批改。",
+            "loginRequired": True,
+        }), 401)
+    if not has_permission(user, "evaluation.review"):
+        return None, (jsonify({"error": "權限不足：此帳號不可進行考核批改。"}), 403)
+    return user, None
+
+
 def register_record_routes(owner):
     app = _app(owner)
     if app.extensions.get("teacher_record_routes_registered"):
         return app
 
     def api_review_record(record_id):
-        denied = _require_admin(owner)
+        reviewer, denied = _require_reviewer(owner)
         if denied:
             return denied
         try:
-            return jsonify(records.review_record(record_id, request.get_json(silent=True) or {}))
+            return jsonify(records.review_record(
+                record_id,
+                request.get_json(silent=True) or {},
+                reviewer_user=reviewer,
+            ))
         except records.RecordError as exc:
             return jsonify({"error": str(exc)}), exc.status
 
