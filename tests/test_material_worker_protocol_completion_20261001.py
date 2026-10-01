@@ -134,7 +134,7 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
             "等待教材正式完成後才能返回",
             "beforeunload",
             "averageCompletedDurationSeconds",
-            "原始檔仍安全保留",
+            "R2 原始檔仍保留",
             "不必重新上傳",
             "canLeaveCourse()",
         ):
@@ -142,7 +142,7 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
         for marker in (
             "近期 Worker 錯誤／重試",
             "protocolCompatible===false",
-            "原始檔仍安全保留",
+            "原始檔仍保留",
             "不必重新上傳",
             "估計剩餘約",
         ):
