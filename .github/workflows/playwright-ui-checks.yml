@@ -66,6 +66,11 @@ jobs:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
         run: npx playwright test tests/playwright/ui-regression.spec.js --reporter=line --workers=1
 
+      - name: Run mobile learner Golden Path browser regressions
+        env:
+          TEACHER_UI_BASE_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/playwright/mobile-learner-golden-path-1025.spec.js --reporter=line --workers=1
+
       - name: Run accessibility browser regressions
         env:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
