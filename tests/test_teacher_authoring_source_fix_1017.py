@@ -11,6 +11,7 @@ class TeacherAuthoringSourceFix1017Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = ROOT.joinpath("static", "teacher-authoring-source-fix-1017.js").read_text(encoding="utf-8")
+        cls.subtitle_frontend = ROOT.joinpath("static", "teacher-media-subtitle-1014.js").read_text(encoding="utf-8")
         cls.subtitle_routes = ROOT.joinpath("teacher_app", "materials", "media_subtitle_routes.py").read_text(encoding="utf-8")
         cls.presentation_routes = ROOT.joinpath("teacher_app", "materials", "ai_presentation_routes.py").read_text(encoding="utf-8")
 
@@ -43,9 +44,9 @@ class TeacherAuthoringSourceFix1017Tests(unittest.TestCase):
             "isCaptionMaterial",
             "syncSubtitleSource",
             "/api/slides/admin",
-            "/api/media-subtitles",
         ):
             self.assertIn(marker, self.source)
+        self.assertIn("/api/media-subtitles", self.subtitle_frontend)
         self.assertIn("denied = _scope(owner", self.subtitle_routes)
         self.assertIn('action="media.subtitle.generate"', self.subtitle_routes)
 
