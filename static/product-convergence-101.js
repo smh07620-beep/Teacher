@@ -26,7 +26,10 @@
   const isSystemPersona = () => surfaceKey === 'system' && (
     persona() === 'system' || (!persona() && systemWorkspaceNames.has(workspace()))
   );
-  const isTeacherPersona = () => ['teacher', 'education'].includes(surfaceKey) && persona() !== 'system';
+  // TeacherWorkspace1014 is exported only when the existing persona layer has
+  // actually activated a teaching surface. This also covers multi-role
+  // system_admin + teacher accounts whose global surface key remains `system`.
+  const isTeacherPersona = () => Boolean(window.TeacherWorkspace1014) && persona() !== 'system';
 
   function makeButton(id, label, handler) {
     let button = document.getElementById(id);
