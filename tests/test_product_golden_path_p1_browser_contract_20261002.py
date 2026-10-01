@@ -10,6 +10,8 @@ class ProductGoldenPathP1BrowserContractTests(unittest.TestCase):
     def setUpClass(cls):
         cls.admin_workspace = (ROOT / "static" / "admin-workspace.js").read_text(encoding="utf-8")
         cls.browser_gp = (ROOT / "tests" / "playwright" / "product-golden-path-p1-real-flask.spec.js").read_text(encoding="utf-8")
+        cls.teacher_workspace = (ROOT / "static" / "teacher-workspace-1014.js").read_text(encoding="utf-8")
+        cls.people = (ROOT / "static" / "admin-people.js").read_text(encoding="utf-8")
 
     def test_admin_modal_respects_requested_deep_link_workspace(self):
         self.assertIn(
