@@ -46,6 +46,8 @@ def _href(item: Mapping[str, Any]) -> str:
     target = str(item.get("target") or "")
     resource_id = str(item.get("resourceId") or item.get("id") or "")
     course_id = str(item.get("courseId") or "")
+    if target == "pgy-workflow":
+        return f"/system?area=pgy&group={group or 'grpNew'}&module=assessment&from=notification-center"
     if target == "exam" or item.get("kind") == "exam":
         suffix = f"&examId={resource_id}" if resource_id else ""
         return f"/system?area={area}&group={group}&module=exam&from=notification-center{suffix}"
