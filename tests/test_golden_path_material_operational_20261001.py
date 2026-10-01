@@ -12,6 +12,8 @@ import pgy_app
 import schema_migrations
 from teacher_app.auth import service as auth_service
 from teacher_app.common import db as common_db
+from teacher_app.courses import repository as course_repository
+from teacher_app.courses import schema as course_schema
 from teacher_app.materials import repository as material_repository
 from teacher_app.materials import schema as material_schema
 from teacher_app.materials import service as material_service
@@ -25,9 +27,10 @@ class MaterialGoldenPathOperationalTests(unittest.TestCase):
     """Protect the human outcome, not just isolated material/Worker endpoints.
 
     GP-01 + GP-05:
-      teacher direct upload -> queued job -> compatible Worker -> recoverable
-      processing failure -> same R2 source is retried -> durable publish receipt
-      -> completed job -> canonical material appears in the teaching catalog.
+      teacher opens a canonical course -> direct upload -> queued job ->
+      compatible Worker -> recoverable processing failure -> same R2 source is
+      retried -> durable publish receipt -> completed job -> canonical material
+      appears in the teaching catalog attached to that same course.
     """
 
     def setUp(self):
@@ -49,9 +52,25 @@ class MaterialGoldenPathOperationalTests(unittest.TestCase):
         try:
             schema_migrations._b_free_local_worker_67(conn, kind)
             schema_migrations._provider_publish_receipts_79(conn, kind)
+            course_schema.init_schema(conn, kind)
             material_schema.init_schema(conn, kind)
         finally:
             conn.close()
+
+        # The product workflow attaches a material to an existing course. Seed
+        # that resource through the canonical repository rather than bypassing
+        # the fail-closed course scope resolution with an invented course id.
+        created = course_repository.create_course(
+            course_id="course-golden-path",
+            area="internal",
+            group="grpBio",
+            title="Golden Path 課程",
+            description="教材端到端驗收課程",
+            date_added=dt.datetime.now(dt.timezone.utc).isoformat(),
+        )
+        self.assertIsNotNone(created)
+        self.assertEqual(created["group"], "grpBio")
+        self.assertEqual(created["area"], "internal")
 
     def connect(self):
         conn = sqlite3.connect(str(self.db_path), timeout=10)
@@ -112,7 +131,7 @@ class MaterialGoldenPathOperationalTests(unittest.TestCase):
         ), patch.object(self.runtime, "record_r2_deleted", return_value=None), patch.object(
             self.runtime, "sync_media_processing_metadata", return_value=None
         ), patch.object(self.runtime, "delete_staging", side_effect=lambda job: deleted_keys.append(job.get("stagingKey", ""))):
-            # Teacher starts a real direct-upload session linked to the course.
+            # Teacher starts a real direct-upload session linked to an existing course.
             init = client.post(
                 "/api/material-upload/init",
                 json={
