@@ -75,8 +75,16 @@
     if (!host) return;
     const rows = authoringSourceIds.map(id => materials.find(item => item.id === id)).filter(Boolean);
     host.innerHTML = rows.length
-      ? rows.map((item, index) => `<span class="inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-800">${index === 0 ? '主要' : '原始'}｜${escapeHtml(item.title || item.filename || item.id)}</span>`).join('')
+      ? rows.map((item, index) => `<span class="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-800">${index === 0 ? '主要' : '原始'}｜${escapeHtml(item.title || item.filename || item.id)}<button type="button" data-remove-authoring-source="${escapeHtml(item.id)}" class="ml-1 rounded px-1 text-violet-700 hover:bg-violet-200" aria-label="移除 ${escapeHtml(item.title || item.filename || '原始資料')}">×</button></span>`).join('')
       : '<span class="text-xs text-slate-500">尚未上傳原始資料；可改用右側既有教材作為參考來源。</span>';
+  }
+
+  function announceDraft(draft = activeDraft) {
+    window.dispatchEvent(new CustomEvent('teacher-ai-material-draft-selected', {detail: {draft: draft || null}}));
+  }
+
+  function announcePublication(materialId) {
+    window.dispatchEvent(new CustomEvent('teacher-ai-material-published', {detail: {materialId: String(materialId || '')}}));
   }
 
   function materialLabel(item) {
@@ -306,6 +314,7 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || '教師核准失敗');
       activeDraft = data.draft || activeDraft;
+      announceDraft();
       status(activeDraft.draftType === 'script'
         ? '✅ 已核准。此教學講稿現在也可作為 AI 語音來源。'
         : '✅ 已由教師核准；需要時可發布成正式文字教材。', 'success');
@@ -358,6 +367,7 @@
       const linkData = await link.json().catch(() => ({}));
       if (!link.ok) throw new Error(linkData.error || '正式教材已完成，但無法連結 AI 草稿紀錄');
       activeDraft = linkData.draft || activeDraft;
+      announcePublication(queued.materialId);
       await paintMaterialOptions();
       await loadDrafts();
       status('✅ 已建立正式教材並保留 AI 來源／教師核准紀錄。', 'success');
@@ -394,6 +404,7 @@
         document.getElementById('teacher-ai-material-editor-1014')?.classList.remove('hidden');
         renderSource({sourceTitle:(materials.find(item=>item.id===materialId)||{}).title || '', outputType:draft.draftType, outputLabel:TYPE_LABELS[draft.draftType] || '', sourceChunks:draft.sourceChunks || [], provider:draft.provider, model:draft.model, fallbackUsed:draft.fallbackUsed});
         syncEditorButtons();
+        announceDraft();
         status(draft.publicationMaterialId ? '此草稿已核准並發布成正式教材。' : (draft.status === 'approved' ? '此草稿已核准，可發布成正式教材。' : '已載入草稿，可繼續編修。'));
       }));
     } catch (error) {
@@ -409,13 +420,14 @@
     section.className = 'mb-5 rounded-2xl border border-violet-200 bg-white p-5 shadow-sm space-y-5';
     section.innerHTML = `
       <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-violet-700">AI POWERPOINT AUTHORING</p><h4 class="text-xl font-black text-slate-950">✨ AI PowerPoint 原始資料工作台</h4><p class="mt-1 text-sm text-slate-600">先上傳多份原始資料，AI Worker 統整/RAG 後產生可核准的投影片大綱；正式教材仍只在明確發布後建立。</p></div><details class="text-sm text-slate-600"><summary class="cursor-pointer font-bold text-violet-700">使用說明</summary><p class="mt-2 max-w-xl leading-6">上傳的 PDF、Word、PPT、圖片或文字只會作為 authoring source，預設保持草稿、不能自動發布。既有教材可選作補充參考來源。</p></details></div>
-      <div class="rounded-2xl border border-violet-200 bg-violet-50/40 p-4"><div class="flex flex-col lg:flex-row lg:items-end gap-3"><label class="flex-1 text-sm font-bold text-slate-700">① 上傳原始資料（可多選）<input id="teacher-ai-material-file-1014" type="file" multiple class="mt-1 block w-full text-sm" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp"></label><button id="teacher-ai-material-upload-1014" type="button" class="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-black text-white">⬆️ 上傳原始資料</button></div><div id="teacher-ai-material-uploaded-sources-1014" class="mt-3 flex flex-wrap gap-2"></div></div>
+      <div class="rounded-2xl border border-violet-200 bg-violet-50/40 p-4"><div class="flex flex-col lg:flex-row lg:items-end gap-3"><label class="flex-1 text-sm font-bold text-slate-700">Step 1｜上傳原始資料（可多選或拖曳）<input id="teacher-ai-material-file-1014" type="file" multiple class="mt-1 block w-full text-sm" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.txt,.md,.png,.jpg,.jpeg,.webp"></label><button id="teacher-ai-material-upload-1014" type="button" class="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-black text-white">⬆️ 加入原始資料</button></div><p class="mt-2 text-xs text-slate-600">這些檔案只作 AI 製作來源，會保持草稿且不會自動對學員公開。</p><div id="teacher-ai-material-uploaded-sources-1014" class="mt-3 flex flex-wrap gap-2"></div></div>
       <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-sm font-bold text-slate-700 xl:col-span-2">既有教材（可選參考來源）<select id="teacher-ai-material-source-1014" multiple size="4" class="learning-input mt-1"><option value="">讀取教材中…</option></select></label><label class="text-sm font-bold text-slate-700">產出類型<select id="teacher-ai-material-type-1014" class="learning-input mt-1"><option value="slides" selected>投影片大綱</option><option value="handout">教學講義</option><option value="summary">重點摘要</option><option value="script">教學講稿</option><option value="quiz">測驗題草稿</option><option value="objectives">課程學習目標</option></select></label><label class="text-sm font-bold text-slate-700">文字風格<select id="teacher-ai-material-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
-      <div class="grid md:grid-cols-[1fr_auto] gap-3"><div class="grid sm:grid-cols-[1fr_160px] gap-3"><input id="teacher-ai-material-focus-1014" class="learning-input" maxlength="500" placeholder="選填：特別聚焦的重點"><select id="teacher-ai-material-minutes-1014" class="learning-input" title="教學講稿目標長度；其他產出類型會作為篇幅參考"><option value="3">精簡</option><option value="5" selected>標準</option><option value="10">較完整</option><option value="15">深入</option></select></div><button id="teacher-ai-material-generate-1014" type="button" class="rounded-xl bg-violet-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40">✨ 產生 AI 草稿</button></div>
+      <div class="grid md:grid-cols-[1fr_auto] gap-3"><div class="grid sm:grid-cols-[1fr_160px] gap-3"><input id="teacher-ai-material-focus-1014" class="learning-input" maxlength="500" placeholder="Step 2｜選填：特別聚焦的重點"><select id="teacher-ai-material-minutes-1014" class="learning-input" title="教學講稿目標長度；其他產出類型會作為篇幅參考"><option value="3">精簡</option><option value="5" selected>標準</option><option value="10">較完整</option><option value="15">深入</option></select></div><button id="teacher-ai-material-generate-1014" type="button" class="rounded-xl bg-violet-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40">Step 2｜AI 統整</button></div>
       <div id="teacher-ai-material-status-1014" class="text-sm text-slate-600">可先上傳來源資料，或直接選擇既有教材。</div>
       <div id="teacher-ai-material-source-info-1014" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-slate-700"></div>
-      <div id="teacher-ai-material-editor-1014" class="hidden space-y-3"><label class="block text-sm font-bold text-slate-700">標題<input id="teacher-ai-material-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-sm font-bold text-slate-700">內容<textarea id="teacher-ai-material-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-base leading-7" placeholder="AI 草稿會出現在這裡；請由教師逐段確認與修改。"></textarea></label><div class="flex flex-wrap gap-2"><button id="teacher-ai-material-save-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-black text-violet-700">💾 儲存草稿</button><button id="teacher-ai-material-approve-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-40">✅ 教師核准</button><button id="teacher-ai-material-publish-1014" type="button" disabled class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-40">📚 發布成教材</button></div><p class="text-sm text-slate-500">測驗題草稿若要進正式題庫，仍請到「評量與出題」完成審核與建立。</p></div>
-      <div class="border-t border-slate-100 pt-4"><h5 class="text-base font-black text-slate-900">已儲存 AI 草稿</h5><div id="teacher-ai-material-saved-1014" class="mt-2 grid gap-2"><p class="text-sm text-slate-500">選擇來源教材後會顯示已儲存草稿。</p></div></div>`;
+      <div id="teacher-ai-material-editor-1014" class="hidden space-y-3"><h5 class="text-base font-black text-slate-900">Step 3｜投影片大綱</h5><label class="block text-sm font-bold text-slate-700">標題<input id="teacher-ai-material-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-sm font-bold text-slate-700">內容<textarea id="teacher-ai-material-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-base leading-7" placeholder="AI 草稿會出現在這裡；請由教師逐段確認與修改。"></textarea></label><div class="flex flex-wrap gap-2"><button id="teacher-ai-material-save-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-black text-violet-700">💾 儲存草稿</button><button id="teacher-ai-material-approve-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-40">✅ 教師核准</button><button id="teacher-ai-material-publish-1014" type="button" disabled class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-40">📚 明確建立正式教材</button></div><p class="text-sm text-slate-500">測驗題草稿若要進正式題庫，仍請到「評量與出題」完成審核與建立。</p></div>
+      <div class="border-t border-slate-100 pt-4"><h5 class="text-base font-black text-slate-900">已儲存 AI 草稿</h5><div id="teacher-ai-material-saved-1014" class="mt-2 grid gap-2"><p class="text-sm text-slate-500">選擇來源教材後會顯示已儲存草稿。</p></div></div>
+      <div id="teacher-ai-material-presentation-stage-1014" class="border-t border-slate-100 pt-5"></div>`;
     const dashboard = box.querySelector('.admin-course-dashboard');
     box.insertBefore(section, dashboard || box.firstChild);
     document.getElementById('teacher-ai-material-upload-1014')?.addEventListener('click', uploadSource);
@@ -423,6 +435,22 @@
     document.getElementById('teacher-ai-material-save-1014')?.addEventListener('click', saveDraft);
     document.getElementById('teacher-ai-material-approve-1014')?.addEventListener('click', approveDraft);
     document.getElementById('teacher-ai-material-publish-1014')?.addEventListener('click', publishDraft);
+    document.getElementById('teacher-ai-material-uploaded-sources-1014')?.addEventListener('click', event => {
+      const button = event.target.closest?.('[data-remove-authoring-source]');
+      if (!button) return;
+      authoringSourceIds = authoringSourceIds.filter(id => id !== button.dataset.removeAuthoringSource);
+      renderAuthoringSources();
+    });
+    const uploadInput = document.getElementById('teacher-ai-material-file-1014');
+    uploadInput?.closest('label')?.addEventListener('dragover', event => event.preventDefault());
+    uploadInput?.closest('label')?.addEventListener('drop', event => {
+      event.preventDefault();
+      if (!event.dataTransfer?.files?.length) return;
+      const transfer = new DataTransfer();
+      [...event.dataTransfer.files].forEach(file => transfer.items.add(file));
+      uploadInput.files = transfer.files;
+      status(`已選擇 ${transfer.files.length} 份原始資料，按「加入原始資料」開始安全上傳。`);
+    });
     document.getElementById('teacher-ai-material-source-1014')?.addEventListener('change', () => {
       activeDraft = null;
       activeJobId = '';
@@ -445,5 +473,6 @@
     observer.observe(document.body, {childList:true, subtree:true});
   }
 
-  window.TeacherAIMaterial1014 = Object.freeze({paintMaterialOptions, loadDrafts});
+  window.addEventListener('teacher-ai-material-request-publication', () => void publishDraft());
+  window.TeacherAIMaterial1014 = Object.freeze({paintMaterialOptions, loadDrafts, publishCurrentDraft: publishDraft});
 })();

@@ -63,113 +63,11 @@
     return `${draft}${scopeText ? `${scopeText}｜` : ''}${title}`;
   }
 
-  function replaceInputWithSelect(id) {
-    const current = $(id);
-    if (!current) return null;
-    if (current.tagName === 'SELECT') return current;
-    const select = document.createElement('select');
-    select.id = current.id;
-    select.className = current.className;
-    select.disabled = current.disabled;
-    select.dataset.teacherSourcePicker1017 = '1';
-    current.replaceWith(select);
-    return select;
-  }
-
-  function renameLabel(control, title) {
-    const label = control?.closest('label');
-    if (!label) return;
-    const textNode = [...label.childNodes].find(node => node.nodeType === 3 && String(node.textContent || '').trim());
-    if (textNode) textNode.textContent = title;
-  }
-
-  async function loadApprovedSlideDrafts(materialId, select) {
-    if (!select) return;
-    select.replaceChildren();
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = materialId ? '讀取已核准投影片大綱…' : '請先選擇教材';
-    select.appendChild(placeholder);
-    select.disabled = !materialId;
-    if (!materialId) return;
-
-    try {
-      const data = await json(`/api/ai-material-drafts?materialId=${encodeURIComponent(materialId)}`);
-      const approved = (Array.isArray(data) ? data : [])
-        .filter(item => item?.draftType === 'slides' && item?.status === 'approved')
-        .sort((a, b) => String(b.approvedAt || b.updatedAt || '').localeCompare(String(a.approvedAt || a.updatedAt || '')));
-      select.replaceChildren();
-      const option0 = document.createElement('option');
-      option0.value = '';
-      option0.textContent = approved.length ? '選擇已核准投影片大綱…' : '尚無已核准投影片大綱';
-      select.appendChild(option0);
-      approved.forEach(item => {
-        const option = document.createElement('option');
-        option.value = String(item.id || '');
-        const approver = item.approvedBy ? `｜核准：${item.approvedBy}` : '';
-        option.textContent = `${item.title || '投影片大綱'}${approver}`;
-        select.appendChild(option);
-      });
-      select.disabled = !approved.length;
-      if (approved.length) select.value = approved[0].id || '';
-      const status = $('teacher-ai-presentation-status-1016');
-      if (status) {
-        status.textContent = approved.length
-          ? `已找到 ${approved.length} 份已核准投影片大綱，可直接建立 PowerPoint。`
-          : '這份教材尚無已核准的投影片大綱；請先到 AI 教材助手建立並核准。';
-      }
-    } catch (_) {
-      select.replaceChildren();
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = '投影片大綱讀取失敗';
-      select.appendChild(option);
-      select.disabled = true;
-    }
-  }
-
+  // PowerPoint now owns its controls inside the AI PowerPoint 製作室.  Keep
+  // this callable no-op only for cached pages that still call the old hook;
+  // it deliberately does not rewrite controls or install a second observer.
   async function installPresentationPickers() {
-    const panel = $('teacher-ai-presentation-1016');
-    if (!panel || panel.dataset.teacherSourcePicker1017 === '1') return Boolean(panel);
-    const materialSelect = replaceInputWithSelect('teacher-ai-presentation-material-1016');
-    const draftSelect = replaceInputWithSelect('teacher-ai-presentation-draft-1016');
-    if (!materialSelect || !draftSelect) return false;
-
-    panel.dataset.teacherSourcePicker1017 = '1';
-    renameLabel(materialSelect, '來源教材');
-    renameLabel(draftSelect, '已核准投影片大綱');
-    materialSelect.replaceChildren();
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = '讀取教材中…';
-    materialSelect.appendChild(placeholder);
-    draftSelect.innerHTML = '<option value="">請先選擇教材</option>';
-    draftSelect.disabled = true;
-
-    try {
-      const rows = await loadMaterials();
-      materialSelect.replaceChildren();
-      const option0 = document.createElement('option');
-      option0.value = '';
-      option0.textContent = rows.length ? '選擇教材…' : '目前沒有可用教材';
-      materialSelect.appendChild(option0);
-      rows.forEach(item => {
-        const option = document.createElement('option');
-        option.value = String(item.id || '');
-        option.textContent = materialLabel(item);
-        materialSelect.appendChild(option);
-      });
-      materialSelect.disabled = !rows.length;
-    } catch (_) {
-      materialSelect.innerHTML = '<option value="">教材清單讀取失敗</option>';
-      materialSelect.disabled = true;
-    }
-
-    materialSelect.addEventListener('change', async () => {
-      await loadApprovedSlideDrafts(materialSelect.value, draftSelect);
-      $('teacher-ai-presentation-refresh-1016')?.click();
-    });
-    return true;
+    return Boolean($('teacher-ai-presentation-1016'));
   }
 
   function isCaptionMaterial(item) {

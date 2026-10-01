@@ -23,17 +23,23 @@ class TeacherAuthoringSourceFix1017Tests(unittest.TestCase):
             body.index("/teacher-authoring-source-fix-1017.js"),
         )
 
-    def test_powerpoint_uses_material_and_approved_outline_pickers(self):
+    def test_powerpoint_is_one_guided_studio_without_visible_internal_ids(self):
+        presentation = ROOT.joinpath("static", "teacher-ai-presentation-1016.js").read_text(encoding="utf-8")
+        material = ROOT.joinpath("static", "teacher-ai-material-1014.js").read_text(encoding="utf-8")
         for marker in (
-            "replaceInputWithSelect('teacher-ai-presentation-material-1016')",
-            "replaceInputWithSelect('teacher-ai-presentation-draft-1016')",
-            "來源教材",
-            "已核准投影片大綱",
-            "/api/ai-material-drafts?materialId=",
-            "item?.draftType === 'slides'",
-            "item?.status === 'approved'",
+            "AI PowerPoint 製作室",
+            "teacher-ai-material-presentation-stage-1014",
+            "teacher-ai-material-draft-selected",
+            "Step 4｜選擇 PowerPoint 範本",
+            "Step 5｜建立 PowerPoint",
+            "teacher-ai-presentation-publication-material-1016",
+            "selectedDraft.status !== 'approved'",
+            "/api/ai-presentations/generate",
         ):
-            self.assertIn(marker, self.source)
+            self.assertIn(marker, presentation + material)
+        self.assertNotIn('placeholder="aidraft-', presentation)
+        self.assertNotIn('placeholder="mat-', presentation)
+        self.assertNotIn("replaceInputWithSelect('teacher-ai-presentation", self.source)
         self.assertIn('draft.get("draftType") != "slides"', self.presentation_routes)
         self.assertIn('draft.get("status") != "approved"', self.presentation_routes)
 

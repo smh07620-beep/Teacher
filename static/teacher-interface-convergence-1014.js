@@ -194,7 +194,14 @@
       body.insertBefore(panel, body.firstChild);
     }
 
-    let manage = actionHost.querySelector('[data-teacher-manage-course-1014]');
+    // A legacy re-render can move the action host while leaving our previous
+    // button behind in the card.  The card, not a transient host, owns this
+    // singleton.  Keep the first existing button (and its click listener),
+    // remove stale copies, then move it to the current host.
+    const manages = [...details.querySelectorAll('[data-teacher-manage-course-1014]')];
+    let manage = manages.shift();
+    manages.forEach(node => node.remove());
+    if (manage && manage.parentElement !== actionHost) actionHost.appendChild(manage);
     if (!manage) {
       manage = document.createElement('button');
       manage.type = 'button';

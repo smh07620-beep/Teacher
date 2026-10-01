@@ -53,12 +53,25 @@ test('large internal course scope stays interactive without summary warnings', a
     await document.getElementById('admin-course-material-hub')._adminCourseMaterialRefresh;
   });
   await expect(page.locator('.admin-course-list > details')).toHaveCount(30);
+  await expect(page.locator('.admin-course-list > details').first().locator('[data-teacher-manage-course-1014]')).toHaveCount(1);
   await expect(page.locator('.admin-course-list > details summary button')).toHaveCount(0);
+  const initialNodeCount = await page.locator('#admin-course-material-hub *').count();
   await page.locator('#wizard-area').selectOption('internal');
   await expect.poll(() => page.locator('.admin-course-list > details').first().textContent()).toContain('課程 0');
   await expect(page.locator('.admin-course-list > details').first().locator('[data-learning-assign-course]')).toHaveAttribute('data-learning-assign-course', 'internal-0');
   await page.getByRole('button', { name: /顯示更多課程/ }).click();
   await expect(page.locator('.admin-course-list > details')).toHaveCount(60);
+  expect(await page.locator('.admin-course-list > details').evaluateAll(cards => cards.every(card => card.querySelectorAll('[data-teacher-manage-course-1014]').length === 1))).toBe(true);
+  for (const area of ['pgy', 'internal', 'pgy', 'internal']) {
+    await page.locator('#wizard-area').selectOption(area);
+    await expect(page.locator('.admin-course-list > details').first().locator('[data-teacher-manage-course-1014]')).toHaveCount(1);
+  }
+  await page.evaluate(async () => {
+    await document.getElementById('admin-course-material-hub')._adminCourseMaterialRefresh;
+    await document.getElementById('admin-course-material-hub')._adminCourseMaterialRefresh;
+  });
+  const afterRerenderNodeCount = await page.locator('#admin-course-material-hub *').count();
+  expect(afterRerenderNodeCount).toBeLessThan(initialNodeCount * 3);
   await page.getByRole('button', { name: '製作語音／錄影' }).click();
   expect(await page.evaluate(() => window.mediaOpened)).toBe(true);
   await page.getByRole('button', { name: '批次管理課程' }).click();
