@@ -23,7 +23,7 @@
     const panel=document.createElement('details');
     panel.id='admin-user-create-panel';
     panel.className='admin-secondary-panel';
-    panel.innerHTML=\`
+    panel.innerHTML=`
       <summary><span><b>＋ 建立登入帳號</b><small>只在新增人員時展開；密碼只在建立或重設時輸入。</small></span><span>展開</span></summary>
       <div class="admin-secondary-panel-body"><div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <label class="text-xs font-bold text-slate-600">登入帳號<input id="admin-user-username" class="learning-input mt-1" autocomplete="off" placeholder="例如 lab0123"></label>
@@ -36,7 +36,7 @@
         <label class="text-xs font-bold text-slate-600">主要職稱<input id="admin-user-professional-title" class="learning-input mt-1" placeholder="例如：品管醫檢師"></label>
         <label class="text-xs font-bold text-slate-600">額外職責標籤<input id="admin-user-responsibility-tags" class="learning-input mt-1" placeholder="以逗號分隔，例如：品管、POCT"></label>
         <div class="flex items-end"><button data-csp-click="createAdminUserAccount()" class="w-full bg-teal-700 hover:bg-teal-600 text-white text-sm font-bold px-4 py-3 rounded-xl">建立登入帳號</button></div>
-      </div></div>\`;
+      </div></div>`;
     host.appendChild(panel);
     return panel;
   }
