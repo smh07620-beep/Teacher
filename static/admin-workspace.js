@@ -89,7 +89,9 @@
 
   function normalizeWorkspace(name) {
     if (name === 'courses' || name === 'materials') return 'course-materials';
-    if (name === 'assessment' || name === 'questions') return 'assessment';
+    // "exams" was used by the older settings page's return button.  Keep it
+    // as an alias instead of leaving the router in an unhandled workspace.
+    if (name === 'assessment' || name === 'questions' || name === 'exams') return 'assessment';
     if (name === 'scoring' || name === 'pgy') return 'teacher';
     return name;
   }

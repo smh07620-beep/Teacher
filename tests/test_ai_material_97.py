@@ -55,12 +55,19 @@ class AIMaterialRuntime97Tests(unittest.TestCase):
             )
         self.assertEqual(values["request"]["outputType"], "summary")
         self.assertEqual(values["group_key"], "grpBio")
-
         with patch.object(media_script_jobs.material_repository, "get_material", return_value=material):
             with self.assertRaisesRegex(ValueError, "不支援"):
                 media_script_jobs.prepare_request(
                     {"materialId": "mat-1", "outputType": "auto_publish"}, actor
                 )
+
+    def test_prepare_request_keeps_secondary_authoring_sources_for_worker_rag(self):
+        material = {"id": "mat-1", "group": "grpBio", "area": "internal", "active": False}
+        with patch.object(media_script_jobs.material_repository, "get_material", return_value=material):
+            values = media_script_jobs.prepare_request(
+                {"materialId": "mat-1", "referenceMaterialIds": ["mat-2", "mat-3", "mat-2"]}, {"username": "teacher1"}
+            )
+        self.assertEqual(values["request"]["referenceMaterialIds"], ["mat-2", "mat-3"])
 
     def test_prompt_is_source_grounded_and_requires_teacher_review_for_general_drafts(self):
         prompt = media_script_runtime._prompt(
@@ -180,6 +187,17 @@ class AIMaterialFrontend97Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
         self.assertNotIn("/api/ai-material-drafts/auto-publish", self.source)
+
+    def test_powerpoint_authoring_prefers_multi_file_draft_sources_over_existing_material(self):
+        for marker in (
+            "multiple class=\"mt-1 block w-full text-sm\"",
+            "AI PowerPoint 原始資料工作台",
+            "authoringSourceIds",
+            "referenceMaterialIds: allAuthoringSourceIds()",
+            "既有教材（可選參考來源）",
+            "active:false",
+        ):
+            self.assertIn(marker, self.source)
 
     def test_factory_registers_migration_and_routes_before_runtime_use(self):
         self.assertIn("ai_material_migration", self.factory)

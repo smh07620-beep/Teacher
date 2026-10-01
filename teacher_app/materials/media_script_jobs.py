@@ -38,6 +38,13 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
     # only when the reviewed output is later published as a formal material.
     if not material:
         raise LookupError("找不到指定教材")
+    reference_ids = []
+    for value in data.get("referenceMaterialIds") or []:
+        candidate = str(value or "").strip()[:120]
+        if candidate and candidate != material_id and candidate not in reference_ids:
+            reference_ids.append(candidate)
+    if len(reference_ids) > 9:
+        raise ValueError("一次最多可使用 10 份原始資料")
     try:
         target_minutes = int(data.get("targetMinutes", 5) or 5)
     except (TypeError, ValueError):
@@ -55,6 +62,7 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
         "actor_username": username,
         "request": {
             "materialId": material_id,
+            "referenceMaterialIds": reference_ids,
             "targetMinutes": target_minutes,
             "tone": tone,
             "focus": str(data.get("focus") or "").strip()[:500],
@@ -84,8 +92,18 @@ def run_generation_sync(snapshot: Mapping[str, Any], *, progress_callback=None) 
     material = material_repository.get_material(material_id)
     if not material:
         raise RuntimeError("教材已不存在，請重新選擇教材。")
+    references = []
+    for reference_id in snapshot.get("referenceMaterialIds") or []:
+        reference = material_repository.get_material(str(reference_id or ""))
+        if not reference:
+            raise RuntimeError("其中一份原始資料已不存在，請重新選擇。")
+        if (str(reference.get("group") or "") != str(material.get("group") or "")
+                or str(reference.get("area") or "") != str(material.get("area") or "")):
+            raise RuntimeError("原始資料必須位於相同訓練區與組別。")
+        references.append(reference)
     return media_script_runtime.generate_script(
         material,
+        reference_entries=references,
         focus=str(snapshot.get("focus") or "")[:500],
         tone=str(snapshot.get("tone") or "clinical")[:30],
         target_minutes=int(snapshot.get("targetMinutes") or 5),

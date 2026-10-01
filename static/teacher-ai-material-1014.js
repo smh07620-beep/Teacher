@@ -21,6 +21,9 @@
   let activeJobId = '';
   let activeDraft = null;
   let pollToken = 0;
+  // These are private authoring inputs, not learner-visible material.  They
+  // become a formal teaching material only through the explicit publish flow.
+  let authoringSourceIds = [];
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
@@ -52,6 +55,28 @@
       const button = document.getElementById(id);
       if (button) button.disabled = busy;
     });
+  }
+
+  function selectedReferenceIds() {
+    const select = document.getElementById('teacher-ai-material-source-1014');
+    return [...(select?.selectedOptions || [])].map(option => option.value).filter(Boolean);
+  }
+
+  function primarySourceId() {
+    return authoringSourceIds[0] || selectedReferenceIds()[0] || '';
+  }
+
+  function allAuthoringSourceIds() {
+    return [...new Set([...authoringSourceIds, ...selectedReferenceIds()])];
+  }
+
+  function renderAuthoringSources() {
+    const host = document.getElementById('teacher-ai-material-uploaded-sources-1014');
+    if (!host) return;
+    const rows = authoringSourceIds.map(id => materials.find(item => item.id === id)).filter(Boolean);
+    host.innerHTML = rows.length
+      ? rows.map((item, index) => `<span class="inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-800">${index === 0 ? '主要' : '原始'}｜${escapeHtml(item.title || item.filename || item.id)}</span>`).join('')
+      : '<span class="text-xs text-slate-500">尚未上傳原始資料；可改用右側既有教材作為參考來源。</span>';
   }
 
   function materialLabel(item) {
@@ -108,43 +133,39 @@
 
   async function uploadSource() {
     const input = document.getElementById('teacher-ai-material-file-1014');
-    const file = input?.files?.[0];
-    if (!file) return status('請先選擇 PDF、Word、PPT、圖片或文字資料。', 'error');
+    const files = [...(input?.files || [])];
+    if (!files.length) return status('請先選擇 PDF、Word、PPT、圖片或文字資料。', 'error');
     if (!window.MaterialUploadClient?.enqueue) return status('教材安全上傳元件尚未載入。', 'error');
     const {area, group} = currentScope();
-    const title = file.name.replace(/\.[^.]+$/, '') || file.name;
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('title', title);
-    fd.append('desc', 'AI 教材助手來源；教師確認前不提供學員使用。');
-    fd.append('group', group);
-    fd.append('area', area);
-    fd.append('courseId', '');
-    fd.append('category', '');
-    fd.append('materialType', 'standard');
     setBusy(true);
     const token = ++pollToken;
     try {
-      status(`正在安全上傳「${file.name}」…`);
-      const queued = await window.MaterialUploadClient.enqueue(fd, {
-        fileName: file.name,
-        onProgress: event => status(`安全上傳 ${event.percent}%｜${file.name}`),
-      });
-      const jobId = queued.jobId || '';
-      const materialId = queued.materialId || '';
-      if (!jobId || !materialId) throw new Error('伺服器沒有回傳教材工作 ID');
-      await pollMaterialJob(jobId, token, '來源教材處理中');
-      // AI authoring source must not become learner-visible merely because a
-      // teacher uploaded it for drafting. Publication remains explicit.
-      const patch = await fetch(`/api/slides/${encodeURIComponent(materialId)}`, {
-        method:'PATCH', credentials:'same-origin', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({active:false, title}),
-      });
-      const patchBody = await patch.json().catch(() => ({}));
-      if (!patch.ok) throw new Error(patchBody.error || '無法將來源教材保持為草稿狀態');
-      await paintMaterialOptions(materialId);
+      const uploaded = [];
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const title = file.name.replace(/\.[^.]+$/, '') || file.name;
+        const fd = new FormData();
+        fd.append('file', file); fd.append('title', title);
+        fd.append('desc', 'AI PowerPoint authoring source；教師確認前不提供學員使用。');
+        fd.append('group', group); fd.append('area', area); fd.append('courseId', ''); fd.append('category', ''); fd.append('materialType', 'standard');
+        status(`正在上傳原始資料 ${index + 1}/${files.length}｜${file.name}`);
+        const queued = await window.MaterialUploadClient.enqueue(fd, {
+          fileName: file.name,
+          onProgress: event => status(`安全上傳 ${index + 1}/${files.length}・${event.percent}%｜${file.name}`),
+        });
+        const jobId = queued.jobId || '', materialId = queued.materialId || '';
+        if (!jobId || !materialId) throw new Error('伺服器沒有回傳教材工作 ID');
+        await pollMaterialJob(jobId, token, '原始資料處理中');
+        const patch = await fetch(`/api/slides/${encodeURIComponent(materialId)}`, {method:'PATCH', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({active:false, title})});
+        const patchBody = await patch.json().catch(() => ({}));
+        if (!patch.ok) throw new Error(patchBody.error || '無法將原始資料保持為草稿狀態');
+        uploaded.push(materialId);
+      }
+      authoringSourceIds = [...new Set([...authoringSourceIds, ...uploaded])];
+      await paintMaterialOptions();
+      renderAuthoringSources();
       input.value = '';
-      status('✅ 來源資料已完成處理並保持為草稿，可直接產生 AI 教材。', 'success');
+      status(`✅ 已加入 ${uploaded.length} 份原始資料並保持為作者草稿；可先統整/RAG 再建立投影片大綱。`, 'success');
     } catch (error) {
       status(`來源資料處理失敗：${error.message}`, 'error');
     } finally {
@@ -205,11 +226,12 @@
   }
 
   async function generateDraft() {
-    const materialId = document.getElementById('teacher-ai-material-source-1014')?.value || '';
+    const materialId = primarySourceId();
     if (!materialId) return status('請先上傳來源資料或選擇既有教材。', 'error');
     const outputType = document.getElementById('teacher-ai-material-type-1014')?.value || 'summary';
     const payload = {
       materialId,
+      referenceMaterialIds: allAuthoringSourceIds().filter(id => id !== materialId),
       outputType,
       targetMinutes: Number(document.getElementById('teacher-ai-material-minutes-1014')?.value || 5),
       tone: document.getElementById('teacher-ai-material-tone-1014')?.value || 'clinical',
@@ -348,7 +370,7 @@
   }
 
   async function loadDrafts() {
-    const materialId = document.getElementById('teacher-ai-material-source-1014')?.value || '';
+    const materialId = primarySourceId();
     const host = document.getElementById('teacher-ai-material-saved-1014');
     if (!host) return;
     if (!materialId) {
@@ -386,9 +408,9 @@
     section.id = 'teacher-ai-material-1014';
     section.className = 'mb-5 rounded-2xl border border-violet-200 bg-white p-5 shadow-sm space-y-5';
     section.innerHTML = `
-      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-violet-700">AI AUTHORING</p><h4 class="text-xl font-black text-slate-950">✨ AI 教材助手</h4><p class="mt-1 text-sm text-slate-600">直接丟資料或選既有教材，先產生草稿；教師編修、核准後才可發布。</p></div><details class="text-sm text-slate-600"><summary class="cursor-pointer font-bold text-violet-700">？使用說明</summary><p class="mt-2 max-w-xl leading-6">來源可使用 PDF、Word、PPT、圖片或文字教材。AI 只根據教材可擷取內容產生草稿；正式內容仍需教師確認。若雲端免費額度不足，AI Worker 會依設定切換 Gemini／本機備援。</p></details></div>
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div class="flex flex-col lg:flex-row lg:items-end gap-3"><label class="flex-1 text-sm font-bold text-slate-700">直接上傳來源資料<input id="teacher-ai-material-file-1014" type="file" class="mt-1 block w-full text-sm" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp"></label><button id="teacher-ai-material-upload-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-black text-violet-700">⬆️ 上傳並選取</button></div></div>
-      <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-sm font-bold text-slate-700 xl:col-span-2">來源教材<select id="teacher-ai-material-source-1014" class="learning-input mt-1"><option value="">讀取教材中…</option></select></label><label class="text-sm font-bold text-slate-700">產出類型<select id="teacher-ai-material-type-1014" class="learning-input mt-1"><option value="handout">教學講義</option><option value="summary" selected>重點摘要</option><option value="slides">投影片大綱</option><option value="script">教學講稿</option><option value="quiz">測驗題草稿</option><option value="objectives">課程學習目標</option></select></label><label class="text-sm font-bold text-slate-700">文字風格<select id="teacher-ai-material-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-violet-700">AI POWERPOINT AUTHORING</p><h4 class="text-xl font-black text-slate-950">✨ AI PowerPoint 原始資料工作台</h4><p class="mt-1 text-sm text-slate-600">先上傳多份原始資料，AI Worker 統整/RAG 後產生可核准的投影片大綱；正式教材仍只在明確發布後建立。</p></div><details class="text-sm text-slate-600"><summary class="cursor-pointer font-bold text-violet-700">使用說明</summary><p class="mt-2 max-w-xl leading-6">上傳的 PDF、Word、PPT、圖片或文字只會作為 authoring source，預設保持草稿、不能自動發布。既有教材可選作補充參考來源。</p></details></div>
+      <div class="rounded-2xl border border-violet-200 bg-violet-50/40 p-4"><div class="flex flex-col lg:flex-row lg:items-end gap-3"><label class="flex-1 text-sm font-bold text-slate-700">① 上傳原始資料（可多選）<input id="teacher-ai-material-file-1014" type="file" multiple class="mt-1 block w-full text-sm" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp"></label><button id="teacher-ai-material-upload-1014" type="button" class="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-black text-white">⬆️ 上傳原始資料</button></div><div id="teacher-ai-material-uploaded-sources-1014" class="mt-3 flex flex-wrap gap-2"></div></div>
+      <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-sm font-bold text-slate-700 xl:col-span-2">既有教材（可選參考來源）<select id="teacher-ai-material-source-1014" multiple size="4" class="learning-input mt-1"><option value="">讀取教材中…</option></select></label><label class="text-sm font-bold text-slate-700">產出類型<select id="teacher-ai-material-type-1014" class="learning-input mt-1"><option value="slides" selected>投影片大綱</option><option value="handout">教學講義</option><option value="summary">重點摘要</option><option value="script">教學講稿</option><option value="quiz">測驗題草稿</option><option value="objectives">課程學習目標</option></select></label><label class="text-sm font-bold text-slate-700">文字風格<select id="teacher-ai-material-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
       <div class="grid md:grid-cols-[1fr_auto] gap-3"><div class="grid sm:grid-cols-[1fr_160px] gap-3"><input id="teacher-ai-material-focus-1014" class="learning-input" maxlength="500" placeholder="選填：特別聚焦的重點"><select id="teacher-ai-material-minutes-1014" class="learning-input" title="教學講稿目標長度；其他產出類型會作為篇幅參考"><option value="3">精簡</option><option value="5" selected>標準</option><option value="10">較完整</option><option value="15">深入</option></select></div><button id="teacher-ai-material-generate-1014" type="button" class="rounded-xl bg-violet-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40">✨ 產生 AI 草稿</button></div>
       <div id="teacher-ai-material-status-1014" class="text-sm text-slate-600">可先上傳來源資料，或直接選擇既有教材。</div>
       <div id="teacher-ai-material-source-info-1014" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-slate-700"></div>
@@ -412,6 +434,7 @@
     // the teacher-facing entry is now consolidated into this assistant.
     document.getElementById('teacher-media-script-1014')?.classList.add('hidden');
     void paintMaterialOptions();
+    renderAuthoringSources();
     return true;
   }
 

@@ -257,15 +257,29 @@
 
   async function openBatchDialog() {
     if (!canAssign) return;
-    const courses = courseRowsFromHub();
-    if (!courses.length) return;
     const dialog = ensureBatchDialog();
+    const hub = document.getElementById('admin-course-material-hub');
+    let courses = courseRowsFromHub();
+    const status = dialog.querySelector('#teacher-batch-status-1014');
+    // Switching training area repaints the hub asynchronously.  Do not turn a
+    // click made during that repaint into a silent no-op; wait once for the
+    // current scoped refresh and keep the dialog responsive either way.
+    if (!courses.length && hub?._adminCourseMaterialRefresh) {
+      if (status) status.textContent = '正在載入此訓練區的課程…';
+      if (typeof dialog.showModal === 'function' && !dialog.open) dialog.showModal();
+      else dialog.setAttribute('open', '');
+      await Promise.resolve(hub._adminCourseMaterialRefresh);
+      courses = courseRowsFromHub();
+    }
+    if (!courses.length) {
+      if (status) status.textContent = '此訓練區目前沒有可批次管理的課程。';
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     const area = document.getElementById('wizard-area')?.value || params.get('area') || 'internal';
     const group = document.getElementById('wizard-group')?.value || params.get('group') || 'grpBio';
     const list = dialog.querySelector('#teacher-batch-course-list-1014');
     list.innerHTML = courses.map(course => `<label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white"><input type="checkbox" data-batch-course value="${escapeHtml(course.id)}" checked><span class="text-sm text-slate-700">${escapeHtml(course.title)}</span></label>`).join('');
-    const status = dialog.querySelector('#teacher-batch-status-1014');
     if (status) status.textContent = '讀取可指派對象…';
     try {
       const options = await fetchAudienceOptions(area, group);
@@ -442,12 +456,20 @@
     details.id = 'teacher-paper-guidance-1014';
     details.className = 'rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3';
     const summary = document.createElement('summary');
-    summary.className = 'cursor-pointer text-sm font-black text-slate-700';
-    summary.textContent = '？ 紙本留存說明與檢核';
+    summary.className = 'flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-slate-700';
+    summary.innerHTML = '<span>📄 紙本留存說明與檢核</span><span class="text-xs font-bold text-teal-700" data-paper-guidance-toggle>展開檢核</span>';
     const body = document.createElement('div');
     body.className = 'mt-4 space-y-5';
+    const hint = document.createElement('p');
+    hint.className = 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600';
+    hint.textContent = '列印／匯出前確認文件版本、簽核、日期與留存要求。';
+    body.appendChild(hint);
     movable.forEach(node => body.appendChild(node));
     details.append(summary, body);
+    details.addEventListener('toggle', () => {
+      const toggle = details.querySelector('[data-paper-guidance-toggle]');
+      if (toggle) toggle.textContent = details.open ? '收合' : '展開檢核';
+    });
     if (template?.parentElement === paper) template.insertAdjacentElement('afterend', details);
     else header?.insertAdjacentElement('afterend', details);
   }

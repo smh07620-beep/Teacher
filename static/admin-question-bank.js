@@ -3,6 +3,7 @@
   'use strict';
 
   const quizListView78={all:[],query:'',status:'all',visible:20};
+  let wizardAreaRefreshQueued = false;
 
   function renderQuizOverview78(list=quizListView78.all){
     const rows=Array.isArray(list)?list:[];
@@ -59,8 +60,17 @@
           wizardSel.innerHTML=window.groupOptionsForArea(wizardArea.value);
           wizardSel.value=wizardSel.options[0]?.value||'';
         }
-        renderAdminCourses(true);
-        renderAdminCourseMaterialHub(true);
+        // The legacy course list still refreshes from system-bootstrap's
+        // delegated change listener.  Coalesce the richer hub refresh here:
+        // replacing its DOM for every duplicated handler was what made the
+        // internal-area switch appear to freeze the entire workspace.
+        if (!wizardAreaRefreshQueued) {
+          wizardAreaRefreshQueued = true;
+          queueMicrotask(() => {
+            wizardAreaRefreshQueued = false;
+            window.renderAdminCourseMaterialHub?.(true);
+          });
+        }
       };
     }
   };

@@ -66,8 +66,13 @@
   let activeJob = '';
   let pollToken = 0;
 
-  const sourceMaterialId = () => document.getElementById('teacher-script-material-1014')?.value || '';
-  const sourceLabel = () => document.getElementById('teacher-script-material-1014')?.selectedOptions?.[0]?.textContent || '';
+  // Do not couple captions to the script picker.  The visible subtitle source
+  // picker is installed by teacher-authoring-source-fix-1017.js; retain the
+  // legacy picker only as a compatibility fallback while it is loading.
+  const sourcePicker = () => document.getElementById('teacher-subtitle-material-1017')
+    || document.getElementById('teacher-script-material-1014');
+  const sourceMaterialId = () => sourcePicker()?.value || '';
+  const sourceLabel = () => sourcePicker()?.selectedOptions?.[0]?.textContent || '';
 
   function setStatus(message, tone = 'normal') {
     const node = document.getElementById('teacher-subtitle-status-1014');
@@ -250,7 +255,12 @@
       <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] leading-5 text-amber-900"><b>安全規則：</b>AI 只產生草稿；教材更新版本後舊字幕不會繼續發布。當 AI_EXTERNAL_MEDIA_ALLOWED=false 時，影音不送外部 AI，改由本機 faster-whisper 轉錄。</div>`;
     const audio = document.getElementById('teacher-media-audio-1014');
     if (audio) audio.insertAdjacentElement('afterend', section); else media.appendChild(section);
-    source.addEventListener('change', () => void loadSubtitles());
+    // The script source remains a backwards-compatible fallback.  The
+    // dedicated subtitle picker calls selectMaterial below and is the source
+    // of truth once it is present.
+    source.addEventListener('change', () => {
+      if (!document.getElementById('teacher-subtitle-material-1017')) void loadSubtitles();
+    });
     document.getElementById('teacher-subtitle-draft-1014')?.addEventListener('change', renderSelected);
     document.getElementById('teacher-subtitle-generate-1014')?.addEventListener('click', () => void generate());
     document.getElementById('teacher-subtitle-save-1014')?.addEventListener('click', () => void save('draft'));
@@ -258,6 +268,16 @@
     void loadSubtitles();
     return true;
   }
+
+  window.TeacherMediaSubtitle1014 = Object.freeze({
+    loadSubtitles,
+    selectedMaterialId: sourceMaterialId,
+    selectMaterial(materialId) {
+      const picker = document.getElementById('teacher-subtitle-material-1017');
+      if (picker && [...picker.options].some(option => option.value === materialId)) picker.value = materialId;
+      void loadSubtitles();
+    },
+  });
 
   if (!installAdmin()) {
     let attempts = 0;

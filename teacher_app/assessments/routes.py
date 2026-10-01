@@ -5,7 +5,7 @@ from flask import g, jsonify, request
 
 from teacher_app.assessments import repository, service
 from teacher_app.auth import rbac_legacy_adapter
-from teacher_app.common import audit, scope
+from teacher_app.common import audit, scope, scope_filter
 from teacher_app.common.auth import ROLE_LABELS, normalize_role
 from teacher_app.common.errors import ApiError
 
@@ -165,6 +165,15 @@ def register_assessment_routes(owner):
         if denied:
             return denied
         before = repository.get_category_full(category_id)
+        if not before:
+            return jsonify({"error": "找不到此考題頁籤"}), 404
+        # The persisted resource scope, rather than a browser value or hidden
+        # control, is the authorization target for this destructive action.
+        _user, scope_denied = scope_filter.scoped_groups(
+            app, "question.manage", {str(before.get("group") or "").strip()}
+        )
+        if scope_denied:
+            return scope_denied
         try:
             payload = service.delete_category(app, category_id)
         except ApiError as exc:

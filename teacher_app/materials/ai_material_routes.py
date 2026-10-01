@@ -65,6 +65,24 @@ def register_ai_material_routes(owner):
         denied = _scope(owner, str(material.get("group") or ""))
         if denied:
             return denied
+        reference_ids = []
+        for value in body.get("referenceMaterialIds") or []:
+            reference_id = str(value or "").strip()[:120]
+            if not reference_id or reference_id == material_id or reference_id in reference_ids:
+                continue
+            reference = material_repository.get_material(reference_id)
+            if not reference:
+                return jsonify({"error": "找不到其中一份原始資料。"}), 404
+            if (str(reference.get("group") or "") != str(material.get("group") or "")
+                    or str(reference.get("area") or "") != str(material.get("area") or "")):
+                return jsonify({"error": "原始資料必須位於相同訓練區與組別。"}), 409
+            denied = _scope(owner, str(reference.get("group") or ""))
+            if denied:
+                return denied
+            reference_ids.append(reference_id)
+        if len(reference_ids) > 9:
+            return jsonify({"error": "一次最多可使用 10 份原始資料。"}), 400
+        body["referenceMaterialIds"] = reference_ids
         try:
             output_type = media_script_runtime.normalize_output_type(body.get("outputType") or "summary")
             body["outputType"] = output_type
@@ -81,7 +99,7 @@ def register_ai_material_routes(owner):
             target_type="material",
             target_id=material_id,
             group=str(material.get("group") or ""),
-            detail={"jobId": job.get("id", ""), "draftType": output_type},
+            detail={"jobId": job.get("id", ""), "draftType": output_type, "referenceMaterialIds": reference_ids},
         )
         return jsonify(media_script_jobs.public_job(job)), 202
 

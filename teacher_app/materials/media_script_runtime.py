@@ -257,7 +257,7 @@ def _generate_body_with_fallback(settings, provider: str, prompt: str, progress_
     ) from last_error
 
 
-def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", target_minutes: int = 5,
+def generate_script(entry: dict, *, reference_entries: list[dict] | None = None, focus: str = "", tone: str = "clinical", target_minutes: int = 5,
                     output_type: str = "script", progress_callback=None) -> dict[str, Any]:
     output_type = normalize_output_type(output_type)
     label = output_type_label(output_type)
@@ -268,10 +268,17 @@ def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", tar
     provider = ai_runtime.active_ai_provider(settings) if ai_privacy.external_enabled() else "ollama"
 
     if progress_callback:
-        progress_callback(15, "讀取教材", "正在讀取 Worker 產生的文字索引或原始教材文字")
-    text, source_chars = ai_runtime.extract_material_text_for_ai(entry, settings=settings)
+        progress_callback(15, "統整原始資料", "正在讀取 Worker 文字索引並建立多來源檢索內容")
+    entries = [entry, *(reference_entries or [])]
+    source_chars = 0
+    chunks = []
     focus = ai_privacy.deidentify_external_text(focus).strip()[:500]
-    chunks = _bounded_source_chunks(entry, text, focus)
+    for source in entries:
+        text, chars = ai_runtime.extract_material_text_for_ai(source, settings=settings)
+        source_chars += int(chars or len(text))
+        # Bound each attachment so one large source cannot crowd out the rest.
+        chunks.extend(_bounded_source_chunks(source, text, focus)[:12])
+    chunks = chunks[:36]
     if not chunks:
         raise RuntimeError(f"教材沒有足夠的可用文字，無法產生{label}。")
     context = ai_runtime.format_retrieval_context(chunks)
@@ -317,7 +324,7 @@ def generate_script(entry: dict, *, focus: str = "", tone: str = "clinical", tar
         "outputLabel": label,
         "sourceMaterialId": str(entry.get("id") or ""),
         "sourceTitle": title,
-        "sourceChars": int(source_chars or len(text)),
+        "sourceChars": int(source_chars),
         "sourceChunks": source_chunks,
         "provider": provider_meta["provider"],
         "model": provider_meta["model"],

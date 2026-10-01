@@ -55,7 +55,10 @@ class TeacherAssignmentExperience1014Tests(unittest.TestCase):
         self.assertIn('WAV 已存入教材庫', AUDIO_REPO)
 
     def test_explanations_are_collapsed_on_demand(self):
-        self.assertIn('？ 紙本留存說明與檢核', UI)
+        self.assertIn('data-paper-guidance-toggle', UI)
+        self.assertIn('展開檢核', UI)
+        self.assertIn('列印／匯出前確認文件版本、簽核、日期與留存要求', UI)
+        self.assertNotIn('？ 紙本留存說明與檢核', UI)
         self.assertIn('？ 工作區說明', UI)
         self.assertIn('collapsePaperGuidance', UI)
         self.assertIn('collapseWorkspaceSummary', UI)

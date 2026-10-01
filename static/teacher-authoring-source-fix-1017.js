@@ -185,18 +185,15 @@
   }
 
   function syncSubtitleSource(materialId, label) {
-    const shared = $('teacher-script-material-1014');
-    if (!shared) return false;
-    if (materialId && ![...shared.options].some(option => option.value === materialId)) {
-      const bridge = document.createElement('option');
-      bridge.value = materialId;
-      bridge.textContent = label || materialId;
-      bridge.dataset.subtitleBridge1017 = '1';
-      shared.appendChild(bridge);
-    }
-    shared.value = materialId || '';
-    shared.dispatchEvent(new Event('change', {bubbles:true}));
-    return true;
+    // Subtitle selection is deliberately independent from the script picker.
+    // The previous bridge rewrote a shared select and dispatched its change
+    // event, which made subtitle state disappear whenever the script panel
+    // rerendered.  Keep the selected material with the subtitle workspace.
+    void label;
+    const picker = $('teacher-subtitle-material-1017');
+    if (picker && picker.value !== materialId) picker.value = materialId || '';
+    window.TeacherMediaSubtitle1014?.selectMaterial?.(materialId || '');
+    return Boolean(materialId);
   }
 
   async function installSubtitlePicker() {
@@ -233,8 +230,8 @@
         select.appendChild(option);
       });
       select.disabled = !rows.length;
-      const sharedValue = $('teacher-script-material-1014')?.value || '';
-      if (sharedValue && rows.some(item => String(item.id) === sharedValue)) select.value = sharedValue;
+      const activeValue = window.TeacherMediaSubtitle1014?.selectedMaterialId?.() || '';
+      if (activeValue && rows.some(item => String(item.id) === activeValue)) select.value = activeValue;
     } catch (_) {
       select.innerHTML = '<option value="">影音教材讀取失敗</option>';
       select.disabled = true;
@@ -292,6 +289,10 @@
     document.addEventListener('click', event => {
       const button = event.target.closest?.('#teacher-course-media-entry-1014 button');
       if (!button) return;
+      // The canonical entry owns its own click listener.  Only recover when
+      // that owner was not installed; stopping propagation here used to block
+      // the working handler and made this entry look frozen.
+      if (typeof window.TeacherWorkspace1014?.openMedia === 'function') return;
       event.preventDefault();
       event.stopImmediatePropagation();
       void safeOpenMediaWorkspace();
