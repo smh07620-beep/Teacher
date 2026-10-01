@@ -66,6 +66,7 @@ test('shared AI media source loads directly and drives narration subtitle and vi
   });
 
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  await expect.poll(() => page.evaluate(() => Boolean(window.TeacherAIMediaControls1023))).toBe(true);
 
   const source = page.locator('#teacher-media-source-1018');
   await expect(source).toBeEnabled();
@@ -98,6 +99,7 @@ test('empty media source becomes an actionable choice instead of a dead disabled
     window.fetch = async () => ({ ok: true, json: async () => [] });
   });
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  await expect.poll(() => page.evaluate(() => Boolean(window.TeacherAIMediaControls1023))).toBe(true);
 
   await expect(page.locator('#teacher-media-source-1018')).toBeDisabled();
   await expect(page.locator('#teacher-media-source-empty-1024')).toBeVisible();
@@ -141,6 +143,7 @@ test('multi-source PowerPoint opens inline and does not run the old jump-back ha
   });
 
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  await expect.poll(() => page.evaluate(() => Boolean(window.TeacherAIMediaControls1023))).toBe(true);
   await page.locator('#teacher-media-open-powerpoint-1018').click();
 
   await expect.poll(() => page.evaluate(() => window.oldJumpCalls)).toBe(0);
@@ -167,6 +170,7 @@ test('course wizard upload is forced to Browser to R2 and cannot fall back to di
   });
 
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  await expect.poll(() => page.evaluate(() => Boolean(window.MaterialUploadClient?.enqueue?.__teacherWizardDirectOnly1024))).toBe(true);
 
   const result = await page.evaluate(async () => {
     const form = new FormData();
