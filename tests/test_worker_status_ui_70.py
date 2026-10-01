@@ -20,7 +20,9 @@ class WorkerStatusUi70Tests(unittest.TestCase):
         self.assertIn("admin-section-worker", self.source)
 
     def test_worker_surface_uses_read_only_session_rbac(self):
-        self.assertIn("/api/material-jobs?limit=12", self.source)
+        # The operational surface keeps a larger recent window so failed and
+        # retrying jobs remain visible alongside the queue summary.
+        self.assertIn("/api/material-jobs?limit=30", self.source)
         self.assertIn("credentials: 'same-origin'", self.source)
         fetch_start = self.source.index("const response = await fetch")
         fetch_end = self.source.index("const data = await response.json", fetch_start)
