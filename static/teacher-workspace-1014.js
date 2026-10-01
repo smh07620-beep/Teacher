@@ -50,32 +50,39 @@
     if (canTeach) choices.push('teacher');
     if (canSystem) choices.push('system');
     if (choices.length < 2) return;
-    if (document.getElementById('teacher-persona-switch-1014')) return;
 
     const actions = document.querySelector('.v56-system-actions');
     const userBox = document.querySelector('.v573-system-user');
     if (!actions) return;
 
-    const host = document.createElement('div');
-    host.id = 'teacher-persona-switch-1014';
-    host.className = 'hidden sm:flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1';
+    let host = document.getElementById('teacher-persona-switch-1014');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'teacher-persona-switch-1014';
+      host.className = 'hidden sm:flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1';
+      actions.insertBefore(host, userBox || actions.firstChild);
+    }
 
+    // Reconcile the two human persona choices instead of assuming an existing
+    // container is complete. Several presentation layers initialize
+    // asynchronously; a partially-rendered switcher must not strand a dual-role
+    // user inside the teacher workspace.
+    const expected = [];
     if (canLearn) {
-      host.appendChild(personaButton('📚 我的學習', !adminPage, () => window.location.assign(learningUrl())));
+      expected.push(personaButton('📚 我的學習', !adminPage, () => window.location.assign(learningUrl())));
     }
     if (canTeach) {
-      host.appendChild(personaButton('👨‍🏫 教師工作區', teacherPersonaActive, () => {
+      expected.push(personaButton('👨‍🏫 教師工作區', teacherPersonaActive, () => {
         window.location.assign(adminUrl('course-materials', 'teacher'));
       }));
     }
     if (canSystem) {
       const systemActive = adminPage && requestedPersona === 'system';
-      host.appendChild(personaButton('⚙ 系統管理', systemActive, () => {
+      expected.push(personaButton('⚙ 系統管理', systemActive, () => {
         window.location.assign(adminUrl('people', 'system'));
       }));
     }
-
-    actions.insertBefore(host, userBox || actions.firstChild);
+    host.replaceChildren(...expected);
   }
 
   function makeNavButton(id, label, handler) {
@@ -342,6 +349,12 @@
   window.TeacherWorkspace1014 = Object.freeze({
     canLearn, canTeach, canSystem,
     openCourse, openMedia, openAssessment, openDocuments,
-    learningUrl
+    learningUrl, ensurePersonaSwitcher
   });
+
+  // Reconcile once more after the teacher workspace has finished mounting.
+  // This is idempotent and protects dual-role users from late presentation
+  // mutations without changing authorization.
+  ensurePersonaSwitcher();
+  setTimeout(ensurePersonaSwitcher, 0);
 })();
