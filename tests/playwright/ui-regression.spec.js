@@ -55,6 +55,21 @@ test('teacher persona full-page workspace never collapses to a blank surface', a
   await page.evaluate(() => window.TeacherRBAC681Ready);
   await page.waitForTimeout(500);
 
+  const debug = await page.evaluate(() => {
+    const modal = document.getElementById('admin-modal');
+    const shell = document.querySelector('.admin-workspace-shell');
+    return {
+      modalTag: modal?.tagName || null,
+      modalClasses: modal?.className || null,
+      modalChildren: modal ? [...modal.children].map(node => ({ tag: node.tagName, id: node.id, cls: node.className })) : [],
+      shellChildren: shell ? [...shell.children].map(node => ({ tag: node.tagName, id: node.id, cls: node.className })) : [],
+      bodyClasses: document.body.className,
+      knownIds: ['admin-workspace-header','admin-workspace-title','admin-workspace-content','admin-workspace-footer'].map(id => [id, Boolean(document.getElementById(id))]),
+      pageErrors,
+    };
+  });
+  console.log('TEACHER_WORKSPACE_DEBUG', JSON.stringify(debug));
+
   await expect(page.locator('#admin-modal')).toBeVisible({ timeout: 10000 });
   await expect(page.locator('#admin-workspace-header')).toBeVisible({ timeout: 10000 });
   await expect(page.locator('#admin-workspace-title')).toContainText('教師工作區');
