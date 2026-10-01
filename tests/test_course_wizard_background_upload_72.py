@@ -37,12 +37,18 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertIn('/api/material-jobs/${encodeURIComponent(id)}', source)
         self.assertIn('背景教材處理中', source)
         self.assertIn('row.error||row.detail', source)
+        self.assertIn('averageCompletedDurationSeconds', source)
+        self.assertIn('處理進度', source)
 
-    def test_successful_course_creation_is_locked_and_has_finish_action(self):
+    def test_successful_course_creation_waits_for_material_completion_before_finish(self):
         source = ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8')
         self.assertIn('state.created=true', source)
-        self.assertIn('完成／返回教材與課程', source)
-        self.assertIn('課程已鎖定完成，不會因再次點擊而重複建立', source)
+        self.assertIn('canLeaveCourse()', source)
+        self.assertIn('教材已完成，返回教材與課程', source)
+        self.assertIn('等待教材正式完成後才能返回', source)
+        self.assertIn('新教材必須全部顯示「已完成」後', source)
+        self.assertIn('beforeunload', source)
+        self.assertIn('課程本身已鎖定完成，不會重複建立', source)
         self.assertIn("if(state.created)return retryFailedUploads();", source)
         self.assertIn('重試未完成教材', source)
 
