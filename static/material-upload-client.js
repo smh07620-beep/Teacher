@@ -430,7 +430,7 @@
   function isDirectNetworkFailure(error){
     if(Number.isFinite(Number(error?.status)))return false;
     const message=String(error?.message||'').toLowerCase();
-    return error?.name==='TypeError'||/failed to fetch|network(?:error| request failed)|load failed/.test(message);
+    return error?.name==='TypeError'||/failed to fetch|network(?:error| request failed)|load failed|r2 未回傳 etag|cors exposeheaders/.test(message);
   }
 
   async function queueCompatibilityUpload(formData,options={}){
