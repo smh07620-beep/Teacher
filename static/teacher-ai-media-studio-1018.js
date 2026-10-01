@@ -223,12 +223,44 @@
     panel.appendChild(note);
   }
 
+  function restorePowerPointAuthoring() {
+    const panel = $('teacher-ai-presentation-1016');
+    const stage = $('teacher-ai-material-presentation-stage-1014');
+    if (panel && stage && panel.parentElement !== stage) stage.appendChild(panel);
+  }
+
+  function installPowerPointShortcut(studio) {
+    if (!studio || $('teacher-media-powerpoint-entry-1018')) return;
+    const entry = document.createElement('section');
+    entry.id = 'teacher-media-powerpoint-entry-1018';
+    entry.className = 'rounded-2xl border border-violet-100 bg-violet-50/60 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3';
+    entry.innerHTML = '<div><b class="text-sm text-violet-950">🖥️ 需要建立新的 PowerPoint？</b><p class="mt-1 text-xs text-violet-800">AI PowerPoint 製作室位於「教材與課程」，可上傳多份原始資料、AI 統整/RAG、核准大綱後建立簡報。</p></div>';
+    const button = document.createElement('button');
+    button.id = 'teacher-media-open-powerpoint-1018';
+    button.type = 'button';
+    button.className = 'shrink-0 rounded-xl bg-violet-700 px-4 py-2.5 text-xs font-black text-white';
+    button.textContent = '🖥️ AI PowerPoint 製作';
+    button.addEventListener('click', async () => {
+      await window.TeacherWorkspace1014?.openCourse?.();
+      setTimeout(() => {
+        const target = $('teacher-ai-material-1014');
+        target?.scrollIntoView?.({block: 'start', behavior: 'smooth'});
+        $('teacher-ai-material-file-1014')?.focus?.();
+      }, 60);
+    });
+    entry.appendChild(button);
+    const tabs = studio.querySelector('.teacher-media-tabs-1018');
+    if (tabs) studio.insertBefore(entry, tabs);
+    else studio.appendChild(entry);
+  }
+
   function attachPanels(studio) {
     const narration = $('teacher-media-panel-narration-1018');
     const subtitle = $('teacher-media-panel-subtitle-1018');
     const video = $('teacher-media-panel-video-1018');
     if (!narration || !subtitle || !video) return false;
 
+    restorePowerPointAuthoring();
     humanizeExistingPanels();
     replaceVideoIdInput();
 
@@ -274,17 +306,20 @@
 
     let advanced = $('teacher-media-advanced-1018');
     if (!advanced) {
-      advanced = makeDetails('PowerPoint 版本、歷史與進階資訊', 'teacher-media-advanced-1018');
+      advanced = makeDetails('媒體版本、品質與進階資訊', 'teacher-media-advanced-1018');
       const technical = document.createElement('p');
       technical.id = 'teacher-media-advanced-note-1018';
       technical.className = 'mt-3 text-xs leading-5 text-slate-600';
-      technical.textContent = '此處保留版本、來源追溯、品質檢查與發布紀錄。背景服務與儲存設定不會顯示敏感識別值。';
+      technical.textContent = '此處只保留媒體版本、品質檢查與發布說明；AI PowerPoint 製作仍在「教材與課程」主工作台。背景服務與儲存設定不會顯示敏感識別值。';
       advanced.appendChild(technical);
       studio.appendChild(advanced);
+    } else {
+      const heading = advanced.querySelector(':scope > summary');
+      if (heading) heading.textContent = '媒體版本、品質與進階資訊';
+      const technical = $('teacher-media-advanced-note-1018');
+      if (technical) technical.textContent = '此處只保留媒體版本、品質檢查與發布說明；AI PowerPoint 製作仍在「教材與課程」主工作台。背景服務與儲存設定不會顯示敏感識別值。';
     }
-    const presentationPanel = $('teacher-ai-presentation-1016');
-    const note = $('teacher-media-advanced-note-1018');
-    if (presentationPanel && presentationPanel.parentElement !== advanced) advanced.insertBefore(presentationPanel, note || null);
+    restorePowerPointAuthoring();
     return true;
   }
 
@@ -318,9 +353,11 @@
       sourceBox.innerHTML = '<label class="block text-sm font-black text-slate-800">來源教材／來源內容<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
       studio.appendChild(sourceBox);
       installTabs(studio);
+      installPowerPointShortcut(studio);
       shell.insertAdjacentElement('afterend', studio);
     } else {
       installTabs(studio);
+      installPowerPointShortcut(studio);
     }
 
     attachPanels(studio);
