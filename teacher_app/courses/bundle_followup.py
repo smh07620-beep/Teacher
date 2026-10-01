@@ -169,10 +169,17 @@ def upload_claim(
         "originalName": str(original_name or ""),
         "fileSize": str(file_size or "").strip(),
         "lastModified": str(last_modified or "").strip(),
-        "fingerprint": str(fingerprint or "").strip().lower(),
-        "fingerprintStrategy": str(fingerprint_strategy or "").strip(),
-        "fingerprintPartSize": str(fingerprint_part_size or "").strip(),
     }
+    # Preserve the historical request hash when the legacy byte-upload path
+    # calls this helper without browser fingerprint fields.  Direct R2 uploads
+    # add the stronger file identity to the hash so the same workflow/index
+    # cannot silently point at different bytes.
+    if any((fingerprint, fingerprint_strategy, fingerprint_part_size)):
+        payload.update({
+            "fingerprint": str(fingerprint or "").strip().lower(),
+            "fingerprintStrategy": str(fingerprint_strategy or "").strip(),
+            "fingerprintPartSize": str(fingerprint_part_size or "").strip(),
+        })
     return f"upload:{index}", _hash_payload(payload)
 
 
