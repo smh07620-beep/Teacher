@@ -1,10 +1,12 @@
-"""Authenticated read-state routes for the aggregated notification center."""
+"""Authenticated read-state and email-preference routes for notifications."""
 from __future__ import annotations
 
 from flask import g, jsonify, request
 
 from teacher_app.command_center import notification_state
+from teacher_app.common import audit
 from teacher_app.common.errors import ApiError
+from teacher_app.notifications import preferences
 
 
 def _install(app, rule: str, endpoint: str, methods: list[str], view_func) -> None:
@@ -68,6 +70,27 @@ def register_notification_state_routes(owner):
         except ApiError as exc:
             return _error(exc)
 
+    def api_notification_preferences():
+        try:
+            return jsonify(preferences.get_preferences(_current_user(owner)))
+        except ApiError as exc:
+            return _error(exc)
+
+    def api_notification_preferences_update():
+        actor = _current_user(owner)
+        try:
+            result = preferences.update_preferences(actor, request.get_json(silent=True) or {})
+            audit.record_event(
+                actor=actor,
+                action="notification.preferences.update",
+                target_type="account",
+                target_id=str((actor or {}).get("username") or ""),
+                detail={"emailCategories": result["emailCategories"]},
+            )
+            return jsonify({"ok": True, **result})
+        except ApiError as exc:
+            return _error(exc)
+
     _install(
         app,
         "/api/notification-states",
@@ -81,6 +104,20 @@ def register_notification_state_routes(owner):
         "api_notification_states_update",
         ["PATCH"],
         api_notification_states_update,
+    )
+    _install(
+        app,
+        "/api/notification-preferences",
+        "api_notification_preferences",
+        ["GET"],
+        api_notification_preferences,
+    )
+    _install(
+        app,
+        "/api/notification-preferences",
+        "api_notification_preferences_update",
+        ["PATCH"],
+        api_notification_preferences_update,
     )
     app.extensions["teacher_notification_state_routes_registered"] = True
     return app
