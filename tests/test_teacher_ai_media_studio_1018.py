@@ -34,6 +34,7 @@ def test_media_shell_has_no_duplicate_source_placeholder_and_keeps_a_small_retur
     source = ROOT.joinpath("static", "teacher-workspace-1014.js").read_text(encoding="utf-8")
     assert "準備媒體來源" in source  # Removes stale markup produced by older workspace hydrations.
     assert "data-teacher-media-source-placeholder-1014" in source
+    assert "teacher-media-shell-compact-1018" in source
     assert "teacher-media-shell-actions-1014" in source
     assert "回教材與課程" in source
     assert "回教材與課程選擇" not in source

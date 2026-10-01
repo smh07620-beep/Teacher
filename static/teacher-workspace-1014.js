@@ -140,11 +140,9 @@
     section.id = 'teacher-media-production-1014';
     section.className = 'hidden space-y-5';
     section.innerHTML = `
-      <section id="teacher-media-studio-shell-1018" class="bg-white border border-cyan-200 rounded-2xl p-5 shadow-sm space-y-5">
-        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-          <div><p class="admin-page-eyebrow text-cyan-700">AI MEDIA STUDIO</p><h4 class="text-xl font-black text-slate-950">🎬 AI 媒體製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">從教材建立語音、字幕與教學影片。</p></div>
-          <div class="flex flex-wrap items-center gap-2"><span class="admin-workspace-chip">本機 AI｜隱私模式</span><button id="teacher-media-pick-material-1014" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">📚 回教材與課程</button></div>
-        </div>
+      <section id="teacher-media-studio-shell-1018" class="teacher-media-shell-compact-1018 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 px-1">
+        <div><p class="admin-page-eyebrow text-cyan-700">AI MEDIA STUDIO</p><h4 class="text-xl font-black text-slate-950">🎬 AI 媒體製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">從教材建立語音、字幕與教學影片。</p></div>
+        <div class="teacher-media-shell-actions-1014 flex flex-wrap items-center gap-2"><span class="admin-workspace-chip">本機 AI｜隱私模式</span><button id="teacher-media-pick-material-1014" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">📚 回教材與課程</button></div>
       </section>`;
     content.appendChild(section);
     normalizeMediaShell(section);
@@ -154,6 +152,19 @@
   function normalizeMediaShell(section) {
     const shell = section?.querySelector('#teacher-media-studio-shell-1018');
     if (!shell) return;
+
+    // Keep the studio identity, but not the old full-width card shell.  The
+    // shared source picker immediately below is the only substantial card.
+    shell.className = 'teacher-media-shell-compact-1018 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 px-1';
+    shell.dataset.teacherMediaCompactShell = '1';
+
+    // Flatten the previous card's nested header so hydrated legacy markup has
+    // the same compact layout as a newly-created workspace.
+    const legacyHeader = [...shell.children].find(node => node.classList?.contains('lg:justify-between'));
+    if (legacyHeader) {
+      while (legacyHeader.firstChild) shell.insertBefore(legacyHeader.firstChild, legacyHeader);
+      legacyHeader.remove();
+    }
 
     // Earlier media shells rendered a second, large "準備媒體來源" card here.
     // The shared selector in TeacherAIMediaStudio1018 is the sole source picker.
@@ -166,7 +177,6 @@
       if (heading.textContent?.trim() === '準備媒體來源') heading.closest('.rounded-2xl')?.remove();
     });
 
-    const header = shell.querySelector(':scope > div');
     const existingButton = shell.querySelector('#teacher-media-pick-material-1014');
     if (existingButton) {
       if (existingButton.dataset.teacherMediaBackBound !== '1') {
@@ -175,14 +185,13 @@
       }
       return;
     }
-    if (!header) return;
-    let actions = header.querySelector(':scope > .teacher-media-shell-actions-1014');
+    let actions = shell.querySelector(':scope > .teacher-media-shell-actions-1014');
     if (!actions) {
       actions = document.createElement('div');
       actions.className = 'teacher-media-shell-actions-1014 flex flex-wrap items-center gap-2';
-      const privacy = header.querySelector('.admin-workspace-chip');
+      const privacy = shell.querySelector('.admin-workspace-chip');
       if (privacy) actions.appendChild(privacy);
-      header.appendChild(actions);
+      shell.appendChild(actions);
     }
     const button = document.createElement('button');
     button.id = 'teacher-media-pick-material-1014';

@@ -23,6 +23,7 @@ test('media shell removes the legacy source placeholder across workspace hydrati
 
   await page.addScriptTag({ path: asset('teacher-workspace-1014.js') });
   await expect(page.locator('#teacher-media-studio-shell-1018')).toHaveCount(1);
+  await expect(page.locator('#teacher-media-studio-shell-1018')).toHaveClass(/teacher-media-shell-compact-1018/);
   await expect(page.getByText('準備媒體來源', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '📚 回教材與課程' })).toHaveCount(1);
   await expect(page.locator('#teacher-media-studio-shell-1018 > .rounded-2xl')).toHaveCount(0);
