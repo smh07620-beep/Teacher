@@ -70,6 +70,8 @@ class Phase3AdminMaterialUploadTests(unittest.TestCase):
         self.assertIn('/api/material-jobs/upload', source)
         self.assertIn('COMPAT_QUEUE_FALLBACK_MAX_BYTES=25*1024*1024', source)
         self.assertIn('fallbackToSameOriginQueue', source)
+        self.assertIn('r2 未回傳 etag', source)
+        self.assertIn('cors exposeheaders', source)
         self.assertNotIn('XMLHttpRequest', source)
 
     def test_streaming_sha256_matches_node_reference_for_multi_chunk_blob(self):
@@ -105,6 +107,8 @@ const cryptoNode = require('crypto');
         source = ROOT.joinpath('static/admin-material-upload.js').read_text(encoding='utf-8')
         self.assertIn('MaterialUploadClient.enqueue', source)
         self.assertIn('MaterialUploadClient.directUpload', source)
+        self.assertIn('fallbackToSameOriginQueue:true', source)
+        self.assertIn('onFallback', source)
         self.assertNotIn('DIRECT_UPLOAD_THRESHOLD', source)
         self.assertNotIn("fetch('/api/material-upload/init'", source)
         self.assertNotIn('DIRECT_VIDEO_EXT', source)
