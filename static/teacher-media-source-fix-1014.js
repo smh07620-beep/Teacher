@@ -77,6 +77,9 @@
     if (generate && !compatibleMaterials.length) generate.disabled = true;
     if (generate && compatibleMaterials.length && !generate.dataset.mediaBusy) generate.disabled = false;
     repainting = false;
+    window.dispatchEvent(new CustomEvent('teacher-media-source-options-1014', {
+      detail: { materials: compatibleMaterials.slice(), selectedId: select.value }
+    }));
     return true;
   }
 

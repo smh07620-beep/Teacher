@@ -127,6 +127,7 @@
   }
 
   function ensureMediaWorkspace() {
+    // Workflow compatibility: 教材 → 講稿 → 語音／影片 → 發布；正式發布仍沿用原教材權限、組別範圍與發布流程。
     const content = document.getElementById('admin-section-content');
     if (!content) return null;
     let section = document.getElementById('teacher-media-production-1014');
@@ -136,17 +137,12 @@
     section.id = 'teacher-media-production-1014';
     section.className = 'hidden space-y-5';
     section.innerHTML = `
-      <section class="bg-white border border-cyan-200 rounded-2xl p-5 shadow-sm space-y-5">
+      <section id="teacher-media-studio-shell-1018" class="bg-white border border-cyan-200 rounded-2xl p-5 shadow-sm space-y-5">
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-          <div><p class="admin-page-eyebrow text-cyan-700">MEDIA STUDIO</p><h4 class="text-xl font-black text-slate-950">🎙️ 教材媒體製作</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">以既有教材為來源，逐步產生講稿、語音與影片。所有正式發布仍沿用原教材權限、組別範圍與發布流程。</p></div>
-          <span class="admin-workspace-chip">教材 → 講稿 → 語音／影片 → 發布</span>
+          <div><p class="admin-page-eyebrow text-cyan-700">AI MEDIA STUDIO</p><h4 class="text-xl font-black text-slate-950">🎬 AI 媒體製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">從教材建立語音、字幕與教學影片。</p></div>
+          <span class="admin-workspace-chip">本機 AI｜隱私模式</span>
         </div>
-        <div class="grid lg:grid-cols-3 gap-4">
-          <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div class="text-2xl">📝</div><h5 class="mt-2 font-black text-slate-900">教材轉講稿</h5><p class="mt-1 text-xs text-slate-600 leading-5">從 PDF、Word、PPT 或既有教材建立口語化講稿；正式生成前由老師確認內容。</p><span class="mt-3 inline-flex rounded-full bg-cyan-100 px-2.5 py-1 text-[11px] font-bold text-cyan-800">流程骨架已建立</span></article>
-          <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div class="text-2xl">🎧</div><h5 class="mt-2 font-black text-slate-900">老師錄音／AI 語音</h5><p class="mt-1 text-xs text-slate-600 leading-5">支援老師自行錄音；AI 語音則由背景 Worker 產生，避免 Render Web 長工作逾時。</p><span class="mt-3 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">下一實作切點</span></article>
-          <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div class="text-2xl">🎬</div><h5 class="mt-2 font-black text-slate-900">老師錄影／教學影片</h5><p class="mt-1 text-xs text-slate-600 leading-5">預留攝影機、麥克風、螢幕分享與教材畫面合成；成品由 Worker 處理後回寫教材。</p><span class="mt-3 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">下一實作切點</span></article>
-        </div>
-        <div class="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><b class="text-sm text-teal-950">先從既有教材開始</b><p class="mt-1 text-xs text-teal-800">媒體製作不另建教材資料；先選教材，再建立媒體版本，避免內容與版本分裂。</p></div><button id="teacher-media-pick-material-1014" type="button" class="shrink-0 rounded-xl bg-teal-700 px-4 py-2 text-xs font-black text-white">📚 回教材與課程選擇</button></div>
+        <div class="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><b class="text-sm text-teal-950">準備媒體來源</b><p class="mt-1 text-xs text-teal-800">選擇來源後，製作室會帶入可使用的下一步；正式核准與發布規則維持不變。</p></div><button id="teacher-media-pick-material-1014" type="button" class="shrink-0 rounded-xl bg-teal-700 px-4 py-2 text-xs font-black text-white">📚 回教材與課程選擇</button></div>
       </section>`;
     content.appendChild(section);
     section.querySelector('#teacher-media-pick-material-1014')?.addEventListener('click', () => openCourse());

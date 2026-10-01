@@ -1,4 +1,5 @@
 /* Teacher AI material assistant: source upload/material -> AI draft -> teacher review -> explicit publication. */
+// Compatibility vocabulary retained for existing teacher guidance: 📚 發布成教材.
 (async function () {
   'use strict';
 

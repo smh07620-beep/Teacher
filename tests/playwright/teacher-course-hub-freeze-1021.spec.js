@@ -79,3 +79,28 @@ test('large internal course scope stays interactive without summary warnings', a
   await expect(page.locator('[data-batch-course]')).toHaveCount(1541);
   expect(warnings).toEqual([]);
 });
+
+test('AI media studio keeps one source and one accessible active mode', async ({ page }) => {
+  await page.setContent('<main><section id="teacher-media-production-1014"><section id="teacher-media-studio-shell-1018"></section><section id="teacher-media-audio-1014"><h4>語音</h4><p class="mt-1">語音說明</p></section><section id="teacher-media-subtitle-1014"><h4>字幕</h4></section><section id="teacher-ai-video-1015"><h4>影片</h4><p class="mt-1">影片說明</p><label>PowerPoint<input id="teacher-ai-video-presentation-1015"></label><span id="teacher-ai-video-provider-1015"></span><span id="teacher-ai-video-renderer-1015"></span></section><section id="teacher-media-script-1014"><label>來源教材<select id="teacher-script-material-1014"><option value="doc-1">教材文件</option><option value="movie-1">教學影片.mp4</option></select></label></section></section></main>');
+  await page.evaluate(() => {
+    window.TeacherRBAC681Ready = Promise.resolve({
+      roles: new Set(['clinical_teacher']), user: { preferredGroup: 'grpBio' },
+      hasPermission: permission => permission === 'material.manage'
+    });
+    window.fetch = async url => ({ ok: true, json: async () => {
+      if (String(url).includes('/api/ai-presentations')) return [];
+      return [];
+    }});
+    window.TeacherMediaSubtitle1014 = { selectMaterial: value => { window.subtitleSource = value; } };
+  });
+  await page.addScriptTag({ path: asset('teacher-ai-media-studio-1018.js') });
+  await expect(page.locator('#teacher-ai-media-studio-1018')).toHaveCount(1);
+  const tabs = page.getByRole('tab');
+  await expect(tabs).toHaveCount(3);
+  await tabs.nth(0).press('ArrowRight');
+  await expect(page.locator('#teacher-media-tab-subtitle-1018')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#teacher-media-panel-narration-1018')).toHaveAttribute('hidden', '');
+  await page.locator('#teacher-media-source-1018').selectOption('movie-1');
+  await expect.poll(() => page.evaluate(() => window.subtitleSource)).toBe('movie-1');
+  await expect(page.locator('[role="tab"][aria-controls]')).toHaveCount(3);
+});

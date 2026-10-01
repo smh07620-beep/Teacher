@@ -1,4 +1,8 @@
 /* AI PowerPoint studio: one guided authoring flow, backed by the existing Phase 4 APIs. */
+/* Existing Phase 4 contracts remain available through the scoped server API:
+ * /download, /provenance, /reupload and immutable revision history.  Advanced
+ * version controls, including 版型／區塊編輯, stay secondary to the guided flow.
+ */
 (async function () {
   'use strict';
   const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));

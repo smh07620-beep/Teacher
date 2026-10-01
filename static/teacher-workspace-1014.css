@@ -19,6 +19,27 @@
   white-space: nowrap;
 }
 
+.teacher-media-tabs-1018::-webkit-scrollbar {
+  display: none;
+}
+
+.teacher-media-tabs-1018 {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.teacher-media-legacy-source-1018 {
+  display: none !important;
+}
+
+.teacher-media-panel-1018[hidden] {
+  display: none !important;
+}
+
+#teacher-ai-media-studio-1018 > details > :not(summary) {
+  margin-top: 0.75rem;
+}
+
 /* 10/14 readability convergence: the /system learning/admin layer should not
  * shrink body copy below the visual scale used on the homepage/landing pages.
  */
@@ -106,5 +127,13 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
   .teacher-help-toggle-1014 {
     padding: 6px 8px;
     font-size: 11px;
+  }
+
+  .teacher-media-tabs-1018 > button {
+    min-width: max-content;
+  }
+
+  #teacher-ai-media-studio-1018 .grid {
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 }
