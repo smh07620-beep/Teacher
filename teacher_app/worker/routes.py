@@ -215,6 +215,17 @@ def _fail_upload(runtime: WorkerWebRuntime, session, reason: str, *, delete_obje
     runtime.release_reservation(session["id"], reason)
 
 
+def _sync_media_metadata(runtime: WorkerWebRuntime, job: dict, status: str, detail: str = "") -> None:
+    """Mirror reporting metadata without making queue correctness depend on it."""
+    try:
+        if detail:
+            runtime.sync_media_processing_metadata(job, status, detail)
+        else:
+            runtime.sync_media_processing_metadata(job, status)
+    except Exception:
+        pass
+
+
 def _job_record_from_session(runtime: WorkerWebRuntime, session):
     payload = dict(session.get("payload") or {})
     now = _now()
@@ -492,7 +503,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
             )
             if not updated:
                 return jsonify({"error": "工作狀態或 Worker ownership 不符。"}), 409
-            runtime.sync_media_processing_metadata(job, "completed")
+            _sync_media_metadata(runtime, job, "completed")
             # Indexing is best-effort and deliberately occurs after the job is
             # terminal; it cannot delay heartbeats or alter restart semantics.
             try:
@@ -526,7 +537,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
                 )
                 if not updated:
                     return jsonify({"error": "工作狀態或 Worker ownership 不符。"}), 409
-                runtime.sync_media_processing_metadata(job, "retry_wait", detail)
+                _sync_media_metadata(runtime, job, "retry_wait", detail)
                 return jsonify({"ok": True, "status": "retry_wait", "retryAfterSeconds": delay})
         updated = worker_repository.transition_owned_material_job(
             job_id,
@@ -544,7 +555,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         )
         if not updated:
             return jsonify({"error": "工作狀態或 Worker ownership 不符。"}), 409
-        runtime.sync_media_processing_metadata(job, "failed", detail)
+        _sync_media_metadata(runtime, job, "failed", detail)
         return jsonify({"ok": True, "status": "failed"})
 
     @app.post("/api/material-worker/<job_id>/complete")
@@ -765,24 +776,40 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         denied = admin_guard()
         if denied: return denied
         session = _session(runtime, upload_id)
-        if not session or session.get("status") != "uploading": return jsonify({"error": "上傳工作不存在或已完成。"}), 404
+        if not session:
+            return jsonify({"error": "找不到上傳工作。"}), 404
         denied = upload_session_guard(session)
         if denied: return denied
+        session_status = str(session.get("status") or "")
+        if session_status == "completed":
+            job = worker_repository.get_material_job(
+                session["job_id"],
+                include_payload=False,
+                connection_factory=runtime.connection_factory,
+            )
+            if not job:
+                return jsonify({"error": "上傳工作已完成，但背景工作不存在。"}), 409
+            return jsonify({
+                "accepted": True,
+                "jobId": session["job_id"],
+                "status": str(job.get("status") or "queued"),
+                "replayed": True,
+            }), 200
+        if session_status != "uploading":
+            return jsonify({"error": "此上傳工作已無法完成。", "status": session_status}), 409
         body = request.get_json(silent=True) or {}; parts = body.get("parts")
         upload_mode = str((session.get("payload") or {}).get("uploadMode") or ("multipart" if session.get("r2_upload_id") else "single"))
         try:
             if upload_mode == "single":
                 if not isinstance(parts, list) or len(parts) != 1 or not isinstance(parts[0], dict):
                     raise ValueError("single PUT 完成資料不完整。")
-                etag = str(parts[0].get("etag") or "").strip()
+                client_etag = str(parts[0].get("etag") or "").strip()
                 supplied_sha = str(parts[0].get("sha256") or session.get("source_sha256") or "").lower()
-                if not etag:
-                    raise ValueError("single PUT 缺少 ETag。")
                 if not re.fullmatch(r"[a-f0-9]{64}", supplied_sha):
                     raise ValueError("single PUT 必須提供 SHA256。")
                 if session.get("source_sha256") and supplied_sha != str(session.get("source_sha256") or "").lower():
                     raise ValueError("single PUT SHA256 與上傳工作不符。")
-                normalized = [{"PartNumber": 1, "ETag": etag}]
+                normalized = [{"PartNumber": 1, "ETag": client_etag}]
                 part_hashes = []
             else:
                 part_hashes = worker_protocol.validate_multipart_part_sha256(
@@ -817,10 +844,14 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
             head = runtime.r2_client_factory().head_object(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"])
             if int(head.get("ContentLength", -1)) != int(session["source_bytes"]): raise ValueError("R2 物件大小驗證失敗。")
             if upload_mode == "single":
-                remote_etag = str(head.get("ETag") or "").strip().strip('"')
+                remote_etag_raw = str(head.get("ETag") or "").strip()
+                remote_etag = remote_etag_raw.strip('"')
                 expected_etag = str(normalized[0]["ETag"] or "").strip().strip('"')
-                if not remote_etag or remote_etag != expected_etag:
+                if not remote_etag:
+                    raise ValueError("R2 single PUT 缺少伺服器端 ETag。")
+                if expected_etag and remote_etag != expected_etag:
                     raise ValueError("R2 single PUT ETag 驗證失敗。")
+                normalized = [{"PartNumber": 1, "ETag": remote_etag_raw}]
                 record_parts = 0
                 estimated_operations = 2
             else:
@@ -855,7 +886,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
                 )
                 if not created_job:
                     raise ValueError("上傳工作不存在或已完成。")
-                runtime.sync_media_processing_metadata(created_job, "queued")
+                _sync_media_metadata(runtime, created_job, "queued")
             except Exception:
                 runtime.r2_client_factory().delete_object(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"])
                 runtime.record_r2_deleted(session["staging_key"])
