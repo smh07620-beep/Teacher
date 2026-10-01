@@ -52,37 +52,24 @@
 
   window.Teacher71Profile = Object.freeze({load: loadProfile, roleLabels: ROLE_LABELS});
 
-  function dashboardUrl(profile) {
-    const query = new URLSearchParams({empId: profile?.empId || ''});
-    if (profile?.name) query.set('name', profile.name);
-    return `/api/dashboard/me?${query.toString()}`;
-  }
-
-  function examHref(item) {
+  function taskHref(item) {
+    if (item?.target === 'pgy-workflow') return '';
+    const moduleName = item?.target === 'exam' ? 'exam' : 'materials';
     const query = new URLSearchParams({
       area: item?.area || 'internal',
       group: item?.group || 'grpBio',
-      module: 'exam',
+      module: moduleName,
       from: 'training-command-center'
     });
-    const examId = String(item?.id || item?.examId || item?.quizId || '').trim();
-    if (examId) query.set('examId', examId);
-    return `/system?${query.toString()}`;
-  }
-
-  function courseHref(item) {
-    const query = new URLSearchParams({
-      area: item?.area || 'internal',
-      group: item?.group || 'grpBio',
-      module: 'materials',
-      from: 'training-command-center'
-    });
+    if (moduleName === 'exam' && item?.resourceId) query.set('examId', String(item.resourceId));
+    if (item?.courseId) query.set('courseId', String(item.courseId));
+    if (item?.kind === 'material' || item?.kind === 'retraining') query.set('materialId', String(item.resourceId || item.id || ''));
     return `/system?${query.toString()}`;
   }
 
   function dueLabel(item) {
     const due = String(item?.dueAt || '').trim();
-    if (!due) return '未設定期限';
+    if (!due) return '';
     return `${item?.overdue ? '已逾期' : '期限'} ${due.slice(0, 10)}`;
   }
 
@@ -115,42 +102,28 @@
     window.setTimeout(() => (document.getElementById('pgy-workflow-center') || document.getElementById('panel-assessment'))?.scrollIntoView?.({behavior:'smooth', block:'start'}), 120);
   }
 
-  function render(profile, command, dashboard) {
+  function render(profile, command) {
     const status = document.getElementById('training-command-status-71');
     const summaryLine = document.getElementById('training-command-summary-71');
     const list = document.getElementById('training-command-list-71');
     if (!status || !summaryLine || !list) return;
 
-    const assignedCourses = Array.isArray(dashboard?.pendingCourses) ? dashboard.pendingCourses : [];
-    const assignedCourseIds = new Set(assignedCourses.map(item => String(item?.id || '')));
-    const pending = (Array.isArray(dashboard?.pendingExams) ? dashboard.pendingExams : [])
-      .filter(exam => !assignedCourseIds.has(String(exam?.courseId || '')));
-    const pgyItems = profile?.pgyLearner && Array.isArray(command?.items) ? command.items : [];
-    const total = assignedCourses.length + pending.length + pgyItems.length;
-    summaryLine.textContent = total ? `${total} 項需要處理` : '目前沒有待辦';
-    status.textContent = dashboard?.scopeSource === 'assignments'
-      ? `正式指派：${Number(dashboard?.requiredAssignments || 0)} 門必修${Number(dashboard?.overdueAssignments || 0) ? ` · ${Number(dashboard.overdueAssignments)} 門逾期` : ''}`
-      : (profile?.pgyLearner ? 'PGY 學員：線上考核＋PGY' : '一般／線上人員：課程／考核');
+    const learnerItems = (Array.isArray(command?.items) ? command.items : []).filter(item => item?.persona === 'learner');
+    summaryLine.textContent = learnerItems.length ? `${learnerItems.length} 項需要處理` : '目前沒有待辦';
+    const overdue = learnerItems.filter(item => item?.overdue).length;
+    const retraining = learnerItems.filter(item => item?.kind === 'retraining').length;
+    status.textContent = `${profile?.pgyLearner ? 'PGY／線上學習' : '線上學習'}${overdue ? ` · ${overdue} 項逾期` : ''}${retraining ? ` · ${retraining} 項需重訓` : ''}`;
 
-    const rows = [];
-    assignedCourses.slice(0, 4).forEach(course => rows.push(`
-      <a href="${courseHref(course)}" class="block rounded-xl border ${course.overdue ? 'border-rose-200 bg-rose-50/60' : 'border-teal-100 bg-white'} px-3 py-2 hover:border-teal-300">
-        <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-800">${escapeHtml(course.title || '待完成課程')}</b><span class="text-[10px] font-bold ${course.overdue ? 'text-rose-700' : 'text-teal-700'}">繼續學習 →</span></div>
-        <div class="text-[10px] ${course.overdue ? 'text-rose-600' : 'text-slate-400'} mt-1">${escapeHtml(dueLabel(course))} · 教材 ${Number(course.materialsCompleted || 0)}/${Number(course.materialsTotal || 0)}${course.examRequired ? ` · ${course.examPassed ? '考核已通過' : '尚待考核'}` : ''}</div>
-      </a>`));
-    pending.slice(0, 4).forEach(exam => rows.push(`
-      <a href="${examHref(exam)}" class="block rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-teal-300">
-        <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-800">${escapeHtml(exam.title || '待完成考核')}</b><span class="text-[10px] font-bold text-teal-700">前往考核 →</span></div>
-        <div class="text-[10px] text-slate-400 mt-1">${escapeHtml(exam.area === 'pgy' ? 'PGY考核' : '院內考核')} · 及格 ${Number(exam.passingScore || 80)} 分</div>
-      </a>`));
-
-    if (profile?.pgyLearner) {
-      pgyItems.slice(0, 4).forEach(item => rows.push(`
-        <article class="rounded-xl border ${item.overdue ? 'border-rose-200 bg-rose-50/60' : 'border-indigo-100 bg-white'} px-3 py-2 flex items-center justify-between gap-3">
-          <div class="min-w-0"><b class="block text-xs text-slate-800 truncate">${escapeHtml(item.title || 'PGY 訓練指派')}</b><span class="text-[10px] text-slate-400">${escapeHtml(item.statusLabel || item.status || '')}${item.overdue ? ' · 已逾期' : ''}</span></div>
-          <button type="button" data-pgy-command class="shrink-0 text-[10px] font-bold rounded-lg bg-indigo-700 text-white px-2.5 py-1.5">${escapeHtml(item.actionLabel || '開啟')}</button>
-        </article>`));
-    }
+    const rows = learnerItems.slice(0, 12).map(item => {
+      const href = taskHref(item);
+      const badge = item?.statusLabel || '待處理';
+      const meta = [dueLabel(item), item?.detail || ''].filter(Boolean).join(' · ');
+      const cls = item?.overdue ? 'border-rose-200 bg-rose-50/60' : item?.kind === 'retraining' ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-white';
+      if (item?.target === 'pgy-workflow') {
+        return `<article class="rounded-xl border ${cls} px-3 py-2 flex items-center justify-between gap-3"><div class="min-w-0"><div class="flex items-center gap-2"><span class="text-[10px] font-black text-indigo-700">${escapeHtml(badge)}</span><b class="block text-xs text-slate-800 truncate">${escapeHtml(item.title || 'PGY 訓練指派')}</b></div>${meta ? `<span class="block text-[10px] text-slate-500 mt-1">${escapeHtml(meta)}</span>` : ''}</div><button type="button" data-pgy-command class="shrink-0 text-[10px] font-bold rounded-lg bg-indigo-700 text-white px-2.5 py-1.5">${escapeHtml(item.actionLabel || '開啟')}</button></article>`;
+      }
+      return `<a href="${href}" class="block rounded-xl border ${cls} px-3 py-2 hover:border-teal-300"><div class="flex items-center justify-between gap-2"><span class="min-w-0"><span class="text-[10px] font-black ${item?.overdue ? 'text-rose-700' : item?.kind === 'retraining' ? 'text-amber-700' : 'text-teal-700'}">${escapeHtml(badge)}</span><b class="block text-xs text-slate-800 truncate mt-0.5">${escapeHtml(item.title || '待辦')}</b></span><span class="text-[10px] font-bold text-teal-700 shrink-0">${escapeHtml(item.actionLabel || '前往處理')} →</span></div>${meta ? `<div class="text-[10px] text-slate-500 mt-1">${escapeHtml(meta)}</div>` : ''}</a>`;
+    });
 
     list.innerHTML = rows.length
       ? rows.join('')
@@ -162,14 +135,12 @@
     const section = mount();
     if (!section) return;
     try {
-      const profile = await loadProfile(force);
-      const requests = [
-        getJSON('/api/training-command-center').catch(() => ({items:[], counts:{}})),
-        profile?.empId ? getJSON(dashboardUrl(profile)).catch(() => ({pendingCourses:[],pendingExams:[]})) : Promise.resolve({pendingCourses:[],pendingExams:[]})
-      ];
-      const [command, dashboard] = await Promise.all(requests);
+      const [profile, command] = await Promise.all([
+        loadProfile(force),
+        getJSON('/api/training-command-center')
+      ]);
       section.classList.remove('hidden');
-      render(profile, command, dashboard);
+      render(profile, command);
     } catch (error) {
       if (error?.status === 401) { section.classList.add('hidden'); return; }
       const status = document.getElementById('training-command-status-71');
