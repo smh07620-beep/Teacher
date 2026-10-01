@@ -6,6 +6,7 @@ from flask import g, jsonify
 
 from teacher_app.command_center import analytics, audience, competency, progress, service
 from teacher_app.common.errors import ApiError
+from teacher_app.notifications import events as notification_events
 
 
 def _error(exc: ApiError):
@@ -99,6 +100,13 @@ def register_training_command_center(owner):
     def training_command_center_progress():
         try:
             return jsonify(progress.build_progress(_current_user(owner)))
+        except ApiError as exc:
+            return _error(exc)
+
+    @app.get("/api/training-command-center/notifications")
+    def training_command_center_notifications():
+        try:
+            return jsonify(notification_events.build_events(_current_user(owner)))
         except ApiError as exc:
             return _error(exc)
 
