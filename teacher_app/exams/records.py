@@ -114,6 +114,26 @@ def _review_scope(conn, kind: str, reviewer_user: Mapping[str, Any], record: Map
     return "assigned_student"
 
 
+def can_review_record(
+    reviewer_user: Mapping[str, Any] | None,
+    record: Mapping[str, Any] | None,
+) -> bool:
+    """Return whether the authenticated reviewer may act on this record.
+
+    Read projections (teacher queues, notifications and email reminders) use the
+    same fail-closed resource scope as the write endpoint so an unassigned
+    teacher never sees a review item that the backend would later reject.
+    """
+    if not reviewer_user or not record or not has_permission(reviewer_user, "evaluation.review"):
+        return False
+    try:
+        with common_db.read_connection() as (conn, kind):
+            _review_scope(conn, kind, reviewer_user, record)
+        return True
+    except (RecordError, Exception):
+        return False
+
+
 def review_record(
     record_id: str,
     data: Mapping[str, Any],
@@ -256,4 +276,4 @@ def create_record(user: Mapping[str, Any], data: Mapping[str, Any]) -> str:
     return record_id
 
 
-__all__ = ["RecordError", "clear_records", "create_record", "list_records", "review_record"]
+__all__ = ["RecordError", "can_review_record", "clear_records", "create_record", "list_records", "review_record"]
