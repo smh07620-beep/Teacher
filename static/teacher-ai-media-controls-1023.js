@@ -1,7 +1,7 @@
 /* Teacher media controls 10/23 reliability pass.
  * The visible shared source picker works independently of legacy hidden pickers.
- * It also keeps AI PowerPoint authoring inside the media workspace and keeps the
- * course wizard on the Browser -> R2 transport. Server RBAC/scope remains authoritative.
+ * It also keeps AI PowerPoint authoring and ordinary material upload inside the
+ * media workspace and keeps uploads on Browser -> R2. Server RBAC/scope remains authoritative.
  */
 (async function () {
   'use strict';
@@ -17,6 +17,7 @@
   let materials = [];
   let refreshGeneration = 0;
   let observer = null;
+  let uploadRefreshTimer = null;
   const powerpointOrigin = { parent: null, next: null, panel: null };
 
   function currentScope() {
@@ -71,10 +72,9 @@
     box.className = 'hidden mt-3 rounded-xl border border-dashed border-cyan-200 bg-white/80 p-4 text-sm text-slate-700';
     box.innerHTML = `
       <b class="text-slate-900">目前沒有可選的已完成教材</b>
-      <p class="mt-1 text-xs leading-5 text-slate-600">你仍可直接丟多份 PDF、Word、PPT、Excel、圖片或文字製作 AI PowerPoint；一般教材完成 Worker 處理後也會自動出現在這裡。</p>
+      <p class="mt-1 text-xs leading-5 text-slate-600">一般教材可直接在這一頁上傳；如果要用多份 PDF、Word、PPT、Excel、圖片或文字產生簡報，請使用下方唯一的「多資料 AI PowerPoint」。</p>
       <div class="mt-3 flex flex-wrap gap-2">
-        <button id="teacher-media-empty-powerpoint-1024" type="button" class="rounded-lg bg-violet-700 px-3 py-2 text-xs font-black text-white">🖥️ 直接製作 AI PowerPoint</button>
-        <button id="teacher-media-empty-upload-1024" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700">📚 上傳一般教材</button>
+        <button id="teacher-media-empty-upload-1024" type="button" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">📚 上傳一般教材</button>
         <button id="teacher-media-source-refresh-1024" type="button" class="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-800">↻ 重新整理教材</button>
       </div>`;
     const label = shared.closest('label');
@@ -97,10 +97,10 @@
       const paragraph = empty.querySelector('p');
       if (errorMessage) {
         if (heading) heading.textContent = '教材清單讀取失敗';
-        if (paragraph) paragraph.textContent = `${errorMessage}。可按「重新整理教材」再試一次，或直接開啟多資料 AI PowerPoint。`;
+        if (paragraph) paragraph.textContent = `${errorMessage}。可按「重新整理教材」再試一次，或直接在本頁上傳一般教材。`;
       } else {
         if (heading) heading.textContent = '目前沒有可選的已完成教材';
-        if (paragraph) paragraph.textContent = '你仍可直接丟多份 PDF、Word、PPT、Excel、圖片或文字製作 AI PowerPoint；一般教材完成 Worker 處理後也會自動出現在這裡。';
+        if (paragraph) paragraph.textContent = '一般教材可直接在這一頁上傳；若要用多份原始資料產生簡報，請使用下方唯一的「多資料 AI PowerPoint」。';
       }
     }
   }
@@ -130,7 +130,7 @@
       else if (usable.length === 1) select.value = String(usable[0].id || '');
       select.disabled = !usable.length;
       const status = $('teacher-ai-video-status-1015');
-      const noPpt = '這份教材尚無已核准 PowerPoint。可先使用上方「多資料 AI PowerPoint」建立並核准。';
+      const noPpt = '這份教材尚無已核准 PowerPoint。可先使用「多資料 AI PowerPoint」建立並核准。';
       if (status && !usable.length && status.textContent !== noPpt) status.textContent = noPpt;
     } catch (error) {
       select.replaceChildren(new Option('PowerPoint 版本讀取失敗', ''));
@@ -160,7 +160,7 @@
     if (!materialId) {
       setSharedHint(materials.length
         ? '請先選擇來源教材／來源內容。'
-        : '沒有既有教材也可以製作：直接使用「多資料 AI PowerPoint」加入原始資料。');
+        : '目前沒有已完成教材。可直接在本頁上傳一般教材，或用下方「多資料 AI PowerPoint」加入原始資料。');
       return;
     }
     const item = materials.find(row => String(row.id) === materialId);
@@ -185,7 +185,7 @@
       if (generation !== refreshGeneration) return false;
       materials = scopedMaterials(body);
       paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材');
-      paintSelect(shared, materials, '目前沒有可用教材；可直接製作 AI PowerPoint');
+      paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳');
       showSourceAvailability(materials);
       syncSelectedSource();
       return true;
@@ -226,7 +226,7 @@
   function improvePowerPointEntry() {
     const entry = $('teacher-media-powerpoint-entry-1018');
     if (!entry) return;
-    const desired = '直接在這裡加入多份 PDF、Word、PPT、Excel、圖片或文字；AI Worker 會統整／RAG 產生大綱，教師核准後再建立 .pptx，不再跳回教材區。';
+    const desired = '一次加入多份 PDF、Word、PPT、Excel、圖片或文字；AI Worker 會統整／RAG 產生大綱，教師核准後再建立 .pptx。這裡是本頁唯一的 AI PowerPoint 入口。';
     const text = entry.querySelector('p');
     if (text && text.textContent !== desired) text.textContent = desired;
     const button = $('teacher-media-open-powerpoint-1018');
@@ -239,7 +239,7 @@
     const note = document.createElement('p');
     note.id = 'teacher-ai-video-source-help-1023';
     note.className = 'rounded-xl border border-violet-100 bg-violet-50 p-3 text-xs leading-5 text-violet-900';
-    note.textContent = '教學影片需要「來源教材 + 已核准 PowerPoint + 旁白」。若 PowerPoint 清單為空，先按上方「多資料 AI PowerPoint」建立並核准簡報。';
+    note.textContent = '教學影片需要「來源教材 + 已核准 PowerPoint + 旁白」。若 PowerPoint 清單為空，先使用本頁「多資料 AI PowerPoint」建立並核准簡報。';
     panel.insertBefore(note, panel.children[1] || null);
   }
 
@@ -269,6 +269,7 @@
   }
 
   async function openPowerPointWorkspace() {
+    closeGeneralMaterialUpload();
     let panel = $('teacher-ai-material-1014');
     if (!panel && typeof window.renderAdminCourseMaterialHub === 'function') {
       try { await window.renderAdminCourseMaterialHub(true); } catch (_error) {}
@@ -325,15 +326,165 @@
     powerpointOrigin.panel = null;
   }
 
-  async function openGeneralMaterialUpload() {
+  function ensureGeneralMaterialUploadWorkspace() {
+    const shared = $('teacher-media-source-1018');
+    const studio = $('teacher-ai-media-studio-1018') || $('teacher-media-production-1014');
+    if (!shared || !studio) return null;
+    let host = $('teacher-media-general-upload-1025');
+    if (host) return host;
+    host = document.createElement('section');
+    host.id = 'teacher-media-general-upload-1025';
+    host.hidden = true;
+    host.className = 'mt-3 rounded-2xl border border-teal-200 bg-white p-4 sm:p-5 shadow-sm';
+    host.innerHTML = `
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p class="text-[11px] font-black tracking-[0.14em] text-teal-700">MATERIAL UPLOAD</p>
+          <h4 class="mt-1 text-lg font-black text-slate-950">📚 上傳一般教材</h4>
+          <p class="mt-1 text-xs leading-5 text-slate-500">檔案直接由瀏覽器傳到 R2，再交給 Worker 處理；不會跳回「教材與課程」。Worker 完成後會自動加入上方來源選單。</p>
+        </div>
+        <button id="teacher-media-general-upload-close-1025" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600">收起</button>
+      </div>
+      <div class="mt-4 grid gap-3 lg:grid-cols-2">
+        <label class="block text-xs font-bold text-slate-700 lg:col-span-2">選擇教材檔案（可多選）
+          <input id="teacher-media-general-files-1025" type="file" multiple accept=".ppt,.pptx,.pdf,.doc,.docx,.xls,.xlsx,.odp,.odt,.ods,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov,.m4v,.mp3,.wav,.m4a,.ogg,.txt,.csv" class="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+        </label>
+        <label class="block text-xs font-bold text-slate-700">教材名稱（選填）
+          <input id="teacher-media-general-title-1025" maxlength="255" placeholder="單檔可自訂；多檔留白使用檔名" class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+        </label>
+        <label class="block text-xs font-bold text-slate-700">教材說明（選填）
+          <input id="teacher-media-general-desc-1025" maxlength="1000" placeholder="例如：儀器操作與維護教材" class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+        </label>
+      </div>
+      <div class="mt-3 rounded-xl bg-teal-50 px-3 py-2 text-xs text-teal-900">上傳範圍：<b id="teacher-media-general-scope-1025"></b>｜安全路徑：Browser → R2 → Worker</div>
+      <div id="teacher-media-general-status-1025" class="mt-3 text-xs leading-5 text-slate-600" aria-live="polite">選好檔案後按「開始上傳」。</div>
+      <div class="mt-4 flex justify-end">
+        <button id="teacher-media-general-upload-start-1025" type="button" class="rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-black text-white">開始上傳</button>
+      </div>`;
+    const empty = ensureSourceEmptyState();
+    const anchor = empty || shared.closest('label') || shared;
+    anchor.insertAdjacentElement('afterend', host);
+    return host;
+  }
+
+  function closeGeneralMaterialUpload() {
+    const host = $('teacher-media-general-upload-1025');
+    if (host) host.hidden = true;
+    if (uploadRefreshTimer) {
+      clearTimeout(uploadRefreshTimer);
+      uploadRefreshTimer = null;
+    }
+  }
+
+  function scheduleMaterialRefresh(beforeIds, status) {
+    if (uploadRefreshTimer) clearTimeout(uploadRefreshTimer);
+    let attempts = 0;
+    const poll = async () => {
+      attempts += 1;
+      await refreshSources();
+      const added = materials.filter(item => !beforeIds.has(String(item.id || '')));
+      if (added.length) {
+        const shared = $('teacher-media-source-1018');
+        if (shared) {
+          shared.value = String(added[0].id || '');
+          syncSelectedSource();
+        }
+        if (status) status.textContent = `✅ Worker 已完成 ${added.length} 份新教材；已更新來源選單並選取「${added[0].title || added[0].filename || '新教材'}」。`;
+        uploadRefreshTimer = null;
+        return;
+      }
+      if (attempts >= 24) {
+        if (status) status.textContent = '⏳ 檔案已排入 Worker，但尚未完成處理。你可以繼續其他工作，完成後按「重新整理教材」即可看到。';
+        uploadRefreshTimer = null;
+        return;
+      }
+      uploadRefreshTimer = setTimeout(poll, 5000);
+    };
+    uploadRefreshTimer = setTimeout(poll, 3000);
+  }
+
+  async function uploadGeneralMaterials() {
+    const input = $('teacher-media-general-files-1025');
+    const files = Array.from(input?.files || []);
+    const status = $('teacher-media-general-status-1025');
+    const button = $('teacher-media-general-upload-start-1025');
+    if (!files.length) {
+      if (status) status.textContent = '請先選擇至少一份教材檔案。';
+      return false;
+    }
+    if (!window.MaterialUploadClient?.enqueue) {
+      if (status) status.textContent = '❌ 教材上傳元件尚未載入，請重新整理頁面後再試。';
+      return false;
+    }
+
+    const beforeIds = new Set(materials.map(item => String(item.id || '')));
+    const { area, group } = currentScope();
+    const title = $('teacher-media-general-title-1025')?.value.trim() || '';
+    const desc = $('teacher-media-general-desc-1025')?.value.trim() || '';
+    if (button) button.disabled = true;
+    let queued = 0;
+    const failed = [];
+
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('title', files.length === 1 ? title : '');
+      fd.append('desc', desc);
+      fd.append('category', '');
+      fd.append('group', group);
+      fd.append('area', area);
+      fd.append('courseId', '');
+      fd.append('materialType', 'standard');
+      fd.append('progressId', `media-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`);
+      try {
+        if (status) status.textContent = `⬆️ ${index + 1}/${files.length} 正在安全上傳「${file.name}」…`;
+        const data = await window.MaterialUploadClient.enqueue(fd, {
+          fileName: file.name,
+          fallbackToSameOriginQueue: false,
+          onProgress: progress => {
+            if (status) status.textContent = `⬆️ ${index + 1}/${files.length}「${file.name}」${Number(progress?.percent || 0).toFixed(0)}%｜Browser → R2`;
+          }
+        });
+        if (!data?.accepted && !data?.jobId && data?.status !== 'queued') throw new Error(data?.error || '教材未成功排入 Worker');
+        queued += 1;
+      } catch (error) {
+        failed.push(`${file.name}：${error.message}`);
+      }
+    }
+
+    if (button) button.disabled = false;
+    if (input) input.value = '';
+    if ($('teacher-media-general-title-1025')) $('teacher-media-general-title-1025').value = '';
+    if ($('teacher-media-general-desc-1025')) $('teacher-media-general-desc-1025').value = '';
+
+    if (!queued) {
+      if (status) status.textContent = `❌ 上傳失敗：${failed.join('；') || '未知錯誤'}`;
+      return false;
+    }
+    if (status) {
+      status.textContent = failed.length
+        ? `⚠️ 已排入 Worker ${queued}/${files.length} 份；${failed.length} 份失敗：${failed.join('；')}`
+        : `✅ ${queued} 份教材已安全傳到 R2 並排入 Worker，正在等待處理完成…`;
+    }
+    scheduleMaterialRefresh(beforeIds, status);
+    return true;
+  }
+
+  function openGeneralMaterialUpload() {
     closePowerPointWorkspace();
-    await window.TeacherWorkspace1014?.openCourse?.();
-    setTimeout(() => {
-      const input = $('admin-pptx-upload-input');
-      const target = input || $('admin-course-material-hub');
-      target?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-      input?.focus?.();
-    }, 80);
+    const host = ensureGeneralMaterialUploadWorkspace();
+    if (!host) {
+      setSharedHint('教材上傳區尚未載入完成，請稍候再試。', true);
+      return false;
+    }
+    const { area, group } = currentScope();
+    const scopeNode = $('teacher-media-general-scope-1025');
+    if (scopeNode) scopeNode.textContent = `${area} · ${group}`;
+    host.hidden = false;
+    host.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    setTimeout(() => $('teacher-media-general-files-1025')?.focus?.(), 50);
+    return true;
   }
 
   function installCourseWizardDirectUploadGuard() {
@@ -377,20 +528,23 @@
 
   document.addEventListener('click', event => {
     const target = event.target?.closest?.(
-      '#teacher-media-open-powerpoint-1018,#teacher-media-empty-powerpoint-1024,#teacher-media-powerpoint-close-1024,#teacher-media-empty-upload-1024,#teacher-media-source-refresh-1024'
+      '#teacher-media-open-powerpoint-1018,#teacher-media-powerpoint-close-1024,#teacher-media-empty-upload-1024,#teacher-media-source-refresh-1024,#teacher-media-general-upload-close-1025,#teacher-media-general-upload-start-1025'
     );
     if (target) {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (target.id === 'teacher-media-powerpoint-close-1024') closePowerPointWorkspace();
-      else if (target.id === 'teacher-media-empty-upload-1024') void openGeneralMaterialUpload();
+      else if (target.id === 'teacher-media-empty-upload-1024') openGeneralMaterialUpload();
       else if (target.id === 'teacher-media-source-refresh-1024') void refreshSources();
+      else if (target.id === 'teacher-media-general-upload-close-1025') closeGeneralMaterialUpload();
+      else if (target.id === 'teacher-media-general-upload-start-1025') void uploadGeneralMaterials();
       else void openPowerPointWorkspace();
       return;
     }
 
     if (event.target?.closest?.('#teacher-nav-course-1014,#teacher-nav-assessment-1014,#teacher-nav-documents-1014,#teacher-media-pick-material-1014')) {
       closePowerPointWorkspace();
+      closeGeneralMaterialUpload();
     }
   }, true);
 
@@ -418,5 +572,6 @@
     refreshSources,
     openPowerPointWorkspace,
     closePowerPointWorkspace,
+    openGeneralMaterialUpload,
   });
 })();
