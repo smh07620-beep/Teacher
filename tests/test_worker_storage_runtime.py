@@ -174,6 +174,46 @@ class WorkerStorageRuntimeTests(unittest.TestCase):
         ):
             self.assertEqual(adapter.active_backend(), "gdrive")
 
+    def test_r2_publication_uses_deterministic_keys_and_manifest(self):
+        adapter = WorkerMaterialStorageAdapter()
+        calls = []
+
+        class R2:
+            def upload_file(self, filename, bucket, key, ExtraArgs=None):
+                calls.append((Path(filename).name, bucket, key, dict(ExtraArgs or {})))
+
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.txt"
+            source.write_text("worker material", encoding="utf-8")
+            with patch(
+                "teacher_app.storage.worker_runtime.providers.r2_client",
+                return_value=R2(),
+            ), patch(
+                "teacher_app.storage.worker_runtime.providers.R2_BUCKET_NAME",
+                "bucket",
+            ):
+                first = adapter.upload_source_to_r2(
+                    "material-1",
+                    source,
+                    publish_key="pub-" + "a" * 64,
+                    source_sha256="b" * 64,
+                )
+                second = adapter.upload_source_to_r2(
+                    "material-1",
+                    source,
+                    publish_key="pub-" + "a" * 64,
+                    source_sha256="b" * 64,
+                )
+
+        self.assertEqual(first[0], "materials/material-1/source.txt")
+        self.assertEqual(first[0], second[0])
+        self.assertEqual(first[2]["r2Objects"], second[2]["r2Objects"])
+        self.assertEqual(first[2]["r2Objects"][0]["key"], first[0])
+        self.assertGreater(first[2]["r2Objects"][0]["bytes"], 0)
+        self.assertEqual([item[2] for item in calls], [first[0], first[0]])
+        self.assertEqual(calls[0][3]["Metadata"]["smh-object-key"], "source")
+
     def test_gdrive_upload_reuses_one_canonical_service(self):
         adapter = WorkerMaterialStorageAdapter()
         service = _DriveService()
