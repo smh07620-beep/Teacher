@@ -174,6 +174,53 @@ test('teacher workspace renders Worker status without layout overflow', async ({
   await assertNoHorizontalOverflow(page);
 });
 
+test('system admin sees canonical Worker offline notification in system workspace', async ({ page }) => {
+  await page.route('**/api/training-command-center/notifications', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: 'training-command-center',
+        counts: { total: 1, overdue: 0, emailEligible: 1 },
+        items: [{
+          key: 'notify:worker_offline:test',
+          persona: 'system',
+          kind: 'worker_offline',
+          domain: 'operations',
+          title: '教材 Worker 已離線',
+          detail: 'A8B5-TeacherWorker 已超過 10 分鐘未回報心跳。',
+          badge: 'Worker 離線',
+          status: 'offline:2026-10-02T00:00:00+00:00',
+          overdue: false,
+          dueAt: '',
+          area: 'internal',
+          group: '',
+          resourceId: 'A8B5-TeacherWorker',
+          courseId: '',
+          href: '/system?admin=1&workspace=worker&persona=system&from=notification-center',
+          channels: ['in_app', 'email'],
+          emailPolicy: 'once',
+        }],
+      }),
+    });
+  });
+  await page.route('**/api/notification-states?**', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ states: {} }) });
+  });
+
+  await page.setViewportSize({ width: 430, height: 932 });
+  await open(page, '/system?admin=1&workspace=worker&persona=system');
+
+  const center = page.locator('#notification-center-71');
+  await expect(center).toBeVisible({ timeout: 10000 });
+  await expect(center).toHaveAttribute('data-notification-context', 'system');
+  await expect(center).toContainText('教材 Worker 已離線');
+  await expect(center).toContainText('Worker 離線');
+  await expect(center.locator('a[href*="workspace=worker"][href*="persona=system"]')).toContainText('查看 Worker 狀態');
+  await expect(center.evaluate(node => node.parentElement?.id || '')).resolves.toBe('admin-workspace-content');
+  await assertNoHorizontalOverflow(page);
+});
+
 test('Worker status error state is distinct from an offline Worker', async ({ page }) => {
   await page.route('**/api/material-jobs?**', async route => {
     await route.fulfill({
