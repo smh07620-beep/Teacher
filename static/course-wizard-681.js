@@ -405,9 +405,22 @@ async function continueToAssessment(){
 async function openCourseWorkspace(){
   if(!canLeaveCourse())return alert('教材尚未正式完成。請留在此頁等待 Worker 完成，避免回到課程後看不到教材。');
   state.watchToken++;
+
+  // The wizard is mounted inside Teacher Content Studio. Switching only the
+  // underlying workspace leaves the studio visible and makes this button look inert.
+  window.teacherContentStudioClose?.(false);
   if(typeof window.switchAdminWorkspace==='function')await window.switchAdminWorkspace('course-materials',true);
   if(typeof window.renderAdminCourseMaterialHub==='function')await window.renderAdminCourseMaterialHub(true).catch(()=>{});
   el('admin-course-material-hub')?.scrollIntoView({behavior:'smooth',block:'start'});
+
+  // Do not leak a completed course into the next create-course flow.
+  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';
+  state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.created=false;
+  state.failedUploads=[];state.queuedJobs=[];state.expectedJobs=0;state.jobRows=[];
+  state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.resultHtml='';
+  clearWorkflowId();
+  render();
+  loadMaterials();
 }
 
 function reset(){

@@ -51,6 +51,9 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertIn('課程本身已鎖定完成，不會重複建立', source)
         self.assertIn("if(state.created)return retryFailedUploads();", source)
         self.assertIn('重試未完成教材', source)
+        self.assertIn("window.teacherContentStudioClose?.(false)", source)
+        self.assertIn("clearWorkflowId();", source)
+        self.assertIn("window.switchAdminWorkspace('course-materials',true)", source)
 
     def test_admin_upload_delegates_to_shared_transport(self):
         source = ROOT.joinpath('static', 'admin-material-upload.js').read_text(encoding='utf-8')
