@@ -416,6 +416,148 @@ class WorkerMaterialStorageAdapter:
     def _content_type(path_or_name: object) -> str:
         return mimetypes.guess_type(str(path_or_name))[0] or "application/octet-stream"
 
+    @staticmethod
+    def _r2_object_meta(path: Path, key: str) -> dict[str, Any]:
+        path = Path(path)
+        return {"key": str(key), "bytes": int(path.stat().st_size)}
+
+    def _r2_put_file(
+        self,
+        local_path: Path,
+        key: str,
+        *,
+        publish_key: str = "",
+        source_sha256: str = "",
+        object_key: str = "",
+    ) -> dict[str, Any]:
+        path = Path(local_path)
+        metadata = {
+            "smh-publish-key": str(publish_key or "")[:240],
+            "smh-source-sha256": str(source_sha256 or "").lower()[:64],
+            "smh-object-key": str(object_key or "")[:240],
+        }
+        metadata = {k: v for k, v in metadata.items() if v}
+        providers.r2_client().upload_file(
+            str(path),
+            providers.R2_BUCKET_NAME,
+            str(key),
+            ExtraArgs={
+                "ContentType": self._content_type(path),
+                "Metadata": metadata,
+            },
+        )
+        return self._r2_object_meta(path, key)
+
+    def upload_source_to_r2(
+        self,
+        material_id: str,
+        source_path: Path,
+        *,
+        publish_key: str = "",
+        source_sha256: str = "",
+    ) -> tuple[str, str, dict[str, Any]]:
+        source_path = Path(source_path)
+        prefix = f"materials/{material_id}"
+        source_key = f"{prefix}/source{source_path.suffix.lower()}"
+        obj = self._r2_put_file(
+            source_path,
+            source_key,
+            publish_key=publish_key,
+            source_sha256=source_sha256,
+            object_key="source",
+        )
+        return source_key, "", {
+            "r2Objects": [obj],
+            "publishKey": publish_key,
+            "sourceSha256": str(source_sha256 or "").lower(),
+        }
+
+    def upload_material_tree_to_r2(
+        self,
+        material_id: str,
+        source_path: Path,
+        slides_dir: Path,
+        page_count: int,
+        *,
+        derivatives: dict[str, Path] | None = None,
+        publish_key: str = "",
+        source_sha256: str = "",
+    ) -> tuple[str, str, dict[str, Any]]:
+        source_path = Path(source_path)
+        slides_dir = Path(slides_dir)
+        prefix = f"materials/{material_id}"
+        source_key = f"{prefix}/source{source_path.suffix.lower()}"
+        slides_prefix = f"{prefix}/slides"
+        objects = [
+            self._r2_put_file(
+                source_path,
+                source_key,
+                publish_key=publish_key,
+                source_sha256=source_sha256,
+                object_key="source",
+            )
+        ]
+        slide_files: dict[str, str] = {}
+        for index in range(1, int(page_count or 0) + 1):
+            slide = self._slide_local_path(slides_dir, index)
+            if not slide.exists():
+                continue
+            key = f"{slides_prefix}/{slide.name}"
+            objects.append(
+                self._r2_put_file(
+                    slide,
+                    key,
+                    publish_key=publish_key,
+                    source_sha256=source_sha256,
+                    object_key=f"slide:{index}",
+                )
+            )
+            slide_files[slide.name] = key
+        derived_files: dict[str, str] = {}
+        for name, raw_path in (derivatives or {}).items():
+            path = Path(raw_path)
+            if not path.is_file() or path.stat().st_size <= 0:
+                continue
+            safe_name = Path(str(name)).name
+            key = f"{prefix}/derived/{safe_name}"
+            objects.append(
+                self._r2_put_file(
+                    path,
+                    key,
+                    publish_key=publish_key,
+                    source_sha256=source_sha256,
+                    object_key=f"derived:{safe_name}",
+                )
+            )
+            derived_files[safe_name] = key
+        return source_key, slides_prefix, {
+            "r2Objects": objects,
+            "slideFiles": slide_files,
+            "derivedFiles": derived_files,
+            "slideFormat": self.slide_format(slides_dir, page_count),
+            "publishKey": publish_key,
+            "sourceSha256": str(source_sha256 or "").lower(),
+        }
+
+    def upload_media_bundle_to_r2(
+        self,
+        material_id: str,
+        source_path: Path,
+        derivatives: dict[str, Path],
+        *,
+        publish_key: str = "",
+        source_sha256: str = "",
+    ) -> tuple[str, str, dict[str, Any]]:
+        return self.upload_material_tree_to_r2(
+            material_id,
+            source_path,
+            Path(source_path).parent / "_empty-slides",
+            0,
+            derivatives=derivatives,
+            publish_key=publish_key,
+            source_sha256=source_sha256,
+        )
+
     def upload_source_to_mega(self, material_id: str, source_path: Path) -> str:
         folder = self._mega_remote_join(self._mega_root(), material_id)
         self._mega_free_guard(source_path.stat().st_size)
