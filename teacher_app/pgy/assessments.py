@@ -6,9 +6,10 @@ import json
 import uuid
 from typing import Any, Mapping
 
+from teacher_app.common import audit
 from teacher_app.common import db as common_db
 from teacher_app.common import scope
-from teacher_app.common.auth import has_role, normalize_role
+from teacher_app.common.auth import has_role
 
 
 PGY_ASSESSMENT_TYPES = {
@@ -46,6 +47,84 @@ PGY_ASSESSMENT_ITEMS = {
 }
 
 TSLM_EPA_REFERENCE_URL = "https://www.labmed.org.tw/upfiles/file/20240119/20240119172950815081.pdf"
+
+
+ACTIVE_CLINICAL_ASSIGNMENT_STATUSES = {
+    "assigned",
+    "submitted",
+    "teacher_signed",
+    "group_countersigned",
+}
+
+
+def _username(value: Any) -> str:
+    return str(value or "").strip().lower()[:100]
+
+
+def _assigned_learner_for_assessment(
+    conn,
+    kind: str,
+    user: Mapping[str, Any],
+    *,
+    emp_id: str,
+    group: str,
+) -> dict[str, Any]:
+    """Resolve the learner and prove an active teacher assignment server-side."""
+    ph = common_db.placeholder(kind)
+    target = conn.execute(
+        f"""
+        SELECT username,display_name,emp_id,role,roles_json,preferred_group,active
+        FROM user_accounts
+        WHERE emp_id={ph}
+        """,
+        (emp_id,),
+    ).fetchone()
+    if not target:
+        raise AssessmentError("找不到受評學員。", 404)
+    target = dict(target)
+    if not bool(target.get("active", True)) or not has_role(target, "student"):
+        raise AssessmentError("指定的受評者不是可用的學員帳號。", 400)
+
+    teacher_username = _username(user.get("username"))
+    learner_username = _username(target.get("username"))
+    own_group = scope.normalize_group(
+        user.get("preferredGroup") or user.get("preferred_group")
+    )
+    if group != own_group:
+        raise AssessmentError("權限不足：臨床教師只能評核自己負責組別的學員。", 403)
+
+    marks = ",".join(ph for _ in ACTIVE_CLINICAL_ASSIGNMENT_STATUSES)
+    assignment = conn.execute(
+        f"""
+        SELECT id,group_key,status
+        FROM pgy_assignments
+        WHERE learner_username={ph}
+          AND teacher_username={ph}
+          AND training_area='pgy'
+          AND group_key={ph}
+          AND status IN ({marks})
+        ORDER BY updated_at DESC
+        LIMIT 1
+        """,
+        (
+            learner_username,
+            teacher_username,
+            group,
+            *sorted(ACTIVE_CLINICAL_ASSIGNMENT_STATUSES),
+        ),
+    ).fetchone()
+    if not assignment:
+        raise AssessmentError(
+            "權限不足：只能評核目前明確指派給你的 PGY 學員。",
+            403,
+        )
+    return {
+        "username": learner_username,
+        "name": str(target.get("display_name") or learner_username).strip()[:100],
+        "empId": str(target.get("emp_id") or emp_id).strip()[:100],
+        "group": group,
+        "assignmentId": str(dict(assignment).get("id") or ""),
+    }
 
 
 class AssessmentError(ValueError):
@@ -168,14 +247,13 @@ def create_assessment(user: Mapping[str, Any], data: Mapping[str, Any]) -> str:
     assessment_type = str(data.get("assessmentType", "")).strip()
     if assessment_type not in PGY_ASSESSMENT_TYPES:
         raise AssessmentError("評量類型不正確", 400)
-    name = str(data.get("name", "")).strip()[:100]
+    requested_name = str(data.get("name", "")).strip()[:100]
     emp_id = str(data.get("empId", "")).strip()[:100]
     evaluator = str(user.get("name", "")).strip()[:100]
-    if not name or not emp_id or not evaluator:
+    if not requested_name or not emp_id or not evaluator:
         raise AssessmentError("請填寫受評者姓名、工號與評估者", 400)
+
     group = scope.normalize_group(data.get("group", scope.DEFAULT_GROUP))
-    if normalize_role(user.get("role")) == "clinical_teacher" and group != scope.normalize_group(user.get("preferredGroup")):
-        raise AssessmentError("權限不足：臨床教師只能評核自己負責組別的學員。", 403)
     details = data.get("details") or {}
     if not isinstance(details, dict):
         raise AssessmentError("評核明細格式錯誤", 400)
@@ -183,6 +261,7 @@ def create_assessment(user: Mapping[str, Any], data: Mapping[str, Any]) -> str:
     expected = PGY_ASSESSMENT_ITEMS.get(assessment_type, [])
     if not isinstance(ratings, list) or len(ratings) != len(expected):
         raise AssessmentError(f"教師評核必須完成全部 {len(expected)} 項評分", 400)
+
     normalized_ratings = []
     for index, item_name in enumerate(expected):
         row = ratings[index] if index < len(ratings) and isinstance(ratings[index], dict) else {}
@@ -192,24 +271,83 @@ def create_assessment(user: Mapping[str, Any], data: Mapping[str, Any]) -> str:
             rating = 0
         if rating not in {1, 2, 3, 4, 5}:
             raise AssessmentError(f"第 {index + 1} 項「{item_name}」尚未完成 1–5 分評核", 400)
-        normalized_ratings.append({"item": item_name, "rating": rating, "note": str(row.get("note", ""))[:1000]})
+        normalized_ratings.append({
+            "item": item_name,
+            "rating": rating,
+            "note": str(row.get("note", ""))[:1000],
+        })
+
     details = {"ratings": normalized_ratings}
     record_id = uuid.uuid4().hex
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     assessment_date = str(data.get("assessmentDate", "")).strip()[:30] or now[:10]
-    title = str(data.get("title", PGY_ASSESSMENT_TYPES[assessment_type])).strip()[:255]
+    title = str(
+        data.get("title", PGY_ASSESSMENT_TYPES[assessment_type])
+    ).strip()[:255]
     comments = str(data.get("comments", "")).strip()[:4000]
-    score = sum(item["rating"] for item in normalized_ratings) / len(normalized_ratings) if normalized_ratings else 0
+    score = (
+        sum(item["rating"] for item in normalized_ratings) / len(normalized_ratings)
+        if normalized_ratings
+        else 0
+    )
     payload = json.dumps(details, ensure_ascii=False)
+
     with common_db.transaction() as (conn, kind):
+        learner = _assigned_learner_for_assessment(
+            conn,
+            kind,
+            user,
+            emp_id=emp_id,
+            group=group,
+        )
+        # Learner identity shown/stored on the signed clinical record is always
+        # resolved from the server account, never from browser display text.
+        name = learner["name"]
+        emp_id = learner["empId"]
         values = (
-            record_id, now, assessment_type, group, name, emp_id, evaluator, "臨床教師",
-            assessment_date, title, payload, comments, score, "completed",
+            record_id,
+            now,
+            assessment_type,
+            group,
+            name,
+            emp_id,
+            evaluator,
+            "臨床教師",
+            assessment_date,
+            title,
+            payload,
+            comments,
+            score,
+            "completed",
         )
         if kind == "postgres":
-            conn.execute("INSERT INTO pgy_assessments(id,created_at,assessment_type,group_key,name,emp_id,evaluator_name,evaluator_title,assessment_date,title,details,comments,overall_score,status) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s)", values)
+            conn.execute(
+                "INSERT INTO pgy_assessments(id,created_at,assessment_type,group_key,name,emp_id,evaluator_name,evaluator_title,assessment_date,title,details,comments,overall_score,status) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s)",
+                values,
+            )
         else:
-            conn.execute("INSERT INTO pgy_assessments(id,created_at,assessment_type,group_key,name,emp_id,evaluator_name,evaluator_title,assessment_date,title,details,comments,overall_score,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", values)
+            conn.execute(
+                "INSERT INTO pgy_assessments(id,created_at,assessment_type,group_key,name,emp_id,evaluator_name,evaluator_title,assessment_date,title,details,comments,overall_score,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                values,
+            )
+
+    audit.record_event(
+        actor=user,
+        action="pgy.assessment.create",
+        target_type="pgy_assessment",
+        target_id=record_id,
+        group=group,
+        scope={
+            "learnerUsername": learner["username"],
+            "assignmentId": learner["assignmentId"],
+        },
+        after={
+            "assessmentType": assessment_type,
+            "assessmentDate": assessment_date,
+            "overallScore": round(score, 3),
+        },
+        detail={"learnerEmpId": emp_id},
+    )
     return record_id
 
 
