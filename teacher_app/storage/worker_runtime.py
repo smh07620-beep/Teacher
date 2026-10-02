@@ -419,15 +419,32 @@ class WorkerMaterialStorageAdapter:
             raise RuntimeError("LibreOffice 未產生 PDF")
         return pdfs[0]
 
-    def build_single_preview_pdf(self, source_path: Path, output_pdf: Path) -> int:
+    def prepare_office_pdf(self, source_path: Path, workdir: Path, *, timeout: int = 240) -> Path:
+        source_path = Path(source_path)
+        if source_path.suffix.lower() not in OFFICE_EXT:
+            raise RuntimeError("不是可轉換的 Office 教材。")
+        workdir = Path(workdir)
+        workdir.mkdir(parents=True, exist_ok=True)
+        with _CONVERSION_LOCK:
+            return self._office_to_pdf(source_path, workdir, timeout=timeout)
+
+    def build_single_preview_pdf(
+        self,
+        source_path: Path,
+        output_pdf: Path,
+        *,
+        prepared_pdf: Path | None = None,
+    ) -> int:
         ext = source_path.suffix.lower()
         if ext == ".pdf":
             return self._save_optimized_pdf(source_path, output_pdf)
         if ext not in OFFICE_EXT:
             return 0
-        with _CONVERSION_LOCK, tempfile.TemporaryDirectory(prefix="teacher-worker-preview-") as temp:
-            pdf = self._office_to_pdf(source_path, Path(temp), timeout=240)
-            return self._save_optimized_pdf(pdf, output_pdf)
+        if prepared_pdf is None:
+            with tempfile.TemporaryDirectory(prefix="teacher-worker-preview-") as temp:
+                pdf = self.prepare_office_pdf(source_path, Path(temp), timeout=240)
+                return self._save_optimized_pdf(pdf, output_pdf)
+        return self._save_optimized_pdf(Path(prepared_pdf), output_pdf)
 
     def convert_pdf_to_images(self, pdf_path: Path, out_folder: Path) -> int:
         if pymupdf is None:
@@ -445,8 +462,8 @@ class WorkerMaterialStorageAdapter:
             document.close()
 
     def convert_office_to_images(self, source_path: Path, out_folder: Path) -> int:
-        with _CONVERSION_LOCK, tempfile.TemporaryDirectory(prefix="teacher-worker-office-") as temp:
-            pdf = self._office_to_pdf(source_path, Path(temp), timeout=180)
+        with tempfile.TemporaryDirectory(prefix="teacher-worker-office-") as temp:
+            pdf = self.prepare_office_pdf(source_path, Path(temp), timeout=180)
             return self.convert_pdf_to_images(pdf, out_folder)
 
     # ------------------------------------------------------------------
