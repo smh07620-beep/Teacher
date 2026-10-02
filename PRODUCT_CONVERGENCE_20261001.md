@@ -146,3 +146,25 @@ The material release gate now includes a real isolated S3-compatible R2 lane usi
 - The loopback HTTP R2 endpoint exists only for the isolated CI fixture. Production R2 remains HTTPS; the canonical provider and CSP layers refuse non-loopback HTTP overrides.
 - GP-02/GP-03/GP-04/GP-05 still retain their existing integration release gates; browser-level convergence for the remaining user workflows is tracked separately rather than being mislabeled as full-stack coverage.
 
+
+
+## Phase A–E completion status (2026-10-02)
+
+The convergence program is now release-gated instead of being tracked only as a planning list.
+
+| Phase | Status | Release evidence |
+| --- | --- | --- |
+| **A — Feature Inventory** | **Complete** | `RC_FEATURE_UI_COVERAGE_MATRIX.md` is the exhaustive engineering inventory and `PRODUCT_FEATURE_INVENTORY_20261001.md` applies the product decisions `保留 / 重複 / 未完成 / 廢棄 / 隱藏`. Known learner duplicate writers were physically retired and recorded as completed deprecations. |
+| **B — Information Architecture** | **Complete** | `PRODUCT_INFORMATION_ARCHITECTURE_20261001.md` limits the product to `我的學習 / 教學 / 評量 / 系統管理`; PGY, group, Worker and media capabilities are scopes/tools rather than extra platforms. |
+| **C — Golden Paths** | **Complete** | GP-01–GP-08 are release gates. The material path includes real Browser → presigned R2-compatible object storage → canonical `material_worker` → database → Browser, plus the same-job Worker-offline recovery path. |
+| **D — UX Convergence** | **Complete** | Learner, teacher/assessment and system surfaces use the shared `Overview / 需要處理 / 目前工作 / 歷史紀錄` product-section contract. Canonical command-center progress/todo/action queues own visible state; the old portal progress/todo writers and duplicate review shortcut were removed. |
+| **E — Production Hardening** | **Complete** | Error recovery and bounded retry/stale recovery are protected; Worker queue depth/oldest wait/failure rate/average duration are observable; security-sensitive writes use append-only audit; normal Email notifications share canonical events; critical Worker-offline alerts are projected after 5–60 minute bounded thresholds and checked every 10 minutes for system admins; material/course hot paths emit latency metrics; mobile learner/browser regressions are release-gated. |
+
+Required release validation remains four independent gates:
+
+1. **Teacher release checks**
+2. **Product Golden Path checks**
+3. **Playwright UI checks**
+4. **Windows Worker checks**
+
+A future feature is not considered converged merely because one of these gates passes; changes must preserve the relevant product, browser, backend/security and local-Worker gates together.
