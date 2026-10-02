@@ -17,7 +17,10 @@
   function ensureAdminUserCreatePanel(){
     const existing=document.getElementById('admin-user-create-panel');
     if(existing)return existing;
-    const host=document.querySelector('#admin-section-people .admin-people-workspace');
+    const peoplePanel=document.getElementById('admin-section-people');
+    const host=document.querySelector('#admin-section-people .admin-people-workspace')
+      || peoplePanel?.querySelector('section')
+      || peoplePanel;
     if(!host)return null;
 
     const panel=document.createElement('details');
@@ -48,7 +51,10 @@
   }
 
   function bindAdminUserCreatePanelRecovery(){
-    const host=document.querySelector('#admin-section-people .admin-people-workspace');
+    const peoplePanel=document.getElementById('admin-section-people');
+    const host=document.querySelector('#admin-section-people .admin-people-workspace')
+      || peoplePanel?.querySelector('section')
+      || peoplePanel;
     if(!host||host.dataset.teacherPeopleCreateObserveBound)return;
     host.dataset.teacherPeopleCreateObserveBound='1';
     new MutationObserver(()=>{
