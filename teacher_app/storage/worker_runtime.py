@@ -687,6 +687,7 @@ class WorkerMaterialStorageAdapter:
                 source_path,
                 folder,
                 f"source{source_path.suffix.lower()}",
+                ensure_folder=False,
             )
             for index in range(1, int(page_count or 0) + 1):
                 slide = self._slide_local_path(slides_dir, index)
@@ -735,7 +736,7 @@ class WorkerMaterialStorageAdapter:
             source_remote = self._mega_upload_file(source_path, folder, source_name, ensure_folder=False)
             preview_remote = self._mega_upload_file(preview_path, folder, "preview.pdf", ensure_folder=False)
             derived_files = {
-                name: self._mega_upload_file(path, folder, name)
+                name: self._mega_upload_file(path, folder, name, ensure_folder=False)
                 for name, path in derivative_files.items()
             }
             meta = {
