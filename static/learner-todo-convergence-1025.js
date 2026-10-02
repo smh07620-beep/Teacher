@@ -34,9 +34,15 @@
   function render(command){
     const list=document.getElementById('v571-pending-exams');
     const count=document.getElementById('v681-home-todo-count');
-    if(!list&&!count)return;
+    const learningCount=document.getElementById('v681-home-materials-pending');
+    const examCount=document.getElementById('v681-home-exams-pending');
+    if(!list&&!count&&!learningCount&&!examCount)return;
     const items=(Array.isArray(command?.items)?command.items:[]).filter(item=>item?.persona==='learner');
+    const exams=items.filter(item=>item?.kind==='exam').length;
+    const learning=Math.max(0,items.length-exams);
     if(count)count.textContent=String(items.length);
+    if(learningCount)learningCount.textContent=String(learning);
+    if(examCount)examCount.textContent=String(exams);
     if(!list)return;
     list.dataset.learnerTodoSource='training-command-center';
     list.innerHTML=items.length?items.slice(0,8).map(item=>{
@@ -62,9 +68,6 @@
 
   function init(){
     load();
-    // portal-v56 loads its progress dashboard independently; re-apply once after
-    // that async paint so the visible task list/count always ends on the canonical source.
-    window.setTimeout(load,800);
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
