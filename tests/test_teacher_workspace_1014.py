@@ -60,9 +60,11 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
         self.assertNotIn("template.manage", self.source)
 
     def test_manual_review_stays_under_assessment_not_new_top_level_nav(self):
-        self.assertIn("待批改／教師評核", self.source)
-        self.assertIn("進入閱卷與評核", self.source)
-        self.assertIn("await window.switchTeacherMode?.('scoring')", self.source)
+        self.assertIn("歷史紀錄", self.source)
+        self.assertIn("待批改項目改由上方「需要我處理」直接進入", self.source)
+        self.assertIn("查看評量紀錄", self.source)
+        self.assertIn("await window.switchAdminWorkspace?.('results', true)", self.source)
+        self.assertNotIn("待批改／教師評核", self.source)
 
     def test_module_does_not_create_authorization_policy(self):
         for forbidden in (
