@@ -218,6 +218,72 @@ class StoragePackageGroundworkTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "loopback"):
             providers._r2_endpoint("acct", "http://s3.example.test")
 
+    def test_mega_login_waits_for_official_server_cold_start_then_retries(self):
+        providers.invalidate_mega_auth_cache()
+        calls = []
+        responses = [
+            SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr="MEGAcmd Server not running. Initiating in the background...",
+            ),
+            SimpleNamespace(returncode=1, stdout="", stderr="server starting"),
+            SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr="MEGAcmd Server not running. Initiating in the background...",
+            ),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="teacher@example.test", stderr=""),
+        ]
+
+        def run(args, **kwargs):
+            calls.append((list(args), kwargs))
+            return responses.pop(0)
+
+        with patch.object(providers.time, "sleep") as sleep:
+            providers.mega_login_if_needed(
+                is_configured=lambda: True,
+                run=run,
+                email="teacher@example.test",
+                password="secret",
+                session_cache_seconds=1800,
+            )
+
+        login_calls = [args for args, _kwargs in calls if args and args[0] == "mega-login"]
+        self.assertEqual(len(login_calls), 2)
+        self.assertGreaterEqual(sleep.call_count, 2)
+        self.assertFalse(responses)
+
+    def test_mega_login_does_not_retry_real_authentication_failure(self):
+        providers.invalidate_mega_auth_cache()
+        calls = []
+
+        def run(args, **kwargs):
+            calls.append((list(args), kwargs))
+            if args[0] == "mega-whoami":
+                return SimpleNamespace(returncode=1, stdout="", stderr="not logged in")
+            if args[0] == "mega-logout":
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            if args[0] == "mega-login":
+                return SimpleNamespace(returncode=2, stdout="", stderr="authentication failed")
+            raise AssertionError(args)
+
+        with patch.object(providers.time, "sleep") as sleep:
+            with self.assertRaisesRegex(RuntimeError, "authentication failed"):
+                providers.mega_login_if_needed(
+                    is_configured=lambda: True,
+                    run=run,
+                    email="teacher@example.test",
+                    password="bad-secret",
+                    session_cache_seconds=1800,
+                )
+        self.assertEqual(
+            sum(1 for args, _kwargs in calls if args and args[0] == "mega-login"),
+            1,
+        )
+        sleep.assert_not_called()
+
     def test_mega_login_cache_is_canonically_owned_and_reused(self):
         providers.invalidate_mega_auth_cache()
         calls = []

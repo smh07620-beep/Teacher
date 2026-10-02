@@ -336,6 +336,32 @@ def mega_timeout_for_deadline(deadline, default_seconds):
     return max(1, min(int(default_seconds), int(max(1, remaining))))
 
 
+def _mega_result_detail(result) -> str:
+    return str(
+        ((getattr(result, "stderr", "") or "") + "\n" + (getattr(result, "stdout", "") or ""))
+    ).strip()
+
+
+def _mega_server_is_starting(result) -> bool:
+    """Recognize the official MEGAcmd cold-start response without hiding auth errors."""
+
+    text = _mega_result_detail(result).lower()
+    return (
+        "megacmd server not running" in text
+        and ("initiating in the background" in text or "starting" in text)
+    )
+
+
+def _mega_wait_for_server(deadline=None, seconds: float = 1.0) -> None:
+    delay = max(0.1, float(seconds or 1.0))
+    if deadline is not None:
+        remaining = float(deadline) - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError("MEGA 讀取逾時，請稍後重試。")
+        delay = min(delay, max(0.1, remaining))
+    time.sleep(delay)
+
+
 _MEGA_AUTH_CACHE = {"ok": False, "at": 0.0}
 _MEGA_LOCK = threading.RLock()
 
@@ -376,19 +402,37 @@ def mega_login_if_needed(
             timeout=mega_timeout_for_deadline(deadline, 30),
         )
         if probe.returncode != 0:
+            if _mega_server_is_starting(probe):
+                _mega_wait_for_server(deadline)
             run(
                 ["mega-logout"],
                 check=False,
                 timeout=mega_timeout_for_deadline(deadline, 30),
             )
-            login = run(
-                ["mega-login", email, password],
-                check=False,
-                timeout=mega_timeout_for_deadline(deadline, 120),
-            )
-            if login.returncode != 0:
-                detail = (login.stderr or login.stdout or "login failed").strip()
-                raise RuntimeError(f"MEGA 登入失敗：{detail[-600:]}")
+            login = None
+            # Official MEGAcmd on Windows may use the first CLI invocation only
+            # to start its per-user background server.  Treat only that exact
+            # cold-start response as transient; authentication/network errors
+            # still fail closed immediately.
+            for attempt in range(8):
+                login = run(
+                    ["mega-login", email, password],
+                    check=False,
+                    timeout=mega_timeout_for_deadline(deadline, 120),
+                )
+                if login.returncode == 0:
+                    break
+                if not _mega_server_is_starting(login):
+                    detail = _mega_result_detail(login) or "login failed"
+                    raise RuntimeError(f"MEGA 登入失敗：{detail[-600:]}")
+                if attempt < 7:
+                    _mega_wait_for_server(deadline)
+            if login is None or login.returncode != 0:
+                detail = _mega_result_detail(login) if login is not None else "login failed"
+                raise RuntimeError(
+                    "MEGA 背景 Server 啟動逾時；原始檔仍安全保留，請稍後直接重新處理。"
+                    + (f"：{detail[-400:]}" if detail else "")
+                )
         verify = run(
             ["mega-whoami"],
             check=False,

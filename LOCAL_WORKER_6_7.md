@@ -123,6 +123,14 @@ FFmpeg/FFprobe、LibreOffice 和 MEGAcmd capability。它只在 `requirements.tx
 checksum 改變或 import check 失敗時同步 requirements；一般 crash 最多重啟
 五次，避免 tight restart loop。
 
+Windows 的官方 MEGAcmd 使用每個 Windows 使用者自己的背景 Server。Task Scheduler
+冷啟動後，第一次 `mega-whoami` / `mega-login` 可能只回覆
+`MEGAcmd Server not running. Initiating in the background...`。Worker 會把這個
+**特定訊息**視為暫時性的 cold-start 狀態，短暫等待並重試登入；一般帳密錯誤、
+網路錯誤或其他 MEGA 錯誤仍會立即失敗，不會被吞掉。若背景 Server 在 bounded
+重試後仍未啟動，教材 Job 會保留 R2 staging，可在 Server 恢復後直接重新處理，
+不需要重新上傳原始檔。
+
 正式 Windows 常駐執行請用 repository 內的
 `install_material_worker_task.ps1`。installer 會建立 **At startup** trigger，
 action 只指向 `run_material_worker_autostart.ps1`，並在 Task Scheduler 層設定
