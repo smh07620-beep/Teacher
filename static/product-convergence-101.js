@@ -80,7 +80,7 @@
   function existing(id, label = '') {
     const button = document.getElementById(id);
     if (!button || button.disabled || button.classList.contains('hidden')) return null;
-    if (label) button.textContent = label;
+    if (label && button.textContent !== label) button.textContent = label;
     button.classList.remove('hidden');
     button.removeAttribute('aria-hidden');
     return button;
