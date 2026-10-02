@@ -1,8 +1,9 @@
 """Authenticated per-account email notification preferences.
 
 In-app actionable notifications remain complete.  These preferences only filter
-ordinary email delivery. Critical material-processing failures are always eligible
-for email and cannot be disabled by user preference.
+ordinary email delivery. Critical material-processing failures and confirmed
+Worker-offline outages are always eligible for email and cannot be disabled by
+user preference.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ DEFAULTS = {
     "retraining": True,
     "teacherReview": True,
 }
-CRITICAL_KINDS = {"material_failure"}
+CRITICAL_KINDS = {"material_failure", "worker_offline"}
 _KIND_TO_PREF = {
     "course": "courseDue",
     "due": "courseDue",
@@ -62,7 +63,7 @@ def get_preferences(user: Mapping[str, Any] | None) -> dict[str, Any]:
         pass
     return {
         "emailCategories": values,
-        "protectedCategories": ["materialFailure"],
+        "protectedCategories": ["materialFailure", "workerOffline"],
     }
 
 
