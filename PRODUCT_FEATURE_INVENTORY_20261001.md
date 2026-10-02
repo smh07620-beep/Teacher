@@ -31,8 +31,8 @@ removed/converged rather than promoted:
 
 | Duplicate | Canonical owner | Decision / next action |
 | --- | --- | --- |
-| Historical `static/portal-v56.js` learner-progress writer | `/api/training-command-center/progress` + `learning-progress-convergence-1025.js` | **廢棄（已完成）** — Phase D removed the portal dashboard writer and its delayed overwrite workaround; canonical progress is the only visible owner. |
-| Historical `static/portal-v56.js` pending-course/exam renderer | `/api/training-command-center` + `learner-todo-convergence-1025.js` | **廢棄（已完成）** — Phase D removed the duplicate portal task renderer; canonical learner todo owns the count, category counts and rows. |
+| Historical `static/portal-v56.js` learner-progress writer | `/api/training-command-center/progress` + `static/learning-progress-convergence-1025.js` | **廢棄（已完成）** — Phase D removed the portal dashboard writer and its delayed overwrite workaround; canonical progress is the only visible owner. |
+| Historical `static/portal-v56.js` pending-course/exam renderer | `/api/training-command-center` + `static/learner-todo-convergence-1025.js` | **廢棄（已完成）** — Phase D removed the duplicate portal task renderer; canonical learner todo owns the count, category counts and rows. |
 | Legacy root compatibility modules (`app.py`, `pgy_frontend.py`, `question_bank_68.py`, `free_worker_67.py`, `health_65.py`, `external_media_68.py`, `exam_integrity.py`) | `teacher_app.*` canonical packages and `teacher_app.frontend.assets` | **重複 / 隱藏** — keep only while compatibility callers exist; no new product ownership may be added. |
 
 ## Explicit retired surfaces — 廢棄
@@ -96,7 +96,7 @@ Phase A is complete only when all of the following stay true:
 
 ## Current Phase A status
 
-**Operational, with the two portal duplicate writers explicitly carried into
-Phase D cleanup.** The exhaustive inventory exists; the remaining Phase A work is
-not discovery but closing those known duplicate presentation owners after Golden
-Path parity is proven.
+**Complete.** The exhaustive inventory and five-way product decision overlay are
+in place. The two known learner portal presentation duplicates were physically
+retired during Phase D after Golden Path parity was proven; the canonical
+command-center progress and todo projections are now the only visible owners.
