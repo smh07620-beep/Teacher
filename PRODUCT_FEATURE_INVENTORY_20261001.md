@@ -52,11 +52,22 @@ reintroduced:
 Their decision is **廢棄**. Compatibility tests may mention historical names only
 to prove they remain absent.
 
+## P2 teacher capability progress
+
+- **我的學員 — 保留（第一階段完成）**: read-only learner projection is embedded
+  inside the existing 評量與出題 workspace. Clinical teachers see only explicitly
+  assigned learners; group leaders are limited to their own group; education
+  administrators receive organization-wide coordination read scope; a standalone
+  system administrator receives no clinical learner scope. It reuses canonical PGY
+  assignment ownership and does not create a third teacher top-level navigation item.
+- The remaining P2 capabilities stay deferred until they independently meet the
+  Product Convergence Definition of Done and receive the appropriate browser/security
+  regression coverage.
+
 ## Explicit unfinished product work — 未完成
 
 The following is intentionally not promoted to the primary Teacher product yet:
 
-- 我的學員;
 - 臨床技能評核 workspace expansion;
 - 能力追蹤 as a separate teacher workflow;
 - 教學分析 as a separate teacher workflow;
