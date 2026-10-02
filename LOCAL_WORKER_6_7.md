@@ -38,6 +38,8 @@ GDRIVE_CLIENT_ID=...
 GDRIVE_CLIENT_SECRET=...
 GDRIVE_REFRESH_TOKEN=...
 GDRIVE_FOLDER_ID=...
+# Queue polling. 2 seconds reduces idle-to-claim latency without parallelizing jobs.
+MATERIAL_WORKER_POLL_SECONDS=2
 # Claimed-job heartbeat during long FFmpeg/LibreOffice/cloud operations.
 MATERIAL_WORKER_HEARTBEAT_SECONDS=30
 # Safe release updater. Runtime auto-check remains opt-in by default.
@@ -87,6 +89,23 @@ repository root 執行 `./update_material_worker.ps1`。此 script 拒絕 dirty
 tree、缺少 `origin`、非 annotated tag、簽章驗證失敗、commit pin 不符、
 diverged history 或 fetch 失敗，並保留目前 checkout。
 
+### Worker Performance Phase 1
+
+Worker 預設每 2 秒輪詢一次新 Job（`MATERIAL_WORKER_POLL_SECONDS=2`），只縮短
+閒置到 claim 的等待，不會增加同時處理中的 Job 數量。每筆完成 Job 會在 Worker
+log 與 result metadata 記錄 `workerTimingsMs`，包含 download、validation、
+media normalize、Office→PDF、text index、preview/render 與 provider publish，
+方便分辨瓶頸是在院內 CPU、R2 網路、LibreOffice/FFmpeg 或 MEGA。
+
+Office 教材在同一 Job 內只建立一次中介 PDF：舊 Office 格式的文字索引與預覽會
+共用該結果，避免重複啟動 LibreOffice。MEGA bundle 在外層已建立教材資料夾後，
+source/preview/index/slide 上傳不再各自重跑 `mega-mkdir`。
+
+影片仍維持安全正規化。若 MP4/M4V 已是 H.264、音訊為 AAC（或無音訊），且解析度
+不超過 1280×720，Worker 只做 FFmpeg remux + faststart，不再重新壓 H.264；AAC
+音軌 sidecar 亦使用 stream copy。WebM、MOV、非 H.264/AAC、超過 720p 等情況仍走
+原有完整轉碼。Phase 1 刻意維持單 Job 處理；是否啟用有限 2-job 併發，應依 timing
+與院內電腦 CPU/磁碟實測後再決定。
 Worker 在 claimed job 執行期間預設每 30 秒送出一次 heartbeat，包含下載、
 FFmpeg/LibreOffice 轉檔與 MEGA/Google Drive publish。可用
 `MATERIAL_WORKER_HEARTBEAT_SECONDS` 調整為 5–90 秒；heartbeat 暫時失敗只會記錄
