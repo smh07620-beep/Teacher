@@ -52,6 +52,9 @@ class ProductConvergence101Tests(unittest.TestCase):
         ):
             self.assertIn(existing_id, self.shell)
 
+    def test_system_nav_observer_does_not_self_trigger_on_stable_labels(self):
+        self.assertIn("if (label && button.textContent !== label) button.textContent = label;", self.shell)
+
     def test_convergence_does_not_create_authorization_logic_or_secret_headers(self):
         self.assertIn("TeacherRBAC681Ready", self.shell)
         self.assertNotIn("X-Admin-Key", self.shell)
