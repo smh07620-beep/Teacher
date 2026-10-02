@@ -57,7 +57,7 @@ class NotificationPreference0106Tests(unittest.TestCase):
         self.assertIn("preferences.filter_email_events", reminders)
         self.assertNotIn("assignment_service", reminders)
         self.assertNotIn("progress_service", reminders)
-        self.assertIn("只控制 Email；站內待辦仍會完整顯示", ui)
+        self.assertIn("只控制一般 Email；站內待辦仍會完整顯示", ui)
         self.assertIn("教材處理失敗（必要通知）", ui)
         self.assertIn("Worker 離線（必要通知）", ui)
         self.assertIn("查看 Worker 狀態", ui)
