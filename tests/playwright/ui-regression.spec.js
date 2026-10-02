@@ -217,7 +217,8 @@ test('system admin sees canonical Worker offline notification in system workspac
   await expect(center).toContainText('教材 Worker 已離線');
   await expect(center).toContainText('Worker 離線');
   await expect(center.locator('a[href*="workspace=worker"][href*="persona=system"]')).toContainText('查看 Worker 狀態');
-  await expect(center.evaluate(node => node.parentElement?.id || '')).resolves.toBe('admin-workspace-content');
+  const parentId = await center.evaluate(node => node.parentElement?.id || '');
+  expect(parentId).toBe('admin-workspace-content');
   await assertNoHorizontalOverflow(page);
 });
 
