@@ -39,6 +39,8 @@
 
   const maintenancePanel = ensurePanel('admin-section-maintenance');
   const auditPanel = ensurePanel('admin-section-audit');
+  maintenancePanel.dataset.productSection = 'current-work';
+  auditPanel.dataset.productSection = 'history';
 
   function moveMaintenanceCard() {
     const card = document.getElementById('teacher64-maintenance');
