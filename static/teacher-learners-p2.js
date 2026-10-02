@@ -147,7 +147,8 @@
   }
 
   async function openPgyLearningSurface(item=null){
-    if(typeof currentTrainingArea!=='undefined'&&currentTrainingArea!=='pgy'){
+    const pageMode=Boolean(window.isAdminWorkspacePage?.());
+    if((typeof currentTrainingArea!=='undefined'&&currentTrainingArea!=='pgy')||pageMode){
       window.location.assign(pgyLearningUrl(false,item));
       return false;
     }
@@ -160,7 +161,8 @@
 
   async function enterClinicalAssessment(item){
     if(!item)return;
-    if(typeof currentTrainingArea!=='undefined'&&currentTrainingArea!=='pgy'){
+    const pageMode=Boolean(window.isAdminWorkspacePage?.());
+    if((typeof currentTrainingArea!=='undefined'&&currentTrainingArea!=='pgy')||pageMode){
       try{sessionStorage.setItem(RESUME_KEY,String(item.username||''));}catch(_){}
       window.location.assign(pgyLearningUrl(true,item));
       return;
