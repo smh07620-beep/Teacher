@@ -40,6 +40,7 @@ jobs:
       - name: Install runtime and browser dependencies
         run: |
           python -m pip install -r requirements.txt
+          python -m pip install 'moto[server]>=5.1,<6.0'
           npm install --no-save @playwright/test@1.55.0
           npx playwright install --with-deps chromium
       - name: Generate isolated full-stack credentials
@@ -69,11 +70,13 @@ jobs:
       - name: Start isolated R2-compatible object store
         shell: bash
         run: |
-          docker run -d --name teacher-minio -p 9000:9000             -e MINIO_ROOT_USER="$R2_ACCESS_KEY_ID"             -e MINIO_ROOT_PASSWORD="$R2_SECRET_ACCESS_KEY"             -e MINIO_API_CORS_ALLOW_ORIGIN="http://127.0.0.1:4175"             docker.io/minio/minio:latest server /data
+          moto_server -H 127.0.0.1 -p 9000 > material-fullstack-s3.log 2>&1 &
+          echo $! > material-fullstack-s3.pid
           for i in $(seq 1 45); do
-            if curl --fail --silent http://127.0.0.1:9000/minio/health/ready >/dev/null; then break; fi
+            if curl --fail --silent http://127.0.0.1:9000/ >/dev/null; then break; fi
             sleep 1
           done
+          curl --fail --silent http://127.0.0.1:9000/ >/dev/null
           python - <<'PY'
           import boto3, os
           from botocore.config import Config
@@ -85,7 +88,18 @@ jobs:
               region_name=os.environ["R2_REGION"],
               config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
           )
-          client.create_bucket(Bucket=os.environ["R2_BUCKET_NAME"])
+          bucket = os.environ["R2_BUCKET_NAME"]
+          client.create_bucket(Bucket=bucket)
+          client.put_bucket_cors(
+              Bucket=bucket,
+              CORSConfiguration={"CORSRules": [{
+                  "AllowedOrigins": ["http://127.0.0.1:4175"],
+                  "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
+                  "AllowedHeaders": ["*"],
+                  "ExposeHeaders": ["ETag"],
+                  "MaxAgeSeconds": 300,
+              }]},
+          )
           PY
       - name: Start real Flask and canonical material Worker
         shell: bash
@@ -111,6 +125,8 @@ jobs:
           cat material-fullstack-web.log || true
           echo "=== Worker ==="
           cat material-fullstack-worker.log || true
+          echo "=== S3-compatible R2 fixture ==="
+          cat material-fullstack-s3.log || true
           echo "=== R2 objects ==="
           python - <<'PY'
           import boto3, os
@@ -134,7 +150,7 @@ jobs:
         run: |
           test ! -f material-fullstack-worker.pid || kill "$(cat material-fullstack-worker.pid)" || true
           test ! -f material-fullstack-web.pid || kill "$(cat material-fullstack-web.pid)" || true
-          docker rm -f teacher-minio || true
+          test ! -f material-fullstack-s3.pid || kill "$(cat material-fullstack-s3.pid)" || true
 
 
   assignment-operational:
