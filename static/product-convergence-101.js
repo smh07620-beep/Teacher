@@ -77,6 +77,26 @@
     return true;
   }
 
+  function ensureTeacherMaterialHistory() {
+    if (!isTeacherPersona()) return false;
+    const course = document.getElementById('admin-course-workspace');
+    const panel = document.getElementById('admin-material-jobs-panel');
+    if (!course || !panel) return false;
+
+    panel.dataset.productSection = 'history';
+    panel.classList.remove('hidden');
+    panel.removeAttribute('aria-hidden');
+    if (panel.parentElement !== course) course.appendChild(panel);
+
+    const heading = panel.querySelector('h5');
+    const description = panel.querySelector('p');
+    const refreshButton = panel.querySelector('button[data-csp-click*="renderMaterialJobs"]');
+    if (heading && heading.textContent !== '教材處理紀錄') heading.textContent = '教材處理紀錄';
+    if (description) description.textContent = '最近教材的接收、處理、完成與失敗紀錄集中在這裡；需要技術細節時再展開。';
+    if (refreshButton && refreshButton.textContent !== '↻ 更新紀錄') refreshButton.textContent = '↻ 更新紀錄';
+    return true;
+  }
+
   function existing(id, label = '') {
     const button = document.getElementById(id);
     if (!button || button.disabled || button.classList.contains('hidden')) return null;
@@ -126,7 +146,10 @@
     queueMicrotask(() => {
       refreshQueued = false;
       if (isSystemPersona()) convergeSystemNavigation();
-      else ensureTeacherContextTools();
+      else {
+        ensureTeacherContextTools();
+        ensureTeacherMaterialHistory();
+      }
     });
   }
 
@@ -142,6 +165,7 @@
   window.ProductConvergence101 = Object.freeze({
     refresh,
     ensureTeacherContextTools,
+    ensureTeacherMaterialHistory,
     convergeSystemNavigation,
   });
 })();
