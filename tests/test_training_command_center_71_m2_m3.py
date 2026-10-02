@@ -155,12 +155,15 @@ class CommandCenterM2M3FrontendTests(unittest.TestCase):
         cls.workflow = ROOT.joinpath('.github','workflows','phase3-pgy-checks.yml').read_text(encoding='utf-8')
         cls.coverage = ROOT.joinpath('RC_FEATURE_UI_COVERAGE_MATRIX.md').read_text(encoding='utf-8')
 
-    def test_m2_switches_between_pgy_and_online_progress(self):
+    def test_m2_switches_between_pgy_and_canonical_online_progress(self):
         self.assertIn('PGY 能力矩陣／訓練進度', self.matrix_ui)
         self.assertIn('線上訓練進度', self.matrix_ui)
         self.assertIn('p?.pgyLearner', self.matrix_ui)
-        self.assertIn('/api/dashboard/me?', self.matrix_ui)
+        self.assertIn('/api/training-command-center/progress', self.matrix_ui)
+        self.assertNotIn('/api/dashboard/me?', self.matrix_ui)
         self.assertIn('/api/training-command-center/pgy-matrix', self.matrix_ui)
+        self.assertIn('online.materialsCompleted', self.matrix_ui)
+        self.assertIn('online.examsPending', self.matrix_ui)
         self.assertIn("if (section) section.classList.add('hidden');", self.matrix_ui)
         self.assertEqual(self.matrix_ui.count("if (section) section.classList.remove('hidden');"), 1)
         for mutation in ("method: 'POST'", "method: 'PATCH'", "method: 'DELETE'"):
