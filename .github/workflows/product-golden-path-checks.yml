@@ -26,7 +26,7 @@ jobs:
 
 
   material-full-stack-browser:
-    name: GP-01 full-stack Browser → R2 → real Worker → Database → Browser
+    name: GP-01 + GP-06 full-stack Browser → R2 → real Worker → Database → Browser
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -117,6 +117,74 @@ jobs:
         env:
           TEACHER_MATERIAL_FULLSTACK_BASE_URL: http://127.0.0.1:4175
         run: npx playwright test tests/playwright/material-fullstack-golden-path.spec.js --reporter=line --workers=1
+      - name: Stop Worker and queue a second Browser upload while offline
+        shell: bash
+        env:
+          TEACHER_MATERIAL_FULLSTACK_BASE_URL: http://127.0.0.1:4175
+        run: |
+          kill "$(cat material-fullstack-worker.pid)"
+          rm -f material-fullstack-worker.pid
+          for i in $(seq 1 20); do
+            if ! pgrep -f "teacher_app.worker.material_worker_entry" >/dev/null; then break; fi
+            sleep 0.25
+          done
+          npx playwright test tests/playwright/material-worker-offline-enqueue.spec.js --reporter=line --workers=1
+      - name: Prove queued job retained the same R2 staging object
+        shell: bash
+        run: |
+          python - <<'PY'
+          import boto3, json, os
+          from botocore.config import Config
+          saved = json.load(open("material-fullstack-offline-job.json", encoding="utf-8"))
+          client = boto3.client(
+              "s3",
+              endpoint_url=os.environ["R2_ENDPOINT_URL"],
+              aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+              aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+              region_name=os.environ["R2_REGION"],
+              config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+          )
+          result = client.head_object(Bucket=os.environ["R2_BUCKET_NAME"], Key=saved["stagingKey"])
+          assert int(result.get("ContentLength") or 0) > 0
+          print("retained staging:", saved["jobId"], saved["stagingKey"], result["ContentLength"])
+          PY
+      - name: Restart canonical Worker and recover the same queued job
+        shell: bash
+        env:
+          TEACHER_MATERIAL_FULLSTACK_BASE_URL: http://127.0.0.1:4175
+        run: |
+          python -m teacher_app.worker.material_worker_entry >> material-fullstack-worker.log 2>&1 &
+          echo $! > material-fullstack-worker.pid
+          npx playwright test tests/playwright/material-worker-offline-recovery.spec.js --reporter=line --workers=1
+      - name: Prove recovery published final R2 object and removed staging
+        shell: bash
+        run: |
+          python - <<'PY'
+          import boto3, json, os
+          from botocore.config import Config
+          from botocore.exceptions import ClientError
+          saved = json.load(open("material-fullstack-offline-job.json", encoding="utf-8"))
+          client = boto3.client(
+              "s3",
+              endpoint_url=os.environ["R2_ENDPOINT_URL"],
+              aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+              aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+              region_name=os.environ["R2_REGION"],
+              config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+          )
+          bucket = os.environ["R2_BUCKET_NAME"]
+          final_key = f"materials/{saved['materialId']}/source.txt"
+          final = client.head_object(Bucket=bucket, Key=final_key)
+          assert int(final.get("ContentLength") or 0) > 0
+          try:
+              client.head_object(Bucket=bucket, Key=saved["stagingKey"])
+          except ClientError as exc:
+              code = str(exc.response.get("Error", {}).get("Code", ""))
+              assert code in {"404", "NoSuchKey", "NotFound"}, code
+          else:
+              raise AssertionError("staging object still exists after successful Worker completion")
+          print("recovered final:", saved["jobId"], final_key, final["ContentLength"])
+          PY
       - name: Show full-stack logs on failure
         if: failure()
         shell: bash
