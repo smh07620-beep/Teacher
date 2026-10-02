@@ -21,7 +21,8 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
 
     def test_dual_role_persona_switch_requires_real_capabilities(self):
         self.assertIn("const canTeach = hasTeachingRole", self.source)
-        self.assertIn("const canLearn = has('course.view')", self.source)
+        self.assertIn("const canLearn = roles.has('student') ||", self.source)
+        self.assertIn("has('course.view') && has('material.read') && has('exam.take') && has('progress.self.read')", self.source)
         self.assertIn("📚 我的學習", self.source)
         self.assertIn("👨‍🏫 教師工作區", self.source)
         self.assertIn("choices.length < 2", self.source)
