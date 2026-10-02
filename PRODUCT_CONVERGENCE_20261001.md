@@ -136,3 +136,13 @@ A green unit/API suite is no longer sufficient evidence to call a workflow compl
 - no RBAC decision moves to the browser and no legacy secret/key seam is introduced.
 
 The next implementation stage is Golden Path release gating, beginning with GP-01/GP-05 because material upload/Worker reliability is the highest operational risk observed in real use.
+
+## Full-stack Golden Path status (2026-10-02)
+
+The material release gate now includes a real isolated S3-compatible R2 lane using the same canonical boto3 adapter and the canonical `teacher_app.worker.material_worker_entry` process.
+
+- **GP-01 full-stack:** Chromium uploads through the real presigned direct-upload API → R2-compatible object storage → real material Worker claim/download/publish → provider publish receipt → database commit → R2 staging cleanup → Chromium observes the published material.
+- **GP-06 full-stack:** the real Worker is stopped before a second Chromium upload → the same queued job and R2 staging object are verified while offline → the canonical Worker restarts → claims the same job → publishes the same material identity → staging is removed only after completion → Chromium observes the result.
+- The loopback HTTP R2 endpoint exists only for the isolated CI fixture. Production R2 remains HTTPS; the canonical provider and CSP layers refuse non-loopback HTTP overrides.
+- GP-02/GP-03/GP-04/GP-05 still retain their existing integration release gates; browser-level convergence for the remaining user workflows is tracked separately rather than being mislabeled as full-stack coverage.
+
