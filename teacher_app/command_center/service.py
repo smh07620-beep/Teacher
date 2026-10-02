@@ -252,6 +252,11 @@ def _teacher_material_failure_items(user: Mapping[str, Any]) -> list[dict[str, A
         if not _visible_to_teacher(user, {"area": area, "group": group}):
             continue
         retained = str(full.get("stagingBackend") or "") == "r2" and bool(full.get("stagingKey"))
+        # "需要我處理" must stay actionable. Historical failures whose
+        # source object is already gone remain visible in the canonical Job
+        # history, but there is nothing a teacher can retry from this queue.
+        if not retained:
+            continue
         values.append({
             "id": str(full.get("id") or ""),
             "resourceId": str(full.get("id") or ""),
@@ -268,7 +273,7 @@ def _teacher_material_failure_items(user: Mapping[str, Any]) -> list[dict[str, A
             "detail": str(full.get("error") or full.get("detail") or "背景教材處理失敗"),
             "sourceRetained": retained,
             "action": "material_jobs",
-            "actionLabel": "直接重新處理" if retained else "查看處理方式",
+            "actionLabel": "直接重新處理",
             "target": "course-materials",
         })
     return values

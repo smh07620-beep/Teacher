@@ -29,10 +29,12 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         ]
         jobs = [
             {"id": "job-bio", "status": "failed"},
+            {"id": "job-bio-lost", "status": "failed"},
             {"id": "job-micro", "status": "failed"},
         ]
         full_jobs = {
             "job-bio": {"id": "job-bio", "status": "failed", "error": "轉檔失敗", "stagingBackend": "r2", "stagingKey": "staging/bio", "payload": {"title": "生化教材", "area": "internal", "group": "grpBio"}},
+            "job-bio-lost": {"id": "job-bio-lost", "status": "failed", "error": "舊檔已清理", "payload": {"title": "舊生化教材", "area": "internal", "group": "grpBio"}},
             "job-micro": {"id": "job-micro", "status": "failed", "error": "轉檔失敗", "payload": {"title": "細菌教材", "area": "internal", "group": "grpMicro"}},
         }
         assignments = [
@@ -71,6 +73,7 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         self.assertEqual({item["kind"] for item in teacher_items}, {"review", "material_failure", "due", "draft"})
         self.assertNotIn("r-micro", {item["id"] for item in teacher_items})
         self.assertNotIn("job-micro", {item["id"] for item in teacher_items})
+        self.assertNotIn("job-bio-lost", {item["id"] for item in teacher_items})
         self.assertNotIn("course-micro", {item["id"] for item in teacher_items})
         self.assertEqual(review_scope.call_count, 2)
 
@@ -86,6 +89,22 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         self.assertEqual(due["resourceId"], "course-bio")
         self.assertEqual(draft["courseId"], "course-bio")
         self.assertEqual(draft["resourceId"], "course-bio")
+
+    def test_material_failures_without_retained_source_stay_out_of_needs_action(self):
+        jobs = [{"id": "job-gone", "status": "failed"}]
+        full = {
+            "id": "job-gone",
+            "status": "failed",
+            "error": "MEGA 登入失敗",
+            "stagingBackend": "",
+            "stagingKey": "",
+            "payload": {"title": "已無原始檔教材", "area": "internal", "group": "grpBio"},
+        }
+        with patch.object(service.worker_repository, "list_material_jobs", return_value=jobs), \
+             patch.object(service.worker_repository, "get_material_job", return_value=full), \
+             patch.object(service.learning_access, "can_access_learning_item", return_value=True):
+            values = service._teacher_material_failure_items(self.user)
+        self.assertEqual(values, [])
 
     def test_review_queue_fails_closed_when_record_scope_is_not_authorized(self):
         teacher = {
