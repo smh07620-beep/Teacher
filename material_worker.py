@@ -395,7 +395,7 @@ def _transcode_if_needed(source,original,temp):
     })
     return output,name,{key:value for key,value in metadata.items() if value is not None},derivatives
 
-def _build_text_index(source,temp):
+def _build_text_index(source,temp,prepared_pdf=None):
     """Build a reusable text sidecar on the Worker for document AI/search."""
     source=Path(source); ext=source.suffix.lower()
     if ext not in ({".pdf"}|set(OFFICE_EXT)):
@@ -405,7 +405,7 @@ def _build_text_index(source,temp):
         elif ext==".pptx":text=classification.extract_pptx_text(source)
         elif ext==".docx":text=classification.extract_docx_text(source)
         else:
-            converted=classification.convert_office_to_pdf_for_text(source,Path(temp)/"index-convert")
+            converted=Path(prepared_pdf) if prepared_pdf else classification.convert_office_to_pdf_for_text(source,Path(temp)/"index-convert")
             text=classification.extract_pdf_text(converted)
         text=classification.clean_extracted_text(text)
     except Exception:
@@ -422,21 +422,27 @@ def _build_text_index(source,temp):
         "textIndexTruncated":truncated,
     }
 
-def publish_to_storage(source,original,job,temp,source_sha256):
+def publish_to_storage(source,original,job,temp,source_sha256,timings=None):
     """Publish through the Flask-free canonical worker storage adapter."""
-    material_id=str(job["materialId"]); source,stored_name,media_meta,derivatives=_transcode_if_needed(source,original,temp)
-    text_index,index_meta=_build_text_index(source,temp)
-    if text_index is not None:derivatives["index.txt"]=text_index
-    media_meta={**media_meta,**index_meta}
+    timings=timings if isinstance(timings,dict) else {}
+    material_id=str(job["materialId"])
+    started=time.monotonic(); source,stored_name,media_meta,derivatives=_transcode_if_needed(source,original,temp); timings["mediaNormalizeMs"]=_elapsed_ms(started)
     backend=STORAGE.active_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
     publish_key=worker_protocol.material_publish_key(job.get("id"),material_id,source_sha256,backend)
     single=bool(backend=="mega" and STORAGE.single_preview and (ext==".pdf" or ext in OFFICE_EXT))
+    prepared_pdf=None
+    if ext in OFFICE_EXT:
+        started=time.monotonic(); prepared_pdf=STORAGE.prepare_office_pdf(source,Path(temp)/"office-pdf",timeout=240); timings["officeToPdfMs"]=_elapsed_ms(started)
+    started=time.monotonic(); text_index,index_meta=_build_text_index(source,temp,prepared_pdf=prepared_pdf); timings["textIndexMs"]=_elapsed_ms(started)
+    if text_index is not None:derivatives["index.txt"]=text_index
+    media_meta={**media_meta,**index_meta}
+    render_publish_started=time.monotonic()
     if single:
-        pages=STORAGE.build_single_preview_pdf(source,preview)
+        pages=STORAGE.build_single_preview_pdf(source,preview,prepared_pdf=prepared_pdf)
         if pages<=0 or not preview.is_file() or preview.stat().st_size<=0: raise RuntimeError("Office/PDF preview 產生失敗，不能完成工作。")
         key,prefix,remote=STORAGE.upload_material_preview_to_mega(material_id,source,preview,pages,derivatives); meta={"previewMode":"single_pdf","previewFilename":"preview.pdf","slideFormat":"pdf",**(remote or {}),**media_meta}
     elif ext==".pdf" or ext in OFFICE_EXT:
-        pages=STORAGE.convert_pdf_to_images(source,slides) if ext==".pdf" else STORAGE.convert_office_to_images(source,slides)
+        pages=STORAGE.convert_pdf_to_images(source if ext==".pdf" else prepared_pdf,slides)
         if pages<=0: raise RuntimeError("Office/PDF 頁面數為零，不能完成工作。")
         if backend=="mega":key,prefix,remote=STORAGE.upload_material_tree_to_mega(material_id,source,slides,pages,derivatives)
         elif backend=="gdrive":key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256)
@@ -462,6 +468,8 @@ def publish_to_storage(source,original,job,temp,source_sha256):
             key,prefix,remote=STORAGE.upload_source_to_r2(material_id,source,publish_key=publish_key,source_sha256=source_sha256)
         meta={**(remote or {}),**media_meta}
     else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA、Google Drive 或 R2。")
+    timings["renderAndProviderMs"]=_elapsed_ms(render_publish_started)
+    meta={**(meta or {}),"workerTimingsMs":dict(timings)}
     return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta,"publishKey":publish_key,"publishSourceSha256":source_sha256}
 
 def process_one(api,job,capabilities=None):
