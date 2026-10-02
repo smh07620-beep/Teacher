@@ -12,6 +12,8 @@
   const ID='teacher-learners-p2';
   const RESUME_KEY='teacher:p2:clinical-assessment-learner';
   let latest={learners:[],summary:{},scope:{}};
+  let competencyCache=null;
+  let competencyLoadedAt=0;
   let loadedAt=0;
   const TTL=30000;
   const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({
@@ -69,6 +71,7 @@
         </div>
         <div class="flex flex-wrap gap-2 shrink-0">
           ${reviewButton}
+          <button type="button" data-p2-competency="${index}" class="rounded-lg border border-teal-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-teal-700">能力追蹤</button>
           ${has('evaluation.sign')
             ? `<button type="button" data-p2-clinical="${index}" class="rounded-lg bg-indigo-700 px-2.5 py-1.5 text-[11px] font-bold text-white">開始臨床技能評核</button>`
             : `<button type="button" data-p2-pgy="${index}" class="rounded-lg bg-indigo-700 px-2.5 py-1.5 text-[11px] font-bold text-white">進入 PGY 工作流程</button>`}
@@ -98,9 +101,11 @@
         <div class="rounded-xl bg-amber-50 p-2"><b class="block text-lg text-amber-900">${Number(summary.awaitingLeader||0)}</b><span class="text-[10px] text-amber-700">待複核</span></div>
         <div class="rounded-xl bg-rose-50 p-2"><b class="block text-lg text-rose-900">${Number(summary.overdueAssignments||0)}</b><span class="text-[10px] text-rose-700">逾期</span></div>
       </div>
-      <div class="mt-3 space-y-2">${rows.length?rows.map(learnerRow).join(''):'<div class="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500">目前沒有伺服器指派給你的學員。</div>'}</div>`;
+      <div class="mt-3 space-y-2">${rows.length?rows.map(learnerRow).join(''):'<div class="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500">目前沒有伺服器指派給你的學員。</div>'}</div>
+      <section id="teacher-competency-detail-p2" class="hidden mt-4 rounded-xl border border-teal-100 bg-teal-50/30 p-4"></section>`;
     section.querySelector('#teacher-learners-refresh-p2')?.addEventListener('click',()=>load(true));
     section.querySelectorAll('[data-p2-results]').forEach(button=>button.addEventListener('click',openResults));
+    section.querySelectorAll('[data-p2-competency]').forEach(button=>button.addEventListener('click',openCompetency));
     section.querySelectorAll('[data-p2-clinical]').forEach(button=>button.addEventListener('click',openClinicalAssessment));
     section.querySelectorAll('[data-p2-pgy]').forEach(button=>button.addEventListener('click',openPgy));
   }
@@ -123,6 +128,56 @@
       if(error?.status===401||error?.status===403){section.classList.add('hidden');return;}
       section.classList.remove('hidden');
       section.innerHTML=`<div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">❌ ${escapeHtml(error.message||'目前無法讀取負責學員')}</div>`;
+    }
+  }
+
+  async function loadCompetency(force=false){
+    if(!force&&competencyCache&&competencyLoadedAt&&Date.now()-competencyLoadedAt<TTL)return competencyCache;
+    competencyCache=await getJSON('/api/training-command-center/teacher-competency');
+    competencyLoadedAt=Date.now();
+    return competencyCache;
+  }
+
+  function competencyScore(value){
+    const number=Number(value);
+    return value===null||value===undefined||value===''||!Number.isFinite(number)?'—':number.toFixed(1);
+  }
+
+  async function openCompetency(event){
+    const learner=latest.learners?.[Number(event.currentTarget?.dataset?.p2Competency)];
+    const panel=document.getElementById('teacher-competency-detail-p2');
+    if(!learner||!panel)return;
+    panel.classList.remove('hidden');
+    panel.innerHTML='<div class="text-xs text-slate-500">讀取正式能力評量紀錄中…</div>';
+    try{
+      const matrix=await loadCompetency(false);
+      const row=(Array.isArray(matrix?.learners)?matrix.learners:[]).find(item=>String(item?.username||'')===String(learner.username||''));
+      if(!row){
+        panel.innerHTML='<div class="text-xs text-slate-500">目前沒有這位學員的正式能力評量紀錄。</div>';
+        return;
+      }
+      const typeLabels=new Map((matrix.assessmentTypes||[]).map(item=>[item.key,item.label]));
+      const cells=Object.entries(row.competencies||{}).map(([key,cell])=>{
+        const count=Number(cell?.count||0);
+        const latest=competencyScore(cell?.latestScore);
+        return `<div class="rounded-xl border border-slate-200 bg-white p-3"><div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-900">${escapeHtml(typeLabels.get(key)||key)}</b><span class="text-[10px] text-slate-400">${count} 次</span></div><div class="mt-1 text-sm font-black text-teal-800">${latest}${latest==='—'?'':' / 5'}</div><div class="mt-1 text-[10px] text-slate-400">最近 ${escapeHtml(cell?.latestDate||'—')}</div></div>`;
+      }).join('');
+      panel.innerHTML=`
+        <div class="flex items-start justify-between gap-3">
+          <div><h5 class="text-sm font-black text-slate-950">📈 能力追蹤 · ${escapeHtml(row.name||learner.name||learner.username)}</h5><p class="mt-1 text-[11px] text-slate-500">依正式 DOPS、MINI-CEX、CBD、CHECKLIST 等紀錄與 PGY 指派完成度呈現；不合併成 AI 能力總分。</p></div>
+          <button id="teacher-competency-close-p2" type="button" class="text-[11px] font-bold text-slate-600">關閉</button>
+        </div>
+        <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+          <div class="rounded-xl bg-white p-2"><b class="block text-base text-slate-950">${Number(row.progress?.assignmentsCompleted||0)} / ${Number(row.progress?.assignmentsTotal||0)}</b><span class="text-[10px] text-slate-500">PGY 指派完成</span></div>
+          <div class="rounded-xl bg-white p-2"><b class="block text-base text-rose-800">${Number(row.progress?.assignmentsOverdue||0)}</b><span class="text-[10px] text-slate-500">逾期指派</span></div>
+          <div class="rounded-xl bg-white p-2"><b class="block text-base text-indigo-900">${Number(row.assessmentSummary?.count||0)}</b><span class="text-[10px] text-slate-500">正式評量</span></div>
+          <div class="rounded-xl bg-white p-2"><b class="block text-base text-teal-900">${competencyScore(row.assessmentSummary?.averageScore)}</b><span class="text-[10px] text-slate-500">正式評量平均</span></div>
+        </div>
+        <div class="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2">${cells}</div>`;
+      panel.querySelector('#teacher-competency-close-p2')?.addEventListener('click',()=>panel.classList.add('hidden'));
+      panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+    }catch(error){
+      panel.innerHTML=`<div class="text-xs text-rose-700">❌ ${escapeHtml(error.message||'能力追蹤讀取失敗')}</div>`;
     }
   }
 
