@@ -101,6 +101,11 @@ jobs:
           TEACHER_FLASK_BASE_URL: http://127.0.0.1:4174
         run: npx playwright test tests/playwright/product-golden-path-p1-real-flask.spec.js --reporter=line --workers=1
 
+      - name: Run P2 teacher workflow real Flask E2E
+        env:
+          TEACHER_FLASK_BASE_URL: http://127.0.0.1:4174
+        run: npx playwright test tests/playwright/teacher-workflow-p2-real-flask.spec.js --reporter=line --workers=1
+
       - name: Show harness logs on failure
         if: failure()
         run: |

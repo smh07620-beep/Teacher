@@ -38,6 +38,7 @@ os.environ["ASSET_VERSION"] = "realflaskci"
 
 from teacher_app import create_app  # noqa: E402
 from teacher_app.auth import accounts, elevation, repository as auth_repository  # noqa: E402
+from teacher_app.pgy import service as pgy_service  # noqa: E402
 
 
 app = create_app()
@@ -76,6 +77,63 @@ if _fixture_password:
             "preferredGroup": "grpBio",
         }
     )
+    _seed_browser_account(
+        {
+            "username": "p2teacher",
+            "password": _fixture_password,
+            "name": "P2 臨床教師",
+            "empId": "P2T001",
+            "role": "clinical_teacher",
+            "roles": ["clinical_teacher"],
+            "preferredArea": "pgy",
+            "preferredGroup": "grpBio",
+        }
+    )
+    _seed_browser_account(
+        {
+            "username": "p2student",
+            "password": _fixture_password,
+            "name": "P2 測試學員",
+            "empId": "P2S001",
+            "role": "student",
+            "roles": ["student"],
+            "preferredArea": "pgy",
+            "preferredGroup": "grpBio",
+        }
+    )
+    _seed_browser_account(
+        {
+            "username": "p2edu",
+            "password": _fixture_password,
+            "name": "P2 教學管理者",
+            "empId": "P2E001",
+            "role": "education_admin",
+            "roles": ["education_admin"],
+            "preferredArea": "pgy",
+            "preferredGroup": "grpBio",
+        }
+    )
+    p2_admin = {
+        "username": "p2edu",
+        "role": "education_admin",
+        "roles": ["education_admin"],
+        "preferredGroup": "grpBio",
+    }
+    if not any(
+        row.get("learnerUsername") == "p2student"
+        for row in pgy_service.list_assignments(p2_admin)
+    ):
+        pgy_service.create_assignment(
+            p2_admin,
+            {
+                "learnerUsername": "p2student",
+                "teacherUsername": "p2teacher",
+                "area": "pgy",
+                "group": "grpBio",
+                "title": "P2 臨床技能評核 E2E",
+                "instructions": "完成 DOPS 臨床技能評核。",
+            },
+        )
     # GP-08 tests account provisioning, not the separate elevation challenge.
     # Pre-authorize only the isolated browser fixture in the disposable CI DB.
     admin_row = auth_repository.find_user("gp08admin") or {}
