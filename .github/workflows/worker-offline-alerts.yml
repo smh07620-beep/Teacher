@@ -1,0 +1,50 @@
+name: Worker offline email alerts
+
+on:
+  schedule:
+    # Critical operations alert. GitHub schedules may be delayed slightly.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teacher-worker-offline-alerts
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    name: Send Worker offline alerts
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: "587"
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      SMTP_STARTTLS: "true"
+      MATERIAL_WORKER_ENABLED: "true"
+      MATERIAL_WORKER_OFFLINE_ALERT_SECONDS: "600"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install application dependencies
+        run: pip install -r requirements.txt
+      - name: Validate alert secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in DATABASE_URL SMTP_USERNAME SMTP_PASSWORD SMTP_FROM; do
+            if [ -z "${!key:-}" ]; then
+              echo "::error::Missing required GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+      - name: Send critical Worker offline alerts
+        run: python -u scripts/send_worker_offline_alerts.py
