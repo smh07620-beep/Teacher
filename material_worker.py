@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib, json, os, re, socket, subprocess, sys, tempfile, threading, time
 from pathlib import Path
+from urllib.parse import urlparse
 import requests
 from PIL import Image, ImageOps, ImageSequence
 from teacher_app.materials.validation import (
@@ -33,6 +34,13 @@ def _env_true(name, default=False):
     return value in {"1","true","yes","on"}
 
 def _utc_now(): return dt.datetime.now(dt.timezone.utc).isoformat()
+
+def _worker_url_allowed(url):
+    parsed=urlparse(str(url or ""))
+    if parsed.scheme=="https" and parsed.netloc:return True
+    if not _env_true("MATERIAL_WORKER_ALLOW_INSECURE_LOCALHOST",False):return False
+    return parsed.scheme=="http" and (parsed.hostname or "").lower() in {"127.0.0.1","localhost","::1"}
+
 
 def _run_git(*args):
     try:
@@ -124,7 +132,7 @@ def capability():
 
 class WorkerApi:
     def __init__(self):
-        if not BASE_URL.startswith("https://"):raise RuntimeError("TEACHER_BASE_URL 必須是 HTTPS URL。")
+        if not _worker_url_allowed(BASE_URL):raise RuntimeError("TEACHER_BASE_URL 必須是 HTTPS URL；僅測試時可明確允許本機 loopback HTTP。")
         if not TOKEN:raise RuntimeError("MATERIAL_WORKER_TOKEN 尚未設定。")
         self.headers={"Authorization":f"Bearer {TOKEN}"}
     def post(self,path,body):
@@ -223,7 +231,7 @@ def _sanitize_raster_image_in_place(source,ext):
         if isinstance(exc,RuntimeError):raise
         raise RuntimeError(f"影像安全重新編碼失敗：{exc}") from exc
 def download(url,target,headers=None):
-    if not str(url).startswith("https://"):raise RuntimeError("Worker download URL 必須是 HTTPS。")
+    if not _worker_url_allowed(url):raise RuntimeError("Worker download URL 必須是 HTTPS；僅測試時可明確允許本機 loopback HTTP。")
     with requests.get(url,stream=True,headers=headers or {},timeout=REQUEST_TIMEOUT) as response:
         response.raise_for_status()
         with Path(target).open("wb") as fh:
@@ -411,7 +419,8 @@ def publish_to_storage(source,original,job,temp,source_sha256):
         if pages<=0: raise RuntimeError("Office/PDF 頁面數為零，不能完成工作。")
         if backend=="mega":key,prefix,remote=STORAGE.upload_material_tree_to_mega(material_id,source,slides,pages,derivatives)
         elif backend=="gdrive":key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256)
-        else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
+        elif backend=="r2":key,prefix,remote=STORAGE.upload_material_tree_to_r2(material_id,source,slides,pages,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256)
+        else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA、Google Drive 或 R2。")
         meta={"slideFormat":STORAGE.slide_format(slides,pages),**(remote or {}),**media_meta}
     elif backend=="mega":
         if ext in VIDEO_EXT|AUDIO_EXT:
@@ -425,7 +434,13 @@ def publish_to_storage(source,original,job,temp,source_sha256):
             meta={**(remote or {}),**media_meta}
         else:
             key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,0,original_name=stored_name,publish_key=publish_key,source_sha256=source_sha256); meta={**(remote or {}),**media_meta}
-    else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA 或 Google Drive。")
+    elif backend=="r2":
+        if ext in VIDEO_EXT|AUDIO_EXT:
+            key,prefix,remote=STORAGE.upload_media_bundle_to_r2(material_id,source,derivatives,publish_key=publish_key,source_sha256=source_sha256)
+        else:
+            key,prefix,remote=STORAGE.upload_source_to_r2(material_id,source,publish_key=publish_key,source_sha256=source_sha256)
+        meta={**(remote or {}),**media_meta}
+    else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA、Google Drive 或 R2。")
     return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta,"publishKey":publish_key,"publishSourceSha256":source_sha256}
 
 def process_one(api,job,capabilities=None):
