@@ -11,6 +11,7 @@ class HomeDashboardRefresh681Tests(unittest.TestCase):
         cls.html = ROOT.joinpath("static", "index.html").read_text(encoding="utf-8")
         cls.css = ROOT.joinpath("static", "portal.css").read_text(encoding="utf-8")
         cls.runtime = ROOT.joinpath("static", "portal-v56.js").read_text(encoding="utf-8")
+        cls.todo = ROOT.joinpath("static", "learner-todo-convergence-1025.js").read_text(encoding="utf-8")
 
     def test_home_header_is_intentionally_minimal(self):
         header = self.html[self.html.index('<header class="v56-header">'):self.html.index('</header>')]
@@ -48,13 +49,17 @@ class HomeDashboardRefresh681Tests(unittest.TestCase):
         self.assertIn('data-phase3-area="internal"', self.html)
         self.assertIn('data-phase3-area="pgy"', self.html)
 
-    def test_home_todo_summary_reuses_dashboard_contract(self):
-        self.assertIn("Number(d.materialsPending||0)", self.runtime)
-        self.assertIn("Number(d.examsPending||0)", self.runtime)
-        self.assertIn("const pendingCourses=Array.isArray(d.pendingCourses)?d.pendingCourses:[]", self.runtime)
-        self.assertIn("d?.scopeSource==='assignments'", self.runtime)
-        self.assertIn(":materialsPending+examsPending", self.runtime)
-        self.assertIn("renderPendingExams(d.pendingExams||[],materialsPending,pendingCourses,materialsRetraining)", self.runtime)
+    def test_home_progress_and_todo_use_canonical_command_center_sources(self):
+        self.assertIn("/api/training-command-center/progress", self.runtime)
+        self.assertNotIn("/api/dashboard/me", self.runtime)
+        self.assertNotIn("renderPendingExams(", self.runtime)
+        self.assertNotIn("v681-home-todo-count", self.runtime)
+        self.assertNotIn("v561-progress-percent", self.runtime)
+        self.assertIn("/api/training-command-center", self.todo)
+        self.assertIn("v681-home-todo-count", self.todo)
+        self.assertIn("v681-home-materials-pending", self.todo)
+        self.assertIn("v681-home-exams-pending", self.todo)
+        self.assertNotIn("setTimeout(load,800)", self.todo)
 
     def test_visual_refresh_is_home_scoped(self):
         self.assertIn('home-dashboard-page', self.html)
