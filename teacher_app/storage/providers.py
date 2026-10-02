@@ -13,6 +13,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 try:
     import boto3
@@ -48,6 +49,8 @@ R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "").strip()
 R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
 R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "").strip()
+R2_ENDPOINT_URL = os.environ.get("R2_ENDPOINT_URL", "").strip()
+R2_REGION = os.environ.get("R2_REGION", "auto").strip() or "auto"
 R2_PRESIGN_SECONDS = max(
     60,
     min(604800, int(os.environ.get("R2_PRESIGN_SECONDS", "3600"))),
@@ -97,15 +100,29 @@ MEGA_WEB_READ_TIMEOUT_SECONDS = max(
 Path(MEGACMD_HOME).mkdir(parents=True, exist_ok=True)
 
 
+def _r2_endpoint(account_id: str, endpoint_url: str) -> str:
+    endpoint = str(endpoint_url or "").strip()
+    if not endpoint:
+        return f"https://{account_id}.r2.cloudflarestorage.com"
+    parsed = urlparse(endpoint)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or not host:
+        raise RuntimeError("R2_ENDPOINT_URL 格式不合法。")
+    if parsed.scheme != "https" and host not in {"127.0.0.1", "localhost", "::1"}:
+        raise RuntimeError("非 HTTPS 的 R2 endpoint 只允許本機 loopback 測試。")
+    return endpoint.rstrip("/")
+
+
 def r2_is_configured(
     *,
     account_id: str = R2_ACCOUNT_ID,
     access_key_id: str = R2_ACCESS_KEY_ID,
     secret_access_key: str = R2_SECRET_ACCESS_KEY,
     bucket_name: str = R2_BUCKET_NAME,
+    endpoint_url: str = R2_ENDPOINT_URL,
 ) -> bool:
     return bool(
-        account_id
+        (account_id or endpoint_url)
         and access_key_id
         and secret_access_key
         and bucket_name
@@ -119,21 +136,28 @@ def r2_client(
     access_key_id: str = R2_ACCESS_KEY_ID,
     secret_access_key: str = R2_SECRET_ACCESS_KEY,
     bucket_name: str = R2_BUCKET_NAME,
+    endpoint_url: str = R2_ENDPOINT_URL,
+    region: str = R2_REGION,
 ):
     if not r2_is_configured(
         account_id=account_id,
         access_key_id=access_key_id,
         secret_access_key=secret_access_key,
         bucket_name=bucket_name,
+        endpoint_url=endpoint_url,
     ):
         raise RuntimeError("Cloudflare R2 尚未完成設定。")
+    endpoint = _r2_endpoint(account_id, endpoint_url)
+    config_kwargs = {"signature_version": "s3v4"}
+    if endpoint_url:
+        config_kwargs["s3"] = {"addressing_style": "path"}
     return boto3.client(
         service_name="s3",
-        endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+        endpoint_url=endpoint,
         aws_access_key_id=access_key_id,
         aws_secret_access_key=secret_access_key,
-        region_name="auto",
-        config=BotoConfig(signature_version="s3v4") if BotoConfig else None,
+        region_name=region or "auto",
+        config=BotoConfig(**config_kwargs) if BotoConfig else None,
     )
 
 
