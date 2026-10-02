@@ -18,11 +18,15 @@ async function login(page) {
 test('GP-05 teacher retries the same failed job without re-uploading', async ({ page }) => {
   const saved = JSON.parse(fs.readFileSync('material-fullstack-failure-job.json', 'utf8'));
   await login(page);
-  await page.evaluate(async jobId => {
-    if (typeof window.renderMaterialJobs === 'function') await window.renderMaterialJobs(true);
-    if (typeof window.retryMaterialJob !== 'function') throw new Error('retryMaterialJob is unavailable');
-    await window.retryMaterialJob(jobId);
-  }, saved.jobId);
+
+  // Regress the exact teacher-facing action that previously only navigated to
+  // the job list without invoking the retry endpoint.
+  const retryButton = page.locator(
+    `#teacher-action-queue-1024 [data-teacher-action-kind="material_failure"][data-teacher-action-id="${saved.jobId}"]`
+  );
+  await expect(retryButton).toBeVisible({ timeout: 15000 });
+  await expect(retryButton).toHaveText('直接重新處理');
+  await retryButton.click();
 
   const retried = await page.evaluate(async jobId => {
     const response = await fetch(`/api/material-jobs/${encodeURIComponent(jobId)}`, {

@@ -268,7 +268,7 @@ def _teacher_material_failure_items(user: Mapping[str, Any]) -> list[dict[str, A
             "detail": str(full.get("error") or full.get("detail") or "背景教材處理失敗"),
             "sourceRetained": retained,
             "action": "material_jobs",
-            "actionLabel": "查看並重新處理",
+            "actionLabel": "直接重新處理" if retained else "查看處理方式",
             "target": "course-materials",
         })
     return values

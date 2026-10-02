@@ -147,9 +147,21 @@
   async function openMaterialFailure(item) {
     const api = window.TeacherWorkspace1014 || {};
     await api.openCourse?.();
+    const wanted = String(item.resourceId || item.id || '');
+
+    // This queue is only a projection. The mutation stays in the canonical
+    // material-job owner, but a retained R2 source should make the visible
+    // "重新處理" action actually invoke that owner instead of only navigating.
+    if (item.sourceRetained && wanted && typeof window.retryMaterialJob === 'function') {
+      const retried = await window.retryMaterialJob(wanted);
+      if (retried !== false) {
+        await refresh();
+        return;
+      }
+    }
+
     if (typeof window.renderMaterialJobs === 'function') await window.renderMaterialJobs(true);
     const host = document.getElementById('admin-material-jobs-list');
-    const wanted = String(item.resourceId || item.id || '');
     const diagnostic = [...(host?.querySelectorAll('details') || [])].find(node => node.textContent?.includes(wanted));
     const card = diagnostic?.closest('.rounded-xl.border.bg-white') || diagnostic?.parentElement || host;
     pulseTarget(card);
@@ -195,7 +207,7 @@
         if (!item || button.disabled) return;
         const original = button.textContent;
         button.disabled = true;
-        button.textContent = '開啟中…';
+        button.textContent = item.kind === 'material_failure' && item.sourceRetained ? '重新排隊中…' : '開啟中…';
         try {
           await openAction(item);
         } catch (error) {
@@ -204,7 +216,7 @@
           setTimeout(() => { button.textContent = original; }, 1800);
         } finally {
           button.disabled = false;
-          if (button.textContent === '開啟中…') button.textContent = original;
+          if (button.textContent === '開啟中…' || button.textContent === '重新排隊中…') button.textContent = original;
         }
       });
     });

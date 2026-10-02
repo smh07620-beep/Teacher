@@ -119,13 +119,18 @@
   };
 
   window.retryMaterialJob = async function(id){
-    const r=await fetch(`/api/material-jobs/${encodeURIComponent(id)}/retry`,{method:'POST',});
+    const r=await fetch(`/api/material-jobs/${encodeURIComponent(id)}/retry`,{
+      method:'POST',
+      credentials:'same-origin',
+    });
     const d=await r.json().catch(()=>({}));
     if(!r.ok){
       alert(d.error||'重新處理失敗');
-      return;
+      return false;
     }
     await window.renderMaterialJobs(true);
+    await window.TeacherActionQueue1024?.refresh?.();
+    return true;
   };
 
   window.cancelMaterialJob = async function(id){

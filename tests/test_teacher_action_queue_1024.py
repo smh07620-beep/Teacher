@@ -81,6 +81,7 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         self.assertEqual(review["resourceId"], "r-bio")
         self.assertEqual(failure["resourceId"], "job-bio")
         self.assertTrue(failure["sourceRetained"])
+        self.assertEqual(failure["actionLabel"], "直接重新處理")
         self.assertEqual(due["courseId"], "course-bio")
         self.assertEqual(due["resourceId"], "course-bio")
         self.assertEqual(draft["courseId"], "course-bio")
@@ -136,11 +137,24 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
             "data-learning-assign-course",
             "teachingEditCourse",
             "renderAdminCourseMaterialHub",
+            "retryMaterialJob",
+            "重新排隊中…",
         ):
             self.assertIn(phrase, source)
         self.assertNotIn("X-Admin-Key", source)
         self.assertNotIn("getAdminKey", source)
         self.assertNotIn("localStorage", source)
+
+    def test_material_failure_action_delegates_to_canonical_retry_owner(self):
+        source = ROOT.joinpath("static", "teacher-action-queue-1024.js").read_text(encoding="utf-8")
+        self.assertIn("item.sourceRetained && wanted && typeof window.retryMaterialJob === 'function'", source)
+        self.assertIn("const retried = await window.retryMaterialJob(wanted)", source)
+        self.assertIn("if (retried !== false)", source)
+        jobs_source = ROOT.joinpath("static", "admin-jobs.js").read_text(encoding="utf-8")
+        self.assertIn("credentials:'same-origin'", jobs_source)
+        self.assertIn("return true", jobs_source)
+        self.assertIn("return false", jobs_source)
+        self.assertIn("TeacherActionQueue1024?.refresh?.()", jobs_source)
 
     def test_queue_mounts_in_the_active_teacher_workspace_and_filters_context(self):
         source = ROOT.joinpath("static", "teacher-action-queue-1024.js").read_text(encoding="utf-8")
