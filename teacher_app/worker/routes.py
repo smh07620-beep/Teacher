@@ -127,6 +127,37 @@ def _published_identity(job: dict, body: dict) -> tuple[str, str, str, dict]:
     return publish_key, backend, source_sha256, result
 
 
+def _record_r2_publish_objects(runtime: WorkerWebRuntime, job: dict, result: dict) -> None:
+    if str(result.get("storageBackend") or "").strip().lower() != "r2":
+        return
+    meta = result.get("storageMeta") if isinstance(result.get("storageMeta"), dict) else {}
+    objects = meta.get("r2Objects")
+    if not isinstance(objects, list) or not objects:
+        raise ValueError("R2 publish result 缺少正式物件清單。")
+    if len(objects) > 10050:
+        raise ValueError("R2 publish result 物件數量超過限制。")
+    material_id = str(job.get("materialId") or "").strip()
+    prefix = f"materials/{material_id}/"
+    storage_key = str(result.get("storageKey") or "").strip()
+    recorded = set()
+    for item in objects:
+        if not isinstance(item, dict):
+            raise ValueError("R2 publish object 格式錯誤。")
+        key = str(item.get("key") or "").strip()
+        try:
+            size = int(item.get("bytes", 0) or 0)
+        except (TypeError, ValueError):
+            size = 0
+        if not key.startswith(prefix) or ".." in key.split("/") or size <= 0:
+            raise ValueError("R2 publish object 範圍或大小不合法。")
+        if key in recorded:
+            continue
+        runtime.record_r2_object(key, size, estimated_operations=1)
+        recorded.add(key)
+    if storage_key not in recorded:
+        raise ValueError("R2 publish storage key 未包含於正式物件清單。")
+
+
 def _receipt_matches_complete(receipt: dict, worker_id: str, body: dict) -> tuple[bool, str]:
     publish_key = str(body.get("publishKey") or "").strip()
     result = body.get("result") if isinstance(body.get("result"), dict) else {}
@@ -415,6 +446,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         if error: return error
         try:
             publish_key, backend, source_sha256, result = _published_identity(job, body)
+            _record_r2_publish_objects(runtime, job, result)
             receipt, replayed = worker_repository.record_publish_receipt(
                 job_id=job_id,
                 publish_key=publish_key,
