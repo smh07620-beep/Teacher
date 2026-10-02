@@ -1,9 +1,8 @@
 """10/14 media compatibility layer for browser-recorded WebM.
 
 Chromium-class browsers may emit microphone-only recordings in a WebM
-container.  The legacy local Worker historically classified ``.webm`` as
-video from the filename alone.  This adapter keeps the mature Worker runtime
-unchanged while making the media decision from ffprobe stream metadata.
+container. The adapter also owns the fast media normalization path used by the
+Windows material Worker.
 """
 from __future__ import annotations
 
@@ -11,7 +10,7 @@ from pathlib import Path
 
 
 def transcode_if_needed(worker, source, original, temp):
-    """Normalize media using actual streams instead of the file suffix alone."""
+    """Normalize media from ffprobe streams and remux web-safe media."""
     ext = Path(original).suffix.lower()
     if ext not in worker.VIDEO_EXT | worker.AUDIO_EXT:
         return source, original, {}, {}
@@ -24,8 +23,6 @@ def transcode_if_needed(worker, source, original, temp):
     has_video = bool(str(metadata.get("videoCodec") or "").strip())
     has_audio = bool(str(metadata.get("audioCodec") or "").strip())
 
-    # An explicitly audio extension stays audio.  Ambiguous containers such as
-    # .webm/.mp4 use ffprobe: a video stream means video; audio-only means audio.
     is_video = ext in worker.VIDEO_EXT and has_video
     is_audio = ext in worker.AUDIO_EXT or (
         ext in worker.VIDEO_EXT and not has_video and has_audio
@@ -41,22 +38,76 @@ def transcode_if_needed(worker, source, original, temp):
         ),
     )
     derivatives = {}
+    video_codec = str(metadata.get("videoCodec") or "").lower()
+    audio_codec = str(metadata.get("audioCodec") or "").lower()
+    width = int(metadata.get("width") or 0)
+    height = int(metadata.get("height") or 0)
+
+    video_remux = bool(
+        is_video
+        and ext in {".mp4", ".m4v"}
+        and video_codec == "h264"
+        and audio_codec in {"", "aac"}
+        and 0 < width <= 1280
+        and 0 < height <= 720
+    )
+    audio_remux = bool(is_audio and ext == ".m4a" and audio_codec == "aac")
 
     if is_video:
         output = Path(temp) / "web.mp4"
-        command = [
-            ffmpeg, "-y", "-i", str(source),
-            "-vf", "scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-            "-movflags", "+faststart", "-c:a", "aac", "-b:a", "128k", str(output),
-        ]
+        if video_remux:
+            command = [
+                ffmpeg,
+                "-y",
+                "-i",
+                str(source),
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a?",
+                "-c",
+                "copy",
+                "-movflags",
+                "+faststart",
+                str(output),
+            ]
+        else:
+            command = [
+                ffmpeg,
+                "-y",
+                "-i",
+                str(source),
+                "-vf",
+                "scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                "-movflags",
+                "+faststart",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                str(output),
+            ]
         name = Path(original).with_suffix(".mp4").name
     else:
         output = Path(temp) / "web.m4a"
         command = [
-            ffmpeg, "-y", "-i", str(source),
-            "-vn", "-c:a", "aac", "-b:a", "128k", str(output),
+            ffmpeg,
+            "-y",
+            "-i",
+            str(source),
+            "-vn",
+            "-c:a",
+            "copy" if audio_remux else "aac",
         ]
+        if not audio_remux:
+            command.extend(["-b:a", "128k"])
+        command.append(str(output))
         name = Path(original).with_suffix(".m4a").name
 
     try:
@@ -84,16 +135,34 @@ def transcode_if_needed(worker, source, original, temp):
         sidecars = (
             (
                 [
-                    ffmpeg, "-y", "-ss", str(stamp), "-i", str(output),
-                    "-frames:v", "1", "-vf", "scale='min(640,iw)':-2",
-                    "-c:v", "libwebp", "-quality", "80", str(poster),
+                    ffmpeg,
+                    "-y",
+                    "-ss",
+                    str(stamp),
+                    "-i",
+                    str(output),
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "scale='min(640,iw)':-2",
+                    "-c:v",
+                    "libwebp",
+                    "-quality",
+                    "80",
+                    str(poster),
                 ],
                 poster,
             ),
             (
                 [
-                    ffmpeg, "-y", "-i", str(output), "-vn", "-c:a", "aac",
-                    "-b:a", "64k", str(audio),
+                    ffmpeg,
+                    "-y",
+                    "-i",
+                    str(output),
+                    "-vn",
+                    "-c:a",
+                    "copy",
+                    str(audio),
                 ],
                 audio,
             ),
@@ -117,14 +186,16 @@ def transcode_if_needed(worker, source, original, temp):
             ):
                 derivatives[target.name] = target
 
+    fast_path = video_remux or audio_remux
     metadata.update(
         {
             "transcoded": True,
+            "transcodeMode": "remux" if fast_path else "transcode",
             "sourceOriginalName": original,
             "mediaKind": "video" if is_video else "audio",
             "normalizedMaxHeight": 720 if is_video else None,
-            "videoCrf": 23 if is_video else None,
-            "videoPreset": "veryfast" if is_video else "",
+            "videoCrf": 23 if is_video and not video_remux else None,
+            "videoPreset": "veryfast" if is_video and not video_remux else "",
         }
     )
     return (
