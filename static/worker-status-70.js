@@ -63,6 +63,7 @@
     panel.className = 'admin-section-panel hidden space-y-5 overflow-y-auto max-h-[68vh] pr-1';
     workspaceHost.appendChild(panel);
   }
+  panel.dataset.productSection = 'needs-action';
 
   let refreshTimer = null;
   let loading = false;
