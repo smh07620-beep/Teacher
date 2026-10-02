@@ -21,6 +21,7 @@ class LearningProgressConvergence1025Tests(unittest.TestCase):
             "materialsTotal": 3,
             "examsPassed": 1,
             "examsTotal": 2,
+            "examsPending": 1,
             "activeCourses": 1,
             "scopeSource": "assignments",
         }
@@ -30,6 +31,7 @@ class LearningProgressConvergence1025Tests(unittest.TestCase):
             data = progress.build_progress(user)
         self.assertEqual(data["online"]["percent"], 67)
         self.assertEqual(data["online"]["materialsCompleted"], 2)
+        self.assertEqual(data["online"]["examsPending"], 1)
         self.assertIsNone(data["pgy"])
         matrix.assert_not_called()
         self.assertEqual(data["interpretation"], "separate_online_and_pgy_progress_sources")
@@ -77,6 +79,13 @@ class LearningProgressConvergence1025Tests(unittest.TestCase):
         self.assertIn('/learning-progress-convergence-1025.js', ASSET_MANIFEST['system']['body'])
         self.assertNotIn('X-Admin-Key',source)
         self.assertNotIn('getAdminKey',source)
+
+    def test_learning_analytics_consumes_canonical_progress_projection(self):
+        source=ROOT.joinpath('static','learning-analytics-71.js').read_text(encoding='utf-8')
+        self.assertIn('/api/training-command-center/progress', source)
+        self.assertNotIn('/api/dashboard/me', source)
+        self.assertIn('online.materialsCompleted', source)
+        self.assertIn('online.examsPending', source)
 
     def test_portal_async_dashboard_cannot_be_the_final_progress_writer(self):
         source=ROOT.joinpath('static','learning-progress-convergence-1025.js').read_text(encoding='utf-8')
