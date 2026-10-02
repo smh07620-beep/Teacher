@@ -619,7 +619,7 @@
                     </section>
                 </div>
 
-                <div id="admin-section-people" class="admin-section-panel hidden space-y-5">
+                <div id="admin-section-people" data-product-section="current-work" class="admin-section-panel hidden space-y-5">
                     <section class="admin-people-workspace bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                         <div class="admin-page-section-heading"><div><p class="admin-page-eyebrow">PEOPLE & ACCESS</p><h4 class="font-black text-slate-950 text-xl">人員與帳號</h4><p class="text-xs text-slate-500 mt-1">日常以搜尋、檢視與維護帳號為主；新增帳號需要時再展開，角色與資料範圍仍由既有 RBAC 規則控管。</p></div><button data-csp-click="renderAdminUserAccounts()" class="admin-toolbar-button">↻ 更新人員</button></div>
                         <div id="admin-people-account-summary" class="admin-people-summary-grid"><div><span>全部帳號</span><strong id="admin-user-total-count">—</strong><small>人</small></div><div><span>啟用中</span><strong id="admin-user-active-count">—</strong><small>可登入</small></div><div><span>教師／管理</span><strong id="admin-user-staff-count">—</strong><small>具教學或管理角色</small></div><div><span>停用</span><strong id="admin-user-disabled-count">—</strong><small>不可登入</small></div></div>
@@ -630,7 +630,7 @@
                     </section>
                 </div>
 
-                <div id="admin-section-system" class="admin-section-panel hidden space-y-5">
+                <div id="admin-section-system" data-product-section="overview" class="admin-section-panel hidden space-y-5">
                     <section class="admin-system-overview bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                         <div class="admin-page-section-heading"><div><p class="admin-page-eyebrow">SYSTEM HEALTH</p><h4 class="font-black text-slate-950 text-xl">系統與服務狀態</h4><p class="text-xs text-slate-500 mt-1">日常先看服務是否正常；儲存搬移與高風險維護仍放在各自的維運工作區。</p></div><button data-csp-click="renderAdminSystemStatus(true)" class="admin-toolbar-button">↻ 重新檢查</button></div>
                         <div id="admin-system-health" class="admin-system-health-grid"></div>
