@@ -90,7 +90,9 @@ diverged history 或 fetch 失敗，並保留目前 checkout。
 Worker 在 claimed job 執行期間預設每 30 秒送出一次 heartbeat，包含下載、
 FFmpeg/LibreOffice 轉檔與 MEGA/Google Drive publish。可用
 `MATERIAL_WORKER_HEARTBEAT_SECONDS` 調整為 5–90 秒；heartbeat 暫時失敗只會記錄
-不含 secret 的警告，不會中斷正在進行的本機轉檔或上傳。publish 完成後若
+不含 secret 的警告，不會中斷正在進行的本機轉檔或上傳。Web 端會用
+`MATERIAL_WORKER_OFFLINE_ALERT_SECONDS` 判定「持續離線」告警，預設 600 秒（10 分鐘），
+可設定 300–3600 秒；單次 heartbeat 查詢失敗只標示狀態不可用，不會誤報 Worker 離線。publish 完成後若
 `/complete` 回應因短暫網路／5xx／429 遺失，Worker 會先重送同一份 completion
 result；Web 端對已完成且同一 Worker ownership 的 completion replay 會直接回覆
 成功，避免因單次 acknowledgement 遺失立刻重新轉檔與重新 publish。
