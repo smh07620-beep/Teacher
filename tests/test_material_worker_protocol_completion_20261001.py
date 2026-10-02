@@ -111,6 +111,43 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
         status = operations.status(lambda: {}, connection_factory=self.connect)
         self.assertTrue(status["workers"][0]["protocolCompatible"])
 
+    def test_storage_preflight_failure_stays_online_but_cannot_claim(self):
+        self.seed_job("preflight-job")
+        repository.upsert_heartbeat(
+            "worker-preflight",
+            last_seen=dt.datetime.now(dt.timezone.utc).isoformat(),
+            capabilities={
+                "protocolVersion": MATERIAL_WORKER_PROTOCOL_VERSION,
+                "platform": "win32",
+                "ffmpeg": {"available": True},
+                "libreOffice": {"available": True},
+                "storagePreflight": {
+                    "ready": False,
+                    "backend": "mega",
+                    "error": "MEGA login/write probe failed",
+                },
+            },
+            connection_factory=self.connect,
+        )
+        claimed = repository.claim_next_material_job(
+            "worker-preflight",
+            now=dt.datetime.now(dt.timezone.utc).isoformat(),
+            connection_factory=self.connect,
+        )
+        self.assertIsNone(claimed)
+        job = repository.get_material_job("preflight-job", connection_factory=self.connect)
+        self.assertEqual(job["status"], "queued")
+        self.assertEqual(job["attempts"], 0)
+
+        worker = operations.status(
+            lambda: {}, connection_factory=self.connect
+        )["workers"][0]
+        self.assertTrue(worker["protocolCompatible"])
+        self.assertFalse(worker["storagePreflightReady"])
+        self.assertEqual(worker["storagePreflightBackend"], "mega")
+        self.assertIn("write probe", worker["storagePreflightError"])
+        self.assertFalse(worker["claimReady"])
+
     def test_capability_installer_is_idempotent(self):
         class Dummy:
             @staticmethod

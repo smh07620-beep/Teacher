@@ -130,6 +130,26 @@ def capability():
     ffmpeg,ffprobe,soffice=_bin("FFMPEG_PATH","ffmpeg"),_bin("FFPROBE_PATH","ffprobe"),_bin("SOFFICE_PATH","soffice")
     return {"platform":sys.platform,"ffmpeg":{"available":_works(ffmpeg,["-version"])} ,"ffprobe":{"available":_works(ffprobe,["-version"])} ,"libreOffice":{"available":_works(soffice,["--version"])}}
 
+def _storage_preflight_snapshot():
+    try:
+        result=STORAGE.startup_preflight()
+        return {
+            "ready":bool(result.get("ready")),
+            "backend":str(result.get("backend") or "")[:32],
+            "detail":str(result.get("detail") or "")[:240],
+            "error":"",
+        }
+    except Exception as exc:
+        return {
+            "ready":False,
+            "backend":str(getattr(STORAGE,"requested_backend","") or "auto")[:32],
+            "detail":"",
+            "error":str(exc)[:500],
+        }
+
+def _capability_with_storage(base,preflight):
+    return {**dict(base or {}),"storagePreflight":dict(preflight or {})}
+
 class WorkerApi:
     def __init__(self):
         if not _worker_url_allowed(BASE_URL):raise RuntimeError("TEACHER_BASE_URL 必須是 HTTPS URL；僅測試時可明確允許本機 loopback HTTP。")
@@ -466,7 +486,23 @@ def process_one(api,job,capabilities=None):
 def main():
     try:api=WorkerApi()
     except RuntimeError as exc:log(str(exc));return 2
-    caps=capability();log(f"startup ffmpeg={caps['ffmpeg']['available']} ffprobe={caps['ffprobe']['available']} libreoffice={caps['libreOffice']['available']}")
+    base_caps=capability();log(f"startup ffmpeg={base_caps['ffmpeg']['available']} ffprobe={base_caps['ffprobe']['available']} libreoffice={base_caps['libreOffice']['available']}")
+
+    while True:
+        try:
+            preflight=_storage_preflight_snapshot()
+            caps=_capability_with_storage(base_caps,preflight)
+            api.heartbeat(capabilities=caps)
+            if preflight.get("ready"):
+                log(f"storage preflight ready backend={preflight.get('backend') or 'unknown'}")
+                break
+            log(f"storage preflight blocked claims: {preflight.get('error') or 'storage unavailable'}")
+            time.sleep(max(5,POLL_SECONDS))
+        except KeyboardInterrupt:return 0
+        except Exception as exc:
+            log(f"storage preflight heartbeat unavailable: {exc}")
+            time.sleep(max(5,POLL_SECONDS))
+
     while True:
         try:
             api.heartbeat(capabilities=caps); data=api.post("/api/material-worker/claim",{"workerId":WORKER_ID,"capabilities":caps,**AUTO_UPDATER.metadata()}); job=data.get("job")

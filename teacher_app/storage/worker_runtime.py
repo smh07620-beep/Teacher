@@ -253,6 +253,37 @@ class WorkerMaterialStorageAdapter:
         except StorageConfigurationError as exc:
             raise RuntimeError(str(exc)) from exc
 
+
+    def startup_preflight(self) -> dict[str, object]:
+        """Validate final storage before the Worker is allowed to claim jobs."""
+
+        backend = self.active_backend()
+        if backend == "local":
+            raise RuntimeError(
+                "Local Worker 正式教材儲存需設定 MEGA、Google Drive 或 R2。"
+            )
+        if backend != "mega":
+            return {"ready": True, "backend": backend, "detail": "provider configured"}
+
+        self._mega_login()
+        root = self._mega_root()
+        with tempfile.TemporaryDirectory(prefix="teacher-storage-preflight-") as temp_name:
+            probe = Path(temp_name) / "preflight.txt"
+            probe.write_text("teacher-material-worker-preflight\n", encoding="utf-8")
+            remote_name = f".worker-preflight-{uuid.uuid4().hex[:12]}.txt"
+            remote_path = self._mega_upload_file(probe, root, remote_name)
+            try:
+                self._mega_run(["mega-rm", "-f", remote_path], timeout=60)
+            except Exception as exc:
+                raise RuntimeError(
+                    "MEGA preflight 寫入成功但清理失敗；Worker 暫停領取新教材。"
+                ) from exc
+        return {
+            "ready": True,
+            "backend": "mega",
+            "detail": "login/write/delete verified",
+        }
+
     # ------------------------------------------------------------------
     # Conversion helpers used only by the standalone worker
     # ------------------------------------------------------------------

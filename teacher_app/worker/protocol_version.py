@@ -46,6 +46,14 @@ def _is_compatible(capabilities: Any) -> bool:
     return False
 
 
+def _storage_preflight_allows_claim(capabilities: Any) -> bool:
+    payload = capabilities if isinstance(capabilities, Mapping) else {}
+    preflight = payload.get("storagePreflight")
+    if not isinstance(preflight, Mapping):
+        return True
+    return preflight.get("ready") is not False
+
+
 def install_capability(worker_module: Any) -> None:
     """Advertise the current wire protocol on canonical Worker capabilities."""
     original = getattr(worker_module, "capability", None)
@@ -92,8 +100,13 @@ def install_web_guards() -> None:
             except Exception:
                 # A status lookup failure must not create a second queue outage.
                 heartbeat = None
-            if heartbeat is not None and not _is_compatible(heartbeat.get("capabilities")):
-                return None
+            if heartbeat is not None:
+                heartbeat_capabilities = heartbeat.get("capabilities")
+                if (
+                    not _is_compatible(heartbeat_capabilities)
+                    or not _storage_preflight_allows_claim(heartbeat_capabilities)
+                ):
+                    return None
             return original_claim(
                 worker_id,
                 now=now,
@@ -131,6 +144,20 @@ def install_web_guards() -> None:
                 worker["minimumProtocolVersion"] = MIN_MATERIAL_WORKER_PROTOCOL_VERSION
                 worker["protocolCompatible"] = compatible
                 worker["updateRequired"] = not compatible
+                preflight = capabilities.get("storagePreflight")
+                if isinstance(preflight, Mapping):
+                    worker["storagePreflightReady"] = preflight.get("ready") is not False
+                    worker["storagePreflightBackend"] = str(preflight.get("backend") or "")[:32]
+                    worker["storagePreflightError"] = str(preflight.get("error") or "")[:500]
+                    worker["storagePreflightDetail"] = str(preflight.get("detail") or "")[:240]
+                else:
+                    worker["storagePreflightReady"] = None
+                    worker["storagePreflightBackend"] = ""
+                    worker["storagePreflightError"] = ""
+                    worker["storagePreflightDetail"] = ""
+                worker["claimReady"] = bool(
+                    compatible and _storage_preflight_allows_claim(capabilities)
+                )
             data["minimumWorkerProtocolVersion"] = MIN_MATERIAL_WORKER_PROTOCOL_VERSION
             return data
 
