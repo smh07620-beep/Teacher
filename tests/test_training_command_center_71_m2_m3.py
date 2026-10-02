@@ -169,6 +169,10 @@ class CommandCenterM2M3FrontendTests(unittest.TestCase):
         for mutation in ("method: 'POST'", "method: 'PATCH'", "method: 'DELETE'"):
             self.assertNotIn(mutation, self.matrix_ui)
 
+    def test_online_progress_projection_is_bound_before_visible_summary_reads_it(self):
+        declaration = self.matrix_ui.index("const online = progress?.online || {};")
+        visible_read = self.matrix_ui.index("summaryLine.textContent = `學習進度")
+        self.assertLess(declaration, visible_read)
     def test_m3_is_compact_inside_course_center_and_uses_canonical_progress_source(self):
         self.assertIn("document.querySelector('#course-overview > .edu-card')", self.analytics_ui)
         self.assertIn('📊 學習摘要', self.analytics_ui)
