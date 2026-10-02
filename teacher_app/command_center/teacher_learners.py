@@ -93,7 +93,7 @@ def build_teacher_learners(
                 SELECT a.learner_username,
                        COALESCE(u.display_name,'') AS learner_name,
                        COALESCE(u.emp_id,'') AS learner_emp_id,
-                       COALESCE(u.active,1) AS learner_active,
+                       u.active AS learner_active,
                        a.group_key,a.status,a.due_at,a.updated_at
                 FROM pgy_assignments a
                 LEFT JOIN user_accounts u ON u.username=a.learner_username
@@ -124,7 +124,7 @@ def build_teacher_learners(
                 "name": str(row.get("learner_name") or learner_username)[:100],
                 "empId": str(row.get("learner_emp_id") or "")[:100],
                 "group": normalize_group(row.get("group_key")),
-                "active": bool(row.get("learner_active", True)),
+                "active": True if row.get("learner_active") is None else bool(row.get("learner_active")),
                 "assignmentCount": 0,
                 "completedAssignments": 0,
                 "awaitingTeacher": 0,
