@@ -12,6 +12,7 @@ class ProductGoldenPathP1BrowserContractTests(unittest.TestCase):
         cls.browser_gp = (ROOT / "tests" / "playwright" / "product-golden-path-p1-real-flask.spec.js").read_text(encoding="utf-8")
         cls.teacher_workspace = (ROOT / "static" / "teacher-workspace-1014.js").read_text(encoding="utf-8")
         cls.people = (ROOT / "static" / "admin-people.js").read_text(encoding="utf-8")
+        cls.roles_signing = (ROOT / "static" / "roles-signing-66.js").read_text(encoding="utf-8")
 
     def test_admin_modal_respects_requested_deep_link_workspace(self):
         self.assertIn(
@@ -45,6 +46,11 @@ class ProductGoldenPathP1BrowserContractTests(unittest.TestCase):
         self.assertIn("function ensureAdminUserCreatePanel()", self.people)
         self.assertIn("if(existing)return existing", self.people)
         self.assertIn("ensureAdminUserCreatePanel();", self.people)
+
+    def test_account_creation_keeps_success_feedback_after_list_refresh(self):
+        self.assertIn("const successMessage = `✅ 已建立", self.roles_signing)
+        self.assertIn("if (status) status.textContent = successMessage;", self.roles_signing)
+        self.assertGreaterEqual(self.roles_signing.count("status.textContent = successMessage"), 2)
 
 
 if __name__ == "__main__":
