@@ -25,12 +25,6 @@
     return getJSON('/api/training-command-center/profile');
   }
 
-  function dashboardUrl(p) {
-    const query = new URLSearchParams({empId:p?.empId || ''});
-    if (p?.name) query.set('name', p.name);
-    return `/api/dashboard/me?${query.toString()}`;
-  }
-
   function mount() {
     let section = document.getElementById(ID);
     if (section) return section;
@@ -66,7 +60,7 @@
     return value === null || value === undefined || value === '' || !Number.isFinite(n) ? '—' : n.toFixed(digits);
   }
 
-  function renderOnline(p, dashboard, analytics) {
+  function renderOnline(p, progress, analytics) {
     const section = document.getElementById(ID);
     if (section) section.classList.add('hidden');
     const title = document.getElementById('training-progress-title-71');
@@ -76,17 +70,18 @@
     const table = document.getElementById('pgy-matrix-table-71');
     if (!title || !summaryLine || !status || !stats || !table) return;
     title.textContent = '📈 線上訓練進度';
-    summaryLine.textContent = `學習進度 ${Number(dashboard?.progressPercent || 0)}%`;
+    summaryLine.textContent = `學習進度 ${Number(online.percent || 0)}%`;
     status.textContent = '一般／線上人員只呈現課程、教材與考試進度，不顯示 PGY 能力矩陣。';
     const s = analytics?.summary || {};
+    const online = progress?.online || {};
     stats.innerHTML = [
-      card('學習進度', Number(dashboard?.progressPercent || 0), '%'),
-      card('教材完成', `${Number(dashboard?.materialsCompleted || 0)}/${Number(dashboard?.materialsTotal || 0)}`),
-      card('進行中課程', Number(dashboard?.activeCourses || 0)),
+      card('學習進度', Number(online.percent || 0), '%'),
+      card('教材完成', `${Number(online.materialsCompleted || 0)}/${Number(online.materialsTotal || 0)}`),
+      card('進行中課程', Number(online.activeCourses || 0)),
       card('考試平均', numberOrDash(s.averageExamScore), '/100')
     ].join('');
-    table.innerHTML = Number(dashboard?.examsPending || 0)
-      ? `<div class="rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">目前有 <b>${Number(dashboard.examsPending)}</b> 份待完成考核，可由上方「考核任務」快速進入。</div>`
+    table.innerHTML = Number(online.examsPending || 0)
+      ? `<div class="rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">目前有 <b>${Number(online.examsPending)}</b> 份待完成考核，可由上方「考核任務」快速進入。</div>`
       : '<div class="rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-700">✓ 目前沒有待完成考核。</div>';
   }
 
@@ -127,11 +122,11 @@
         const matrix = await getJSON('/api/training-command-center/pgy-matrix');
         renderPgy(matrix);
       } else {
-        const [dashboard, analytics] = await Promise.all([
-          p?.empId ? getJSON(dashboardUrl(p)).catch(()=>({})) : Promise.resolve({}),
+        const [progress, analytics] = await Promise.all([
+          getJSON('/api/training-command-center/progress').catch(()=>({online:{},pgy:null})),
           getJSON('/api/training-command-center/learning-analytics').catch(()=>({summary:{}}))
         ]);
-        renderOnline(p, dashboard, analytics);
+        renderOnline(p, progress, analytics);
       }
     } catch (error) {
       if (error?.status === 401 || error?.status === 403) { section.classList.add('hidden'); return; }
