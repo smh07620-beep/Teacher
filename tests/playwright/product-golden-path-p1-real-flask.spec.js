@@ -45,6 +45,18 @@ test('GP-07 dual-role account switches learner and teacher personas without syst
   await expect(page.locator('#admin-nav-worker')).toBeHidden();
   await expect(page.locator('#admin-nav-people')).toBeHidden();
 
+  const teacherRuntime = await page.evaluate(() => ({
+    roles: [...(window.TeacherRBAC681?.roles || [])],
+    permissions: [...(window.TeacherRBAC681?.permissions || [])],
+    workspace: window.TeacherWorkspace1014 ? {
+      canLearn: window.TeacherWorkspace1014.canLearn,
+      canTeach: window.TeacherWorkspace1014.canTeach,
+      canSystem: window.TeacherWorkspace1014.canSystem,
+    } : null,
+    switcher: document.getElementById('teacher-persona-switch-1014')?.outerHTML || null,
+    actions: document.querySelector('.v56-system-actions')?.outerHTML || null,
+  }));
+  console.log('GP07_RUNTIME', JSON.stringify(teacherRuntime));
   const teacherSwitcher = page.locator('#teacher-persona-switch-1014');
   await expect(teacherSwitcher.getByRole('button', { name: /我的學習/ })).toBeVisible();
   await teacherSwitcher.getByRole('button', { name: /我的學習/ }).click();
@@ -56,6 +68,14 @@ test('GP-07 dual-role account switches learner and teacher personas without syst
 test('GP-08 system administrator provisions scoped teacher who gets only canonical permissions', async ({ page }) => {
   await login(page, 'gp08admin', '/system?admin=1&workspace=people&persona=system');
   await page.waitForURL(url => url.searchParams.get('workspace') === 'people', { timeout: 15000 });
+  const peopleRuntime = await page.evaluate(() => ({
+    peoplePanel: document.getElementById('admin-section-people')?.outerHTML?.slice(0, 5000) || null,
+    createPanel: document.getElementById('admin-user-create-panel')?.outerHTML || null,
+    ensureType: typeof window.ensureAdminUserCreatePanel,
+    renderType: typeof window.renderAdminPeople,
+    adminPeopleScript: [...document.scripts].some(script => String(script.src || '').includes('/admin-people.js')),
+  }));
+  console.log('GP08_RUNTIME', JSON.stringify(peopleRuntime));
   await expect(page.locator('#admin-user-create-panel')).toBeAttached({ timeout: 15000 });
 
   const panel = page.locator('#admin-user-create-panel');
