@@ -33,6 +33,50 @@ test('P2 我的學員 stays inside assessment workspace with server-scoped learn
     contentType: 'application/json',
     body: JSON.stringify([]),
   }));
+  await page.route('**/api/training-command-center/teacher-competency', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      scope: { kind: 'assigned', group: 'grpBio' },
+      assessmentTypes: [
+        { key: 'dops', label: 'DOPS' },
+        { key: 'mini_cex', label: 'MINI-CEX' },
+      ],
+      summary: {
+        learners: 1,
+        assignments: 2,
+        assignmentsCompleted: 1,
+        assignmentsOverdue: 0,
+        assignmentCompletionPercent: 50,
+        assessments: 2,
+        averageAssessmentScore: 4.2,
+      },
+      learners: [{
+        username: 'student-p2',
+        name: '測試學員',
+        empId: 'S2001',
+        group: 'grpBio',
+        progress: {
+          assignmentsTotal: 2,
+          assignmentsCompleted: 1,
+          assignmentsOverdue: 0,
+          percent: 50,
+        },
+        assessmentSummary: {
+          count: 2,
+          averageScore: 4.2,
+          coverageTypes: 2,
+          coverageTotal: 10,
+        },
+        competencies: {
+          dops: { count: 1, averageScore: 4, latestScore: 4, latestDate: '2026-10-01' },
+          mini_cex: { count: 1, averageScore: 4.4, latestScore: 4.4, latestDate: '2026-10-02' },
+        },
+      }],
+      source: 'formal-pgy-assessments',
+      interpretation: 'formal_assessment_tracking_without_mastery_score',
+    }),
+  }));
   await page.route('**/api/training-command-center/teacher-learners', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -80,6 +124,17 @@ test('P2 我的學員 stays inside assessment workspace with server-scoped learn
   await expect(panel).toContainText('測試學員');
   await expect(panel).toContainText('待教師 1');
   await expect(panel.getByRole('button', { name: '查看考核紀錄' })).toBeVisible();
+  const competency = panel.getByRole('button', { name: '能力追蹤' });
+  await expect(competency).toBeVisible();
+  await competency.click();
+  const competencyPanel = page.locator('#teacher-competency-detail-p2');
+  await expect(competencyPanel).toBeVisible();
+  await expect(competencyPanel).toContainText('能力追蹤 · 測試學員');
+  await expect(competencyPanel).toContainText('DOPS');
+  await expect(competencyPanel).toContainText('MINI-CEX');
+  await expect(competencyPanel).toContainText('不合併成 AI 能力總分');
+  await expect(competencyPanel).toContainText('4.2');
+
   const clinical = panel.getByRole('button', { name: '開始臨床技能評核' });
   await expect(clinical).toBeVisible();
 
