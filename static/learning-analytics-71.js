@@ -25,12 +25,6 @@
     return getJSON('/api/training-command-center/profile');
   }
 
-  function dashboardUrl(p) {
-    const query = new URLSearchParams({empId:p?.empId || ''});
-    if (p?.name) query.set('name', p.name);
-    return `/api/dashboard/me?${query.toString()}`;
-  }
-
   function numberOrDash(value, digits = 1) {
     if (value === null || value === undefined || value === '') return '—';
     const n = Number(value);
@@ -93,20 +87,21 @@
     }).join('')}</tbody></table>`;
   }
 
-  function render(p, dashboard, analytics) {
+  function render(p, progress, analytics) {
     const status = document.getElementById('learning-analytics-status-71');
     const stats = document.getElementById('learning-analytics-stats-71');
     if (!status || !stats) return;
     const s = analytics?.summary || {};
     const includePgy = Boolean(p?.pgyLearner);
 
-    // These visible material/course values intentionally come from /dashboard/me
-    // so M3 and the home-page personal summary cannot disagree.
+    // Visible course/material/exam progress comes from the canonical progress
+    // projection. Detailed analytics stays on its own read-only analytics API.
+    const online = progress?.online || {};
     const chips = [
-      chip('教材完成', `${Number(dashboard?.materialsCompleted || 0)}/${Number(dashboard?.materialsTotal || 0)}`),
-      chip('整體學習進度', `${Number(dashboard?.progressPercent || 0)}%`),
-      chip('進行中課程', String(Number(dashboard?.activeCourses || 0))),
-      chip('待完成考核', String(Number(dashboard?.examsPending || 0))),
+      chip('教材完成', `${Number(online.materialsCompleted || 0)}/${Number(online.materialsTotal || 0)}`),
+      chip('整體學習進度', `${Number(online.percent || 0)}%`),
+      chip('進行中課程', String(Number(online.activeCourses || 0))),
+      chip('待完成考核', String(Number(online.examsPending || 0))),
       chip('考試平均', numberOrDash(s.averageExamScore), '/ 100')
     ];
     if (includePgy) {
@@ -127,12 +122,12 @@
     if (status) status.textContent = force ? '更新中…' : '讀取中…';
     try {
       const p = await profile(force);
-      const [dashboard, analytics] = await Promise.all([
-        p?.empId ? getJSON(dashboardUrl(p)).catch(()=>({})) : Promise.resolve({}),
+      const [progress, analytics] = await Promise.all([
+        getJSON('/api/training-command-center/progress').catch(()=>({online:{},pgy:null})),
         getJSON('/api/training-command-center/learning-analytics').catch(()=>({summary:{},learners:[],timeline:[]}))
       ]);
       section.classList.remove('hidden');
-      render(p, dashboard, analytics);
+      render(p, progress, analytics);
     } catch (error) {
       if (error?.status === 401 || error?.status === 403) { section.classList.add('hidden'); return; }
       if (status) status.textContent = `❌ ${error.message || '無法讀取學習摘要'}`;
