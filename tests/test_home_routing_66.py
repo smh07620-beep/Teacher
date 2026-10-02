@@ -23,6 +23,9 @@ class HomeRouting66Tests(
         portal = self.source(
             "static/portal-v56.js"
         )
+        todo = self.source(
+            "static/learner-todo-convergence-1025.js"
+        )
 
         self.assertIn(
             'id="v66-pending-all"',
@@ -40,12 +43,22 @@ class HomeRouting66Tests(
         )
 
         self.assertIn(
-            "qs.set('examId',examId)",
-            portal,
+            "if(moduleName==='exam'&&item?.resourceId)query.set('examId',String(item.resourceId))",
+            todo,
         )
 
         self.assertIn(
-            "x.id||x.examId||x.quizId",
+            "area:item?.area||'internal'",
+            todo,
+        )
+
+        self.assertIn(
+            "group:item?.group||'grpBio'",
+            todo,
+        )
+
+        self.assertNotIn(
+            "renderPendingExams(",
             portal,
         )
 
