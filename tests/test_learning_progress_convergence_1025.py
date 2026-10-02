@@ -87,10 +87,13 @@ class LearningProgressConvergence1025Tests(unittest.TestCase):
         self.assertIn('online.materialsCompleted', source)
         self.assertIn('online.examsPending', source)
 
-    def test_portal_async_dashboard_cannot_be_the_final_progress_writer(self):
-        source=ROOT.joinpath('static','learning-progress-convergence-1025.js').read_text(encoding='utf-8')
-        self.assertIn("window.setTimeout(()=>load(true).catch(()=>{}),900)", source)
-        self.assertIn("canonical progress projection must be the final visible owner", source)
+    def test_portal_has_no_legacy_progress_writer_or_race_workaround(self):
+        progress_source=ROOT.joinpath('static','learning-progress-convergence-1025.js').read_text(encoding='utf-8')
+        portal=ROOT.joinpath('static','portal-v56.js').read_text(encoding='utf-8')
+        self.assertNotIn("window.setTimeout(()=>load(true).catch(()=>{}),900)", progress_source)
+        self.assertNotIn("v561-progress-percent", portal)
+        self.assertNotIn("/api/dashboard/me", portal)
+        self.assertIn("/api/training-command-center/progress", portal)
 
 
 if __name__ == '__main__':
