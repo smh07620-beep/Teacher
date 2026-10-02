@@ -21,6 +21,26 @@ def truthy(value: str) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+
+def _loopback_r2_connect_source() -> str:
+    """Allow only an explicitly configured local HTTP R2 fixture in CSP.
+
+    Production R2 remains covered by HTTPS. This narrow exception exists for
+    local/full-stack test endpoints and never admits a non-loopback HTTP origin.
+    """
+    raw = str(os.environ.get("R2_ENDPOINT_URL", "") or "").strip()
+    if not raw:
+        return ""
+    try:
+        parsed = urlsplit(raw)
+    except Exception:
+        return ""
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "http" or host not in {"127.0.0.1", "localhost", "::1"}:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 def login_rate_limit_status() -> dict:
     """Describe the supported topology of the in-process login limiter."""
     try:
@@ -192,13 +212,18 @@ def register_production_hardening(
             "script-src 'self' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
             "script-src-attr 'none'; "
         )
+        connect_sources = "'self' https:"
+        loopback_r2 = _loopback_r2_connect_source()
+        if loopback_r2:
+            connect_sources += f" {loopback_r2}"
         csp = (
             "default-src 'self'; "
             + script_src
             + "style-src 'self' 'unsafe-inline' https:; "
             "img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; "
             "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com; "
-            "connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+            + f"connect-src {connect_sources}; "
+            + "frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
         )
         response.headers.setdefault(
             "Content-Security-Policy" if csp_enforce else "Content-Security-Policy-Report-Only",
@@ -229,6 +254,7 @@ def register_production_hardening(
 
 __all__ = [
     "HOT_PATH_ENDPOINTS",
+    "_loopback_r2_connect_source",
     "client_ip",
     "csrf_origin_ok",
     "login_key",
