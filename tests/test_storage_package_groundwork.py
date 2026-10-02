@@ -15,6 +15,7 @@ from teacher_app.storage import (
     select_backend,
 )
 from teacher_app.storage import providers
+from teacher_app.storage.worker_runtime import WorkerMaterialStorageAdapter
 
 
 ROOT = Path(__file__).parents[1]
@@ -217,6 +218,45 @@ class StoragePackageGroundworkTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(RuntimeError, "loopback"):
             providers._r2_endpoint("acct", "http://s3.example.test")
+
+    def test_worker_mega_startup_preflight_requires_real_write_and_delete(self):
+        runtime = WorkerMaterialStorageAdapter()
+        seen = {}
+
+        def upload_probe(local_path, folder, remote_name):
+            seen["exists"] = Path(local_path).is_file()
+            seen["payload"] = Path(local_path).read_text(encoding="utf-8")
+            seen["folder"] = folder
+            seen["remote_name"] = remote_name
+            return f"{folder}/{remote_name}"
+
+        with patch.object(runtime, "active_backend", return_value="mega"), \
+             patch.object(runtime, "_mega_login") as login, \
+             patch.object(runtime, "_mega_root", return_value="/smh-teaching-materials"), \
+             patch.object(runtime, "_mega_upload_file", side_effect=upload_probe) as upload, \
+             patch.object(runtime, "_mega_run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run:
+            result = runtime.startup_preflight()
+
+        login.assert_called()
+        upload.assert_called_once()
+        self.assertTrue(seen["exists"])
+        self.assertIn("teacher-material-worker-preflight", seen["payload"])
+        self.assertEqual(seen["folder"], "/smh-teaching-materials")
+        self.assertTrue(seen["remote_name"].startswith(".worker-preflight-"))
+        self.assertEqual(result["backend"], "mega")
+        self.assertTrue(result["ready"])
+        self.assertEqual(run.call_args.args[0][:2], ["mega-rm", "-f"])
+
+    def test_worker_non_mega_startup_preflight_is_bounded(self):
+        runtime = WorkerMaterialStorageAdapter()
+        with patch.object(runtime, "active_backend", return_value="r2"), \
+             patch.object(runtime, "_mega_login") as login:
+            result = runtime.startup_preflight()
+        self.assertEqual(
+            result,
+            {"ready": True, "backend": "r2", "detail": "provider configured"},
+        )
+        login.assert_not_called()
 
     def test_mega_login_waits_for_official_server_cold_start_then_retries(self):
         providers.invalidate_mega_auth_cache()

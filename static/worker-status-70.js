@@ -134,7 +134,13 @@
   }
 
   function workerCard(worker) {
-    const [icon, label, classes] = statusMeta(worker.status);
+    const storageBlocked = worker.storagePreflightReady === false;
+    const [icon, label, classes] = storageBlocked
+      ? ['🔴', '儲存未就緒', 'text-rose-700 bg-rose-50 border-rose-200']
+      : statusMeta(worker.status);
+    const preflightText = storageBlocked
+      ? '<div class="rounded-xl border border-rose-200 bg-rose-50 p-2 text-[11px] font-bold text-rose-800">儲存尚未就緒，Worker 已暫停領取新教材。'+(worker.storagePreflightBackend?'<div class="mt-1">Provider：'+escapeHtml(worker.storagePreflightBackend)+'</div>':'')+(worker.storagePreflightError?'<div class="mt-1 font-normal">'+escapeHtml(worker.storagePreflightError)+'</div>':'')+'</div>'
+      : '';
     const updateText = worker.updateAvailable
       ? '<span class="inline-flex px-2 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-700 font-bold">⚠ 最近安全更新檢查有版本變更</span>'
       : '<span class="inline-flex px-2 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 font-bold">✓ 無待更新訊號</span>';
@@ -155,8 +161,10 @@
       <div class="flex flex-wrap gap-2 text-[11px]">
         <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">FFmpeg ${worker.ffmpeg ? '✓' : '✕'}</span>
         <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">LibreOffice ${worker.libreOffice ? '✓' : '✕'}</span>
+        <span class="px-2 py-1 rounded-full ${storageBlocked?'bg-rose-100 text-rose-800':'bg-slate-100 text-slate-700'}">儲存 preflight ${worker.storagePreflightReady===false?'✕':worker.storagePreflightReady===true?'✓':'—'}</span>
         ${updateText}
       </div>
+      ${preflightText}
       <div class="text-[11px] text-slate-500">最近自動更新檢查：${formatWhen(worker.lastUpdateCheckAt)}。更新只會在 Worker 閒置時於本機執行，Web 端不能遠端下令 pull。</div>
     </article>`;
   }

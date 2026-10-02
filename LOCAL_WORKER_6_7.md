@@ -123,6 +123,13 @@ FFmpeg/FFprobe、LibreOffice 和 MEGAcmd capability。它只在 `requirements.tx
 checksum 改變或 import check 失敗時同步 requirements；一般 crash 最多重啟
 五次，避免 tight restart loop。
 
+Worker 每次啟動時會先執行正式儲存 preflight，再開始領取教材 Job。若正式
+provider 是 MEGA，preflight 會以 Task Scheduler 實際執行身分完成登入，並在正式
+教材根目錄寫入一個極小的暫時 probe 檔後立即刪除，以同時驗證 MEGAcmd Server、
+session 與寫入／刪除權限。只要 preflight 未通過，Worker 仍會送 heartbeat 讓 Web
+顯示錯誤，但不會 claim 新教材，因此 Queue / R2 staging 不會因儲存環境問題消耗
+重試次數。Web 的 Worker / Job 狀態會直接顯示「儲存未就緒」與 bounded 錯誤原因。
+
 Windows 的官方 MEGAcmd 使用每個 Windows 使用者自己的背景 Server。Task Scheduler
 冷啟動後，第一次 `mega-whoami` / `mega-login` 可能只回覆
 `MEGAcmd Server not running. Initiating in the background...`。Worker 會把這個
