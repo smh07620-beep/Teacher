@@ -219,9 +219,16 @@ class WorkerMaterialStorageAdapter:
                 f"加入此檔會超過網站硬上限 {limit/1024**3:.2f}GB。請先刪除舊教材。"
             )
 
-    def _mega_upload_file(self, local_path: Path, folder: str, remote_name: str) -> str:
+    def _mega_upload_file(
+        self,
+        local_path: Path,
+        folder: str,
+        remote_name: str,
+        *,
+        ensure_folder: bool = True,
+    ) -> str:
         self._mega_login()
-        folder = self._mega_ensure_dir(folder)
+        folder = self._mega_ensure_dir(folder) if ensure_folder else str(folder)
         remote_path = self._mega_remote_join(folder, remote_name)
         self._mega_run(["mega-rm", "-f", remote_path], check=False, timeout=60)
         self._mega_run(
@@ -641,9 +648,10 @@ class WorkerMaterialStorageAdapter:
                 source_path,
                 folder,
                 f"source{source_path.suffix.lower()}",
+                ensure_folder=False,
             )
             for name, path in files.items():
-                uploaded[name] = self._mega_upload_file(path, folder, name)
+                uploaded[name] = self._mega_upload_file(path, folder, name, ensure_folder=False)
             return source_remote, folder, {
                 "folderId": folder,
                 "sourceFileId": source_remote,
@@ -683,9 +691,9 @@ class WorkerMaterialStorageAdapter:
             for index in range(1, int(page_count or 0) + 1):
                 slide = self._slide_local_path(slides_dir, index)
                 if slide.exists():
-                    slide_files[slide.name] = self._mega_upload_file(slide, folder, slide.name)
+                    slide_files[slide.name] = self._mega_upload_file(slide, folder, slide.name, ensure_folder=False)
             derived_files = {
-                name: self._mega_upload_file(path, folder, name)
+                name: self._mega_upload_file(path, folder, name, ensure_folder=False)
                 for name, path in derivative_files.items()
             }
             meta = {
@@ -724,8 +732,8 @@ class WorkerMaterialStorageAdapter:
         self._mega_ensure_dir(folder)
         source_name = f"source{source_path.suffix.lower()}"
         try:
-            source_remote = self._mega_upload_file(source_path, folder, source_name)
-            preview_remote = self._mega_upload_file(preview_path, folder, "preview.pdf")
+            source_remote = self._mega_upload_file(source_path, folder, source_name, ensure_folder=False)
+            preview_remote = self._mega_upload_file(preview_path, folder, "preview.pdf", ensure_folder=False)
             derived_files = {
                 name: self._mega_upload_file(path, folder, name)
                 for name, path in derivative_files.items()
