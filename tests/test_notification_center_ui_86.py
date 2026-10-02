@@ -44,6 +44,19 @@ class NotificationCenterUi86Tests(unittest.TestCase):
         ):
             self.assertIn(token, self.dashboard)
 
+    def test_system_admin_notifications_use_system_workspace_not_hidden_learner_dom(self):
+        for token in (
+            "function isSystemContext()",
+            "admin-workspace-content",
+            "section.dataset.notificationContext='system'",
+            "section.dataset.productSection='needs-action'",
+            "item.kind==='worker_offline'",
+            "查看 Worker 狀態",
+            "Worker 離線（必要通知）",
+        ):
+            self.assertIn(token, self.js)
+        self.assertIn("isSystemContext()?Promise.resolve([])", self.js)
+
     def test_browser_does_not_rebuild_actionable_event_identity(self):
         self.assertNotIn("notificationKey('pgy'", self.js)
         self.assertNotIn("notificationKey('course'", self.js)
