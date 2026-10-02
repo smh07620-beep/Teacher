@@ -38,21 +38,46 @@
   let loading = false;
   let latestItems = [];
 
+  function currentContext() {
+    const now = new URLSearchParams(window.location.search);
+    const workspace = now.get('workspace') || '';
+    const teacherMode = now.get('teacherMode') || '';
+    if (teacherMode === 'media' || teacherMode === 'documents') return 'contextual-tool';
+    if (workspace === 'assessment' || teacherMode === 'scoring' || teacherMode === 'pgy') return 'assessment';
+    return 'course';
+  }
+
   function hostPanel() {
+    const context = currentContext();
+    if (context === 'contextual-tool') return null;
+    if (context === 'assessment') {
+      const workspace = new URLSearchParams(window.location.search).get('workspace') || '';
+      return document.getElementById(workspace === 'assessment' ? 'admin-section-quiz' : 'admin-section-results');
+    }
     return document.getElementById('admin-section-content');
   }
 
   function ensureSection() {
     const panel = hostPanel();
-    if (!panel) return null;
     let section = document.getElementById('teacher-action-queue-1024');
-    if (section) return section;
-    section = document.createElement('section');
-    section.id = 'teacher-action-queue-1024';
-    section.className = 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm';
-    const contextTools = document.getElementById('teacher-context-tools-101');
-    if (contextTools?.parentElement === panel) panel.insertBefore(section, contextTools);
-    else panel.insertBefore(section, panel.firstChild);
+    if (!panel) {
+      section?.classList.add('hidden');
+      return null;
+    }
+    if (!section) {
+      section = document.createElement('section');
+      section.id = 'teacher-action-queue-1024';
+      section.className = 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm';
+    }
+    section.classList.remove('hidden');
+    section.dataset.productSection = 'needs-action';
+    if (section.parentElement !== panel) {
+      const context = currentContext();
+      const anchor = context === 'assessment'
+        ? (document.getElementById('teacher-review-shortcut-1014') || panel.firstChild)
+        : (document.getElementById('teacher-context-tools-101') || panel.firstChild);
+      panel.insertBefore(section, anchor || null);
+    }
     return section;
   }
 
