@@ -306,13 +306,13 @@
     if (!panel || document.getElementById('teacher-review-shortcut-1014')) return;
     const section = document.createElement('section');
     section.id = 'teacher-review-shortcut-1014';
+    section.dataset.productSection = 'history';
     section.className = 'rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3';
-    section.innerHTML = `<div><b class="text-sm text-indigo-950">✍️ 待批改／教師評核</b><p class="mt-1 text-xs text-indigo-700">閱卷仍屬於評量流程，不另外佔一個主導覽；需要時從這裡進入。</p></div><button id="teacher-open-review-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">進入閱卷與評核</button>`;
-    panel.insertBefore(section, panel.firstChild);
+    section.innerHTML = `<div><b class="text-sm text-indigo-950">歷史紀錄</b><p class="mt-1 text-xs text-indigo-700">已完成與歷次評量紀錄集中在這裡；待批改項目改由上方「需要我處理」直接進入。</p></div><button id="teacher-open-review-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">查看評量紀錄</button>`;
+    panel.appendChild(section);
     section.querySelector('#teacher-open-review-1014')?.addEventListener('click', async () => {
       state.mode = 'assessment';
-      await window.switchAdminWorkspace?.('teacher', true);
-      await window.switchTeacherMode?.('scoring');
+      await window.switchAdminWorkspace?.('results', true);
       markTeacherNav('assessment');
     });
   }
