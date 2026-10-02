@@ -10,6 +10,7 @@ from typing import Any, Mapping
 from teacher_app.auth import repository as auth_repository
 from teacher_app.auth.self_service import _send
 from teacher_app.common import db as common_db
+from teacher_app.common.auth import has_role
 from teacher_app.notifications import events, preferences
 
 TAIPEI = dt.timezone(dt.timedelta(hours=8))
@@ -110,4 +111,61 @@ def run_due_reminders() -> int:
     return sent
 
 
-__all__ = ["run_due_reminders"]
+def run_worker_offline_reminders() -> int:
+    """Send critical Worker-offline alerts to system administrators only."""
+    now = dt.datetime.now(dt.timezone.utc)
+    sent = 0
+    for row in auth_repository.list_users():
+        if not row.get("active") or not row.get("email"):
+            continue
+        user = _user_from_row(row)
+        if not has_role(user, "system_admin"):
+            continue
+        try:
+            projected = events.build_events(user, now=now).get("items") or []
+            candidates = [
+                event
+                for event in projected
+                if str(event.get("kind") or "") == "worker_offline"
+                and "email" in event.get("channels", [])
+            ]
+            candidates = preferences.filter_email_events(
+                candidates,
+                user,
+                general_enabled=False,
+            )
+        except Exception:
+            continue
+        claimed = [
+            event
+            for event in candidates
+            if _claim(user["username"], event["key"], event["kind"])
+        ]
+        if not claimed:
+            continue
+        name = str(row.get("display_name") or row["username"])
+        body = (
+            f"您好 {name}：\n\n"
+            "教材 Worker 已持續離線，請登入系統管理 → Worker / Job 狀態確認。\n"
+            + "\n".join(_line(event) for event in claimed)
+            + "\n\n此為必要系統通知，不受一般學習 Email 偏好關閉影響。"
+        )
+        try:
+            delivered = bool(
+                _send(
+                    row["email"],
+                    "醫學檢驗教學平台｜教材 Worker 離線提醒",
+                    body,
+                )
+            )
+        except Exception:
+            delivered = False
+        if delivered:
+            sent += 1
+        else:
+            for event in claimed:
+                _release_claim(user["username"], event["key"])
+    return sent
+
+
+__all__ = ["run_due_reminders", "run_worker_offline_reminders"]
