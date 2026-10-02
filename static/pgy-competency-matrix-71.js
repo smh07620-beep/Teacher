@@ -69,11 +69,11 @@
     const stats = document.getElementById('pgy-matrix-stats-71');
     const table = document.getElementById('pgy-matrix-table-71');
     if (!title || !summaryLine || !status || !stats || !table) return;
+    const s = analytics?.summary || {};
+    const online = progress?.online || {};
     title.textContent = '📈 線上訓練進度';
     summaryLine.textContent = `學習進度 ${Number(online.percent || 0)}%`;
     status.textContent = '一般／線上人員只呈現課程、教材與考試進度，不顯示 PGY 能力矩陣。';
-    const s = analytics?.summary || {};
-    const online = progress?.online || {};
     stats.innerHTML = [
       card('學習進度', Number(online.percent || 0), '%'),
       card('教材完成', `${Number(online.materialsCompleted || 0)}/${Number(online.materialsTotal || 0)}`),
