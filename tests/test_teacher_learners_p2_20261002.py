@@ -55,7 +55,7 @@ class TeacherLearnersP2Tests(unittest.TestCase):
             """,
             [
                 ("a1", "student1", "teacher1", "pgy", "grpBio", "submitted", "2026-10-03T00:00:00+00:00", "2026-10-01T10:00:00+00:00"),
-                ("a2", "student3", "teacher2", "pgy", "grpBio", "teacher_signed", "2026-10-01T00:00:00+00:00", "2026-10-01T11:00:00+00:00"),
+                ("a2", "student3", "teacher2", "pgy", "grpBio", "group_countersigned", "2026-10-01T00:00:00+00:00", "2026-10-01T11:00:00+00:00"),
                 ("a3", "student2", "teacher2", "pgy", "grpBlood", "finalized", "2026-10-01T00:00:00+00:00", "2026-10-01T12:00:00+00:00"),
             ],
         )
