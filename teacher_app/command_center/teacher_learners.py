@@ -19,7 +19,8 @@ _STATUS_LABELS = {
     "assigned": "學習中",
     "submitted": "待教師簽核",
     "teacher_signed": "待複核",
-    "leader_reviewed": "待行政確認",
+    "group_countersigned": "待行政確認",
+    "leader_reviewed": "待行政確認",  # legacy compatibility
     "finalized": "已完成",
     "cancelled": "已取消",
 }
@@ -144,7 +145,7 @@ def build_teacher_learners(
             item["awaitingTeacher"] += 1
         elif status == "teacher_signed":
             item["awaitingLeader"] += 1
-        elif status == "leader_reviewed":
+        elif status in {"group_countersigned", "leader_reviewed"}:
             item["awaitingFinalize"] += 1
 
         due = _parse_datetime(row.get("due_at"))
