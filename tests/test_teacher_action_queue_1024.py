@@ -142,6 +142,19 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         self.assertNotIn("getAdminKey", source)
         self.assertNotIn("localStorage", source)
 
+    def test_queue_mounts_in_the_active_teacher_workspace_and_filters_context(self):
+        source = ROOT.joinpath("static", "teacher-action-queue-1024.js").read_text(encoding="utf-8")
+        for phrase in (
+            "function currentContext()",
+            "admin-section-content",
+            "admin-section-quiz",
+            "admin-section-results",
+            "item.kind === 'review'",
+            "item.kind !== 'review'",
+            "section.dataset.productSection = 'needs-action'",
+        ):
+            self.assertIn(phrase, source)
+
     def test_review_ui_uses_server_derived_reviewer_identity(self):
         source = ROOT.joinpath("static", "admin-results.js").read_text(encoding="utf-8")
         self.assertIn("完成批改時由目前登入教師自動帶入", source)
