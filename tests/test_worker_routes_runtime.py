@@ -233,6 +233,95 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
         self.assertTrue(expected.issubset(actual), sorted(expected - actual))
         self.assertIs(self.app.extensions["teacher_worker_web_runtime"], self.runtime)
 
+    def test_r2_publish_receipt_records_only_scoped_final_objects(self):
+        self.seed_job("job-r2")
+        claimed = self.client.post(
+            "/api/material-worker/claim",
+            json={"workerId": "worker-a", "capabilities": {}},
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(claimed.status_code, 200, claimed.get_data(as_text=True))
+
+        publish_key = worker_protocol.material_publish_key(
+            "job-r2", "material-1", "a" * 64, "r2"
+        )
+        result = {
+            "storageBackend": "r2",
+            "storageKey": "materials/material-1/source.txt",
+            "slidesPrefix": "",
+            "storageFilename": "source.txt",
+            "pageCount": 0,
+            "storageMeta": {
+                "r2Objects": [
+                    {"key": "materials/material-1/source.txt", "bytes": 12}
+                ]
+            },
+            "publishKey": publish_key,
+            "publishSourceSha256": "a" * 64,
+        }
+        published = self.client.post(
+            "/api/material-worker/job-r2/published",
+            json={
+                "workerId": "worker-a",
+                "publishKey": publish_key,
+                "backend": "r2",
+                "sourceSha256": "a" * 64,
+                "result": result,
+            },
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(published.status_code, 200, published.get_data(as_text=True))
+        self.assertIn(
+            (
+                "ledger.record",
+                "materials/material-1/source.txt",
+                12,
+                {"estimated_operations": 1},
+            ),
+            self.events,
+        )
+
+    def test_r2_publish_receipt_rejects_objects_outside_material_namespace(self):
+        self.seed_job("job-r2-bad")
+        claimed = self.client.post(
+            "/api/material-worker/claim",
+            json={"workerId": "worker-a", "capabilities": {}},
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(claimed.status_code, 200, claimed.get_data(as_text=True))
+        publish_key = worker_protocol.material_publish_key(
+            "job-r2-bad", "material-1", "a" * 64, "r2"
+        )
+        result = {
+            "storageBackend": "r2",
+            "storageKey": "materials/material-1/source.txt",
+            "storageFilename": "source.txt",
+            "pageCount": 0,
+            "storageMeta": {
+                "r2Objects": [
+                    {"key": "materials/other-material/source.txt", "bytes": 12}
+                ]
+            },
+            "publishKey": publish_key,
+            "publishSourceSha256": "a" * 64,
+        }
+        rejected = self.client.post(
+            "/api/material-worker/job-r2-bad/published",
+            json={
+                "workerId": "worker-a",
+                "publishKey": publish_key,
+                "backend": "r2",
+                "sourceSha256": "a" * 64,
+                "result": result,
+            },
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(rejected.status_code, 409, rejected.get_data(as_text=True))
+        self.assertNotIn(
+            ("ledger.record", "materials/other-material/source.txt", 12, {"estimated_operations": 1}),
+            self.events,
+        )
+
     def test_worker_token_claim_heartbeat_and_owned_completion_contract(self):
         self.seed_job()
         denied = self.client.post("/api/material-worker/claim", json={"workerId": "worker-a"})
