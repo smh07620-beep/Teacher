@@ -135,23 +135,38 @@
     if(typeof window.renderAdminTable==='function')await window.renderAdminTable();
   }
 
+  function pgyLearningUrl(fromLearners=false,item=null){
+    const url=new URL(window.location.href);
+    url.searchParams.set('area','pgy');
+    url.searchParams.set('group',item?.group||'grpBio');
+    url.searchParams.set('module','assessment');
+    if(fromLearners)url.searchParams.set('from','teacher-learners');
+    else url.searchParams.delete('from');
+    for(const key of ['admin','workspace','persona','teacherMode'])url.searchParams.delete(key);
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
+
+  async function openPgyLearningSurface(item=null){
+    if(typeof currentTrainingArea!=='undefined'&&currentTrainingArea!=='pgy'){
+      window.location.assign(pgyLearningUrl(false,item));
+      return false;
+    }
+    if(typeof switchGroup==='function'&&item?.group) switchGroup(item.group);
+    await window.toggleAdminModal?.(false);
+    window.switchLearningModule?.('assessment');
+    document.getElementById('panel-assessment')?.scrollIntoView({behavior:'smooth',block:'start'});
+    return true;
+  }
+
   async function enterClinicalAssessment(item){
     if(!item)return;
     if(typeof currentTrainingArea!=='undefined'&&currentTrainingArea!=='pgy'){
       try{sessionStorage.setItem(RESUME_KEY,String(item.username||''));}catch(_){}
-      const url=new URL(window.location.href);
-      url.searchParams.set('area','pgy');
-      url.searchParams.set('group',item.group||'grpBio');
-      url.searchParams.set('admin','1');
-      url.searchParams.set('workspace','assessment');
-      url.searchParams.set('persona','teacher');
-      url.searchParams.set('from','teacher-learners');
-      window.location.assign(`${url.pathname}${url.search}${url.hash}`);
+      window.location.assign(pgyLearningUrl(true,item));
       return;
     }
-    if(typeof switchGroup==='function'&&item.group) switchGroup(item.group);
-    await window.switchAdminWorkspace?.('teacher',true);
-    await window.switchTeacherMode?.('pgy');
+    const ready=await openPgyLearningSurface(item);
+    if(ready===false)return;
     if(typeof initPgyAssessmentCenter==='function') await initPgyAssessmentCenter();
     const name=document.getElementById('pgy-assess-name');
     const empId=document.getElementById('pgy-assess-empid');
@@ -160,7 +175,7 @@
     if(typeof selectPgyAssessmentType==='function')selectPgyAssessmentType('dops');
     const status=document.getElementById('pgy-assess-status');
     if(status)status.textContent=`已選擇 ${item.name||item.username}；請選擇評量類型並完成各項評分。`;
-    document.getElementById('panel-assessment')?.scrollIntoView({behavior:'smooth',block:'start'});
+    document.getElementById('pgy-assessment-form')?.scrollIntoView({behavior:'smooth',block:'start'});
   }
 
   async function openClinicalAssessment(event){
@@ -168,9 +183,9 @@
     await enterClinicalAssessment(item);
   }
 
-  async function openPgy(){
-    await window.switchAdminWorkspace?.('teacher',true);
-    await window.switchTeacherMode?.('pgy');
+  async function openPgy(event){
+    const item=latest.learners?.[Number(event.currentTarget?.dataset?.p2Pgy)]||null;
+    await openPgyLearningSurface(item);
   }
 
   async function resumeClinicalAssessment(){
