@@ -473,25 +473,30 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None):
     return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta,"publishKey":publish_key,"publishSourceSha256":source_sha256}
 
 def process_one(api,job,capabilities=None):
-    job_id=job["id"]
+    job_id=job["id"]; timings={}; job_started=time.monotonic()
     try:
         with JobHeartbeat(api,job_id,capabilities=capabilities):
             with tempfile.TemporaryDirectory(prefix="teacher-local-worker-") as temp_name:
-                temp=Path(temp_name); staged=temp/"source.bin"; api.download(job,staged); original=validate_download(staged,job)
+                temp=Path(temp_name); staged=temp/"source.bin"
+                started=time.monotonic(); api.download(job,staged); timings["downloadMs"]=_elapsed_ms(started)
+                started=time.monotonic(); original=validate_download(staged,job); timings["validateMs"]=_elapsed_ms(started)
                 # File content is staged as .bin, but processing must see the actual
                 # extension so LibreOffice and preview routing are deterministic.
                 source=temp/("source"+Path(original).suffix.lower()); staged.replace(source)
                 source_sha256=str(job.get("sourceSha256") or "").lower() or _sha256(source)
-                _sanitize_raster_image_in_place(source,source.suffix.lower())
-                result=publish_to_storage(source,original,job,temp,source_sha256)
-                published_job(api,job_id,result)
-        complete_job(api,job_id,result)
-        log(f"completed {job_id}")
+                started=time.monotonic(); _sanitize_raster_image_in_place(source,source.suffix.lower()); timings["sanitizeMs"]=_elapsed_ms(started)
+                result=publish_to_storage(source,original,job,temp,source_sha256,timings=timings)
+                timings["processingBeforeReceiptMs"]=_elapsed_ms(job_started)
+                result["storageMeta"]={**dict(result.get("storageMeta") or {}),"workerTimingsMs":dict(timings)}
+                started=time.monotonic(); published_job(api,job_id,result); published_ack_ms=_elapsed_ms(started)
+        started=time.monotonic(); complete_job(api,job_id,result); complete_ack_ms=_elapsed_ms(started)
+        final_timings={**timings,"publishedAckMs":published_ack_ms,"completeAckMs":complete_ack_ms,"totalMs":_elapsed_ms(job_started)}
+        log(f"completed {job_id} timings_ms={json.dumps(final_timings,sort_keys=True,separators=(',',':'))}")
     except Exception as exc:
         message=str(exc)[:1200]
         try:api.post(f"/api/material-worker/{job_id}/retry",{"workerId":WORKER_ID,"error":message})
         except Exception as report:log(f"failed to report {job_id}: {report}")
-        log(f"job {job_id}: {message}")
+        log(f"job {job_id}: {message} timings_ms={json.dumps(timings,sort_keys=True,separators=(',',':'))}")
 def main():
     try:api=WorkerApi()
     except RuntimeError as exc:log(str(exc));return 2
