@@ -69,7 +69,7 @@ jobs:
       - name: Start isolated R2-compatible object store
         shell: bash
         run: |
-          docker run -d --name teacher-minio -p 9000:9000             -e MINIO_ROOT_USER="$R2_ACCESS_KEY_ID"             -e MINIO_ROOT_PASSWORD="$R2_SECRET_ACCESS_KEY"             -e MINIO_API_CORS_ALLOW_ORIGIN="http://127.0.0.1:4175"             quay.io/minio/minio:latest server /data
+          docker run -d --name teacher-minio -p 9000:9000             -e MINIO_ROOT_USER="$R2_ACCESS_KEY_ID"             -e MINIO_ROOT_PASSWORD="$R2_SECRET_ACCESS_KEY"             -e MINIO_API_CORS_ALLOW_ORIGIN="http://127.0.0.1:4175"             docker.io/minio/minio:latest server /data
           for i in $(seq 1 45); do
             if curl --fail --silent http://127.0.0.1:9000/minio/health/ready >/dev/null; then break; fi
             sleep 1
@@ -123,7 +123,10 @@ jobs:
               region_name=os.environ["R2_REGION"],
               config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
           )
-          print(client.list_objects_v2(Bucket=os.environ["R2_BUCKET_NAME"]).get("Contents", []))
+          try:
+              print(client.list_objects_v2(Bucket=os.environ["R2_BUCKET_NAME"]).get("Contents", []))
+          except Exception as exc:
+              print("R2 diagnostic unavailable:", type(exc).__name__, str(exc)[:240])
           PY
       - name: Stop full-stack services
         if: always()
