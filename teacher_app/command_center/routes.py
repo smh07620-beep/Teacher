@@ -112,6 +112,15 @@ def register_training_command_center(owner):
         except ApiError as exc:
             return _error(exc)
 
+    @app.get("/api/training-command-center/teacher-competency")
+    def training_command_center_teacher_competency():
+        try:
+            return jsonify(
+                competency.build_teacher_competency_matrix(_current_user(owner))
+            )
+        except ApiError as exc:
+            return _error(exc)
+
     @app.get("/api/training-command-center/notifications")
     def training_command_center_notifications():
         try:
