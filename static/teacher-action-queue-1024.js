@@ -211,7 +211,11 @@
   }
 
   function render(section, data) {
-    const teacherItems = (Array.isArray(data.items) ? data.items : []).filter(item => item.domain !== 'pgy');
+    const allTeacherItems = (Array.isArray(data.items) ? data.items : []).filter(item => item.domain !== 'pgy');
+    const context = currentContext();
+    const teacherItems = context === 'assessment'
+      ? allTeacherItems.filter(item => item.kind === 'review')
+      : allTeacherItems.filter(item => item.kind !== 'review');
     latestItems = teacherItems.slice(0, 12);
     const counts = data.counts || {};
     section.innerHTML = `
