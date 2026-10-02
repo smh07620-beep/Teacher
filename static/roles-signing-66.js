@@ -131,9 +131,8 @@
         return;
       }
 
-      if (status) {
-        status.textContent = `✅ 已建立 ${data.user?.name || payload.name}；身分：${(data.user?.roles || roles).map(r => ROLE_LABELS[r] || r).join('＋')}`;
-      }
+      const successMessage = `✅ 已建立 ${data.user?.name || payload.name}；身分：${(data.user?.roles || roles).map(r => ROLE_LABELS[r] || r).join('＋')}`;
+      if (status) status.textContent = successMessage;
 
       const password = document.getElementById('admin-user-password');
       if (password) password.value = '';
@@ -143,6 +142,7 @@
       }
 
       await loadRoleManager();
+      if (status) status.textContent = successMessage;
     };
   }
 
