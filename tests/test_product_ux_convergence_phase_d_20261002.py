@@ -16,6 +16,9 @@ class ProductUxConvergencePhaseDTests(unittest.TestCase):
         cls.course = ROOT.joinpath("static", "admin-course-material.js").read_text(encoding="utf-8")
         cls.quiz = ROOT.joinpath("static", "admin-question-bank.js").read_text(encoding="utf-8")
         cls.home = ROOT.joinpath("static", "index.html").read_text(encoding="utf-8")
+        cls.system_html = ROOT.joinpath("static", "system.html").read_text(encoding="utf-8")
+        cls.worker = ROOT.joinpath("static", "worker-status-70.js").read_text(encoding="utf-8")
+        cls.shell = ROOT.joinpath("static", "workspace-shell-70.js").read_text(encoding="utf-8")
 
     def test_teacher_action_queue_follows_active_workspace_without_duplicate_state_owner(self):
         for marker in (
@@ -53,6 +56,13 @@ class ProductUxConvergencePhaseDTests(unittest.TestCase):
         self.assertIn('id="groups" data-product-section="current-work"', self.home)
         self.assertIn('data-product-section="history" class="v56-panel phase3-content-panel"', self.home)
         self.assertIn('id="pending-exams" data-product-section="needs-action"', self.home)
+
+    def test_system_persona_maps_health_actions_work_and_history(self):
+        self.assertIn('id="admin-section-system" data-product-section="overview"', self.system_html)
+        self.assertIn('id="admin-section-people" data-product-section="current-work"', self.system_html)
+        self.assertIn("panel.dataset.productSection = 'needs-action'", self.worker)
+        self.assertIn("maintenancePanel.dataset.productSection = 'current-work'", self.shell)
+        self.assertIn("auditPanel.dataset.productSection = 'history'", self.shell)
 
     def test_phase_d_layers_load_after_existing_workspace_owners(self):
         body = ASSET_MANIFEST["system"]["body"]
