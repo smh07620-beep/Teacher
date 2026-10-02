@@ -32,7 +32,7 @@ class ProductPhaseCompletion20261002Tests(unittest.TestCase):
     def test_phase_c_keeps_real_full_stack_and_all_eight_golden_paths(self):
         for number in range(1, 9):
             self.assertIn(f"GP-0{number}", self.status)
-        self.assertIn("Browser → R2", self.status)
+        self.assertIn("Browser → presigned R2-compatible object storage", self.status)
         self.assertIn("material_worker", self.golden_workflow)
         self.assertIn("full-stack Browser", self.golden_workflow)
 
