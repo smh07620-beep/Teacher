@@ -11,9 +11,12 @@
 
   const ID='teacher-learners-p2';
   const RESUME_KEY='teacher:p2:clinical-assessment-learner';
+  const CONTEXT_KEY='teacher:p2:clinical-assessment-context';
   let latest={learners:[],summary:{},scope:{}};
   let competencyCache=null;
   let competencyLoadedAt=0;
+  let analyticsCache=null;
+  let analyticsLoadedAt=0;
   let loadedAt=0;
   const TTL=30000;
   const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({
@@ -93,7 +96,7 @@
           </div>
           <p class="mt-1 text-xs text-slate-500">只顯示伺服器判定你可查看的學員；這裡不新增臨床簽核權限。</p>
         </div>
-        <button id="teacher-learners-refresh-p2" type="button" class="text-[11px] font-bold text-indigo-700">↻ 更新</button>
+        <div class="flex items-center gap-3"><button id="teacher-analytics-open-p2" type="button" class="text-[11px] font-bold text-teal-700">📊 教學分析</button><button id="teacher-learners-refresh-p2" type="button" class="text-[11px] font-bold text-indigo-700">↻ 更新</button></div>
       </div>
       <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
         <div class="rounded-xl bg-slate-50 p-2"><b class="block text-lg text-slate-950">${Number(summary.learners||0)}</b><span class="text-[10px] text-slate-500">學員</span></div>
@@ -102,8 +105,10 @@
         <div class="rounded-xl bg-rose-50 p-2"><b class="block text-lg text-rose-900">${Number(summary.overdueAssignments||0)}</b><span class="text-[10px] text-rose-700">逾期</span></div>
       </div>
       <div class="mt-3 space-y-2">${rows.length?rows.map(learnerRow).join(''):'<div class="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500">目前沒有伺服器指派給你的學員。</div>'}</div>
-      <section id="teacher-competency-detail-p2" class="hidden mt-4 rounded-xl border border-teal-100 bg-teal-50/30 p-4"></section>`;
+      <section id="teacher-competency-detail-p2" class="hidden mt-4 rounded-xl border border-teal-100 bg-teal-50/30 p-4"></section>
+      <section id="teacher-teaching-analytics-p2" class="hidden mt-4 rounded-xl border border-sky-100 bg-sky-50/30 p-4"></section>`;
     section.querySelector('#teacher-learners-refresh-p2')?.addEventListener('click',()=>load(true));
+    section.querySelector('#teacher-analytics-open-p2')?.addEventListener('click',openTeachingAnalytics);
     section.querySelectorAll('[data-p2-results]').forEach(button=>button.addEventListener('click',openResults));
     section.querySelectorAll('[data-p2-competency]').forEach(button=>button.addEventListener('click',openCompetency));
     section.querySelectorAll('[data-p2-clinical]').forEach(button=>button.addEventListener('click',openClinicalAssessment));
@@ -136,6 +141,13 @@
     competencyCache=await getJSON('/api/training-command-center/teacher-competency');
     competencyLoadedAt=Date.now();
     return competencyCache;
+  }
+
+  async function loadAnalytics(force=false){
+    if(!force&&analyticsCache&&analyticsLoadedAt&&Date.now()-analyticsLoadedAt<TTL)return analyticsCache;
+    analyticsCache=await getJSON('/api/training-command-center/teacher-analytics');
+    analyticsLoadedAt=Date.now();
+    return analyticsCache;
   }
 
   function competencyScore(value){
@@ -181,6 +193,25 @@
     }
   }
 
+  function analyticNumber(value,digits=1){
+    if(value===null||value===undefined||value==='')return'—';
+    const number=Number(value);return Number.isFinite(number)?number.toFixed(digits):'—';
+  }
+
+  async function openTeachingAnalytics(){
+    const panel=document.getElementById('teacher-teaching-analytics-p2');if(!panel)return;
+    panel.classList.remove('hidden');panel.innerHTML='<div class="text-xs text-slate-500">讀取目前教學範圍分析中…</div>';
+    try{
+      const data=await loadAnalytics(false),summary=data?.summary||{},rows=Array.isArray(data?.learners)?data.learners:[],timeline=(Array.isArray(data?.timeline)?data.timeline:[]).slice(-6);
+      const rowHtml=rows.map(row=>{const materials=row.materials||{},exams=row.exams||{},pgy=row.pgy||{};return `<article class="rounded-xl border border-slate-200 bg-white p-3"><div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"><div><b class="text-xs text-slate-900">${escapeHtml(row.name||row.empId||row.username)}</b><div class="text-[10px] text-slate-400">${escapeHtml(row.empId||'')} · ${escapeHtml(row.group||'')}</div></div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]"><span>教材 <b>${analyticNumber(materials.averageProgress)}%</b><br><i class="not-italic text-slate-400">${Number(materials.completed||0)}/${Number(materials.tracked||0)} 完成</i></span><span>考試 <b>${analyticNumber(exams.averageScore)}</b><br><i class="not-italic text-slate-400">${Number(exams.pendingReview||0)} 待批改</i></span><span>PGY <b>${analyticNumber(pgy.completionRate)}%</b><br><i class="not-italic text-slate-400">${Number(pgy.completedAssignments||0)}/${Number(pgy.assignments||0)} 完成</i></span><span>正式評量 <b>${analyticNumber(pgy.assessmentAverage)}</b><br><i class="not-italic text-slate-400">${Number(pgy.assessments||0)} 筆</i></span></div></div></article>`}).join('');
+      const timelineHtml=timeline.map(month=>`<div class="rounded-lg border border-slate-100 bg-white p-2"><b class="text-[10px] text-slate-700">${escapeHtml(month.month||'')}</b><div class="mt-1 text-[9px] text-slate-400">教材 ${Number(month.materials||0)} · 考試 ${Number(month.exams||0)} · PGY ${Number(month.pgy||0)} · 評量 ${Number(month.assessments||0)}</div></div>`).join('');
+      panel.innerHTML=`<div class="flex items-start justify-between gap-3"><div><h5 class="text-sm font-black text-slate-950">📊 教學分析</h5><p class="mt-1 text-[11px] text-slate-500">依目前伺服器 scope 的教材、考試、PGY 指派與正式評量紀錄呈現；只描述既有資料，不產生 AI 能力總分或預測。</p></div><button id="teacher-analytics-close-p2" type="button" class="text-[11px] font-bold text-slate-600">關閉</button></div>
+        <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center"><div class="rounded-xl bg-white p-2"><b class="block text-base text-slate-950">${Number(summary.learners||0)}</b><span class="text-[10px] text-slate-500">學員</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-teal-900">${analyticNumber(summary.materialCompletionRate)}%</b><span class="text-[10px] text-slate-500">教材完成率</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-indigo-900">${analyticNumber(summary.averageExamScore)}</b><span class="text-[10px] text-slate-500">考試平均</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-amber-800">${Number(summary.examPendingReview||0)}</b><span class="text-[10px] text-slate-500">待批改考試</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-sky-900">${analyticNumber(summary.pgyCompletionRate)}%</b><span class="text-[10px] text-slate-500">PGY 完成率</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-emerald-900">${analyticNumber(summary.averagePgyAssessmentScore)}</b><span class="text-[10px] text-slate-500">正式評量平均</span></div></div>
+        <div class="mt-3 space-y-2">${rowHtml||'<div class="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-xs text-slate-500">目前沒有可分析的學員紀錄。</div>'}</div><div class="mt-3"><div class="mb-2 text-[10px] font-black text-slate-500">近 6 個月活動</div><div class="grid sm:grid-cols-3 lg:grid-cols-6 gap-2">${timelineHtml||'<span class="text-xs text-slate-400">尚無近期活動。</span>'}</div></div>`;
+      panel.querySelector('#teacher-analytics-close-p2')?.addEventListener('click',()=>panel.classList.add('hidden'));panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+    }catch(error){panel.innerHTML=`<div class="text-xs text-rose-700">❌ ${escapeHtml(error.message||'教學分析讀取失敗')}</div>`}
+  }
+
   async function openResults(event){
     const item=latest.learners?.[Number(event.currentTarget?.dataset?.p2Results)];
     if(!item)return;
@@ -214,8 +245,16 @@
     return true;
   }
 
+  function storeClinicalContext(item){
+    if(!item)return;try{sessionStorage.setItem(CONTEXT_KEY,JSON.stringify({username:String(item.username||''),empId:String(item.empId||''),name:String(item.name||''),group:String(item.group||'grpBio')}))}catch(_){}
+  }
+  function clinicalContext(){try{return JSON.parse(sessionStorage.getItem(CONTEXT_KEY)||'null')}catch(_){return null}}
+  function teacherAssessmentWorkspaceUrl(item=null){
+    const url=new URL(window.location.href);url.searchParams.set('area','pgy');url.searchParams.set('group',item?.group||'grpBio');url.searchParams.set('admin','1');url.searchParams.set('workspace','assessment');url.searchParams.set('persona','teacher');for(const key of ['from','module'])url.searchParams.delete(key);return `${url.pathname}${url.search}${url.hash}`;
+  }
+
   async function enterClinicalAssessment(item){
-    if(!item)return;
+    if(!item)return;storeClinicalContext(item);
     const pageMode=Boolean(window.isAdminWorkspacePage?.());
     if((typeof currentTrainingArea!=='undefined'&&currentTrainingArea!=='pgy')||pageMode){
       try{sessionStorage.setItem(RESUME_KEY,String(item.username||''));}catch(_){}
@@ -245,6 +284,14 @@
     await openPgyLearningSurface(item);
   }
 
+  function invalidateTeacherInsights(){competencyCache=null;competencyLoadedAt=0;analyticsCache=null;analyticsLoadedAt=0;loadedAt=0}
+  function onClinicalAssessmentSaved(event){
+    const context=clinicalContext(),detail=event?.detail||{};if(!context||!context.empId||String(context.empId)!==String(detail.empId||''))return;invalidateTeacherInsights();
+    const status=document.getElementById('pgy-assess-status');if(!status)return;let button=document.getElementById('teacher-p2-return-after-assessment');
+    if(!button){button=document.createElement('button');button.id='teacher-p2-return-after-assessment';button.type='button';button.className='rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-xs font-black text-teal-800 hover:bg-teal-100';button.textContent='← 返回我的學員並更新';status.insertAdjacentElement('afterend',button)}
+    button.onclick=()=>{const current=clinicalContext()||context;try{sessionStorage.removeItem(CONTEXT_KEY)}catch(_){}window.location.assign(teacherAssessmentWorkspaceUrl(current))}
+  }
+
   async function resumeClinicalAssessment(){
     const params=new URLSearchParams(window.location.search);
     if(params.get('from')!=='teacher-learners')return;
@@ -265,6 +312,7 @@
     if(params.get('workspace')==='assessment')load(false);
   }
 
+  window.addEventListener('pgy:assessment-saved',onClinicalAssessmentSaved);
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',()=>{ensureSection();load(false);resumeClinicalAssessment();},{once:true});
   }else{

@@ -1,47 +1,28 @@
-# P2 Teacher Learner Workspace
+# P2 Teacher Workflow
 
-The first P2 teacher capability is a read-only **我的學員** projection embedded
-inside the existing 評量與出題 workspace. It does not add a third teacher
-top-level navigation item.
+P2 stays inside the existing two teacher jobs: **教材與課程** and **評量與出題**. It does not add another teacher top-level navigation item.
 
-## Canonical API
+## 我的學員
 
-`GET /api/training-command-center/teacher-learners`
+`GET /api/training-command-center/teacher-learners` is the canonical read-only roster projection. Scope is derived only from the authenticated session: clinical teachers see explicitly assigned PGY learners, group leaders see their own group, education administrators receive organization-wide teaching coordination read scope, and a standalone system administrator receives no clinical learner scope.
 
-The endpoint derives scope only from the authenticated session and canonical
-permissions:
+## 臨床技能評核
 
-- `clinical_teacher` / `student.view_assigned`: learners explicitly linked by
-  `pgy_assignments.teacher_username`;
-- `group_leader` / `student.view_group`: learners in the leader's own group;
-- `education_admin` / `student.view_all`: organization-wide teaching
-  coordination read scope;
-- a standalone `system_admin` does not receive clinical learner scope.
+The roster delegates writes to the existing canonical PGY assessment center and `POST /api/pgy-assessments`. Learner/evaluator identity is resolved again on the server, every required 1–5 rating is mandatory, duplicate in-flight saves are blocked, and a successful save emits `pgy:assessment-saved`. P2 then offers **返回我的學員並更新** and invalidates its read caches.
 
-Browser-supplied learner, teacher, group, role, or evaluator identity never widens
-the result.
+## 能力追蹤
 
-## Projection
+`GET /api/training-command-center/teacher-competency` reuses formal PGY assessments and PGY assignment completion. It does not invent a mastery score.
 
-The read model returns learner identity plus PGY assignment counts and workflow
-status counts such as pending teacher review, leader review, final confirmation,
-completed assignments, and overdue assignments. It intentionally does **not**
-invent a competency/mastery score and does not grant signing authority.
+## 教學分析
 
-## UI
-
-`static/teacher-learners-p2.js` mounts the roster under 評量與出題 →
-目前工作. Existing flows remain the mutation owners:
-
-- `查看考核紀錄` is shown only when the session already has
-  `evaluation.review`;
-- `進入 PGY 工作流程` delegates to the existing PGY teacher workflow.
+`GET /api/training-command-center/teacher-analytics` is a teacher-only wrapper around the canonical learning analytics projection. It uses the same server-derived learner scope across existing material progress, exam records, PGY assignments and formal PGY assessments. It is descriptive only: no AI mastery score or prediction.
 
 ## Release coverage
 
-- `tests/test_teacher_learners_p2_20261002.py` protects backend scope and
-  GET-only routing.
-- `tests/playwright/teacher-learners-p2.spec.js` proves discoverability in the
-  real system workspace and protects the two-item teacher primary navigation.
-- The normal Teacher release, Product Golden Path, Playwright UI, and Windows
-  Worker gates must remain green.
+- `tests/test_teacher_learners_p2_20261002.py`: roster scope.
+- `tests/test_pgy_clinical_assessment_scope_p2.py`: clinical write/read scope, server-derived identities and audit.
+- `tests/test_teacher_competency_p2.py`: competency boundary.
+- `tests/test_teacher_analytics_p2.py`: analytics boundary.
+- `tests/playwright/teacher-learners-p2.spec.js`: deterministic P2 browser loop.
+- `tests/playwright/teacher-workflow-p2-real-flask.spec.js`: real Chromium → Flask → SQLite teacher workflow.

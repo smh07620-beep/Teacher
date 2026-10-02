@@ -77,6 +77,29 @@ test('P2 我的學員 stays inside assessment workspace with server-scoped learn
       interpretation: 'formal_assessment_tracking_without_mastery_score',
     }),
   }));
+  await page.route('**/api/training-command-center/teacher-analytics', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      scope: { kind: 'assigned', group: 'grpBio' },
+      summary: { learners: 1, materialCompletionRate: 75, averageExamScore: 88, examPendingReview: 1, pgyCompletionRate: 50, averagePgyAssessmentScore: 4.2 },
+      learners: [{ username: 'student-p2', name: '測試學員', empId: 'S2001', group: 'grpBio',
+        materials: { tracked: 4, completed: 3, averageProgress: 75 },
+        exams: { averageScore: 88, pendingReview: 1, passed: 2, reviewedAttempts: 2 },
+        pgy: { assignments: 2, completedAssignments: 1, completionRate: 50, assessments: 2, assessmentAverage: 4.2 } }],
+      timeline: [{ month: '2026-10', materials: 3, exams: 2, pgy: 1, assessments: 2 }],
+      source: 'scoped-learning-exam-pgy-records',
+      interpretation: 'descriptive_teacher_analytics_without_mastery_score',
+    }),
+  }));
+  await page.route('**/api/pgy-assessments', async route => {
+    if (route.request().method() !== 'POST') return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    const payload = route.request().postDataJSON();
+    expect(payload.empId).toBe('S2001');
+    expect(payload.assessmentType).toBe('dops');
+    expect(payload.details.ratings).toHaveLength(6);
+    expect(payload.details.ratings.every(item => item.rating === 4)).toBeTruthy();
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, id: 'p2-assessment-1' }) });
+  });
   await page.route('**/api/training-command-center/teacher-learners', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -124,20 +147,8 @@ test('P2 我的學員 stays inside assessment workspace with server-scoped learn
   await expect(panel).toContainText('測試學員');
   await expect(panel).toContainText('待教師 1');
   await expect(panel.getByRole('button', { name: '查看考核紀錄' })).toBeVisible();
-  const competency = panel.getByRole('button', { name: '能力追蹤' });
-  await expect(competency).toBeVisible();
-  await competency.click();
-  const competencyPanel = page.locator('#teacher-competency-detail-p2');
-  await expect(competencyPanel).toBeVisible();
-  await expect(competencyPanel).toContainText('能力追蹤 · 測試學員');
-  await expect(competencyPanel).toContainText('DOPS');
-  await expect(competencyPanel).toContainText('MINI-CEX');
-  await expect(competencyPanel).toContainText('不合併成 AI 能力總分');
-  await expect(competencyPanel).toContainText('4.2');
-
   const clinical = panel.getByRole('button', { name: '開始臨床技能評核' });
   await expect(clinical).toBeVisible();
-
   await expect(page.locator('#teacher-nav-course-1014')).toBeVisible();
   await expect(page.locator('#teacher-nav-assessment-1014')).toBeVisible();
   await expect(page.locator('[id^="teacher-nav-"]')).toHaveCount(2);
@@ -150,6 +161,34 @@ test('P2 我的學員 stays inside assessment workspace with server-scoped learn
   await expect(page.locator('#pgy-assess-evaluator')).toHaveValue('P2 臨床教師');
   await expect(page.locator('#pgy-assessment-form-title')).toContainText('DOPS');
   await expect(page.locator('#pgy-assess-status')).toContainText('已選擇 測試學員');
+
+  for (let index = 0; index < 6; index += 1) {
+    await page.locator(`input[name="pgy-rating-${index}"][value="4"]`).check();
+  }
+  await page.locator('#pgy-assess-submit').click();
+  await expect(page.locator('#pgy-assess-status')).toContainText('已完成全部 6 項評核並儲存');
+  await expect(page.locator('#teacher-p2-return-after-assessment')).toBeVisible();
+  await page.locator('#teacher-p2-return-after-assessment').click();
+  await page.waitForURL(url => url.searchParams.get('workspace') === 'assessment' && url.searchParams.get('persona') === 'teacher');
+
+  const refreshedPanel = page.locator('#teacher-learners-p2');
+  await expect(refreshedPanel).toBeVisible();
+  await refreshedPanel.getByRole('button', { name: '能力追蹤' }).click();
+  const competencyPanel = page.locator('#teacher-competency-detail-p2');
+  await expect(competencyPanel).toBeVisible();
+  await expect(competencyPanel).toContainText('能力追蹤 · 測試學員');
+  await expect(competencyPanel).toContainText('DOPS');
+  await expect(competencyPanel).toContainText('MINI-CEX');
+  await expect(competencyPanel).toContainText('不合併成 AI 能力總分');
+  await expect(competencyPanel).toContainText('4.2');
+
+  await refreshedPanel.getByRole('button', { name: '教學分析' }).click();
+  const analyticsPanel = page.locator('#teacher-teaching-analytics-p2');
+  await expect(analyticsPanel).toBeVisible();
+  await expect(analyticsPanel).toContainText('教學分析');
+  await expect(analyticsPanel).toContainText('測試學員');
+  await expect(analyticsPanel).toContainText('正式評量平均');
+  await expect(analyticsPanel).toContainText('不產生 AI 能力總分或預測');
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(overflow).toBe(false);
