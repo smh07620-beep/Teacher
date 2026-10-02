@@ -20,9 +20,14 @@ The roster delegates writes to the existing canonical PGY assessment center and 
 
 ## Release coverage
 
+P2 is release-promoted as a single teacher flow while remaining inside the two
+primary teacher jobs. The real browser path begins in **教材與課程**, switches
+through the canonical **評量與出題** navigation, completes a scoped clinical
+assessment, returns to **我的學員**, and verifies both **能力追蹤** and **教學分析**.
+
 - `tests/test_teacher_learners_p2_20261002.py`: roster scope.
 - `tests/test_pgy_clinical_assessment_scope_p2.py`: clinical write/read scope, server-derived identities and audit.
 - `tests/test_teacher_competency_p2.py`: competency boundary.
 - `tests/test_teacher_analytics_p2.py`: analytics boundary.
 - `tests/playwright/teacher-learners-p2.spec.js`: deterministic P2 browser loop.
-- `tests/playwright/teacher-workflow-p2-real-flask.spec.js`: real Chromium → Flask → SQLite teacher workflow.
+- `tests/playwright/teacher-workflow-p2-real-flask.spec.js`: real Chromium → Flask → SQLite full teacher workflow.

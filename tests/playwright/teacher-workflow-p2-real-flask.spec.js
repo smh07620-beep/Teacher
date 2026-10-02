@@ -15,14 +15,24 @@ async function login(page, username, next) {
   await page.waitForLoadState('domcontentloaded');
 }
 
-test('P2 teacher workflow persists clinical assessment then refreshes competency and teaching analytics', async ({ page }) => {
-  const teacherUrl = '/system?area=pgy&group=grpBio&admin=1&workspace=assessment&persona=teacher';
+test('teacher workflow crosses primary jobs, persists clinical assessment, then refreshes competency and analytics', async ({ page }) => {
+  const teacherUrl = '/system?area=pgy&group=grpBio&admin=1&workspace=course-materials&persona=teacher';
   await login(page, 'p2teacher', teacherUrl);
+
+  const teacherNav = page.locator('.v580-admin-groups');
+  await expect(page.locator('[id^="teacher-nav-"]')).toHaveCount(2);
+  await expect(page.locator('#teacher-nav-course-1014')).toBeVisible();
+  await expect(page.locator('#teacher-nav-assessment-1014')).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe('course-materials');
+  await expect(page.locator('#admin-section-content')).toBeVisible();
+
+  await teacherNav.getByRole('button', { name: '評量與出題' }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe('assessment');
+  await expect(page.locator('#admin-section-quiz')).toBeVisible({ timeout: 15000 });
 
   const roster = page.locator('#teacher-learners-p2');
   await expect(roster).toBeVisible({ timeout: 15000 });
   await expect(roster).toContainText('P2 測試學員');
-  await expect(page.locator('[id^="teacher-nav-"]')).toHaveCount(2);
 
   await roster.getByRole('button', { name: '開始臨床技能評核' }).click();
   await page.waitForURL(url => url.searchParams.get('from') === 'teacher-learners' && !url.searchParams.has('admin'), { timeout: 15000 });

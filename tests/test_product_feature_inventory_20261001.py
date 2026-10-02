@@ -56,11 +56,17 @@ class ProductFeatureInventory20261001Tests(unittest.TestCase):
         self.assertIn("**重複**", self.product)
         self.assertIn("**廢棄**", self.product)
 
-    def test_teacher_learners_is_promoted_but_remaining_p2_capabilities_stay_unfinished(self):
-        self.assertIn("我的學員 — 保留（第一階段完成）", self.product)
-        for marker in ("臨床技能評核", "能力追蹤", "教學分析"):
+    def test_p2_teacher_workflow_is_promoted_after_browser_and_security_gates(self):
+        for marker in (
+            "我的學員 — 保留",
+            "臨床技能評核 — 保留",
+            "能力追蹤 — 保留",
+            "教學分析 — 保留",
+        ):
             self.assertIn(marker, self.product)
-        self.assertIn("These remain **未完成**", self.product)
+        self.assertNotIn("臨床技能評核 workspace expansion", self.product)
+        self.assertNotIn("These remain **未完成**", self.product)
+        self.assertIn("P2 capabilities above are no longer in this list", self.product)
 
 
 if __name__ == "__main__":

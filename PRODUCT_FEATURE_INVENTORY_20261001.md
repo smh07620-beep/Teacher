@@ -54,27 +54,37 @@ to prove they remain absent.
 
 ## P2 teacher capability progress
 
-- **我的學員 — 保留（第一階段完成）**: read-only learner projection is embedded
-  inside the existing 評量與出題 workspace. Clinical teachers see only explicitly
-  assigned learners; group leaders are limited to their own group; education
-  administrators receive organization-wide coordination read scope; a standalone
-  system administrator receives no clinical learner scope. It reuses canonical PGY
-  assignment ownership and does not create a third teacher top-level navigation item.
-- The remaining P2 capabilities stay deferred until they independently meet the
-  Product Convergence Definition of Done and receive the appropriate browser/security
-  regression coverage.
+P2 is now promoted as one continuous teacher workflow inside the existing
+**教材與課程** and **評量與出題** jobs. It still does not add a third teacher
+top-level navigation item.
+
+- **我的學員 — 保留**: read-only learner projection is embedded inside 評量與出題.
+  Clinical teachers see only explicitly assigned learners; group leaders are limited
+  to their own group; education administrators receive organization-wide coordination
+  read scope; a standalone system administrator receives no clinical learner scope.
+- **臨床技能評核 — 保留**: the roster hands off to the canonical PGY assessment
+  form. Learner/evaluator identity and assignment scope are re-resolved on the server,
+  the browser cannot widen the target, and successful saves are audited before the
+  teacher returns to the roster.
+- **能力追蹤 — 保留**: formal PGY assessments and assignment completion are
+  projected read-only for the same server-derived learner scope. No synthetic or AI
+  mastery score is introduced.
+- **教學分析 — 保留**: scoped material progress, exams, PGY assignments and formal
+  assessments are combined into a descriptive teacher analytics view. It does not
+  predict competence or widen clinical signing authority.
+- The real-Flask browser Golden Path crosses **教材與課程 → 評量與出題 → 我的學員
+  → 臨床技能評核 → 能力追蹤 → 教學分析** and verifies persisted, server-attributed
+  assessment data.
 
 ## Explicit unfinished product work — 未完成
 
 The following is intentionally not promoted to the primary Teacher product yet:
 
-- 臨床技能評核 workspace expansion;
-- 能力追蹤 as a separate teacher workflow;
-- 教學分析 as a separate teacher workflow;
 - any Beta/deferred capability that has not met the Product Convergence Definition
   of Done and an appropriate Golden Path.
 
-These remain **未完成** even if lower-level backend primitives already exist.
+The P2 capabilities above are no longer in this list because their backend scope,
+browser flow, security regressions and real-Flask Golden Path are now release-gated.
 
 ## Explicit hidden technical surfaces — 隱藏
 
