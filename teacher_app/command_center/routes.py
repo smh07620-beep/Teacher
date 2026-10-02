@@ -121,6 +121,15 @@ def register_training_command_center(owner):
         except ApiError as exc:
             return _error(exc)
 
+    @app.get("/api/training-command-center/teacher-analytics")
+    def training_command_center_teacher_analytics():
+        try:
+            return jsonify(
+                analytics.build_teacher_analytics(_current_user(owner))
+            )
+        except ApiError as exc:
+            return _error(exc)
+
     @app.get("/api/training-command-center/notifications")
     def training_command_center_notifications():
         try:

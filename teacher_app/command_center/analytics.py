@@ -11,7 +11,9 @@ from typing import Any, Mapping, Optional, Sequence
 
 from teacher_app.command_center.competency import ASSESSMENT_KEYS, load_assignment_rows, load_assessment_rows
 from teacher_app.command_center.scope import visible_learners
+from teacher_app.common.auth import has_permission
 from teacher_app.common.db import get_connection, placeholder
+from teacher_app.common.errors import ApiError
 
 
 def _parse_datetime(value: Any) -> Optional[dt.datetime]:
@@ -378,3 +380,31 @@ def build_learning_analytics(user: Optional[Mapping[str, Any]], *, now: Optional
         assessments,
         now=now,
     )
+
+
+def build_teacher_analytics(
+    user: Optional[Mapping[str, Any]],
+    *,
+    now: Optional[dt.datetime] = None,
+) -> dict[str, Any]:
+    """Teacher-facing descriptive analytics within canonical learner scope."""
+    if not user:
+        raise ApiError(
+            "LOGIN_REQUIRED",
+            "請先登入後再查看教學分析。",
+            status=401,
+            extra={"loginRequired": True},
+        )
+    if not any(
+        has_permission(user, permission)
+        for permission in ("student.view_assigned", "student.view_group", "student.view_all")
+    ):
+        raise ApiError(
+            "FORBIDDEN",
+            "此帳號沒有教師教學分析檢視權限。",
+            status=403,
+        )
+    data = build_learning_analytics(user, now=now)
+    data["source"] = "scoped-learning-exam-pgy-records"
+    data["interpretation"] = "descriptive_teacher_analytics_without_mastery_score"
+    return data
