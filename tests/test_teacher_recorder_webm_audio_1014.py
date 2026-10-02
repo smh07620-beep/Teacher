@@ -17,11 +17,14 @@ class FakeWorker:
     AUDIO_EXT = {".mp3", ".wav", ".m4a", ".ogg"}
     os = __import__("os")
 
+    commands = []
+
     class subprocess:
         TimeoutExpired = subprocess.TimeoutExpired
 
         @staticmethod
         def run(command, **_kwargs):
+            FakeWorker.commands.append(list(command))
             target = Path(command[-1])
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(b"normalized-media")
@@ -46,6 +49,9 @@ class FakeWorker:
 
 
 class TeacherRecorderWebmAudio1014Tests(unittest.TestCase):
+    def setUp(self):
+        FakeWorker.commands = []
+
     def test_audio_only_webm_uses_audio_transcode_path(self):
         with tempfile.TemporaryDirectory() as temp_name:
             temp = Path(temp_name)
@@ -91,6 +97,46 @@ class TeacherRecorderWebmAudio1014Tests(unittest.TestCase):
             self.assertEqual(metadata["videoCrf"], 23)
             self.assertIn("poster.webp", derivatives)
             self.assertIn("audio.m4a", derivatives)
+
+    def test_web_safe_mp4_uses_fast_remux_instead_of_h264_reencode(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.mp4"
+            source.write_bytes(b"mp4-video")
+            FakeWorker.probe = {
+                "durationSeconds": 30.0,
+                "width": 1280,
+                "height": 720,
+                "bitrate": 900000,
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+            }
+            _output, _name, metadata, _derivatives = transcode_if_needed(
+                FakeWorker, source, "已最佳化影片.mp4", temp
+            )
+            first = FakeWorker.commands[0]
+            self.assertIn("copy", first)
+            self.assertNotIn("libx264", first)
+            self.assertEqual(metadata["transcodeMode"], "remux")
+            self.assertNotIn("videoCrf", metadata)
+
+    def test_large_h264_video_still_uses_safe_transcode(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.mp4"
+            source.write_bytes(b"mp4-video")
+            FakeWorker.probe = {
+                "durationSeconds": 30.0,
+                "width": 1920,
+                "height": 1080,
+                "bitrate": 3000000,
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+            }
+            transcode_if_needed(FakeWorker, source, "1080p.mp4", temp)
+            first = FakeWorker.commands[0]
+            self.assertIn("libx264", first)
+            self.assertIn("veryfast", first)
 
     def test_job_commit_uses_normalized_audio_suffix_for_viewer(self):
         job = {
