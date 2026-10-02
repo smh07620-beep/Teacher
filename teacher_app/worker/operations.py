@@ -28,6 +28,80 @@ def _int_env(name: str, default: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, value))
 
 
+def offline_worker_alerts(
+    *,
+    now: dt.datetime | None = None,
+    connection_factory=None,
+) -> dict:
+    """Project confirmed prolonged Worker heartbeat outages for notifications.
+
+    A heartbeat repository failure is reported as unavailable and never treated
+    as an offline Worker. Short transient gaps remain visible in Worker status
+    but do not become alert events until the bounded alert threshold is crossed.
+    """
+    if not _env_true("MATERIAL_WORKER_ENABLED", True):
+        return {"available": True, "thresholdSeconds": 0, "workers": []}
+
+    current = now or dt.datetime.now(dt.timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=dt.timezone.utc)
+    current = current.astimezone(dt.timezone.utc)
+    threshold_seconds = _int_env(
+        "MATERIAL_WORKER_OFFLINE_ALERT_SECONDS", 600, 300, 3600
+    )
+    retention_hours = _int_env(
+        "MATERIAL_WORKER_HEARTBEAT_RETENTION_HOURS", 24, 1, 720
+    )
+    history_cutoff = current - dt.timedelta(hours=retention_hours)
+
+    try:
+        heartbeats = repository.list_heartbeats(
+            50, connection_factory=connection_factory
+        )
+    except Exception:
+        LOGGER.exception("Worker heartbeat alert lookup failed")
+        return {
+            "available": False,
+            "thresholdSeconds": threshold_seconds,
+            "workers": [],
+        }
+
+    workers = []
+    for item in heartbeats:
+        worker_id = str(item.get("worker_id") or item.get("workerId") or "").strip()
+        last_seen = str(item.get("last_seen") or item.get("lastSeen") or "").strip()
+        if not worker_id or not last_seen:
+            continue
+        try:
+            seen = dt.datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=dt.timezone.utc)
+            seen = seen.astimezone(dt.timezone.utc)
+        except (TypeError, ValueError):
+            continue
+        if seen < history_cutoff:
+            continue
+        offline_seconds = max(0, int((current - seen).total_seconds()))
+        if offline_seconds < threshold_seconds:
+            continue
+        workers.append(
+            {
+                "workerId": worker_id,
+                "lastSeen": seen.isoformat(),
+                "offlineSeconds": offline_seconds,
+                "currentJobId": str(
+                    item.get("current_job_id") or item.get("currentJobId") or ""
+                ),
+            }
+        )
+    workers.sort(key=lambda row: (-int(row["offlineSeconds"]), row["workerId"]))
+    return {
+        "available": True,
+        "thresholdSeconds": threshold_seconds,
+        "workers": workers,
+    }
+
+
 def cleanup_staging(
     delete_staging: Callable[[dict], None],
     *,
@@ -300,6 +374,7 @@ def status(
 __all__ = [
     "WORKER_STATUS_ERROR",
     "cleanup_staging",
+    "offline_worker_alerts",
     "recover_stale_processing_jobs",
     "status",
 ]
