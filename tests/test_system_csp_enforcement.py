@@ -117,6 +117,30 @@ class SystemCspEnforcementTests(unittest.TestCase):
                 "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com",
             )
 
+    def test_csp_allows_only_explicit_loopback_http_r2_endpoint(self):
+        app = Flask(__name__ + "-r2-loopback")
+        app.config.update(TESTING=True, SECRET_KEY="test")
+
+        @app.get("/")
+        def portal_page():
+            return "ok"
+
+        with patch.dict(os.environ, {"CSP_ENFORCE": "true", "R2_ENDPOINT_URL": "http://127.0.0.1:9000"}, clear=False):
+            register_production_hardening(app, current_user=lambda: None)
+            csp = app.test_client().get("/").headers["Content-Security-Policy"]
+        self.assertIn("connect-src 'self' https: http://127.0.0.1:9000", csp)
+
+        other = Flask(__name__ + "-r2-external-http")
+        other.config.update(TESTING=True, SECRET_KEY="test")
+
+        @other.get("/")
+        def other_page():
+            return "ok"
+
+        with patch.dict(os.environ, {"CSP_ENFORCE": "true", "R2_ENDPOINT_URL": "http://storage.example.test"}, clear=False):
+            register_production_hardening(other, current_user=lambda: None)
+            external_csp = other.test_client().get("/").headers["Content-Security-Policy"]
+        self.assertNotIn("http://storage.example.test", external_csp)
 
 if __name__ == "__main__":
     unittest.main()
