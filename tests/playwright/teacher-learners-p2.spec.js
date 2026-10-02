@@ -28,6 +28,11 @@ test('P2 我的學員 stays inside assessment workspace with server-scoped learn
     contentType: 'application/json',
     body: JSON.stringify({ authenticated: true, user: TEACHER }),
   }));
+  await page.route('**/api/pgy-assessment-templates', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([]),
+  }));
   await page.route('**/api/training-command-center/teacher-learners', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -75,11 +80,21 @@ test('P2 我的學員 stays inside assessment workspace with server-scoped learn
   await expect(panel).toContainText('測試學員');
   await expect(panel).toContainText('待教師 1');
   await expect(panel.getByRole('button', { name: '查看考核紀錄' })).toBeVisible();
-  await expect(panel.getByRole('button', { name: '進入 PGY 工作流程' })).toBeVisible();
+  const clinical = panel.getByRole('button', { name: '開始臨床技能評核' });
+  await expect(clinical).toBeVisible();
 
   await expect(page.locator('#teacher-nav-course-1014')).toBeVisible();
   await expect(page.locator('#teacher-nav-assessment-1014')).toBeVisible();
   await expect(page.locator('[id^="teacher-nav-"]')).toHaveCount(2);
+
+  await clinical.click();
+  await expect(page.locator('#panel-assessment')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#admin-modal')).toHaveClass(/hidden/);
+  await expect(page.locator('#pgy-assess-name')).toHaveValue('測試學員');
+  await expect(page.locator('#pgy-assess-empid')).toHaveValue('S2001');
+  await expect(page.locator('#pgy-assess-evaluator')).toHaveValue('P2 臨床教師');
+  await expect(page.locator('#pgy-assessment-form-title')).toContainText('DOPS');
+  await expect(page.locator('#pgy-assess-status')).toContainText('已選擇 測試學員');
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(overflow).toBe(false);
