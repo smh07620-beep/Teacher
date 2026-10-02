@@ -309,15 +309,36 @@
     const section=document.getElementById(ID);
     if(section)ensureSection();
     const params=new URLSearchParams(window.location.search);
-    if(params.get('workspace')==='assessment')load(false);
+    if(params.get('workspace')==='assessment')mountWhenReady();
+  }
+
+  let mountTimer=0;
+  function mountWhenReady(attempt=0){
+    const params=new URLSearchParams(window.location.search);
+    if(params.get('workspace')!=='assessment')return;
+    const section=ensureSection();
+    if(section){
+      if(mountTimer){clearTimeout(mountTimer);mountTimer=0}
+      load(false);
+      return;
+    }
+    if(attempt>=80)return;
+    if(mountTimer)clearTimeout(mountTimer);
+    mountTimer=setTimeout(()=>{mountTimer=0;mountWhenReady(attempt+1)},125);
+  }
+
+  function bootstrap(){
+    mountWhenReady();
+    resumeClinicalAssessment();
   }
 
   window.addEventListener('pgy:assessment-saved',onClinicalAssessmentSaved);
   if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',()=>{ensureSection();load(false);resumeClinicalAssessment();},{once:true});
+    document.addEventListener('DOMContentLoaded',bootstrap,{once:true});
   }else{
-    ensureSection();load(false);resumeClinicalAssessment();
+    bootstrap();
   }
+  window.addEventListener('pageshow',()=>mountWhenReady());
   window.AdminWorkspaceShell?.addAfterWorkspace?.(()=>refreshPlacement());
-  window.TeacherLearnersP2=Object.freeze({load});
+  window.TeacherLearnersP2=Object.freeze({load,mount:mountWhenReady});
 })();

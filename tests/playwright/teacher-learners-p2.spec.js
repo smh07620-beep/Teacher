@@ -170,6 +170,8 @@ test('P2 我的學員 stays inside assessment workspace with server-scoped learn
   await expect(page.locator('#teacher-p2-return-after-assessment')).toBeVisible();
   await page.locator('#teacher-p2-return-after-assessment').click();
   await page.waitForURL(url => url.searchParams.get('workspace') === 'assessment' && url.searchParams.get('persona') === 'teacher');
+  await expect(page.locator('#admin-section-quiz')).not.toHaveClass(/hidden/);
+  await page.evaluate(() => window.TeacherLearnersP2?.mount?.());
 
   const refreshedPanel = page.locator('#teacher-learners-p2');
   await expect(refreshedPanel).toBeVisible();

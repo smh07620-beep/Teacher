@@ -69,6 +69,8 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
             "-RestartInterval (New-TimeSpan -Minutes 1)",
             "-StartWhenAvailable",
             "-LogonType ServiceAccount",
+            "-LogonType Interactive",
+            "New-ScheduledTaskTrigger -AtLogOn -User $TaskUser",
             "-Principal $taskPrincipal",
             "-User $TaskUser",
             "-Password $plainPassword",
@@ -78,17 +80,23 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
             "Register-ScheduledTask",
         ):
             self.assertIn(marker, source)
-        self.assertNotIn("-AtLogOn", source)
         self.assertNotIn("-InputObject $task", source)
         self.assertIn("NT AUTHORITY\\SYSTEM", source)
         self.assertNotIn("DOMAIN\\teacher-worker$", source)
         self.assertNotIn("material_worker.py\"", source)
 
-        service_start = source.index("if ($ServiceAccount) {")
+        interactive_start = source.index("if ($InteractiveLogon) {")
+        service_start = source.index("} elseif ($ServiceAccount) {", interactive_start)
         password_start = source.index("} else {", service_start)
         footer_start = source.index("if ($registered) {", password_start)
+        interactive_block = source[interactive_start:service_start]
         service_block = source[service_start:password_start]
         password_block = source[password_start:footer_start]
+        self.assertIn("-LogonType Interactive", interactive_block)
+        self.assertIn("New-ScheduledTaskTrigger -AtLogOn -User $TaskUser", interactive_block)
+        self.assertIn("-Principal $taskPrincipal", interactive_block)
+        self.assertNotIn("Get-Credential", interactive_block)
+        self.assertNotIn("-Password $plainPassword", interactive_block)
         self.assertIn("-Principal $taskPrincipal", service_block)
         self.assertNotIn("-User $TaskUser", service_block)
         self.assertNotIn("-Password $plainPassword", service_block)
@@ -110,6 +118,7 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         self.assertIn("install_material_worker_task.ps1", docs)
         self.assertIn("**At startup**", docs)
         self.assertIn("Run whether", docs)
+        self.assertIn("-InteractiveLogon", docs)
 
     def test_idle_check_respects_minimum_interval_and_requests_restart_after_update(self):
         state = Path(self.temp.name) / "state.json"
