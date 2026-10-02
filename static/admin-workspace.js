@@ -212,7 +212,9 @@
     if (name === 'word') return switchSection('word', force);
     if (name === 'people') {
       await switchSection('people', true);
+      window.ensureAdminUserCreatePanel?.();
       await window.renderAdminPeople?.(force);
+      window.ensureAdminUserCreatePanel?.();
       return;
     }
     if (name === 'system') {
