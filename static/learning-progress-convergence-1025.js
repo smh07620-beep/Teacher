@@ -71,11 +71,6 @@
 
   function init(){
     load(false).catch(()=>{});
-    // portal-v56 still loads dashboard/profile statistics asynchronously. The
-    // canonical progress projection must be the final visible owner even when
-    // that older request resolves later. Re-read once after the portal's
-    // initial async paint instead of allowing response timing to pick an owner.
-    window.setTimeout(()=>load(true).catch(()=>{}),900);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();
