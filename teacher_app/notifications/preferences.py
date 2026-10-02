@@ -95,7 +95,7 @@ def update_preferences(user: Mapping[str, Any] | None, payload: Mapping[str, Any
         )
     return {
         "emailCategories": current,
-        "protectedCategories": ["materialFailure"],
+        "protectedCategories": ["materialFailure", "workerOffline"],
     }
 
 
