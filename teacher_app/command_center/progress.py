@@ -28,6 +28,7 @@ def build_progress(user: Optional[Mapping[str, Any]]) -> dict[str, Any]:
             "materialsTotal": int(dashboard.get("materialsTotal") or 0),
             "examsPassed": int(dashboard.get("examsPassed") or 0),
             "examsTotal": int(dashboard.get("examsTotal") or 0),
+            "examsPending": int(dashboard.get("examsPending") or 0),
             "activeCourses": int(dashboard.get("activeCourses") or 0),
             "scopeSource": str(dashboard.get("scopeSource") or "profile"),
         },
