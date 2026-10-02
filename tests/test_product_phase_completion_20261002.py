@@ -27,7 +27,7 @@ class ProductPhaseCompletion20261002Tests(unittest.TestCase):
     def test_phase_b_has_exact_four_product_areas(self):
         for area in ("我的學習", "教學", "評量", "系統管理"):
             self.assertIn(area, self.ia)
-        self.assertIn("not a fifth product area", self.ia)
+        self.assertIn("must never become a fifth product area", self.ia)
 
     def test_phase_c_keeps_real_full_stack_and_all_eight_golden_paths(self):
         for number in range(1, 9):
@@ -42,7 +42,7 @@ class ProductPhaseCompletion20261002Tests(unittest.TestCase):
 
     def test_phase_e_contract_covers_recovery_observability_audit_email_performance_and_mobile(self):
         for marker in (
-            "recover_stale_material_jobs",
+            "recover_stale_processing_jobs",
             "oldestPendingAgeSeconds",
             "recentFailureRate",
             "averageCompletedDurationSeconds",
