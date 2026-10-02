@@ -28,6 +28,7 @@ class NotificationPreference0106Tests(unittest.TestCase):
             {"kind": "retraining", "key": "r"},
             {"kind": "review", "key": "v"},
             {"kind": "material_failure", "key": "f"},
+            {"kind": "worker_offline", "key": "w"},
         ]
         stored = {
             "emailCategories": {
@@ -36,13 +37,13 @@ class NotificationPreference0106Tests(unittest.TestCase):
                 "retraining": False,
                 "teacherReview": False,
             },
-            "protectedCategories": ["materialFailure"],
+            "protectedCategories": ["materialFailure", "workerOffline"],
         }
         with patch.object(preferences, "get_preferences", return_value=stored):
             filtered = preferences.filter_email_events(rows, {"username": "u1"}, general_enabled=True)
-            self.assertEqual([row["kind"] for row in filtered], ["material_failure"])
+            self.assertEqual([row["kind"] for row in filtered], ["material_failure", "worker_offline"])
             filtered_master_off = preferences.filter_email_events(rows, {"username": "u1"}, general_enabled=False)
-            self.assertEqual([row["kind"] for row in filtered_master_off], ["material_failure"])
+            self.assertEqual([row["kind"] for row in filtered_master_off], ["material_failure", "worker_offline"])
 
     def test_preference_api_and_ui_are_session_scoped_and_do_not_hide_in_app_tasks(self):
         routes = ROOT.joinpath("teacher_app", "command_center", "notification_routes.py").read_text(encoding="utf-8")
@@ -58,8 +59,12 @@ class NotificationPreference0106Tests(unittest.TestCase):
         self.assertNotIn("progress_service", reminders)
         self.assertIn("只控制 Email；站內待辦仍會完整顯示", ui)
         self.assertIn("教材處理失敗（必要通知）", ui)
+        self.assertIn("Worker 離線（必要通知）", ui)
+        self.assertIn("查看 Worker 狀態", ui)
+        self.assertIn("notificationContext='system'", ui)
         self.assertIn("protectedCategories", service)
-        self.assertIn('CRITICAL_KINDS = {"material_failure"}', service)
+        self.assertIn('CRITICAL_KINDS = {"material_failure", "worker_offline"}', service)
+        self.assertIn('["materialFailure", "workerOffline"]', service)
 
     def test_payload_cannot_select_another_account_or_disable_protected_kind(self):
         source = ROOT.joinpath("teacher_app", "notifications", "preferences.py").read_text(encoding="utf-8")
