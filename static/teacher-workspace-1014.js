@@ -44,12 +44,26 @@
     return button;
   }
 
-  function personaSwitcherNeedsRepair(host) {
-    if (!host) return true;
-    const labels = [...host.querySelectorAll('button')].map(button => String(button.textContent || ''));
-    if (canLearn && !labels.some(label => label.includes('我的學習'))) return true;
-    if (canTeach && !labels.some(label => label.includes('教師工作區'))) return true;
-    return false;
+  function personaMountTarget() {
+    if (adminPage) {
+      const header = document.getElementById('admin-workspace-header');
+      if (header) {
+        let mount = document.getElementById('admin-workspace-persona-actions-1014');
+        if (!mount) {
+          mount = document.createElement('div');
+          mount.id = 'admin-workspace-persona-actions-1014';
+          mount.className = 'ml-auto flex items-center gap-2';
+          const close = document.getElementById('admin-workspace-close');
+          header.insertBefore(mount, close || null);
+        }
+        return {actions: mount, userBox: null, pageMode: true};
+      }
+    }
+    return {
+      actions: document.querySelector('.v56-system-actions'),
+      userBox: document.querySelector('.v573-system-user'),
+      pageMode: false,
+    };
   }
 
   function ensurePersonaSwitcher() {
@@ -59,22 +73,24 @@
     if (canSystem) choices.push('system');
     if (choices.length < 2) return;
 
-    const actions = document.querySelector('.v56-system-actions');
-    const userBox = document.querySelector('.v573-system-user');
+    const mount = personaMountTarget();
+    const actions = mount.actions;
+    const userBox = mount.userBox;
     if (!actions) return;
 
     let host = document.getElementById('teacher-persona-switch-1014');
     if (!host) {
       host = document.createElement('div');
       host.id = 'teacher-persona-switch-1014';
-      host.className = 'hidden sm:flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1';
-      actions.insertBefore(host, userBox || actions.firstChild);
+    }
+    host.className = mount.pageMode
+      ? 'flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800/80 p-1'
+      : 'hidden sm:flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 p-1';
+
+    if (host.parentElement !== actions) {
+      actions.insertBefore(host, userBox || null);
     }
 
-    // Reconcile the two human persona choices instead of assuming an existing
-    // container is complete. Several presentation layers initialize
-    // asynchronously; a partially-rendered switcher must not strand a dual-role
-    // user inside the teacher workspace.
     const expected = [];
     if (canLearn) {
       expected.push(personaButton('📚 我的學習', !adminPage, () => window.location.assign(learningUrl())));
@@ -91,20 +107,6 @@
       }));
     }
     host.replaceChildren(...expected);
-
-    if (!host.dataset.teacher1014ObserveBound) {
-      host.dataset.teacher1014ObserveBound = '1';
-      new MutationObserver(() => {
-        if (personaSwitcherNeedsRepair(host)) ensurePersonaSwitcher();
-      }).observe(host, {childList: true});
-    }
-    if (!actions.dataset.teacher1014PersonaObserveBound) {
-      actions.dataset.teacher1014PersonaObserveBound = '1';
-      new MutationObserver(() => {
-        const current = document.getElementById('teacher-persona-switch-1014');
-        if (!current || personaSwitcherNeedsRepair(current)) ensurePersonaSwitcher();
-      }).observe(actions, {childList: true});
-    }
   }
 
   function makeNavButton(id, label, handler) {
@@ -349,6 +351,7 @@
   syncTeacherHeader();
 
   window.AdminWorkspaceShell?.addAfterWorkspace?.(({workspace}) => {
+    ensurePersonaSwitcher();
     buildTeacherNavigation();
     ensureAssessmentReviewShortcut();
     if (state.mode === 'media' && workspace === 'course-materials') {
