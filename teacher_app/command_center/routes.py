@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from flask import g, jsonify
 
-from teacher_app.command_center import analytics, audience, competency, progress, service
+from teacher_app.command_center import analytics, audience, competency, progress, service, teacher_learners
 from teacher_app.common.errors import ApiError
 from teacher_app.notifications import events as notification_events
 
@@ -100,6 +100,15 @@ def register_training_command_center(owner):
     def training_command_center_progress():
         try:
             return jsonify(progress.build_progress(_current_user(owner)))
+        except ApiError as exc:
+            return _error(exc)
+
+    @app.get("/api/training-command-center/teacher-learners")
+    def training_command_center_teacher_learners():
+        try:
+            return jsonify(
+                teacher_learners.build_teacher_learners(_current_user(owner))
+            )
         except ApiError as exc:
             return _error(exc)
 
