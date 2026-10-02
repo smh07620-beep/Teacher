@@ -43,7 +43,7 @@
     const workspace = now.get('workspace') || '';
     const teacherMode = now.get('teacherMode') || '';
     if (teacherMode === 'media' || teacherMode === 'documents') return 'contextual-tool';
-    if (workspace === 'assessment' || teacherMode === 'scoring' || teacherMode === 'pgy') return 'assessment';
+    if (['assessment', 'results', 'teacher'].includes(workspace) || teacherMode === 'scoring' || teacherMode === 'pgy') return 'assessment';
     return 'course';
   }
 
