@@ -188,10 +188,9 @@
   }
 
   function resetPersonalDashboard(){
-    // Progress and learner todo have dedicated canonical owners. This legacy
-    // dashboard only resets the remaining personal summary it still owns.
+    // Progress and learner todo have dedicated canonical owners. This shell
+    // only resets the remaining course-summary count it owns.
     setText('#v561-course-count','—');
-    setText('#v561-exam-pending','—');
   }
 
   function setupProfileDialog(){
@@ -241,30 +240,36 @@
   }
 
   async function loadPersonalDashboard(){
-    const empId=authUser?.empId||'', name=authUser?.name||'', welcome=$('#v561-welcome');
-    if(!authUser){resetPersonalDashboard();setText('#v561-header-name','登入學習帳號');setText('#v561-header-id','登入後讀取個人進度');if(welcome)welcome.textContent='尚未登入｜登入後自動顯示你的課程、考核與學習進度';return;}
-    setText('#v561-header-name',name||'讀取個人資料中…');setText('#v561-header-id',`工號 ${empId}`);if(welcome)welcome.textContent='正在讀取你的學習紀錄…';
+    const name=authUser?.name||'', empId=authUser?.empId||'', welcome=$('#v561-welcome');
+    if(!authUser){
+      resetPersonalDashboard();
+      setText('#v561-header-name','登入學習帳號');
+      setText('#v561-header-id','登入後讀取個人進度');
+      if(welcome)welcome.textContent='尚未登入｜登入後自動顯示你的課程、考核與學習進度';
+      return;
+    }
+    setText('#v561-header-name',name||'讀取個人資料中…');
+    setText('#v561-header-id',empId?`工號 ${empId}`:'學習帳號');
+    if(welcome)welcome.textContent='正在讀取你的學習紀錄…';
     try{
-      const qs=new URLSearchParams({empId}); if(name)qs.set('name',name);
-      const d=await fetchJSONCached(
-        `/api/dashboard/me?${qs.toString()}`,
+      const progress=await fetchJSONCached(
+        '/api/training-command-center/progress',
         HOME_PERSONAL_TTL
       );
-      if(d.name){writeLocal(LEARNER_NAME_KEY,d.name);setText('#v561-header-name',d.name);}else setText('#v561-header-name',name||'學習者');
-      setText('#v561-header-id',`工號 ${d.empId||empId}`);
-      setText('#v561-course-count',Number(d.activeCourses||0));
-      const materialsPending=Math.max(0,Number(d.materialsPending||0));
-      const materialsRetraining=Math.max(0,Number(d.materialsRetraining||0));
-      const examsPending=Math.max(0,Number(d.examsPending||0));
-      const pendingCourses=Array.isArray(d.pendingCourses)?d.pendingCourses:[];
-      const pendingCourseIds=new Set(pendingCourses.map(x=>String(x?.id||'')));
-      const standaloneExams=(Array.isArray(d.pendingExams)?d.pendingExams:[]).filter(x=>!pendingCourseIds.has(String(x?.courseId||''))).length;
-      const todoCount=d?.scopeSource==='assignments'?pendingCourses.length+standaloneExams:materialsPending+examsPending;
-      const pct=Math.max(0,Math.min(100,Number(d.progressPercent||0)));
-      if(welcome)welcome.textContent=d?.scopeSource==='assignments'
-        ? `早安，${d.name||name||'同仁'}｜正式指派 ${Number(d.requiredAssignments||0)} 門必修・待完成 ${pendingCourses.length} 門${Number(d.overdueAssignments||0)?`・逾期 ${Number(d.overdueAssignments)} 門`:''}・整體進度 ${pct}%`
-        : `早安，${d.name||name||'同仁'}｜教材完成 ${Number(d.materialsCompleted||0)}/${Number(d.materialsTotal||0)}・考核通過 ${Number(d.examsPassed||0)}/${Number(d.examsTotal||0)}・教師評核 ${Number(d.teacherAssessmentsCompleted||0)} 次${Number(d.essayReviewsPending||0)?`・待人工批改 ${Number(d.essayReviewsPending)} 份`:''}`;
-    }catch(err){resetPersonalDashboard();if(welcome)welcome.textContent=`個人紀錄暫時無法讀取：${err.message}`;}
+      const online=progress?.online||{};
+      const pct=Math.max(0,Math.min(100,Number(online.percent||0)));
+      setText('#v561-course-count',Number(online.activeCourses||0));
+      if(welcome){
+        if(progress?.pgyLearner&&progress?.pgy){
+          welcome.textContent=`早安，${name||'同仁'}｜線上學習 ${pct}% · PGY 指派 ${Number(progress.pgy.percent||0).toFixed(0)}%`;
+        }else{
+          welcome.textContent=`早安，${name||'同仁'}｜進行中課程 ${Number(online.activeCourses||0)} 門 · 整體進度 ${pct}%`;
+        }
+      }
+    }catch(err){
+      resetPersonalDashboard();
+      if(welcome)welcome.textContent=`個人紀錄暫時無法讀取：${err.message}`;
+    }
   }
 
   async function loadDashboard(){
