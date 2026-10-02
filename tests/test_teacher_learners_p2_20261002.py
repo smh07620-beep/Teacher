@@ -102,7 +102,7 @@ class TeacherLearnersP2Tests(unittest.TestCase):
             {"student1", "student3"},
         )
         self.assertEqual(data["summary"]["overdueAssignments"], 1)
-        self.assertEqual(data["summary"]["awaitingLeader"], 1)
+        self.assertEqual(data["summary"]["awaitingFinalize"], 1)
 
     def test_education_admin_can_coordinate_cross_group_without_signing_projection(self):
         data = self.build(
