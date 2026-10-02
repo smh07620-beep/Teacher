@@ -488,6 +488,8 @@ def main():
     except RuntimeError as exc:log(str(exc));return 2
     base_caps=capability();log(f"startup ffmpeg={base_caps['ffmpeg']['available']} ffprobe={base_caps['ffprobe']['available']} libreoffice={base_caps['libreOffice']['available']}")
 
+    preflight_attempt=0
+    last_preflight_error=""
     while True:
         try:
             preflight=_storage_preflight_snapshot()
@@ -496,11 +498,21 @@ def main():
             if preflight.get("ready"):
                 log(f"storage preflight ready backend={preflight.get('backend') or 'unknown'}")
                 break
-            log(f"storage preflight blocked claims: {preflight.get('error') or 'storage unavailable'}")
+            preflight_attempt+=1
+            error=str(preflight.get("error") or "storage unavailable")
+            if error!=last_preflight_error or preflight_attempt==1 or preflight_attempt%12==0:
+                suffix="" if preflight_attempt==1 else f" (attempt {preflight_attempt}; still waiting)"
+                log(f"storage preflight blocked claims: {error}{suffix}")
+            last_preflight_error=error
             time.sleep(max(5,POLL_SECONDS))
         except KeyboardInterrupt:return 0
         except Exception as exc:
-            log(f"storage preflight heartbeat unavailable: {exc}")
+            preflight_attempt+=1
+            error=f"heartbeat unavailable: {exc}"
+            if error!=last_preflight_error or preflight_attempt==1 or preflight_attempt%12==0:
+                suffix="" if preflight_attempt==1 else f" (attempt {preflight_attempt}; still waiting)"
+                log(f"storage preflight {error}{suffix}")
+            last_preflight_error=error
             time.sleep(max(5,POLL_SECONDS))
 
     while True:

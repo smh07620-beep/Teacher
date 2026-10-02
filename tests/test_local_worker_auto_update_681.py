@@ -194,12 +194,18 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         self.assertIn(".local-worker.env", gitignore)
         self.assertIn("!.local-worker.env.example", gitignore)
 
+    def test_preflight_logging_is_rate_limited_while_waiting(self):
+        source = ROOT.joinpath("material_worker.py").read_text(encoding="utf-8")
+        self.assertIn("preflight_attempt%12==0", source)
+        self.assertIn("last_preflight_error", source)
+        self.assertIn("still waiting", source)
+
     def test_processing_job_never_invokes_auto_update(self):
         api = Mock()
         api.post.return_value = {"job": {"id": "active"}}
         updater = Mock(); updater.metadata.return_value = {}; updater.check_when_idle.return_value = True
         caps = {"ffmpeg": {"available": True}, "ffprobe": {"available": True}, "libreOffice": {"available": True}}
-        with patch.object(material_worker, "WorkerApi", return_value=api), patch.object(material_worker, "AUTO_UPDATER", updater), patch.object(material_worker, "capability", return_value=caps), patch.object(material_worker, "process_one", side_effect=KeyboardInterrupt):
+        with patch.object(material_worker, "WorkerApi", return_value=api), patch.object(material_worker, "AUTO_UPDATER", updater), patch.object(material_worker, "capability", return_value=caps), patch.object(material_worker, "_storage_preflight_snapshot", return_value={"ready": True, "backend": "r2", "detail": "test", "error": ""}), patch.object(material_worker, "process_one", side_effect=KeyboardInterrupt):
             self.assertEqual(material_worker.main(), 0)
         updater.check_when_idle.assert_not_called()
 
@@ -208,7 +214,7 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         api.post.return_value = {"job": None}
         updater = Mock(); updater.metadata.return_value = {}; updater.check_when_idle.return_value = True
         caps = {"ffmpeg": {"available": True}, "ffprobe": {"available": True}, "libreOffice": {"available": True}}
-        with patch.object(material_worker, "WorkerApi", return_value=api), patch.object(material_worker, "AUTO_UPDATER", updater), patch.object(material_worker, "capability", return_value=caps):
+        with patch.object(material_worker, "WorkerApi", return_value=api), patch.object(material_worker, "AUTO_UPDATER", updater), patch.object(material_worker, "capability", return_value=caps), patch.object(material_worker, "_storage_preflight_snapshot", return_value={"ready": True, "backend": "r2", "detail": "test", "error": ""}):
             self.assertEqual(material_worker.main(), material_worker.RESTART_FOR_UPDATE)
 
     def test_heartbeat_payload_has_build_metadata_and_no_secret_fields(self):
