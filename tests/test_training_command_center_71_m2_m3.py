@@ -166,12 +166,14 @@ class CommandCenterM2M3FrontendTests(unittest.TestCase):
         for mutation in ("method: 'POST'", "method: 'PATCH'", "method: 'DELETE'"):
             self.assertNotIn(mutation, self.matrix_ui)
 
-    def test_m3_is_compact_inside_course_center_and_uses_home_dashboard_source(self):
+    def test_m3_is_compact_inside_course_center_and_uses_canonical_progress_source(self):
         self.assertIn("document.querySelector('#course-overview > .edu-card')", self.analytics_ui)
         self.assertIn('📊 學習摘要', self.analytics_ui)
-        self.assertIn('/api/dashboard/me?', self.analytics_ui)
-        self.assertIn('materialsCompleted', self.analytics_ui)
-        self.assertIn('materialsTotal', self.analytics_ui)
+        self.assertIn('/api/training-command-center/progress', self.analytics_ui)
+        self.assertNotIn('/api/dashboard/me?', self.analytics_ui)
+        self.assertIn('online.materialsCompleted', self.analytics_ui)
+        self.assertIn('online.materialsTotal', self.analytics_ui)
+        self.assertIn('online.examsPending', self.analytics_ui)
         self.assertIn('p?.pgyLearner', self.analytics_ui)
         self.assertIn('<details id="learning-analytics-detail-71"', self.analytics_ui)
         for mutation in ("method: 'POST'", "method: 'PATCH'", "method: 'DELETE'"):
