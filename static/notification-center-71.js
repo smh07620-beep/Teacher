@@ -12,15 +12,49 @@
   function stableHash(value){let hash=2166136261;for(const char of String(value??'')){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return(hash>>>0).toString(36);}
   function announcementKey(item){return `announcement:${String(item?.id||'')}:${stableHash(`${item?.title||''}\n${item?.body||''}\n${item?.publishedAt||''}`)}`.slice(0,240);}
 
-  function mount(){
-    const existing=document.getElementById(ID);if(existing)return existing;
+  function isSystemContext(){
+    const params=new URLSearchParams(window.location.search);
+    const workspace=params.get('workspace')||'';
+    return params.get('persona')==='system'
+      || (params.get('admin')==='1'&&['people','system','worker','maintenance','audit'].includes(workspace));
+  }
+
+  function preferredHost(){
+    if(isSystemContext()){
+      return document.getElementById('admin-workspace-content')
+        || document.querySelector('main.flex-grow')
+        || document.querySelector('main');
+    }
+    return document.getElementById('course-overview')
+      || document.querySelector('main.flex-grow')
+      || document.querySelector('main');
+  }
+
+  function placeSection(section){
+    const host=preferredHost();if(!host)return false;
+    if(isSystemContext()){
+      section.dataset.notificationContext='system';
+      section.dataset.productSection='needs-action';
+      if(section.parentElement!==host)host.insertBefore(section,host.firstChild);
+      return true;
+    }
+    delete section.dataset.notificationContext;
     const statusHost=document.getElementById('learning-status-detail-71');
     const course=document.getElementById('course-overview');
-    const host=course||document.querySelector('main.flex-grow')||document.querySelector('main');
-    if(!host)return null;
-    const section=document.createElement('details');section.id=ID;section.className='rounded-xl border border-amber-100 bg-amber-50/20 px-3 py-3';
-    section.innerHTML=`<summary class="cursor-pointer list-none flex items-center justify-between gap-3"><span><b class="text-sm text-slate-900">🔔 通知中心</b><span id="notification-status-71" class="ml-2 text-[11px] text-slate-500">讀取中…</span></span><span class="text-[11px] font-bold text-amber-700">展開 ▾</span></summary><div class="mt-3 flex justify-end gap-3"><button id="notification-email-settings-71" type="button" class="text-[10px] font-bold text-slate-600">Email 通知設定</button><button id="notification-mark-all-read-71" type="button" class="text-[10px] font-bold text-slate-600">全部標示已讀</button><button id="notification-refresh-71" type="button" class="text-[10px] font-bold text-amber-700">↻ 更新</button></div><div id="notification-preferences-71" class="hidden mt-3 rounded-xl border border-slate-200 bg-white p-3"><div class="flex items-start justify-between gap-3"><div><b class="text-xs text-slate-900">Email 通知設定</b><p class="text-[10px] text-slate-500 mt-1">只控制 Email；站內待辦仍會完整顯示。教材處理失敗屬必要通知，無法關閉。</p></div><button id="notification-preferences-save-71" type="button" class="text-[10px] font-bold px-3 py-2 rounded-lg bg-slate-900 text-white">儲存</button></div><div class="grid sm:grid-cols-2 gap-2 mt-3 text-[11px]"><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="courseDue"> 課程期限提醒</label><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="examDue"> 考核期限提醒</label><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="retraining"> 重大版重新訓練</label><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="teacherReview"> 教師待批改提醒</label><label class="flex items-center gap-2 opacity-70"><input type="checkbox" checked disabled> 教材處理失敗（必要通知）</label></div><p id="notification-preferences-status-71" class="text-[10px] text-slate-500 mt-2"></p></div><div id="notification-list-71" class="space-y-2 mt-3"></div><p class="text-[10px] text-slate-400 mt-3">需要處理的通知與 Email 共用同一個伺服器事件來源；公告只在站內顯示。這裡只保存你的已讀狀態與 Email 偏好，不會修改課程、成績、評量或 Worker 工作。</p>`;
-    const grid=document.getElementById('course-overview-grid');if(statusHost)statusHost.appendChild(section);else if(grid)grid.after(section);else if(course)course.appendChild(section);else host.appendChild(section);
+    const grid=document.getElementById('course-overview-grid');
+    if(statusHost){if(section.parentElement!==statusHost)statusHost.appendChild(section);}
+    else if(grid){if(section.previousElementSibling!==grid)grid.after(section);}
+    else if(course){if(section.parentElement!==course)course.appendChild(section);}
+    else if(section.parentElement!==host)host.appendChild(section);
+    return true;
+  }
+
+  function mount(){
+    const existing=document.getElementById(ID);if(existing){placeSection(existing);return existing;}
+    const host=preferredHost();if(!host)return null;
+    const section=document.createElement('details');section.id=ID;section.className='rounded-xl border border-amber-100 bg-amber-50/20 px-3 py-3';section.dataset.productSection='needs-action';
+    section.innerHTML=`<summary class="cursor-pointer list-none flex items-center justify-between gap-3"><span><b class="text-sm text-slate-900">🔔 通知中心</b><span id="notification-status-71" class="ml-2 text-[11px] text-slate-500">讀取中…</span></span><span class="text-[11px] font-bold text-amber-700">展開 ▾</span></summary><div class="mt-3 flex justify-end gap-3"><button id="notification-email-settings-71" type="button" class="text-[10px] font-bold text-slate-600">Email 通知設定</button><button id="notification-mark-all-read-71" type="button" class="text-[10px] font-bold text-slate-600">全部標示已讀</button><button id="notification-refresh-71" type="button" class="text-[10px] font-bold text-amber-700">↻ 更新</button></div><div id="notification-preferences-71" class="hidden mt-3 rounded-xl border border-slate-200 bg-white p-3"><div class="flex items-start justify-between gap-3"><div><b class="text-xs text-slate-900">Email 通知設定</b><p class="text-[10px] text-slate-500 mt-1">只控制一般 Email；站內待辦仍會完整顯示。教材處理失敗與 Worker 離線屬必要通知，無法關閉。</p></div><button id="notification-preferences-save-71" type="button" class="text-[10px] font-bold px-3 py-2 rounded-lg bg-slate-900 text-white">儲存</button></div><div class="grid sm:grid-cols-2 gap-2 mt-3 text-[11px]"><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="courseDue"> 課程期限提醒</label><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="examDue"> 考核期限提醒</label><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="retraining"> 重大版重新訓練</label><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="teacherReview"> 教師待批改提醒</label><label class="flex items-center gap-2 opacity-70"><input type="checkbox" checked disabled> 教材處理失敗（必要通知）</label><label class="flex items-center gap-2 opacity-70"><input type="checkbox" checked disabled> Worker 離線（必要通知）</label></div><p id="notification-preferences-status-71" class="text-[10px] text-slate-500 mt-2"></p></div><div id="notification-list-71" class="space-y-2 mt-3"></div><p class="text-[10px] text-slate-400 mt-3">需要處理的通知與 Email 共用同一個伺服器事件來源；公告只在站內顯示。這裡只保存你的已讀狀態與 Email 偏好，不會修改課程、成績、評量或 Worker 工作。</p>`;
+    placeSection(section);
     section.querySelector('#notification-refresh-71')?.addEventListener('click',()=>load(true));
     section.querySelector('#notification-mark-all-read-71')?.addEventListener('click',markAllRead);
     section.querySelector('#notification-email-settings-71')?.addEventListener('click',togglePreferences);
@@ -34,7 +68,7 @@
   async function readStates(rows){const keys=rows.map(row=>row.key).filter(Boolean);if(!keys.length)return{};const query=new URLSearchParams();keys.forEach(key=>query.append('key',key));const data=await getJSON(`/api/notification-states?${query.toString()}`);return data?.states||{};}
 
   function announcementRows(data){const rows=Array.isArray(data)?data:(Array.isArray(data?.items)?data.items:[]);return rows.slice(0,5).map(item=>({key:announcementKey(item),persona:'info',kind:'announcement',title:item?.title||'平台公告',detail:item?.body||'平台有新的公告。',badge:'公告',overdue:false,href:'',channels:['in_app'],emailPolicy:'none'}));}
-  function actionLabel(item){if(item.kind==='review')return'前往批改';if(item.kind==='material_failure')return'查看教材工作';if(item.kind==='retraining'||item.kind==='material')return'前往教材';if(item.kind==='course'||item.kind==='due'||item.kind==='draft')return'前往課程';if(item.kind==='exam')return'前往考核';return'前往處理';}
+  function actionLabel(item){if(item.kind==='worker_offline')return'查看 Worker 狀態';if(item.kind==='review')return'前往批改';if(item.kind==='material_failure')return'查看教材工作';if(item.kind==='retraining'||item.kind==='material')return'前往教材';if(item.kind==='course'||item.kind==='due'||item.kind==='draft')return'前往課程';if(item.kind==='exam')return'前往考核';return'前往處理';}
 
   function render(rows){
     const status=document.getElementById('notification-status-71'),list=document.getElementById('notification-list-71');if(!status||!list)return;
@@ -57,13 +91,13 @@
   async function load(force=false){
     const section=mount();if(!section)return;const status=document.getElementById('notification-status-71');if(status)status.textContent=force?'更新中…':'讀取中…';
     try{
-      const [events,announcements]=await Promise.all([getJSON('/api/training-command-center/notifications'),getJSON('/api/announcements?limit=5').catch(()=>[])]);
+      const announcementsRequest=isSystemContext()?Promise.resolve([]):getJSON('/api/announcements?limit=5').catch(()=>[]);const [events,announcements]=await Promise.all([getJSON('/api/training-command-center/notifications'),announcementsRequest]);
       const rows=[...(Array.isArray(events?.items)?events.items:[]),...announcementRows(announcements)];
       const states=await readStates(rows);currentRows=rows.map(row=>({...row,read:Boolean(states[row.key]?.read)}));render(currentRows);document.documentElement.dataset.notificationSource='training-command-center';
     }catch(error){if(error?.status===401||error?.status===403){section.classList.add('hidden');return;}if(status)status.textContent=`❌ ${error.message||'通知讀取失敗'}`;}
   }
 
-  function init(){if(mount())load(false);}
+  function init(){if(mount())load(false);window.AdminWorkspaceShell?.addAfterWorkspace?.(()=>{const section=document.getElementById(ID);if(section)placeSection(section);});}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
   window.TeacherNotificationCenter71=Object.freeze({load,loadPreferences});
 })();
