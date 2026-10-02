@@ -46,6 +46,55 @@ class NotificationEventConvergence1025Tests(unittest.TestCase):
         self.assertEqual(item["dueAt"],"2026-10-02T12:00:00+00:00")
         self.assertEqual(item["emailPolicy"],"due")
 
+    def test_system_admin_gets_worker_offline_event_and_other_roles_do_not(self):
+        system_user={**USER,"username":"sys","role":"system_admin","roles":["system_admin"]}
+        offline={
+            "available":True,
+            "thresholdSeconds":600,
+            "workers":[{"workerId":"worker-a","lastSeen":"2026-10-02T00:45:00+00:00","offlineSeconds":900,"currentJobId":""}],
+        }
+        with patch.object(events.service,"build_summary",return_value={"items":[]}), \
+             patch.object(events.dashboard_service,"dashboard_summary",return_value={"pendingExams":[]}), \
+             patch.object(events.worker_operations,"offline_worker_alerts",return_value=offline):
+            data=events.build_events(system_user,now=NOW)
+        item=next(row for row in data["items"] if row["kind"]=="worker_offline")
+        self.assertEqual(item["persona"],"system")
+        self.assertEqual(item["emailPolicy"],"once")
+        self.assertIn("email",item["channels"])
+        self.assertIn("workspace=worker",item["href"])
+        self.assertIn("persona=system",item["href"])
+
+        with patch.object(events.service,"build_summary",return_value={"items":[]}), \
+             patch.object(events.dashboard_service,"dashboard_summary",return_value={"pendingExams":[]}), \
+             patch.object(events.worker_operations,"offline_worker_alerts") as alert:
+            learner=events.build_events(USER,now=NOW)
+        alert.assert_not_called()
+        self.assertFalse(any(row["kind"]=="worker_offline" for row in learner["items"]))
+
+    def test_worker_status_lookup_failure_never_becomes_offline_notification(self):
+        system_user={**USER,"username":"sys","role":"system_admin","roles":["system_admin"]}
+        with patch.object(events.service,"build_summary",return_value={"items":[]}), \
+             patch.object(events.dashboard_service,"dashboard_summary",return_value={"pendingExams":[]}), \
+             patch.object(events.worker_operations,"offline_worker_alerts",return_value={"available":False,"thresholdSeconds":600,"workers":[]}):
+            data=events.build_events(system_user,now=NOW)
+        self.assertFalse(any(row["kind"]=="worker_offline" for row in data["items"]))
+
+    def test_worker_outage_key_is_stable_until_a_new_heartbeat_outage(self):
+        system_user={**USER,"username":"sys","role":"system_admin","roles":["system_admin"]}
+        def build(last_seen):
+            with patch.object(events.service,"build_summary",return_value={"items":[]}), \
+                 patch.object(events.dashboard_service,"dashboard_summary",return_value={"pendingExams":[]}), \
+                 patch.object(events.worker_operations,"offline_worker_alerts",return_value={
+                     "available":True,"thresholdSeconds":600,
+                     "workers":[{"workerId":"worker-a","lastSeen":last_seen,"offlineSeconds":900,"currentJobId":""}],
+                 }):
+                return next(row for row in events.build_events(system_user,now=NOW)["items"] if row["kind"]=="worker_offline")
+        first=build("2026-10-02T00:45:00+00:00")
+        replay=build("2026-10-02T00:45:00+00:00")
+        later_outage=build("2026-10-02T00:48:00+00:00")
+        self.assertEqual(first["key"],replay["key"])
+        self.assertNotEqual(first["key"],later_outage["key"])
+
     def test_email_filter_reuses_same_events_and_horizon(self):
         rows={"items":[
             {"key":"soon","kind":"course","channels":["in_app","email"],"emailPolicy":"due","dueAt":"2026-10-02T12:00:00+00:00"},
