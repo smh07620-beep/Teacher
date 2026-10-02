@@ -19,7 +19,7 @@ from teacher_app.worker import protocol as worker_protocol
 BASE_URL=os.environ.get("TEACHER_BASE_URL", "").rstrip("/")
 TOKEN=os.environ.get("MATERIAL_WORKER_TOKEN", "")
 WORKER_ID=os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{socket.gethostname()}:{os.getpid()}"
-POLL_SECONDS=max(2,min(60,int(os.environ.get("MATERIAL_WORKER_POLL_SECONDS","5"))))
+POLL_SECONDS=max(2,min(60,int(os.environ.get("MATERIAL_WORKER_POLL_SECONDS","2"))))
 REQUEST_TIMEOUT=max(10,min(600,int(os.environ.get("MATERIAL_WORKER_HTTP_TIMEOUT","120"))))
 HEARTBEAT_SECONDS=max(5,min(90,int(os.environ.get("MATERIAL_WORKER_HEARTBEAT_SECONDS","30"))))
 COMPLETE_RETRIES=4
@@ -118,6 +118,7 @@ class AutoUpdateController:
 AUTO_UPDATER=AutoUpdateController()
 
 def log(message): print(f"[teacher-local-worker {WORKER_ID}] {message}",flush=True)
+def _elapsed_ms(start): return max(0,int(round((time.monotonic()-start)*1000)))
 def _bin(env,fallback):
     value=os.environ.get(env,"").strip()
     if value:return value
