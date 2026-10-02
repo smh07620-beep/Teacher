@@ -206,6 +206,18 @@ class StoragePackageGroundworkTests(unittest.TestCase):
             "https://acct.r2.cloudflarestorage.com",
         )
 
+    def test_r2_endpoint_override_allows_only_secure_or_loopback_http(self):
+        self.assertEqual(
+            providers._r2_endpoint("acct", "http://127.0.0.1:9000"),
+            "http://127.0.0.1:9000",
+        )
+        self.assertEqual(
+            providers._r2_endpoint("acct", "https://s3.example.test"),
+            "https://s3.example.test",
+        )
+        with self.assertRaisesRegex(RuntimeError, "loopback"):
+            providers._r2_endpoint("acct", "http://s3.example.test")
+
     def test_mega_login_cache_is_canonically_owned_and_reused(self):
         providers.invalidate_mega_auth_cache()
         calls = []
