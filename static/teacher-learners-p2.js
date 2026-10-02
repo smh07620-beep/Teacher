@@ -10,6 +10,7 @@
   if (!['student.view_assigned','student.view_group','student.view_all'].some(has)) return;
 
   const ID='teacher-learners-p2';
+  const RESUME_KEY='teacher:p2:clinical-assessment-learner';
   let latest={learners:[],summary:{},scope:{}};
   let loadedAt=0;
   const TTL=30000;
@@ -68,7 +69,9 @@
         </div>
         <div class="flex flex-wrap gap-2 shrink-0">
           ${reviewButton}
-          <button type="button" data-p2-pgy="${index}" class="rounded-lg bg-indigo-700 px-2.5 py-1.5 text-[11px] font-bold text-white">進入 PGY 工作流程</button>
+          ${has('evaluation.sign')
+            ? `<button type="button" data-p2-clinical="${index}" class="rounded-lg bg-indigo-700 px-2.5 py-1.5 text-[11px] font-bold text-white">開始臨床技能評核</button>`
+            : `<button type="button" data-p2-pgy="${index}" class="rounded-lg bg-indigo-700 px-2.5 py-1.5 text-[11px] font-bold text-white">進入 PGY 工作流程</button>`}
         </div>
       </div>
     </article>`;
@@ -98,6 +101,7 @@
       <div class="mt-3 space-y-2">${rows.length?rows.map(learnerRow).join(''):'<div class="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500">目前沒有伺服器指派給你的學員。</div>'}</div>`;
     section.querySelector('#teacher-learners-refresh-p2')?.addEventListener('click',()=>load(true));
     section.querySelectorAll('[data-p2-results]').forEach(button=>button.addEventListener('click',openResults));
+    section.querySelectorAll('[data-p2-clinical]').forEach(button=>button.addEventListener('click',openClinicalAssessment));
     section.querySelectorAll('[data-p2-pgy]').forEach(button=>button.addEventListener('click',openPgy));
   }
 
@@ -131,9 +135,55 @@
     if(typeof window.renderAdminTable==='function')await window.renderAdminTable();
   }
 
+  async function enterClinicalAssessment(item){
+    if(!item)return;
+    if(typeof currentTrainingArea!=='undefined'&&currentTrainingArea!=='pgy'){
+      try{sessionStorage.setItem(RESUME_KEY,String(item.username||''));}catch(_){}
+      const url=new URL(window.location.href);
+      url.searchParams.set('area','pgy');
+      url.searchParams.set('group',item.group||'grpBio');
+      url.searchParams.set('admin','1');
+      url.searchParams.set('workspace','assessment');
+      url.searchParams.set('persona','teacher');
+      url.searchParams.set('from','teacher-learners');
+      window.location.assign(`${url.pathname}${url.search}${url.hash}`);
+      return;
+    }
+    if(typeof switchGroup==='function'&&item.group) switchGroup(item.group);
+    await window.switchAdminWorkspace?.('teacher',true);
+    await window.switchTeacherMode?.('pgy');
+    if(typeof initPgyAssessmentCenter==='function') await initPgyAssessmentCenter();
+    const name=document.getElementById('pgy-assess-name');
+    const empId=document.getElementById('pgy-assess-empid');
+    if(name)name.value=item.name||'';
+    if(empId)empId.value=item.empId||'';
+    if(typeof selectPgyAssessmentType==='function')selectPgyAssessmentType('dops');
+    const status=document.getElementById('pgy-assess-status');
+    if(status)status.textContent=`已選擇 ${item.name||item.username}；請選擇評量類型並完成各項評分。`;
+    document.getElementById('panel-assessment')?.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  async function openClinicalAssessment(event){
+    const item=latest.learners?.[Number(event.currentTarget?.dataset?.p2Clinical)];
+    await enterClinicalAssessment(item);
+  }
+
   async function openPgy(){
     await window.switchAdminWorkspace?.('teacher',true);
     await window.switchTeacherMode?.('pgy');
+  }
+
+  async function resumeClinicalAssessment(){
+    const params=new URLSearchParams(window.location.search);
+    if(params.get('from')!=='teacher-learners')return;
+    let username='';
+    try{username=String(sessionStorage.getItem(RESUME_KEY)||'');sessionStorage.removeItem(RESUME_KEY);}catch(_){}
+    if(!username)return;
+    try{
+      const data=await getJSON('/api/training-command-center/teacher-learners');
+      const item=(Array.isArray(data?.learners)?data.learners:[]).find(row=>String(row?.username||'')===username);
+      if(item)await enterClinicalAssessment(item);
+    }catch(_){}
   }
 
   function refreshPlacement(){
@@ -144,9 +194,9 @@
   }
 
   if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',()=>{ensureSection();load(false);},{once:true});
+    document.addEventListener('DOMContentLoaded',()=>{ensureSection();load(false);resumeClinicalAssessment();},{once:true});
   }else{
-    ensureSection();load(false);
+    ensureSection();load(false);resumeClinicalAssessment();
   }
   window.AdminWorkspaceShell?.addAfterWorkspace?.(()=>refreshPlacement());
   window.TeacherLearnersP2=Object.freeze({load});
