@@ -44,6 +44,14 @@
     return button;
   }
 
+  function personaSwitcherNeedsRepair(host) {
+    if (!host) return true;
+    const labels = [...host.querySelectorAll('button')].map(button => String(button.textContent || ''));
+    if (canLearn && !labels.some(label => label.includes('我的學習'))) return true;
+    if (canTeach && !labels.some(label => label.includes('教師工作區'))) return true;
+    return false;
+  }
+
   function ensurePersonaSwitcher() {
     const choices = [];
     if (canLearn) choices.push('learning');
@@ -83,6 +91,20 @@
       }));
     }
     host.replaceChildren(...expected);
+
+    if (!host.dataset.teacher1014ObserveBound) {
+      host.dataset.teacher1014ObserveBound = '1';
+      new MutationObserver(() => {
+        if (personaSwitcherNeedsRepair(host)) ensurePersonaSwitcher();
+      }).observe(host, {childList: true});
+    }
+    if (!actions.dataset.teacher1014PersonaObserveBound) {
+      actions.dataset.teacher1014PersonaObserveBound = '1';
+      new MutationObserver(() => {
+        const current = document.getElementById('teacher-persona-switch-1014');
+        if (!current || personaSwitcherNeedsRepair(current)) ensurePersonaSwitcher();
+      }).observe(actions, {childList: true});
+    }
   }
 
   function makeNavButton(id, label, handler) {
