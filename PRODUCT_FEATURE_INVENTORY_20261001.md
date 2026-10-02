@@ -31,8 +31,8 @@ removed/converged rather than promoted:
 
 | Duplicate | Canonical owner | Decision / next action |
 | --- | --- | --- |
-| `static/portal-v56.js` writes the learner progress card from `/api/dashboard/me` while `static/learning-progress-convergence-1025.js` owns the canonical progress projection | `/api/training-command-center/progress` + `learning-progress-convergence-1025.js` | **重複** — legacy write is compatibility fallback only; canonical projection must be the final visible owner and the old write should be retired during Phase D. |
-| `static/portal-v56.js` can render its historical pending-course/exam block while `static/learner-todo-convergence-1025.js` owns the canonical learner todo projection | `/api/training-command-center` + `learner-todo-convergence-1025.js` | **重複** — canonical learner todo must always win; retire the old task writer during Phase D after browser gates prove parity. |
+| Historical `static/portal-v56.js` learner-progress writer | `/api/training-command-center/progress` + `learning-progress-convergence-1025.js` | **廢棄（已完成）** — Phase D removed the portal dashboard writer and its delayed overwrite workaround; canonical progress is the only visible owner. |
+| Historical `static/portal-v56.js` pending-course/exam renderer | `/api/training-command-center` + `learner-todo-convergence-1025.js` | **廢棄（已完成）** — Phase D removed the duplicate portal task renderer; canonical learner todo owns the count, category counts and rows. |
 | Legacy root compatibility modules (`app.py`, `pgy_frontend.py`, `question_bank_68.py`, `free_worker_67.py`, `health_65.py`, `external_media_68.py`, `exam_integrity.py`) | `teacher_app.*` canonical packages and `teacher_app.frontend.assets` | **重複 / 隱藏** — keep only while compatibility callers exist; no new product ownership may be added. |
 
 ## Explicit retired surfaces — 廢棄
