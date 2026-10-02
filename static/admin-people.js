@@ -38,13 +38,29 @@
         <div class="flex items-end"><button data-csp-click="createAdminUserAccount()" class="w-full bg-teal-700 hover:bg-teal-600 text-white text-sm font-bold px-4 py-3 rounded-xl">建立登入帳號</button></div>
       </div></div>`;
     host.appendChild(panel);
+    if(!host.dataset.teacherPeopleCreateObserveBound){
+      host.dataset.teacherPeopleCreateObserveBound='1';
+      new MutationObserver(()=>{
+        if(!document.getElementById('admin-user-create-panel')) ensureAdminUserCreatePanel();
+      }).observe(host,{childList:true});
+    }
     return panel;
+  }
+
+  function bindAdminUserCreatePanelRecovery(){
+    const host=document.querySelector('#admin-section-people .admin-people-workspace');
+    if(!host||host.dataset.teacherPeopleCreateObserveBound)return;
+    host.dataset.teacherPeopleCreateObserveBound='1';
+    new MutationObserver(()=>{
+      if(!document.getElementById('admin-user-create-panel')) ensureAdminUserCreatePanel();
+    }).observe(host,{childList:true});
   }
 
   // Static system.html owns this form. This guard is recovery-only: if an
   // asynchronous presentation layer removes it, restore the canonical IDs
   // before multi-role/account scripts enhance the people workspace.
   ensureAdminUserCreatePanel();
+  bindAdminUserCreatePanelRecovery();
 
   function adminProfileTags(value){
     const raw=Array.isArray(value)?value:String(value||'').split(/[,，、;；\n]+/);
