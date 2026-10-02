@@ -9,7 +9,7 @@
   const has = permission => typeof R.hasPermission === 'function' && R.hasPermission(permission);
   const hasTeachingRole = ['clinical_teacher','group_leader','education_admin'].some(role => roles.has(role));
   const canTeach = hasTeachingRole && (has('course.manage') || has('material.manage') || has('question.manage') || has('exam.manage'));
-  const canLearn = has('course.view') && has('material.read') && has('exam.take') && has('progress.self.read');
+  const canLearn = roles.has('student') || (has('course.view') && has('material.read') && has('exam.take') && has('progress.self.read'));
   const canSystem = roles.has('system_admin') && has('system.manage');
   const params = new URLSearchParams(window.location.search);
   const adminPage = params.get('admin') === '1';
