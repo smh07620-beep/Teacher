@@ -20,7 +20,8 @@ class Teacher1014MvpAcceptanceTests(unittest.TestCase):
     def test_acceptance_persona_switch_keeps_one_account_with_separate_surfaces(self):
         for label in ("📚 我的學習", "👨‍🏫 教師工作區", "⚙ 系統管理"):
             self.assertIn(label, self.workspace)
-        self.assertIn("const canLearn = has('course.view')", self.workspace)
+        self.assertIn("const canLearn = roles.has('student') ||", self.workspace)
+        self.assertIn("has('course.view') && has('material.read') && has('exam.take') && has('progress.self.read')", self.workspace)
         self.assertIn("const canTeach = hasTeachingRole", self.workspace)
         self.assertIn("const canSystem = roles.has('system_admin')", self.workspace)
         self.assertNotIn("X-Admin-Key", self.workspace)
