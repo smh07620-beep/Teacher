@@ -75,14 +75,23 @@ class WorkerMaterialStorageAdapter:
         if not sys.platform.startswith("win"):
             return []
         path_module = self._megacmd_path_module()
-        return [
-            path_module.join(base, "MEGAcmd")
-            for base in (
-                os.environ.get("ProgramFiles", ""),
-                os.environ.get("ProgramFiles(x86)", ""),
-            )
-            if base
-        ]
+        bases = (
+            os.environ.get("LOCALAPPDATA", ""),
+            os.environ.get("ProgramFiles", ""),
+            os.environ.get("ProgramFiles(x86)", ""),
+        )
+        values: list[str] = []
+        seen: set[str] = set()
+        for base in bases:
+            if not base:
+                continue
+            directory = path_module.join(base, "MEGAcmd")
+            normalized = path_module.normcase(path_module.normpath(directory))
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            values.append(directory)
+        return values
 
     def _megacmd_env(self) -> dict[str, str]:
         env = os.environ.copy()

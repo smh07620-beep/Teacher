@@ -219,6 +219,27 @@ class StoragePackageGroundworkTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "loopback"):
             providers._r2_endpoint("acct", "http://s3.example.test")
 
+    def test_worker_finds_per_user_windows_megacmd_install(self):
+        runtime = WorkerMaterialStorageAdapter()
+        with patch("teacher_app.storage.worker_runtime.sys.platform", "win32"), \
+             patch.dict(
+                 "teacher_app.storage.worker_runtime.os.environ",
+                 {
+                     "LOCALAPPDATA": r"C:\Users\hmisa\AppData\Local",
+                     "ProgramFiles": r"C:\Program Files",
+                     "ProgramFiles(x86)": r"C:\Program Files (x86)",
+                 },
+                 clear=False,
+             ):
+            directories = runtime._megacmd_windows_dirs()
+
+        self.assertEqual(
+            directories[0],
+            r"C:\Users\hmisa\AppData\Local\MEGAcmd",
+        )
+        self.assertIn(r"C:\Program Files\MEGAcmd", directories)
+        self.assertIn(r"C:\Program Files (x86)\MEGAcmd", directories)
+
     def test_worker_mega_startup_preflight_requires_real_write_and_delete(self):
         runtime = WorkerMaterialStorageAdapter()
         seen = {}

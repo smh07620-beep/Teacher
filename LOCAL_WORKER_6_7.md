@@ -130,6 +130,13 @@ session 與寫入／刪除權限。只要 preflight 未通過，Worker 仍會送
 顯示錯誤，但不會 claim 新教材，因此 Queue / R2 staging 不會因儲存環境問題消耗
 重試次數。Web 的 Worker / Job 狀態會直接顯示「儲存未就緒」與 bounded 錯誤原因。
 
+Windows 的 MEGAcmd 也常以 per-user 方式安裝在
+`%LOCALAPPDATA%\MEGAcmd`。Worker 會優先搜尋該路徑，再搜尋
+`Program Files\MEGAcmd`，因此不需要另外把 MEGAcmd 加進全域 PATH。Task
+Scheduler 必須使用實際安裝 MEGAcmd 的 Windows 使用者；若改用 SYSTEM，
+`%LOCALAPPDATA%` 會變成 `C:\Windows\System32\config\systemprofile\AppData\Local`
+而找不到使用者的 `MEGAcmdServer.exe`。
+
 Windows 的官方 MEGAcmd 使用每個 Windows 使用者自己的背景 Server。Task Scheduler
 冷啟動後，第一次 `mega-whoami` / `mega-login` 可能只回覆
 `MEGAcmd Server not running. Initiating in the background...`。Worker 會把這個
