@@ -19,12 +19,14 @@ foreach ($marker in @(
   "[System.Diagnostics.EventLog]::LogNameFromSourceName",
   "New-EventLog -LogName `$eventLog -Source `$eventSource",
   "New-ScheduledTaskTrigger -AtStartup",
+  "New-ScheduledTaskTrigger -AtLogOn -User `$TaskUser",
   "run_material_worker_autostart.ps1",
   "-WorkingDirectory `$root",
   "-RestartCount 5",
   "-RestartInterval (New-TimeSpan -Minutes 1)",
   "-StartWhenAvailable",
   "-LogonType ServiceAccount",
+  "-LogonType Interactive",
   "Normalize-ServiceAccount",
   "Get-Credential",
   "Register-ScheduledTask",
@@ -39,7 +41,6 @@ foreach ($marker in @(
 }
 
 foreach ($forbidden in @(
-  "-AtLogOn",
   "-InputObject `$task",
   "MATERIAL_WORKER_TOKEN",
   "MEGA_PASSWORD",
@@ -54,15 +55,26 @@ foreach ($forbidden in @(
   }
 }
 
-$serviceStart = $source.IndexOf('if ($ServiceAccount) {')
+$interactiveStart = $source.IndexOf('if ($InteractiveLogon) {')
+$serviceStart = $source.IndexOf('} elseif ($ServiceAccount) {', $interactiveStart)
 $passwordStart = $source.IndexOf('} else {', $serviceStart)
 $footerStart = $source.IndexOf('if ($registered) {', $passwordStart)
-if ($serviceStart -lt 0 -or $passwordStart -lt 0 -or $footerStart -lt 0) {
-  throw "Could not locate the service/password registration branches."
+if ($interactiveStart -lt 0 -or $serviceStart -lt 0 -or $passwordStart -lt 0 -or $footerStart -lt 0) {
+  throw "Could not locate the interactive/service/password registration branches."
 }
+$interactiveBlock = $source.Substring($interactiveStart, $serviceStart - $interactiveStart)
 $serviceBlock = $source.Substring($serviceStart, $passwordStart - $serviceStart)
 $passwordBlock = $source.Substring($passwordStart, $footerStart - $passwordStart)
 
+if (-not $interactiveBlock.Contains('-LogonType Interactive') -or -not $interactiveBlock.Contains('-Principal $taskPrincipal')) {
+  throw "Interactive registration must use an Interactive principal."
+}
+if (-not $interactiveBlock.Contains('New-ScheduledTaskTrigger -AtLogOn -User $TaskUser')) {
+  throw "Interactive registration must use an at-logon trigger."
+}
+if ($interactiveBlock.Contains('-Password $plainPassword') -or $interactiveBlock.Contains('Get-Credential')) {
+  throw "Interactive registration must not request or store a Windows password."
+}
 if (-not $serviceBlock.Contains('-Principal $taskPrincipal')) {
   throw "Service-account registration must use the -Principal parameter set."
 }

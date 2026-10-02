@@ -130,6 +130,16 @@ session 與寫入／刪除權限。只要 preflight 未通過，Worker 仍會送
 顯示錯誤，但不會 claim 新教材，因此 Queue / R2 staging 不會因儲存環境問題消耗
 重試次數。Web 的 Worker / Job 狀態會直接顯示「儲存未就緒」與 bounded 錯誤原因。
 
+若院內 Windows 會自動登入固定操作帳號，而且不知道該帳號密碼，可使用
+`-InteractiveLogon`。此模式不儲存 Windows 密碼，會在該使用者登入後啟動 Worker：
+
+```powershell
+.\install_material_worker_task.ps1 -TaskUser "$env:USERDOMAIN\$env:USERNAME" -InteractiveLogon -StartNow
+```
+
+Worker 是長駐程序；若 Python Worker 意外以 exit code 0 結束，supervisor 也會視為
+異常並依既有 restart policy 重啟，不再讓 Task Scheduler 靜默回到 Ready。
+
 Windows 的 MEGAcmd 也常以 per-user 方式安裝在
 `%LOCALAPPDATA%\MEGAcmd`。Worker 會優先搜尋該路徑，再搜尋
 `Program Files\MEGAcmd`，因此不需要另外把 MEGAcmd 加進全域 PATH。Task

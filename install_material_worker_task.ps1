@@ -4,6 +4,7 @@ param(
   [string]$TaskUser = "",
   [pscredential]$Credential,
   [switch]$ServiceAccount,
+  [switch]$InteractiveLogon,
   [switch]$StartNow
 )
 
@@ -119,7 +120,26 @@ $settings = New-ScheduledTaskSettingsSet `
   -DontStopIfGoingOnBatteries
 
 $registered = $null
-if ($ServiceAccount) {
+if ($InteractiveLogon) {
+  if ($ServiceAccount) { throw "Do not combine -InteractiveLogon with -ServiceAccount." }
+  if ($Credential) { throw "Do not pass -Credential with -InteractiveLogon." }
+  if (-not $TaskUser) { $TaskUser = Current-TaskUser }
+  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $TaskUser
+  $taskPrincipal = New-ScheduledTaskPrincipal `
+    -UserId $TaskUser `
+    -LogonType Interactive `
+    -RunLevel Highest
+  if ($PSCmdlet.ShouldProcess($TaskName, "Register at-logon material Worker task for interactive user $TaskUser")) {
+    $registered = Register-ScheduledTask `
+      -TaskName $TaskName `
+      -Action $action `
+      -Trigger $trigger `
+      -Settings $settings `
+      -Principal $taskPrincipal `
+      -Description "Teacher local material Worker; starts after Windows interactive logon." `
+      -Force
+  }
+} elseif ($ServiceAccount) {
   if ($Credential) {
     throw "Do not pass -Credential with -ServiceAccount."
   }
@@ -179,7 +199,7 @@ if ($ServiceAccount) {
 if ($registered) {
   Write-Output "Registered scheduled task: $TaskName"
   Write-Output "Event source: TeacherMaterialWorker (Application)"
-  Write-Output "Trigger: At startup"
+  Write-Output ("Trigger: " + $(if ($InteractiveLogon) { "At logon ($TaskUser)" } else { "At startup" }))
   Write-Output "Launcher: $launcher"
   Write-Output "Task user: $TaskUser"
   Write-Output "Stable Worker ID: $stableWorkerId"

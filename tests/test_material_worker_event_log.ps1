@@ -72,6 +72,12 @@ foreach ($line in $eventCalls) {
     }
   }
 }
+if (-not $source.Contains('$env:LOCALAPPDATA') -or -not $source.Contains('Join-Path $env:LOCALAPPDATA "MEGAcmd"')) {
+  throw "Worker supervisor must discover per-user MEGAcmd installs under LOCALAPPDATA."
+}
+if (-not $source.Contains('$effectiveExit = if ($workerExit -eq 0) { 33 } else { $workerExit }')) {
+  throw "Worker supervisor must not silently terminate after an unexpected zero exit."
+}
 if ($source.Contains('New-EventLog')) {
   throw "Supervisor must not require administrative Event source creation."
 }

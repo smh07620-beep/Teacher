@@ -80,6 +80,7 @@ function Ensure-StableWorkerId {
 function Add-MegaCmdPath {
   $megaDirectories = @(
     $env:MEGACMD_PATH,
+    $(if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "MEGAcmd" }),
     $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles "MEGAcmd" }),
     $(if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} "MEGAcmd" })
   ) | Where-Object { $_ -and (Test-Path $_ -PathType Container) }
@@ -171,7 +172,6 @@ while ($true) {
     Write-Warning "Worker process launch failed; supervisor stopped."
     exit 32
   }
-  if ($workerExit -eq 0) { exit 0 }
   if ($workerExit -eq 75) {
     Write-TeacherWorkerEvent -EntryType "Information" -EventId 1010 -Message "Worker requested an approved post-update restart."
     Write-Host "Worker requested safe post-update restart."
@@ -179,13 +179,16 @@ while ($true) {
     Start-Sleep -Seconds 2
     continue
   }
+  # A scheduled material Worker is a long-lived service. A zero exit is not a
+  # successful completion; treating it as terminal silently leaves the site Offline.
+  $effectiveExit = if ($workerExit -eq 0) { 33 } else { $workerExit }
   $crashRestarts++
   if ($crashRestarts -gt $maxCrashRestarts) {
     Write-TeacherWorkerEvent -EntryType "Error" -EventId 3004 -Message "Worker restart limit exhausted; supervisor stopped to avoid a restart loop."
-    Write-Warning "Worker crashed too many times; stopping to avoid a restart loop."
-    exit $workerExit
+    Write-Warning "Worker exited too many times; stopping to avoid a restart loop."
+    exit $effectiveExit
   }
-  Write-TeacherWorkerEvent -EntryType "Warning" -EventId 2100 -Message "Worker exited abnormally and will be restarted by the supervisor."
+  Write-TeacherWorkerEvent -EntryType "Warning" -EventId 2100 -Message "Worker exited and will be restarted by the supervisor."
   Write-Warning "Worker exited with code $workerExit; restarting in 5 seconds ($crashRestarts/$maxCrashRestarts)."
   Start-Sleep -Seconds 5
 }
