@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from teacher_app.common import audit
 from teacher_app.common import db as common_db
 from teacher_app.common import scope
-from teacher_app.common.auth import has_role
+from teacher_app.common.auth import has_role, normalize_role
 
 
 PGY_ASSESSMENT_TYPES = {
@@ -360,27 +360,91 @@ def list_assessments(
 ) -> list[dict]:
     if not admin_override and not user:
         raise AssessmentError("請先登入後查看評量紀錄", 401)
-    role = normalize_role((user or {}).get("role"))
-    if not admin_override and role == "student":
-        emp_id = str((user or {}).get("empId", ""))
-    scoped_group = ""
-    if not admin_override and role in {"clinical_teacher", "group_leader"}:
-        own_group = scope.normalize_group((user or {}).get("preferredGroup"))
-        # Preserve the legacy distinction between an omitted group query and an
-        # explicitly empty `?group=` query.  Omitted means "my own group";
-        # explicit empty normalizes to the platform default group.
-        requested_group = scope.normalize_group(own_group if group is None else group)
-        if requested_group != own_group:
-            raise AssessmentError("權限不足：臨床教師只能查看自己負責組別的評量。", 403)
-        scoped_group = own_group
+
+    if admin_override:
+        mode = "organization"
+    elif has_role(user, "education_admin"):
+        mode = "organization"
+    elif has_role(user, "group_leader"):
+        mode = "group"
+    elif has_role(user, "clinical_teacher"):
+        mode = "assigned"
+    elif has_role(user, "student"):
+        mode = "self"
+    else:
+        raise AssessmentError("權限不足：此帳號不可查看臨床評量紀錄。", 403)
+
+    requested_emp_id = str(emp_id or "").strip()[:100]
+    requested_group = (
+        scope.normalize_group(group)
+        if group is not None and str(group).strip()
+        else ""
+    )
+
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
-        if scoped_group:
-            rows = conn.execute(f"SELECT * FROM pgy_assessments WHERE group_key={ph} ORDER BY created_at DESC", (scoped_group,)).fetchall()
-        elif emp_id:
-            rows = conn.execute(f"SELECT * FROM pgy_assessments WHERE emp_id={ph} ORDER BY created_at DESC", (emp_id,)).fetchall()
+        params: list[Any] = []
+        clauses: list[str] = []
+
+        if mode == "self":
+            own_emp_id = str((user or {}).get("empId") or (user or {}).get("emp_id") or "").strip()[:100]
+            if not own_emp_id:
+                return []
+            clauses.append(f"p.emp_id={ph}")
+            params.append(own_emp_id)
+        elif mode == "assigned":
+            own_group = scope.normalize_group(
+                (user or {}).get("preferredGroup")
+                or (user or {}).get("preferred_group")
+            )
+            if requested_group and requested_group != own_group:
+                raise AssessmentError(
+                    "權限不足：臨床教師只能查看自己負責組別的評量。",
+                    403,
+                )
+            clauses.append(f"p.group_key={ph}")
+            params.append(own_group)
+            clauses.append(
+                "EXISTS ("
+                "SELECT 1 FROM user_accounts u "
+                "JOIN pgy_assignments a ON a.learner_username=u.username "
+                f"WHERE u.emp_id=p.emp_id AND a.teacher_username={ph} "
+                "AND a.training_area='pgy' AND a.group_key=p.group_key "
+                "AND a.status<>'cancelled'"
+                ")"
+            )
+            params.append(_username((user or {}).get("username")))
+            if requested_emp_id:
+                clauses.append(f"p.emp_id={ph}")
+                params.append(requested_emp_id)
+        elif mode == "group":
+            own_group = scope.normalize_group(
+                (user or {}).get("preferredGroup")
+                or (user or {}).get("preferred_group")
+            )
+            if requested_group and requested_group != own_group:
+                raise AssessmentError(
+                    "權限不足：組長只能查看自己組別的臨床評量。",
+                    403,
+                )
+            clauses.append(f"p.group_key={ph}")
+            params.append(own_group)
+            if requested_emp_id:
+                clauses.append(f"p.emp_id={ph}")
+                params.append(requested_emp_id)
         else:
-            rows = conn.execute("SELECT * FROM pgy_assessments ORDER BY created_at DESC").fetchall()
+            if requested_group:
+                clauses.append(f"p.group_key={ph}")
+                params.append(requested_group)
+            if requested_emp_id:
+                clauses.append(f"p.emp_id={ph}")
+                params.append(requested_emp_id)
+
+        sql = "SELECT p.* FROM pgy_assessments p"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY p.created_at DESC"
+        rows = conn.execute(sql, tuple(params)).fetchall()
     return [assessment_to_dict(row) for row in rows]
 
 
