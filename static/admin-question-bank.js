@@ -17,6 +17,7 @@
       'admin-quiz-draft-count':draft,
     };
     Object.entries(values).forEach(([id,value])=>{const node=document.getElementById(id);if(node)node.textContent=String(value);});
+    document.querySelector('#admin-quiz-workspace .admin-quiz-summary-grid')?.setAttribute('data-product-section','overview');
   }
 
   window.groupOptionsForArea = function(area){
@@ -144,6 +145,7 @@
     const box=document.getElementById('admin-quiz-categories-list');if(!box)return;
     const filtered=filteredQuizCategories78(),shown=filtered.slice(0,quizListView78.visible);
     renderQuizOverview78();
+    box.dataset.productSection='current-work';
     box.innerHTML=`<div data-quiz-list-tools-78 class="sticky top-0 z-10 rounded-xl border border-slate-200 bg-white/95 p-3 backdrop-blur"><div class="grid gap-2 sm:grid-cols-[1fr_150px_auto]"><input value="${escapeHtml(quizListView78.query)}" data-csp-input="teacher78FilterQuizCategories(this.value)" placeholder="🔎 搜尋考卷名稱…" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"><select data-csp-change="teacher78SetQuizStatus(this.value)" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="all" ${quizListView78.status==='all'?'selected':''}>全部狀態</option><option value="active" ${quizListView78.status==='active'?'selected':''}>已發布</option><option value="approved" ${quizListView78.status==='approved'?'selected':''}>已審核</option><option value="draft" ${quizListView78.status==='draft'?'selected':''}>草稿</option></select><span class="self-center text-xs text-slate-400">${filtered.length} 份考卷</span></div></div><div data-quiz-list-items-78 class="space-y-2">${shown.length?shown.map(quizCategoryCardHTML).join(''):'<div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-500">沒有符合條件的考卷。</div>'}</div>${shown.length<filtered.length?`<button type="button" data-csp-click="teacher78LoadMoreQuizCategories()" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">顯示更多（尚有 ${filtered.length-shown.length} 份）</button>`:''}`;
     window.exposeQuestionDeleteActions(box);
     updateQuizWorkspacePresentation();
