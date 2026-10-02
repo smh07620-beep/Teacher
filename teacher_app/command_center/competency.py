@@ -10,7 +10,9 @@ from statistics import mean
 from typing import Any, Mapping, Optional, Sequence
 
 from teacher_app.command_center.scope import visible_learners
+from teacher_app.common.auth import has_permission
 from teacher_app.common.db import get_connection, placeholder
+from teacher_app.common.errors import ApiError
 
 
 ASSESSMENT_TYPES = (
@@ -213,6 +215,34 @@ def project_matrix(
         "learners": output,
         "interpretation": "matrix_by_formal_assessment_tool",
     }
+
+
+def build_teacher_competency_matrix(
+    user: Optional[Mapping[str, Any]],
+    *,
+    now: Optional[dt.datetime] = None,
+) -> dict[str, Any]:
+    """Teacher-facing formal assessment tracking with canonical learner scope."""
+    if not user:
+        raise ApiError(
+            "LOGIN_REQUIRED",
+            "請先登入後再查看能力追蹤。",
+            status=401,
+            extra={"loginRequired": True},
+        )
+    if not any(
+        has_permission(user, permission)
+        for permission in ("student.view_assigned", "student.view_group", "student.view_all")
+    ):
+        raise ApiError(
+            "FORBIDDEN",
+            "此帳號沒有教師能力追蹤檢視權限。",
+            status=403,
+        )
+    data = build_competency_matrix(user, now=now)
+    data["source"] = "formal-pgy-assessments"
+    data["interpretation"] = "formal_assessment_tracking_without_mastery_score"
+    return data
 
 
 def build_competency_matrix(user: Optional[Mapping[str, Any]], *, now: Optional[dt.datetime] = None) -> dict[str, Any]:
