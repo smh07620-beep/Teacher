@@ -143,6 +143,7 @@ implementation. The active human job still belongs to one of the four areas abov
 
 ## Current Phase B status
 
-**Operational.** Existing convergence assets and regressions already enforce focused
+**Complete.** Existing convergence assets and regressions enforce focused
 teacher/system navigation and learner-first portal behavior. This document is the
-formal IA contract used to prevent future navigation drift while Phase C/D continue.
+formal IA contract used to prevent future navigation drift; later phases may refine
+presentation but may not create a fifth product area.
