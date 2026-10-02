@@ -11,11 +11,13 @@ import hashlib
 from typing import Any, Mapping, Optional
 
 from teacher_app.command_center import dashboard_service, service
+from teacher_app.common.auth import has_role
+from teacher_app.worker import operations as worker_operations
 from teacher_app.common.errors import ApiError
 from teacher_app.exams import windows as exam_windows
 
 
-EMAIL_ONCE_KINDS = {"retraining", "review", "material_failure"}
+EMAIL_ONCE_KINDS = {"retraining", "review", "material_failure", "worker_offline"}
 EMAIL_DUE_KINDS = {"course", "exam", "due"}
 
 
@@ -46,6 +48,8 @@ def _href(item: Mapping[str, Any]) -> str:
     target = str(item.get("target") or "")
     resource_id = str(item.get("resourceId") or item.get("id") or "")
     course_id = str(item.get("courseId") or "")
+    if target == "worker" or item.get("kind") == "worker_offline":
+        return "/system?admin=1&workspace=worker&persona=system&from=notification-center"
     if target == "pgy-workflow":
         return f"/system?area=pgy&group={group or 'grpNew'}&module=assessment&from=notification-center"
     if target == "exam" or item.get("kind") == "exam":
@@ -75,6 +79,7 @@ def _badge(kind: str, overdue: bool, status: str) -> str:
         "due": "即將到期",
         "draft": "草稿",
         "material": "教材",
+        "worker_offline": "Worker 離線",
     }.get(kind, "待辦")
 
 
@@ -149,6 +154,48 @@ def _exam_deadline_events(user: Mapping[str, Any], current: dt.datetime) -> list
     return values
 
 
+def _worker_offline_events(
+    user: Mapping[str, Any],
+    current: dt.datetime,
+) -> list[dict[str, Any]]:
+    if not has_role(user, "system_admin"):
+        return []
+    status = worker_operations.offline_worker_alerts(now=current)
+    if not status.get("available"):
+        return []
+    threshold_minutes = max(1, int(status.get("thresholdSeconds") or 0) // 60)
+    output = []
+    for worker in status.get("workers") or []:
+        worker_id = str(worker.get("workerId") or "").strip()
+        last_seen = str(worker.get("lastSeen") or "").strip()
+        if not worker_id or not last_seen:
+            continue
+        offline_minutes = max(1, int(worker.get("offlineSeconds") or 0) // 60)
+        item = {
+            "id": worker_id,
+            "resourceId": worker_id,
+            "persona": "system",
+            "domain": "operations",
+            "kind": "worker_offline",
+            "title": "教材 Worker 已離線",
+            # Last-seen is part of the status so a recovered Worker can create a
+            # new stable event key if a later outage occurs.
+            "status": f"offline:{last_seen}",
+            "statusLabel": "Worker 離線",
+            "group": "",
+            "area": "internal",
+            "dueAt": "",
+            "overdue": False,
+            "detail": (
+                f"{worker_id} 已超過 {threshold_minutes} 分鐘未回報心跳；"
+                f"目前約離線 {offline_minutes} 分鐘。"
+            ),
+            "target": "worker",
+        }
+        output.append(_event(item))
+    return output
+
+
 def build_events(user: Optional[Mapping[str, Any]], *, now: Optional[dt.datetime] = None) -> dict[str, Any]:
     if not user:
         raise ApiError("LOGIN_REQUIRED", "請先登入後再查看通知。", status=401, extra={"loginRequired": True})
@@ -158,6 +205,7 @@ def build_events(user: Optional[Mapping[str, Any]], *, now: Optional[dt.datetime
     current = current.astimezone(dt.timezone.utc)
     command = service.build_summary(user, now=current)
     events = [_event(item) for item in command.get("items") or []]
+    events.extend(_worker_offline_events(user, current))
 
     # Command-center intentionally de-duplicates exams covered by a course.  A
     # deadline remains independently important for notification/email purposes,
@@ -179,7 +227,7 @@ def build_events(user: Optional[Mapping[str, Any]], *, now: Optional[dt.datetime
 
     events.sort(key=lambda row: (
         0 if row.get("overdue") else 1,
-        0 if row.get("kind") in {"review", "material_failure"} else 1,
+        0 if row.get("kind") in {"review", "material_failure", "worker_offline"} else 1,
         _parse_datetime(row.get("dueAt")) or dt.datetime.max.replace(tzinfo=dt.timezone.utc),
         str(row.get("title") or ""),
     ))
