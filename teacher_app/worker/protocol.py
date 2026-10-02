@@ -12,7 +12,7 @@ from teacher_app.worker import repository
 
 CLIENT_FINGERPRINT_STRATEGY = "sha256-part-tree-v1"
 PUBLISH_KEY_VERSION = "material-publish-v1"
-PUBLISH_BACKENDS = frozenset({"mega", "gdrive"})
+PUBLISH_BACKENDS = frozenset({"mega", "gdrive", "r2"})
 
 
 def now() -> str:
