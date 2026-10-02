@@ -112,6 +112,7 @@ ASSET_MANIFEST = {
             "/teacher-persona-isolation-1014.js",
             "/product-convergence-101.js",
             "/teacher-action-queue-1024.js",
+            "/teacher-learners-p2.js",
         ),
     },
 }
