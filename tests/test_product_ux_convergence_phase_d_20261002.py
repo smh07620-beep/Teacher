@@ -15,6 +15,7 @@ class ProductUxConvergencePhaseDTests(unittest.TestCase):
         cls.teacher = ROOT.joinpath("static", "teacher-workspace-1014.js").read_text(encoding="utf-8")
         cls.course = ROOT.joinpath("static", "admin-course-material.js").read_text(encoding="utf-8")
         cls.quiz = ROOT.joinpath("static", "admin-question-bank.js").read_text(encoding="utf-8")
+        cls.home = ROOT.joinpath("static", "index.html").read_text(encoding="utf-8")
 
     def test_teacher_action_queue_follows_active_workspace_without_duplicate_state_owner(self):
         for marker in (
@@ -46,6 +47,12 @@ class ProductUxConvergencePhaseDTests(unittest.TestCase):
         self.assertIn("歷史紀錄", self.teacher)
         self.assertIn("待批改項目改由上方「需要我處理」直接進入", self.teacher)
         self.assertIn("switchAdminWorkspace?.('results', true)", self.teacher)
+
+    def test_learner_home_uses_the_same_four_section_contract(self):
+        self.assertIn('id="today-learning" data-product-section="overview"', self.home)
+        self.assertIn('id="groups" data-product-section="current-work"', self.home)
+        self.assertIn('data-product-section="history" class="v56-panel phase3-content-panel"', self.home)
+        self.assertIn('id="pending-exams" data-product-section="needs-action"', self.home)
 
     def test_phase_d_layers_load_after_existing_workspace_owners(self):
         body = ASSET_MANIFEST["system"]["body"]
