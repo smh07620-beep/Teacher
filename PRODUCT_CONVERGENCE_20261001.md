@@ -126,6 +126,13 @@ A green unit/API suite is no longer sufficient evidence to call a workflow compl
 - Revisit deferred teacher capabilities (`我的學員`, clinical skill evaluation, competency tracking, teaching analytics) only after P0 Golden Paths are operational.
 - Promote Beta features to primary navigation only after meeting the Definition of Done.
 
+### P3 — hospital production acceptance
+
+- Make the ordinary teacher material-upload surface use the same completion gate as the course wizard: R2/direct receipt is only the first stage, and the teacher is told it is safe to leave only after every queued Material Worker job is formally `completed`.
+- Surface hospital Worker protocol incompatibility inline during the upload wait. An incompatible Worker may heartbeat for diagnostics but must not claim new jobs; queued material remains safe until the Worker is upgraded.
+- Keep R2 staging on retry/failure and tell the teacher to reprocess the existing job instead of blindly re-uploading the same file.
+- Keep Web releases independent from the physical hospital checkout: a normal Web deployment must not silently overwrite the hospital Worker. Local Worker upgrades remain an explicit operator action followed by a Worker restart.
+
 ## Stage 1 implementation in this change
 
 `static/product-convergence-101.js` is a presentation-only convergence layer loaded after the existing workspace/persona scripts. It intentionally reuses existing workspace functions instead of rebuilding architecture:

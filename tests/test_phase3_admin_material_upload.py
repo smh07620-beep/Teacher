@@ -23,6 +23,7 @@ class Phase3AdminMaterialUploadTests(unittest.TestCase):
             'sha256File',
             'directR2MaterialUpload',
             'adminUploadMaterials',
+            'waitForAdminMaterialJobs',
             'editAdminMaterial',
             'toggleAdminMaterial',
             'deleteAdminMaterial',
@@ -113,6 +114,23 @@ const cryptoNode = require('crypto');
         self.assertNotIn('DIRECT_UPLOAD_THRESHOLD', source)
         self.assertNotIn("fetch('/api/material-upload/init'", source)
         self.assertNotIn('DIRECT_VIDEO_EXT', source)
+
+    def test_upload_waits_for_formal_worker_completion_before_allowing_teacher_to_leave(self):
+        source = ROOT.joinpath('static/admin-material-upload.js').read_text(encoding='utf-8')
+        for marker in (
+            "window.addEventListener('beforeunload',materialUploadLeaveGuard)",
+            "window.waitForAdminMaterialJobs",
+            "/api/material-jobs/'+encodeURIComponent(id)",
+            "protocolCompatible===false",
+            "請等到全部教材顯示「已完成」再離開",
+            "R2 接收完成不等於教材已完成",
+            "已正式完成並寫入教材清單",
+            "現在可以安全離開或返回課程",
+            "R2 原始檔仍保留，可直接重新處理",
+        ):
+            self.assertIn(marker, source)
+        self.assertNotIn('現在可切換頁面或關閉後台視窗，工作會繼續', source)
+        self.assertNotIn('你可以離開此頁；完成後會自動出現在教材清單', source)
 
     def test_direct_upload_keeps_atlas_metadata_fields(self):
         source = ROOT.joinpath('static/admin-material-upload.js').read_text(encoding='utf-8')
