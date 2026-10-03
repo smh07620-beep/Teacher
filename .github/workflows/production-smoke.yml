@@ -7,15 +7,17 @@ name: Production smoke acceptance
 # the deployment-precondition check suite.
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
+  # The probe may wait up to 12 minutes for checksPass-triggered Render deploys.
+  # Run every 15 minutes and never cancel an in-flight acceptance window.
   group: production-smoke-acceptance
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   production-smoke:
