@@ -18,7 +18,8 @@ from teacher_app.worker import protocol as worker_protocol
 
 BASE_URL=os.environ.get("TEACHER_BASE_URL", "").rstrip("/")
 TOKEN=os.environ.get("MATERIAL_WORKER_TOKEN", "")
-WORKER_ID=os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{socket.gethostname()}:{os.getpid()}"
+_FALLBACK_MACHINE=re.sub(r"[^A-Za-z0-9._-]","-",str(socket.gethostname() or "TeacherWorker").strip()).strip("-") or "TeacherWorker"
+WORKER_ID=os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{_FALLBACK_MACHINE}-TeacherWorker"
 POLL_SECONDS=max(2,min(60,int(os.environ.get("MATERIAL_WORKER_POLL_SECONDS","2"))))
 REQUEST_TIMEOUT=max(10,min(600,int(os.environ.get("MATERIAL_WORKER_HTTP_TIMEOUT","120"))))
 HEARTBEAT_SECONDS=max(5,min(90,int(os.environ.get("MATERIAL_WORKER_HEARTBEAT_SECONDS","30"))))
@@ -26,7 +27,10 @@ COMPLETE_RETRIES=4
 VIDEO_EXT={".mp4",".webm",".mov",".m4v"}; AUDIO_EXT={".mp3",".wav",".m4a",".ogg"}
 EXIF_RASTER_EXT={".jpg",".jpeg",".png",".webp"}
 RESTART_FOR_UPDATE=75
+DUPLICATE_RUNTIME=76
 ROOT=Path(__file__).resolve().parent
+RUNTIME_LOCK_PATH=ROOT/".worker-runtime.lock"
+_RUNTIME_LOCK_HANDLE=None
 STORAGE=WorkerMaterialStorageAdapter()
 
 def _env_true(name, default=False):
@@ -34,6 +38,38 @@ def _env_true(name, default=False):
     return value in {"1","true","yes","on"}
 
 def _utc_now(): return dt.datetime.now(dt.timezone.utc).isoformat()
+
+def acquire_worker_runtime_lock():
+    """Hold one process-level lock for this checkout for the Worker lifetime."""
+    global _RUNTIME_LOCK_HANDLE
+    if _RUNTIME_LOCK_HANDLE is not None:
+        return True
+    try:
+        handle=open(RUNTIME_LOCK_PATH,"a+b")
+    except OSError as exc:
+        raise RuntimeError(f"Worker runtime lock cannot be opened: {exc}") from exc
+    try:
+        handle.seek(0,os.SEEK_END)
+        if handle.tell()==0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        if os.name=="nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(),msvcrt.LK_NBLCK,1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        handle.seek(0)
+        handle.truncate()
+        handle.write(str(os.getpid()).encode("ascii","ignore") or b"0")
+        handle.flush()
+        _RUNTIME_LOCK_HANDLE=handle
+        return True
+    except (OSError,IOError):
+        handle.close()
+        return False
+
 
 def _worker_url_allowed(url):
     parsed=urlparse(str(url or ""))
@@ -530,6 +566,13 @@ def process_one(api,job,capabilities=None):
         except Exception as report:log(f"failed to report {job_id}: {report}")
         log(f"job {job_id}: {message} timings_ms={json.dumps(timings,sort_keys=True,separators=(',',':'))}")
 def main():
+    try:
+        if not acquire_worker_runtime_lock():
+            log("another material Worker runtime is already active; duplicate process exiting")
+            return DUPLICATE_RUNTIME
+    except RuntimeError as exc:
+        log(str(exc))
+        return 2
     try:api=WorkerApi()
     except RuntimeError as exc:log(str(exc));return 2
     base_caps=capability();log(f"startup ffmpeg={base_caps['ffmpeg']['available']} ffprobe={base_caps['ffprobe']['available']} libreoffice={base_caps['libreOffice']['available']}")

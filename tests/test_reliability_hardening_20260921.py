@@ -32,6 +32,15 @@ class StableWorkerIdentityTests(unittest.TestCase):
         self.assertIn('[Environment]::SetEnvironmentVariable("MATERIAL_WORKER_ID", $workerId, "Process")', supervisor)
         self.assertIn("if ([string]$env:MATERIAL_WORKER_ID)", supervisor)
 
+        worker = ROOT.joinpath("material_worker.py").read_text(encoding="utf-8")
+        self.assertIn('WORKER_ID=os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{_FALLBACK_MACHINE}-TeacherWorker"', worker)
+        self.assertNotIn('f"{socket.gethostname()}:{os.getpid()}"', worker)
+        self.assertIn('RUNTIME_LOCK_PATH=ROOT/".worker-runtime.lock"', worker)
+        self.assertIn("def acquire_worker_runtime_lock()", worker)
+        self.assertIn("DUPLICATE_RUNTIME=76", worker)
+        self.assertIn("if ($workerExit -eq 76)", supervisor)
+        self.assertIn(".worker-runtime.lock", gitignore)
+
 
 class WorkerStatusObservabilityTests(unittest.TestCase):
     def _status(self):

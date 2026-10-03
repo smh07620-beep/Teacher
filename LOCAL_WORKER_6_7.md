@@ -217,6 +217,13 @@ file lock。同一份 `C:\TeacherWorker` checkout 若已由 Scheduled Task 執�
 Worker process；反向亦同。這是 Task Scheduler `MultipleInstances IgnoreNew`
 之外的本機第二層保護，涵蓋手動＋排程混用情境。
 
+Python Worker 本體另持有 gitignored 的 `.worker-runtime.lock`。因此即使有人繞過
+launcher，直接執行 `python material_worker.py` 或 package entrypoint，同一份
+checkout 也只允許一個 material Worker runtime。未設定 `MATERIAL_WORKER_ID` 時，
+Python fallback ID 會使用穩定的 `<MachineName>-TeacherWorker`，不再包含 PID，
+避免每次手動重啟都產生新的 Worker ID。若 supervisor 遇到 runtime lock 已被其他
+Worker 持有，會每 30 秒等待接手，且不消耗 crash restart quota。
+
 Worker heartbeat 另帶 `workerMachine` 實體主機識別。Web 狀態與離線告警會以
 「同一實體主機的最新 heartbeat」為準，因此同一台院內電腦曾使用舊 Worker ID、
 重裝後換 ID 或短暫切換啟動方式時，舊 ID 不再被顯示成另一台在線 Worker，也不會
