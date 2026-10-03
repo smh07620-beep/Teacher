@@ -160,3 +160,44 @@ OPERATIONS_FORECAST_MIN_SNAPSHOT_COVERAGE=0.5
 ```
 
 These values control whether the model has enough evidence to calculate; they are not organizational performance targets.
+
+
+## Workload-calibrated capacity model
+
+The capacity Forecast now learns separate service-time distributions for distinct material workloads instead of treating every Job as equal.
+
+Workload classes are derived only from existing persisted metadata:
+
+- **document**: PDF / Office / text materials;
+- **media**: video and audio;
+- **image**: raster image uploads;
+- **archive**: ZIP packages;
+- **other**: any remaining supported material type.
+
+For each class, the system uses real completed jobs to calculate median and P95 processing duration, recent arrival rate, current backlog count/bytes, and source-size bands (<10 MB, 10–100 MB, >=100 MB).
+
+When available, existing Worker result metadata further calibrates the class:
+
+- document results use persisted `pageCount` to show median pages and median processing seconds/page;
+- media results use persisted `storageMeta.durationSeconds` and `mediaKind` to show median media duration and processing/media real-time ratio;
+- source file bytes are used as evidence bands, not assumed to have a linear relationship with processing time.
+
+A workload class needs at least two completed jobs by default before it is considered calibrated:
+
+```text
+OPERATIONS_FORECAST_MIN_WORKLOAD_COMPLETED_JOBS=2
+```
+
+The mixed workload model converts each class into Worker-hours of demand:
+
+```text
+arrival worker demand = arrival_rate × class service_time / 3600
+backlog worker-hours = backlog_count × class service_time / 3600
+mixed queue ETA = backlog worker-hours / (active Workers - arrival worker demand)
+```
+
+Both nominal (class median) and conservative (class P95) versions are shown for the current Worker pool and the +1 Worker simulation.
+
+If any recent arrival or current backlog belongs to a workload class without enough completed samples, the mixed ETA is intentionally marked unavailable/partially calibrated. The previous all-Job Forecast remains visible as a fallback, but the UI explicitly says that the workload-aware model is incomplete. This prevents document performance from being applied to a long video without evidence.
+
+No new migration is required because `material_jobs.original_name`, `source_bytes`, `result.pageCount`, and `result.storageMeta.durationSeconds` already exist.
