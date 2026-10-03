@@ -350,3 +350,20 @@ temporarily; remove it from production CORS afterwards.
 `material_jobs.progress_percent` 由 migration `0107-material-job-progress` 新增，保存院內 Worker 對目前工作的進度回報。Worker 仍以 canonical stage（下載、驗證、轉檔、預覽、發布、完成確認）作為主要真實狀態，並同步回報 1–99 的 `progressPercent`；Web 端只允許同一輪工作單調增加。自動或人工重試會把進度重設為 25%，完成時由正式 `completed` 狀態投影為 100%。
 
 舊 Worker 若尚未傳送 `progressPercent` 仍可相容運作：Web 會用既有 stage checkpoint 投影顯示值。這讓 Web 先部署 migration 不會要求院內電腦同一時間立即更新，但院內 Worker 更新後即可得到持久化真實進度。
+
+
+## 主動維運 Incident（0108）
+
+Web/Render 端每 10 分鐘使用既有 critical alert workflow 同步維運 incident。預設門檻為：
+
+```text
+MATERIAL_WORKER_OFFLINE_ALERT_SECONDS=600
+MATERIAL_JOB_STALE_SECONDS=1800
+MATERIAL_INCIDENT_ERROR_BURST_COUNT=3
+MATERIAL_INCIDENT_FAILURE_RATE_MIN_JOBS=5
+MATERIAL_INCIDENT_FAILURE_RATE_PERCENT=50
+```
+
+這些都是 Web/Render/GitHub Actions 端設定，**不需要**加入院內 `.local-worker.env`。同一個問題持續存在時只維持一筆 OPEN incident；恢復後標記「已恢復」，日後再次發生才以新的 generation 重新告警。Worker 離線只有在同一實體機器真的送回新 heartbeat 後才視為恢復，不會因舊 heartbeat 超過保留期而假恢復。
+
+告警只寄給 `system_admin`，沿用既有 SMTP secrets 與 `email_notification_log` 去重複；一般課程/考核 Email 偏好不能關閉 critical incident/recovery 通知。
