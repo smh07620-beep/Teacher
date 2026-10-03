@@ -129,7 +129,8 @@ def _works(path,args):
     except (OSError,subprocess.TimeoutExpired):return False
 def capability():
     ffmpeg,ffprobe,soffice=_bin("FFMPEG_PATH","ffmpeg"),_bin("FFPROBE_PATH","ffprobe"),_bin("SOFFICE_PATH","soffice")
-    return {"platform":sys.platform,"ffmpeg":{"available":_works(ffmpeg,["-version"])} ,"ffprobe":{"available":_works(ffprobe,["-version"])} ,"libreOffice":{"available":_works(soffice,["--version"])}}
+    machine=re.sub(r"[^A-Za-z0-9._-]","-",str(socket.gethostname() or "").strip())[:80]
+    return {"platform":sys.platform,"workerMachine":machine,"ffmpeg":{"available":_works(ffmpeg,["-version"])} ,"ffprobe":{"available":_works(ffprobe,["-version"])} ,"libreOffice":{"available":_works(soffice,["--version"])}}
 
 def _storage_preflight_snapshot():
     try:
