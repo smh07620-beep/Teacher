@@ -351,6 +351,47 @@ test('Worker notification action cannot land on assessment or AI authoring', asy
 });
 
 
+test('operational incident UI separates active and recovered states without navigation selector collisions', async ({ page }) => {
+  await page.route('**/api/material-jobs?**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        jobs: [], problemJobs: [],
+        workers: [{ workerId: 'A8B5-TeacherWorker', status: 'online', lastSeen: '2026-10-03T12:00:00+00:00', ffmpeg: true, libreOffice: true }],
+        workerStatusAvailable: true, pendingJobs: 0, processingJobs: 0, retryJobs: 0, failedJobs: 0,
+        recentTerminalJobs: 0, recentFailureRate: 0, averageCompletedDurationSeconds: 0,
+        healthyProcessingJobs: 0, heartbeatDelayedJobs: 0, stalledJobs: 0, heartbeatWarningSeconds: 120, staleThresholdSeconds: 1800,
+        staging: { backend: 'r2', available: true, shared: true },
+        incidents: [
+          { incidentKey: 'worker_offline:a8b5', incidentType: 'worker_offline', category: 'worker', severity: 'critical', status: 'open', title: '教材 Worker 已離線', detail: 'heartbeat 超過門檻', action: '重新啟動院內 Worker', errorCode: 'WORKER_OFFLINE', resourceId: 'A8B5-TeacherWorker', generation: 2, occurrenceCount: 3, openedAt: '2026-10-03T10:00:00+00:00', lastSeenAt: '2026-10-03T12:00:00+00:00', responseState: 'assigned', acknowledgedBy: 'root', assignedTo: 'ops-a', maintenanceActive: true, maintenanceUntil: '2026-10-03T13:00:00+00:00', responseNote: '院內端重啟中', runbook: { title: 'Worker 離線處置', steps: ['確認院內電腦是否開機。'] } },
+          { incidentKey: 'ai_queue_failure:question', incidentType: 'ai_queue_failure', category: 'ai', severity: 'warning', status: 'resolved', title: 'AI 出題背景工作連續失敗', detail: '最近連續失敗', action: '檢查 provider', errorCode: 'AI_QUESTION_FAILURE_BURST', resourceId: 'question', generation: 1, occurrenceCount: 1, openedAt: '2026-10-03T09:00:00+00:00', lastSeenAt: '2026-10-03T10:00:00+00:00', resolvedAt: '2026-10-03T10:00:00+00:00', responseState: 'acknowledged', runbook: { title: 'AI 背景工作連續失敗', steps: ['確認 AI Worker 是否在線。'] } }
+        ],
+      }),
+    });
+  });
+  await page.setViewportSize({ width: 430, height: 932 });
+  await open(page, '/system?admin=1&workspace=worker&persona=system');
+  const incidents = page.locator('#worker-incidents-70');
+  await expect(incidents).toBeVisible({ timeout: 10000 });
+  await expect(incidents).toContainText('目前問題 1');
+  await expect(incidents).toContainText('已恢復 1');
+  await expect(incidents).toContainText('發生 3 次');
+  await expect(incidents).toContainText('ops-a');
+  await expect(incidents).toContainText('維護中');
+  await expect(incidents).toContainText('建議動作');
+  await expect(incidents).toContainText('Worker 離線處置');
+  const actions = incidents.locator('[data-incident-action]');
+  await expect(actions).toHaveCount(2);
+  await expect(actions.first()).toHaveAttribute('href', '#worker-runtime-70');
+  const attrs = await actions.evaluateAll(nodes => nodes.map(node => ({ csp: node.getAttribute('data-csp-click'), onclick: node.getAttribute('onclick') })));
+  expect(attrs.every(item => item.csp === null && item.onclick === null)).toBe(true);
+  await actions.first().click();
+  await expect(page).toHaveURL(/#worker-runtime-70$/);
+  await expect(page.locator('#admin-section-quiz')).toBeHidden();
+  await assertNoHorizontalOverflow(page);
+});
+
 test('Worker status error state is distinct from an offline Worker', async ({ page }) => {
   await page.route('**/api/material-jobs?**', async route => {
     await route.fulfill({

@@ -51,8 +51,17 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             "incidentType",
             "occurrenceCount",
             "generation",
-            "維運 Incident",
+            "維運事件",
+            "目前問題",
             "已恢復",
+            "建議動作",
+            "responseState",
+            "assignedTo",
+            "maintenanceActive",
+            "runbook",
+            "data-incident-action",
+            "worker-incidents-70",
+            "worker-problems-70",
             "workerVersion",
             "workerSha",
             "workerBranch",
@@ -63,6 +72,21 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             "libreOffice",
         ):
             self.assertIn(marker, self.source)
+
+    def test_incident_actions_use_plain_links_and_route_by_domain(self):
+        self.assertIn("function incidentActionMeta(incident)", self.source)
+        self.assertIn("function incidentResponseMeta(incident)", self.source)
+        self.assertIn("workspace=system&persona=system&from=incident&focus=storage", self.source)
+        self.assertIn("workspace=assessment&persona=teacher&from=incident&focus=ai-question", self.source)
+        self.assertIn("workspace=course-materials&persona=teacher&from=incident&focus=ai-media", self.source)
+        self.assertIn("Boolean(window.TeacherWorkspace1014?.canTeach)", self.source)
+        incident_block = self.source[
+            self.source.index("function incidentCards"):
+            self.source.index("function firstRunGuide")
+        ]
+        self.assertIn("data-incident-action", incident_block)
+        self.assertNotIn("data-csp-click", incident_block)
+        self.assertNotIn(".onclick", incident_block)
 
     def test_first_run_guide_is_explicit(self):
         for marker in (

@@ -232,24 +232,75 @@
     }).join('');
   }
 
-  function incidentCards(rows) {
-    if(!rows.length)return '<div class="rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">目前沒有開啟中的維運 Incident；最近 24 小時也沒有恢復事件。</div>';
+  function incidentCategoryMeta(incident) {
+    const category=String(incident.category||'').toLowerCase();
+    const code=String(incident.errorCode||'').toUpperCase();
+    if(category==='ai'||incident.incidentType==='ai_queue_failure')return ['🤖','AI'];
+    if(category==='storage'||/(R2|GDRIVE|MEGA|OCI|STORAGE)/.test(code))return ['☁️','Storage'];
+    if(category==='worker'||/WORKER|FFMPEG|LIBREOFFICE/.test(code))return ['🖥️','Worker'];
+    return ['🛠️','系統'];
+  }
+
+  function incidentResponseMeta(incident) {
+    if(incident.status==='resolved')return ['🟢','已恢復','text-emerald-700 bg-emerald-50 border-emerald-200'];
+    if(incident.maintenanceActive)return ['🛠️','維護中','text-indigo-700 bg-indigo-50 border-indigo-200'];
+    if(incident.responseState==='assigned')return ['👤','處理中','text-sky-700 bg-sky-50 border-sky-200'];
+    if(incident.responseState==='acknowledged')return ['✓','已確認','text-teal-700 bg-teal-50 border-teal-200'];
+    return ['!','待確認','text-amber-700 bg-amber-50 border-amber-200'];
+  }
+
+  function incidentActionMeta(incident) {
+    const type=String(incident.incidentType||'');
+    const category=String(incident.category||'').toLowerCase();
+    const code=String(incident.errorCode||'').toUpperCase();
+    const resource=String(incident.resourceId||'').toLowerCase();
+    if(type==='worker_offline')return {href:'#worker-runtime-70',label:'查看 Worker'};
+    if(type==='job_stalled'||type==='failure_rate'||(type==='error_burst'&&category==='worker'))return {href:'#worker-problems-70',label:'查看異常工作'};
+    if(category==='storage'||/(R2|GDRIVE|MEGA|OCI|STORAGE)/.test(code))return {href:'/system?admin=1&workspace=system&persona=system&from=incident&focus=storage',label:'前往系統與儲存'};
+    if(category==='ai'||type==='ai_queue_failure'){
+      const canTeach=Boolean(window.TeacherWorkspace1014?.canTeach);
+      if(canTeach){
+        const assessment=resource==='question';
+        return {
+          href:assessment
+            ? '/system?admin=1&workspace=assessment&persona=teacher&from=incident&focus=ai-question'
+            : '/system?admin=1&workspace=course-materials&persona=teacher&from=incident&focus=ai-media',
+          label:assessment?'前往評量與出題':'前往教材與媒體'
+        };
+      }
+      return {href:'#worker-problems-70',label:'查看 AI Worker 技術狀態'};
+    }
+    return {href:'#worker-problems-70',label:'查看維運狀態'};
+  }
+
+  function incidentCards(rows, emptyText='目前沒有事件。') {
+    if(!rows.length)return '<div class="rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">'+escapeHtml(emptyText)+'</div>';
     return rows.map(incident=>{
       const open=incident.status==='open';
       const classes=open
         ? (incident.severity==='critical'?'border-rose-200 bg-rose-50':'border-amber-200 bg-amber-50')
         : 'border-emerald-200 bg-emerald-50';
-      const badge=open
-        ? (incident.severity==='critical'?'🔴 OPEN':'🟠 OPEN')
-        : '🟢 已恢復';
-      return `<article class="rounded-xl border ${classes} p-3 text-sm">
+      const [categoryIcon,categoryLabel]=incidentCategoryMeta(incident);
+      const [responseIcon,responseLabel,responseClasses]=incidentResponseMeta(incident);
+      const action=incidentActionMeta(incident);
+      const occurrences=Math.max(1,Number(incident.occurrenceCount||1));
+      const runbook=incident.runbook&&typeof incident.runbook==='object'?incident.runbook:{};
+      const steps=Array.isArray(runbook.steps)?runbook.steps.filter(Boolean):[];
+      const assignee=String(incident.assignedTo||'').trim();
+      const maintenance=incident.maintenanceActive&&incident.maintenanceUntil?` · 維護至 ${formatWhen(incident.maintenanceUntil)}`:'';
+      return `<article class="rounded-xl border ${classes} p-3 text-sm" data-incident-type="${escapeHtml(incident.incidentType||'')}" data-incident-status="${open?'open':'resolved'}">
         <div class="flex flex-wrap items-start justify-between gap-2">
-          <div><b>${escapeHtml(incident.title||'系統維運事件')}</b><div class="mt-1 font-mono text-[10px] text-slate-500">${escapeHtml(incident.errorCode||incident.incidentType||'')} · generation ${Number(incident.generation||1)}</div></div>
-          <span class="rounded-full border border-current px-2 py-1 text-[10px] font-bold">${badge}</span>
+          <div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] font-bold text-slate-600">${categoryIcon} ${escapeHtml(categoryLabel)}</span><span class="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] font-bold text-slate-600">發生 ${occurrences} 次</span></div><b class="mt-1.5 block text-slate-900">${escapeHtml(incident.title||'系統維運事件')}</b><div class="mt-1 font-mono text-[10px] text-slate-500">${escapeHtml(incident.errorCode||incident.incidentType||'')} · generation ${Number(incident.generation||1)}</div></div>
+          <span class="rounded-full border px-2 py-1 text-[10px] font-bold ${responseClasses}">${responseIcon} ${escapeHtml(responseLabel)}</span>
         </div>
         <div class="mt-2 text-xs text-slate-700">${escapeHtml(open?(incident.detail||'需要處理'):'系統已確認此事件恢復正常。')}</div>
-        ${open&&incident.action?`<div class="mt-1 text-xs font-semibold text-slate-700">建議：${escapeHtml(incident.action)}</div>`:''}
-        <div class="mt-2 text-[10px] text-slate-500">首次 ${formatWhen(incident.openedAt)} · 最後觀察 ${formatWhen(incident.lastSeenAt)}${incident.resolvedAt?` · 恢復 ${formatWhen(incident.resolvedAt)}`:''} · 發生 ${Number(incident.occurrenceCount||1)} 次</div>
+        ${open&&incident.action?`<div class="mt-2 rounded-lg bg-white/70 px-2.5 py-2 text-xs font-semibold text-slate-700"><span class="text-slate-500">建議動作：</span>${escapeHtml(incident.action)}</div>`:''}
+        ${(assignee||incident.acknowledgedBy||incident.responseNote||maintenance)?`<div class="mt-2 text-[11px] text-slate-600">${assignee?`負責人：<b>${escapeHtml(assignee)}</b> · `:''}${incident.acknowledgedBy?`確認：${escapeHtml(incident.acknowledgedBy)} · `:''}${incident.responseNote?`備註：${escapeHtml(incident.responseNote)}`:''}${maintenance}</div>`:''}
+        ${steps.length?`<details class="mt-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-xs text-slate-700"><summary class="cursor-pointer font-bold">📋 ${escapeHtml(runbook.title||'處置步驟')}</summary><ol class="mt-2 list-decimal space-y-1 pl-5">${steps.map(step=>`<li>${escapeHtml(step)}</li>`).join('')}</ol></details>`:''}
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <div class="text-[10px] text-slate-500">首次 ${formatWhen(incident.openedAt)} · 最後觀察 ${formatWhen(incident.lastSeenAt)}${incident.resolvedAt?` · 恢復 ${formatWhen(incident.resolvedAt)}`:''}</div>
+          <a data-incident-action href="${escapeHtml(action.href)}" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50">${escapeHtml(action.label)} →</a>
+        </div>
       </article>`;
     }).join('');
   }
@@ -299,7 +350,9 @@
       jobs.filter(job => ['heartbeat_delayed','stalled'].includes(job.observabilityState)).forEach(job => problemMap.set(String(job.id||''), job));
       const problemJobs = [...problemMap.values()];
       const incidents = Array.isArray(data.incidents) ? data.incidents : [];
-      const openIncidents = incidents.filter(incident=>incident.status==='open').length;
+      const currentIncidents = incidents.filter(incident=>incident.status==='open');
+      const resolvedIncidents = incidents.filter(incident=>incident.status==='resolved');
+      const openIncidents = currentIncidents.length;
       const operationalIssues = Array.isArray(data.operationalIssues) ? data.operationalIssues : [];
       const operationalIssueHtml = operationalIssues.length
         ? '<div class="space-y-2">'+operationalIssues.map(issue=>'<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><b>'+escapeHtml(issue.message||issue.code||'維運提醒')+'</b>'+(issue.code?'<span class="ml-1 font-mono text-[10px]">['+escapeHtml(issue.code)+']</span>':'')+(issue.action?'<div class="mt-1">'+escapeHtml(issue.action)+'</div>':'')+'</div>').join('')+'</div>'
@@ -340,19 +393,20 @@
           <div class="text-xs rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">Shared staging：<b>${escapeHtml(staging.backend || '未設定')}</b> · ${staging.available ? '可用' : '不可用'}${staging.shared ? ' · Web/Worker 共用' : ''}</div>
           ${operationalIssueHtml}
         </section>
-        <section class="space-y-3">
+        <section id="worker-runtime-70" class="space-y-3 scroll-mt-4">
           <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
           ${workerBody}
         </section>
-        <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-          <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">🚨 維運 Incident</h5><span class="text-[11px] text-slate-400">OPEN ${openIncidents} · 顯示最近 24 小時恢復事件</span></div>
-          <div class="space-y-2">${incidentCards(incidents)}</div>
+        <section id="worker-incidents-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4 scroll-mt-4">
+          <div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-slate-900">🚨 維運事件</h5><p class="mt-1 text-[11px] text-slate-500">Worker、AI 與 Storage 的持續性問題集中在這裡；單次可恢復 fallback 不會升級成事件。</p></div><div class="flex gap-2 text-[11px]"><span class="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 font-bold text-rose-700">目前問題 ${currentIncidents.length}</span><span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 font-bold text-emerald-700">已恢復 ${resolvedIncidents.length}</span></div></div>
+          <div><div class="mb-2 text-xs font-black text-slate-700">目前問題</div><div class="space-y-2">${incidentCards(currentIncidents,'目前沒有需要處理的維運事件。')}</div></div>
+          <details class="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><summary class="cursor-pointer text-xs font-black text-slate-700">最近已恢復（24 小時） · ${resolvedIncidents.length} 筆</summary><div class="mt-3 space-y-2">${incidentCards(resolvedIncidents,'最近 24 小時沒有已恢復事件。')}</div></details>
         </section>
-        <section class="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm space-y-3">
+        <section id="worker-problems-70" class="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm space-y-3 scroll-mt-4">
           <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">⚠ 需要注意的工作</h5><span class="text-[11px] text-slate-400">${problemJobs.length} 筆</span></div>
           <div class="space-y-2">${failureCards(problemJobs)}</div>
         </section>
-        <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <section id="worker-jobs-history-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 scroll-mt-4">
           <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">最近背景工作</h5><span class="text-[11px] text-slate-400">最近 ${jobs.length} 筆</span></div>
           <div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs"><thead class="bg-slate-50"><tr><th class="p-3">Job ID</th><th class="p-3">教材</th><th class="p-3">狀態</th><th class="p-3">階段／原因</th><th class="p-3">耗時</th><th class="p-3">更新時間</th></tr></thead><tbody class="divide-y divide-slate-100">${jobRows(jobs)}</tbody></table></div>
         </section>
