@@ -19,10 +19,25 @@
   const navHost = document.querySelector('.v580-admin-groups');
   if (!navHost) return;
 
+  const NAV_WORKSPACES = Object.freeze({
+    'admin-nav-people': 'people',
+    'admin-nav-system': 'system',
+    'admin-nav-worker': 'worker',
+    'admin-nav-maintenance': 'maintenance',
+    'admin-nav-audit': 'audit',
+  });
+
   function existing(id, label = '') {
     const item = document.getElementById(id);
     if (!item || item.disabled || item.classList.contains('hidden')) return null;
-    if (label) item.textContent = label;
+    if (label && item.textContent !== label) item.textContent = label;
+    const workspace = NAV_WORKSPACES[id];
+    if (workspace) {
+      item.dataset.adminWorkspace = workspace;
+      item.onclick = null;
+      item.removeAttribute('onclick');
+      item.setAttribute('data-csp-click', `switchAdminWorkspace('${workspace}',true)`);
+    }
     item.classList.remove('hidden');
     item.removeAttribute('aria-hidden');
     return item;
@@ -62,16 +77,27 @@
 
   function rebuild() {
     hideTeacherOwnedWordEntry();
-    const groups = [
-      navGroup('人員與權限', [existing('admin-nav-people', '👥 人員與權限')]),
-      navGroup('系統與儲存', [
+    const spec = [
+      ['人員與權限', [existing('admin-nav-people', '👥 人員與權限')]],
+      ['系統與儲存', [
         existing('admin-nav-system', '⚙️ 系統與服務'),
         existing('admin-nav-worker', '🖥️ Worker / Job 狀態'),
-      ]),
-      navGroup('資料保護', [existing('admin-nav-maintenance', '🛡️ 備份維護')]),
-      navGroup('安全與稽核', [existing('admin-nav-audit', '🔎 稽核紀錄')]),
-    ].filter(Boolean);
-    navHost.replaceChildren(...groups);
+      ]],
+      ['資料保護', [existing('admin-nav-maintenance', '🛡️ 備份維護')]],
+      ['安全與稽核', [existing('admin-nav-audit', '🔎 稽核紀錄')]],
+    ].map(([label, buttons]) => [label, buttons.filter(Boolean)])
+      .filter(([, buttons]) => buttons.length);
+
+    const signature = groups => groups.map(group => {
+      const label = group.querySelector('.v580-admin-group-label')?.textContent?.trim() || '';
+      const ids = [...group.querySelectorAll('.admin-nav-btn')].map(button => button.id).join(',');
+      return `${label}:${ids}`;
+    }).join('|');
+    const desiredSignature = spec.map(([label, buttons]) => `${label}:${buttons.map(button => button.id).join(',')}`).join('|');
+    const currentSignature = signature([...navHost.querySelectorAll(':scope > .v580-admin-group')]);
+    if (currentSignature !== desiredSignature) {
+      navHost.replaceChildren(...spec.map(([label, buttons]) => navGroup(label, buttons)));
+    }
 
     const banner = document.getElementById('rbac-workspace-banner');
     if (banner && !document.getElementById('system-focus-note-1014')) {

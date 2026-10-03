@@ -29,9 +29,10 @@ This map records the remaining compatibility wrapper chains that intentionally r
 ## Navigation ownership
 
 - `static/admin-workspace.js` is the sole owner of `switchAdminWorkspace`, `toggleAdminModal`, workspace normalization, URL synchronization, and extension dispatch.
+- `static/system-admin-focus-1014.js` is the sole owner of the **system-persona navigation layout**. `workspace-shell-70.js` may create maintenance/audit extension entries and `worker-status-70.js` may create the Worker entry, but neither may rebuild the whole system navigation. `product-convergence-101.js` only requests reconciliation from the system-navigation owner.
 - Deferred extension workspaces `worker`, `maintenance`, and `audit` must resolve a registered handler before visible workspace state changes. A previous assessment/AI section must never remain visible under a Worker header.
 - Dynamic system navigation buttons use `data-csp-click="switchAdminWorkspace(...)"` and clear any direct `onclick` navigation property.
-- `static/system-csp-actions.js` is the single delegated owner for `data-csp-click`; it invokes only the nearest element carrying that event attribute.
+- `static/system-csp-actions.js` is the single delegated owner for `data-csp-click`; it invokes the nearest action element but does not let an outer delegated action steal a click from a nested native link/button/control.
 - Notification Center actions remain canonical server-generated links. Worker-offline actions target `workspace=worker&persona=system` and are regression-tested by an actual click-through.
 
 ## Guardrails

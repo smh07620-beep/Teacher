@@ -229,9 +229,18 @@
     console.error('[system-csp-actions]', error, program);
   }
 
+  function delegatedTarget(eventName, attribute, event) {
+    const origin = event.target instanceof Element ? event.target : null;
+    const target = origin?.closest(`[${attribute}]`) || null;
+    if (!target || eventName !== 'click') return target;
+    const nativeAction = origin.closest('a[href],button,input,select,textarea,summary,[role="button"]');
+    if (nativeAction && nativeAction !== target && target.contains(nativeAction)) return null;
+    return target;
+  }
+
   for (const [eventName, attribute] of Object.entries(ATTRIBUTE_BY_EVENT)) {
     document.addEventListener(eventName, event => {
-      const target = event.target instanceof Element ? event.target.closest(`[${attribute}]`) : null;
+      const target = delegatedTarget(eventName, attribute, event);
       if (!target) return;
       try {
         const result = runProgram(target.getAttribute(attribute), target, event);

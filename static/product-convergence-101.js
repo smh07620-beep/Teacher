@@ -3,9 +3,9 @@
  * workspace implementations remain authoritative.
  *
  * The final teacher persona navigation is owned by teacher-persona-isolation-
- * 1014.js. This layer adds contextual teaching tools and converges system
- * administration groups without introducing a second competing teacher-nav
- * observer.
+ * 1014.js. System-persona navigation is owned by system-admin-focus-1014.js.
+ * This layer adds contextual teaching tools and delegates system navigation
+ * reconciliation to that single owner.
  */
 (async function () {
   'use strict';
@@ -25,21 +25,6 @@
     persona() === 'system' || (!persona() && systemWorkspaceNames.has(workspace()))
   );
   const isTeacherPersona = () => Boolean(window.TeacherWorkspace1014) && persona() !== 'system';
-
-  function navGroup(label, buttons, compact = false) {
-    const usable = buttons.filter(Boolean);
-    if (!usable.length) return null;
-    const section = document.createElement('section');
-    section.className = `v580-admin-group${compact ? ' compact' : ''}`;
-    const heading = document.createElement('span');
-    heading.className = 'v580-admin-group-label';
-    heading.textContent = label;
-    const actions = document.createElement('div');
-    actions.className = 'v580-admin-group-actions';
-    usable.forEach(button => actions.appendChild(button));
-    section.append(heading, actions);
-    return section;
-  }
 
   function ensureTeacherContextTools() {
     if (!isTeacherPersona()) return false;
@@ -97,45 +82,11 @@
     return true;
   }
 
-  function existing(id, label = '') {
-    const button = document.getElementById(id);
-    if (!button || button.disabled || button.classList.contains('hidden')) return null;
-    if (label && button.textContent !== label) button.textContent = label;
-    button.classList.remove('hidden');
-    button.removeAttribute('aria-hidden');
-    return button;
-  }
-
   function convergeSystemNavigation() {
     if (!isSystemPersona()) return false;
-
-    const people = existing('admin-nav-people', '👥 人員與權限');
-    const system = existing('admin-nav-system', '⚙️ 系統與服務');
-    const worker = existing('admin-nav-worker', '🖥️ Worker / Job 狀態');
-    const maintenance = existing('admin-nav-maintenance', '🛡️ 備份維護');
-    const audit = existing('admin-nav-audit', '🔎 稽核紀錄');
-
-    const expected = [people, system, worker, maintenance, audit].filter(Boolean).map(button => button.id);
-    const current = [...navHost.querySelectorAll('.admin-nav-btn')].map(button => button.id);
-    const labels = [...navHost.querySelectorAll('.v580-admin-group-label')].map(label => label.textContent?.trim());
-    const desiredLabels = ['人員與權限', '系統健康與維運', '安全與稽核'].filter((label, index) => index !== 2 || audit);
-    const alreadyConverged = expected.length === current.length
-      && expected.every((id, index) => current[index] === id)
-      && desiredLabels.every(label => labels.includes(label));
-
-    if (!alreadyConverged) {
-      const groups = [
-        navGroup('人員與權限', [people], true),
-        navGroup('系統健康與維運', [system, worker, maintenance], true),
-        navGroup('安全與稽核', [audit], true),
-      ].filter(Boolean);
-      navHost.replaceChildren(...groups);
-    }
-
-    const note = document.getElementById('system-focus-note-1014');
-    if (note) {
-      note.textContent = '教材、出題、媒體與紙本輸出屬於教師工作；系統管理只保留人員權限、系統健康維運與稽核。';
-    }
+    const owner = window.SystemAdminFocus1014;
+    if (typeof owner?.rebuild !== 'function') return false;
+    owner.rebuild();
     return true;
   }
 
@@ -156,9 +107,9 @@
   refresh();
   window.AdminWorkspaceShell?.addAfterWorkspace?.(() => refresh());
 
-  // System modules may insert Worker/maintenance entries asynchronously. The
-  // observer is safe for teacher persona because teacher refresh only ensures
-  // contextual tools and never rewrites the navigation host.
+  // System modules may insert Worker/maintenance entries asynchronously. This
+  // observer never rebuilds system navigation itself; it delegates to the sole
+  // system-navigation owner and only manages contextual tools for teachers.
   const observer = new MutationObserver(() => refresh());
   observer.observe(navHost, {childList: true, subtree: true});
 

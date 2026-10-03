@@ -17,6 +17,13 @@
   const canMaintenance = has('backup.manage') || has('education.cross_group.manage');
   const canAudit = has('audit.read') || has('audit.view');
   const canVerifyExternalMedia = has('material.manage');
+  const systemWorkspaceNames = new Set(['people','system','worker','maintenance','audit']);
+  function isSystemPersonaRoute() {
+    const route = new URLSearchParams(window.location.search);
+    const persona = route.get('persona') || '';
+    const workspace = route.get('workspace') || '';
+    return isSystemAdmin && (persona === 'system' || (!persona && systemWorkspaceNames.has(workspace)));
+  }
   const workspaceHost = document.getElementById('admin-workspace-content');
   const navHost = document.querySelector('.v580-admin-groups');
   const modal = document.getElementById('admin-modal');
@@ -147,26 +154,19 @@
     return item;
   }
 
-  function buildSystemNavigation() {
-    if (!isSystemAdmin) return;
-    const teaching = [
-      existing('admin-nav-course-materials'),
-      existing('admin-nav-assessment'),
-      existing('admin-nav-teacher'),
-      existing('admin-nav-results'),
-      existing('admin-nav-word')
-    ];
-    const people = [existing('admin-nav-people')];
-    const system = [existing('admin-nav-system')];
-    const maintenance = canMaintenance ? [button('admin-nav-maintenance', '🛡️ 備份維護', 'maintenance')] : [];
-    const audit = canAudit ? [button('admin-nav-audit', '🔎 稽核紀錄', 'audit')] : [];
-    navHost.replaceChildren(
-      navGroup('教學管理', teaching),
-      navGroup('人員與權限', people, true),
-      navGroup('系統與儲存', system, true),
-      navGroup('備份維護', maintenance, true),
-      navGroup('安全與稽核', audit, true)
-    );
+  function ensureSystemNavigationEntries() {
+    if (!isSystemPersonaRoute()) return;
+    const systemActions = document.getElementById('admin-nav-system')
+      ?.closest('.v580-admin-group')
+      ?.querySelector('.v580-admin-group-actions');
+    if (!systemActions) return;
+    const entries = [
+      canMaintenance ? button('admin-nav-maintenance', '🛡️ 備份維護', 'maintenance') : null,
+      canAudit ? button('admin-nav-audit', '🔎 稽核紀錄', 'audit') : null,
+    ].filter(Boolean);
+    entries.forEach(item => {
+      if (item.parentElement !== systemActions) systemActions.appendChild(item);
+    });
   }
 
   function addEducationMaintenanceNavigation() {
@@ -360,13 +360,13 @@
     if (show) {
       moveMaintenanceCard();
       ensureSystemAdvancedMaintenance();
-      if (isSystemAdmin) buildSystemNavigation();
-      else addEducationMaintenanceNavigation();
+      ensureSystemNavigationEntries();
+      if (!isSystemAdmin) addEducationMaintenanceNavigation();
     }
   });
 
   ensureSystemAdvancedMaintenance();
-  buildSystemNavigation();
+  ensureSystemNavigationEntries();
   addEducationMaintenanceNavigation();
   exposeAuditorEntry();
 
