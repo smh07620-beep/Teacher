@@ -229,6 +229,40 @@ def _latest_heartbeat_per_machine(rows) -> list[tuple[dict, dict, dt.datetime]]:
     return list(latest.values())
 
 
+
+def online_worker_recovery_keys(
+    *,
+    now: dt.datetime | None = None,
+    connection_factory=None,
+) -> set[str]:
+    """Return stable machine/worker identifiers with a confirmed fresh heartbeat."""
+    current = now or dt.datetime.now(dt.timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=dt.timezone.utc)
+    current = current.astimezone(dt.timezone.utc)
+    cutoff = current - dt.timedelta(seconds=120)
+    try:
+        heartbeats = repository.list_heartbeats(
+            50,
+            connection_factory=connection_factory,
+        )
+    except Exception:
+        LOGGER.exception("Worker heartbeat recovery lookup failed")
+        return set()
+    keys: set[str] = set()
+    for item, capabilities, seen in _latest_heartbeat_per_machine(heartbeats):
+        if seen < cutoff:
+            continue
+        worker_id = str(item.get("worker_id") or item.get("workerId") or "").strip()
+        machine_key = _worker_machine_key(worker_id, capabilities)
+        if machine_key:
+            keys.add(machine_key)
+        if worker_id:
+            keys.add(worker_id.lower())
+    return keys
+
+
+
 def offline_worker_alerts(
     *,
     now: dt.datetime | None = None,
@@ -777,6 +811,7 @@ __all__ = [
     "material_job_observability",
     "material_jobs_observability",
     "offline_worker_alerts",
+    "online_worker_recovery_keys",
     "operational_incident_candidates",
     "recover_stale_processing_jobs",
     "status",
