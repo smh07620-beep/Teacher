@@ -28,6 +28,53 @@ def _int_env(name: str, default: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, value))
 
 
+def _worker_machine_key(worker_id: str, capabilities: dict | None = None) -> str:
+    """Return a stable physical-host key across legacy Worker ID formats."""
+    caps = capabilities or {}
+    machine = str(caps.get("workerMachine") or "").strip().lower()
+    if machine:
+        return machine
+    raw = str(worker_id or "").strip()
+    lowered = raw.lower()
+    marker = "-teacherworker"
+    if marker in lowered:
+        return lowered.split(marker, 1)[0]
+    if ":" in lowered:
+        return lowered.split(":", 1)[0]
+    return lowered
+
+
+def _latest_heartbeat_per_machine(rows) -> list[tuple[dict, dict, dt.datetime]]:
+    """Keep only the freshest heartbeat for each physical machine.
+
+    Old IDs from reinstall/reconfiguration must not create duplicate online
+    cards or false offline alerts after the same PC reconnects with a new ID.
+    """
+    latest: dict[str, tuple[dict, dict, dt.datetime]] = {}
+    for item in rows:
+        worker_id = str(item.get("worker_id") or item.get("workerId") or "").strip()
+        last_seen = str(item.get("last_seen") or item.get("lastSeen") or "").strip()
+        if not worker_id or not last_seen:
+            continue
+        try:
+            seen = dt.datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=dt.timezone.utc)
+            seen = seen.astimezone(dt.timezone.utc)
+        except (TypeError, ValueError):
+            continue
+        raw = item.get("capabilities") or {}
+        try:
+            capabilities = json.loads(raw) if isinstance(raw, str) else dict(raw)
+        except (TypeError, ValueError):
+            capabilities = {}
+        key = _worker_machine_key(worker_id, capabilities) or worker_id.lower()
+        current = latest.get(key)
+        if current is None or seen > current[2]:
+            latest[key] = (dict(item), capabilities, seen)
+    return list(latest.values())
+
+
 def offline_worker_alerts(
     *,
     now: dt.datetime | None = None,
@@ -67,18 +114,8 @@ def offline_worker_alerts(
         }
 
     workers = []
-    for item in heartbeats:
+    for item, capabilities, seen in _latest_heartbeat_per_machine(heartbeats):
         worker_id = str(item.get("worker_id") or item.get("workerId") or "").strip()
-        last_seen = str(item.get("last_seen") or item.get("lastSeen") or "").strip()
-        if not worker_id or not last_seen:
-            continue
-        try:
-            seen = dt.datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
-            if seen.tzinfo is None:
-                seen = seen.replace(tzinfo=dt.timezone.utc)
-            seen = seen.astimezone(dt.timezone.utc)
-        except (TypeError, ValueError):
-            continue
         if seen < history_cutoff:
             continue
         offline_seconds = max(0, int((current - seen).total_seconds()))
@@ -87,6 +124,7 @@ def offline_worker_alerts(
         workers.append(
             {
                 "workerId": worker_id,
+                "workerMachine": str(capabilities.get("workerMachine") or "")[:80],
                 "lastSeen": seen.isoformat(),
                 "offlineSeconds": offline_seconds,
                 "currentJobId": str(
@@ -303,28 +341,18 @@ def status(
         heartbeats = repository.list_heartbeats(
             50, connection_factory=connection_factory
         )
-        for item in heartbeats:
-            last_seen = str(item.get("last_seen") or item.get("lastSeen") or "")
-            try:
-                seen = dt.datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
-                if seen.tzinfo is None:
-                    seen = seen.replace(tzinfo=dt.timezone.utc)
-            except (TypeError, ValueError):
-                continue
+        for item, capabilities, seen in _latest_heartbeat_per_machine(heartbeats):
             if seen < history_cutoff:
                 continue
             online = seen >= cutoff
-            raw = item.get("capabilities") or {}
-            try:
-                capabilities = json.loads(raw) if isinstance(raw, str) else dict(raw)
-            except (TypeError, ValueError):
-                capabilities = {}
+            last_seen = seen.isoformat()
             current_job = str(
                 item.get("current_job_id") or item.get("currentJobId") or ""
             )
             workers.append(
                 {
                     "workerId": str(item.get("worker_id") or item.get("workerId") or ""),
+                    "workerMachine": str(capabilities.get("workerMachine") or "")[:80],
                     "lastSeen": last_seen,
                     "currentJobId": current_job,
                     "status": "busy" if online and current_job else ("online" if online else "offline"),
