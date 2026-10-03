@@ -121,5 +121,47 @@ class SystemObserverBrowserRegressionTests(unittest.TestCase):
         self.assertIn("interceptQuestionNext", source)
 
 
+    def test_global_compat_observers_filter_unrelated_dom_churn(self):
+        expectations = {
+            'teacher-ui-resilience-1014.js': (
+                'mutationTouchesWorkerSurface',
+                'if (workerSurfaceChanged) scheduleWorkerEnhance();',
+            ),
+            'course-wizard-runtime-fix-1014.js': (
+                'mutationNeedsConverge',
+                'if(records.some(mutationNeedsConverge))converge();',
+            ),
+            'teacher-authoring-source-fix-1017.js': (
+                'mutationNeedsInstall',
+                'if (records.some(mutationNeedsInstall)) scheduleInstallAll();',
+            ),
+            'teacher-assignment-experience-1014.js': (
+                'mutationNeedsConverge',
+                'if (records.some(mutationNeedsConverge)) scheduleConverge();',
+            ),
+            'home-profile-title-71.js': (
+                'mutationTouchesIdentity',
+                'records.some(mutationTouchesIdentity)',
+            ),
+        }
+        for filename, markers in expectations.items():
+            source = ROOT.joinpath('static', filename).read_text(encoding='utf-8')
+            for marker in markers:
+                self.assertIn(marker, source, filename)
+
+    def test_course_wizard_group_observer_rebinds_from_body_to_wizard(self):
+        source = ROOT.joinpath('static', 'course-wizard-group-fix-1014.js').read_text(encoding='utf-8')
+        self.assertIn('function observeWizard()', source)
+        self.assertIn("document.getElementById('course-wizard-681')", source)
+        self.assertIn('observer?.disconnect();', source)
+        self.assertIn('observeWizard();', source)
+        self.assertNotIn('const root = document.getElementById', source)
+
+    def test_ai_material_legacy_observer_disconnects_after_convergence(self):
+        source = ROOT.joinpath('static', 'teacher-ai-material-convergence-1014.js').read_text(encoding='utf-8')
+        self.assertIn('observer?.disconnect();', source)
+        self.assertIn('nodeTouchesTarget', source)
+        self.assertIn('if (!tryConverge())', source)
+
 if __name__ == '__main__':
     unittest.main()

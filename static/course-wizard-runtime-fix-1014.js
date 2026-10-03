@@ -93,8 +93,23 @@
     suppressDuplicateFailurePanel();
   }
 
+  const CONVERGENCE_SELECTOR='#course-wizard-681,#worker-recent-failures-1014,[data-csp-click="courseWizard681OpenCourse()"]';
+
+  function nodeNeedsConverge(node){
+    if(!(node instanceof Element))return false;
+    return node.matches?.(CONVERGENCE_SELECTOR)||Boolean(node.querySelector?.(CONVERGENCE_SELECTOR));
+  }
+
+  function mutationNeedsConverge(record){
+    const target=record?.target instanceof Element?record.target:null;
+    if(target?.closest?.('#course-wizard-681'))return true;
+    return [...(record?.addedNodes||[])].some(nodeNeedsConverge);
+  }
+
   converge();
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',converge,{once:true});
-  const observer=new MutationObserver(()=>converge());
-  observer.observe(document.documentElement,{childList:true,subtree:true});
+  const observer=new MutationObserver(records=>{
+    if(records.some(mutationNeedsConverge))converge();
+  });
+  observer.observe(document.body||document.documentElement,{childList:true,subtree:true});
 })();

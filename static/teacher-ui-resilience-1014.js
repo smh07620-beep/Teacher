@@ -241,13 +241,29 @@
     workerEnhanceTimer = setTimeout(() => { workerEnhanceTimer = null; void enhanceWorkerPanel(); }, 80);
   }
 
+  function mutationTouchesWorkerSurface(record) {
+    const panel = document.getElementById('admin-section-worker');
+    const target = record?.target instanceof Element ? record.target : record?.target?.parentElement;
+    if (panel && target && (target === panel || panel.contains(target))) return true;
+    return [...(record?.addedNodes || [])].some(node => {
+      if (!(node instanceof Element)) return false;
+      if (node.id === 'admin-section-worker' || node.matches?.('#admin-section-worker')) return true;
+      if (node.querySelector?.('#admin-section-worker')) return true;
+      return Boolean(panel && (node === panel || panel.contains(node)));
+    });
+  }
+
   installHelpToggle();
   scanHelp(document);
   const observer = new MutationObserver(records => {
-    records.forEach(record => record.addedNodes.forEach(node => {
-      if (node instanceof HTMLElement) scanHelp(node);
-    }));
-    scheduleWorkerEnhance();
+    let workerSurfaceChanged = false;
+    records.forEach(record => {
+      record.addedNodes.forEach(node => {
+        if (node instanceof HTMLElement) scanHelp(node);
+      });
+      if (!workerSurfaceChanged && mutationTouchesWorkerSurface(record)) workerSurfaceChanged = true;
+    });
+    if (workerSurfaceChanged) scheduleWorkerEnhance();
   });
   observer.observe(document.body, {childList:true, subtree:true});
   scheduleWorkerEnhance();

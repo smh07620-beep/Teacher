@@ -84,9 +84,30 @@
     return ready;
   }
 
+  let observer = null;
+
+  function nodeContainsWizard(node) {
+    if (!(node instanceof Element)) return false;
+    return node.id === 'course-wizard-681' || Boolean(node.querySelector?.('#course-wizard-681'));
+  }
+
+  function observeWizard() {
+    observer?.disconnect();
+    const root = document.getElementById('course-wizard-681');
+    if (root) {
+      observer = new MutationObserver(() => sync());
+      observer.observe(root, {childList:true, subtree:true});
+      return;
+    }
+    observer = new MutationObserver(records => {
+      if (!records.some(record => [...(record.addedNodes || [])].some(nodeContainsWizard))) return;
+      sync();
+      observeWizard();
+    });
+    observer.observe(document.body, {childList:true, subtree:true});
+  }
+
   sync();
-  const root = document.getElementById('course-wizard-681') || document.body;
-  const observer = new MutationObserver(() => sync());
-  observer.observe(root, {childList:true, subtree:true});
+  observeWizard();
   window.CourseWizardGroupFix1014 = Object.freeze({ sync });
 })();

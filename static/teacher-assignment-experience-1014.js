@@ -534,7 +534,27 @@
     queueMicrotask(converge);
   }
 
-  const observer = new MutationObserver(scheduleConverge);
+  const CONVERGENCE_SURFACE_SELECTOR=[
+    '#learning-assignment-dialog',
+    '#admin-course-material-hub',
+    '#teacher-course-media-entry-1014',
+    '#teacher-media-audio-1014',
+    '#teacher-paper-documents',
+    '#admin-workspace-summary'
+  ].join(',');
+
+  function mutationNeedsConverge(record) {
+    const target = record?.target instanceof Element ? record.target : record?.target?.parentElement;
+    if (target?.closest?.(CONVERGENCE_SURFACE_SELECTOR)) return true;
+    return [...(record?.addedNodes || [])].some(node => {
+      if (!(node instanceof Element)) return false;
+      return node.matches?.(CONVERGENCE_SURFACE_SELECTOR) || Boolean(node.querySelector?.(CONVERGENCE_SURFACE_SELECTOR));
+    });
+  }
+
+  const observer = new MutationObserver(records => {
+    if (records.some(mutationNeedsConverge)) scheduleConverge();
+  });
   observer.observe(document.body, {childList:true, subtree:true});
   window.AdminWorkspaceShell?.addAfterWorkspace?.(scheduleConverge);
   [0, 300, 1000, 2500].forEach(delay => setTimeout(scheduleConverge, delay));

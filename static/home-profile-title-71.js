@@ -91,10 +91,23 @@
     }catch(_){ /* presentation enhancement must never block the page */ }
   }
 
+  const IDENTITY_SELECTOR=TARGETS.flat().map(id=>`#${id}`).join(',');
+
+  function mutationTouchesIdentity(record){
+    const target=record?.target instanceof Element?record.target:record?.target?.parentElement;
+    if(target?.closest?.(IDENTITY_SELECTOR))return true;
+    return [...(record?.addedNodes||[])].some(node=>{
+      if(!(node instanceof Element))return false;
+      return node.matches?.(IDENTITY_SELECTOR)||Boolean(node.querySelector?.(IDENTITY_SELECTOR));
+    });
+  }
+
   function installObserver(){
     if(!document.body||document.body.dataset.teacherIdentityObserved==='1') return;
     document.body.dataset.teacherIdentityObserved='1';
-    new MutationObserver(()=>{ if(cachedProfile) scheduleApply(); }).observe(document.body,{
+    new MutationObserver(records=>{
+      if(cachedProfile&&records.some(mutationTouchesIdentity))scheduleApply();
+    }).observe(document.body,{
       childList:true,subtree:true,characterData:true
     });
   }

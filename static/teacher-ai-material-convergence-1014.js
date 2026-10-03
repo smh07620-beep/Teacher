@@ -5,13 +5,31 @@
   function converge() {
     const assistant = document.getElementById('teacher-ai-material-1014');
     const legacy = document.getElementById('teacher-media-script-1014');
-    if (assistant && legacy) {
-      legacy.classList.add('hidden');
-      legacy.setAttribute('aria-hidden', 'true');
-    }
+    if (!assistant || !legacy) return false;
+    if (!legacy.classList.contains('hidden')) legacy.classList.add('hidden');
+    if (legacy.getAttribute('aria-hidden') !== 'true') legacy.setAttribute('aria-hidden', 'true');
+    return true;
   }
 
-  const observer = new MutationObserver(converge);
-  observer.observe(document.body, {childList:true, subtree:true});
-  [0, 250, 900, 2200].forEach(delay => setTimeout(converge, delay));
+  const TARGET_SELECTOR='#teacher-ai-material-1014,#teacher-media-script-1014';
+  let observer = null;
+
+  function nodeTouchesTarget(node) {
+    if (!(node instanceof Element)) return false;
+    return node.matches?.(TARGET_SELECTOR) || Boolean(node.querySelector?.(TARGET_SELECTOR));
+  }
+
+  function tryConverge() {
+    if (!converge()) return false;
+    observer?.disconnect();
+    return true;
+  }
+
+  if (!tryConverge()) {
+    observer = new MutationObserver(records => {
+      if (records.some(record => [...(record.addedNodes || [])].some(nodeTouchesTarget))) tryConverge();
+    });
+    observer.observe(document.body, {childList:true, subtree:true});
+  }
+  [250, 900, 2200].forEach(delay => setTimeout(tryConverge, delay));
 })();

@@ -14,6 +14,7 @@
   let materials = null;
   let materialsPromise = null;
   let installing = false;
+  let installScheduled = false;
 
   function currentScope() {
     const query = new URLSearchParams(window.location.search);
@@ -213,10 +214,37 @@
     }
   }
 
+  const AUTHORING_SURFACE_SELECTOR=[
+    '#teacher-ai-presentation-1016',
+    '#teacher-media-subtitle-1014',
+    '#teacher-course-media-entry-1014',
+    '#teacher-media-production-1014'
+  ].join(',');
+
+  function mutationNeedsInstall(record) {
+    const target = record?.target instanceof Element ? record.target : record?.target?.parentElement;
+    if (target?.closest?.(AUTHORING_SURFACE_SELECTOR)) return true;
+    return [...(record?.addedNodes || [])].some(node => {
+      if (!(node instanceof Element)) return false;
+      return node.matches?.(AUTHORING_SURFACE_SELECTOR) || Boolean(node.querySelector?.(AUTHORING_SURFACE_SELECTOR));
+    });
+  }
+
+  function scheduleInstallAll() {
+    if (installScheduled) return;
+    installScheduled = true;
+    queueMicrotask(() => {
+      installScheduled = false;
+      void installAll();
+    });
+  }
+
   void installAll();
-  const observer = new MutationObserver(() => queueMicrotask(() => void installAll()));
+  const observer = new MutationObserver(records => {
+    if (records.some(mutationNeedsInstall)) scheduleInstallAll();
+  });
   observer.observe(document.body, {childList:true, subtree:true});
-  [300, 900, 1800].forEach(delay => setTimeout(() => void installAll(), delay));
+  [300, 900, 1800].forEach(delay => setTimeout(scheduleInstallAll, delay));
 
   window.TeacherAuthoringSourceFix1017 = Object.freeze({
     loadMaterials,
