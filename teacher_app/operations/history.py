@@ -776,7 +776,7 @@ def build_capacity_forecast(
     decision_state = "insufficient_data"
     decision_label = "資料不足，先累積真實吞吐量"
     decision_detail = "目前不應根據不完整樣本決定是否增加 Worker。"
-    if model_available and blockers:
+    if blockers:
         decision_state = "dependency_blocked"
         decision_label = "先排除故障，再判斷容量"
         decision_detail = (
