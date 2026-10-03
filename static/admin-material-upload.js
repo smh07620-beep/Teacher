@@ -77,6 +77,7 @@
   }
 
   function materialUploadElapsedSeconds(job){
+    if(Number.isFinite(Number(job?.elapsedSeconds)))return Math.max(0,Math.round(Number(job.elapsedSeconds)));
     const stamp=job?.startedAt||job?.createdAt||job?.updatedAt;
     const parsed=new Date(stamp||Date.now()).getTime();
     return Number.isFinite(parsed)?Math.max(0,Math.round((Date.now()-parsed)/1000)):0;
@@ -92,8 +93,10 @@
     if(job.status==='queued')return {pct:actual||25,label:'R2 已接收 · 等待 Worker '+materialUploadDurationLabel(elapsed)};
     if(job.status==='retry_wait')return {pct:actual||25,label:'等待自動重試 · '+materialUploadDurationLabel(elapsed)};
     const pct=actual||30;
-    const remaining=average>elapsed?'估計剩餘約 '+materialUploadDurationLabel(average-elapsed):'已超過近期平均，Worker 仍在處理';
-    return {pct,label:(job.stage||'Worker 處理中')+' · 已處理 '+materialUploadDurationLabel(elapsed)+' · '+(average>0?remaining:'估計時間資料累積中')};
+    if(job.observabilityState==='stalled')return {pct,label:(job.stage||'Worker 處理中')+' · 可能卡住 · heartbeat '+materialUploadDurationLabel(job.heartbeatAgeSeconds||0)+'前'};
+    if(job.observabilityState==='heartbeat_delayed')return {pct,label:(job.stage||'Worker 處理中')+' · 回報延遲 · heartbeat '+materialUploadDurationLabel(job.heartbeatAgeSeconds||0)+'前'};
+    const remaining=average>elapsed?'估計剩餘約 '+materialUploadDurationLabel(average-elapsed):'已超過近期平均，但 heartbeat 正常';
+    return {pct,label:(job.stage||'Worker 處理中')+' · 已處理 '+materialUploadDurationLabel(elapsed)+' · '+(average>0?remaining:'heartbeat 正常，持續處理')};
   }
 
   function materialUploadJobLabel(state){
@@ -137,6 +140,13 @@
     }else if(!onlineCompatible&&workers.length===0){
       warning='<div class="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-2 font-bold text-amber-800">⚠ 目前尚未收到院內 Worker heartbeat。教材已安全排隊，Worker 上線後會自動接續；請先不要重複上傳。</div>';
     }
+    const stalled=rows.filter(job=>job?.observabilityState==='stalled');
+    const delayed=rows.filter(job=>job?.observabilityState==='heartbeat_delayed');
+    if(stalled.length){
+      warning+='<div class="mb-2 rounded-lg border border-rose-200 bg-rose-50 p-2 font-bold text-rose-800">🔴 '+stalled.length+' 份教材的 Worker heartbeat 已超過 stale 門檻。系統會依安全恢復機制處理；請勿重複上傳，並到 Worker / Job 狀態查看。</div>';
+    }else if(delayed.length){
+      warning+='<div class="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-2 font-bold text-amber-800">🟠 '+delayed.length+' 份教材的 Worker 回報暫時延遲，但尚未達卡住門檻；原始檔與工作仍保留。</div>';
+    }
     const cards=rows.map(job=>{
       const progress=materialUploadProgress(job,average);
       const failed=['failed','cancelled'].includes(job.status);
@@ -144,9 +154,13 @@
       const retained=job.stagingBackend==='r2'&&['retry_wait','failed'].includes(job.status)
         ? '<div class="mt-1 font-bold text-violet-700">☁ R2 原始檔仍安全保留，可直接重新處理，不必重新上傳；正式完成後才會清除暫存。</div>'
         : '';
+      const health=job.observabilityLabel||'';
+      const heartbeat=job.status==='processing'&&Number.isFinite(Number(job.heartbeatAgeSeconds))
+        ? ' · heartbeat '+materialUploadDurationLabel(job.heartbeatAgeSeconds)+'前'
+        : '';
       const detail=(failed||retryWait)?(job.error||job.detail||'請查看 Worker / Job 狀態'):(job.detail||job.stage||'');
       const barClass=failed?'bg-rose-500':retryWait?'bg-amber-500':job.status==='completed'?'bg-emerald-500':'bg-sky-600';
-      return '<div class="rounded-lg border '+(failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white')+' p-2"><div class="flex flex-wrap items-center justify-between gap-2"><span><b>'+escapeHtml(job.title||job.originalName||job.id||'教材')+'</b> · '+escapeHtml(materialUploadJobLabel(job.status))+'</span><span class="text-[11px] text-slate-500">'+escapeHtml(progress.label)+'</span></div><div class="mt-1 text-[11px] '+(failed?'text-rose-700':'text-slate-600')+'">'+escapeHtml(detail)+'</div>'+renderMaterialUploadTimeline(job)+retained+'<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 '+progress.pct+'%</span><span>依 Worker 真實回報階段顯示；頁數／R2 上傳量會即時持久化，剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full '+barClass+' transition-all" style="width:'+progress.pct+'%"></div></div></div>';
+      return '<div class="rounded-lg border '+(failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white')+' p-2"><div class="flex flex-wrap items-center justify-between gap-2"><span><b>'+escapeHtml(job.title||job.originalName||job.id||'教材')+'</b> · '+escapeHtml(materialUploadJobLabel(job.status))+'</span><span class="text-[11px] text-slate-500">'+escapeHtml(progress.label)+'</span></div><div class="mt-1 text-[11px] '+(failed?'text-rose-700':'text-slate-600')+'">'+escapeHtml(detail)+'</div>'+(health?'<div class="mt-1 text-[10px] font-bold '+(job.stalled?'text-rose-700':job.heartbeatDelayed?'text-amber-700':'text-emerald-700')+'">'+escapeHtml(health+heartbeat)+'</div>':'')+renderMaterialUploadTimeline(job)+retained+'<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 '+progress.pct+'%</span><span>依 Worker 真實回報階段顯示；頁數／R2 上傳量會即時持久化，剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full '+barClass+' transition-all" style="width:'+progress.pct+'%"></div></div></div>';
     }).join('');
     const allDone=rows.length>0&&rows.every(job=>job.status==='completed');
     const terminal=rows.length>0&&rows.every(job=>['completed','failed','cancelled'].includes(job.status));
