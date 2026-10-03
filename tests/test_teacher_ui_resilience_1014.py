@@ -43,6 +43,7 @@ class TeacherUiResilience1014Tests(unittest.TestCase):
             "FFmpeg",
             "job.error || job.detail",
             "/api/material-jobs?limit=30",
+            "data.problemJobs || data.jobs || []",
         ):
             self.assertIn(marker, self.source)
 
