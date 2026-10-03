@@ -32,3 +32,22 @@ The existing 10-minute `.github/workflows/worker-offline-alerts.yml` lane now sy
 An incident remains one row while the condition persists, so each system administrator gets one stable email event per incident generation. When the condition clears, the same row becomes `resolved` and produces one recovery event. If the condition later returns, generation increments and a new email key is produced. Worker-offline incidents are resolved only after a confirmed fresh heartbeat from the same physical worker identity; heartbeat retention expiry alone is never treated as recovery.
 
 Operational incident and recovery email kinds are protected critical notifications, like existing material-failure/Worker-offline notifications. Ordinary learning email preferences cannot disable them. The Notification Center and Worker / Job status page reuse the same incident lifecycle instead of creating separate alert state.
+
+
+## Incident response lifecycle (0109)
+
+Migration `0109-operational-incident-response` keeps automatic detection state separate from human response state. The system remains the only authority that changes an Incident from `open` to `resolved`; a system administrator cannot manually hide an active failure.
+
+For an OPEN Incident, a system administrator can:
+
+- mark it acknowledged;
+- assign it only to another active `system_admin` account;
+- enter a bounded maintenance window from 15 minutes to 24 hours;
+- add a bounded response note;
+- clear maintenance or assignment without changing the automatic detection state.
+
+Every response mutation is session/RBAC protected and is appended to the existing general audit log. A reopened Incident starts a new generation and resets response state, assignment, maintenance and note fields so an old acknowledgement cannot silently carry into a new outage.
+
+While a maintenance window is active, the Incident remains visible in-app but new escalation Email is paused. Automatic recovery is never paused, and a recovery event remains Email-eligible. When the maintenance deadline expires, an unresolved Incident becomes escalation-eligible again.
+
+The Worker / Job status page renders a static non-secret runbook selected by stable `errorCode` (for example `WORKER_OFFLINE`, `R2_STORAGE`, `FFMPEG_CONVERSION`, `LIBREOFFICE_CONVERSION`, `DATABASE`, DNS/network and AI failure-burst codes). Runbooks are guidance only; they do not execute infrastructure changes.
