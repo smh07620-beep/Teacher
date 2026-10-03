@@ -148,6 +148,39 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
         self.assertIn("write probe", worker["storagePreflightError"])
         self.assertFalse(worker["claimReady"])
 
+    def test_status_projects_video_acceleration_and_libreoffice_warm_health(self):
+        repository.upsert_heartbeat(
+            "worker-phase2",
+            last_seen=dt.datetime.now(dt.timezone.utc).isoformat(),
+            capabilities={
+                "protocolVersion": MATERIAL_WORKER_PROTOCOL_VERSION,
+                "platform": "win32",
+                "ffmpeg": {"available": True},
+                "libreOffice": {"available": True},
+                "videoAcceleration": {
+                    "enabled": True,
+                    "available": True,
+                    "encoder": "h264_qsv",
+                    "preference": "auto",
+                },
+                "libreOfficeWarm": {
+                    "enabled": True,
+                    "running": True,
+                    "mode": "warm",
+                },
+            },
+            connection_factory=self.connect,
+        )
+        worker = operations.status(
+            lambda: {}, connection_factory=self.connect
+        )["workers"][0]
+        self.assertTrue(worker["videoAccelerationEnabled"])
+        self.assertTrue(worker["videoAccelerationAvailable"])
+        self.assertEqual(worker["videoAccelerationEncoder"], "h264_qsv")
+        self.assertTrue(worker["libreOfficeWarmEnabled"])
+        self.assertTrue(worker["libreOfficeWarmRunning"])
+        self.assertEqual(worker["libreOfficeWarmMode"], "warm")
+
     def test_capability_installer_is_idempotent(self):
         class Dummy:
             @staticmethod
@@ -182,6 +215,8 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
             "原始檔仍保留",
             "不必重新上傳",
             "估計剩餘約",
+            "Video ",
+            "LO warm",
         ):
             self.assertIn(marker, jobs)
         self.assertIn("install_capability(worker)", entry)
