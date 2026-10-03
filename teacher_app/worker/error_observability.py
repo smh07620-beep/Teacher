@@ -13,27 +13,6 @@ _SECRET_PATTERNS = (
 
 _RULES = (
     (
-        "DNS_RESOLUTION",
-        "network",
-        ("getaddrinfo", "name resolution", "temporary failure in name resolution", "nodename nor servname", "dns"),
-        "網路 DNS 解析失敗",
-        "確認院內網路/DNS 與正式網址可解析；不需要重新上傳已安全接收的教材。",
-    ),
-    (
-        "TLS_CONNECTION",
-        "network",
-        ("ssl", "tls", "certificate verify", "certificate_verify_failed"),
-        "安全連線驗證失敗",
-        "檢查系統時間、TLS 憑證與代理伺服器設定，再讓 Worker 重試。",
-    ),
-    (
-        "NETWORK_TIMEOUT",
-        "network",
-        ("timed out", "timeout", "readtimeout", "connecttimeout"),
-        "外部連線逾時",
-        "先確認網路與服務狀態；若原始檔仍保留，讓系統自動重試即可。",
-    ),
-    (
         "LIBREOFFICE_CONVERSION",
         "conversion",
         ("libreoffice", "soffice", "office/pdf preview", "office to pdf"),
@@ -115,6 +94,27 @@ _RULES = (
         ),
         "教材檔案完整性或格式驗證失敗",
         "確認原始檔未損毀、格式與副檔名一致；這類問題通常需要修正來源檔再上傳。",
+    ),
+    (
+        "DNS_RESOLUTION",
+        "network",
+        ("getaddrinfo", "name resolution", "temporary failure in name resolution", "nodename nor servname", "dns"),
+        "網路 DNS 解析失敗",
+        "確認院內網路/DNS 與正式網址可解析；不需要重新上傳已安全接收的教材。",
+    ),
+    (
+        "TLS_CONNECTION",
+        "network",
+        ("ssl", "tls", "certificate verify", "certificate_verify_failed"),
+        "安全連線驗證失敗",
+        "檢查系統時間、TLS 憑證與代理伺服器設定，再讓 Worker 重試。",
+    ),
+    (
+        "NETWORK_TIMEOUT",
+        "network",
+        ("timed out", "timeout", "readtimeout", "connecttimeout"),
+        "外部連線逾時",
+        "先確認網路與服務狀態；若原始檔仍保留，讓系統自動重試即可。",
     ),
     (
         "WORKER_API",
