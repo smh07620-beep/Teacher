@@ -87,8 +87,8 @@
     const average=Math.max(0,Number(averageSeconds||0));
     const actual=Math.max(0,Math.min(100,Number(job.progressPercent||0)));
     if(job.status==='completed')return {pct:100,label:'完成 · '+materialUploadDurationLabel(elapsed)};
-    if(job.status==='failed')return {pct:100,label:'需要處理 · '+materialUploadDurationLabel(elapsed)};
-    if(job.status==='cancelled')return {pct:100,label:'已取消'};
+    if(job.status==='failed')return {pct:actual||100,label:'需要處理 · '+materialUploadDurationLabel(elapsed)};
+    if(job.status==='cancelled')return {pct:actual||100,label:'已取消'};
     if(job.status==='queued')return {pct:actual||25,label:'R2 已接收 · 等待 Worker '+materialUploadDurationLabel(elapsed)};
     if(job.status==='retry_wait')return {pct:actual||25,label:'等待自動重試 · '+materialUploadDurationLabel(elapsed)};
     const pct=actual||30;
@@ -146,7 +146,7 @@
         : '';
       const detail=(failed||retryWait)?(job.error||job.detail||'請查看 Worker / Job 狀態'):(job.detail||job.stage||'');
       const barClass=failed?'bg-rose-500':retryWait?'bg-amber-500':job.status==='completed'?'bg-emerald-500':'bg-sky-600';
-      return '<div class="rounded-lg border '+(failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white')+' p-2"><div class="flex flex-wrap items-center justify-between gap-2"><span><b>'+escapeHtml(job.title||job.originalName||job.id||'教材')+'</b> · '+escapeHtml(materialUploadJobLabel(job.status))+'</span><span class="text-[11px] text-slate-500">'+escapeHtml(progress.label)+'</span></div><div class="mt-1 text-[11px] '+(failed?'text-rose-700':'text-slate-600')+'">'+escapeHtml(detail)+'</div>'+renderMaterialUploadTimeline(job)+retained+'<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 '+progress.pct+'%</span><span>依 Worker 真實回報階段顯示；剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full '+barClass+' transition-all" style="width:'+progress.pct+'%"></div></div></div>';
+      return '<div class="rounded-lg border '+(failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white')+' p-2"><div class="flex flex-wrap items-center justify-between gap-2"><span><b>'+escapeHtml(job.title||job.originalName||job.id||'教材')+'</b> · '+escapeHtml(materialUploadJobLabel(job.status))+'</span><span class="text-[11px] text-slate-500">'+escapeHtml(progress.label)+'</span></div><div class="mt-1 text-[11px] '+(failed?'text-rose-700':'text-slate-600')+'">'+escapeHtml(detail)+'</div>'+renderMaterialUploadTimeline(job)+retained+'<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 '+progress.pct+'%</span><span>依 Worker 真實回報階段顯示；進度已持久化，剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full '+barClass+' transition-all" style="width:'+progress.pct+'%"></div></div></div>';
     }).join('');
     const allDone=rows.length>0&&rows.every(job=>job.status==='completed');
     const terminal=rows.length>0&&rows.every(job=>['completed','failed','cancelled'].includes(job.status));
