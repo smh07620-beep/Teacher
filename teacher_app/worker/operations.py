@@ -15,6 +15,152 @@ LOGGER = logging.getLogger(__name__)
 WORKER_STATUS_ERROR = "無法讀取本機 Worker 狀態，請稍後再試或檢查伺服器記錄。"
 
 
+def _parse_utc(value: object) -> dt.datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def material_job_observability(
+    job: dict,
+    *,
+    now: dt.datetime | None = None,
+    stale_seconds: int | None = None,
+    heartbeat_warning_seconds: int | None = None,
+) -> dict:
+    """Attach one human-facing liveness projection without changing queue state."""
+    item = dict(job or {})
+    current = now or dt.datetime.now(dt.timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=dt.timezone.utc)
+    current = current.astimezone(dt.timezone.utc)
+
+    heartbeat_interval = _int_env("MATERIAL_WORKER_HEARTBEAT_SECONDS", 30, 5, 90)
+    warning_seconds = (
+        max(90, heartbeat_interval * 4)
+        if heartbeat_warning_seconds is None
+        else max(30, int(heartbeat_warning_seconds))
+    )
+    stale_limit = (
+        _int_env("MATERIAL_JOB_STALE_SECONDS", 1800, 300, 21600)
+        if stale_seconds is None
+        else max(300, min(21600, int(stale_seconds)))
+    )
+
+    status_value = str(item.get("status") or "")
+    started = _parse_utc(item.get("startedAt") or item.get("createdAt"))
+    finished = _parse_utc(item.get("finishedAt"))
+    elapsed_end = finished or current
+    elapsed_seconds = (
+        max(0, int((elapsed_end - started).total_seconds()))
+        if started
+        else 0
+    )
+
+    heartbeat = _parse_utc(item.get("workerLastSeen"))
+    if heartbeat is None and status_value == "processing":
+        heartbeat = _parse_utc(item.get("updatedAt"))
+    heartbeat_age = (
+        max(0, int((current - heartbeat).total_seconds()))
+        if heartbeat
+        else None
+    )
+
+    available = _parse_utc(item.get("availableAt"))
+    retry_in = (
+        max(0, int((available - current).total_seconds()))
+        if status_value == "retry_wait" and available
+        else 0
+    )
+
+    state = "unknown"
+    label = "狀態待確認"
+    detail = ""
+    if status_value == "processing":
+        if heartbeat_age is None:
+            state = "heartbeat_delayed"
+            label = "等待 Worker 回報"
+            detail = "工作正在處理，但尚未取得本輪 heartbeat；不會僅因處理時間較長就判定失敗。"
+        elif heartbeat_age >= stale_limit:
+            state = "stalled"
+            label = "可能卡住"
+            detail = f"Worker 已 {heartbeat_age} 秒沒有回報；達到 stale 門檻 {stale_limit} 秒。"
+        elif heartbeat_age >= warning_seconds:
+            state = "heartbeat_delayed"
+            label = "回報延遲"
+            detail = f"Worker 已 {heartbeat_age} 秒沒有回報；未達 stale 門檻 {stale_limit} 秒。"
+        else:
+            state = "active"
+            label = "持續處理"
+            detail = f"Worker heartbeat 正常（{heartbeat_age} 秒前）；即使處理時間較長也不視為卡住。"
+    elif status_value == "retry_wait":
+        state = "retry_wait"
+        label = "等待重試"
+        detail = (
+            f"預計 {retry_in} 秒後可再次由 Worker 領取。"
+            if retry_in
+            else "已到可重試時間，等待可用 Worker 領取。"
+        )
+    elif status_value == "queued":
+        state = "queued"
+        label = "等待 Worker"
+        detail = "原始檔已安全排隊，尚未由 Worker 領取。"
+    elif status_value == "completed":
+        state = "completed"
+        label = "已完成"
+        detail = "教材已完成正式發布。"
+    elif status_value == "failed":
+        state = "failed"
+        label = "需要處理"
+        detail = str(item.get("error") or item.get("detail") or "背景工作失敗。")[:500]
+    elif status_value == "cancelled":
+        state = "cancelled"
+        label = "已取消"
+        detail = str(item.get("detail") or "背景工作已取消。")[:500]
+
+    item.update(
+        {
+            "elapsedSeconds": elapsed_seconds,
+            "heartbeatAgeSeconds": heartbeat_age,
+            "heartbeatWarningSeconds": warning_seconds,
+            "staleThresholdSeconds": stale_limit,
+            "retryInSeconds": retry_in,
+            "observabilityState": state,
+            "observabilityLabel": label,
+            "observabilityDetail": detail,
+            "heartbeatDelayed": state == "heartbeat_delayed",
+            "stalled": state == "stalled",
+        }
+    )
+    return item
+
+
+def material_jobs_observability(
+    jobs,
+    *,
+    now: dt.datetime | None = None,
+    stale_seconds: int | None = None,
+    heartbeat_warning_seconds: int | None = None,
+) -> list[dict]:
+    current = now or dt.datetime.now(dt.timezone.utc)
+    return [
+        material_job_observability(
+            item,
+            now=current,
+            stale_seconds=stale_seconds,
+            heartbeat_warning_seconds=heartbeat_warning_seconds,
+        )
+        for item in (jobs or [])
+    ]
+
+
 def _env_true(name: str, default: bool) -> bool:
     fallback = "true" if default else "false"
     return os.environ.get(name, fallback).strip().lower() in {"1", "true", "yes", "on"}
@@ -285,9 +431,13 @@ def status(
     )
     processing = int((aggregates.get("processing") or {}).get("count") or 0)
     failed = int((aggregates.get("failed") or {}).get("count") or 0)
-    recent_jobs = repository.list_material_jobs(
-        100,
-        connection_factory=connection_factory,
+    now = dt.datetime.now(dt.timezone.utc)
+    recent_jobs = material_jobs_observability(
+        repository.list_material_jobs(
+            100,
+            connection_factory=connection_factory,
+        ),
+        now=now,
     )
     terminal_jobs = [
         item
@@ -339,7 +489,7 @@ def status(
                 parsed = parsed.replace(tzinfo=dt.timezone.utc)
             oldest_age = max(
                 0,
-                int((dt.datetime.now(dt.timezone.utc) - parsed).total_seconds()),
+                int((now - parsed.astimezone(dt.timezone.utc)).total_seconds()),
             )
         except (TypeError, ValueError):
             pass
@@ -348,7 +498,6 @@ def status(
     worker_status_available = True
     worker_status_error = ""
     try:
-        now = dt.datetime.now(dt.timezone.utc)
         cutoff = now - dt.timedelta(seconds=120)
         retention_hours = _int_env(
             "MATERIAL_WORKER_HEARTBEAT_RETENTION_HOURS", 24, 1, 720
@@ -407,6 +556,22 @@ def status(
             if durations
             else 0.0
         ),
+        "healthyProcessingJobs": sum(
+            item.get("observabilityState") == "active" for item in recent_jobs
+        ),
+        "heartbeatDelayedJobs": sum(
+            item.get("observabilityState") == "heartbeat_delayed" for item in recent_jobs
+        ),
+        "stalledJobs": sum(
+            item.get("observabilityState") == "stalled" for item in recent_jobs
+        ),
+        "heartbeatWarningSeconds": max(
+            90,
+            _int_env("MATERIAL_WORKER_HEARTBEAT_SECONDS", 30, 5, 90) * 4,
+        ),
+        "staleThresholdSeconds": _int_env(
+            "MATERIAL_JOB_STALE_SECONDS", 1800, 300, 21600
+        ),
         "workers": workers,
         "workerStatusAvailable": worker_status_available,
         "workerStatusError": worker_status_error,
@@ -418,6 +583,8 @@ def status(
 __all__ = [
     "WORKER_STATUS_ERROR",
     "cleanup_staging",
+    "material_job_observability",
+    "material_jobs_observability",
     "offline_worker_alerts",
     "recover_stale_processing_jobs",
     "status",
