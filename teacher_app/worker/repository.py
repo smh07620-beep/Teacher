@@ -622,6 +622,7 @@ def claim_next_material_job(
                 "updated_at": now,
                 "stage": "背景處理中",
                 "detail": "Worker 已取得工作",
+                "progress_percent": 30,
                 "worker_id": worker_id,
             },
             expected_statuses=(str(raw.get("status") or ""),),
