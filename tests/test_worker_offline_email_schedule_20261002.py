@@ -159,7 +159,10 @@ class WorkerOfflineEmailSchedule20261002Tests(unittest.TestCase):
         self.assertIn('cron: "*/10 * * * *"', critical)
         self.assertIn('MATERIAL_WORKER_OFFLINE_ALERT_SECONDS: "600"', critical)
         self.assertIn("send_worker_offline_alerts.py", critical)
-        self.assertIn("run_worker_offline_reminders", script)\n        self.assertIn("run_operational_incident_alerts", script)\n        self.assertIn('MATERIAL_INCIDENT_ERROR_BURST_COUNT: "3"', critical)\n        self.assertIn('MATERIAL_INCIDENT_FAILURE_RATE_PERCENT: "50"', critical)
+        self.assertIn("run_worker_offline_reminders", script)
+        self.assertIn("run_operational_incident_alerts", script)
+        self.assertIn('MATERIAL_INCIDENT_ERROR_BURST_COUNT: "3"', critical)
+        self.assertIn('MATERIAL_INCIDENT_FAILURE_RATE_PERCENT: "50"', critical)
         self.assertIn('cron: "15 1 * * *"', daily)
         self.assertNotIn('*/10', daily)
 
