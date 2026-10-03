@@ -53,6 +53,7 @@ Explicit admin deletion is strict: provider cleanup failures must surface throug
 
 - `static/system-admin.js` is a legacy compatibility bundle. It must not receive new product logic.
 - `static/course-wizard-681.js` is the canonical Course Wizard UI/state owner.
+- `static/system-exam.js` is the canonical learner exam browser runtime. The retired no-op `static/exam-integrity.js` compatibility asset is removed; root `exam_integrity.py` remains only as a Python registration adapter.
 - `static/admin-compat-facade.js`, `static/assessment-681.js`, `static/question-authoring-ux-71.js`, and `static/runtime-escape-guard-7111.js` are removed. Current HTML and runtime manifests call canonical owners directly.
 - `static/assessment-advanced-74.js` is the sole owner for blueprint snapshots and item analytics; normal exam/question management remains with the canonical admin modules.
 - `static/shared-core.js` owns the global `escapeHtml` compatibility export until remaining callers move to `AppCore.escapeHtml`.

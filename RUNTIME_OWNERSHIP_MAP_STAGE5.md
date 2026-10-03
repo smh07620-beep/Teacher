@@ -1,6 +1,6 @@
 # Runtime Ownership Map — Stage 5 historical record and current cutover status
 
-Branch target: `feature/teacher-content-authoring-studio-72`
+Historical branch target: `feature/teacher-content-authoring-studio-72` (retired). Current production/release branch: `main`.
 
 This file originally tracked the Stage 5 migration from the monolithic Flask host. That migration has since crossed the production composition boundary. The statements below describe the **current** repository state; older Stage 5 assumptions such as “`pgy_app.py` still imports `app.py`” are no longer valid.
 
