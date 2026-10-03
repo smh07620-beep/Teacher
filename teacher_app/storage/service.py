@@ -9,12 +9,14 @@ clients or duplicating provider protocols.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any, Callable, Mapping
 
 
 VALID_BACKENDS = frozenset({"local", "mega", "oci", "gdrive", "r2"})
 AUTO_BACKEND_ORDER = ("mega", "oci", "gdrive", "r2")
 DELETE_OPERATIONS = frozenset({"object", "prefix", "material"})
+LOGGER = logging.getLogger(__name__)
 
 
 class StorageConfigurationError(RuntimeError):
@@ -231,6 +233,12 @@ def delete_best_effort(
     except Exception as exc:
         backend = str(request.backend or "").strip().lower()
         operation = str(request.operation or "").strip().lower()
+        LOGGER.warning(
+            "storage best-effort delete failed backend=%s operation=%s error_type=%s",
+            backend[:32],
+            operation[:32],
+            type(exc).__name__,
+        )
         return DeleteOutcome(
             backend=backend,
             operation=operation,

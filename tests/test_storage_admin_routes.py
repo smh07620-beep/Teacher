@@ -149,6 +149,26 @@ class StorageAdminRoutesTests(unittest.TestCase):
         self.assertEqual(refreshed["error"], "")
         self.assertEqual(refreshed["cachedSeconds"], 30)
 
+    def test_storage_status_provider_failure_is_logged_without_exception_message(self):
+        runtime = _runtime(
+            self.paths,
+            active_material_backend=lambda: (_ for _ in ()).throw(
+                RuntimeError("credential=do-not-log")
+            ),
+        )
+        with patch(
+            "teacher_app.storage.admin_service.material_repository.list_uploaded_materials",
+            return_value=[],
+        ), patch.object(admin_service.LOGGER, "warning") as warning:
+            result = admin_service.storage_status(runtime, force=True)
+
+        self.assertEqual(result["activeBackend"], "error")
+        rendered = "\n".join(str(call) for call in warning.call_args_list)
+        self.assertIn("storage status failed", rendered)
+        self.assertIn("active_backend", rendered)
+        self.assertIn("RuntimeError", rendered)
+        self.assertNotIn("do-not-log", rendered)
+
     def test_gdrive_configuration_and_check_errors_preserve_400_json(self):
         app = Flask(__name__)
         base = _Base(app)

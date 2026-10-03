@@ -23,6 +23,10 @@ class ErrorObservability20261003Tests(unittest.TestCase):
         video_jobs = ROOT.joinpath("teacher_app", "materials", "ai_video_jobs.py").read_text(encoding="utf-8")
         notification_prefs = ROOT.joinpath("teacher_app", "notifications", "preferences.py").read_text(encoding="utf-8")
         ai_worker = ROOT.joinpath("ai_question_worker.py").read_text(encoding="utf-8")
+        storage_service = ROOT.joinpath("teacher_app", "storage", "service.py").read_text(encoding="utf-8")
+        storage_worker = ROOT.joinpath("teacher_app", "storage", "worker_runtime.py").read_text(encoding="utf-8")
+        storage_web = ROOT.joinpath("teacher_app", "storage", "web_runtime.py").read_text(encoding="utf-8")
+        storage_admin = ROOT.joinpath("teacher_app", "storage", "admin_service.py").read_text(encoding="utf-8")
 
         for marker, source in (
             ("R2 upload session status count failed", r2),
@@ -47,13 +51,22 @@ class ErrorObservability20261003Tests(unittest.TestCase):
             ("AI presentation job failed", presentation_jobs),
             ("AI video job failed", video_jobs),
             ("notification preferences read fallback", notification_prefs),
+            ("storage best-effort delete failed", storage_service),
+            ("storage cleanup failed backend=mega", storage_worker),
+            ("storage cleanup failed backend=gdrive", storage_worker),
+            ("storage read failed backend=mega", storage_web),
+            ("storage preview cache cleanup failed backend=mega", storage_web),
+            ("storage status failed backend=gdrive", storage_admin),
+            ("storage migration failed target=r2", storage_admin),
+            ("storage migration rollback failed backend=r2", storage_admin),
         ):
             self.assertIn(marker, source)
 
         for source in (
             r2, reminders, pgy, materials, scope_filter, ai_fallback, ai_jobs,
             script_jobs, audio_jobs, subtitle_jobs, presentation_jobs, video_jobs,
-            notification_prefs,
+            notification_prefs, storage_service, storage_worker, storage_web,
+            storage_admin,
         ):
             self.assertIn("error_type=%s", source)
         self.assertIn("loop error type=", ai_worker)

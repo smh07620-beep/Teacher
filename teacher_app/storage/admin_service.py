@@ -8,6 +8,7 @@ while the legacy host is being retired.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import threading
@@ -25,6 +26,7 @@ from teacher_app.storage.worker_runtime import WorkerMaterialStorageAdapter
 
 _STATUS_CACHE = {"at": 0.0, "data": None}
 _STATUS_LOCK = threading.RLock()
+LOGGER = logging.getLogger(__name__)
 
 
 def _env_true(name: str, default: bool = False) -> bool:
@@ -219,6 +221,10 @@ def storage_status(runtime: StorageAdminRuntime, *, force: bool = False) -> dict
         backend = runtime.active_material_backend()
         error = ""
     except Exception as exc:
+        LOGGER.warning(
+            "storage status failed backend=selection action=active_backend error_type=%s",
+            type(exc).__name__,
+        )
         backend = "error"
         error = str(exc)
 
@@ -228,6 +234,10 @@ def storage_status(runtime: StorageAdminRuntime, *, force: bool = False) -> dict
         try:
             drive_info = runtime.gdrive_check()
         except Exception as exc:
+            LOGGER.warning(
+                "storage status failed backend=gdrive action=folder_check error_type=%s",
+                type(exc).__name__,
+            )
             drive_error = str(exc)
             if not error:
                 error = drive_error
@@ -244,6 +254,10 @@ def storage_status(runtime: StorageAdminRuntime, *, force: bool = False) -> dict
                 "totalGb": round(space["total"] / 1024**3, 3),
             }
         except Exception as exc:
+            LOGGER.warning(
+                "storage status failed backend=mega action=capacity error_type=%s",
+                type(exc).__name__,
+            )
             mega_status_error = str(exc)
             if not error:
                 error = mega_status_error
@@ -253,6 +267,10 @@ def storage_status(runtime: StorageAdminRuntime, *, force: bool = False) -> dict
         try:
             oci_used = round(runtime.oci_bucket_usage_bytes() / 1024**3, 3)
         except Exception as exc:
+            LOGGER.warning(
+                "storage status failed backend=oci action=usage error_type=%s",
+                type(exc).__name__,
+            )
             if not error:
                 error = str(exc)
 
@@ -305,6 +323,10 @@ def migrate_materials_to_gdrive(runtime: StorageAdminRuntime) -> tuple[dict, int
     try:
         runtime.gdrive_check()
     except Exception as exc:
+        LOGGER.warning(
+            "storage migration preflight failed backend=gdrive action=folder_check error_type=%s",
+            type(exc).__name__,
+        )
         return {"error": f"Google Drive 連線/資料夾檢查失敗：{exc}"}, 400
 
     paths = runtime.paths_provider()
@@ -366,6 +388,12 @@ def migrate_materials_to_gdrive(runtime: StorageAdminRuntime) -> tuple[dict, int
                 )
             migrated += 1
         except Exception as exc:
+            LOGGER.warning(
+                "storage migration failed target=gdrive material_id=%s source_backend=%s error_type=%s",
+                str(entry.get("id") or "")[:120],
+                str(old_backend or "")[:32],
+                type(exc).__name__,
+            )
             failed.append({
                 "id": entry["id"],
                 "title": entry.get("title", ""),
@@ -424,10 +452,20 @@ def migrate_materials_to_r2(runtime: StorageAdminRuntime) -> tuple[dict, int]:
             shutil.rmtree(slides, ignore_errors=True)
             migrated += 1
         except Exception as exc:
+            LOGGER.warning(
+                "storage migration failed target=r2 material_id=%s source_backend=%s error_type=%s",
+                str(entry.get("id") or "")[:120],
+                str(backend or "local")[:32],
+                type(exc).__name__,
+            )
             try:
                 runtime.r2_delete_prefix(f"materials/{entry['id']}/")
-            except Exception:
-                pass
+            except Exception as cleanup_exc:
+                LOGGER.warning(
+                    "storage migration rollback failed backend=r2 action=delete_prefix material_id=%s error_type=%s",
+                    str(entry.get("id") or "")[:120],
+                    type(cleanup_exc).__name__,
+                )
             failed.append({
                 "id": entry["id"],
                 "title": entry.get("title", ""),

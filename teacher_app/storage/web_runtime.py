@@ -7,6 +7,7 @@ modules do not need callbacks from ``teacher_app.legacy_host``.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shutil
@@ -27,6 +28,7 @@ from teacher_app.storage.worker_runtime import WorkerMaterialStorageAdapter
 
 _PREVIEW_CACHE_LOCKS: dict[str, threading.RLock] = {}
 _PREVIEW_CACHE_LOCKS_GUARD = threading.Lock()
+LOGGER = logging.getLogger(__name__)
 
 
 def mega_web_status(exc) -> int:
@@ -108,7 +110,11 @@ class WebStorageRuntime:
                 target,
                 timeout_seconds=providers.MEGA_WEB_READ_TIMEOUT_SECONDS,
             )
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "storage read failed backend=mega action=send_file error_type=%s",
+                type(exc).__name__,
+            )
             shutil.rmtree(temp_root, ignore_errors=True)
             raise
         response = send_file(
@@ -161,8 +167,11 @@ class WebStorageRuntime:
                     total -= size
                 except OSError:
                     pass
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.warning(
+                "storage preview cache cleanup failed backend=mega error_type=%s",
+                type(exc).__name__,
+            )
 
     def mega_cached_preview(self, entry) -> Path:
         meta = entry.get("storageMeta") or {}

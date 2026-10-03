@@ -139,12 +139,19 @@ class StoragePackageGroundworkTests(unittest.TestCase):
                 delete_material=lambda _payload: (_ for _ in ()).throw(RuntimeError("boom")),
             )
         }
-        result = delete_best_effort(
-            DeleteRequest("gdrive", "material", {"materialFolderId": "folder-1"}),
-            providers,
-        )
+        with patch("teacher_app.storage.service.LOGGER.warning") as warning:
+            result = delete_best_effort(
+                DeleteRequest("gdrive", "material", {"materialFolderId": "folder-1"}),
+                providers,
+            )
         self.assertFalse(result.deleted)
         self.assertIsInstance(result.error, StorageDeletionError)
+        rendered = "\n".join(str(call) for call in warning.call_args_list)
+        self.assertIn("storage best-effort delete failed", rendered)
+        self.assertIn("gdrive", rendered)
+        self.assertIn("material", rendered)
+        self.assertIn("StorageDeletionError", rendered)
+        self.assertNotIn("boom", rendered)
 
     def test_missing_delete_handler_is_explicit_in_strict_and_bounded_in_best_effort(self):
         providers = {"oci": adapter("oci", configured=True)}
@@ -267,6 +274,22 @@ class StoragePackageGroundworkTests(unittest.TestCase):
         self.assertEqual(result["backend"], "mega")
         self.assertTrue(result["ready"])
         self.assertEqual(run.call_args.args[0][:2], ["mega-rm", "-f"])
+
+    def test_worker_mega_cleanup_failure_is_logged_without_provider_message(self):
+        runtime = WorkerMaterialStorageAdapter()
+        with patch(
+            "teacher_app.storage.worker_runtime.providers.mega_delete_object",
+            side_effect=RuntimeError("password=do-not-log"),
+        ), patch(
+            "teacher_app.storage.worker_runtime.LOGGER.warning",
+        ) as warning:
+            runtime._mega_cleanup("/remote/material")
+
+        rendered = "\n".join(str(call) for call in warning.call_args_list)
+        self.assertIn("storage cleanup failed", rendered)
+        self.assertIn("backend=mega", rendered)
+        self.assertIn("RuntimeError", rendered)
+        self.assertNotIn("do-not-log", rendered)
 
     def test_worker_non_mega_startup_preflight_is_bounded(self):
         runtime = WorkerMaterialStorageAdapter()

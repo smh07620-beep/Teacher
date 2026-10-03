@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import hashlib
+import logging
 import mimetypes
 import ntpath
 import os
@@ -38,6 +39,7 @@ except ImportError:  # pragma: no cover - deployment dependency is optional at i
 
 OFFICE_EXT = frozenset({".pptx", ".ppt", ".doc", ".docx", ".xls", ".xlsx", ".odp", ".odt", ".ods"})
 _CONVERSION_LOCK = threading.Lock()
+LOGGER = logging.getLogger(__name__)
 
 
 def _env_true(name: str, default: bool) -> bool:
@@ -260,8 +262,11 @@ class WorkerMaterialStorageAdapter:
                 is_configured=self.mega_is_configured,
                 run=self._mega_run,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.warning(
+                "storage cleanup failed backend=mega action=delete_object error_type=%s",
+                type(exc).__name__,
+            )
 
     def active_backend(self) -> str:
         adapters = {
@@ -1074,8 +1079,12 @@ class WorkerMaterialStorageAdapter:
             if material_folder_id and not reused_material_folder:
                 try:
                     service.files().delete(fileId=material_folder_id).execute()
-                except Exception:
-                    pass
+                except Exception as cleanup_exc:
+                    LOGGER.warning(
+                        "storage cleanup failed backend=gdrive action=delete_material_folder material_id=%s error_type=%s",
+                        str(material_id or "")[:120],
+                        type(cleanup_exc).__name__,
+                    )
             raise
 
     def upload_media_bundle_to_gdrive(
@@ -1144,6 +1153,10 @@ class WorkerMaterialStorageAdapter:
             if material_folder_id and not reused_material_folder:
                 try:
                     service.files().delete(fileId=material_folder_id).execute()
-                except Exception:
-                    pass
+                except Exception as cleanup_exc:
+                    LOGGER.warning(
+                        "storage cleanup failed backend=gdrive action=delete_material_folder material_id=%s error_type=%s",
+                        str(material_id or "")[:120],
+                        type(cleanup_exc).__name__,
+                    )
             raise
