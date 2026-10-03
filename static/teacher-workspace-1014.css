@@ -108,6 +108,36 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
 }
 
 @media (max-width: 820px) {
+  body.admin-page-mode #admin-workspace-header {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    min-width: 0;
+  }
+
+  body.admin-page-mode #admin-workspace-persona-actions-1014 {
+    order: 3;
+    flex: 1 0 100%;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0 !important;
+  }
+
+  body.admin-page-mode #teacher-persona-switch-1014 {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  body.admin-page-mode #teacher-persona-switch-1014 > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 6px 4px;
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   body.v56-system .v56-system-actions {
     max-width: calc(100vw - 108px);
     overflow: visible;
