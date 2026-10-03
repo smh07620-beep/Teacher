@@ -24,6 +24,16 @@ POLL_SECONDS=max(2,min(60,int(os.environ.get("MATERIAL_WORKER_POLL_SECONDS","2")
 REQUEST_TIMEOUT=max(10,min(600,int(os.environ.get("MATERIAL_WORKER_HTTP_TIMEOUT","120"))))
 HEARTBEAT_SECONDS=max(5,min(90,int(os.environ.get("MATERIAL_WORKER_HEARTBEAT_SECONDS","30"))))
 COMPLETE_RETRIES=4
+WORKER_PROGRESS_PERCENT={
+    "下載原始檔":38,
+    "驗證教材":48,
+    "內容準備":56,
+    "轉檔處理":66,
+    "建立預覽":76,
+    "正式發布":86,
+    "發布確認":93,
+    "完成確認":97,
+}
 VIDEO_EXT={".mp4",".webm",".mov",".m4v"}; AUDIO_EXT={".mp3",".wav",".m4a",".ogg"}
 EXIF_RASTER_EXT={".jpg",".jpeg",".png",".webp"}
 RESTART_FOR_UPDATE=75
@@ -204,10 +214,16 @@ class WorkerApi:
         path=f"/api/material-worker/{job_id}/heartbeat" if job_id else "/api/material-worker/heartbeat"
         caps=capabilities if isinstance(capabilities,dict) else capability()
         return self.post(path,{"workerId":WORKER_ID,"capabilities":caps,**AUTO_UPDATER.metadata()})
-    def progress(self,job_id,stage,detail=""):
+    def progress(self,job_id,stage,detail="",progress_percent=None):
+        percent=WORKER_PROGRESS_PERCENT.get(str(stage or "")) if progress_percent is None else progress_percent
         return self.post(
             f"/api/material-worker/{job_id}/progress",
-            {"workerId":WORKER_ID,"stage":str(stage or ""),"detail":str(detail or "")[:500]},
+            {
+                "workerId":WORKER_ID,
+                "stage":str(stage or ""),
+                "detail":str(detail or "")[:500],
+                "progressPercent":int(percent or 0),
+            },
         )
     def download(self,job,target):
         url=str(job.get("downloadUrl") or "")
@@ -219,10 +235,10 @@ class WorkerApi:
             url=BASE_URL+path; headers={**self.headers,"X-Teacher-Worker-Id":WORKER_ID}
         download(url,target,headers=headers)
 
-def _report_progress(api,job_id,stage,detail=""):
-    """Best-effort UX checkpoint; queue correctness never depends on reporting."""
+def _report_progress(api,job_id,stage,detail="",progress_percent=None):
+    """Best-effort persisted UX checkpoint; queue correctness never depends on reporting."""
     try:
-        api.progress(job_id,stage,detail)
+        api.progress(job_id,stage,detail,progress_percent=progress_percent)
     except Exception as exc:
         log(f"progress {job_id} {stage} failed: {str(exc)[:240]}")
 
