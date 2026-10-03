@@ -367,3 +367,12 @@ MATERIAL_INCIDENT_FAILURE_RATE_PERCENT=50
 這些都是 Web/Render/GitHub Actions 端設定，**不需要**加入院內 `.local-worker.env`。同一個問題持續存在時只維持一筆 OPEN incident；恢復後標記「已恢復」，日後再次發生才以新的 generation 重新告警。Worker 離線只有在同一實體機器真的送回新 heartbeat 後才視為恢復，不會因舊 heartbeat 超過保留期而假恢復。
 
 告警只寄給 `system_admin`，沿用既有 SMTP secrets 與 `email_notification_log` 去重複；一般課程/考核 Email 偏好不能關閉 critical incident/recovery 通知。
+
+
+## Incident 處置閉環（0109）
+
+`0109-operational-incident-response` 只增加 Web 端 Incident 的人工處置 metadata，不改 Worker protocol，因此院內 `.local-worker.env` **不需要新增任何設定**。
+
+系統管理者可以在 Worker / Job 狀態頁直接「已知悉、指派處理、設定 15 分鐘～24 小時維護、填寫備註」。維護期間 Incident 仍保留在站內，只暫停新的 escalation Email；Worker heartbeat、stale recovery、queue/retry 與自動恢復判定全部照常運作。Incident 只能由真實恢復條件轉成 resolved，不能人工強制關閉。
+
+同一問題重新發生時會建立新的 generation，上一輪的已知悉、負責人、維護期限與備註不會自動套用。各 error code 的 Runbook 是非敏感、唯讀處置指引，不會從 Render 遠端命令院內 Worker 或雲端 provider。
