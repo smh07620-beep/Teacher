@@ -294,6 +294,147 @@ def offline_worker_alerts(
     }
 
 
+
+def operational_incident_candidates(
+    *,
+    now: dt.datetime | None = None,
+    connection_factory=None,
+) -> list[dict]:
+    """Project only confirmed operational conditions worth incidenting."""
+    current = now or dt.datetime.now(dt.timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=dt.timezone.utc)
+    current = current.astimezone(dt.timezone.utc)
+    candidates: list[dict] = []
+
+    offline = offline_worker_alerts(
+        now=current,
+        connection_factory=connection_factory,
+    )
+    if offline.get("available"):
+        threshold_minutes = max(1, int(offline.get("thresholdSeconds") or 0) // 60)
+        for worker in offline.get("workers") or []:
+            worker_id = str(worker.get("workerId") or "").strip()
+            machine = str(worker.get("workerMachine") or "").strip().lower()
+            resource = machine or worker_id.lower()
+            if not resource:
+                continue
+            offline_minutes = max(1, int(worker.get("offlineSeconds") or 0) // 60)
+            candidates.append({
+                "incidentKey": f"worker_offline:{resource}",
+                "incidentType": "worker_offline",
+                "category": "worker",
+                "severity": "critical",
+                "title": "教材 Worker 已離線",
+                "detail": (
+                    f"{worker_id or resource} 已超過 {threshold_minutes} 分鐘未回報心跳；"
+                    f"目前約離線 {offline_minutes} 分鐘。"
+                ),
+                "action": "啟動或重新啟動院內 Worker；已排隊與 R2 staging 的教材不需要重新上傳。",
+                "errorCode": "WORKER_OFFLINE",
+                "resourceId": worker_id or resource,
+            })
+
+    jobs = material_jobs_observability(
+        repository.list_material_jobs(
+            100,
+            connection_factory=connection_factory,
+        ),
+        now=current,
+    )
+    for job in jobs:
+        if job.get("observabilityState") != "stalled":
+            continue
+        job_id = str(job.get("id") or "").strip()
+        if not job_id:
+            continue
+        candidates.append({
+            "incidentKey": f"job_stalled:{job_id}",
+            "incidentType": "job_stalled",
+            "category": "worker",
+            "severity": "critical",
+            "title": "教材處理工作可能卡住",
+            "detail": (
+                f"{job.get('title') or job.get('originalName') or job_id} 已超過 "
+                f"{int(job.get('staleThresholdSeconds') or 0)} 秒未收到 Worker heartbeat。"
+            ),
+            "action": "先確認院內 Worker 是否仍在執行；系統會依 stale recovery 安全續接，請勿重複上傳。",
+            "errorCode": "WORKER_HEARTBEAT_STALLED",
+            "resourceId": job_id,
+        })
+
+    terminal = [
+        job for job in jobs
+        if str(job.get("status") or "") in {"completed", "failed"}
+    ]
+    min_jobs = _int_env("MATERIAL_INCIDENT_FAILURE_RATE_MIN_JOBS", 5, 3, 50)
+    rate_percent = _int_env("MATERIAL_INCIDENT_FAILURE_RATE_PERCENT", 50, 20, 100)
+    sample = terminal[:20]
+    failures = [job for job in sample if str(job.get("status") or "") == "failed"]
+    if len(sample) >= min_jobs and failures:
+        rate = len(failures) / len(sample)
+        if rate * 100 >= rate_percent:
+            candidates.append({
+                "incidentKey": "material_failure_rate",
+                "incidentType": "failure_rate",
+                "category": "worker",
+                "severity": "warning",
+                "title": "教材背景工作近期失敗率偏高",
+                "detail": (
+                    f"最近 {len(sample)} 筆完成/失敗工作中有 {len(failures)} 筆失敗，"
+                    f"失敗率約 {round(rate * 100)}%。"
+                ),
+                "action": "先查看近期 error code 分布與 Worker/儲存狀態，再決定是否需要人工介入。",
+                "errorCode": "MATERIAL_FAILURE_RATE_HIGH",
+                "resourceId": "material-jobs",
+            })
+
+    burst_threshold = _int_env("MATERIAL_INCIDENT_ERROR_BURST_COUNT", 3, 2, 10)
+    burst_codes = {
+        "R2_STORAGE",
+        "GDRIVE_STORAGE",
+        "MEGA_STORAGE",
+        "OCI_STORAGE",
+        "STORAGE_PROVIDER",
+        "FFMPEG_CONVERSION",
+        "LIBREOFFICE_CONVERSION",
+    }
+    run_code = ""
+    run_count = 0
+    for job in terminal:
+        if str(job.get("status") or "") == "completed":
+            break
+        code = str(job.get("errorCode") or "")
+        if code not in burst_codes:
+            break
+        if not run_code:
+            run_code = code
+            run_count = 1
+        elif code == run_code:
+            run_count += 1
+        else:
+            break
+    if run_code and run_count >= burst_threshold:
+        sample_job = next(
+            (job for job in terminal if str(job.get("errorCode") or "") == run_code),
+            {},
+        )
+        candidates.append({
+            "incidentKey": f"error_burst:{run_code.lower()}",
+            "incidentType": "error_burst",
+            "category": str(sample_job.get("errorCategory") or "worker"),
+            "severity": "critical" if run_count >= burst_threshold + 1 else "warning",
+            "title": f"教材背景工作連續發生 {run_code}",
+            "detail": f"最近已連續 {run_count} 筆工作以相同 error code 失敗。",
+            "action": str(sample_job.get("errorAction") or "先查看 Worker / Job 狀態與技術細節，再恢復處理。"),
+            "errorCode": run_code,
+            "resourceId": run_code,
+        })
+
+    return candidates
+
+
+
 def cleanup_staging(
     delete_staging: Callable[[dict], None],
     *,
@@ -636,6 +777,7 @@ __all__ = [
     "material_job_observability",
     "material_jobs_observability",
     "offline_worker_alerts",
+    "operational_incident_candidates",
     "recover_stale_processing_jobs",
     "status",
 ]
