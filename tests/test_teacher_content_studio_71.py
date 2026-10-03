@@ -42,10 +42,18 @@ class TeacherContentStudio71Tests(unittest.TestCase):
             'renderFormalAtlas', 'openAtlasCreate',
         ):
             self.assertIn(marker, self.source)
-        self.assertIn('/api/quiz-categories?', self.source)
+        self.assertIn('/api/quiz-categories/admin?', self.source)
         self.assertNotIn("method:'POST'", self.source)
         self.assertNotIn("method:'PATCH'", self.source)
         self.assertNotIn("method:'DELETE'", self.source)
+
+    def test_exam_open_uses_scoped_detail_and_restorable_deep_link(self):
+        self.assertIn("const EXAM_PARAM='exam'", self.source)
+        self.assertIn('/api/quiz-categories/${encodeURIComponent(catId)}', self.source)
+        self.assertIn('syncExamDeepLink(catId)', self.source)
+        self.assertIn('restoreExamDeepLink', self.source)
+        self.assertIn('AdminWorkspaceShell?.addAfterWorkspace', self.source)
+        self.assertNotIn('categories.find(c=>String(c.id)===String(catId))', self.source)
 
     def test_question_presets_select_image_and_video_modes(self):
         self.assertIn("preset === 'image'", self.source)
