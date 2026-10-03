@@ -150,6 +150,8 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             "stalledJobs": ops.get("stalledJobs", 0),
             "heartbeatWarningSeconds": ops.get("heartbeatWarningSeconds", 120),
             "staleThresholdSeconds": ops.get("staleThresholdSeconds", 1800),
+            "operationalIssues": ops.get("operationalIssues", []),
+            "recentErrorCodes": ops.get("recentErrorCodes", []),
             "r2Budget": ops.get("r2Budget", {}),
         })
 
