@@ -8,6 +8,7 @@ from typing import Any, Iterable, Mapping
 
 from teacher_app.common import db as common_db
 from teacher_app.notifications import incident_runbooks
+from teacher_app.operations import history as operational_history
 from teacher_app.worker import operations as worker_operations
 
 
@@ -198,6 +199,17 @@ def sync_operational_incidents(
     else:
         raw_candidates = worker_operations.operational_incident_candidates(now=current)
         raw_candidates.extend(_ai_job_incident_candidates())
+        try:
+            raw_candidates.extend(
+                operational_history.trend_incident_candidates(now=current)
+            )
+        except Exception as exc:
+            # Trend detection is secondary observability. Never let a history
+            # read failure suppress Worker/provider/AI critical incidents.
+            LOGGER.warning(
+                "operational trend projection failed error_type=%s",
+                type(exc).__name__,
+            )
     confirmed_worker_recoveries = (
         set()
         if explicit_candidates
