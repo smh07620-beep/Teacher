@@ -68,6 +68,19 @@ jobs:
             throw 'Supervisor must export the stable Worker identity to material_worker.py.'
           }
           if (-not $gitignore.Contains('.worker-id')) { throw '.worker-id must remain gitignored.' }
+          $worker = Get-Content ./material_worker.py -Raw
+          if (-not $worker.Contains('.worker-runtime.lock') -or -not $worker.Contains('DUPLICATE_RUNTIME=76')) {
+            throw 'Python Worker runtime single-instance guard is missing.'
+          }
+          if ($worker.Contains('socket.gethostname()}:{os.getpid()}')) {
+            throw 'Worker fallback identity must not depend on process ID.'
+          }
+          if (-not $supervisor.Contains('$workerExit -eq 76')) {
+            throw 'Supervisor must treat duplicate runtime ownership as a non-crash wait state.'
+          }
+          if (-not $gitignore.Contains('.worker-runtime.lock')) {
+            throw '.worker-runtime.lock must remain gitignored.'
+          }
 
       - name: Do not create persistent scheduled tasks in CI
         shell: pwsh

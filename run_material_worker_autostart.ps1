@@ -202,6 +202,13 @@ while ($true) {
     Start-Sleep -Seconds 2
     continue
   }
+  if ($workerExit -eq 76) {
+    Write-TeacherWorkerEvent -EntryType "Information" -EventId 1021 -Message "Another material Worker runtime already owns the local runtime lock; supervisor will wait without consuming crash retries."
+    Write-Host "Another material Worker runtime is already active; retrying in 30 seconds."
+    $crashRestarts = 0
+    Start-Sleep -Seconds 30
+    continue
+  }
   # A scheduled material Worker is a long-lived service. A zero exit is not a
   # successful completion; treating it as terminal silently leaves the site Offline.
   $effectiveExit = if ($workerExit -eq 0) { 33 } else { $workerExit }
