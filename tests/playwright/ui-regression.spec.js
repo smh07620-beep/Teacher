@@ -219,6 +219,31 @@ test('system admin sees canonical Worker offline notification in system workspac
   await expect(center.locator('a[href*="workspace=worker"][href*="persona=system"]')).toContainText('查看 Worker 狀態');
   const parentId = await center.evaluate(node => node.parentElement?.id || '');
   expect(parentId).toBe('admin-workspace-content');
+
+  await center.locator('summary').click();
+  await expect(center).toHaveClass(/notification-center-modal-open/);
+  const overlay = await center.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    return {
+      parentIsBody: node.parentElement === document.body,
+      top: rect.top,
+      left: rect.left,
+      right: rect.right,
+      bottom: rect.bottom,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(overlay.parentIsBody, JSON.stringify(overlay)).toBe(true);
+  expect(overlay.left, JSON.stringify(overlay)).toBeGreaterThanOrEqual(0);
+  expect(overlay.right, JSON.stringify(overlay)).toBeLessThanOrEqual(overlay.viewportWidth + 1);
+  expect(overlay.top, JSON.stringify(overlay)).toBeGreaterThanOrEqual(0);
+  expect(overlay.bottom, JSON.stringify(overlay)).toBeLessThanOrEqual(overlay.viewportHeight + 1);
+
+  await page.keyboard.press('Escape');
+  await expect(center).not.toHaveClass(/notification-center-modal-open/);
+  const restoredParentId = await center.evaluate(node => node.parentElement?.id || '');
+  expect(restoredParentId).toBe('admin-workspace-content');
   await assertNoHorizontalOverflow(page);
 });
 
