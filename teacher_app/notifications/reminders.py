@@ -12,7 +12,7 @@ from teacher_app.auth import repository as auth_repository
 from teacher_app.auth.self_service import _send
 from teacher_app.common import db as common_db
 from teacher_app.common.auth import has_role
-from teacher_app.notifications import events, preferences
+from teacher_app.notifications import events, incidents, preferences
 
 TAIPEI = dt.timezone(dt.timedelta(hours=8))
 LOGGER = logging.getLogger(__name__)
@@ -127,9 +127,15 @@ def run_due_reminders() -> int:
     return sent
 
 
-def run_worker_offline_reminders() -> int:
-    """Send critical Worker-offline alerts to system administrators only."""
-    now = dt.datetime.now(dt.timezone.utc)
+def _send_operational_alerts(*, now: dt.datetime, sync_incidents: bool, kinds: set[str]) -> int:
+    if sync_incidents:
+        try:
+            incidents.sync_operational_incidents(now=now)
+        except Exception as exc:
+            LOGGER.warning(
+                "operational incident sync failed error_type=%s",
+                type(exc).__name__,
+            )
     sent = 0
     for row in auth_repository.list_users():
         if not row.get("active") or not row.get("email"):
@@ -142,7 +148,7 @@ def run_worker_offline_reminders() -> int:
             candidates = [
                 event
                 for event in projected
-                if str(event.get("kind") or "") == "worker_offline"
+                if str(event.get("kind") or "") in kinds
                 and "email" in event.get("channels", [])
             ]
             candidates = preferences.filter_email_events(
@@ -152,7 +158,7 @@ def run_worker_offline_reminders() -> int:
             )
         except Exception as exc:
             LOGGER.warning(
-                "worker offline reminder projection failed username=%s error_type=%s",
+                "operational incident reminder projection failed username=%s error_type=%s",
                 str(user.get("username") or "")[:80],
                 type(exc).__name__,
             )
@@ -167,21 +173,21 @@ def run_worker_offline_reminders() -> int:
         name = str(row.get("display_name") or row["username"])
         body = (
             f"您好 {name}：\n\n"
-            "教材 Worker 已持續離線，請登入系統管理 → Worker / Job 狀態確認。\n"
+            "以下是教學平台目前的系統維運事件：\n"
             + "\n".join(_line(event) for event in claimed)
-            + "\n\n此為必要系統通知，不受一般學習 Email 偏好關閉影響。"
+            + "\n\n請登入系統管理 → Worker / Job 狀態查看。"
+            + "\n此為必要系統通知，不受一般學習 Email 偏好關閉影響。"
+        )
+        subject = (
+            "醫學檢驗教學平台｜教材 Worker 離線提醒"
+            if all(str(event.get("kind") or "") == "worker_offline" for event in claimed)
+            else "醫學檢驗教學平台｜系統維運事件提醒"
         )
         try:
-            delivered = bool(
-                _send(
-                    row["email"],
-                    "醫學檢驗教學平台｜教材 Worker 離線提醒",
-                    body,
-                )
-            )
+            delivered = bool(_send(row["email"], subject, body))
         except Exception as exc:
             LOGGER.warning(
-                "worker offline reminder send failed username=%s error_type=%s",
+                "operational incident reminder send failed username=%s error_type=%s",
                 str(user.get("username") or "")[:80],
                 type(exc).__name__,
             )
@@ -194,4 +200,22 @@ def run_worker_offline_reminders() -> int:
     return sent
 
 
-__all__ = ["run_due_reminders", "run_worker_offline_reminders"]
+def run_operational_incident_alerts() -> int:
+    """Sync incident lifecycle and send one email per state transition/admin."""
+    return _send_operational_alerts(
+        now=dt.datetime.now(dt.timezone.utc),
+        sync_incidents=True,
+        kinds={"worker_offline", "operational_incident", "operational_recovery"},
+    )
+
+
+def run_worker_offline_reminders() -> int:
+    """Backward-compatible Worker-only sender used by older callers/tests."""
+    return _send_operational_alerts(
+        now=dt.datetime.now(dt.timezone.utc),
+        sync_incidents=False,
+        kinds={"worker_offline"},
+    )
+
+
+__all__ = ["run_due_reminders", "run_operational_incident_alerts", "run_worker_offline_reminders"]
