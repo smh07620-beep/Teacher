@@ -276,6 +276,10 @@
       const problemMap = new Map(rawProblemJobs.map(job => [String(job.id||''), job]));
       jobs.filter(job => ['heartbeat_delayed','stalled'].includes(job.observabilityState)).forEach(job => problemMap.set(String(job.id||''), job));
       const problemJobs = [...problemMap.values()];
+      const operationalIssues = Array.isArray(data.operationalIssues) ? data.operationalIssues : [];
+      const operationalIssueHtml = operationalIssues.length
+        ? '<div class="space-y-2">'+operationalIssues.map(issue=>'<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><b>'+escapeHtml(issue.message||issue.code||'維運提醒')+'</b>'+(issue.code?'<span class="ml-1 font-mono text-[10px]">['+escapeHtml(issue.code)+']</span>':'')+(issue.action?'<div class="mt-1">'+escapeHtml(issue.action)+'</div>':'')+'</div>').join('')+'</div>'
+        : '';
       const staging = data.staging || {};
       const emptyWorkerMessage = recentOfflineWorkers.length
         ? '⚠ 目前沒有在線 Worker；下方仍保留最近 24 小時內的離線紀錄供檢查。'
@@ -310,6 +314,7 @@
             <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2"><span class="text-rose-700">🔴 可能卡住：</span><b>${Number(data.stalledJobs||0)}</b><div class="mt-1 text-[10px]">stale ${formatDuration(data.staleThresholdSeconds||1800)}</div></div>
           </div>
           <div class="text-xs rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">Shared staging：<b>${escapeHtml(staging.backend || '未設定')}</b> · ${staging.available ? '可用' : '不可用'}${staging.shared ? ' · Web/Worker 共用' : ''}</div>
+          ${operationalIssueHtml}
         </section>
         <section class="space-y-3">
           <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
