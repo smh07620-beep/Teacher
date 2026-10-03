@@ -937,3 +937,84 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
         min-height: 68px;
     }
 }
+
+
+/* Notification Center: system/admin users open the details panel as a real
+   viewport overlay instead of expanding inside the workspace scroll container.
+   The collapsed row remains in its canonical workspace position. */
+body.notification-center-open-71 {
+    overflow: hidden !important;
+}
+
+.notification-center-backdrop-71 {
+    position: fixed;
+    inset: 0;
+    z-index: 998;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: rgba(15, 23, 42, .48);
+    backdrop-filter: blur(2px);
+    cursor: default;
+}
+
+#notification-center-71.notification-center-modal-open {
+    position: fixed !important;
+    z-index: 999 !important;
+    top: max(24px, env(safe-area-inset-top));
+    left: 50%;
+    width: min(860px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    margin: 0 !important;
+    padding: 16px 18px !important;
+    transform: translateX(-50%);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 18px !important;
+    background: #fff !important;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .28);
+}
+
+#notification-center-71.notification-center-modal-open > summary {
+    position: sticky;
+    top: -16px;
+    z-index: 2;
+    margin: -16px -18px 0;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid #eef2f7;
+    background: rgba(255,255,255,.98);
+}
+
+#notification-center-71.notification-center-modal-open #notification-list-71 {
+    max-height: none;
+}
+
+@media (max-width: 640px) {
+    #notification-center-71.notification-center-modal-open {
+        top: max(8px, env(safe-area-inset-top));
+        width: calc(100vw - 16px);
+        max-width: calc(100vw - 16px);
+        max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+        padding: 14px !important;
+        border-radius: 14px !important;
+    }
+
+    #notification-center-71.notification-center-modal-open > summary {
+        top: -14px;
+        margin: -14px -14px 0;
+        padding: 14px 14px 12px;
+    }
+
+    #notification-center-71.notification-center-modal-open article {
+        align-items: stretch;
+    }
+
+    #notification-center-71.notification-center-modal-open article > div:last-child {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
