@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from teacher_app.storage.worker_runtime import WorkerMaterialStorageAdapter
-from teacher_app.worker import media_acceleration
+from teacher_app.worker import media_acceleration, media_transcode_compat
 from teacher_app.worker.libreoffice_warm import WarmLibreOfficeConverter
 
 
@@ -113,6 +113,81 @@ class MaterialWorkerPhase220261003Tests(unittest.TestCase):
         self.assertFalse(result["available"])
         self.assertEqual(result["selected"], "")
         self.assertEqual(ProbeWorker.calls, [])
+
+    def test_ffmpeg_progress_time_parser_uses_real_clock(self):
+        self.assertAlmostEqual(
+            media_transcode_compat._parse_ffmpeg_time("00:12:34.500000"),
+            754.5,
+            places=3,
+        )
+        self.assertEqual(media_transcode_compat._parse_ffmpeg_time("invalid"), 0.0)
+
+    def test_ffmpeg_streaming_runner_emits_out_time_progress(self):
+        class Stream:
+            def __init__(self, lines):
+                self.lines = list(lines)
+
+            def __iter__(self):
+                return iter(self.lines)
+
+        class Process:
+            def __init__(self):
+                self.stdout = Stream(
+                    [
+                        "out_time=00:00:02.500000\n",
+                        "out_time=00:00:05.000000\n",
+                        "progress=end\n",
+                    ]
+                )
+                self.stderr = Stream([])
+                self.returncode = 0
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
+                return self.returncode
+
+            def terminate(self):
+                self.returncode = 0
+
+            def kill(self):
+                self.returncode = -9
+
+        calls = []
+
+        class FakeSubprocess:
+            PIPE = object()
+            TimeoutExpired = subprocess.TimeoutExpired
+
+            @staticmethod
+            def Popen(command, **_kwargs):
+                calls.append(list(command))
+                return Process()
+
+        class Worker:
+            subprocess = FakeSubprocess
+
+        with tempfile.TemporaryDirectory() as temp_name:
+            output = Path(temp_name) / "out.mp4"
+            output.write_bytes(b"video")
+            progress = []
+            completed, error = media_transcode_compat._run(
+                Worker,
+                ["ffmpeg", "-y", "-i", "in.mov", str(output)],
+                output,
+                timeout=5,
+                progress_callback=lambda current, total: progress.append((current, total)),
+                duration_seconds=5.0,
+            )
+
+        self.assertEqual(error, "")
+        self.assertEqual(completed.returncode, 0)
+        self.assertTrue(progress)
+        self.assertIn((2.5, 5.0), progress)
+        self.assertEqual(progress[-1], (5.0, 5.0))
+        self.assertIn("-progress", calls[0])
+        self.assertIn("pipe:1", calls[0])
 
     def test_warm_libreoffice_reuses_one_profile_for_conversion(self):
         fake_process = FakeProcess()
