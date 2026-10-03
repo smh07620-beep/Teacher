@@ -368,6 +368,11 @@ test('Worker status error state is distinct from an offline Worker', async ({ pa
         recentTerminalJobs: 0,
         recentFailureRate: 0,
         averageCompletedDurationSeconds: 0,
+        healthyProcessingJobs: 0,
+        heartbeatDelayedJobs: 0,
+        stalledJobs: 0,
+        heartbeatWarningSeconds: 120,
+        staleThresholdSeconds: 1800,
         staging: { backend: 'r2', available: true, shared: true },
       }),
     });
