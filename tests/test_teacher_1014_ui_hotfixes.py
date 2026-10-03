@@ -36,8 +36,9 @@ class Teacher1014UiHotfixTests(unittest.TestCase):
             self.assertIn(marker, self.group_fix)
         self.assertNotIn('X-Admin-Key', self.group_fix)
 
-    def test_duplicate_system_persona_is_replaced_by_platform_entry(self):
-        self.assertIn("includes('系統管理')", self.nav_fix)
+    def test_system_persona_stays_in_canonical_switcher_and_legacy_entry_targets_platform(self):
+        self.assertNotIn("removeDuplicatePersona", self.nav_fix)
+        self.assertIn("single owner of the persona switcher", self.nav_fix)
         self.assertIn('⚙ 平台管理', self.nav_fix)
         self.assertIn("workspace', 'people'", self.nav_fix)
         self.assertIn("persona', 'system'", self.nav_fix)
