@@ -8,12 +8,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from teacher_app.notifications.reminders import run_worker_offline_reminders
+from teacher_app.notifications.reminders import (
+    run_operational_incident_alerts,
+    run_worker_offline_reminders,  # backward-compatible callable kept intentionally
+)
 
 
 def main() -> int:
-    sent = run_worker_offline_reminders()
-    print(f"teacher-worker-offline-alerts sent={sent}", flush=True)
+    sent = run_operational_incident_alerts()
+    print(f"teacher-operational-incident-alerts sent={sent}", flush=True)
     return 0
 
 
