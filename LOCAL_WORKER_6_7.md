@@ -42,6 +42,14 @@ GDRIVE_FOLDER_ID=...
 MATERIAL_WORKER_POLL_SECONDS=2
 # Claimed-job heartbeat during long FFmpeg/LibreOffice/cloud operations.
 MATERIAL_WORKER_HEARTBEAT_SECONDS=30
+# Phase 2 video acceleration: real 1-frame probe, then QSV -> NVENC -> AMF.
+# Any per-job hardware failure falls back to libx264 automatically.
+MATERIAL_VIDEO_HARDWARE_ACCELERATION=true
+MATERIAL_VIDEO_HARDWARE_ENCODER=auto
+# Warm LibreOffice is best-effort and remains single-conversion. If the resident
+# instance fails, Worker restarts it once and then uses isolated one-shot soffice.
+MATERIAL_LIBREOFFICE_WARM_ENABLED=true
+MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS=5
 # Safe release updater. Runtime auto-check remains opt-in by default.
 MATERIAL_WORKER_AUTO_UPDATE=false
 MATERIAL_WORKER_UPDATE_INTERVAL_HOURS=6
@@ -106,6 +114,45 @@ source/preview/index/slide 上傳不再各自重跑 `mega-mkdir`。
 音軌 sidecar 亦使用 stream copy。WebM、MOV、非 H.264/AAC、超過 720p 等情況仍走
 原有完整轉碼。Phase 1 刻意維持單 Job 處理；是否啟用有限 2-job 併發，應依 timing
 與院內電腦 CPU/磁碟實測後再決定。
+
+### Worker Performance Phase 2
+
+影片硬體加速不依賴 FFmpeg 的 encoder 清單文字，而是在 Worker 啟動時做極小的
+1-frame 真實 H.264 encode probe。預設 `auto` 順序為 `h264_qsv` →
+`h264_nvenc` → `h264_amf`；第一個實測成功的 encoder 才會被採用。若某支影片在
+實際轉碼時硬體 encoder 因驅動、格式或資源狀態失敗，**同一 Job 會自動退回
+`libx264 veryfast`**，不會因效能功能讓教材失敗。已符合 H.264/AAC、≤720p 的
+MP4/M4V 仍優先走 Phase 1 remux，不做任何重新壓縮。
+
+可設定：
+
+```text
+MATERIAL_VIDEO_HARDWARE_ACCELERATION=true
+# auto | qsv | nvenc | amf | cpu
+MATERIAL_VIDEO_HARDWARE_ENCODER=auto
+```
+
+`cpu` 可明確停用硬體 encoder；`qsv`/`nvenc`/`amf` 只嘗試指定類型，實測不通仍
+回 CPU。管理後台 Worker 技術狀態會顯示實際選到的 encoder，例如
+`Video h264_qsv ✓`；沒有可用硬體 encoder 時顯示 `CPU fallback`。
+
+Office 轉檔預設啟用 warm LibreOffice。Worker 在正式儲存 preflight 通過後會
+best-effort 預先啟動一個 headless LibreOffice instance，同一個 Worker process
+後續的 PPT/PPTX/DOC/XLS 轉檔會重用該 profile。Office conversion 仍受既有
+單一 `_CONVERSION_LOCK` 保護，因此不會同時啟動兩個 Office 轉檔互撞。
+
+每次轉檔前會檢查 warm process 是否仍存活；若 warm conversion crash/timeout，
+Worker 會重啟一次再試，第二次仍失敗才退回原本的隔離 one-shot soffice。
+因此 warm 模式只是效能層，不能降低既有可靠性。可設定：
+
+```text
+MATERIAL_LIBREOFFICE_WARM_ENABLED=true
+MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS=5
+```
+
+`storageMeta.officeConversionMode` 會記錄 `warm` 或 `oneshot`，
+`workerTimingsMs.officeToPdfMs` 可直接比較改善前後。Phase 2 仍不啟用 RAM Disk，
+也不增加重 FFmpeg/LibreOffice 的同時工作數；有限併發需等院內真實 timing 再決定。
 Worker 在 claimed job 執行期間預設每 30 秒送出一次 heartbeat，包含下載、
 FFmpeg/LibreOffice 轉檔與 MEGA/Google Drive publish。可用
 `MATERIAL_WORKER_HEARTBEAT_SECONDS` 調整為 5–90 秒；heartbeat 暫時失敗只會記錄
@@ -175,8 +222,9 @@ Windows 的官方 MEGAcmd 使用每個 Windows 使用者自己的背景 Server�
 不需要重新上傳原始檔。
 
 正式 Windows 常駐執行請用 repository 內的
-`install_material_worker_task.ps1`。installer 會建立 **At startup** trigger，
-action 只指向 `run_material_worker_autostart.ps1`，並在 Task Scheduler 層設定
+`install_material_worker_task.ps1`。一般 Password/ServiceAccount 模式使用
+**At startup**；`-InteractiveLogon` 模式使用指定使用者的 **At logon** trigger。
+action 都只指向 `run_material_worker_autostart.ps1`，並在 Task Scheduler 層設定
 失敗後每 1 分鐘重啟、最多 5 次及 `StartWhenAvailable`。Worker token、MEGA、
 Google Drive 等 secrets 不會放進 Task Scheduler command line；仍只從本機、
 gitignored 的 `.local-worker.env` 載入。
