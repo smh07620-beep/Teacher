@@ -45,6 +45,18 @@ These are not separate product owners, but classic scripts can reassign bare glo
 - `markMaterialComplete` — the duplicate POST implementation was removed from `static/teaching.js`; `static/system-learner.js` is the only writer and exposes `LearnerMaterialProgress.complete` for presentation wrappers.
 - `renderCourseOverview` — `static/teaching.js` no longer replaces the global renderer. `static/system-learner.js` owns a stable dispatcher and shared finalizer; Teaching registers a presenter through `TeachingCourseOverview66`.
 
+## CI-enforced sole owners
+
+These globals have one mutation owner. Callers may invoke them, but no compatibility layer may replace them unless this table is deliberately changed in the same review.
+
+| Global/API | Canonical owner |
+| --- | --- |
+| `switchAdminWorkspace` | `static/admin-workspace.js` |
+| `toggleAdminModal` | `static/admin-workspace.js` |
+| `createAdminUserAccount` | `static/admin-people.js` |
+| `fetchAdminMaterials` | `static/admin-materials.js` |
+
+
 ## Navigation ownership
 
 - `static/admin-workspace.js` is the sole owner of `switchAdminWorkspace`, `toggleAdminModal`, workspace normalization, URL synchronization, and extension dispatch.
@@ -65,6 +77,9 @@ These are not separate product owners, but classic scripts can reassign bare glo
 4. Do not attach both direct `onclick` navigation and `data-csp-click` to the same system navigation control.
 5. Extension workspace deep links must wait for their registered handler or fail closed; they must never show a stale section from another workspace.
 6. Bare classic-script reassignments (for example `renderQuestions = function...`) count as ownership changes exactly like `window.renderQuestions = ...`; they must be documented and guarded.
+7. A document-wide `MutationObserver` (`document.body` / `document.documentElement` with `childList + subtree`) is CI-controlled. New broad observers must be added to the ownership guard with an explicit selector filter, one-shot disconnect, or documented compatibility reason.
+8. A new capture handler for `.admin-nav-btn` is prohibited unless it is explicitly registered as a navigation-interception owner; structural navigation remains owned by the workspace router/shell.
+9. Any dynamically created system navigation control using `data-csp-click="switchAdminWorkspace(...)"` must clear a pre-existing `onclick` property/attribute first.
 
 
 ## Selector / dispatch collision audit

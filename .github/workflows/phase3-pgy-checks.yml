@@ -63,6 +63,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_runtime_question_routes.py' -v
           python -m unittest discover -s tests -p 'test_strict_scope_writes.py' -v
           python -m unittest discover -s tests -p 'test_frontend_asset_observability.py' -v
+          python -m unittest discover -s tests -p 'test_frontend_ownership_ci_guard.py' -v
       - name: Browser JavaScript syntax
         run: |
           find static -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
