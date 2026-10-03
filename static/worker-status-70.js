@@ -218,7 +218,7 @@
           <li>安裝依賴：<code>.venv\\Scripts\\python.exe -m pip install -r requirements.txt</code>。</li>
           <li>建立只存在本機的 <code>.local-worker.env</code>，至少填入 <code>TEACHER_BASE_URL</code>、<code>MATERIAL_WORKER_TOKEN</code> 與正式儲存 provider 的設定；若未指定 <code>MATERIAL_WORKER_ID</code>，啟動器會建立 gitignored 的固定 <code>.worker-id</code>。</li>
           <li>第一次手動啟動：<code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\TeacherWorker\\run_material_worker_autostart.ps1"</code>，確認本頁顯示 🟢 在線。</li>
-          <li>若 MEGAcmd 安裝在目前 Windows 使用者帳號下，執行 <code>install_material_worker_task.ps1 -TaskUser "$env:USERDOMAIN\$env:USERNAME" -InteractiveLogon -StartNow</code>；不需要 Windows 密碼，Windows 自動登入後會啟動 Worker。只有使用機器層級 provider 的環境才適合 ServiceAccount/SYSTEM。</li>
+          <li>若 MEGAcmd 安裝在目前 Windows 使用者帳號下，執行 <code>install_material_worker_task.ps1 -TaskUser "$env:USERDOMAIN\$env:USERNAME" -InteractiveLogon -StartNow</code>；由 Windows Task Scheduler 在該帳號登入後啟動 Worker，不需要 Windows 密碼。只有使用機器層級 provider 的環境才適合 ServiceAccount/SYSTEM。</li>
         </ol>
         <p class="font-bold">自動更新預設關閉；只有明確啟用且設定核准 release tag 時，安全 updater 才會在 Worker 閒置時自動 fast-forward。一般情況可由管理者更新 <code>main</code> 後重新啟動排程。</p>
       </div>
