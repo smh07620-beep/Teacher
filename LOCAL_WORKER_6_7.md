@@ -344,3 +344,9 @@ Teacher hostname. Do not use `*` for production.
 
 For local browser development, add a specific `http://localhost:<port>` origin
 temporarily; remove it from production CORS afterwards.
+
+## 教材處理進度（0107）
+
+`material_jobs.progress_percent` 由 migration `0107-material-job-progress` 新增，保存院內 Worker 對目前工作的進度回報。Worker 仍以 canonical stage（下載、驗證、轉檔、預覽、發布、完成確認）作為主要真實狀態，並同步回報 1–99 的 `progressPercent`；Web 端只允許同一輪工作單調增加。自動或人工重試會把進度重設為 25%，完成時由正式 `completed` 狀態投影為 100%。
+
+舊 Worker 若尚未傳送 `progressPercent` 仍可相容運作：Web 會用既有 stage checkpoint 投影顯示值。這讓 Web 先部署 migration 不會要求院內電腦同一時間立即更新，但院內 Worker 更新後即可得到持久化真實進度。
