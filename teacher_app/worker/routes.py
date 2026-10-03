@@ -630,6 +630,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
                         "updated_at": now,
                         "stage": "等待自動重試",
                         "detail": f"本機 Worker 回報暫時失敗；{delay} 秒後重試。",
+                        "progress_percent": 25,
                         "error": detail,
                         "worker_id": "",
                     },
