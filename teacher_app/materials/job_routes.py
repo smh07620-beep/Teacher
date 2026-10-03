@@ -17,6 +17,7 @@ from teacher_app.common import scope
 from teacher_app.config import material_web_byte_upload_max_mb
 from teacher_app.materials.job_runtime import MaterialJobRuntime, from_compat_owner
 from teacher_app.materials.validation import ALLOWED_MATERIAL_EXTENSIONS, normalize_material_filename
+from teacher_app.worker import operations as worker_operations
 from teacher_app.worker import repository as worker_repository
 
 
@@ -110,9 +111,24 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             limit = 30
         runtime.cleanup_budget_state()
         ops = runtime.operations_status()
+        now = dt.datetime.now(dt.timezone.utc)
+        jobs = worker_operations.material_jobs_observability(
+            worker_repository.list_material_jobs(
+                limit,
+                connection_factory=connection_factory,
+            ),
+            now=now,
+        )
+        problem_jobs = worker_operations.material_jobs_observability(
+            worker_repository.list_problem_material_jobs(
+                20,
+                connection_factory=connection_factory,
+            ),
+            now=now,
+        )
         return jsonify({
-            "jobs": worker_repository.list_material_jobs(limit, connection_factory=connection_factory),
-            "problemJobs": worker_repository.list_problem_material_jobs(20, connection_factory=connection_factory),
+            "jobs": jobs,
+            "problemJobs": problem_jobs,
             "backgroundEnabled": _runtime_bool(runtime.background_enabled),
             "workerEnabled": _runtime_bool(runtime.worker_enabled),
             "queueBackend": "material_jobs",
@@ -129,6 +145,11 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             "recentTerminalJobs": ops.get("recentTerminalJobs", 0),
             "recentFailureRate": ops.get("recentFailureRate", 0),
             "averageCompletedDurationSeconds": ops.get("averageCompletedDurationSeconds", 0),
+            "healthyProcessingJobs": ops.get("healthyProcessingJobs", 0),
+            "heartbeatDelayedJobs": ops.get("heartbeatDelayedJobs", 0),
+            "stalledJobs": ops.get("stalledJobs", 0),
+            "heartbeatWarningSeconds": ops.get("heartbeatWarningSeconds", 120),
+            "staleThresholdSeconds": ops.get("staleThresholdSeconds", 1800),
             "r2Budget": ops.get("r2Budget", {}),
         })
 
@@ -143,7 +164,7 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
         )
         if not job:
             return jsonify({"error": "找不到此背景教材工作"}), 404
-        return jsonify(job)
+        return jsonify(worker_operations.material_job_observability(job))
 
     def api_enqueue_material_job():
         denied = _guard(app)
