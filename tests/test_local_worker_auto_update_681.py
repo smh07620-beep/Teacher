@@ -55,6 +55,9 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         self.assertIn("-m pip install -r", source)
         self.assertIn("FFmpeg=$ffmpeg", source)
         self.assertIn("MEGAcmd=$mega", source)
+        self.assertIn("Acquire-TeacherWorkerSupervisorLock", source)
+        self.assertIn("[System.IO.FileShare]::None", source)
+        self.assertIn(".worker-supervisor.lock", source)
         batch = ROOT.joinpath("run_material_worker.bat").read_text(encoding="utf-8")
         self.assertIn("run_material_worker_autostart.ps1", batch)
         self.assertNotIn("python -u material_worker.py", batch)
@@ -78,6 +81,7 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
             "Normalize-ServiceAccount",
             "Get-Credential",
             "Register-ScheduledTask",
+            "-WindowStyle Hidden",
         ):
             self.assertIn(marker, source)
         self.assertNotIn("-InputObject $task", source)
@@ -202,6 +206,7 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         gitignore = ROOT.joinpath(".gitignore").read_text(encoding="utf-8")
         self.assertIn(".local-worker.env", gitignore)
         self.assertIn("!.local-worker.env.example", gitignore)
+        self.assertIn(".worker-supervisor.lock", gitignore)
 
     def test_preflight_logging_is_rate_limited_while_waiting(self):
         source = ROOT.joinpath("material_worker.py").read_text(encoding="utf-8")
