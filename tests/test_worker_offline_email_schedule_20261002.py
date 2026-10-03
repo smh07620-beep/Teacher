@@ -121,6 +121,37 @@ class WorkerOfflineEmailSchedule20261002Tests(unittest.TestCase):
         warning.assert_called_once()
 
 
+    def test_generalized_sender_syncs_incidents_and_emails_system_admin_once(self):
+        user = {
+            "username": "sys-ops",
+            "display_name": "系統管理",
+            "email": "sys-ops@example.test",
+            "active": True,
+            "role": "system_admin",
+            "roles": ["system_admin"],
+            "email_notifications": False,
+        }
+        event = {
+            "key": "notify:operational_incident:r2",
+            "kind": "operational_incident",
+            "title": "教材背景工作連續發生 R2_STORAGE",
+            "badge": "系統事件",
+            "detail": "最近已連續 3 筆失敗。",
+            "dueAt": "",
+            "channels": ["in_app", "email"],
+            "emailPolicy": "once",
+        }
+        with patch.object(reminders.auth_repository, "list_users", return_value=[user]), \
+             patch.object(reminders.incidents, "sync_operational_incidents") as sync, \
+             patch.object(reminders.events, "build_events", return_value={"items": [event]}), \
+             patch.object(reminders.preferences, "filter_email_events", side_effect=lambda rows, *_args, **_kwargs: list(rows)), \
+             patch.object(reminders, "_claim", return_value=True), \
+             patch.object(reminders, "_send", return_value=True) as send:
+            sent = reminders.run_operational_incident_alerts()
+        self.assertEqual(sent, 1)
+        sync.assert_called_once()
+        self.assertIn("系統維運事件提醒", send.call_args.args[1])
+
     def test_workflow_is_ten_minute_critical_lane_and_daily_reminders_stay_daily(self):
         critical = ROOT.joinpath(".github", "workflows", "worker-offline-alerts.yml").read_text(encoding="utf-8")
         daily = ROOT.joinpath(".github", "workflows", "email-reminders.yml").read_text(encoding="utf-8")
@@ -128,7 +159,7 @@ class WorkerOfflineEmailSchedule20261002Tests(unittest.TestCase):
         self.assertIn('cron: "*/10 * * * *"', critical)
         self.assertIn('MATERIAL_WORKER_OFFLINE_ALERT_SECONDS: "600"', critical)
         self.assertIn("send_worker_offline_alerts.py", critical)
-        self.assertIn("run_worker_offline_reminders", script)
+        self.assertIn("run_worker_offline_reminders", script)\n        self.assertIn("run_operational_incident_alerts", script)\n        self.assertIn('MATERIAL_INCIDENT_ERROR_BURST_COUNT: "3"', critical)\n        self.assertIn('MATERIAL_INCIDENT_FAILURE_RATE_PERCENT: "50"', critical)
         self.assertIn('cron: "15 1 * * *"', daily)
         self.assertNotIn('*/10', daily)
 
