@@ -36,6 +36,26 @@ class WorkerOfflineAlerts20261002Tests(unittest.TestCase):
         self.assertEqual([row["workerId"] for row in result["workers"]], ["worker-11m"])
         self.assertGreaterEqual(result["workers"][0]["offlineSeconds"], 660)
 
+    def test_superseded_worker_id_does_not_create_false_offline_alert(self):
+        fresh = heartbeat("AB85-TeacherWorker", 1)
+        fresh["capabilities"] = {"workerMachine": "AB85"}
+        stale = heartbeat("AB85-TeacherWorker-deadbeef", 30)
+        stale["capabilities"] = {"workerMachine": "AB85"}
+        with patch.dict(
+            os.environ,
+            {
+                "MATERIAL_WORKER_ENABLED": "true",
+                "MATERIAL_WORKER_OFFLINE_ALERT_SECONDS": "600",
+            },
+            clear=False,
+        ), patch.object(
+            operations.repository,
+            "list_heartbeats",
+            return_value=[stale, fresh],
+        ):
+            result = operations.offline_worker_alerts(now=NOW)
+        self.assertEqual(result["workers"], [])
+
     def test_alert_threshold_is_bounded_to_five_through_sixty_minutes(self):
         with patch.object(operations.repository, "list_heartbeats", return_value=[]):
             with patch.dict(
