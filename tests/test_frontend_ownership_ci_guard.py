@@ -42,7 +42,8 @@ BROAD_OBSERVER_CONTRACT = {
 }
 
 BROAD_OBSERVER_RE = re.compile(
-    r"observe\s*\(\s*document\.(?:body|documentElement)\s*,\s*\{"
+    r"observe\s*\(\s*document\.(?:body|documentElement)"
+    r"(?:\s*\|\|\s*document\.(?:body|documentElement))?\s*,\s*\{"
     r"(?=[^}]*childList\s*:\s*true)"
     r"(?=[^}]*subtree\s*:\s*true)",
     re.DOTALL,
