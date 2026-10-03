@@ -20,7 +20,7 @@
       onProgress:e=>{
         if(status){
           const pct=e.percent;
-          status.innerHTML=`⬆️ ${escapeHtml(fileName)}｜安全接收 ${pct}%<span class="block text-[11px] text-slate-500 mt-1">${(e.loaded/1024/1024).toFixed(1)} / ${(e.total/1024/1024).toFixed(1)} MB；接收後會立刻排入背景佇列，不再占住 Web worker。</span>`;
+          status.innerHTML=`<b>① 上傳至 R2：${escapeHtml(fileName)}｜${pct}%</b><span class="block text-[11px] text-slate-500 mt-1">${(e.loaded/1024/1024).toFixed(1)} / ${(e.total/1024/1024).toFixed(1)} MB；R2 接收完成後會進入「② 等待 Worker」，直到正式發布完成才算完成。</span>`;
         }
       }
     });
@@ -42,6 +42,22 @@
   };
 
   let materialUploadCompletionPending=false;
+  let materialUploadGuardDepth=0;
+  let materialUploadPendingMessage='教材仍在上傳或由 Worker 處理中，請等到正式完成再離開。';
+
+  function beginMaterialUploadGuard(message=''){
+    materialUploadGuardDepth+=1;
+    if(message)materialUploadPendingMessage=String(message);
+    materialUploadCompletionPending=true;
+  }
+
+  function endMaterialUploadGuard(){
+    materialUploadGuardDepth=Math.max(0,materialUploadGuardDepth-1);
+    materialUploadCompletionPending=materialUploadGuardDepth>0;
+  }
+
+  window.isTeacherMaterialUploadPending=()=>materialUploadCompletionPending;
+  window.teacherMaterialUploadPendingMessage=()=>materialUploadPendingMessage;
 
   function materialUploadLeaveGuard(event){
     if(!materialUploadCompletionPending)return;
@@ -82,6 +98,31 @@
     return ({queued:'等待處理',retry_wait:'等待重試',processing:'處理中',completed:'已完成',failed:'需要處理',cancelled:'已取消'})[state]||'確認狀態中';
   }
 
+  const MATERIAL_UPLOAD_PHASES=['R2 接收','等待 Worker','下載／驗證','轉檔／預覽','正式發布','完成'];
+
+  function materialUploadPhaseIndex(job){
+    if(job?.status==='completed')return 5;
+    if(['queued','retry_wait'].includes(job?.status))return 1;
+    const stage=String(job?.stage||'');
+    if(['下載原始檔','驗證教材','內容準備'].includes(stage))return 2;
+    if(['轉檔處理','建立預覽'].includes(stage))return 3;
+    if(['正式發布','發布確認','完成確認'].includes(stage))return 4;
+    if(job?.status==='processing')return 2;
+    return 1;
+  }
+
+  function renderMaterialUploadTimeline(job){
+    const current=materialUploadPhaseIndex(job);
+    const failed=['failed','cancelled'].includes(job?.status);
+    return '<div class="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">'+MATERIAL_UPLOAD_PHASES.map((label,index)=>{
+      const done=job?.status==='completed'||index<current;
+      const active=index===current&&job?.status!=='completed';
+      const cls=failed&&active?'border-rose-300 bg-rose-50 text-rose-700':done?'border-emerald-200 bg-emerald-50 text-emerald-700':active?'border-sky-300 bg-sky-50 text-sky-800':'border-slate-200 bg-slate-50 text-slate-400';
+      const mark=done?'✓':failed&&active?'!':active?'●':String(index+1);
+      return '<div class="rounded-lg border px-2 py-1 text-[10px] font-bold '+cls+'"><span class="mr-1">'+mark+'</span>'+escapeHtml(label)+'</div>';
+    }).join('')+'</div>';
+  }
+
   function renderAdminMaterialUploadJobs(rows,metrics,status){
     if(!status)return;
     const workers=Array.isArray(metrics?.workers)?metrics.workers:[];
@@ -103,7 +144,7 @@
         : '';
       const detail=(failed||retryWait)?(job.error||job.detail||'請查看 Worker / Job 狀態'):(job.detail||job.stage||'');
       const barClass=failed?'bg-rose-500':retryWait?'bg-amber-500':job.status==='completed'?'bg-emerald-500':'bg-sky-600';
-      return '<div class="rounded-lg border '+(failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white')+' p-2"><div class="flex flex-wrap items-center justify-between gap-2"><span><b>'+escapeHtml(job.title||job.originalName||job.id||'教材')+'</b> · '+escapeHtml(materialUploadJobLabel(job.status))+'</span><span class="text-[11px] text-slate-500">'+escapeHtml(progress.label)+'</span></div><div class="mt-1 text-[11px] '+(failed?'text-rose-700':'text-slate-600')+'">'+escapeHtml(detail)+'</div>'+retained+'<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 '+progress.pct+'%</span><span>依 Worker 真實回報階段顯示；剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full '+barClass+' transition-all" style="width:'+progress.pct+'%"></div></div></div>';
+      return '<div class="rounded-lg border '+(failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white')+' p-2"><div class="flex flex-wrap items-center justify-between gap-2"><span><b>'+escapeHtml(job.title||job.originalName||job.id||'教材')+'</b> · '+escapeHtml(materialUploadJobLabel(job.status))+'</span><span class="text-[11px] text-slate-500">'+escapeHtml(progress.label)+'</span></div><div class="mt-1 text-[11px] '+(failed?'text-rose-700':'text-slate-600')+'">'+escapeHtml(detail)+'</div>'+renderMaterialUploadTimeline(job)+retained+'<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 '+progress.pct+'%</span><span>依 Worker 真實回報階段顯示；剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full '+barClass+' transition-all" style="width:'+progress.pct+'%"></div></div></div>';
     }).join('');
     const allDone=rows.length>0&&rows.every(job=>job.status==='completed');
     const terminal=rows.length>0&&rows.every(job=>['completed','failed','cancelled'].includes(job.status));
@@ -133,7 +174,7 @@
     const unique=[...new Set((jobIds||[]).filter(Boolean).map(String))];
     if(!unique.length)return {rows:[],metrics:{},allDone:true};
     const pollMs=Math.max(500,Number(window.__TEACHER_MATERIAL_UPLOAD_POLL_MS__||3000));
-    materialUploadCompletionPending=true;
+    beginMaterialUploadGuard('教材仍在 Worker 正式處理中，請等到全部顯示「已完成」再離開。');
     try{
       while(true){
         const metrics=await fetchAdminMaterialUploadMetrics();
@@ -147,7 +188,7 @@
         await new Promise(resolve=>setTimeout(resolve,pollMs));
       }
     }finally{
-      materialUploadCompletionPending=false;
+      endMaterialUploadGuard();
     }
   };
 
@@ -162,6 +203,8 @@
     const status=document.getElementById('admin-upload-status');
     const btn=document.getElementById('admin-upload-btn');
     btn.disabled=true;
+    beginMaterialUploadGuard('教材正在上傳至 R2 或等待 Worker 正式完成，請先不要關閉教材工作畫面。');
+    try{
     let queued=0;
     const queuedJobs=[];
     const failed=[];
@@ -194,7 +237,7 @@
         const data=await window.uploadAdminMaterialRequest(fd,progressId,file.name,status);
         queued++;
         if(data.jobId)queuedJobs.push(String(data.jobId));
-        status.innerHTML='⏳ '+(n+1)+'/'+files.length+'「'+escapeHtml(file.name)+'」已安全接收並排入背景處理<span class="block text-[11px] mt-1">'+escapeHtml(data.jobId||'')+'｜R2 接收完成不等於教材已完成；正在等待 Worker 正式發布。</span>';
+        status.innerHTML='⏳ ② 等待 Worker｜'+(n+1)+'/'+files.length+'「'+escapeHtml(file.name)+'」已安全接收<span class="block text-[11px] mt-1">'+escapeHtml(data.jobId||'')+'｜R2 接收完成不等於教材已完成；接下來會依序顯示下載／驗證、轉檔／預覽、正式發布與完成。</span>';
       }catch(err){
         failed.push({name:file.name,error:err.message});
         status.innerHTML='❌ '+escapeHtml(file.name)+'：'+escapeHtml(err.message)+'<span class="block text-[11px] mt-1">其他檔案會繼續接收。</span>';
@@ -223,8 +266,11 @@
     }
 
     input.value='';
-    btn.disabled=false;
     await renderMaterialJobs(true);
+    }finally{
+      endMaterialUploadGuard();
+      btn.disabled=false;
+    }
   };
 
   window.editAdminMaterial = async function(id){

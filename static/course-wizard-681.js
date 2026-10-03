@@ -224,6 +224,24 @@ function elapsedLabel(value){
   return `${Math.floor(seconds/3600)} 小時 ${Math.floor((seconds%3600)/60)} 分`;
 }
 
+const COURSE_UPLOAD_PHASES=['R2 接收','等待 Worker','下載／驗證','轉檔／預覽','正式發布','完成'];
+
+function courseUploadPhaseIndex(row){
+  if(row?.status==='completed')return 5;
+  if(['queued','retry_wait'].includes(row?.status))return 1;
+  const stage=String(row?.stage||'');
+  if(['下載原始檔','驗證教材','內容準備'].includes(stage))return 2;
+  if(['轉檔處理','建立預覽'].includes(stage))return 3;
+  if(['正式發布','發布確認','完成確認'].includes(stage))return 4;
+  if(row?.status==='processing')return 2;
+  return 1;
+}
+
+function courseUploadTimeline(row){
+  const current=courseUploadPhaseIndex(row),failed=['failed','cancelled'].includes(row?.status);
+  return `<div class="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">${COURSE_UPLOAD_PHASES.map((label,index)=>{const done=row?.status==='completed'||index<current;const active=index===current&&row?.status!=='completed';const cls=failed&&active?'border-rose-300 bg-rose-50 text-rose-700':done?'border-emerald-200 bg-emerald-50 text-emerald-700':active?'border-sky-300 bg-sky-50 text-sky-800':'border-slate-200 bg-slate-50 text-slate-400';const mark=done?'✓':failed&&active?'!':active?'●':String(index+1);return `<div class="rounded-lg border px-2 py-1 text-[10px] font-bold ${cls}"><span class="mr-1">${mark}</span>${esc(label)}</div>`;}).join('')}</div>`;
+}
+
 function progressProjection(row,estimateSeconds){
   const elapsed=elapsedSeconds(row.startedAt||row.createdAt);
   const estimate=Math.max(0,Number(estimateSeconds||0));
@@ -247,7 +265,7 @@ function backgroundJobsHtml(rows,metrics={}){
   const heading=allDone?'✅ 所有教材已正式完成':hasProblem?'⚠️ 教材處理需要注意':'⚙️ 背景教材處理中';
   const leaveHint=allDone?'現在可以安全返回課程。':'請等到全部教材顯示「已完成」再離開；系統會每 3 秒更新。';
   const protocolWarning=protocolBlocked?'<div class="mb-2 rounded-lg border border-rose-200 bg-rose-50 p-2 font-bold text-rose-800">本機 Worker 協議版本過舊，系統已停止派發新工作。教材會保持排隊，不會因版本問題反覆失敗；請更新 Worker 後再等待自動接續。</div>':'';
-  return `<div class="mt-3 rounded-xl border ${hasProblem&&!allDone?'border-amber-200 bg-amber-50':'border-sky-200 bg-sky-50'} p-3 text-left text-sky-950"><div class="flex flex-wrap items-center justify-between gap-2"><b>${heading}</b><span class="text-[11px] text-sky-700">${leaveHint}</span></div>${protocolWarning}<div class="mt-2 space-y-2">${rows.map(row=>{const failed=row.status==='failed';const done=row.status==='completed';const projection=progressProjection(row,metrics.averageCompletedDurationSeconds);const label=done?'✅ 已完成':failed?'❌ 失敗':row.status==='retry_wait'?'🔁 等待重試':row.status==='processing'?`⚙️ ${row.stage||'Worker 處理中'}`:row.status==='cancelled'?'⛔ 已取消':'⏳ R2 已接收／等待 Worker';const detail=(failed||row.status==='retry_wait')?(row.error||row.detail||'未提供失敗原因'):(row.detail||row.stage||'');const retained=row.stagingBackend==='r2'&&['retry_wait','failed'].includes(row.status)?'<div class="mt-1 font-bold text-violet-700">☁ R2 原始檔仍保留，可直接重新處理，不必重新上傳；成功後才會清除 staging。</div>':'';const retry=failed&&Number(row.attempts||0)>=Number(row.maxAttempts||0)?`<button type="button" data-csp-click="retryMaterialJob('${esc(row.id)}')" class="mt-2 rounded border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-800">直接重新處理</button>`:'';const barClass=failed?'bg-rose-500':row.status==='retry_wait'?'bg-amber-500':done?'bg-emerald-500':'bg-sky-600';return `<div class="rounded-lg border ${failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white'} p-2"><div class="flex flex-wrap justify-between gap-2"><span><b>${esc(row.title||row.originalName||row.id)}</b> · ${label}</span><span class="text-[11px] text-slate-500">${esc(projection.timing)}</span></div><div class="mt-1 text-[11px] ${failed?'text-rose-700':'text-slate-600'}">${esc(row.stage||'')} ${detail?`｜${esc(detail)}`:''}</div>${retained}<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 ${projection.pct}%</span><span>依 Worker 真實回報階段顯示；剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full ${barClass} transition-all" style="width:${projection.pct}%"></div></div>${retry}</div>`;}).join('')}</div></div>`;
+  return `<div class="mt-3 rounded-xl border ${hasProblem&&!allDone?'border-amber-200 bg-amber-50':'border-sky-200 bg-sky-50'} p-3 text-left text-sky-950"><div class="flex flex-wrap items-center justify-between gap-2"><b>${heading}</b><span class="text-[11px] text-sky-700">${leaveHint}</span></div>${protocolWarning}<div class="mt-2 space-y-2">${rows.map(row=>{const failed=row.status==='failed';const done=row.status==='completed';const projection=progressProjection(row,metrics.averageCompletedDurationSeconds);const label=done?'✅ 已完成':failed?'❌ 失敗':row.status==='retry_wait'?'🔁 等待重試':row.status==='processing'?`⚙️ ${row.stage||'Worker 處理中'}`:row.status==='cancelled'?'⛔ 已取消':'⏳ R2 已接收／等待 Worker';const detail=(failed||row.status==='retry_wait')?(row.error||row.detail||'未提供失敗原因'):(row.detail||row.stage||'');const retained=row.stagingBackend==='r2'&&['retry_wait','failed'].includes(row.status)?'<div class="mt-1 font-bold text-violet-700">☁ R2 原始檔仍保留，可直接重新處理，不必重新上傳；成功後才會清除 staging。</div>':'';const retry=failed&&Number(row.attempts||0)>=Number(row.maxAttempts||0)?`<button type="button" data-csp-click="retryMaterialJob('${esc(row.id)}')" class="mt-2 rounded border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-800">直接重新處理</button>`:'';const barClass=failed?'bg-rose-500':row.status==='retry_wait'?'bg-amber-500':done?'bg-emerald-500':'bg-sky-600';return `<div class="rounded-lg border ${failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white'} p-2"><div class="flex flex-wrap justify-between gap-2"><span><b>${esc(row.title||row.originalName||row.id)}</b> · ${label}</span><span class="text-[11px] text-slate-500">${esc(projection.timing)}</span></div><div class="mt-1 text-[11px] ${failed?'text-rose-700':'text-slate-600'}">${esc(row.stage||'')} ${detail?`｜${esc(detail)}`:''}</div>${courseUploadTimeline(row)}${retained}<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 ${projection.pct}%</span><span>依 Worker 真實回報階段顯示；剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full ${barClass} transition-all" style="width:${projection.pct}%"></div></div>${retry}</div>`;}).join('')}</div></div>`;
 }
 
 async function watchQueuedJobs(jobIds){
@@ -431,6 +449,11 @@ function reset(){
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
+
+window.courseWizard681HasPending=()=>Boolean(state.created&&!canLeaveCourse());
+window.courseWizard681PendingMessage=()=>state.failedUploads.length
+  ? '課程已建立，但仍有教材尚未完成。請先重試失敗教材或確認處理狀態。'
+  : '課程已建立，教材仍在上傳／排隊／轉檔／發布中。請等到全部顯示「已完成」再離開。';
 
 window.addEventListener('beforeunload',event=>{
   if(!state.created||canLeaveCourse())return;

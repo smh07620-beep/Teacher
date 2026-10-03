@@ -177,5 +177,12 @@ class TeacherContentStudio71Tests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
 
 
+    def test_material_upload_cannot_close_studio_while_pending(self):
+        source = ROOT.joinpath('static', 'teacher-content-studio-71.js').read_text(encoding='utf-8')
+        self.assertIn('window.isTeacherMaterialUploadPending?.()', source)
+        self.assertIn('window.courseWizard681HasPending?.()', source)
+        self.assertIn('teacherMaterialUploadPendingMessage', source)
+        self.assertIn('courseWizard681PendingMessage', source)
+
 if __name__ == '__main__':
     unittest.main()

@@ -127,6 +127,12 @@ const cryptoNode = require('crypto');
             "已正式完成並寫入教材清單",
             "現在可以安全離開或返回課程",
             "R2 原始檔仍保留，可直接重新處理",
+            "window.isTeacherMaterialUploadPending",
+            "MATERIAL_UPLOAD_PHASES",
+            "R2 接收",
+            "下載／驗證",
+            "轉檔／預覽",
+            "正式發布",
         ):
             self.assertIn(marker, source)
         self.assertNotIn('現在可切換頁面或關閉後台視窗，工作會繼續', source)

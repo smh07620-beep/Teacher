@@ -41,6 +41,11 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertIn('progressPercent', source)
         self.assertIn('依 Worker 真實回報階段顯示', source)
         self.assertIn('處理進度', source)
+        self.assertIn('COURSE_UPLOAD_PHASES', source)
+        self.assertIn('R2 接收', source)
+        self.assertIn('下載／驗證', source)
+        self.assertIn('轉檔／預覽', source)
+        self.assertIn('正式發布', source)
 
     def test_successful_course_creation_waits_for_material_completion_before_finish(self):
         source = ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8')
@@ -54,6 +59,8 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertIn("if(state.created)return retryFailedUploads();", source)
         self.assertIn('重試未完成教材', source)
         self.assertIn("window.teacherContentStudioClose?.(false)", source)
+        self.assertIn("window.courseWizard681HasPending", source)
+        self.assertIn("window.courseWizard681PendingMessage", source)
         self.assertIn("clearWorkflowId();", source)
         self.assertIn("window.switchAdminWorkspace('course-materials',true)", source)
 

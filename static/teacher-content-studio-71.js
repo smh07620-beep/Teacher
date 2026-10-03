@@ -96,6 +96,15 @@
   }
 
   function closeStudio(restoreWorkspace=true){
+    const adminPending=window.isTeacherMaterialUploadPending?.();
+    const coursePending=window.courseWizard681HasPending?.();
+    if(adminPending||coursePending){
+      const message=adminPending
+        ? (window.teacherMaterialUploadPendingMessage?.()||'教材仍在處理中，請等到正式完成再離開。')
+        : (window.courseWizard681PendingMessage?.()||'課程教材仍在處理中，請等到全部完成再離開。');
+      alert(message);
+      return false;
+    }
     restoreAiPanel();
     restoreCourseWizard();
     restoreMaterialHub();
@@ -106,6 +115,7 @@
       syncExamDeepLink('');
     }
     if(restoreWorkspace && window.isAdminWorkspacePage?.()) void window.switchAdminWorkspace?.(studioState.returnWorkspace, false);
+    return true;
   }
 
   function syncExamDeepLink(catId=''){

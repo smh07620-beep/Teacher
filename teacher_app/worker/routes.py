@@ -282,7 +282,7 @@ def _job_record_from_session(runtime: WorkerWebRuntime, session):
         "available_at": now,
         "max_attempts": int(_runtime_value(runtime.max_attempts) or 3),
         "stage": "等待背景處理",
-        "detail": "教材已安全接收，可離開此頁；獨立背景 Worker 會繼續。",
+        "detail": "教材已安全接收；請等待 Worker 正式完成後再離開上傳流程。",
         "payload": payload,
         "staging_path": "",
         "staging_backend": "r2",

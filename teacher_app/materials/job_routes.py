@@ -217,7 +217,7 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
                             "available_at": now,
                             "max_attempts": _runtime_int(runtime.max_attempts),
                             "stage": "等待背景處理",
-                            "detail": "教材已安全接收，可離開此頁；獨立背景 Worker 會繼續。",
+                            "detail": "教材已安全接收；請等待 Worker 正式完成後再離開上傳流程。",
                             "payload": payload,
                             "staging_path": str(staging_path or ""),
                             "staging_backend": staging_backend,
@@ -247,7 +247,7 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
                 job_id,
                 9,
                 "已加入背景佇列",
-                "教材已安全接收，可離開此頁；背景 Worker 將自動轉檔、最佳化並送往雲端。",
+                "教材已安全接收；背景 Worker 正在準備轉檔、最佳化與正式發布，請在上傳畫面確認完成。",
             )
             return jsonify({
                 "accepted": True,
@@ -257,7 +257,7 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
                 "sourceBytes": source_bytes,
                 "sourceSha256": source_sha256,
                 "statusUrl": f"/api/material-jobs/{job_id}",
-                "message": "教材已安全接收並加入背景佇列，可離開此頁。",
+                "message": "教材已安全接收並加入背景佇列；請在上傳畫面確認 Worker 正式完成。",
             }), 202
         except Exception as exc:
             if staging_record:
