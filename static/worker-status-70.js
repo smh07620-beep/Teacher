@@ -216,6 +216,12 @@
     const trend=metrics.trendAnalysis||{};
     const trendSignals=Array.isArray(trend.signals)?trend.signals:[];
     const capacity=trend.capacity||{};
+    const forecast=metrics.capacityForecast||{};
+    const forecastRates=forecast.rates||{};
+    const forecastQueue=forecast.queue||{};
+    const forecastDecision=forecast.decision||{};
+    const forecastCurrent=forecast.current||{};
+    const forecastPlusOne=forecast.plusOneWorker||{};
     const series=Array.isArray(metrics.series)?metrics.series:[];
     const success=material.successRate===null||material.successRate===undefined?'資料不足':formatPercent(material.successRate);
     const workerAvailability=worker.observedAvailability===null||worker.observedAvailability===undefined?'採樣累積中':formatPercent(worker.observedAvailability);
@@ -241,6 +247,28 @@
     const trendHtml=trendSignals.length
       ? trendSignals.map(signal=>'<article class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><div class="flex flex-wrap items-center justify-between gap-2"><b>'+escapeHtml(signal.title||signal.code||'趨勢異常')+'</b><span class="font-mono text-[10px]">'+escapeHtml(signal.code||'')+'</span></div><div class="mt-1">'+escapeHtml(signal.detail||'')+'</div>'+(signal.action?'<div class="mt-1 font-semibold">建議：'+escapeHtml(signal.action)+'</div>':'')+'</article>').join('')
       : '<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">目前沒有符合「持續惡化」條件的趨勢異常；單次尖峰不會被升級。</div>';
+    const forecastConfidence=String(forecast.confidence||'unavailable');
+    const forecastConfidenceLabel=forecastConfidence==='high'?'高':forecastConfidence==='medium'?'中':forecastConfidence==='low'?'低':'尚不可估';
+    const arrivalRate=forecastRates.arrivalPerHour==null?'—':Number(forecastRates.arrivalPerHour).toFixed(2)+' / 小時';
+    const workerRate=forecastRates.nominalPerWorkerPerHour==null?'—':Number(forecastRates.nominalPerWorkerPerHour).toFixed(2)+' / 小時';
+    const workerConservative=forecastRates.conservativePerWorkerPerHour==null?'—':Number(forecastRates.conservativePerWorkerPerHour).toFixed(2)+' / 小時';
+    const currentNominal=forecastCurrent.nominal||{};
+    const currentConservative=forecastCurrent.conservative||{};
+    const plusOneNominal=forecastPlusOne.nominal||{};
+    const plusOneConservative=forecastPlusOne.conservative||{};
+    const etaText=scenario=>{
+      if(!scenario||scenario.state==='unavailable')return '資料不足';
+      if(Number(scenario.clearEtaSeconds)===0)return '目前無 backlog';
+      if(scenario.clearEtaSeconds==null)return '無法淨消化';
+      return formatDuration(scenario.clearEtaSeconds);
+    };
+    const forecastLimitations=Array.isArray(forecast.limitations)?forecast.limitations:[];
+    const blockers=Array.isArray(forecast.blockers)?forecast.blockers:[];
+    const forecastClasses=forecastDecision.state==='dependency_blocked'
+      ? 'border-rose-200 bg-rose-50'
+      : ['one_more_worker_would_restore_drain','one_more_worker_may_help','one_more_worker_insufficient','borderline'].includes(forecastDecision.state)
+        ? 'border-amber-200 bg-amber-50'
+        : 'border-slate-200 bg-slate-50/60';
     return `<section id="worker-slo-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4 scroll-mt-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div><h5 class="font-black text-slate-900">📈 維運趨勢 / SLO</h5><p class="mt-1 text-[11px] text-slate-500">${escapeHtml(baseline)}</p></div>
@@ -262,6 +290,38 @@
       <div class="space-y-2">
         <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-700">趨勢異常判讀</b><span class="text-[10px] text-slate-400">${trendSignals.length} 個持續性訊號</span></div>
         ${trendHtml}
+      </div>
+      <div class="rounded-xl border p-3 ${forecastClasses}">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div><b class="text-sm text-slate-900">🧮 容量規劃 / Forecast</b><div class="mt-1 text-[11px] text-slate-500">最近 ${Number(forecast.windowHours||0)} 小時 · 模型信心 ${escapeHtml(forecastConfidenceLabel)} · 完成樣本 ${Number(forecast.sample?.completedJobs||0)} 筆</div></div>
+          <span class="rounded-full border border-slate-300 bg-white px-2 py-1 text-[10px] font-bold text-slate-700">${escapeHtml(forecastDecision.label||'資料累積中')}</span>
+        </div>
+        <div class="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
+          ${sloMetricCard('📥','近期到達率',arrivalRate,'新工作進入 queue 的速度')}
+          ${sloMetricCard('⚙️','單 Worker nominal',workerRate,'依完成 Job 中位處理時間')}
+          ${sloMetricCard('🛡️','單 Worker 保守值',workerConservative,'依完成 Job P95 處理時間')}
+          ${sloMetricCard('📚','目前 backlog',String(Number(forecastQueue.backlogJobs||0))+' 筆','pending '+Number(forecastQueue.pending||0)+' · retry '+Number(forecastQueue.retry||0)+' · processing '+Number(forecastQueue.processing||0))}
+        </div>
+        <div class="mt-3 grid lg:grid-cols-2 gap-3">
+          <div class="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+            <b class="text-slate-800">目前 ${Number(forecastQueue.currentActiveWorkers||0)} 台 Worker</b>
+            <div class="mt-2 grid grid-cols-2 gap-2">
+              <div><span class="text-slate-400">Nominal ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(currentNominal))}</div><div class="text-[10px] text-slate-400">淨消化 ${currentNominal.netDrainPerHour==null?'—':Number(currentNominal.netDrainPerHour).toFixed(2)+'/h'}</div></div>
+              <div><span class="text-slate-400">P95 保守 ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(currentConservative))}</div><div class="text-[10px] text-slate-400">淨消化 ${currentConservative.netDrainPerHour==null?'—':Number(currentConservative.netDrainPerHour).toFixed(2)+'/h'}</div></div>
+            </div>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+            <b class="text-slate-800">模擬多 1 台 Worker</b>
+            <div class="mt-2 grid grid-cols-2 gap-2">
+              <div><span class="text-slate-400">Nominal ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(plusOneNominal))}</div><div class="text-[10px] text-slate-400">淨消化 ${plusOneNominal.netDrainPerHour==null?'—':Number(plusOneNominal.netDrainPerHour).toFixed(2)+'/h'}</div></div>
+              <div><span class="text-slate-400">P95 保守 ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(plusOneConservative))}</div><div class="text-[10px] text-slate-400">淨消化 ${plusOneConservative.netDrainPerHour==null?'—':Number(plusOneConservative.netDrainPerHour).toFixed(2)+'/h'}</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-700"><b>判讀：</b>${escapeHtml(forecastDecision.detail||'樣本仍在累積。')}</div>
+        ${blockers.length?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800"><b>先排除 Incident：</b> '+blockers.map(item=>escapeHtml(item.code||item.title||'')).join('、')+'</div>':''}
+        ${forecastLimitations.length?'<details class="mt-2 text-[10px] text-slate-500"><summary class="cursor-pointer font-bold">模型限制 / 為什麼目前信心不足</summary><ul class="mt-1 list-disc space-y-1 pl-5">'+forecastLimitations.map(item=>'<li>'+escapeHtml(item)+'</li>').join('')+'</ul></details>':''}
+        <div class="mt-2 text-[10px] text-slate-400">Forecast 是容量情境模型，不是正式 SLO，也不會自動啟動第二台 Worker。nominal 使用中位處理時間；保守情境使用 P95。</div>
       </div>
       <div class="grid lg:grid-cols-2 gap-3">
         <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
