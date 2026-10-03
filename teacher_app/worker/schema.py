@@ -36,6 +36,7 @@ def init_schema(conn: Any, kind: str) -> None:
             max_attempts INTEGER NOT NULL DEFAULT 3,
             stage TEXT NOT NULL DEFAULT '等待處理',
             detail TEXT NOT NULL DEFAULT '',
+            progress_percent INTEGER NOT NULL DEFAULT 0,
             payload {payload} NOT NULL DEFAULT {payload_default},
             staging_path TEXT NOT NULL,
             staging_backend TEXT NOT NULL DEFAULT 'local',
@@ -54,10 +55,9 @@ def init_schema(conn: Any, kind: str) -> None:
         """
     )
 
-    # These five columns are formally 0067 additive ownership, but the current
-    # canonical insert statement names them unconditionally.  Keeping this tiny
-    # compatibility subset makes direct pre-migration queue inserts valid while
-    # the 0067 migrations remain authoritative/idempotent for deployed upgrades.
+    # These compatibility columns make direct pre-migration queue use safe.
+    # Formal deployed ownership remains in the additive migration registry
+    # (0067 for staging/heartbeat fields and 0107 for progress_percent).
     existing = _columns(conn, kind)
     definitions = {
         "staging_backend": "staging_backend TEXT NOT NULL DEFAULT 'local'",
@@ -65,6 +65,7 @@ def init_schema(conn: Any, kind: str) -> None:
         "original_name": "original_name TEXT NOT NULL DEFAULT ''",
         "worker_last_seen": "worker_last_seen TEXT NOT NULL DEFAULT ''",
         "cleanup_pending": f"cleanup_pending {boolean} NOT NULL DEFAULT {default_false}",
+        "progress_percent": "progress_percent INTEGER NOT NULL DEFAULT 0",
     }
     for name, definition in definitions.items():
         if name in existing:
