@@ -13,6 +13,7 @@ from teacher_app.auth.self_service import _send
 from teacher_app.common import db as common_db
 from teacher_app.common.auth import has_role
 from teacher_app.notifications import events, incidents, preferences
+from teacher_app.operations import history as operational_history
 
 TAIPEI = dt.timezone(dt.timedelta(hours=8))
 LOGGER = logging.getLogger(__name__)
@@ -128,12 +129,23 @@ def run_due_reminders() -> int:
 
 
 def _send_operational_alerts(*, now: dt.datetime, sync_incidents: bool, kinds: set[str]) -> int:
+    lifecycle = None
     if sync_incidents:
         try:
-            incidents.sync_operational_incidents(now=now)
+            lifecycle = incidents.sync_operational_incidents(now=now)
         except Exception as exc:
             LOGGER.warning(
                 "operational incident sync failed error_type=%s",
+                type(exc).__name__,
+            )
+        try:
+            operational_history.record_operational_sample(
+                now=now,
+                lifecycle=lifecycle,
+            )
+        except Exception as exc:
+            LOGGER.warning(
+                "operational metrics sample failed error_type=%s",
                 type(exc).__name__,
             )
     sent = 0
