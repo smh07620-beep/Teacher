@@ -513,17 +513,40 @@ def _build_text_index(source,temp,prepared_pdf=None):
 def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progress_callback=None):
     """Publish through the Flask-free canonical worker storage adapter."""
     timings=timings if isinstance(timings,dict) else {}
-    report=progress_callback if callable(progress_callback) else (lambda _stage,_detail="":None)
+    report=progress_callback if callable(progress_callback) else (lambda _stage,_detail="",_percent=None:None)
     material_id=str(job["materialId"])
-    report("轉檔處理","正在依教材格式進行必要的轉檔與正規化。")
+    page_progress_state={"percent":75}
+    upload_progress_state={"percent":85}
+
+    def page_progress(current,total):
+        total=max(1,int(total or 0)); current=max(0,min(total,int(current or 0)))
+        percent=min(84,76+int((current/total)*8))
+        if percent<=page_progress_state["percent"]:
+            return
+        page_progress_state["percent"]=percent
+        report("建立預覽",f"正在建立教材預覽：第 {current}/{total} 頁。",percent)
+
+    def upload_progress(current,total,label=""):
+        total=max(1,int(total or 0)); current=max(0,min(total,int(current or 0)))
+        percent=min(92,86+int((current/total)*6))
+        if percent<=upload_progress_state["percent"]:
+            return
+        upload_progress_state["percent"]=percent
+        current_mb=current/1024/1024
+        total_mb=total/1024/1024
+        suffix=f"｜{label}" if label else ""
+        report("正式發布",f"R2 正式上傳 {current_mb:.1f}/{total_mb:.1f} MB{suffix}",percent)
+
+    report("轉檔處理","正在依教材格式進行必要的轉檔與正規化。",66)
     started=time.monotonic(); source,stored_name,media_meta,derivatives=_transcode_if_needed(source,original,temp); timings["mediaNormalizeMs"]=_elapsed_ms(started)
     backend=STORAGE.active_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
     publish_key=worker_protocol.material_publish_key(job.get("id"),material_id,source_sha256,backend)
     single=bool(backend=="mega" and STORAGE.single_preview and (ext==".pdf" or ext in OFFICE_EXT))
     prepared_pdf=None
     if ext in OFFICE_EXT:
-        report("轉檔處理","正在使用 LibreOffice 建立可預覽的 PDF。")
+        report("轉檔處理","LibreOffice 已開始建立可預覽 PDF；此步驟以實際完成事件更新，不使用假倒數。",68)
         started=time.monotonic(); prepared_pdf=STORAGE.prepare_office_pdf(source,Path(temp)/"office-pdf",timeout=240); timings["officeToPdfMs"]=_elapsed_ms(started)
+        report("轉檔處理","LibreOffice 轉檔已完成，準備建立預覽。",72)
         try:
             office_status=STORAGE.libreoffice_status()
             media_meta={
@@ -533,7 +556,7 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
             }
         except Exception:
             pass
-    report("建立預覽","正在建立教材預覽與可搜尋內容。")
+    report("建立預覽","正在建立教材預覽與可搜尋內容。",76)
     started=time.monotonic(); text_index,index_meta=_build_text_index(source,temp,prepared_pdf=prepared_pdf); timings["textIndexMs"]=_elapsed_ms(started)
     if text_index is not None:derivatives["index.txt"]=text_index
     media_meta={**media_meta,**index_meta}
@@ -541,40 +564,46 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
     if single:
         pages=STORAGE.build_single_preview_pdf(source,preview,prepared_pdf=prepared_pdf)
         if pages<=0 or not preview.is_file() or preview.stat().st_size<=0: raise RuntimeError("Office/PDF preview 產生失敗，不能完成工作。")
-        report("正式發布",f"正在將教材與預覽正式寫入 {backend.upper()}。")
+        report("建立預覽",f"單一 PDF 預覽已建立完成，共 {pages} 頁。",84)
+        report("正式發布",f"正在將教材與預覽正式寫入 {backend.upper()}。",86)
         key,prefix,remote=STORAGE.upload_material_preview_to_mega(material_id,source,preview,pages,derivatives); meta={"previewMode":"single_pdf","previewFilename":"preview.pdf","slideFormat":"pdf",**(remote or {}),**media_meta}
     elif ext==".pdf" or ext in OFFICE_EXT:
-        pages=STORAGE.convert_pdf_to_images(source if ext==".pdf" else prepared_pdf,slides)
+        pages=STORAGE.convert_pdf_to_images(
+            source if ext==".pdf" else prepared_pdf,
+            slides,
+            progress_callback=page_progress,
+        )
         if pages<=0: raise RuntimeError("Office/PDF 頁面數為零，不能完成工作。")
-        report("正式發布",f"正在將教材與 {pages} 頁預覽正式寫入 {backend.upper()}。")
+        report("正式發布",f"正在將教材與 {pages} 頁預覽正式寫入 {backend.upper()}。",86)
         if backend=="mega":key,prefix,remote=STORAGE.upload_material_tree_to_mega(material_id,source,slides,pages,derivatives)
         elif backend=="gdrive":key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256)
-        elif backend=="r2":key,prefix,remote=STORAGE.upload_material_tree_to_r2(material_id,source,slides,pages,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256)
+        elif backend=="r2":key,prefix,remote=STORAGE.upload_material_tree_to_r2(material_id,source,slides,pages,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256,progress_callback=upload_progress)
         else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA、Google Drive 或 R2。")
         meta={"slideFormat":STORAGE.slide_format(slides,pages),**(remote or {}),**media_meta}
     elif backend=="mega":
-        report("正式發布","正在將教材正式寫入 MEGA。")
+        report("正式發布","正在將教材正式寫入 MEGA。",86)
         if ext in VIDEO_EXT|AUDIO_EXT:
             key,prefix,remote=STORAGE.upload_media_bundle_to_mega(material_id,source,derivatives)
             meta={**(remote or {}),**media_meta}
         else:
             key=STORAGE.upload_source_to_mega(material_id,source); prefix=""; meta=media_meta
     elif backend=="gdrive":
-        report("正式發布","正在將教材正式寫入 Google Drive。")
+        report("正式發布","正在將教材正式寫入 Google Drive。",86)
         if ext in VIDEO_EXT|AUDIO_EXT:
             key,prefix,remote=STORAGE.upload_media_bundle_to_gdrive(material_id,source,derivatives,original_name=stored_name,publish_key=publish_key,source_sha256=source_sha256)
             meta={**(remote or {}),**media_meta}
         else:
             key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,0,original_name=stored_name,publish_key=publish_key,source_sha256=source_sha256); meta={**(remote or {}),**media_meta}
     elif backend=="r2":
-        report("正式發布","正在將教材正式寫入 Cloudflare R2。")
+        report("正式發布","正在將教材正式寫入 Cloudflare R2。",86)
         if ext in VIDEO_EXT|AUDIO_EXT:
-            key,prefix,remote=STORAGE.upload_media_bundle_to_r2(material_id,source,derivatives,publish_key=publish_key,source_sha256=source_sha256)
+            key,prefix,remote=STORAGE.upload_media_bundle_to_r2(material_id,source,derivatives,publish_key=publish_key,source_sha256=source_sha256,progress_callback=upload_progress)
         else:
-            key,prefix,remote=STORAGE.upload_source_to_r2(material_id,source,publish_key=publish_key,source_sha256=source_sha256)
+            key,prefix,remote=STORAGE.upload_source_to_r2(material_id,source,publish_key=publish_key,source_sha256=source_sha256,progress_callback=upload_progress)
         meta={**(remote or {}),**media_meta}
     else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA、Google Drive 或 R2。")
     timings["renderAndProviderMs"]=_elapsed_ms(render_publish_started)
+    report("正式發布",f"{backend.upper()} 正式教材寫入完成，準備發布確認。",92)
     meta={**(meta or {}),"workerTimingsMs":dict(timings)}
     return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta,"publishKey":publish_key,"publishSourceSha256":source_sha256}
 
@@ -601,13 +630,13 @@ def process_one(api,job,capabilities=None):
                     temp,
                     source_sha256,
                     timings=timings,
-                    progress_callback=lambda stage,detail="":_report_progress(api,job_id,stage,detail),
+                    progress_callback=lambda stage,detail="",progress_percent=None:_report_progress(api,job_id,stage,detail,progress_percent),
                 )
                 timings["processingBeforeReceiptMs"]=_elapsed_ms(job_started)
                 result["storageMeta"]={**dict(result.get("storageMeta") or {}),"workerTimingsMs":dict(timings)}
-                _report_progress(api,job_id,"發布確認","正式檔已寫入儲存端，正在建立不可重複發布的 receipt。")
+                _report_progress(api,job_id,"發布確認","正式檔已寫入儲存端，正在建立不可重複發布的 receipt。",93)
                 started=time.monotonic(); published_job(api,job_id,result); published_ack_ms=_elapsed_ms(started)
-                _report_progress(api,job_id,"完成確認","發布已確認，正在寫入正式教材清單並清理 staging。")
+                _report_progress(api,job_id,"完成確認","發布已確認，正在寫入正式教材清單並清理 staging。",97)
         started=time.monotonic(); complete_job(api,job_id,result); complete_ack_ms=_elapsed_ms(started)
         final_timings={**timings,"publishedAckMs":published_ack_ms,"completeAckMs":complete_ack_ms,"totalMs":_elapsed_ms(job_started)}
         log(f"completed {job_id} timings_ms={json.dumps(final_timings,sort_keys=True,separators=(',',':'))}")
