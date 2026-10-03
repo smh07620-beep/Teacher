@@ -385,3 +385,12 @@ MATERIAL_INCIDENT_FAILURE_RATE_PERCENT=50
 Worker availability 與 queue depth 只能從 0110 上線後開始真實採樣，系統不會回填假的七天歷史；畫面會顯示首次採樣時間與資料覆蓋率。教材成功率、失敗率、平均/P95 處理時間則可直接使用既有 `material_jobs` 回算。
 
 正式 SLO 門檻預設不設定。若日後院內決定門檻，只需在 Render Web 端設定 `OPERATIONS_SLO_WORKER_AVAILABILITY_PERCENT`、`MATERIAL_SLO_SUCCESS_PERCENT`、`MATERIAL_SLO_P95_DURATION_SECONDS`；這些值不需要放進院內 `.local-worker.env`。
+
+
+## 趨勢異常 / Worker 容量判讀
+
+這一層使用 0110 已累積的 Web 端歷史，不改 Worker protocol，也不需要更新院內 `.local-worker.env`。
+
+系統不會因為一次大量上傳或單一慢 Job 就判定 Worker 不夠用。預設要連續至少 6 個 10 分鐘樣本出現 Queue 上升，且最久等待同步拉長，才會建立趨勢事件；之後才會搭配在線 Worker 數量判斷「可能有容量壓力」。在 FFmpeg、LibreOffice、storage、網路或 Worker offline 尚未排除前，畫面只會寫「可能」，不會把硬體容量當成確定根因。
+
+處理時間惡化與 Incident 頻率上升也採前後等長時間窗比較，需要足夠樣本才成立。趨勢恢復後會沿用既有 Incident 自動 resolved；如果趨勢歷史本身暫時讀不到，系統會保留既有 OPEN 狀態，不會假裝已恢復。
