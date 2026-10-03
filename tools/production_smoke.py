@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""Read-only production acceptance probe for the deployed Teacher web service."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+
+
+REPORT_PATH = Path("production-smoke-report.json")
+USER_AGENT = "TeacherProductionSmoke/1.0"
+
+
+@dataclass
+class Response:
+    status: int
+    headers: dict[str, str]
+    body: bytes
+
+    def text(self) -> str:
+        return self.body.decode("utf-8", errors="replace")
+
+    def json(self) -> Any:
+        return json.loads(self.text())
+
+
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: N802
+        return None
+
+
+def _request(base_url: str, path: str, *, follow_redirects: bool = True, timeout: int = 60) -> Response:
+    url = urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
+    request = Request(
+        url,
+        headers={
+            "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
+            "User-Agent": USER_AGENT,
+            "Cache-Control": "no-cache",
+        },
+        method="GET",
+    )
+    opener = build_opener() if follow_redirects else build_opener(NoRedirect)
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            return Response(
+                status=int(response.getcode() or 0),
+                headers={str(k).lower(): str(v) for k, v in response.headers.items()},
+                body=response.read(),
+            )
+    except HTTPError as exc:
+        return Response(
+            status=int(exc.code or 0),
+            headers={str(k).lower(): str(v) for k, v in exc.headers.items()},
+            body=exc.read(),
+        )
+
+
+def _assert(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
+def _json_endpoint(base_url: str, path: str, expected_status: int = 200) -> tuple[Response, dict]:
+    response = _request(base_url, path)
+    _assert(
+        response.status == expected_status,
+        f"{path} returned HTTP {response.status}, expected {expected_status}: {response.text()[:500]}",
+    )
+    try:
+        payload = response.json()
+    except Exception as exc:
+        raise AssertionError(f"{path} did not return valid JSON: {response.text()[:500]}") from exc
+    _assert(isinstance(payload, dict), f"{path} returned non-object JSON")
+    return response, payload
+
+
+def _poll_exact_deployment(
+    base_url: str,
+    expected_commit: str,
+    *,
+    max_wait_seconds: int,
+    poll_seconds: int,
+) -> dict:
+    expected = expected_commit.strip().lower()[:12]
+    _assert(bool(expected), "expected commit is required")
+    deadline = time.monotonic() + max(1, max_wait_seconds)
+    attempts = 0
+    last_observation: dict[str, Any] = {}
+
+    while True:
+        attempts += 1
+        try:
+            response = _request(base_url, "/health", timeout=90)
+            if response.status == 200:
+                payload = response.json()
+                deployment = payload.get("deployment") or {}
+                observed = str(deployment.get("commit") or "").strip().lower()
+                last_observation = {
+                    "httpStatus": response.status,
+                    "ok": payload.get("ok"),
+                    "status": payload.get("status"),
+                    "version": payload.get("version"),
+                    "branch": deployment.get("branch"),
+                    "commit": observed,
+                    "databaseKind": (payload.get("database") or {}).get("kind"),
+                    "migrationsOk": (payload.get("migrations") or {}).get("ok"),
+                    "configurationOk": (payload.get("configuration") or {}).get("ok"),
+                }
+                if observed == expected:
+                    return {"attempts": attempts, "payload": payload}
+                print(
+                    f"[production-smoke] waiting for Render commit {expected}; "
+                    f"currently {observed or 'unknown'} (attempt {attempts})",
+                    flush=True,
+                )
+            else:
+                last_observation = {
+                    "httpStatus": response.status,
+                    "body": response.text()[:500],
+                }
+                print(
+                    f"[production-smoke] /health HTTP {response.status}; "
+                    f"waiting for deployment (attempt {attempts})",
+                    flush=True,
+                )
+        except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
+            last_observation = {"error": f"{type(exc).__name__}: {exc}"}
+            print(
+                f"[production-smoke] /health unavailable while waiting for deployment: {exc}",
+                flush=True,
+            )
+
+        if time.monotonic() >= deadline:
+            raise AssertionError(
+                f"Render did not converge to commit {expected} within the acceptance window; "
+                f"last observation={last_observation!r}"
+            )
+        time.sleep(max(1, poll_seconds))
+
+
+def run(base_url: str, expected_commit: str, *, max_wait_seconds: int, poll_seconds: int) -> dict:
+    started_at = time.time()
+    result: dict[str, Any] = {
+        "baseUrl": base_url.rstrip("/"),
+        "expectedCommit": expected_commit.strip().lower()[:12],
+        "checks": {},
+    }
+
+    deployment = _poll_exact_deployment(
+        base_url,
+        expected_commit,
+        max_wait_seconds=max_wait_seconds,
+        poll_seconds=poll_seconds,
+    )
+    health = deployment["payload"]
+    health_deployment = health.get("deployment") or {}
+    _assert(health.get("ok") is True, "/health ok must be true")
+    _assert(health.get("status") == "healthy", "/health status must be healthy")
+    _assert(health.get("version") == "6.8.1", f"unexpected production version: {health.get('version')!r}")
+    _assert(health_deployment.get("provider") == "render", "production provider must be render")
+    _assert(health_deployment.get("branch") == "main", f"production branch must be main, got {health_deployment.get('branch')!r}")
+    _assert((health.get("database") or {}).get("ok") is True, "production database is not healthy")
+    _assert((health.get("database") or {}).get("kind") == "postgres", "production database must be PostgreSQL/Supabase")
+    _assert((health.get("migrations") or {}).get("ok") is True, "production migrations are not healthy")
+    _assert((health.get("migrations") or {}).get("missing") == [], "production has missing migrations")
+    result["checks"]["health"] = {
+        "ok": True,
+        "attempts": deployment["attempts"],
+        "commit": health_deployment.get("commit"),
+        "branch": health_deployment.get("branch"),
+        "version": health.get("version"),
+        "database": (health.get("database") or {}).get("kind"),
+        "migrationCount": len((health.get("migrations") or {}).get("applied") or []),
+    }
+
+    _, ready = _json_endpoint(base_url, "/ready")
+    _assert(ready.get("ok") is True and ready.get("status") == "ready", f"/ready is not ready: {ready!r}")
+    _assert((ready.get("configuration") or {}).get("ok") is True, f"production configuration is not ready: {(ready.get('configuration') or {}).get('warnings')!r}")
+    result["checks"]["ready"] = {"ok": True}
+
+    _, live = _json_endpoint(base_url, "/live")
+    _assert(live.get("ok") is True and live.get("status") == "live", f"/live is not live: {live!r}")
+    result["checks"]["live"] = {"ok": True}
+
+    home = _request(base_url, "/")
+    _assert(home.status == 200, f"/ returned HTTP {home.status}")
+    home_text = home.text()
+    _assert("今天的學習，從這裡開始" in home_text, "homepage canonical hero marker is missing")
+    _assert("醫學檢驗教學平台" in home_text, "homepage brand marker is missing")
+    result["checks"]["homepage"] = {"ok": True}
+
+    login = _request(base_url, "/login")
+    _assert(login.status == 200, f"/login returned HTTP {login.status}")
+    login_text = login.text()
+    _assert('id="login-form"' in login_text, "login form marker is missing")
+    _assert("使用者登入" in login_text, "login page title marker is missing")
+    result["checks"]["login"] = {"ok": True}
+
+    _, me = _json_endpoint(base_url, "/api/auth/me")
+    _assert(me == {"authenticated": False, "user": None}, f"anonymous auth contract drifted: {me!r}")
+    result["checks"]["anonymousAuth"] = {"ok": True}
+
+    system = _request(base_url, "/system", follow_redirects=False)
+    _assert(system.status in {301, 302, 303, 307, 308}, f"anonymous /system should redirect, got HTTP {system.status}")
+    location = system.headers.get("location", "")
+    _assert(location.startswith("/login") or "/login" in location, f"anonymous /system redirect target is unexpected: {location!r}")
+    result["checks"]["anonymousSystemGuard"] = {"ok": True, "location": location}
+
+    result["ok"] = True
+    result["elapsedSeconds"] = round(time.time() - started_at, 3)
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base-url", required=True)
+    parser.add_argument("--expected-commit", required=True)
+    parser.add_argument("--max-wait-seconds", type=int, default=720)
+    parser.add_argument("--poll-seconds", type=int, default=15)
+    args = parser.parse_args()
+
+    report: dict[str, Any]
+    try:
+        report = run(
+            args.base_url,
+            args.expected_commit,
+            max_wait_seconds=args.max_wait_seconds,
+            poll_seconds=args.poll_seconds,
+        )
+    except Exception as exc:
+        report = {
+            "ok": False,
+            "baseUrl": args.base_url.rstrip("/"),
+            "expectedCommit": args.expected_commit.strip().lower()[:12],
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+        REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(report, ensure_ascii=False, indent=2), flush=True)
+        return 1
+
+    REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(report, ensure_ascii=False, indent=2), flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

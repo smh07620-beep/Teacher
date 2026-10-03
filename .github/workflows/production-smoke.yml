@@ -1,0 +1,52 @@
+name: Production smoke acceptance
+
+on:
+  workflow_run:
+    workflows:
+      - Teacher release checks
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-smoke-acceptance
+  cancel-in-progress: true
+
+jobs:
+  production-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TEACHER_BASE_URL: https://teacher-j3id.onrender.com
+      EXPECTED_COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_COMMIT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify exact Render deployment and public read-only flows
+        run: |
+          python tools/production_smoke.py \
+            --base-url "$TEACHER_BASE_URL" \
+            --expected-commit "$EXPECTED_COMMIT" \
+            --max-wait-seconds 720 \
+            --poll-seconds 15
+
+      - name: Upload production smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-smoke-${{ github.run_id }}
+          path: production-smoke-report.json
+          if-no-files-found: warn
+          retention-days: 14
