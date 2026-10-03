@@ -33,6 +33,14 @@
     return `${(seconds / 3600).toFixed(1)} 小時`;
   };
 
+  const formatBytes = value => {
+    const bytes = Math.max(0, Number(value || 0));
+    if (!bytes) return '—';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+  };
+
   const elapsedFrom = value => {
     if (!value) return '—';
     const started = new Date(value).getTime();
@@ -222,6 +230,10 @@
     const forecastDecision=forecast.decision||{};
     const forecastCurrent=forecast.current||{};
     const forecastPlusOne=forecast.plusOneWorker||{};
+    const workload=forecast.workloadCalibration||{};
+    const workloadProfiles=Array.isArray(workload.profiles)?workload.profiles:[];
+    const workloadCurrent=workload.current||{};
+    const workloadPlusOne=workload.plusOneWorker||{};
     const series=Array.isArray(metrics.series)?metrics.series:[];
     const success=material.successRate===null||material.successRate===undefined?'資料不足':formatPercent(material.successRate);
     const workerAvailability=worker.observedAvailability===null||worker.observedAvailability===undefined?'採樣累積中':formatPercent(worker.observedAvailability);
@@ -269,6 +281,29 @@
       : ['one_more_worker_would_restore_drain','one_more_worker_may_help','one_more_worker_insufficient','borderline'].includes(forecastDecision.state)
         ? 'border-amber-200 bg-amber-50'
         : 'border-slate-200 bg-slate-50/60';
+    const workloadEta=scenario=>{
+      if(!scenario||scenario.state==='unavailable')return '資料不足';
+      if(Number(scenario.clearEtaSeconds)===0)return '目前無 backlog';
+      if(scenario.clearEtaSeconds==null)return '無法淨消化';
+      return formatDuration(scenario.clearEtaSeconds);
+    };
+    const workloadProfileHtml=workloadProfiles.length
+      ? workloadProfiles.map(profile=>{
+          const calibrated=Boolean(profile.calibrated);
+          const media=profile.kind==='media';
+          const document=profile.kind==='document';
+          const specific=media&&Number(profile.medianMediaDurationSeconds||0)>0
+            ? '影音中位 '+formatDuration(profile.medianMediaDurationSeconds)+' · 處理/影音 '+Number(profile.medianProcessingToMediaRatio||0).toFixed(2)+'×'
+            : document&&Number(profile.medianPageCount||0)>0
+              ? '中位 '+Number(profile.medianPageCount||0).toFixed(1)+' 頁 · '+Number(profile.medianSecondsPerPage||0).toFixed(1)+' 秒/頁'
+              : '檔案中位 '+formatBytes(profile.medianSourceBytes||0);
+          return '<article class="rounded-xl border border-slate-200 bg-white p-3 text-xs">'
+            +'<div class="flex flex-wrap items-center justify-between gap-2"><b>'+escapeHtml(profile.label||profile.kind||'workload')+'</b><span class="rounded-full border px-2 py-0.5 text-[10px] font-bold '+(calibrated?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-amber-200 bg-amber-50 text-amber-700')+'">'+(calibrated?'已校準':'樣本不足')+'</span></div>'
+            +'<div class="mt-2 grid grid-cols-2 gap-2 text-[11px]"><div><span class="text-slate-400">完成樣本</span><div class="font-bold">'+Number(profile.completedSamples||0)+'</div></div><div><span class="text-slate-400">近期到達率</span><div class="font-bold">'+Number(profile.arrivalPerHour||0).toFixed(2)+'/h</div></div><div><span class="text-slate-400">中位處理</span><div class="font-bold">'+escapeHtml(formatDuration(profile.medianDurationSeconds||0))+'</div></div><div><span class="text-slate-400">P95</span><div class="font-bold">'+escapeHtml(formatDuration(profile.p95DurationSeconds||0))+'</div></div></div>'
+            +'<div class="mt-2 text-[10px] text-slate-500">'+escapeHtml(specific)+' · backlog '+Number(profile.backlogJobs||0)+' 筆 / '+escapeHtml(formatBytes(profile.backlogBytes||0))+'</div>'
+            +'</article>';
+        }).join('')
+      : '<div class="rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-400">尚無可用 workload 完成樣本。</div>';
     return `<section id="worker-slo-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4 scroll-mt-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div><h5 class="font-black text-slate-900">📈 維運趨勢 / SLO</h5><p class="mt-1 text-[11px] text-slate-500">${escapeHtml(baseline)}</p></div>
@@ -317,6 +352,16 @@
               <div><span class="text-slate-400">P95 保守 ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(plusOneConservative))}</div><div class="text-[10px] text-slate-400">淨消化 ${plusOneConservative.netDrainPerHour==null?'—':Number(plusOneConservative.netDrainPerHour).toFixed(2)+'/h'}</div></div>
             </div>
           </div>
+        </div>
+        <div class="mt-3 rounded-xl border border-slate-200 bg-white/80 p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2"><b class="text-xs text-slate-800">🧩 Workload 校準</b><span class="text-[10px] font-bold ${workload.fullyCalibrated?'text-emerald-700':'text-amber-700'}">${workload.fullyCalibrated?'混合 workload 已完整校準':'部分校準 / 保留全體 Forecast'}</span></div>
+          <div class="mt-1 text-[10px] text-slate-500">文件、影音、圖片等分開學習處理成本；每類至少 ${Number(workload.minimumCompletedPerKind||0)} 筆完成樣本才納入混合容量估算。</div>
+          <div class="mt-3 grid md:grid-cols-2 xl:grid-cols-3 gap-2">${workloadProfileHtml}</div>
+          <div class="mt-3 grid lg:grid-cols-2 gap-3 text-xs">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5"><b>目前 Worker · workload-adjusted</b><div class="mt-1">Nominal ETA：<b>${escapeHtml(workloadEta(workloadCurrent.nominal))}</b> · 利用率 ${workloadCurrent.nominal?.utilization==null?'—':(Number(workloadCurrent.nominal.utilization)*100).toFixed(1)+'%'}</div><div>P95 ETA：<b>${escapeHtml(workloadEta(workloadCurrent.conservative))}</b> · 利用率 ${workloadCurrent.conservative?.utilization==null?'—':(Number(workloadCurrent.conservative.utilization)*100).toFixed(1)+'%'}</div></div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5"><b>多 1 台 Worker · workload-adjusted</b><div class="mt-1">Nominal ETA：<b>${escapeHtml(workloadEta(workloadPlusOne.nominal))}</b> · 利用率 ${workloadPlusOne.nominal?.utilization==null?'—':(Number(workloadPlusOne.nominal.utilization)*100).toFixed(1)+'%'}</div><div>P95 ETA：<b>${escapeHtml(workloadEta(workloadPlusOne.conservative))}</b> · 利用率 ${workloadPlusOne.conservative?.utilization==null?'—':(Number(workloadPlusOne.conservative.utilization)*100).toFixed(1)+'%'}</div></div>
+          </div>
+          ${Array.isArray(workload.limitations)&&workload.limitations.length?'<div class="mt-2 text-[10px] text-amber-700">'+workload.limitations.map(item=>escapeHtml(item)).join(' · ')+'</div>':''}
         </div>
         <div class="mt-3 rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-700"><b>判讀：</b>${escapeHtml(forecastDecision.detail||'樣本仍在累積。')}</div>
         ${blockers.length?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800"><b>先排除 Incident：</b> '+blockers.map(item=>escapeHtml(item.code||item.title||'')).join('、')+'</div>':''}
