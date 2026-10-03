@@ -1,7 +1,7 @@
 """Teacher local material worker (outbound HTTPS only)."""
 from __future__ import annotations
 import datetime as dt
-import hashlib, json, os, re, socket, subprocess, sys, tempfile, threading, time
+import hashlib, json, logging, os, re, socket, subprocess, sys, tempfile, threading, time
 from pathlib import Path
 from urllib.parse import urlparse
 import requests
@@ -15,6 +15,8 @@ from teacher_app.materials.validation import (
 from teacher_app.materials import classification
 from teacher_app.storage.worker_runtime import OFFICE_EXT, WorkerMaterialStorageAdapter
 from teacher_app.worker import protocol as worker_protocol
+
+LOGGER=logging.getLogger("teacher.material_worker")
 
 BASE_URL=os.environ.get("TEACHER_BASE_URL", "").rstrip("/")
 TOKEN=os.environ.get("MATERIAL_WORKER_TOKEN", "")
@@ -496,7 +498,12 @@ def _build_text_index(source,temp,prepared_pdf=None):
             converted=Path(prepared_pdf) if prepared_pdf else classification.convert_office_to_pdf_for_text(source,Path(temp)/"index-convert")
             text=classification.extract_pdf_text(converted)
         text=classification.clean_extracted_text(text)
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning(
+            "material text index build failed ext=%s error_type=%s",
+            ext,
+            type(exc).__name__,
+        )
         return None,{"textIndexAvailable":False}
     if not text:
         return None,{"textIndexAvailable":False}

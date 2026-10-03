@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import hmac
+import logging
 import math
 import mimetypes
 import re
@@ -32,6 +33,7 @@ _RATE: dict[str, list[float]] = {}
 PART_HASH_STRATEGY = "sha256-parts-v1"
 SINGLE_HASH_STRATEGY = "sha256-single-v1"
 SINGLE_PUT_MAX_BYTES = 32 * 1024 * 1024
+LOGGER = logging.getLogger(__name__)
 WORKER_PROGRESS_STAGES = frozenset({
     "下載原始檔",
     "驗證教材",
@@ -237,14 +239,24 @@ def _fail_upload(runtime: WorkerWebRuntime, session, reason: str, *, delete_obje
     if terminal and session.get("r2_upload_id"):
         try:
             runtime.r2_client_factory().abort_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"], UploadId=session["r2_upload_id"])
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.warning(
+                "worker upload multipart abort cleanup failed upload_id=%s job_id=%s error_type=%s",
+                str(session.get("id") or "")[:80],
+                str(session.get("job_id") or "")[:80],
+                type(exc).__name__,
+            )
     if delete_object:
         try:
             runtime.r2_client_factory().delete_object(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=session["staging_key"])
             runtime.record_r2_deleted(session["staging_key"])
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.warning(
+                "worker upload object delete cleanup failed upload_id=%s job_id=%s error_type=%s",
+                str(session.get("id") or "")[:80],
+                str(session.get("job_id") or "")[:80],
+                type(exc).__name__,
+            )
     if terminal:
         worker_repository.cas_upload_session_status(
             session["id"],
@@ -263,8 +275,13 @@ def _sync_media_metadata(runtime: WorkerWebRuntime, job: dict, status: str, deta
             runtime.sync_media_processing_metadata(job, status, detail)
         else:
             runtime.sync_media_processing_metadata(job, status)
-    except Exception:
-        pass
+    except Exception as exc:
+        LOGGER.warning(
+            "worker media metadata mirror failed job_id=%s status=%s error_type=%s",
+            str(job.get("id") or "")[:80],
+            str(status or "")[:40],
+            type(exc).__name__,
+        )
 
 
 def _job_record_from_session(runtime: WorkerWebRuntime, session):

@@ -7,10 +7,14 @@ reporting and deliberately treats a missing optional table as non-fatal.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from pathlib import Path
 
 from teacher_app.common import db as common_db
 from teacher_app.materials.repository import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _now() -> str:
@@ -47,9 +51,16 @@ def sync(job: dict, status: str, failure_reason: str = "") -> None:
                 "status=excluded.status,failure_reason=excluded.failure_reason,updated_at=excluded.updated_at",
                 (job_id, material_id, job_id, status, failure_reason[:1200], now, now),
             )
-    except Exception:
-        # Reporting metadata must never alter queue correctness.
-        pass
+    except Exception as exc:
+        # Reporting metadata must never alter queue correctness, but failure
+        # must remain observable for migration/provider troubleshooting.
+        LOGGER.warning(
+            "media processing metadata sync skipped job_id=%s material_id=%s status=%s error_type=%s",
+            job_id[:80],
+            material_id[:80],
+            str(status or "")[:40],
+            type(exc).__name__,
+        )
     finally:
         conn.close()
 

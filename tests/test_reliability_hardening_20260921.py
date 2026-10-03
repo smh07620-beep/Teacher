@@ -87,6 +87,70 @@ class WorkerStatusObservabilityTests(unittest.TestCase):
         self.assertIn("此訊息不代表 Worker 已離線", worker_ui)
 
 
+class WorkerFailureObservabilityTests(unittest.TestCase):
+    def test_staging_probe_error_is_logged_and_does_not_mark_job_missing(self):
+        job = {
+            "id": "job-probe-error",
+            "workerId": "worker-a",
+            "updatedAt": "2026-09-18T09:00:00+00:00",
+            "stagingBackend": "r2",
+        }
+        with (
+            patch.object(operations.repository, "list_stale_processing_jobs", return_value=[job]),
+            patch.object(operations.repository, "cas_material_job") as cas_job,
+            patch.object(operations.LOGGER, "warning") as log_warning,
+        ):
+            result = operations.recover_stale_processing_jobs(
+                lambda _job: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+                stale_seconds=300,
+                now=__import__("datetime").datetime(
+                    2026, 9, 18, 11, 0, tzinfo=__import__("datetime").timezone.utc
+                ),
+            )
+
+        self.assertEqual(result.get("stagingProbeErrors"), 1)
+        cas_job.assert_not_called()
+        log_warning.assert_called_once()
+
+    def test_cleanup_failure_is_logged_and_remains_pending(self):
+        job = {
+            "id": "job-cleanup-error",
+            "status": "failed",
+            "updatedAt": "2026-09-18T09:00:00+00:00",
+            "cleanupPending": True,
+            "stagingBackend": "r2",
+        }
+        with (
+            patch.object(operations.repository, "list_cleanup_candidates", return_value=[job]),
+            patch.object(operations.repository, "update_material_job") as update_job,
+            patch.object(operations.LOGGER, "warning") as log_warning,
+        ):
+            operations.cleanup_staging(
+                lambda _job: (_ for _ in ()).throw(RuntimeError("provider unavailable"))
+            )
+
+        log_warning.assert_called_once()
+        self.assertTrue(update_job.call_args.kwargs["fields"]["cleanup_pending"])
+
+    def test_worker_and_progress_fallbacks_have_non_secret_observability(self):
+        root = ROOT
+        worker = root.joinpath("material_worker.py").read_text(encoding="utf-8")
+        routes = root.joinpath("teacher_app", "worker", "routes.py").read_text(encoding="utf-8")
+        metadata = root.joinpath("teacher_app", "worker", "media_metadata.py").read_text(encoding="utf-8")
+        jobs = root.joinpath("teacher_app", "materials", "job_routes.py").read_text(encoding="utf-8")
+        for marker, source in (
+            ("material text index build failed", worker),
+            ("worker upload multipart abort cleanup failed", routes),
+            ("worker upload object delete cleanup failed", routes),
+            ("worker media metadata mirror failed", routes),
+            ("media processing metadata sync skipped", metadata),
+            ("material upload progress read failed", jobs),
+        ):
+            self.assertIn(marker, source)
+        for source in (worker, routes, metadata, jobs):
+            self.assertIn("error_type=%s", source)
+
+
 class ScopeFailClosedTests(unittest.TestCase):
     def _app(self, user):
         app = Flask(__name__)

@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import logging
 import mimetypes
 import tempfile
 import uuid
@@ -20,6 +21,7 @@ from teacher_app.worker import repository as worker_repository
 
 
 ALLOWED_EXT = ALLOWED_MATERIAL_EXTENSIONS
+LOGGER = logging.getLogger(__name__)
 
 
 def _utc_now_iso() -> str:
@@ -90,7 +92,12 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             return jsonify({"percent": 0, "stage": "等待上傳開始", "detail": ""})
         try:
             return jsonify(json.loads(path.read_text(encoding="utf-8")))
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "material upload progress read failed progress_id=%r error_type=%s",
+                str(progress_id)[:80],
+                type(exc).__name__,
+            )
             return jsonify({"percent": 0, "stage": "讀取進度中", "detail": ""})
 
     def api_list_material_jobs():
@@ -99,7 +106,7 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             return denied
         try:
             limit = int(request.args.get("limit", 30) or 30)
-        except Exception:
+        except (TypeError, ValueError):
             limit = 30
         runtime.cleanup_budget_state()
         ops = runtime.operations_status()

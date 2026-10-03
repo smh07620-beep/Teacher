@@ -163,7 +163,13 @@ def cleanup_staging(
             continue
         try:
             delete_staging(job)
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "material staging cleanup failed job_id=%s backend=%s error_type=%s",
+                str(job.get("id") or "")[:80],
+                str(job.get("stagingBackend") or "")[:32],
+                type(exc).__name__,
+            )
             repository.update_material_job(
                 str(job.get("id") or ""),
                 fields={"cleanup_pending": True, "updated_at": now.isoformat()},
@@ -212,8 +218,18 @@ def recover_stale_processing_jobs(
         updated_at = str(job.get("updatedAt") or "")
         try:
             has_staging = bool(staging_exists(job))
-        except Exception:
-            has_staging = False
+        except Exception as exc:
+            counts["stagingProbeErrors"] = counts.get("stagingProbeErrors", 0) + 1
+            LOGGER.warning(
+                "stale material staging probe failed job_id=%s backend=%s error_type=%s",
+                job_id[:80],
+                str(job.get("stagingBackend") or "")[:32],
+                type(exc).__name__,
+            )
+            # Fail closed on uncertainty: a storage/provider outage is not proof
+            # that the retained source disappeared. Leave ownership/status intact
+            # so the next recovery cycle can make an authoritative decision.
+            continue
 
         if has_staging:
             fields = {
