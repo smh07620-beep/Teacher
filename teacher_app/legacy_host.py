@@ -1679,6 +1679,7 @@ def init_material_jobs_db():
                     max_attempts INTEGER NOT NULL DEFAULT 3,
                     stage TEXT NOT NULL DEFAULT '等待處理',
                     detail TEXT NOT NULL DEFAULT '',
+                    progress_percent INTEGER NOT NULL DEFAULT 0,
                     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
                     staging_path TEXT NOT NULL,
                     staging_backend TEXT NOT NULL DEFAULT 'local',
@@ -1698,6 +1699,7 @@ def init_material_jobs_db():
             conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS original_name TEXT NOT NULL DEFAULT ''")
             conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS worker_last_seen TEXT NOT NULL DEFAULT ''")
             conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS cleanup_pending BOOLEAN NOT NULL DEFAULT FALSE")
+            conn.execute("ALTER TABLE material_jobs ADD COLUMN IF NOT EXISTS progress_percent INTEGER NOT NULL DEFAULT 0")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_material_jobs_queue ON material_jobs(status, priority DESC, created_at)")
         else:
             conn.execute("""
@@ -1714,6 +1716,7 @@ def init_material_jobs_db():
                     max_attempts INTEGER NOT NULL DEFAULT 3,
                     stage TEXT NOT NULL DEFAULT '等待處理',
                     detail TEXT NOT NULL DEFAULT '',
+                    progress_percent INTEGER NOT NULL DEFAULT 0,
                     payload TEXT NOT NULL DEFAULT '{}',
                     staging_path TEXT NOT NULL,
                     staging_backend TEXT NOT NULL DEFAULT 'local',
@@ -1741,6 +1744,8 @@ def init_material_jobs_db():
                 conn.execute("ALTER TABLE material_jobs ADD COLUMN worker_last_seen TEXT NOT NULL DEFAULT ''")
             if "cleanup_pending" not in existing_cols:
                 conn.execute("ALTER TABLE material_jobs ADD COLUMN cleanup_pending INTEGER NOT NULL DEFAULT 0")
+            if "progress_percent" not in existing_cols:
+                conn.execute("ALTER TABLE material_jobs ADD COLUMN progress_percent INTEGER NOT NULL DEFAULT 0")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_material_jobs_queue ON material_jobs(status, priority, created_at)")
     finally:
         conn.close()
@@ -1837,7 +1842,7 @@ def list_material_jobs(limit=30):
 
 
 def _update_material_job(job_id: str, **fields):
-    allowed = {"status","updated_at","available_at","started_at","finished_at","attempts","stage","detail","material_id","error","result","worker_id","cancel_requested","staging_path","staging_key","worker_last_seen","cleanup_pending"}
+    allowed = {"status","updated_at","available_at","started_at","finished_at","attempts","stage","detail","progress_percent","material_id","error","result","worker_id","cancel_requested","staging_path","staging_key","worker_last_seen","cleanup_pending"}
     clean = {k:v for k,v in fields.items() if k in allowed}
     if not clean:
         return
