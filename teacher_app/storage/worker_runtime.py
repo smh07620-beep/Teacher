@@ -594,12 +594,15 @@ class WorkerMaterialStorageAdapter:
         source_key = f"{prefix}/source{source_path.suffix.lower()}"
         total_bytes = max(1, int(source_path.stat().st_size))
         transferred = 0
+        progress_lock = threading.Lock()
 
         def on_delta(delta: int) -> None:
             nonlocal transferred
-            transferred = min(total_bytes, transferred + max(0, int(delta or 0)))
+            with progress_lock:
+                transferred = min(total_bytes, transferred + max(0, int(delta or 0)))
+                current = transferred
             if callable(progress_callback):
-                progress_callback(transferred, total_bytes, "原始教材")
+                progress_callback(current, total_bytes, "原始教材")
 
         obj = self._r2_put_file(
             source_path,
@@ -650,13 +653,16 @@ class WorkerMaterialStorageAdapter:
             + sum(int(path.stat().st_size) for _name, path in derivative_paths),
         )
         transferred = 0
+        progress_lock = threading.Lock()
 
         def file_delta(label: str):
             def on_delta(delta: int) -> None:
                 nonlocal transferred
-                transferred = min(total_bytes, transferred + max(0, int(delta or 0)))
+                with progress_lock:
+                    transferred = min(total_bytes, transferred + max(0, int(delta or 0)))
+                    current = transferred
                 if callable(progress_callback):
-                    progress_callback(transferred, total_bytes, label)
+                    progress_callback(current, total_bytes, label)
             return on_delta
 
         objects = [
