@@ -50,6 +50,7 @@ This map records the remaining compatibility wrapper chains that intentionally r
 ## Selector / dispatch collision audit
 
 - System navigation uses one click path: `data-csp-click` → `static/system-csp-actions.js` → `switchAdminWorkspace(...)`. Dynamic system buttons explicitly clear `.onclick` before installing the CSP action.
+- Auditor workspace entry also uses only the CSP path: its inherited `openTeachingMaterials()` action is replaced with `toggleAdminModal(true)`, and any native `.onclick` is cleared first.
 - Worker notification actions are ordinary server-generated `<a href="/system?admin=1&workspace=worker&persona=system...">` links. They do not share the admin-navigation delegated selector.
 - Teacher authoring capture handlers are scoped to the Teacher Content Studio (for example `[data-composer-question-next]`) and do not match `.admin-nav-btn`, Notification Center links, or Worker controls.
 - Browser regression counts calls to `switchAdminWorkspace` when System and Worker buttons are clicked and requires exactly one dispatch per click.

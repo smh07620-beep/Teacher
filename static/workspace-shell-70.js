@@ -181,10 +181,9 @@
       if (entry.id === 'workspace-entry') entry.innerHTML = '<span>🔎</span>稽核檢視';
       else entry.textContent = '🔎 稽核檢視';
       entry.title = '唯讀檢視授權的稽核紀錄。';
-      entry.onclick = event => {
-        event?.preventDefault?.();
-        window.toggleAdminModal?.(true);
-      };
+      entry.onclick = null;
+      entry.removeAttribute('onclick');
+      entry.setAttribute('data-csp-click', 'toggleAdminModal(true)');
     });
     navHost.replaceChildren(navGroup('稽核／唯讀', [button('admin-nav-audit', '🔎 稽核紀錄', 'audit')], false, 'audit'));
   }

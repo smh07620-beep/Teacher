@@ -89,6 +89,9 @@ class WorkspaceShell70Tests(unittest.TestCase):
 
     def test_auditor_entry_does_not_unlock_teacher_panels(self):
         self.assertIn("navHost.replaceChildren(navGroup('稽核／唯讀'", self.source)
+        self.assertIn("entry.onclick = null", self.source)
+        self.assertIn("entry.setAttribute('data-csp-click', 'toggleAdminModal(true)')", self.source)
+        self.assertNotIn("entry.onclick = event =>", self.source)
         self.assertIn("document.querySelectorAll('.admin-section-panel').forEach", self.source)
         self.assertIn("window.switchAdminWorkspace('audit', true)", self.source)
         # Profile metadata may be documented in comments, but must never take part
