@@ -321,4 +321,19 @@
   });
 
   ensureNavigation();
+
+  // Deep links can be restored by system-bootstrap before this deferred
+  // extension has registered its workspace handler. Once registration is
+  // complete, reclaim an explicit system/worker URL so the visible section
+  // cannot remain on a previously rendered teacher/assessment workspace.
+  const initialParams = new URLSearchParams(window.location.search);
+  if (
+    initialParams.get('admin') === '1' &&
+    initialParams.get('workspace') === 'worker' &&
+    initialParams.get('persona') === 'system'
+  ) {
+    setTimeout(() => {
+      void window.switchAdminWorkspace?.('worker', true);
+    }, 0);
+  }
 })();
