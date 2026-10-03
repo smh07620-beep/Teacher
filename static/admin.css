@@ -939,6 +939,31 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
 }
 
 
+/* Notification Center must also stay shrinkable after an overlay is closed
+   and restored to the admin workspace. Details/flex intrinsic widths otherwise
+   can widen the mobile body even though the fixed overlay itself is clipped. */
+#notification-center-71 {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+}
+
+#notification-center-71 > *,
+#notification-center-71 article,
+#notification-center-71 article > *,
+#notification-center-71 #notification-list-71 {
+    max-width: 100%;
+    min-width: 0;
+}
+
+#notification-center-71 a,
+#notification-center-71 button,
+#notification-center-71 p {
+    overflow-wrap: anywhere;
+}
+
 /* Notification Center: system/admin users open the details panel as a real
    viewport overlay instead of expanding inside the workspace scroll container.
    The collapsed row remains in its canonical workspace position. */
