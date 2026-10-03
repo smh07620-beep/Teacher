@@ -8,7 +8,7 @@ import os
 from typing import Callable
 
 from teacher_app.storage import r2_budget
-from teacher_app.worker import repository
+from teacher_app.worker import error_observability, repository
 
 
 LOGGER = logging.getLogger(__name__)
@@ -138,6 +138,14 @@ def material_job_observability(
             "heartbeatDelayed": state == "heartbeat_delayed",
             "stalled": state == "stalled",
         }
+    )
+    item.update(
+        error_observability.classify_material_error(
+            item.get("error"),
+            stage=item.get("stage"),
+            status=status_value,
+            observability_state=state,
+        )
     )
     return item
 
@@ -540,6 +548,42 @@ def status(
         workers = []
         LOGGER.exception("Worker heartbeat status lookup failed")
 
+    active_worker_count = sum(
+        item.get("status") in {"online", "busy"} for item in workers
+    )
+    operational_issues: list[dict] = []
+    if not worker_status_available:
+        operational_issues.append(
+            {
+                "code": "WORKER_STATUS_UNAVAILABLE",
+                "category": "worker",
+                "message": "目前無法讀取 Worker heartbeat 狀態",
+                "action": "檢查 Web/資料庫狀態後再重新整理；此狀態本身不代表 Worker 已離線。",
+            }
+        )
+    elif active_worker_count == 0 and (pending > 0 or processing > 0):
+        operational_issues.append(
+            {
+                "code": "WORKER_OFFLINE",
+                "category": "worker",
+                "message": "目前沒有在線 Worker 可處理教材",
+                "action": "啟動或重新啟動院內 Worker；已排隊/R2 staging 的教材不需要重新上傳。",
+            }
+        )
+
+    stalled_count = sum(
+        item.get("observabilityState") == "stalled" for item in recent_jobs
+    )
+    if stalled_count:
+        operational_issues.append(
+            {
+                "code": "WORKER_JOB_STALLED",
+                "category": "worker",
+                "message": f"{stalled_count} 筆教材工作可能卡住",
+                "action": "先確認 Worker heartbeat；系統會依既有 stale recovery 處理，避免手動建立重複工作。",
+            }
+        )
+
     return {
         "backgroundJobsEnabled": _env_true("MATERIAL_BACKGROUND_JOBS", True),
         "workerEnabled": _env_true("MATERIAL_WORKER_ENABLED", True),
@@ -562,15 +606,21 @@ def status(
         "heartbeatDelayedJobs": sum(
             item.get("observabilityState") == "heartbeat_delayed" for item in recent_jobs
         ),
-        "stalledJobs": sum(
-            item.get("observabilityState") == "stalled" for item in recent_jobs
-        ),
+        "stalledJobs": stalled_count,
         "heartbeatWarningSeconds": max(
             90,
             _int_env("MATERIAL_WORKER_HEARTBEAT_SECONDS", 30, 5, 90) * 4,
         ),
         "staleThresholdSeconds": _int_env(
             "MATERIAL_JOB_STALE_SECONDS", 1800, 300, 21600
+        ),
+        "operationalIssues": operational_issues,
+        "recentErrorCodes": sorted(
+            {
+                str(item.get("errorCode") or "")
+                for item in recent_jobs
+                if str(item.get("errorCode") or "")
+            }
         ),
         "workers": workers,
         "workerStatusAvailable": worker_status_available,
