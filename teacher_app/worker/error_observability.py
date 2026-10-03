@@ -80,6 +80,20 @@ _RULES = (
         "確認 MEGAcmd 登入與寫入權限，再重新處理既有工作。",
     ),
     (
+        "OCI_STORAGE",
+        "storage",
+        ("oracle cloud", "oci ", "object storage"),
+        "OCI Object Storage 儲存失敗",
+        "確認 OCI bucket、namespace、憑證與網路，再重新處理既有工作。",
+    ),
+    (
+        "STORAGE_PROVIDER",
+        "storage",
+        ("storage provider", "provider unavailable", "storage unavailable", "儲存未就緒"),
+        "教材儲存 Provider 暫時不可用",
+        "確認目前啟用的儲存 Provider 與網路；原始檔仍保留時等待或重新處理即可。",
+    ),
+    (
         "DATABASE",
         "database",
         ("postgres", "psycopg", "sqlite", "database", "db failed", "sqlstate"),
