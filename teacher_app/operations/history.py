@@ -42,6 +42,22 @@ def _optional_float(name: str) -> float | None:
         return None
 
 
+def _int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(str(os.environ.get(name, default) or default))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def _float_env(name: str, default: float, minimum: float, maximum: float) -> float:
+    try:
+        value = float(str(os.environ.get(name, default) or default))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
 def _percentile(values: Iterable[float], percentile: float) -> float:
     ordered = sorted(float(value) for value in values)
     if not ordered:
@@ -281,6 +297,323 @@ def _job_period(rows: Iterable[Mapping[str, Any]], start: dt.datetime, end: dt.d
     }
 
 
+
+def _snapshot_rows_since(
+    start: dt.datetime,
+    *,
+    end: dt.datetime | None = None,
+) -> list[dict[str, Any]]:
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            if end is None:
+                rows = conn.execute(
+                    f"SELECT * FROM operational_metric_snapshots "
+                    f"WHERE sampled_at >= {ph} ORDER BY sampled_at ASC",
+                    (start.isoformat(),),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    f"SELECT * FROM operational_metric_snapshots "
+                    f"WHERE sampled_at >= {ph} AND sampled_at < {ph} "
+                    f"ORDER BY sampled_at ASC",
+                    (start.isoformat(), end.isoformat()),
+                ).fetchall()
+    except Exception as exc:
+        text = str(exc or "").lower()
+        if "no such table" in text or ("relation" in text and "does not exist" in text):
+            return []
+        raise
+    return [dict(row) for row in rows]
+
+
+def _completed_durations(
+    start: dt.datetime,
+    end: dt.datetime,
+) -> list[float]:
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            rows = conn.execute(
+                f"SELECT started_at,finished_at FROM material_jobs "
+                f"WHERE status='completed' AND finished_at >= {ph} AND finished_at < {ph} "
+                f"ORDER BY finished_at ASC",
+                (start.isoformat(), end.isoformat()),
+            ).fetchall()
+    except Exception as exc:
+        if _missing_material_job_history_schema(exc):
+            return []
+        raise
+    values: list[float] = []
+    for raw in rows:
+        row = dict(raw)
+        started = _parse_time(row.get("started_at"))
+        finished = _parse_time(row.get("finished_at"))
+        if not started or not finished:
+            continue
+        seconds = (finished - started).total_seconds()
+        if 0 <= seconds <= 7 * 24 * 3600:
+            values.append(seconds)
+    return values
+
+
+def _incident_open_counts(
+    start: dt.datetime,
+    end: dt.datetime,
+) -> Counter:
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            rows = conn.execute(
+                f"SELECT error_code,incident_type FROM operational_incident_events "
+                f"WHERE event_type='opened' AND occurred_at >= {ph} AND occurred_at < {ph}",
+                (start.isoformat(), end.isoformat()),
+            ).fetchall()
+    except Exception as exc:
+        text = str(exc or "").lower()
+        if "no such table" in text or ("relation" in text and "does not exist" in text):
+            return Counter()
+        raise
+    counter = Counter()
+    for raw in rows:
+        row = dict(raw)
+        code = str(row.get("error_code") or row.get("incident_type") or "UNKNOWN").strip()
+        if not code or code.startswith("TREND_") or code == "WORKER_CAPACITY_PRESSURE":
+            continue
+        counter[code] += 1
+    return counter
+
+
+def analyze_operational_trends(
+    *,
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
+    """Detect sustained deterioration without promoting one-off spikes."""
+    current = _utc(now)
+    sample_count = _int_env("OPERATIONS_TREND_MIN_SAMPLES", 6, 6, 24)
+    queue_growth_min = _int_env("OPERATIONS_TREND_QUEUE_MIN_GROWTH", 3, 2, 100)
+    oldest_min = _int_env("OPERATIONS_TREND_QUEUE_OLDEST_SECONDS", 600, 120, 21600)
+    duration_min_jobs = _int_env("OPERATIONS_TREND_DURATION_MIN_JOBS", 3, 2, 50)
+    duration_ratio = _float_env("OPERATIONS_TREND_DURATION_RATIO", 1.5, 1.2, 5.0)
+    duration_delta = _int_env("OPERATIONS_TREND_DURATION_MIN_DELTA_SECONDS", 60, 30, 7200)
+    incident_min = _int_env("OPERATIONS_TREND_INCIDENT_MIN_COUNT", 3, 2, 20)
+    incident_ratio = _float_env("OPERATIONS_TREND_INCIDENT_RATIO", 2.0, 1.5, 10.0)
+
+    recent_start = current - dt.timedelta(minutes=10 * sample_count)
+    snapshots = _snapshot_rows_since(recent_start)
+    recent = snapshots[-sample_count:]
+    signals: list[dict[str, Any]] = []
+    queue_signal = None
+    capacity_signal = None
+
+    if len(recent) >= sample_count:
+        pending = [int(row.get("pending_jobs") or 0) for row in recent]
+        oldest = [int(row.get("oldest_pending_age_seconds") or 0) for row in recent]
+        active = [
+            int(row.get("active_workers") or 0)
+            for row in recent
+            if bool(row.get("worker_status_available"))
+        ]
+        half = max(1, sample_count // 2)
+        first_avg = mean(pending[:half])
+        second_avg = mean(pending[-half:])
+        nondecreasing = sum(
+            pending[index] >= pending[index - 1]
+            for index in range(1, len(pending))
+        )
+        queue_growth = pending[-1] - pending[0]
+        queue_sustained = (
+            pending[-1] > 0
+            and queue_growth >= queue_growth_min
+            and second_avg - first_avg >= max(1.0, queue_growth_min / 2)
+            and nondecreasing >= len(pending) - 2
+            and max(oldest[-half:]) >= oldest_min
+        )
+        if queue_sustained:
+            queue_signal = {
+                "code": "TREND_QUEUE_GROWTH",
+                "severity": "warning",
+                "title": "教材 Queue 持續上升",
+                "detail": (
+                    f"最近 {sample_count * 10} 分鐘待處理工作由 {pending[0]} 筆升至 "
+                    f"{pending[-1]} 筆，後半段平均 {round(second_avg, 1)} 筆；"
+                    f"最久等待已達 {max(oldest[-half:])} 秒。"
+                ),
+                "action": "先確認 Worker 是否都在線，再查看處理時間與 storage/conversion Incident；不要因 queue 上升重複上傳教材。",
+                "evidence": {
+                    "firstPending": pending[0],
+                    "lastPending": pending[-1],
+                    "growth": queue_growth,
+                    "oldestPendingSeconds": max(oldest[-half:]),
+                    "sampleCount": sample_count,
+                },
+            }
+            signals.append(queue_signal)
+
+            if active:
+                max_known = max(int(row.get("known_workers") or 0) for row in recent)
+                recent_active = mean(active[-min(3, len(active)):])
+                if max_known <= 1 and recent_active <= 1:
+                    capacity_signal = {
+                        "code": "WORKER_CAPACITY_PRESSURE",
+                        "severity": "warning",
+                        "title": "教材處理容量可能成為瓶頸",
+                        "detail": (
+                            f"Queue 已連續上升，而近期可用 Worker 平均僅 {round(recent_active, 1)} 台；"
+                            "目前證據較符合單 Worker 容量壓力，而非單次排隊尖峰。"
+                        ),
+                        "action": "先排除 Worker offline、FFmpeg/LibreOffice 與 storage 異常；若依賴均正常且趨勢持續，再評估增加可用 Worker 或提升院內 Worker 處理能力。",
+                        "evidence": {
+                            "recentActiveWorkersAverage": round(recent_active, 2),
+                            "maxKnownWorkers": max_known,
+                            "queueGrowth": queue_growth,
+                        },
+                    }
+                    signals.append(capacity_signal)
+                elif max_known >= 2:
+                    first_active = mean([
+                        int(row.get("active_workers") or 0)
+                        for row in recent[:half]
+                        if bool(row.get("worker_status_available"))
+                    ] or [0])
+                    second_active = mean([
+                        int(row.get("active_workers") or 0)
+                        for row in recent[-half:]
+                        if bool(row.get("worker_status_available"))
+                    ] or [0])
+                    if first_active - second_active >= 1:
+                        capacity_signal = {
+                            "code": "WORKER_CAPACITY_PRESSURE",
+                            "severity": "warning",
+                            "title": "可用 Worker 容量下降且 Queue 上升",
+                            "detail": (
+                                f"前半段平均在線 Worker {round(first_active, 1)} 台，"
+                                f"後半段降至 {round(second_active, 1)} 台，同期 Queue 持續增加。"
+                            ),
+                            "action": "先恢復離線/不可用 Worker；若 Worker 數量恢復後 Queue 仍持續增加，再檢查單 Job 處理時間與 provider 吞吐。",
+                            "evidence": {
+                                "firstActiveWorkersAverage": round(first_active, 2),
+                                "secondActiveWorkersAverage": round(second_active, 2),
+                                "queueGrowth": queue_growth,
+                            },
+                        }
+                        signals.append(capacity_signal)
+
+    duration_window_hours = _int_env("OPERATIONS_TREND_DURATION_WINDOW_HOURS", 6, 1, 24)
+    duration_start = current - dt.timedelta(hours=duration_window_hours)
+    previous_duration_start = duration_start - dt.timedelta(hours=duration_window_hours)
+    current_durations = _completed_durations(duration_start, current)
+    previous_durations = _completed_durations(previous_duration_start, duration_start)
+    if (
+        len(current_durations) >= duration_min_jobs
+        and len(previous_durations) >= duration_min_jobs
+    ):
+        current_p95 = _percentile(current_durations, 0.95)
+        previous_p95 = _percentile(previous_durations, 0.95)
+        if (
+            previous_p95 > 0
+            and current_p95 >= previous_p95 * duration_ratio
+            and current_p95 - previous_p95 >= duration_delta
+        ):
+            signals.append({
+                "code": "TREND_PROCESSING_SLOWDOWN",
+                "severity": "warning",
+                "title": "教材處理時間持續惡化",
+                "detail": (
+                    f"最近 {duration_window_hours} 小時 P95 約 {round(current_p95)} 秒，"
+                    f"前一時段約 {round(previous_p95)} 秒，增加 "
+                    f"{round((current_p95 / previous_p95 - 1) * 100)}%。"
+                ),
+                "action": "查看 FFmpeg/LibreOffice、storage provider 與 Worker CPU/硬體加速狀態；先找共同根因，再決定是否需要擴充 Worker 容量。",
+                "evidence": {
+                    "currentP95Seconds": round(current_p95, 1),
+                    "previousP95Seconds": round(previous_p95, 1),
+                    "currentJobs": len(current_durations),
+                    "previousJobs": len(previous_durations),
+                },
+            })
+
+    incident_window_hours = _int_env("OPERATIONS_TREND_INCIDENT_WINDOW_HOURS", 24, 6, 72)
+    incident_start = current - dt.timedelta(hours=incident_window_hours)
+    previous_incident_start = incident_start - dt.timedelta(hours=incident_window_hours)
+    current_counts = _incident_open_counts(incident_start, current)
+    previous_counts = _incident_open_counts(previous_incident_start, incident_start)
+    for code, count in current_counts.most_common():
+        previous = int(previous_counts.get(code) or 0)
+        increasing = (
+            count >= incident_min
+            and (
+                previous == 0
+                or count >= max(incident_min, math.ceil(previous * incident_ratio))
+            )
+        )
+        if not increasing:
+            continue
+        signals.append({
+            "code": "TREND_INCIDENT_FREQUENCY",
+            "severity": "warning",
+            "title": f"{code} Incident 發生頻率上升",
+            "detail": (
+                f"最近 {incident_window_hours} 小時新開 {count} 次，"
+                f"前一相同時段 {previous} 次。"
+            ),
+            "action": "查看該 error code 的 Runbook 與共同依賴，優先處理反覆根因，而不是逐筆重試。",
+            "componentCode": code,
+            "evidence": {
+                "currentCount": count,
+                "previousCount": previous,
+                "windowHours": incident_window_hours,
+            },
+        })
+
+    severity_order = {"critical": 0, "warning": 1, "info": 2}
+    signals.sort(key=lambda item: (severity_order.get(str(item.get("severity")), 9), str(item.get("code"))))
+    return {
+        "generatedAt": current.isoformat(),
+        "sampleWindowMinutes": sample_count * 10,
+        "signals": signals,
+        "hasAnomaly": bool(signals),
+        "capacity": (
+            {
+                "state": "pressure",
+                "label": "可能有 Worker 容量壓力",
+                "evidence": capacity_signal.get("evidence") if capacity_signal else {},
+            }
+            if capacity_signal
+            else {
+                "state": "watch" if queue_signal else "normal",
+                "label": "持續觀察 Queue" if queue_signal else "目前沒有持續容量壓力訊號",
+                "evidence": queue_signal.get("evidence") if queue_signal else {},
+            }
+        ),
+    }
+
+
+def trend_incident_candidates(
+    *,
+    now: dt.datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Convert sustained trend signals into de-duplicated operational incidents."""
+    analysis = analyze_operational_trends(now=now)
+    candidates: list[dict[str, Any]] = []
+    for signal in analysis.get("signals") or []:
+        code = str(signal.get("code") or "")
+        component = str(signal.get("componentCode") or "")
+        suffix = component.lower() if code == "TREND_INCIDENT_FREQUENCY" and component else code.lower()
+        candidates.append({
+            "incidentKey": f"trend:{suffix}",
+            "incidentType": "trend_anomaly",
+            "category": "capacity" if code == "WORKER_CAPACITY_PRESSURE" else "trend",
+            "severity": str(signal.get("severity") or "warning"),
+            "title": str(signal.get("title") or "維運趨勢異常"),
+            "detail": str(signal.get("detail") or ""),
+            "action": str(signal.get("action") or ""),
+            "errorCode": code,
+            "resourceId": component or code,
+        })
+    return candidates
+
+
 def build_operational_dashboard(
     *,
     window: str = "24h",
@@ -492,8 +825,14 @@ def build_operational_dashboard(
         },
         "targets": targets,
         "targetsConfigured": any(value is not None for value in targets.values()),
+        "trendAnalysis": analyze_operational_trends(now=current),
         "series": series,
     }
 
 
-__all__ = ["build_operational_dashboard", "record_operational_sample"]
+__all__ = [
+    "analyze_operational_trends",
+    "build_operational_dashboard",
+    "record_operational_sample",
+    "trend_incident_candidates",
+]
