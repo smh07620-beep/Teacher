@@ -140,26 +140,6 @@ function renderCourseOverview() {
     document.getElementById('course-overview-exam-count').textContent = `考卷 ${quizzes.length}`;
 }
 
-async function markMaterialComplete(materialId) {
-    if (!teachingIdentity) {
-        closeSlideViewer(); closeMediaViewer();
-        teachingWelcome();
-        const status = document.getElementById('learning-identity-status');
-        status.textContent = '請先回首頁設定姓名與工號，再標記教材完成。';
-        return false;
-    }
-    const identity = teachingIdentity;
-    try {
-        const res = await fetch('/api/material-progress', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...identity,materialId})});
-        const data = await res.json();
-        if (!res.ok) throw Error(data.error || '無法儲存完成紀錄');
-        if (teachingIdentity !== identity) return false;
-        myCompletedMaterials[materialId] = data.completedAt || true;
-        if (currentMaterialView === 'materials') renderCourseOverview(); else await renderSlidesGrid();
-        return true;
-    } catch (err) { alert('完成紀錄尚未儲存：' + err.message + '。請重試。'); return false; }
-}
-
 function teachingEnsureDialog() {
     if (document.getElementById('teaching-dialog')) return;
     const dialog = document.createElement('dialog'); dialog.id = 'teaching-dialog'; dialog.className = 'teaching-dialog';
@@ -376,34 +356,55 @@ function teachingNextMedia() {
 
 
     const teacher66OriginalMarkComplete =
-        markMaterialComplete;
+        window.LearnerMaterialProgress?.complete
+        || window.markMaterialComplete;
 
-    markMaterialComplete =
-        async function (materialId) {
-            const result =
-                await teacher66OriginalMarkComplete
-                    .apply(
-                        this,
-                        arguments
-                    );
+    if (typeof teacher66OriginalMarkComplete === 'function') {
+        window.markMaterialComplete =
+            async function (materialId) {
+                if (!teachingIdentity) {
+                    closeSlideViewer();
+                    closeMediaViewer();
+                    teachingWelcome();
+                    const status =
+                        document.getElementById(
+                            'learning-identity-status'
+                        );
+                    if (status) {
+                        status.textContent =
+                            '請先回首頁設定姓名與工號，再標記教材完成。';
+                    }
+                    return false;
+                }
 
-            if (result) {
-                /*
-                 * Completion is already stored in
-                 * myCompletedMaterials by the original
-                 * function. Refresh reader controls
-                 * immediately instead of requiring
-                 * close/reopen or page refresh.
-                 */
-                teacher66SyncReaderNext();
-
-                requestAnimationFrame(
-                    teacher66SyncReaderNext
+                teachingSetIdentityFields(
+                    teachingIdentity.name,
+                    teachingIdentity.empId
                 );
-            }
 
-            return result;
-        };
+                const result =
+                    await teacher66OriginalMarkComplete
+                        .apply(
+                            this,
+                            arguments
+                        );
+
+                if (result) {
+                    /*
+                     * Completion is stored by the canonical
+                     * learner progress owner. This wrapper
+                     * only refreshes reader controls.
+                     */
+                    teacher66SyncReaderNext();
+
+                    requestAnimationFrame(
+                        teacher66SyncReaderNext
+                    );
+                }
+
+                return result;
+            };
+    }
 
 
     const teacher66OriginalNextMaterial =

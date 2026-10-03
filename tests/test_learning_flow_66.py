@@ -43,6 +43,26 @@ class LearningFlow66Tests(
             source,
         )
 
+    def test_material_completion_has_one_canonical_writer(self):
+        learner = self.source("static/system-learner.js")
+        teaching = self.source("static/teaching.js")
+        self.assertEqual(learner.count("fetch('/api/material-progress'"), 1)
+        self.assertNotIn("fetch('/api/material-progress'", teaching)
+        self.assertIn("window.LearnerMaterialProgress = Object.freeze", learner)
+        self.assertIn("window.LearnerMaterialProgress?.complete", teaching)
+        self.assertIn("return true;", learner)
+        self.assertIn("return false;", learner)
+
+    def test_teaching_completion_wrapper_only_adds_identity_and_reader_sync(self):
+        source = self.source("static/teaching.js")
+        start = source.index("const teacher66OriginalMarkComplete")
+        end = source.index("const teacher66OriginalNextMaterial", start)
+        wrapper = source[start:end]
+        self.assertIn("teachingSetIdentityFields(", wrapper)
+        self.assertIn("teacher66SyncReaderNext", wrapper)
+        self.assertIn("requestAnimationFrame", wrapper)
+        self.assertNotIn("/api/material-progress", wrapper)
+
     def test_empty_exam_has_explicit_not_ready_state(self):
         source = self.source(
             "static/teaching.js"

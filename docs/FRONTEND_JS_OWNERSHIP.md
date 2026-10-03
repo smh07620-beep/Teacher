@@ -20,11 +20,13 @@ This map records the remaining compatibility wrapper chains that intentionally r
 | `buildSlideCardHTML` | `static/system-learner.js` | `static/learner-content-audience-1014.js` | Add learner-visible audience badges to canonical material cards. |
 | `buildCourseMaterialRow` | `static/system-learner.js` | `static/learner-content-audience-1014.js` | Add learner-visible audience badges to canonical course-material rows. |
 | `courseWizard681OpenCourse` | `static/course-wizard-681.js` | `static/course-wizard-runtime-fix-1014.js` | Prevent duplicate/re-entrant finish rendering and route through the canonical workspace router. |
+| `markMaterialComplete` | `static/system-learner.js` | `static/teaching.js` | Canonical owner performs the single `/api/material-progress` write. Teaching only enforces the homepage-linked identity and refreshes reader controls after success. |
 
 ## Duplicate owners removed in this audit
 
 - `createAdminUserAccount` — canonical owner: `static/admin-people.js`. `roles-signing-66.js` now only supplies selected roles through `TeacherRoleSigning66.getCreateRoles()`.
 - `fetchAdminMaterials` — canonical owner: `static/admin-materials.js`. `rbac-ui-681.js` no longer replaces it after an asynchronous profile request.
+- `markMaterialComplete` — the duplicate POST implementation was removed from `static/teaching.js`; `static/system-learner.js` is the only writer and exposes `LearnerMaterialProgress.complete` for presentation wrappers.
 
 ## Navigation ownership
 

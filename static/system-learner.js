@@ -911,17 +911,29 @@ async function markMaterialComplete(materialId){
 
     const empId=(document.getElementById('examinee-id')?.value || document.getElementById('progress-empid')?.value || '').trim();
 
-    if(!name||!empId){alert('請先回首頁設定姓名與工號；內頁會自動連動，不需要重複輸入。'); return;}
+    if(!name||!empId){alert('請先回首頁設定姓名與工號；內頁會自動連動，不需要重複輸入。'); return false;}
 
-    const res=await fetch('/api/material-progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,empId,materialId})});
+    const identitySnapshot={name,empId};
 
-    const data=await res.json().catch(()=>({})); if(!res.ok){alert(data.error||'儲存失敗');return;}
+    const res=await fetch('/api/material-progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...identitySnapshot,materialId})});
+
+    const data=await res.json().catch(()=>({})); if(!res.ok){alert(data.error||'儲存失敗');return false;}
+
+    const currentName=(document.getElementById('examinee-name')?.value || document.getElementById('progress-name')?.value || '').trim();
+    const currentEmpId=(document.getElementById('examinee-id')?.value || document.getElementById('progress-empid')?.value || '').trim();
+    if(currentName!==identitySnapshot.name || currentEmpId!==identitySnapshot.empId) return false;
 
     myCompletedMaterials[materialId]=data.completedAt||true;
 
     if(currentMaterialView==='materials') renderCourseOverview(); else await renderSlidesGrid();
 
+    return true;
+
 }
+
+window.LearnerMaterialProgress = Object.freeze({
+    complete: markMaterialComplete
+});
 
 function buildProgressCourseCard(c){
     const currentCertificate=completionCertificates.find(item=>item.courseId===c.id&&item.currentValid);
