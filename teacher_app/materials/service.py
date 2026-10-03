@@ -7,6 +7,7 @@ until storage providers move under ``teacher_app.storage``.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 from pathlib import Path
@@ -22,6 +23,8 @@ from teacher_app import storage as canonical_storage
 from teacher_app.storage.web_runtime import WebStorageRuntime
 
 
+LOGGER = logging.getLogger(__name__)
+
 MATERIAL_TYPES = {"standard", "atlas", "infographic", "video", "troubleshooting", "sop", "case"}
 
 
@@ -34,9 +37,12 @@ def _category_labels() -> dict[str, str]:
     try:
         for category_id, title in assessment_repository.category_labels().items():
             labels[category_id] = title or labels.get(category_id, catalog.CATEGORY_LABELS[""])
-    except Exception:
+    except Exception as exc:
         # Material catalog remains usable if assessment labels are temporarily unavailable.
-        pass
+        LOGGER.warning(
+            "material category label lookup failed error_type=%s",
+            type(exc).__name__,
+        )
     return labels
 
 

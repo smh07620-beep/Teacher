@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import os
 import uuid
 from typing import Any, Mapping
@@ -14,6 +15,7 @@ from teacher_app.common.auth import has_role
 from teacher_app.notifications import events, preferences
 
 TAIPEI = dt.timezone(dt.timedelta(hours=8))
+LOGGER = logging.getLogger(__name__)
 
 
 def _user_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -58,8 +60,12 @@ def _release_claim(username: str, key: str) -> None:
                 f"DELETE FROM email_notification_log WHERE username={ph} AND notification_key={ph}",
                 (username, key),
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        LOGGER.warning(
+            "email notification claim release failed username=%s error_type=%s",
+            str(username or "")[:80],
+            type(exc).__name__,
+        )
 
 
 def _line(event: Mapping[str, Any]) -> str:
@@ -87,7 +93,12 @@ def run_due_reminders() -> int:
                 user,
                 general_enabled=bool(row.get("email_notifications", True)),
             )
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "email reminder event projection failed username=%s error_type=%s",
+                str(user.get("username") or "")[:80],
+                type(exc).__name__,
+            )
             continue
         claimed = [event for event in candidates if _claim(user["username"], event["key"], event["kind"])]
         if not claimed:
@@ -101,7 +112,12 @@ def run_due_reminders() -> int:
         )
         try:
             delivered = bool(_send(row["email"], "醫學檢驗教學平台｜需要處理的學習與教學提醒", body))
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "email reminder send failed username=%s error_type=%s",
+                str(user.get("username") or "")[:80],
+                type(exc).__name__,
+            )
             delivered = False
         if delivered:
             sent += 1
@@ -134,7 +150,12 @@ def run_worker_offline_reminders() -> int:
                 user,
                 general_enabled=False,
             )
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "worker offline reminder projection failed username=%s error_type=%s",
+                str(user.get("username") or "")[:80],
+                type(exc).__name__,
+            )
             continue
         claimed = [
             event
@@ -158,7 +179,12 @@ def run_worker_offline_reminders() -> int:
                     body,
                 )
             )
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "worker offline reminder send failed username=%s error_type=%s",
+                str(user.get("username") or "")[:80],
+                type(exc).__name__,
+            )
             delivered = False
         if delivered:
             sent += 1

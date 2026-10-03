@@ -197,6 +197,31 @@ class R2BudgetRuntimeTests(unittest.TestCase):
             "single_put_expired",
         )
 
+    def test_status_count_failure_is_logged_and_falls_back_to_zero_active_uploads(self):
+        policy = self.policy()
+        with patch.object(
+            r2_budget.worker_repository,
+            "upload_session_status_counts",
+            side_effect=RuntimeError("database unavailable"),
+        ), patch.object(r2_budget.LOGGER, "warning") as warning:
+            current = r2_budget.status(policy=policy)
+
+        self.assertEqual(current["activeUploads"], 0)
+        warning.assert_called_once()
+
+    def test_stale_upload_lookup_failure_is_logged_and_cleanup_stays_safe(self):
+        policy = self.policy()
+        with patch.object(
+            r2_budget.worker_repository,
+            "list_stale_upload_sessions",
+            side_effect=RuntimeError("database unavailable"),
+        ), patch.object(r2_budget.LOGGER, "warning") as warning:
+            expired = r2_budget.cleanup_budget_state(policy=policy)
+
+        self.assertEqual(expired, 0)
+        warning.assert_called_once()
+
+
     def test_level_thresholds_match_60_80_90_contract(self):
         policy = self.policy(free_only=True)
         self.assertEqual(r2_budget.budget_level(59.9, policy=policy), "green")

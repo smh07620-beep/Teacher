@@ -88,6 +88,39 @@ class WorkerOfflineEmailSchedule20261002Tests(unittest.TestCase):
         self.assertEqual(sent, 0)
         release.assert_called_once_with("sys1", event["key"])
 
+    def test_worker_alert_send_exception_is_logged_and_claim_is_released(self):
+        user = {
+            "username": "sys-log",
+            "display_name": "系統管理",
+            "email": "sys-log@example.test",
+            "active": True,
+            "role": "system_admin",
+            "roles": ["system_admin"],
+        }
+        event = {
+            "key": "notify:worker_offline:log",
+            "kind": "worker_offline",
+            "title": "教材 Worker 已離線",
+            "badge": "Worker 離線",
+            "detail": "worker-a 已離線。",
+            "dueAt": "",
+            "channels": ["in_app", "email"],
+            "emailPolicy": "once",
+        }
+        with patch.object(reminders.auth_repository, "list_users", return_value=[user]), \
+             patch.object(reminders.events, "build_events", return_value={"items": [event]}), \
+             patch.object(reminders.preferences, "filter_email_events", side_effect=lambda rows, *_args, **_kwargs: list(rows)), \
+             patch.object(reminders, "_claim", return_value=True), \
+             patch.object(reminders, "_send", side_effect=RuntimeError("smtp unavailable")), \
+             patch.object(reminders, "_release_claim") as release, \
+             patch.object(reminders.LOGGER, "warning") as warning:
+            sent = reminders.run_worker_offline_reminders()
+
+        self.assertEqual(sent, 0)
+        release.assert_called_once_with("sys-log", event["key"])
+        warning.assert_called_once()
+
+
     def test_workflow_is_ten_minute_critical_lane_and_daily_reminders_stay_daily(self):
         critical = ROOT.joinpath(".github", "workflows", "worker-offline-alerts.yml").read_text(encoding="utf-8")
         daily = ROOT.joinpath(".github", "workflows", "email-reminders.yml").read_text(encoding="utf-8")

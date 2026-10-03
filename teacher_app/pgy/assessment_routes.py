@@ -88,8 +88,12 @@ def register_pgy_assessment_routes(owner, *, paths, template_runtime=None):
         finally:
             try:
                 tmp.unlink(missing_ok=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                app.logger.warning(
+                    "PGY template temp cleanup failed template_type=%s error_type=%s",
+                    str(template_type or "")[:40],
+                    type(exc).__name__,
+                )
 
     def api_import_tslm_epa_template():
         denied = _require_admin()
@@ -113,12 +117,19 @@ def register_pgy_assessment_routes(owner, *, paths, template_runtime=None):
                 runtime.delete(old)
             return jsonify({"ok": True, "storageBackend": backend, "sourceUrl": assessments.TSLM_EPA_REFERENCE_URL, "validation": validation})
         except Exception as exc:
+            app.logger.warning(
+                "PGY EPA reference import failed error_type=%s",
+                type(exc).__name__,
+            )
             return jsonify({"error": f"匯入學會 EPA 公版失敗：{exc}"}), 502
         finally:
             try:
                 tmp.unlink(missing_ok=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                app.logger.warning(
+                    "PGY EPA temp cleanup failed error_type=%s",
+                    type(exc).__name__,
+                )
 
     def api_download_pgy_assessment_template(template_type):
         _user, denied = material_login_user()
@@ -140,6 +151,11 @@ def register_pgy_assessment_routes(owner, *, paths, template_runtime=None):
             runtime.delete(row, best_effort=False)
         except Exception as exc:
             cause = getattr(exc, "cause", exc)
+            app.logger.warning(
+                "PGY template delete failed template_type=%s error_type=%s",
+                str(template_type or "")[:40],
+                type(cause).__name__,
+            )
             return jsonify({"error": f"評量範本刪除失敗：{cause}"}), 502
         assessments.delete_template(template_type)
         return jsonify({"ok": True})

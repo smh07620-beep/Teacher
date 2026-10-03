@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import logging
 import os
 from dataclasses import dataclass
 from typing import Callable
@@ -19,6 +20,7 @@ from teacher_app.worker import repository as worker_repository
 
 
 _GB = 1024**3
+LOGGER = logging.getLogger(__name__)
 
 
 def _bounded_number(name: str, default, minimum, maximum, caster=float):
@@ -283,7 +285,11 @@ def status(*, policy: R2BudgetPolicy | None = None) -> dict:
 
     try:
         upload_counts = worker_repository.upload_session_status_counts()
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning(
+            "R2 upload session status count failed error_type=%s",
+            type(exc).__name__,
+        )
         upload_counts = {}
     return {
         "enabled": bool(policy.free_only),
@@ -314,7 +320,11 @@ def cleanup_budget_state(
     ).isoformat()
     try:
         stale = worker_repository.list_stale_upload_sessions(cutoff)
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning(
+            "R2 stale upload session lookup failed error_type=%s",
+            type(exc).__name__,
+        )
         stale = []
     expired = 0
     for item in stale:
@@ -336,10 +346,15 @@ def cleanup_budget_state(
                 # presigned PUT may already have created the object even though
                 # the browser never reached /complete, so remove that object.
                 client.delete_object(Bucket=providers.R2_BUCKET_NAME, Key=key)
-        except Exception:
+        except Exception as exc:
             # The remote upload/object can already be gone; local state still
             # must be released so capacity does not remain permanently blocked.
-            pass
+            LOGGER.warning(
+                "R2 stale upload remote cleanup failed upload_id=%s mode=%s error_type=%s",
+                upload_id[:80],
+                "multipart" if remote_upload_id else "single",
+                type(exc).__name__,
+            )
         try:
             worker_repository.cas_upload_session_status(
                 upload_id,
@@ -347,8 +362,12 @@ def cleanup_budget_state(
                 new_status="expired",
                 updated_at=_utc_now_iso(),
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.warning(
+                "R2 stale upload state transition failed upload_id=%s error_type=%s",
+                upload_id[:80],
+                type(exc).__name__,
+            )
         release_reservation(
             upload_id,
             "multipart_expired" if remote_upload_id else "single_put_expired",
