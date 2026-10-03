@@ -88,6 +88,27 @@ class WorkerStatusUi70Tests(unittest.TestCase):
         self.assertNotIn("data-csp-click", incident_block)
         self.assertNotIn(".onclick", incident_block)
 
+    def test_operational_slo_dashboard_is_system_admin_surface(self):
+        for marker in (
+            "/api/operational-metrics?window=",
+            "維運趨勢 / SLO",
+            "Worker 採樣可用率",
+            "教材成功率",
+            "教材 P95 處理時間",
+            "Incident 平均 MTTR",
+            "Queue depth 趨勢",
+            "完成處理時間趨勢",
+            "最常觸發 Incident 的元件",
+            "資料覆蓋",
+            "data-slo-window",
+            "24 小時",
+            "7 天",
+            "尚未設定正式 SLO 門檻",
+        ):
+            self.assertIn(marker, self.source)
+        self.assertIn("Date.now()-cached.loadedAt<60000", self.source)
+        self.assertNotIn("Chart(", self.source)
+
     def test_first_run_guide_is_explicit(self):
         for marker in (
             "本機 Worker 第一次安裝（只需要做一次）",
