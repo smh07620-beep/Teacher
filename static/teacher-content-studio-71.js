@@ -609,7 +609,13 @@
     document.addEventListener('click',event=>{
       if(!event.target.closest('.admin-nav-btn'))return;
       const root=document.getElementById(studioId);
-      if(root && !root.classList.contains('hidden'))closeStudio(false);
+      if(root && !root.classList.contains('hidden')){
+        const closed=closeStudio(false);
+        if(closed===false){
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }
     },true);
   }
 

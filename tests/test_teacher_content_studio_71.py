@@ -183,6 +183,9 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertIn('window.courseWizard681HasPending?.()', source)
         self.assertIn('teacherMaterialUploadPendingMessage', source)
         self.assertIn('courseWizard681PendingMessage', source)
+        self.assertIn('const closed=closeStudio(false);', source)
+        self.assertIn('event.preventDefault();', source)
+        self.assertIn('event.stopImmediatePropagation();', source)
 
 if __name__ == '__main__':
     unittest.main()
