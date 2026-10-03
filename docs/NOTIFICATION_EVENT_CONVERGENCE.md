@@ -51,3 +51,35 @@ Every response mutation is session/RBAC protected and is appended to the existin
 While a maintenance window is active, the Incident remains visible in-app but new escalation Email is paused. Automatic recovery is never paused, and a recovery event remains Email-eligible. When the maintenance deadline expires, an unresolved Incident becomes escalation-eligible again.
 
 The Worker / Job status page renders a static non-secret runbook selected by stable `errorCode` (for example `WORKER_OFFLINE`, `R2_STORAGE`, `FFMPEG_CONVERSION`, `LIBREOFFICE_CONVERSION`, `DATABASE`, DNS/network and AI failure-burst codes). Runbooks are guidance only; they do not execute infrastructure changes.
+
+
+## Operational history and SLO baseline (0110)
+
+Migration `0110-operational-metrics-history` adds two bounded operational-history tables:
+
+- `operational_metric_snapshots`: one idempotent sample per 10-minute bucket, retained for 30 days;
+- `operational_incident_events`: stable open/resolved transition history per Incident generation so MTTR and component-frequency metrics are not lost when an Incident later reopens.
+
+The existing 10-minute operational-alert workflow is also the sampling clock. It synchronizes Incident state, persists Incident transitions, then records queue depth, oldest pending age, recent failure rate, completed-job duration, stalled-job count, Worker availability, and open-Incident count. A snapshot failure does not erase an already persisted Incident transition.
+
+The system-admin Worker / Job workspace exposes a separate `GET /api/operational-metrics?window=24h|7d` endpoint and renders:
+
+- sampled Worker availability;
+- material terminal-job success rate from existing `material_jobs`;
+- material P95 and average processing time plus change versus the previous equal window;
+- average/max queue depth and maximum oldest-wait age;
+- Incident opened/resolved counts and MTTR;
+- most frequently opened Incident error codes;
+- explicit sample coverage so partial history is never presented as a complete seven-day record.
+
+Queue depth and Worker availability cannot be reconstructed truthfully for time before 0110 deployment, so the UI shows the first sample time and coverage percentage. Existing material completion/failure rows are still used for historical success/duration calculations.
+
+Formal SLO targets are optional and deliberately have no product defaults. If the organization wants pass/fail target context, configure on the Web/Render environment:
+
+```text
+OPERATIONS_SLO_WORKER_AVAILABILITY_PERCENT=
+MATERIAL_SLO_SUCCESS_PERCENT=
+MATERIAL_SLO_P95_DURATION_SECONDS=
+```
+
+When these values are absent, the UI labels the view as a baseline and does not invent a target.
