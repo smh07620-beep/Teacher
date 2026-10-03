@@ -109,6 +109,60 @@ class MaterialWorkerPerformance20261002Tests(unittest.TestCase):
         self.assertTrue(any("第 4/4 頁" in detail for stage, detail, _percent in events if stage == "建立預覽"))
         self.assertTrue(any("R2 正式上傳" in detail for stage, detail, _percent in events if stage == "正式發布"))
 
+    def test_publish_maps_ffmpeg_time_progress_into_worker_percent(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            original = temp / "source.mov"
+            original.write_bytes(b"video")
+            normalized = temp / "web.mp4"
+            normalized.write_bytes(b"normalized")
+
+            fake = Mock()
+            fake.single_preview = False
+            fake.active_backend.return_value = "r2"
+            fake.upload_media_bundle_to_r2.return_value = (
+                "materials/mat-video/source.mp4",
+                "",
+                {"r2Objects": [{"key": "materials/mat-video/source.mp4", "bytes": 10}]},
+            )
+
+            def transcode(_source, _original, _temp, *, progress_callback=None):
+                self.assertIsNotNone(progress_callback)
+                progress_callback(300, 600, "影片 CPU 轉碼")
+                progress_callback(600, 600, "影片 CPU 轉碼")
+                return (
+                    normalized,
+                    "source.mp4",
+                    {"mediaKind": "video", "durationSeconds": 600},
+                    {},
+                )
+
+            events = []
+            with patch.object(material_worker, "STORAGE", fake), \
+                 patch.object(material_worker, "_transcode_if_needed", side_effect=transcode), \
+                 patch.object(material_worker, "_build_text_index", return_value=(None, {})):
+                material_worker.publish_to_storage(
+                    original,
+                    "source.mov",
+                    {"id": "job-video", "materialId": "mat-video"},
+                    temp,
+                    "a" * 64,
+                    progress_callback=lambda stage, detail="", percent=None: events.append(
+                        (stage, detail, percent)
+                    ),
+                )
+
+        media_events = [
+            (detail, percent)
+            for stage, detail, percent in events
+            if stage == "轉檔處理" and "影片 CPU 轉碼" in detail
+        ]
+        self.assertTrue(media_events)
+        self.assertTrue(any("50%" in detail for detail, _percent in media_events))
+        self.assertTrue(any("05:00 / 10:00" in detail for detail, _percent in media_events))
+        self.assertIn(70, [percent for _detail, percent in media_events])
+        self.assertIn(75, [percent for _detail, percent in media_events])
+
     def test_mega_preview_bundle_ensures_material_folder_once(self):
         runtime = WorkerMaterialStorageAdapter()
         with tempfile.TemporaryDirectory() as temp_name:
