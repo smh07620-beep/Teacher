@@ -22,7 +22,7 @@ DEFAULTS = {
     "retraining": True,
     "teacherReview": True,
 }
-CRITICAL_KINDS = {"material_failure", "worker_offline"}
+CRITICAL_KINDS = {"material_failure", "worker_offline", "operational_incident", "operational_recovery"}
 _KIND_TO_PREF = {
     "course": "courseDue",
     "due": "courseDue",
@@ -69,7 +69,7 @@ def get_preferences(user: Mapping[str, Any] | None) -> dict[str, Any]:
         )
     return {
         "emailCategories": values,
-        "protectedCategories": ["materialFailure", "workerOffline"],
+        "protectedCategories": ["materialFailure", "workerOffline", "operationalIncidents"],
     }
 
 
