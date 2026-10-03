@@ -7,21 +7,140 @@ fallback live here so the canonical Worker keeps one media policy.
 from __future__ import annotations
 
 from pathlib import Path
+import queue
+import threading
+import time
+from types import SimpleNamespace
 
 from teacher_app.worker import media_acceleration
 
 
-def _run(worker, command, output: Path, *, timeout: int):
+def _parse_ffmpeg_time(value: object) -> float:
+    text = str(value or "").strip()
+    if not text:
+        return 0.0
+    parts = text.split(":")
+    if len(parts) != 3:
+        return 0.0
     try:
-        completed = worker.subprocess.run(
-            command,
-            capture_output=True,
+        hours = float(parts[0])
+        minutes = float(parts[1])
+        seconds = float(parts[2])
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, hours * 3600.0 + minutes * 60.0 + seconds)
+
+
+def _run(
+    worker,
+    command,
+    output: Path,
+    *,
+    timeout: int,
+    progress_callback=None,
+    duration_seconds: float = 0.0,
+):
+    duration = max(0.0, float(duration_seconds or 0.0))
+    if not callable(progress_callback) or duration <= 0:
+        try:
+            completed = worker.subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except worker.subprocess.TimeoutExpired:
+            return None, "FFmpeg conversion timed out"
+        if completed.returncode == 0 and output.is_file() and output.stat().st_size > 0:
+            return completed, ""
+        detail = str(completed.stderr or completed.stdout or "").strip()
+        return completed, (detail[-300:] or "FFmpeg conversion failed")
+
+    progress_command = [
+        *command[:-1],
+        "-progress",
+        "pipe:1",
+        "-nostats",
+        "-loglevel",
+        "error",
+        command[-1],
+    ]
+    try:
+        process = worker.subprocess.Popen(
+            progress_command,
+            stdout=worker.subprocess.PIPE,
+            stderr=worker.subprocess.PIPE,
             text=True,
-            timeout=timeout,
-            check=False,
+            bufsize=1,
         )
-    except worker.subprocess.TimeoutExpired:
-        return None, "FFmpeg conversion timed out"
+    except OSError as exc:
+        return None, f"FFmpeg conversion failed: {exc}"
+
+    events: queue.Queue[object] = queue.Queue()
+    stderr_lines: list[str] = []
+
+    def pump_stdout() -> None:
+        try:
+            for line in process.stdout or ():
+                events.put(str(line).strip())
+        finally:
+            events.put(None)
+
+    def pump_stderr() -> None:
+        for line in process.stderr or ():
+            stderr_lines.append(str(line))
+            if len(stderr_lines) > 80:
+                del stderr_lines[:20]
+
+    stdout_thread = threading.Thread(target=pump_stdout, daemon=True)
+    stderr_thread = threading.Thread(target=pump_stderr, daemon=True)
+    stdout_thread.start()
+    stderr_thread.start()
+    deadline = time.monotonic() + max(1, int(timeout))
+    stdout_done = False
+
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            try:
+                process.terminate()
+                process.wait(timeout=5)
+            except Exception:
+                try:
+                    process.kill()
+                except Exception:
+                    pass
+            return None, "FFmpeg conversion timed out"
+        try:
+            event = events.get(timeout=min(0.5, remaining))
+        except queue.Empty:
+            if process.poll() is not None and stdout_done:
+                break
+            continue
+        if event is None:
+            stdout_done = True
+            if process.poll() is not None:
+                break
+            continue
+        line = str(event)
+        if line.startswith("out_time="):
+            current = min(duration, _parse_ffmpeg_time(line.partition("=")[2]))
+            progress_callback(current, duration)
+        elif line == "progress=end":
+            progress_callback(duration, duration)
+
+    try:
+        return_code = process.wait(timeout=max(1, min(5, int(timeout))))
+    except Exception:
+        return_code = process.poll()
+    stdout_thread.join(timeout=1)
+    stderr_thread.join(timeout=1)
+    completed = SimpleNamespace(
+        returncode=int(return_code if return_code is not None else -1),
+        stdout="",
+        stderr="".join(stderr_lines),
+    )
     if completed.returncode == 0 and output.is_file() and output.stat().st_size > 0:
         return completed, ""
     detail = str(completed.stderr or completed.stdout or "").strip()
@@ -76,7 +195,7 @@ def _hardware_video_command(
     ]
 
 
-def transcode_if_needed(worker, source, original, temp):
+def transcode_if_needed(worker, source, original, temp, *, progress_callback=None):
     """Normalize media using actual streams and fail-safe acceleration.
 
     Priority:
@@ -115,6 +234,7 @@ def transcode_if_needed(worker, source, original, temp):
     audio_codec = str(metadata.get("audioCodec") or "").lower()
     width = int(metadata.get("width") or 0)
     height = int(metadata.get("height") or 0)
+    duration_seconds = max(0.0, float(metadata.get("durationSeconds") or 0.0))
 
     video_remux = bool(
         is_video
@@ -146,7 +266,18 @@ def transcode_if_needed(worker, source, original, temp):
                 "+faststart",
                 str(output),
             ]
-            completed, error = _run(worker, command, output, timeout=timeout)
+            completed, error = _run(
+                worker,
+                command,
+                output,
+                timeout=timeout,
+                progress_callback=(
+                    (lambda current, total: progress_callback(current, total, "影片快速封裝"))
+                    if callable(progress_callback)
+                    else None
+                ),
+                duration_seconds=duration_seconds,
+            )
             if error:
                 raise RuntimeError(error)
             transcode_mode = "remux"
@@ -162,13 +293,37 @@ def transcode_if_needed(worker, source, original, temp):
                     output,
                     hardware_encoder,
                 )
-                completed, error = _run(worker, command, output, timeout=timeout)
+                completed, error = _run(
+                    worker,
+                    command,
+                    output,
+                    timeout=timeout,
+                    progress_callback=(
+                        (lambda current, total: progress_callback(current, total, "影片硬體轉碼"))
+                        if callable(progress_callback)
+                        else None
+                    ),
+                    duration_seconds=duration_seconds,
+                )
                 if error:
                     hardware_fallback = error[:240]
                     output.unlink(missing_ok=True)
             if not hardware_encoder or error:
                 command = _cpu_video_command(ffmpeg, Path(source), output)
-                completed, cpu_error = _run(worker, command, output, timeout=timeout)
+                if callable(progress_callback) and hardware_fallback:
+                    progress_callback(0.0, duration_seconds, "硬體轉碼失敗，改用 CPU 重新轉碼")
+                completed, cpu_error = _run(
+                    worker,
+                    command,
+                    output,
+                    timeout=timeout,
+                    progress_callback=(
+                        (lambda current, total: progress_callback(current, total, "影片 CPU 轉碼"))
+                        if callable(progress_callback)
+                        else None
+                    ),
+                    duration_seconds=duration_seconds,
+                )
                 if cpu_error:
                     raise RuntimeError(f"FFmpeg conversion failed: {cpu_error}")
                 transcode_mode = "transcode"
@@ -189,7 +344,22 @@ def transcode_if_needed(worker, source, original, temp):
         if not audio_remux:
             command.extend(["-b:a", "128k"])
         command.append(str(output))
-        completed, error = _run(worker, command, output, timeout=timeout)
+        completed, error = _run(
+            worker,
+            command,
+            output,
+            timeout=timeout,
+            progress_callback=(
+                (lambda current, total: progress_callback(
+                    current,
+                    total,
+                    "音訊快速封裝" if audio_remux else "音訊轉碼",
+                ))
+                if callable(progress_callback)
+                else None
+            ),
+            duration_seconds=duration_seconds,
+        )
         if error:
             raise RuntimeError(f"FFmpeg conversion failed: {error}")
         name = Path(original).with_suffix(".m4a").name
@@ -271,8 +441,14 @@ def transcode_if_needed(worker, source, original, temp):
 
 def install(worker) -> None:
     """Install stream-safe media handling and capability reporting."""
-    worker._transcode_if_needed = lambda source, original, temp: transcode_if_needed(
-        worker, source, original, temp
+    worker._transcode_if_needed = (
+        lambda source, original, temp, progress_callback=None: transcode_if_needed(
+            worker,
+            source,
+            original,
+            temp,
+            progress_callback=progress_callback,
+        )
     )
     if getattr(worker, "_teacher_media_acceleration_installed", False):
         return
