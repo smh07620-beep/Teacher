@@ -151,6 +151,11 @@ class Handler(BaseHTTPRequestHandler):
                 "recentTerminalJobs": 0,
                 "recentFailureRate": 0,
                 "averageCompletedDurationSeconds": 0,
+                "healthyProcessingJobs": 0,
+                "heartbeatDelayedJobs": 0,
+                "stalledJobs": 0,
+                "heartbeatWarningSeconds": 120,
+                "staleThresholdSeconds": 1800,
                 "staging": {"backend": "r2", "available": True, "shared": True},
             }
         if path.startswith("/api/slides") or path.startswith("/api/courses") or path.startswith("/api/quiz-categories"):
