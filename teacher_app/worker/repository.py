@@ -389,6 +389,24 @@ def list_material_jobs(
     ]
 
 
+def list_problem_material_jobs(
+    limit: int = 20,
+    *,
+    connection_factory: ConnectionFactory | None = None,
+) -> list[dict[str, Any]]:
+    """Return actionable failures independently of the general recent-job window."""
+    limit = max(1, min(100, int(limit or 20)))
+    with _read_connection(connection_factory) as (conn, _kind):
+        rows = conn.execute(
+            "SELECT * FROM material_jobs "
+            "WHERE status IN ('failed','retry_wait') "
+            f"ORDER BY updated_at DESC, created_at DESC LIMIT {limit}"
+        ).fetchall()
+    return [
+        material_job_row_to_dict(row, include_payload=False) or {}
+        for row in rows
+    ]
+
 def _update_material_job_on_connection(
     conn: Any,
     kind: str,
