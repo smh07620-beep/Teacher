@@ -268,22 +268,36 @@ def sync_operational_incidents(
 
             generation = int(prior.get("generation") or 1) + 1
             occurrence_count = int(prior.get("occurrence_count") or 1) + 1
-            conn.execute(
-                f"UPDATE operational_incidents SET "
-                f"incident_type={ph},category={ph},severity={ph},status={ph},title={ph},detail={ph},"
-                f"action={ph},error_code={ph},resource_id={ph},generation={ph},occurrence_count={ph},"
-                f"opened_at={ph},last_seen_at={ph},resolved_at={ph},"
-                f"response_state={ph},acknowledged_by={ph},acknowledged_at={ph},assigned_to={ph},"
-                f"maintenance_until={ph},response_note={ph},response_updated_by={ph},response_updated_at={ph} "
-                f"WHERE incident_key={ph}",
-                (
-                    candidate["incident_type"], candidate["category"], candidate["severity"], "open",
-                    candidate["title"], candidate["detail"], candidate["action"],
-                    candidate["error_code"], candidate["resource_id"], generation,
-                    occurrence_count, stamp, stamp, "",
-                    "unacknowledged", "", "", "", "", "", "", "", key,
-                ),
-            )
+            if "response_state" in prior:
+                conn.execute(
+                    f"UPDATE operational_incidents SET "
+                    f"incident_type={ph},category={ph},severity={ph},status={ph},title={ph},detail={ph},"
+                    f"action={ph},error_code={ph},resource_id={ph},generation={ph},occurrence_count={ph},"
+                    f"opened_at={ph},last_seen_at={ph},resolved_at={ph},"
+                    f"response_state={ph},acknowledged_by={ph},acknowledged_at={ph},assigned_to={ph},"
+                    f"maintenance_until={ph},response_note={ph},response_updated_by={ph},response_updated_at={ph} "
+                    f"WHERE incident_key={ph}",
+                    (
+                        candidate["incident_type"], candidate["category"], candidate["severity"], "open",
+                        candidate["title"], candidate["detail"], candidate["action"],
+                        candidate["error_code"], candidate["resource_id"], generation,
+                        occurrence_count, stamp, stamp, "",
+                        "unacknowledged", "", "", "", "", "", "", "", key,
+                    ),
+                )
+            else:
+                conn.execute(
+                    f"UPDATE operational_incidents SET "
+                    f"incident_type={ph},category={ph},severity={ph},status={ph},title={ph},detail={ph},"
+                    f"action={ph},error_code={ph},resource_id={ph},generation={ph},occurrence_count={ph},"
+                    f"opened_at={ph},last_seen_at={ph},resolved_at={ph} WHERE incident_key={ph}",
+                    (
+                        candidate["incident_type"], candidate["category"], candidate["severity"], "open",
+                        candidate["title"], candidate["detail"], candidate["action"],
+                        candidate["error_code"], candidate["resource_id"], generation,
+                        occurrence_count, stamp, stamp, "", key,
+                    ),
+                )
             reopened.append(
                 incident_dict({
                     **prior,
