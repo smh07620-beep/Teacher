@@ -4,7 +4,6 @@ from __future__ import annotations
 import datetime as dt
 import math
 import os
-import uuid
 from collections import Counter
 from statistics import mean
 from typing import Any, Iterable, Mapping
@@ -114,6 +113,22 @@ def _write_incident_event(conn, kind: str, event: Mapping[str, Any]) -> None:
     )
 
 
+def _record_incident_transitions(
+    lifecycle: Mapping[str, Any] | None,
+    *,
+    now: dt.datetime,
+) -> None:
+    if not lifecycle:
+        return
+    with common_db.transaction() as (conn, kind):
+        for item in lifecycle.get("opened") or []:
+            _write_incident_event(conn, kind, _incident_event(item, "opened", now))
+        for item in lifecycle.get("reopened") or []:
+            _write_incident_event(conn, kind, _incident_event(item, "opened", now))
+        for item in lifecycle.get("resolved") or []:
+            _write_incident_event(conn, kind, _incident_event(item, "resolved", now))
+
+
 def record_operational_sample(
     *,
     now: dt.datetime | None = None,
@@ -121,6 +136,7 @@ def record_operational_sample(
 ) -> dict[str, Any]:
     """Record one idempotent ten-minute sample and incident transition history."""
     current = _utc(now)
+    _record_incident_transitions(lifecycle, now=current)
     bucket_minute = (current.minute // 10) * 10
     sampled = current.replace(minute=bucket_minute, second=0, microsecond=0)
     status = worker_operations.status(
@@ -192,14 +208,6 @@ def record_operational_sample(
             f"DELETE FROM operational_metric_snapshots WHERE sampled_at < {ph}",
             (cutoff,),
         )
-
-        if lifecycle:
-            for item in lifecycle.get("opened") or []:
-                _write_incident_event(conn, kind, _incident_event(item, "opened", current))
-            for item in lifecycle.get("reopened") or []:
-                _write_incident_event(conn, kind, _incident_event(item, "opened", current))
-            for item in lifecycle.get("resolved") or []:
-                _write_incident_event(conn, kind, _incident_event(item, "resolved", current))
 
     return {
         "sampledAt": sampled.isoformat(),
