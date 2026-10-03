@@ -115,3 +115,48 @@ OPERATIONS_TREND_INCIDENT_RATIO=2.0
 ```
 
 A single queue spike, one slow job, or one provider Incident is intentionally insufficient for a trend Incident.
+
+
+## Capacity planning / Forecast
+
+The SLO workspace now includes a capacity-planning model built from the existing 0110 history; no new migration or Worker protocol is required.
+
+The model deliberately separates three quantities:
+
+- **arrival rate**: material jobs created during the forecast window;
+- **observed completions**: successfully completed jobs during the same window;
+- **per-Worker service capacity**: derived from real completed-job duration rather than dividing by wall-clock time, so idle time does not incorrectly reduce capacity.
+
+Two service scenarios are shown:
+
+- **nominal**: one Worker's jobs/hour from the median completed-job duration;
+- **conservative**: one Worker's jobs/hour from P95 completed-job duration.
+
+The default forecast window is 6 hours. A model is only considered usable when it has a recent Worker/queue sample, at least three completed jobs and at least 50% of expected ten-minute samples. The workspace shows confidence and limitations instead of manufacturing a number when the evidence is insufficient.
+
+Queue ETA is calculated from:
+
+```text
+net drain rate = estimated Worker capacity - recent job arrival rate
+queue clear time = current backlog / positive net drain rate
+```
+
+The dashboard shows both current-Worker and **+1 Worker** scenarios. This is a planning simulation only. It never starts another Worker or changes infrastructure.
+
+Capacity interpretation remains conservative:
+
+- if a blocking Worker/storage/conversion/network/database Incident is OPEN, the forecast says to repair the dependency first;
+- if the existing P95-conservative scenario still has positive net drain, current capacity is shown as clearing the Queue;
+- if nominal clears but P95 does not, capacity is labeled borderline;
+- if current capacity cannot drain the recent arrival rate but one additional Worker can, the UI states that the +1 Worker scenario would restore net drain;
+- if even +1 Worker does not restore net drain, the model says that adding only one Worker is insufficient instead of recommending repeated scaling.
+
+Default forecast evidence knobs are Web-side operational settings, not formal SLO targets:
+
+```text
+OPERATIONS_FORECAST_WINDOW_HOURS=6
+OPERATIONS_FORECAST_MIN_COMPLETED_JOBS=3
+OPERATIONS_FORECAST_MIN_SNAPSHOT_COVERAGE=0.5
+```
+
+These values control whether the model has enough evidence to calculate; they are not organizational performance targets.
