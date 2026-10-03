@@ -145,7 +145,7 @@ class ProductionSmokeAcceptanceTests(unittest.TestCase):
         keepalive = (ROOT / ".github" / "workflows" / "supabase-keepalive.yml").read_text(encoding="utf-8")
         fallback = (ROOT / ".github" / "workflows" / "material-fallback-worker.yml").read_text(encoding="utf-8")
         def target_from(source: str) -> str:
-            match = re.search(r"vars\\.TEACHER_PRODUCTION_URL\\s*\\|\\|\\s*'([^']+)'", source)
+            match = re.search(r"vars\.TEACHER_PRODUCTION_URL\s*\|\|\s*'([^']+)'", source)
             self.assertIsNotNone(match)
             return match.group(1)
 
