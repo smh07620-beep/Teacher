@@ -95,6 +95,60 @@ class NotificationEventConvergence1025Tests(unittest.TestCase):
         self.assertEqual(first["key"],replay["key"])
         self.assertNotEqual(first["key"],later_outage["key"])
 
+    def test_system_admin_gets_persisted_operational_incident_and_recovery_events(self):
+        system_user={**USER,"username":"sys","role":"system_admin","roles":["system_admin"]}
+        rows=[
+            {
+                "incidentKey":"error_burst:r2_storage",
+                "incidentType":"error_burst",
+                "category":"storage",
+                "severity":"critical",
+                "status":"open",
+                "title":"教材背景工作連續發生 R2_STORAGE",
+                "detail":"最近已連續 3 筆工作以相同 error code 失敗。",
+                "action":"確認 R2 bucket 與網路。",
+                "errorCode":"R2_STORAGE",
+                "resourceId":"R2_STORAGE",
+                "generation":1,
+                "occurrenceCount":1,
+                "openedAt":"2026-10-01T11:00:00+00:00",
+                "lastSeenAt":"2026-10-01T12:00:00+00:00",
+                "resolvedAt":"",
+            },
+            {
+                "incidentKey":"job_stalled:job-old",
+                "incidentType":"job_stalled",
+                "category":"worker",
+                "severity":"critical",
+                "status":"resolved",
+                "title":"教材處理工作可能卡住",
+                "detail":"job-old stale",
+                "action":"確認 Worker heartbeat",
+                "errorCode":"WORKER_HEARTBEAT_STALLED",
+                "resourceId":"job-old",
+                "generation":2,
+                "occurrenceCount":2,
+                "openedAt":"2026-10-01T09:00:00+00:00",
+                "lastSeenAt":"2026-10-01T11:50:00+00:00",
+                "resolvedAt":"2026-10-01T11:50:00+00:00",
+            },
+        ]
+        with patch.object(events.service,"build_summary",return_value={"items":[]}), \
+             patch.object(events.dashboard_service,"dashboard_summary",return_value={"pendingExams":[]}), \
+             patch.object(events.incidents,"list_recent_incidents",return_value=rows), \
+             patch.object(events.worker_operations,"offline_worker_alerts",return_value={"available":True,"thresholdSeconds":600,"workers":[]}):
+            data=events.build_events(system_user,now=NOW)
+
+        incident=next(row for row in data["items"] if row["kind"]=="operational_incident")
+        recovery=next(row for row in data["items"] if row["kind"]=="operational_recovery")
+        self.assertEqual(incident["errorCode"],"R2_STORAGE")
+        self.assertEqual(incident["generation"],1)
+        self.assertEqual(incident["emailPolicy"],"once")
+        self.assertIn("workspace=worker",incident["href"])
+        self.assertEqual(recovery["generation"],2)
+        self.assertIn("已恢復",recovery["title"])
+        self.assertNotEqual(incident["key"],recovery["key"])
+
     def test_email_filter_reuses_same_events_and_horizon(self):
         rows={"items":[
             {"key":"soon","kind":"course","channels":["in_app","email"],"emailPolicy":"due","dueAt":"2026-10-02T12:00:00+00:00"},
