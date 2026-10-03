@@ -34,6 +34,7 @@ BROAD_OBSERVER_CONTRACT = {
     "teacher-media-status-fix-1014.js": ("observer.disconnect()",),
     "teacher-paper-template-manager-1014.js": ("observer.disconnect()",),
     "teacher-ai-video-1015.js": ("observer.disconnect()",),
+    "teacher-ai-presentation-1016.js": ("observer.disconnect()", "if (!install())"),
     "teacher-media-audio-1014.js": ("observer.disconnect()",),
     "teacher-media-recorder-1014.js": ("observer.disconnect()",),
     "teacher-media-script-1014.js": ("observer.disconnect()",),
