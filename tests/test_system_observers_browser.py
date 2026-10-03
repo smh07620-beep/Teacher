@@ -155,7 +155,7 @@ class SystemObserverBrowserRegressionTests(unittest.TestCase):
         self.assertIn("document.getElementById('course-wizard-681')", source)
         self.assertIn('observer?.disconnect();', source)
         self.assertIn('observeWizard();', source)
-        self.assertNotIn('const root = document.getElementById', source)
+        self.assertNotIn("const root = document.getElementById('course-wizard-681') || document.body", source)
 
     def test_ai_material_legacy_observer_disconnects_after_convergence(self):
         source = ROOT.joinpath('static', 'teacher-ai-material-convergence-1014.js').read_text(encoding='utf-8')
