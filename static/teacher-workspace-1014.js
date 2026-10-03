@@ -14,7 +14,15 @@
   const params = new URLSearchParams(window.location.search);
   const adminPage = params.get('admin') === '1';
   const requestedPersona = params.get('persona') || '';
-  const teacherPersonaActive = adminPage && canTeach && requestedPersona !== 'system';
+  const requestedWorkspace = params.get('workspace') || 'course-materials';
+  const teacherOwnedWorkspaces = new Set([
+    'course-materials','courses','materials','assessment','questions','exams',
+    'teacher','scoring','results','compliance','pgy','word'
+  ]);
+  const teacherPersonaActive = adminPage && canTeach && (
+    requestedPersona === 'teacher' ||
+    (!requestedPersona && teacherOwnedWorkspaces.has(requestedWorkspace))
+  );
   const state = { mode: params.get('teacherMode') || 'course' };
 
   function learningUrl() {
