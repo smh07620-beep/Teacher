@@ -13,11 +13,12 @@ from typing import Any, Mapping, Optional
 from teacher_app.command_center import dashboard_service, service
 from teacher_app.common.auth import has_role
 from teacher_app.worker import operations as worker_operations
+from teacher_app.notifications import incidents
 from teacher_app.common.errors import ApiError
 from teacher_app.exams import windows as exam_windows
 
 
-EMAIL_ONCE_KINDS = {"retraining", "review", "material_failure", "worker_offline"}
+EMAIL_ONCE_KINDS = {"retraining", "review", "material_failure", "worker_offline", "operational_incident", "operational_recovery"}
 EMAIL_DUE_KINDS = {"course", "exam", "due"}
 
 
@@ -48,7 +49,7 @@ def _href(item: Mapping[str, Any]) -> str:
     target = str(item.get("target") or "")
     resource_id = str(item.get("resourceId") or item.get("id") or "")
     course_id = str(item.get("courseId") or "")
-    if target == "worker" or item.get("kind") == "worker_offline":
+    if target == "worker" or item.get("kind") in {"worker_offline", "operational_incident", "operational_recovery"}:
         return "/system?admin=1&workspace=worker&persona=system&from=notification-center"
     if target == "pgy-workflow":
         return f"/system?area=pgy&group={group or 'grpNew'}&module=assessment&from=notification-center"
@@ -80,6 +81,8 @@ def _badge(kind: str, overdue: bool, status: str) -> str:
         "draft": "草稿",
         "material": "教材",
         "worker_offline": "Worker 離線",
+        "operational_incident": "系統事件",
+        "operational_recovery": "已恢復",
     }.get(kind, "待辦")
 
 
@@ -109,6 +112,11 @@ def _event(item: Mapping[str, Any]) -> dict[str, Any]:
         "href": _href(item),
         "channels": ["in_app"] + (["email"] if email_policy != "none" else []),
         "emailPolicy": email_policy,
+        "incidentType": str(item.get("incidentType") or ""),
+        "severity": str(item.get("severity") or ""),
+        "errorCode": str(item.get("errorCode") or ""),
+        "action": str(item.get("action") or ""),
+        "generation": int(item.get("generation") or 0),
     }
 
 
@@ -196,6 +204,61 @@ def _worker_offline_events(
     return output
 
 
+def _operational_incident_events(
+    user: Mapping[str, Any],
+    current: dt.datetime,
+) -> list[dict[str, Any]]:
+    if not has_role(user, "system_admin"):
+        return []
+    output: list[dict[str, Any]] = []
+    for incident in incidents.list_recent_incidents(now=current, resolved_hours=24):
+        state = str(incident.get("status") or "")
+        generation = int(incident.get("generation") or 1)
+        incident_type = str(incident.get("incidentType") or "")
+        is_recovery = state == "resolved"
+        kind = (
+            "operational_recovery"
+            if is_recovery
+            else "worker_offline"
+            if incident_type == "worker_offline"
+            else "operational_incident"
+        )
+        title = str(incident.get("title") or "系統維運事件")
+        if is_recovery:
+            title = f"{title}｜已恢復"
+        item = {
+            "id": str(incident.get("incidentKey") or ""),
+            "resourceId": str(incident.get("incidentKey") or ""),
+            "persona": "system",
+            "domain": "operations",
+            "kind": kind,
+            "title": title,
+            "status": f"{state}:{generation}",
+            "statusLabel": "已恢復" if is_recovery else "需要處理",
+            "group": "",
+            "area": "internal",
+            "dueAt": "",
+            "overdue": False,
+            "detail": (
+                "系統已確認此維運事件恢復正常。"
+                if is_recovery
+                else str(incident.get("detail") or "")
+            ),
+            "target": "worker",
+            "incidentType": incident_type,
+            "severity": str(incident.get("severity") or ""),
+            "errorCode": str(incident.get("errorCode") or ""),
+            "action": (
+                "目前不需要額外處理。"
+                if is_recovery
+                else str(incident.get("action") or "")
+            ),
+            "generation": generation,
+        }
+        output.append(_event(item))
+    return output
+
+
 def build_events(user: Optional[Mapping[str, Any]], *, now: Optional[dt.datetime] = None) -> dict[str, Any]:
     if not user:
         raise ApiError("LOGIN_REQUIRED", "請先登入後再查看通知。", status=401, extra={"loginRequired": True})
@@ -205,7 +268,15 @@ def build_events(user: Optional[Mapping[str, Any]], *, now: Optional[dt.datetime
     current = current.astimezone(dt.timezone.utc)
     command = service.build_summary(user, now=current)
     events = [_event(item) for item in command.get("items") or []]
-    events.extend(_worker_offline_events(user, current))
+    incident_events = _operational_incident_events(user, current)
+    events.extend(incident_events)
+    if not any(
+        row.get("incidentType") == "worker_offline"
+        and not str(row.get("kind") or "").endswith("recovery")
+        for row in incident_events
+    ):
+        # Mixed-version fallback until the 10-minute incident sync has run.
+        events.extend(_worker_offline_events(user, current))
 
     # Command-center intentionally de-duplicates exams covered by a course.  A
     # deadline remains independently important for notification/email purposes,
@@ -227,7 +298,7 @@ def build_events(user: Optional[Mapping[str, Any]], *, now: Optional[dt.datetime
 
     events.sort(key=lambda row: (
         0 if row.get("overdue") else 1,
-        0 if row.get("kind") in {"review", "material_failure", "worker_offline"} else 1,
+        0 if row.get("kind") in {"review", "material_failure", "worker_offline", "operational_incident", "operational_recovery"} else 1,
         _parse_datetime(row.get("dueAt")) or dt.datetime.max.replace(tzinfo=dt.timezone.utc),
         str(row.get("title") or ""),
     ))
