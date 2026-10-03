@@ -194,6 +194,7 @@ def sync_operational_incidents(
     current = _now(now)
     stamp = current.isoformat()
     explicit_candidates = candidates is not None
+    trend_projection_available = True
     if explicit_candidates:
         raw_candidates = list(candidates)
     else:
@@ -205,7 +206,9 @@ def sync_operational_incidents(
             )
         except Exception as exc:
             # Trend detection is secondary observability. Never let a history
-            # read failure suppress Worker/provider/AI critical incidents.
+            # read failure suppress Worker/provider/AI critical incidents, and
+            # never interpret an unavailable projection as trend recovery.
+            trend_projection_available = False
             LOGGER.warning(
                 "operational trend projection failed error_type=%s",
                 type(exc).__name__,
@@ -333,6 +336,13 @@ def sync_operational_incidents(
 
         for key, prior in existing.items():
             if str(prior.get("status") or "") != "open" or key in active:
+                continue
+            if (
+                not explicit_candidates
+                and str(prior.get("incident_type") or "") == "trend_anomaly"
+                and not trend_projection_available
+            ):
+                # Missing trend history is unknown state, not recovery.
                 continue
             if (
                 not explicit_candidates
