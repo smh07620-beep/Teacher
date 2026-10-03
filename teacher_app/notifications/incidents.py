@@ -335,7 +335,7 @@ def sync_operational_incidents(
         "opened": opened,
         "reopened": reopened,
         "resolved": resolved,
-        "active": list_active_incidents(),
+        "active": list_active_incidents(now=current),
     }
 
 
