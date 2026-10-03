@@ -57,6 +57,15 @@ class TeacherMediaRecorder1014Tests(unittest.TestCase):
         self.assertIn("身分證字號", self.source)
         self.assertIn("不必要個資", self.source)
 
+    def test_leaving_media_workspace_stops_live_capture_resources(self):
+        self.assertIn("function stopCaptureForWorkspaceExit()", self.source)
+        self.assertIn("stopTimer();", self.source)
+        self.assertIn("stopStreams();", self.source)
+        self.assertIn("media.classList.contains('hidden')", self.source)
+        self.assertIn("attributeFilter: ['class']", self.source)
+        self.assertIn("window.addEventListener('pagehide', stopCaptureForWorkspaceExit)", self.source)
+        self.assertIn("cleanup: stopCaptureForWorkspaceExit", self.source)
+
     def test_server_rbac_remains_authoritative(self):
         self.assertIn("has('material.manage')", self.source)
         for forbidden in ("ROLE_PERMISSIONS", "require_permission", "professionalTitle", "responsibilityTags"):

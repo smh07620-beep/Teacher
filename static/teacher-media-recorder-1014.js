@@ -20,6 +20,7 @@
   let recordedUrl = '';
   let recordingStartedAt = 0;
   let timerId = null;
+  let workspaceVisibilityObserver = null;
 
   const audioCandidates = [
     ['audio/ogg;codecs=opus', '.ogg'],
@@ -85,6 +86,15 @@
   function stopStreams() {
     activeStreams.forEach(stream => stream?.getTracks?.().forEach(track => track.stop()));
     activeStreams = [];
+  }
+
+  function stopCaptureForWorkspaceExit() {
+    stopTimer();
+    if (recorder && recorder.state !== 'inactive') {
+      try { recorder.stop(); }
+      catch (_) { /* Stream teardown below is still authoritative. */ }
+    }
+    stopStreams();
   }
 
   function setRecordingButtons(active) {
@@ -423,6 +433,12 @@
       status('此瀏覽器不支援直接錄製；仍可回「教材與課程」上傳既有影音檔。', 'error');
     }
 
+    workspaceVisibilityObserver?.disconnect();
+    workspaceVisibilityObserver = new MutationObserver(() => {
+      if (media.classList.contains('hidden')) stopCaptureForWorkspaceExit();
+    });
+    workspaceVisibilityObserver.observe(media, { attributes: true, attributeFilter: ['class'] });
+
     const empty = document.getElementById('teacher-recorder-empty-1014');
     const previewObserver = new MutationObserver(() => {
       const audioVisible = !document.getElementById('teacher-record-audio-preview-1014')?.classList.contains('hidden');
@@ -451,10 +467,13 @@
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  window.addEventListener('pagehide', stopCaptureForWorkspaceExit);
+
   window.TeacherMediaRecorder1014 = Object.freeze({
     startAudio: () => startRecording('audio'),
     startVideo: () => startRecording('video'),
     startScreen: () => startRecording('screen'),
     stop: stopRecording,
+    cleanup: stopCaptureForWorkspaceExit,
   });
 })();
