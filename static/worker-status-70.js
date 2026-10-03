@@ -281,7 +281,7 @@
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div><h4 class="font-black text-slate-950 text-lg">🖥️ Worker / Job 狀態</h4>
-            <p class="text-xs text-slate-500 mt-1">失敗原因、Worker、處理時間與重試次數會保留在工作紀錄中；頁面會定期更新。</p></div>
+            <p class="text-xs text-slate-500 mt-1">失敗原因、Worker、真實進度、heartbeat、處理時間與重試次數會保留在工作紀錄中；長時間處理不等於卡住。</p></div>
             <button id="worker-refresh-70" type="button" class="text-xs border border-slate-300 bg-white px-3 py-2 rounded-xl">↻ 立即更新</button>
           </div>
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -294,6 +294,11 @@
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">最舊待處理等待：</span><b>${formatDuration(data.oldestPendingAgeSeconds)}</b>${data.oldestPendingAt ? ` · ${formatWhen(data.oldestPendingAt)}` : ''}</div>
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">最近失敗率：</span><b>${Math.round(Number(data.recentFailureRate || 0) * 100)}%</b> · ${Number(data.recentTerminalJobs || 0)} 筆 terminal job</div>
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">平均完成時間：</span><b>${formatDuration(data.averageCompletedDurationSeconds)}</b></div>
+          </div>
+          <div class="grid sm:grid-cols-3 gap-2 text-xs">
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2"><span class="text-emerald-700">🟢 Heartbeat 正常：</span><b>${Number(data.healthyProcessingJobs||0)}</b></div>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"><span class="text-amber-700">🟠 回報延遲：</span><b>${Number(data.heartbeatDelayedJobs||0)}</b><div class="mt-1 text-[10px]">警戒 ${formatDuration(data.heartbeatWarningSeconds||120)}</div></div>
+            <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2"><span class="text-rose-700">🔴 可能卡住：</span><b>${Number(data.stalledJobs||0)}</b><div class="mt-1 text-[10px]">stale ${formatDuration(data.staleThresholdSeconds||1800)}</div></div>
           </div>
           <div class="text-xs rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">Shared staging：<b>${escapeHtml(staging.backend || '未設定')}</b> · ${staging.available ? '可用' : '不可用'}${staging.shared ? ' · Web/Worker 共用' : ''}</div>
         </section>
@@ -326,7 +331,7 @@
       modal.dataset.section = 'worker';
       markActive();
       const status = document.getElementById('admin-workspace-status');
-      if (status) status.textContent = '系統管理者唯讀檢視 Worker heartbeat、背景佇列、處理時間與失敗原因。';
+      if (status) status.textContent = '系統管理者唯讀檢視 Worker heartbeat、真實進度、卡住判定、重試與失敗原因。';
       await renderWorkerStatus(Boolean(force));
       return true;
   });
