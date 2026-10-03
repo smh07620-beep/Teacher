@@ -458,6 +458,21 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         detail = str(body.get("detail") or "").strip()[:500]
         if stage not in WORKER_PROGRESS_STAGES:
             return jsonify({"error": "Worker progress stage 不合法。"}), 400
+        raw_progress = body.get("progressPercent")
+        if raw_progress in (None, ""):
+            requested_progress = worker_repository.material_job_progress_percent(
+                "processing",
+                stage,
+            )
+        else:
+            try:
+                requested_progress = int(raw_progress)
+            except (TypeError, ValueError):
+                return jsonify({"error": "Worker progressPercent 必須是整數。"}), 400
+            if requested_progress < 1 or requested_progress > 99:
+                return jsonify({"error": "Worker progressPercent 必須介於 1 到 99。"}), 400
+        current_progress = int(_job.get("progressPercent", 0) or 0)
+        progress_percent = max(current_progress, requested_progress)
         now = _now()
         updated = worker_repository.transition_owned_material_job(
             job_id,
@@ -467,6 +482,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
                 "worker_last_seen": now,
                 "stage": stage,
                 "detail": detail,
+                "progress_percent": progress_percent,
             },
             connection_factory=runtime.connection_factory,
         )
