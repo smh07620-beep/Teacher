@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import socket
+import ssl
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 
@@ -35,6 +37,37 @@ class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: N802
         return None
 
+
+def _dns_diagnostic(base_url: str) -> dict[str, Any]:
+    parsed = urlsplit(base_url)
+    host = parsed.hostname
+    if not host:
+        return {"ok": False, "stage": "url", "error": f"invalid base URL: {base_url!r}"}
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        rows = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        return {
+            "ok": False,
+            "stage": "dns",
+            "host": host,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    addresses = sorted({row[4][0] for row in rows})
+    return {"ok": True, "stage": "dns", "host": host, "addresses": addresses}
+
+
+def _network_error_stage(exc: BaseException) -> str:
+    reason = exc.reason if isinstance(exc, URLError) else exc
+    if isinstance(reason, socket.gaierror):
+        return "dns"
+    if isinstance(reason, ssl.SSLError):
+        return "tls"
+    if isinstance(reason, (socket.timeout, TimeoutError)):
+        return "timeout"
+    if isinstance(reason, ConnectionRefusedError):
+        return "tcp"
+    return "http"
 
 def _request(base_url: str, path: str, *, follow_redirects: bool = True, timeout: int = 60) -> Response:
     url = urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
@@ -97,46 +130,64 @@ def _poll_exact_deployment(
 
     while True:
         attempts += 1
-        try:
-            response = _request(base_url, "/health", timeout=90)
-            if response.status == 200:
-                payload = response.json()
-                deployment = payload.get("deployment") or {}
-                observed = str(deployment.get("commit") or "").strip().lower()
-                last_observation = {
-                    "httpStatus": response.status,
-                    "ok": payload.get("ok"),
-                    "status": payload.get("status"),
-                    "version": payload.get("version"),
-                    "branch": deployment.get("branch"),
-                    "commit": observed,
-                    "databaseKind": (payload.get("database") or {}).get("kind"),
-                    "migrationsOk": (payload.get("migrations") or {}).get("ok"),
-                    "configurationOk": (payload.get("configuration") or {}).get("ok"),
-                }
-                if observed == expected:
-                    return {"attempts": attempts, "payload": payload}
-                print(
-                    f"[production-smoke] waiting for Render commit {expected}; "
-                    f"currently {observed or 'unknown'} (attempt {attempts})",
-                    flush=True,
-                )
-            else:
-                last_observation = {
-                    "httpStatus": response.status,
-                    "body": response.text()[:500],
-                }
-                print(
-                    f"[production-smoke] /health HTTP {response.status}; "
-                    f"waiting for deployment (attempt {attempts})",
-                    flush=True,
-                )
-        except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
-            last_observation = {"error": f"{type(exc).__name__}: {exc}"}
+        dns = _dns_diagnostic(base_url)
+        if not dns.get("ok"):
+            last_observation = dict(dns)
             print(
-                f"[production-smoke] /health unavailable while waiting for deployment: {exc}",
+                f"[production-smoke] DNS resolution failed before /health "
+                f"(attempt {attempts}): {dns.get('error')}",
                 flush=True,
             )
+        else:
+            try:
+                response = _request(base_url, "/health", timeout=90)
+                if response.status == 200:
+                    payload = response.json()
+                    deployment = payload.get("deployment") or {}
+                    observed = str(deployment.get("commit") or "").strip().lower()
+                    last_observation = {
+                        "stage": "health",
+                        "httpStatus": response.status,
+                        "ok": payload.get("ok"),
+                        "status": payload.get("status"),
+                        "version": payload.get("version"),
+                        "branch": deployment.get("branch"),
+                        "commit": observed,
+                        "databaseKind": (payload.get("database") or {}).get("kind"),
+                        "migrationsOk": (payload.get("migrations") or {}).get("ok"),
+                        "configurationOk": (payload.get("configuration") or {}).get("ok"),
+                        "dns": dns,
+                    }
+                    if observed == expected:
+                        return {"attempts": attempts, "payload": payload, "network": dns}
+                    print(
+                        f"[production-smoke] waiting for Render commit {expected}; "
+                        f"currently {observed or 'unknown'} (attempt {attempts})",
+                        flush=True,
+                    )
+                else:
+                    last_observation = {
+                        "stage": "http",
+                        "httpStatus": response.status,
+                        "body": response.text()[:500],
+                        "dns": dns,
+                    }
+                    print(
+                        f"[production-smoke] /health HTTP {response.status}; "
+                        f"waiting for deployment (attempt {attempts})",
+                        flush=True,
+                    )
+            except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
+                stage = _network_error_stage(exc)
+                last_observation = {
+                    "stage": stage,
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "dns": dns,
+                }
+                print(
+                    f"[production-smoke] /health unavailable at stage={stage}: {exc}",
+                    flush=True,
+                )
 
         if time.monotonic() >= deadline:
             raise AssertionError(
@@ -144,7 +195,6 @@ def _poll_exact_deployment(
                 f"last observation={last_observation!r}"
             )
         time.sleep(max(1, poll_seconds))
-
 
 def run(base_url: str, expected_commit: str, *, max_wait_seconds: int, poll_seconds: int) -> dict:
     started_at = time.time()
@@ -161,6 +211,7 @@ def run(base_url: str, expected_commit: str, *, max_wait_seconds: int, poll_seco
         poll_seconds=poll_seconds,
     )
     health = deployment["payload"]
+    result["checks"]["network"] = deployment.get("network") or {}
     health_deployment = health.get("deployment") or {}
     _assert(health.get("ok") is True, "/health ok must be true")
     _assert(health.get("status") == "healthy", "/health status must be healthy")
