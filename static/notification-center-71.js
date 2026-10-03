@@ -49,12 +49,54 @@
     return true;
   }
 
+  function closeSystemOverlay(section){
+    if(!section?.classList?.contains('notification-center-modal-open'))return;
+    section.classList.remove('notification-center-modal-open');
+    document.body.classList.remove('notification-center-open-71');
+    document.getElementById('notification-center-backdrop-71')?.remove();
+    const anchor=section._notificationAnchor;
+    if(anchor?.parentNode){
+      anchor.parentNode.insertBefore(section,anchor);
+      anchor.remove();
+    }else{
+      placeSection(section);
+    }
+    section._notificationAnchor=null;
+  }
+
+  function openSystemOverlay(section){
+    if(!section||!isSystemContext()||section.classList.contains('notification-center-modal-open'))return;
+    const anchor=document.createComment('notification-center-71-anchor');
+    section.parentNode?.insertBefore(anchor,section);
+    section._notificationAnchor=anchor;
+    const backdrop=document.createElement('button');
+    backdrop.type='button';
+    backdrop.id='notification-center-backdrop-71';
+    backdrop.className='notification-center-backdrop-71';
+    backdrop.setAttribute('aria-label','關閉通知中心');
+    backdrop.addEventListener('click',()=>{
+      section.open=false;
+      closeSystemOverlay(section);
+    });
+    document.body.appendChild(backdrop);
+    document.body.appendChild(section);
+    document.body.classList.add('notification-center-open-71');
+    section.classList.add('notification-center-modal-open');
+  }
+
+  function syncExpandedPresentation(section){
+    if(!section)return;
+    if(section.open&&isSystemContext())openSystemOverlay(section);
+    else closeSystemOverlay(section);
+  }
+
   function mount(){
     const existing=document.getElementById(ID);if(existing){placeSection(existing);return existing;}
     const host=preferredHost();if(!host)return null;
     const section=document.createElement('details');section.id=ID;section.className='rounded-xl border border-amber-100 bg-amber-50/20 px-3 py-3';section.dataset.productSection='needs-action';
     section.innerHTML=`<summary class="cursor-pointer list-none flex items-center justify-between gap-3"><span><b class="text-sm text-slate-900">🔔 通知中心</b><span id="notification-status-71" class="ml-2 text-[11px] text-slate-500">讀取中…</span></span><span class="text-[11px] font-bold text-amber-700">展開 ▾</span></summary><div class="mt-3 flex justify-end gap-3"><button id="notification-email-settings-71" type="button" class="text-[10px] font-bold text-slate-600">Email 通知設定</button><button id="notification-mark-all-read-71" type="button" class="text-[10px] font-bold text-slate-600">全部標示已讀</button><button id="notification-refresh-71" type="button" class="text-[10px] font-bold text-amber-700">↻ 更新</button></div><div id="notification-preferences-71" class="hidden mt-3 rounded-xl border border-slate-200 bg-white p-3"><div class="flex items-start justify-between gap-3"><div><b class="text-xs text-slate-900">Email 通知設定</b><p class="text-[10px] text-slate-500 mt-1">只控制一般 Email；站內待辦仍會完整顯示。教材處理失敗與 Worker 離線屬必要通知，無法關閉。</p></div><button id="notification-preferences-save-71" type="button" class="text-[10px] font-bold px-3 py-2 rounded-lg bg-slate-900 text-white">儲存</button></div><div class="grid sm:grid-cols-2 gap-2 mt-3 text-[11px]"><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="courseDue"> 課程期限提醒</label><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="examDue"> 考核期限提醒</label><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="retraining"> 重大版重新訓練</label><label class="flex items-center gap-2"><input type="checkbox" data-notification-pref="teacherReview"> 教師待批改提醒</label><label class="flex items-center gap-2 opacity-70"><input type="checkbox" checked disabled> 教材處理失敗（必要通知）</label><label class="flex items-center gap-2 opacity-70"><input type="checkbox" checked disabled> Worker 離線（必要通知）</label></div><p id="notification-preferences-status-71" class="text-[10px] text-slate-500 mt-2"></p></div><div id="notification-list-71" class="space-y-2 mt-3"></div><p class="text-[10px] text-slate-400 mt-3">需要處理的通知與 Email 共用同一個伺服器事件來源；公告只在站內顯示。這裡只保存你的已讀狀態與 Email 偏好，不會修改課程、成績、評量或 Worker 工作。</p>`;
     placeSection(section);
+    section.addEventListener('toggle',()=>syncExpandedPresentation(section));
     section.querySelector('#notification-refresh-71')?.addEventListener('click',()=>load(true));
     section.querySelector('#notification-mark-all-read-71')?.addEventListener('click',markAllRead);
     section.querySelector('#notification-email-settings-71')?.addEventListener('click',togglePreferences);
@@ -97,7 +139,21 @@
     }catch(error){if(error?.status===401||error?.status===403){section.classList.add('hidden');return;}if(status)status.textContent=`❌ ${error.message||'通知讀取失敗'}`;}
   }
 
-  function init(){if(mount())load(false);window.AdminWorkspaceShell?.addAfterWorkspace?.(()=>{const section=document.getElementById(ID);if(section)placeSection(section);});}
+  function init(){
+    if(mount())load(false);
+    window.addEventListener('keydown',event=>{
+      if(event.key!=='Escape')return;
+      const section=document.getElementById(ID);
+      if(section?.classList?.contains('notification-center-modal-open')){
+        section.open=false;
+        closeSystemOverlay(section);
+      }
+    });
+    window.AdminWorkspaceShell?.addAfterWorkspace?.(()=>{
+      const section=document.getElementById(ID);
+      if(section&&!section.classList.contains('notification-center-modal-open'))placeSection(section);
+    });
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
   window.TeacherNotificationCenter71=Object.freeze({load,loadPreferences});
 })();
