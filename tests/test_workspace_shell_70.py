@@ -14,15 +14,18 @@ class WorkspaceShell70Tests(unittest.TestCase):
 
     def test_system_admin_is_split_into_focused_subworkspaces(self):
         for marker in (
-            "navGroup('教學管理'",
             "navGroup('人員與權限'",
-            "navGroup('系統與儲存'",
-            "navGroup('備份維護'",
+            "navGroup('系統健康與維運'",
             "navGroup('安全與稽核'",
+            "'people'",
+            "'operations'",
+            "'audit'",
             "admin-nav-maintenance",
             "admin-nav-audit",
         ):
             self.assertIn(marker, self.source)
+        self.assertNotIn("navGroup('教學管理'", self.source)
+        self.assertIn("section.dataset.adminNavGroup = ownershipKey", self.source)
 
     def test_dynamic_workspace_buttons_have_explicit_workspace_identity(self):
         self.assertIn("item.dataset.adminWorkspace = workspace", self.source)

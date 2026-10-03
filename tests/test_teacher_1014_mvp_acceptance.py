@@ -16,6 +16,7 @@ class Teacher1014MvpAcceptanceTests(unittest.TestCase):
         cls.recorder = (ROOT / "static" / "teacher-media-recorder-1014.js").read_text(encoding="utf-8")
         cls.paper_export = (ROOT / "static" / "admin-results-export.js").read_text(encoding="utf-8")
         cls.system_focus = (ROOT / "static" / "system-admin-focus-1014.js").read_text(encoding="utf-8")
+        cls.system_shell = (ROOT / "static" / "workspace-shell-70.js").read_text(encoding="utf-8")
 
     def test_acceptance_persona_switch_keeps_one_account_with_separate_surfaces(self):
         for label in ("📚 我的學習", "👨‍🏫 教師工作區", "⚙ 系統管理"):
@@ -40,11 +41,14 @@ class Teacher1014MvpAcceptanceTests(unittest.TestCase):
         self.assertIn("navHost.replaceChildren(navGroup('教師工作台', buttons))", self.workspace)
 
     def test_acceptance_system_admin_does_not_duplicate_daily_teaching_navigation(self):
-        for label in ("人員與權限", "系統與儲存", "資料保護", "安全與稽核"):
-            self.assertIn(label, self.system_focus)
+        for label in ("人員與權限", "系統健康與維運", "安全與稽核"):
+            self.assertIn(label, self.system_shell)
+        self.assertNotIn("navGroup('教學管理'", self.system_shell)
+        self.assertNotIn("navHost.replaceChildren", self.system_focus)
         self.assertNotIn("正式文件治理", self.system_focus)
         self.assertIn("紙本輸出與範本維護已移至「教師工作區」", self.system_focus)
-        self.assertIn("#admin-nav-course-materials,#admin-nav-assessment,#admin-nav-results,#admin-nav-word", self.system_focus)
+        for nav_id in ("admin-nav-course-materials", "admin-nav-assessment", "admin-nav-results", "admin-nav-word"):
+            self.assertIn(nav_id, self.system_focus)
 
     def test_acceptance_media_chain_requires_teacher_approved_script(self):
         self.assertIn("AI 草稿 → 教師核准", self.script_studio)

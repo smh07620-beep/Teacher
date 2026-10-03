@@ -37,8 +37,9 @@ class ProductConvergence101Tests(unittest.TestCase):
 
     def test_teacher_and_convergence_layers_do_not_compete_for_navigation(self):
         self.assertIn("final teacher persona navigation is owned by teacher-persona-isolation", self.shell)
-        self.assertNotIn("navHost.replaceChildren(group)", self.shell)
-        self.assertIn("contextual tools and never rewrites the navigation host", self.shell)
+        self.assertIn("Structural system navigation is owned by workspace-shell-70.js", self.shell)
+        self.assertNotIn("navHost.replaceChildren", self.shell)
+        self.assertIn("does not rebuild either navigation tree", self.shell)
 
     def test_system_navigation_groups_infrastructure_by_human_job(self):
         for label in ("人員與權限", "系統健康與維運", "安全與稽核"):
@@ -54,6 +55,8 @@ class ProductConvergence101Tests(unittest.TestCase):
 
     def test_system_nav_observer_does_not_self_trigger_on_stable_labels(self):
         self.assertIn("if (label && button.textContent !== label) button.textContent = label;", self.shell)
+        self.assertIn("if (label && label.textContent !== text) label.textContent = text;", self.shell)
+        self.assertNotIn("navGroup('系統健康與維運'", self.shell)
 
     def test_convergence_does_not_create_authorization_logic_or_secret_headers(self):
         self.assertIn("TeacherRBAC681Ready", self.shell)

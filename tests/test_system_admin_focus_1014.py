@@ -17,21 +17,17 @@ class SystemAdminFocus1014Tests(unittest.TestCase):
         self.assertIn("/system-admin-focus-1014.js", body)
         self.assertLess(body.index("/worker-status-70.js"), body.index("/system-admin-focus-1014.js"))
 
-    def test_system_admin_nav_keeps_only_platform_governance(self):
-        for label in (
-            "👥 人員與權限",
-            "⚙️ 系統與服務",
-            "🖥️ Worker / Job 狀態",
-            "🛡️ 備份維護",
-            "🔎 稽核紀錄",
-        ):
-            self.assertIn(label, self.source)
+    def test_system_admin_focus_does_not_rebuild_canonical_navigation(self):
+        self.assertIn("Structural system navigation is owned by workspace-shell-70.js", self.source)
+        self.assertIn("TEACHER_OWNED_NAV_IDS", self.source)
+        self.assertIn("function applySystemFocus()", self.source)
+        self.assertNotIn("navHost.replaceChildren", self.source)
+        self.assertNotIn("function navGroup", self.source)
         self.assertNotIn("📄 紙本文件範本", self.source)
         self.assertNotIn("正式文件治理", self.source)
-        self.assertIn("navHost.replaceChildren(...groups)", self.source)
 
     def test_paper_template_entry_is_owned_by_teacher_workspace(self):
-        self.assertIn("document.getElementById('admin-nav-word')", self.source)
+        self.assertIn("'admin-nav-word'", self.source)
         self.assertIn("item.classList.add('hidden')", self.source)
         self.assertIn("params.get('workspace') !== 'word'", self.source)
         self.assertIn("url.searchParams.set('workspace', 'people')", self.source)

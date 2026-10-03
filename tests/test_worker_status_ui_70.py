@@ -71,6 +71,9 @@ class WorkerStatusUi70Tests(unittest.TestCase):
         self.assertIn('button.setAttribute(\'data-csp-click\', "switchAdminWorkspace(\'worker\',true)")', self.source)
         self.assertIn("button.onclick = null", self.source)
         self.assertNotIn("button.onclick = () => window.switchAdminWorkspace?.('worker', true)", self.source)
+        self.assertIn('[data-admin-nav-group="operations"] .v580-admin-group-actions', self.source)
+        self.assertIn("group.dataset.adminNavGroup = 'operations'", self.source)
+        self.assertNotIn("label.textContent = 'Worker 與佇列'", self.source)
 
     def test_worker_asset_loads_after_role_workspace_shell(self):
         from pgy_frontend import ASSET_MANIFEST

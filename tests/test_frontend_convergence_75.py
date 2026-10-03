@@ -81,6 +81,17 @@ class FrontendConvergence75Tests(unittest.TestCase):
         self.assertNotIn("function openQuestionEditor", composer)
         self.assertIn("event.target.closest('[data-composer-question-next]')", convergence)
 
+    def test_system_navigation_has_one_structural_owner(self):
+        shell = self.source("workspace-shell-70.js")
+        focus = self.source("system-admin-focus-1014.js")
+        convergence = self.source("product-convergence-101.js")
+        worker = self.source("worker-status-70.js")
+        self.assertIn("navHost.replaceChildren(", shell)
+        self.assertIn("section.dataset.adminNavGroup = ownershipKey", shell)
+        self.assertNotIn("navHost.replaceChildren", focus)
+        self.assertNotIn("navHost.replaceChildren", convergence)
+        self.assertIn('[data-admin-nav-group="operations"] .v580-admin-group-actions', worker)
+
     def test_admin_workspace_router_has_one_global_owner(self):
         core = self.source("admin-workspace.js")
         rbac = self.source("rbac-ui-681.js")
