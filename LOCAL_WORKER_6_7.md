@@ -206,6 +206,22 @@ session 與寫入／刪除權限。只要 preflight 未通過，Worker 仍會送
 Worker 是長駐程序；若 Python Worker 意外以 exit code 0 結束，supervisor 也會視為
 異常並依既有 restart policy 重啟，不再讓 Task Scheduler 靜默回到 Ready。
 
+InteractiveLogon 的 Scheduled Task action 會使用 `-WindowStyle Hidden`，因此仍以
+實際登入使用者身分取得 per-user MEGAcmd session，但不再留下可被誤關閉的黑色
+PowerShell supervisor 視窗。安裝／更新排程完成後，系統管理員自己開啟的
+PowerShell 可以正常關閉，不會終止背景 Worker。
+
+canonical supervisor 會持有 gitignored 的 `.worker-supervisor.lock` exclusive
+file lock。同一份 `C:\TeacherWorker` checkout 若已由 Scheduled Task 執行，
+之後再手動啟動 launcher 只會記錄 duplicate launch 並直接退出，不會再產生第二個
+Worker process；反向亦同。這是 Task Scheduler `MultipleInstances IgnoreNew`
+之外的本機第二層保護，涵蓋手動＋排程混用情境。
+
+Worker heartbeat 另帶 `workerMachine` 實體主機識別。Web 狀態與離線告警會以
+「同一實體主機的最新 heartbeat」為準，因此同一台院內電腦曾使用舊 Worker ID、
+重裝後換 ID 或短暫切換啟動方式時，舊 ID 不再被顯示成另一台在線 Worker，也不會
+在新 ID 已在線時產生舊 ID 的假離線通知。
+
 Windows 的 MEGAcmd 也常以 per-user 方式安裝在
 `%LOCALAPPDATA%\MEGAcmd`。Worker 會優先搜尋該路徑，再搜尋
 `Program Files\MEGAcmd`，因此不需要另外把 MEGAcmd 加進全域 PATH。Task
