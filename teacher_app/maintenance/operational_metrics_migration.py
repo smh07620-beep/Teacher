@@ -1,5 +1,5 @@
 """Additive history tables for operational SLO/trend reporting."""
-from teacher_app.maintenance.migrations import migration
+from teacher_app.maintenance.migrations import _columns, _table_exists, migration
 
 
 @migration("0110-operational-metrics-history")
@@ -61,10 +61,14 @@ def operational_metrics_history_110(conn, kind: str) -> None:
         "CREATE INDEX IF NOT EXISTS idx_operational_incident_events_incident "
         "ON operational_incident_events(incident_key,generation,event_type)"
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_material_jobs_finished_at "
-        "ON material_jobs(finished_at)"
-    )
+    if (
+        _table_exists(conn, kind, "material_jobs")
+        and "finished_at" in _columns(conn, kind, "material_jobs")
+    ):
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_material_jobs_finished_at "
+            "ON material_jobs(finished_at)"
+        )
 
 
 __all__ = ["operational_metrics_history_110"]
