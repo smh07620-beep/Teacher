@@ -20,6 +20,7 @@
   const modalGuards = [];
   const afterModalHooks = [];
   const PAGE_MODE_PARAM = 'admin';
+  const SYSTEM_WORKSPACES = new Set(['people','system','worker','maintenance','audit']);
   const WORKSPACE_META = Object.freeze({
     'course-materials': {
       icon: '📚',
@@ -47,9 +48,14 @@
   }
 
   function workspaceUrl(workspace = state.workspace || 'course-materials') {
+    const canonical = normalizeWorkspace(String(workspace || 'course-materials'));
     const url = new URL(window.location.href);
     url.searchParams.set(PAGE_MODE_PARAM, '1');
-    url.searchParams.set('workspace', String(workspace || 'course-materials'));
+    url.searchParams.set('workspace', String(workspace || canonical));
+    if (SYSTEM_WORKSPACES.has(canonical)) {
+      url.searchParams.set('persona', 'system');
+      url.searchParams.delete('teacherMode');
+    }
     return `${url.pathname}${url.search}${url.hash}`;
   }
 
@@ -229,6 +235,13 @@
   async function switchWorkspace(name, force=false) {
     const requested = String(name || '');
     const workspace = normalizeWorkspace(requested);
+    if (isPageMode() && SYSTEM_WORKSPACES.has(workspace)) {
+      const currentPersona = new URLSearchParams(window.location.search).get('persona') || '';
+      if (currentPersona !== 'system') {
+        window.location.assign(workspaceUrl(requested || workspace));
+        return true;
+      }
+    }
     const context = {requested, workspace, force:Boolean(force), switchSection};
     for (const hook of beforeWorkspaceHooks) await hook(context);
     for (const guard of workspaceGuards) {
