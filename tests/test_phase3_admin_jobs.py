@@ -47,7 +47,7 @@ class Phase3AdminJobsTests(unittest.TestCase):
         self.assertIn("completed:'可使用'", source)
         self.assertIn("failed:'需要處理'", source)
         self.assertIn("cancelled:'需要處理'", source)
-        self.assertIn('查看處理細節', source)
+        self.assertIn('查看技術細節', source)
         self.assertIn('查看 Worker 技術狀態', source)
         self.assertIn('Worker 上線後會自動開始，不需要重新上傳', source)
         self.assertIn('原始檔仍安全保留，可直接重新處理，不必重新上傳', source)
