@@ -1,5 +1,9 @@
 services:
   - type: web
+    # Render display/service name is not the operational URL source.
+    # Production workflows use the repository variable TEACHER_PRODUCTION_URL
+    # (default: https://teacher-j3id.onrender.com). Verify the Render Dashboard
+    # external URL before changing either value.
     name: biochemical-training-exam
     branch: main
     runtime: docker
