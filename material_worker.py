@@ -455,6 +455,15 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None):
     prepared_pdf=None
     if ext in OFFICE_EXT:
         started=time.monotonic(); prepared_pdf=STORAGE.prepare_office_pdf(source,Path(temp)/"office-pdf",timeout=240); timings["officeToPdfMs"]=_elapsed_ms(started)
+        try:
+            office_status=STORAGE.libreoffice_status()
+            media_meta={
+                **media_meta,
+                "officeConversionMode":str(office_status.get("mode") or ""),
+                "libreOfficeWarmRunning":bool(office_status.get("running")),
+            }
+        except Exception:
+            pass
     started=time.monotonic(); text_index,index_meta=_build_text_index(source,temp,prepared_pdf=prepared_pdf); timings["textIndexMs"]=_elapsed_ms(started)
     if text_index is not None:derivatives["index.txt"]=text_index
     media_meta={**media_meta,**index_meta}
@@ -532,7 +541,21 @@ def main():
             caps=_capability_with_storage(base_caps,preflight)
             api.heartbeat(capabilities=caps)
             if preflight.get("ready"):
-                log(f"storage preflight ready backend={preflight.get('backend') or 'unknown'}")
+                try:
+                    office_warm=STORAGE.warmup_libreoffice()
+                except Exception:
+                    office_warm={"enabled":False,"running":False,"lastError":"warmup unavailable"}
+                base_caps={**base_caps,"libreOfficeWarm":{
+                    "enabled":bool(office_warm.get("enabled")),
+                    "running":bool(office_warm.get("running")),
+                    "mode":str(office_warm.get("mode") or ""),
+                }}
+                caps=_capability_with_storage(base_caps,preflight)
+                api.heartbeat(capabilities=caps)
+                log(
+                    f"storage preflight ready backend={preflight.get('backend') or 'unknown'} "
+                    f"libreoffice_warm={bool(office_warm.get('running'))}"
+                )
                 break
             preflight_attempt+=1
             error=str(preflight.get("error") or "storage unavailable")
