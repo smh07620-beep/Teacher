@@ -68,6 +68,7 @@ REQUIRED_MIGRATIONS = (
     "0107-material-job-progress",
     "0108-operational-incidents",
     "0109-operational-incident-response",
+    "0110-operational-metrics-history",
 )
 
 # Backward-compatible singular name used by older release checks.  It now
