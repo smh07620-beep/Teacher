@@ -323,6 +323,31 @@ test('Worker notification action cannot land on assessment or AI authoring', asy
   await expect(page.locator('#admin-section-quiz')).toBeHidden();
   await expect(page.locator('#admin-workspace-title')).toContainText('Worker');
   await expect(page.locator('#teacher-content-studio-71')).toBeHidden();
+
+  const navIds = await page.locator('.v580-admin-groups .admin-nav-btn').evaluateAll(nodes => nodes.map(node => node.id));
+  expect(new Set(navIds).size).toBe(navIds.length);
+  await expect(page.locator('.v580-admin-groups [data-admin-nav-group="operations"]')).toHaveCount(1);
+  await expect(page.locator('.v580-admin-groups #admin-nav-worker')).toHaveCount(1);
+
+  await page.evaluate(() => {
+    const original = window.switchAdminWorkspace;
+    window.__workspaceDispatchCount = 0;
+    window.switchAdminWorkspace = async function (...args) {
+      window.__workspaceDispatchCount += 1;
+      return original.apply(this, args);
+    };
+  });
+
+  await page.locator('#admin-nav-system').click();
+  await expect.poll(() => page.evaluate(() => window.__workspaceDispatchCount)).toBe(1);
+  await expect(page).toHaveURL(/workspace=system/);
+
+  await page.evaluate(() => { window.__workspaceDispatchCount = 0; });
+  await page.locator('#admin-nav-worker').click();
+  await expect.poll(() => page.evaluate(() => window.__workspaceDispatchCount)).toBe(1);
+  await expect(page).toHaveURL(/workspace=worker/);
+  await expect(page.locator('.v580-admin-groups .admin-nav-btn[aria-current="page"]')).toHaveCount(1);
+  await expect(page.locator('#admin-nav-worker')).toHaveAttribute('aria-current', 'page');
 });
 
 

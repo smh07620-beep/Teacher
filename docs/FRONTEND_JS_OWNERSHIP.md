@@ -29,6 +29,10 @@ This map records the remaining compatibility wrapper chains that intentionally r
 ## Navigation ownership
 
 - `static/admin-workspace.js` is the sole owner of `switchAdminWorkspace`, `toggleAdminModal`, workspace normalization, URL synchronization, and extension dispatch.
+- `static/workspace-shell-70.js` is the sole structural owner of the **system-persona navigation tree**. It groups `people`, `system/worker/maintenance`, and `audit` using stable `data-admin-nav-group` slots.
+- `static/worker-status-70.js` owns only the Worker button and Worker workspace renderer. It may insert that button into the canonical `operations` slot, but it must not rebuild the surrounding navigation.
+- `static/system-admin-focus-1014.js` is presentation-only: it hides leaked teacher-owned controls and maintains the focus note. It must not call `replaceChildren()` on the navigation host.
+- `static/product-convergence-101.js` may normalize labels and hide unexpected controls, but it must not structurally rebuild the system navigation.
 - Deferred extension workspaces `worker`, `maintenance`, and `audit` must resolve a registered handler before visible workspace state changes. A previous assessment/AI section must never remain visible under a Worker header.
 - Dynamic system navigation buttons use `data-csp-click="switchAdminWorkspace(...)"` and clear any direct `onclick` navigation property.
 - `static/system-csp-actions.js` is the single delegated owner for `data-csp-click`; it invokes only the nearest element carrying that event attribute.
@@ -41,3 +45,11 @@ This map records the remaining compatibility wrapper chains that intentionally r
 3. Network response timing, `setTimeout`, or transient DOM presence must never decide which implementation owns a global.
 4. Do not attach both direct `onclick` navigation and `data-csp-click` to the same system navigation control.
 5. Extension workspace deep links must wait for their registered handler or fail closed; they must never show a stale section from another workspace.
+
+
+## Selector / dispatch collision audit
+
+- System navigation uses one click path: `data-csp-click` → `static/system-csp-actions.js` → `switchAdminWorkspace(...)`. Dynamic system buttons explicitly clear `.onclick` before installing the CSP action.
+- Worker notification actions are ordinary server-generated `<a href="/system?admin=1&workspace=worker&persona=system...">` links. They do not share the admin-navigation delegated selector.
+- Teacher authoring capture handlers are scoped to the Teacher Content Studio (for example `[data-composer-question-next]`) and do not match `.admin-nav-btn`, Notification Center links, or Worker controls.
+- Browser regression counts calls to `switchAdminWorkspace` when System and Worker buttons are clicked and requires exactly one dispatch per click.
