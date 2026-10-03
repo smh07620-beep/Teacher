@@ -36,6 +36,7 @@ class WorkerRepositoryPhase4Tests(unittest.TestCase):
                     max_attempts INTEGER NOT NULL DEFAULT 3,
                     stage TEXT NOT NULL DEFAULT '等待處理',
                     detail TEXT NOT NULL DEFAULT '',
+                    progress_percent INTEGER NOT NULL DEFAULT 0,
                     payload TEXT NOT NULL DEFAULT '{}',
                     staging_path TEXT NOT NULL DEFAULT '',
                     staging_backend TEXT NOT NULL DEFAULT 'local',
