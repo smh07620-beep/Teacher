@@ -232,6 +232,28 @@
     }).join('');
   }
 
+  function incidentCards(rows) {
+    if(!rows.length)return '<div class="rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">目前沒有開啟中的維運 Incident；最近 24 小時也沒有恢復事件。</div>';
+    return rows.map(incident=>{
+      const open=incident.status==='open';
+      const classes=open
+        ? (incident.severity==='critical'?'border-rose-200 bg-rose-50':'border-amber-200 bg-amber-50')
+        : 'border-emerald-200 bg-emerald-50';
+      const badge=open
+        ? (incident.severity==='critical'?'🔴 OPEN':'🟠 OPEN')
+        : '🟢 已恢復';
+      return `<article class="rounded-xl border ${classes} p-3 text-sm">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div><b>${escapeHtml(incident.title||'系統維運事件')}</b><div class="mt-1 font-mono text-[10px] text-slate-500">${escapeHtml(incident.errorCode||incident.incidentType||'')} · generation ${Number(incident.generation||1)}</div></div>
+          <span class="rounded-full border border-current px-2 py-1 text-[10px] font-bold">${badge}</span>
+        </div>
+        <div class="mt-2 text-xs text-slate-700">${escapeHtml(open?(incident.detail||'需要處理'):'系統已確認此事件恢復正常。')}</div>
+        ${open&&incident.action?`<div class="mt-1 text-xs font-semibold text-slate-700">建議：${escapeHtml(incident.action)}</div>`:''}
+        <div class="mt-2 text-[10px] text-slate-500">首次 ${formatWhen(incident.openedAt)} · 最後觀察 ${formatWhen(incident.lastSeenAt)}${incident.resolvedAt?` · 恢復 ${formatWhen(incident.resolvedAt)}`:''} · 發生 ${Number(incident.occurrenceCount||1)} 次</div>
+      </article>`;
+    }).join('');
+  }
+
   function firstRunGuide() {
     return `<details class="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
       <summary class="cursor-pointer font-black text-indigo-950">🧰 本機 Worker 第一次安裝（只需要做一次）</summary>
@@ -276,6 +298,8 @@
       const problemMap = new Map(rawProblemJobs.map(job => [String(job.id||''), job]));
       jobs.filter(job => ['heartbeat_delayed','stalled'].includes(job.observabilityState)).forEach(job => problemMap.set(String(job.id||''), job));
       const problemJobs = [...problemMap.values()];
+      const incidents = Array.isArray(data.incidents) ? data.incidents : [];
+      const openIncidents = incidents.filter(incident=>incident.status==='open').length;
       const operationalIssues = Array.isArray(data.operationalIssues) ? data.operationalIssues : [];
       const operationalIssueHtml = operationalIssues.length
         ? '<div class="space-y-2">'+operationalIssues.map(issue=>'<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><b>'+escapeHtml(issue.message||issue.code||'維運提醒')+'</b>'+(issue.code?'<span class="ml-1 font-mono text-[10px]">['+escapeHtml(issue.code)+']</span>':'')+(issue.action?'<div class="mt-1">'+escapeHtml(issue.action)+'</div>':'')+'</div>').join('')+'</div>'
@@ -319,6 +343,10 @@
         <section class="space-y-3">
           <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
           ${workerBody}
+        </section>
+        <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+          <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">🚨 維運 Incident</h5><span class="text-[11px] text-slate-400">OPEN ${openIncidents} · 顯示最近 24 小時恢復事件</span></div>
+          <div class="space-y-2">${incidentCards(incidents)}</div>
         </section>
         <section class="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm space-y-3">
           <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">⚠ 需要注意的工作</h5><span class="text-[11px] text-slate-400">${problemJobs.length} 筆</span></div>
