@@ -57,6 +57,58 @@ class MaterialWorkerPerformance20261002Tests(unittest.TestCase):
             self.assertIn("renderAndProviderMs", timings)
             self.assertEqual(result["storageMeta"]["workerTimingsMs"], timings)
 
+    def test_publish_maps_real_page_and_r2_byte_progress(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.pdf"
+            source.write_bytes(b"%PDF-progress")
+            fake = Mock()
+            fake.single_preview = False
+            fake.active_backend.return_value = "r2"
+
+            def convert(_pdf, _slides, *, progress_callback=None):
+                if progress_callback:
+                    progress_callback(1, 4)
+                    progress_callback(2, 4)
+                    progress_callback(4, 4)
+                return 4
+
+            def upload(_material_id, _source, _slides, _pages, **kwargs):
+                callback = kwargs.get("progress_callback")
+                if callback:
+                    callback(25, 100, "原始教材")
+                    callback(50, 100, "預覽第 2/4 頁")
+                    callback(100, 100, "預覽第 4/4 頁")
+                return (
+                    "materials/mat-1/source.pdf",
+                    "materials/mat-1/slides",
+                    {"r2Objects": [{"key": "materials/mat-1/source.pdf", "bytes": 13}]},
+                )
+
+            fake.convert_pdf_to_images.side_effect = convert
+            fake.upload_material_tree_to_r2.side_effect = upload
+            events = []
+            with patch.object(material_worker, "STORAGE", fake), \
+                 patch.object(material_worker, "_transcode_if_needed", return_value=(source, "source.pdf", {}, {})), \
+                 patch.object(material_worker, "_build_text_index", return_value=(None, {"textIndexAvailable": False})):
+                material_worker.publish_to_storage(
+                    source,
+                    "source.pdf",
+                    {"id": "job-progress", "materialId": "mat-1"},
+                    temp,
+                    "a" * 64,
+                    progress_callback=lambda stage, detail="", percent=None: events.append(
+                        (stage, detail, percent)
+                    ),
+                )
+
+        page_percents = [percent for stage, _detail, percent in events if stage == "建立預覽" and percent]
+        upload_percents = [percent for stage, _detail, percent in events if stage == "正式發布" and percent]
+        self.assertIn(84, page_percents)
+        self.assertIn(92, upload_percents)
+        self.assertTrue(any("第 4/4 頁" in detail for stage, detail, _percent in events if stage == "建立預覽"))
+        self.assertTrue(any("R2 正式上傳" in detail for stage, detail, _percent in events if stage == "正式發布"))
+
     def test_mega_preview_bundle_ensures_material_folder_once(self):
         runtime = WorkerMaterialStorageAdapter()
         with tempfile.TemporaryDirectory() as temp_name:
