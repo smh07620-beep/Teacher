@@ -394,3 +394,12 @@ Worker availability 與 queue depth 只能從 0110 上線後開始真實採樣�
 系統不會因為一次大量上傳或單一慢 Job 就判定 Worker 不夠用。預設要連續至少 6 個 10 分鐘樣本出現 Queue 上升，且最久等待同步拉長，才會建立趨勢事件；之後才會搭配在線 Worker 數量判斷「可能有容量壓力」。在 FFmpeg、LibreOffice、storage、網路或 Worker offline 尚未排除前，畫面只會寫「可能」，不會把硬體容量當成確定根因。
 
 處理時間惡化與 Incident 頻率上升也採前後等長時間窗比較，需要足夠樣本才成立。趨勢恢復後會沿用既有 Incident 自動 resolved；如果趨勢歷史本身暫時讀不到，系統會保留既有 OPEN 狀態，不會假裝已恢復。
+
+
+## 容量規劃 / Forecast
+
+容量 Forecast 使用 Web 端已有的 `material_jobs` 與 0110 十分鐘快照，**不需要修改院內 Worker protocol，也不需要新增 `.local-worker.env` 設定**。
+
+模型會顯示近期每小時到達率、單台 Worker nominal 吞吐量（完成 Job 中位處理時間）、P95 保守吞吐量、目前 backlog，以及現有 Worker / 多 1 台 Worker 的 Queue 清空 ETA。只有完成樣本、採樣覆蓋率與最新 Worker 狀態都足夠時才會估算；否則顯示「資料不足」。
+
+若目前有 Worker offline、R2/正式儲存、FFmpeg、LibreOffice、DNS/網路或資料庫 OPEN Incident，系統會優先顯示「先排除故障，再判斷容量」。Forecast 不會自動啟動第二台 Worker，也不會把故障造成的慢直接判成硬體不足。
