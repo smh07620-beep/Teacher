@@ -172,16 +172,38 @@ class ScopeFailClosedTests(unittest.TestCase):
 
     def test_group_scoped_actor_fails_closed_when_target_lookup_errors(self):
         app = self._app({"role": "group_leader", "roles": ["group_leader"], "preferredGroup": "grpBio"})
-        with patch.object(scope_filter.material_repository, "get_material", side_effect=RuntimeError("database unavailable")):
+        with (
+            patch.object(
+                scope_filter.material_repository,
+                "get_material",
+                side_effect=RuntimeError("postgres://super-secret@example"),
+            ),
+            patch.object(scope_filter.LOGGER, "warning") as warning,
+        ):
             response = app.test_client().put("/probe/material/mat-1", json={})
         self.assertEqual(response.status_code, 503)
         self.assertTrue(response.get_json()["scopeResolutionFailed"])
+        self.assertGreaterEqual(warning.call_count, 2)
+        rendered = "\n".join(str(call) for call in warning.call_args_list)
+        self.assertIn("scope resource lookup failed", rendered)
+        self.assertIn("scope authorization resolution denied", rendered)
+        self.assertIn("RuntimeError", rendered)
+        self.assertNotIn("super-secret", rendered)
 
     def test_group_scoped_actor_fails_closed_when_target_group_is_missing(self):
         app = self._app({"role": "group_leader", "roles": ["group_leader"], "preferredGroup": "grpBio"})
-        with patch.object(scope_filter.material_repository, "get_material", return_value={"id": "mat-1"}):
+        with (
+            patch.object(scope_filter.material_repository, "get_material", return_value={"id": "mat-1"}),
+            patch.object(scope_filter.LOGGER, "warning") as warning,
+        ):
             response = app.test_client().put("/probe/material/mat-1", json={})
         self.assertEqual(response.status_code, 503)
+        self.assertTrue(
+            any(
+                "scope authorization resolution denied" in str(call)
+                for call in warning.call_args_list
+            )
+        )
 
     def test_group_scope_still_allows_own_group_and_denies_other_group(self):
         app = self._app({"role": "group_leader", "roles": ["group_leader"], "preferredGroup": "grpBio"})
@@ -191,6 +213,27 @@ class ScopeFailClosedTests(unittest.TestCase):
             other = app.test_client().put("/probe/material/mat-2", json={})
         self.assertEqual(own.status_code, 200)
         self.assertEqual(other.status_code, 403)
+
+    def test_scope_helper_repository_errors_are_logged_without_exception_message(self):
+        app = Flask(__name__)
+        app.config["TESTING"] = True
+        with app.test_request_context("/probe"):
+            with (
+                patch.object(
+                    scope_filter.assessment_repository,
+                    "get_question",
+                    side_effect=RuntimeError("credential=do-not-log"),
+                ),
+                patch.object(scope_filter.LOGGER, "warning") as warning,
+            ):
+                self.assertEqual(scope_filter.question_group(app, "question-1"), "")
+
+        rendered = "\n".join(str(call) for call in warning.call_args_list)
+        self.assertIn("scope resource lookup failed", rendered)
+        self.assertIn("question-1", rendered)
+        self.assertIn("RuntimeError", rendered)
+        self.assertNotIn("do-not-log", rendered)
+
 
     def test_organization_wide_admin_keeps_cross_group_permission_on_lookup_failure(self):
         app = self._app({"role": "education_admin", "roles": ["education_admin"], "preferredGroup": "grpBio"})

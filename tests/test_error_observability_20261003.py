@@ -11,6 +11,7 @@ class ErrorObservability20261003Tests(unittest.TestCase):
         reminders = ROOT.joinpath("teacher_app", "notifications", "reminders.py").read_text(encoding="utf-8")
         pgy = ROOT.joinpath("teacher_app", "pgy", "assessment_routes.py").read_text(encoding="utf-8")
         materials = ROOT.joinpath("teacher_app", "materials", "service.py").read_text(encoding="utf-8")
+        scope_filter = ROOT.joinpath("teacher_app", "common", "scope_filter.py").read_text(encoding="utf-8")
 
         for marker, source in (
             ("R2 upload session status count failed", r2),
@@ -24,10 +25,12 @@ class ErrorObservability20261003Tests(unittest.TestCase):
             ("PGY EPA reference import failed", pgy),
             ("PGY template delete failed", pgy),
             ("material category label lookup failed", materials),
+            ("scope resource lookup failed", scope_filter),
+            ("scope authorization resolution denied", scope_filter),
         ):
             self.assertIn(marker, source)
 
-        for source in (r2, reminders, pgy, materials):
+        for source in (r2, reminders, pgy, materials, scope_filter):
             self.assertIn("error_type=%s", source)
 
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from flask import g, jsonify, request
 
@@ -56,6 +57,8 @@ UPLOAD_SESSION_SCOPE_OWNER_ENDPOINTS = {
     "material_upload_complete",
     "material_upload_abort",
 }
+
+LOGGER = logging.getLogger(__name__)
 
 _SCOPE_FAILURE_ATTR = "teacher_scope_resolution_failed"
 _SCOPE_FAILURE_MESSAGE = "無法確認資源授權範圍，請稍後再試。"
@@ -122,6 +125,15 @@ def json_object(value) -> dict:
     return {}
 
 
+def _log_scope_lookup_failure(resource_kind: str, resource_id, exc: BaseException) -> None:
+    LOGGER.warning(
+        "scope resource lookup failed resource=%s resource_id=%r error_type=%s",
+        str(resource_kind or "unknown")[:40],
+        str(resource_id or "")[:120],
+        type(exc).__name__,
+    )
+
+
 def _mark_scope_resolution_failed() -> None:
     setattr(g, _SCOPE_FAILURE_ATTR, True)
 
@@ -138,6 +150,12 @@ def _scope_resolution_denied(owner, *permissions):
         return denied_response
     if not any(has_role(user, role) for role in GROUP_SCOPED_ROLES):
         return None
+    LOGGER.warning(
+        "scope authorization resolution denied endpoint=%s method=%s permissions=%s",
+        str(request.endpoint or "")[:120],
+        str(request.method or "")[:16],
+        ",".join(str(permission)[:80] for permission in permissions),
+    )
     return jsonify({"error": _SCOPE_FAILURE_MESSAGE, "scopeResolutionFailed": True}), 503
 
 
@@ -191,7 +209,8 @@ def category_group(owner, category_id) -> str:
         return ""
     try:
         return row_group(assessment_repository.get_category(category_id) or {})
-    except Exception:
+    except Exception as exc:
+        _log_scope_lookup_failure("category", category_id, exc)
         return ""
 
 
@@ -201,7 +220,8 @@ def question_group(owner, question_id) -> str:
         return ""
     try:
         question = assessment_repository.get_question(question_id) or {}
-    except Exception:
+    except Exception as exc:
+        _log_scope_lookup_failure("question", question_id, exc)
         question = {}
     category_id = str(
         question.get("quizCategoryId") or question.get("quiz_category_id") or ""
@@ -216,7 +236,8 @@ def upload_session_group(owner, upload_id) -> str:
     try:
         session = worker_repository.get_upload_session(upload_id) or {}
         return row_group(json_object(session.get("payload")))
-    except Exception:
+    except Exception as exc:
+        _log_scope_lookup_failure("upload_session", upload_id, exc)
         return ""
 
 
@@ -226,7 +247,8 @@ def blueprint_group(owner, blueprint_id) -> str:
         return ""
     try:
         blueprint = assessment_repository.get_blueprint(blueprint_id) or {}
-    except Exception:
+    except Exception as exc:
+        _log_scope_lookup_failure("blueprint", blueprint_id, exc)
         return ""
     return category_group(owner, blueprint.get("quiz_category_id"))
 
@@ -287,14 +309,16 @@ def request_groups(owner=None) -> set[str]:
     if material_id:
         try:
             add_required(row_group(material_repository.get_material(material_id) or {}))
-        except Exception:
+        except Exception as exc:
+            _log_scope_lookup_failure("material", material_id, exc)
             _mark_scope_resolution_failed()
 
     course_id = view.get("course_id") or body.get("courseId") or request.args.get("courseId")
     if course_id:
         try:
             add_required(row_group(course_repository.get_course(course_id) or {}))
-        except Exception:
+        except Exception as exc:
+            _log_scope_lookup_failure("course", course_id, exc)
             _mark_scope_resolution_failed()
 
     question_id = view.get("question_id")
@@ -314,7 +338,8 @@ def request_groups(owner=None) -> set[str]:
             ) or {}
             job_group = row_group(job) or row_group(json_object(job.get("payload")))
             add_required(job_group)
-        except Exception:
+        except Exception as exc:
+            _log_scope_lookup_failure("material_job", job_id, exc)
             _mark_scope_resolution_failed()
 
     upload_id = view.get("upload_id")
@@ -439,14 +464,14 @@ def item_group(owner, item) -> str:
             group = row_group(material_repository.get_material(material_id) or {})
             if group:
                 return group
-        except Exception:
-            pass
+        except Exception as exc:
+            _log_scope_lookup_failure("material", material_id, exc)
     course_id = item.get("courseId") or item.get("course_id")
     if course_id:
         try:
             return row_group(course_repository.get_course(course_id) or {})
-        except Exception:
-            pass
+        except Exception as exc:
+            _log_scope_lookup_failure("course", course_id, exc)
     return ""
 
 
