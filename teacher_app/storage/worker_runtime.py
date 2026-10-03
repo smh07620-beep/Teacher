@@ -507,7 +507,13 @@ class WorkerMaterialStorageAdapter:
                 return self._save_optimized_pdf(pdf, output_pdf)
         return self._save_optimized_pdf(Path(prepared_pdf), output_pdf)
 
-    def convert_pdf_to_images(self, pdf_path: Path, out_folder: Path) -> int:
+    def convert_pdf_to_images(
+        self,
+        pdf_path: Path,
+        out_folder: Path,
+        *,
+        progress_callback=None,
+    ) -> int:
         if pymupdf is None:
             raise RuntimeError("本機 Worker 缺少 PyMuPDF 套件")
         out_folder.mkdir(parents=True, exist_ok=True)
@@ -518,6 +524,8 @@ class WorkerMaterialStorageAdapter:
             for index in range(page_count):
                 pixmap = document.load_page(index).get_pixmap(matrix=matrix)
                 self._render_slide_pixmap(pixmap, out_folder, index + 1)
+                if callable(progress_callback):
+                    progress_callback(index + 1, page_count)
             return page_count
         finally:
             document.close()
@@ -547,6 +555,7 @@ class WorkerMaterialStorageAdapter:
         publish_key: str = "",
         source_sha256: str = "",
         object_key: str = "",
+        progress_callback=None,
     ) -> dict[str, Any]:
         path = Path(local_path)
         metadata = {
@@ -555,14 +564,19 @@ class WorkerMaterialStorageAdapter:
             "smh-object-key": str(object_key or "")[:240],
         }
         metadata = {k: v for k, v in metadata.items() if v}
+        kwargs = {
+            "ExtraArgs": {
+                "ContentType": self._content_type(path),
+                "Metadata": metadata,
+            }
+        }
+        if callable(progress_callback):
+            kwargs["Callback"] = lambda transferred: progress_callback(max(0, int(transferred or 0)))
         providers.r2_client().upload_file(
             str(path),
             providers.R2_BUCKET_NAME,
             str(key),
-            ExtraArgs={
-                "ContentType": self._content_type(path),
-                "Metadata": metadata,
-            },
+            **kwargs,
         )
         return self._r2_object_meta(path, key)
 
@@ -573,16 +587,27 @@ class WorkerMaterialStorageAdapter:
         *,
         publish_key: str = "",
         source_sha256: str = "",
+        progress_callback=None,
     ) -> tuple[str, str, dict[str, Any]]:
         source_path = Path(source_path)
         prefix = f"materials/{material_id}"
         source_key = f"{prefix}/source{source_path.suffix.lower()}"
+        total_bytes = max(1, int(source_path.stat().st_size))
+        transferred = 0
+
+        def on_delta(delta: int) -> None:
+            nonlocal transferred
+            transferred = min(total_bytes, transferred + max(0, int(delta or 0)))
+            if callable(progress_callback):
+                progress_callback(transferred, total_bytes, "原始教材")
+
         obj = self._r2_put_file(
             source_path,
             source_key,
             publish_key=publish_key,
             source_sha256=source_sha256,
             object_key="source",
+            progress_callback=on_delta if callable(progress_callback) else None,
         )
         return source_key, "", {
             "r2Objects": [obj],
@@ -600,12 +625,40 @@ class WorkerMaterialStorageAdapter:
         derivatives: dict[str, Path] | None = None,
         publish_key: str = "",
         source_sha256: str = "",
+        progress_callback=None,
     ) -> tuple[str, str, dict[str, Any]]:
         source_path = Path(source_path)
         slides_dir = Path(slides_dir)
         prefix = f"materials/{material_id}"
         source_key = f"{prefix}/source{source_path.suffix.lower()}"
         slides_prefix = f"{prefix}/slides"
+        slide_paths: list[tuple[int, Path]] = []
+        for index in range(1, int(page_count or 0) + 1):
+            slide = self._slide_local_path(slides_dir, index)
+            if slide.exists():
+                slide_paths.append((index, slide))
+        derivative_paths: list[tuple[str, Path]] = []
+        for name, raw_path in (derivatives or {}).items():
+            path = Path(raw_path)
+            if path.is_file() and path.stat().st_size > 0:
+                derivative_paths.append((Path(str(name)).name, path))
+
+        total_bytes = max(
+            1,
+            int(source_path.stat().st_size)
+            + sum(int(path.stat().st_size) for _index, path in slide_paths)
+            + sum(int(path.stat().st_size) for _name, path in derivative_paths),
+        )
+        transferred = 0
+
+        def file_delta(label: str):
+            def on_delta(delta: int) -> None:
+                nonlocal transferred
+                transferred = min(total_bytes, transferred + max(0, int(delta or 0)))
+                if callable(progress_callback):
+                    progress_callback(transferred, total_bytes, label)
+            return on_delta
+
         objects = [
             self._r2_put_file(
                 source_path,
@@ -613,13 +666,11 @@ class WorkerMaterialStorageAdapter:
                 publish_key=publish_key,
                 source_sha256=source_sha256,
                 object_key="source",
+                progress_callback=file_delta("原始教材") if callable(progress_callback) else None,
             )
         ]
         slide_files: dict[str, str] = {}
-        for index in range(1, int(page_count or 0) + 1):
-            slide = self._slide_local_path(slides_dir, index)
-            if not slide.exists():
-                continue
+        for index, slide in slide_paths:
             key = f"{slides_prefix}/{slide.name}"
             objects.append(
                 self._r2_put_file(
@@ -628,15 +679,12 @@ class WorkerMaterialStorageAdapter:
                     publish_key=publish_key,
                     source_sha256=source_sha256,
                     object_key=f"slide:{index}",
+                    progress_callback=file_delta(f"預覽第 {index}/{len(slide_paths)} 頁") if callable(progress_callback) else None,
                 )
             )
             slide_files[slide.name] = key
         derived_files: dict[str, str] = {}
-        for name, raw_path in (derivatives or {}).items():
-            path = Path(raw_path)
-            if not path.is_file() or path.stat().st_size <= 0:
-                continue
-            safe_name = Path(str(name)).name
+        for safe_name, path in derivative_paths:
             key = f"{prefix}/derived/{safe_name}"
             objects.append(
                 self._r2_put_file(
@@ -645,6 +693,7 @@ class WorkerMaterialStorageAdapter:
                     publish_key=publish_key,
                     source_sha256=source_sha256,
                     object_key=f"derived:{safe_name}",
+                    progress_callback=file_delta(f"衍生檔 {safe_name}") if callable(progress_callback) else None,
                 )
             )
             derived_files[safe_name] = key
@@ -665,6 +714,7 @@ class WorkerMaterialStorageAdapter:
         *,
         publish_key: str = "",
         source_sha256: str = "",
+        progress_callback=None,
     ) -> tuple[str, str, dict[str, Any]]:
         return self.upload_material_tree_to_r2(
             material_id,
@@ -674,6 +724,7 @@ class WorkerMaterialStorageAdapter:
             derivatives=derivatives,
             publish_key=publish_key,
             source_sha256=source_sha256,
+            progress_callback=progress_callback,
         )
 
     def upload_source_to_mega(self, material_id: str, source_path: Path) -> str:
