@@ -26,6 +26,9 @@ class WorkspaceShell70Tests(unittest.TestCase):
 
     def test_dynamic_workspace_buttons_have_explicit_workspace_identity(self):
         self.assertIn("item.dataset.adminWorkspace = workspace", self.source)
+        self.assertIn("item.setAttribute('data-csp-click', `switchAdminWorkspace('${workspace}',true)`)", self.source)
+        self.assertIn("item.onclick = null", self.source)
+        self.assertNotIn("item.onclick = () => window.switchAdminWorkspace?.(workspace, true)", self.source)
         router = ROOT.joinpath("static", "admin-workspace.js").read_text(encoding="utf-8")
         self.assertIn("document.querySelectorAll('.admin-nav-btn')", router)
         self.assertIn("button.dataset.adminWorkspace", router)

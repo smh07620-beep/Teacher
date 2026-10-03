@@ -277,6 +277,55 @@ test('system admin sees canonical Worker offline notification in system workspac
   await assertNoHorizontalOverflow(page);
 });
 
+test('Worker notification action cannot land on assessment or AI authoring', async ({ page }) => {
+  await page.route('**/api/training-command-center/notifications', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: 'training-command-center',
+        counts: { total: 1, overdue: 0, emailEligible: 1 },
+        items: [{
+          key: 'notify:worker_offline:routing',
+          persona: 'system',
+          kind: 'worker_offline',
+          domain: 'operations',
+          title: '教材 Worker 已離線',
+          detail: 'Worker heartbeat 已超過門檻。',
+          badge: 'Worker 離線',
+          status: 'offline:test',
+          overdue: false,
+          href: '/system?admin=1&workspace=worker&persona=system&from=notification-center',
+          channels: ['in_app'],
+          emailPolicy: 'none',
+        }],
+      }),
+    });
+  });
+  await page.route('**/api/notification-states?**', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ states: {} }) });
+  });
+
+  await page.setViewportSize({ width: 430, height: 932 });
+  await open(page, '/system?admin=1&workspace=people&persona=system');
+  const center = page.locator('#notification-center-71');
+  await expect(center).toBeVisible({ timeout: 10000 });
+  await center.locator('summary').click();
+  const workerLink = center.locator('a[href*="workspace=worker"][href*="persona=system"]');
+  await expect(workerLink).toBeVisible();
+
+  await Promise.all([
+    page.waitForURL(url => url.searchParams.get('workspace') === 'worker' && url.searchParams.get('persona') === 'system', { timeout: 15000 }),
+    workerLink.click(),
+  ]);
+
+  await expect(page.locator('#admin-section-worker')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#admin-section-quiz')).toBeHidden();
+  await expect(page.locator('#admin-workspace-title')).toContainText('Worker');
+  await expect(page.locator('#teacher-content-studio-71')).toBeHidden();
+});
+
+
 test('Worker status error state is distinct from an offline Worker', async ({ page }) => {
   await page.route('**/api/material-jobs?**', async route => {
     await route.fulfill({

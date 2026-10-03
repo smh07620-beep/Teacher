@@ -119,7 +119,9 @@
     }
     item.textContent = label;
     item.dataset.adminWorkspace = workspace;
-    item.onclick = () => window.switchAdminWorkspace?.(workspace, true);
+    item.onclick = null;
+    item.removeAttribute('onclick');
+    item.setAttribute('data-csp-click', `switchAdminWorkspace('${workspace}',true)`);
     item.classList.remove('hidden');
     item.disabled = false;
     item.setAttribute('aria-hidden', 'false');
