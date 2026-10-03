@@ -56,6 +56,17 @@
     cancelled: ['⏹', '已取消', 'text-slate-600 bg-slate-50 border-slate-200']
   }[status] || ['•', status || '未知', 'text-slate-600 bg-slate-50 border-slate-200']);
 
+  const jobHealthMeta = job => ({
+    active: ['🟢', '持續處理', 'text-emerald-700 bg-emerald-50 border-emerald-200'],
+    heartbeat_delayed: ['🟠', '回報延遲', 'text-amber-700 bg-amber-50 border-amber-200'],
+    stalled: ['🔴', '可能卡住', 'text-rose-700 bg-rose-50 border-rose-200'],
+    queued: ['⚪', '等待 Worker', 'text-slate-600 bg-slate-50 border-slate-200'],
+    retry_wait: ['🟠', '等待重試', 'text-amber-700 bg-amber-50 border-amber-200'],
+    completed: ['🟢', '已完成', 'text-emerald-700 bg-emerald-50 border-emerald-200'],
+    failed: ['🔴', '需要處理', 'text-rose-700 bg-rose-50 border-rose-200'],
+    cancelled: ['⚪', '已取消', 'text-slate-600 bg-slate-50 border-slate-200']
+  }[String(job.observabilityState || '')] || ['⚪', job.observabilityLabel || '狀態待確認', 'text-slate-600 bg-slate-50 border-slate-200']);
+
   let panel = document.getElementById('admin-section-worker');
   if (!panel) {
     panel = document.createElement('div');
@@ -178,18 +189,24 @@
     if (!jobs.length) return '<tr><td colspan="6" class="p-5 text-center text-slate-400">目前沒有背景教材工作。</td></tr>';
     return jobs.map(job => {
       const [icon,label,classes]=jobMeta(job.status);
+      const [healthIcon,healthLabel,healthClasses]=jobHealthMeta(job);
+      const progress=Math.max(0,Math.min(100,Number(job.progressPercent||0)));
+      const heartbeatAge=Number(job.heartbeatAgeSeconds);
+      const heartbeat=job.status==='processing'?(Number.isFinite(heartbeatAge)?'heartbeat '+formatDuration(heartbeatAge)+'前':'尚未取得本輪 heartbeat'):'';
       const detail=String(job.detail||'').trim();
       const error=String(job.error||'').trim();
       const timerBase=job.startedAt||job.createdAt;
-      const duration=job.finishedAt&&timerBase
-        ? formatDuration(Math.max(0,(new Date(job.finishedAt)-new Date(timerBase))/1000))
-        : elapsedFrom(timerBase);
+      const duration=Number.isFinite(Number(job.elapsedSeconds))
+        ? formatDuration(job.elapsedSeconds)
+        : (job.finishedAt&&timerBase
+          ? formatDuration(Math.max(0,(new Date(job.finishedAt)-new Date(timerBase))/1000))
+          : elapsedFrom(timerBase));
       return `<tr class="align-top">
         <td class="p-3 font-mono text-[11px] break-all">${escapeHtml(job.id || '')}</td>
         <td class="p-3"><div class="font-semibold text-slate-800">${escapeHtml(job.title || job.originalName || '未命名教材')}</div><div class="text-[10px] text-slate-400">${escapeHtml(job.originalName || '')}</div>${job.workerId?`<div class="text-[10px] text-slate-400 mt-1">Worker：${escapeHtml(job.workerId)}</div>`:''}</td>
-        <td class="p-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-[10px] font-bold ${classes}">${icon} ${label}</span><div class="mt-1 text-[10px] text-slate-400">第 ${Number(job.attempts||0)}/${Number(job.maxAttempts||3)} 次</div></td>
-        <td class="p-3 text-slate-600"><div class="font-semibold">${escapeHtml(job.stage || '—')}</div>${detail?`<div class="mt-1 text-[11px]">${escapeHtml(detail)}</div>`:''}${error?`<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] font-semibold text-rose-700">失敗原因：${escapeHtml(error)}</div>`:''}</td>
-        <td class="p-3 whitespace-nowrap text-slate-500"><div>${escapeHtml(duration)}</div><div class="mt-1 text-[10px] text-slate-400">開始：${formatWhen(job.startedAt||job.createdAt)}</div></td>
+        <td class="p-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-[10px] font-bold ${classes}">${icon} ${label}</span><div class="mt-1"><span class="inline-flex rounded-full border px-2 py-1 text-[10px] font-bold ${healthClasses}">${healthIcon} ${escapeHtml(healthLabel)}</span></div><div class="mt-1 text-[10px] text-slate-400">第 ${Number(job.attempts||0)}/${Number(job.maxAttempts||3)} 次</div></td>
+        <td class="p-3 text-slate-600"><div class="font-semibold">${escapeHtml(job.stage || '—')} · ${progress}%</div><div class="mt-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-sky-500" style="width:${progress}%"></div></div>${detail?`<div class="mt-1 text-[11px]">${escapeHtml(detail)}</div>`:''}<div class="mt-1 text-[10px] ${job.stalled?'text-rose-700 font-bold':job.heartbeatDelayed?'text-amber-700':'text-slate-400'}">${escapeHtml(job.observabilityDetail||'')}${heartbeat?` · ${escapeHtml(heartbeat)}`:''}</div>${error?`<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] font-semibold text-rose-700">失敗原因：${escapeHtml(error)}</div>`:''}</td>
+        <td class="p-3 whitespace-nowrap text-slate-500"><div>${escapeHtml(duration)}</div><div class="mt-1 text-[10px] text-slate-400">開始：${formatWhen(job.startedAt||job.createdAt)}</div>${job.retryInSeconds?`<div class="mt-1 text-[10px] text-amber-700">約 ${formatDuration(job.retryInSeconds)} 後重試</div>`:''}</td>
         <td class="p-3 whitespace-nowrap text-slate-500">${formatWhen(job.updatedAt || job.createdAt)}</td>
       </tr>`;
     }).join('');
