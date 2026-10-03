@@ -63,6 +63,35 @@ class LearningFlow66Tests(
         self.assertIn("requestAnimationFrame", wrapper)
         self.assertNotIn("/api/material-progress", wrapper)
 
+    def test_course_overview_has_one_global_owner_and_a_registered_presenter(self):
+        learner = self.source("static/system-learner.js")
+        teaching = self.source("static/teaching.js")
+        self.assertIn("function renderCourseOverview()", learner)
+        self.assertIn("function renderCourseOverviewBase()", learner)
+        self.assertIn("window.LearnerCourseOverview = Object.freeze", learner)
+        self.assertNotIn("function renderCourseOverview() {", teaching)
+        self.assertIn("function renderTeachingCourseOverview()", teaching)
+        self.assertIn("window.TeachingCourseOverview66 = Object.freeze", teaching)
+
+    def test_teaching_course_presenter_runs_shared_learner_finalizer(self):
+        source = self.source("static/teaching.js")
+        start = source.index("function renderTeachingCourseOverview()")
+        end = source.index("window.TeachingCourseOverview66 = Object.freeze", start)
+        presenter = source[start:end]
+        self.assertIn("LearnerCourseOverview?.ensureSupportData?.()", presenter)
+        self.assertIn("LearnerCourseOverview?.finalize?.(grid, courses)", presenter)
+        self.assertIn("learning-search", presenter)
+        self.assertIn("learning-filter", presenter)
+        self.assertIn("learningObjectives", presenter)
+
+    def test_course_overview_base_fails_closed_to_current_area(self):
+        learner = self.source("static/system-learner.js")
+        start = learner.index("function renderCourseOverviewBase()")
+        end = learner.index("function renderCourseOverview()", start)
+        base = learner[start:end]
+        self.assertIn("(m.area||currentTrainingArea)===currentTrainingArea", base)
+        self.assertIn("(c.area||currentTrainingArea)===currentTrainingArea", base)
+
     def test_empty_exam_has_explicit_not_ready_state(self):
         source = self.source(
             "static/teaching.js"
