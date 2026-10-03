@@ -7,6 +7,7 @@ import os
 from typing import Any, Iterable, Mapping
 
 from teacher_app.common import db as common_db
+from teacher_app.notifications import incident_runbooks
 from teacher_app.worker import operations as worker_operations
 
 
@@ -92,24 +93,75 @@ def _now(value: dt.datetime | None = None) -> dt.datetime:
     return current.astimezone(dt.timezone.utc)
 
 
-def incident_dict(row: Mapping[str, Any]) -> dict[str, Any]:
+def _parse_time(value: Any) -> dt.datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def incident_dict(
+    row: Mapping[str, Any],
+    *,
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
     item = dict(row or {})
+    current = _now(now)
+    error_code = str(item.get("error_code") or item.get("errorCode") or "")
+    incident_type = str(item.get("incident_type") or item.get("incidentType") or "")
+    maintenance_until = str(
+        item.get("maintenance_until") or item.get("maintenanceUntil") or ""
+    )
+    maintenance_deadline = _parse_time(maintenance_until)
+    maintenance_active = bool(
+        maintenance_deadline
+        and maintenance_deadline > current
+        and str(item.get("status") or "open") == "open"
+    )
     return {
         "incidentKey": str(item.get("incident_key") or item.get("incidentKey") or ""),
-        "incidentType": str(item.get("incident_type") or item.get("incidentType") or ""),
+        "incidentType": incident_type,
         "category": str(item.get("category") or "operations"),
         "severity": str(item.get("severity") or "warning"),
         "status": str(item.get("status") or "open"),
         "title": str(item.get("title") or "系統維運事件"),
         "detail": str(item.get("detail") or ""),
         "action": str(item.get("action") or ""),
-        "errorCode": str(item.get("error_code") or item.get("errorCode") or ""),
+        "errorCode": error_code,
         "resourceId": str(item.get("resource_id") or item.get("resourceId") or ""),
         "generation": int(item.get("generation") or 1),
         "occurrenceCount": int(item.get("occurrence_count") or item.get("occurrenceCount") or 1),
         "openedAt": str(item.get("opened_at") or item.get("openedAt") or ""),
         "lastSeenAt": str(item.get("last_seen_at") or item.get("lastSeenAt") or ""),
         "resolvedAt": str(item.get("resolved_at") or item.get("resolvedAt") or ""),
+        "responseState": str(
+            item.get("response_state") or item.get("responseState") or "unacknowledged"
+        ),
+        "acknowledgedBy": str(
+            item.get("acknowledged_by") or item.get("acknowledgedBy") or ""
+        ),
+        "acknowledgedAt": str(
+            item.get("acknowledged_at") or item.get("acknowledgedAt") or ""
+        ),
+        "assignedTo": str(item.get("assigned_to") or item.get("assignedTo") or ""),
+        "maintenanceUntil": maintenance_until,
+        "maintenanceActive": maintenance_active,
+        "responseNote": str(
+            item.get("response_note") or item.get("responseNote") or ""
+        ),
+        "responseUpdatedBy": str(
+            item.get("response_updated_by") or item.get("responseUpdatedBy") or ""
+        ),
+        "responseUpdatedAt": str(
+            item.get("response_updated_at") or item.get("responseUpdatedAt") or ""
+        ),
+        "runbook": incident_runbooks.runbook_for(error_code, incident_type),
     }
 
 
@@ -197,7 +249,7 @@ def sync_operational_incidents(
                     f"VALUES ({','.join([ph] * len(columns))})",
                     tuple(values),
                 )
-                opened.append(incident_dict(dict(zip(columns, values))))
+                opened.append(incident_dict(dict(zip(columns, values)), now=current))
                 continue
 
             if str(prior.get("status") or "") == "open":
@@ -220,12 +272,16 @@ def sync_operational_incidents(
                 f"UPDATE operational_incidents SET "
                 f"incident_type={ph},category={ph},severity={ph},status={ph},title={ph},detail={ph},"
                 f"action={ph},error_code={ph},resource_id={ph},generation={ph},occurrence_count={ph},"
-                f"opened_at={ph},last_seen_at={ph},resolved_at={ph} WHERE incident_key={ph}",
+                f"opened_at={ph},last_seen_at={ph},resolved_at={ph},"
+                f"response_state={ph},acknowledged_by={ph},acknowledged_at={ph},assigned_to={ph},"
+                f"maintenance_until={ph},response_note={ph},response_updated_by={ph},response_updated_at={ph} "
+                f"WHERE incident_key={ph}",
                 (
                     candidate["incident_type"], candidate["category"], candidate["severity"], "open",
                     candidate["title"], candidate["detail"], candidate["action"],
                     candidate["error_code"], candidate["resource_id"], generation,
-                    occurrence_count, stamp, stamp, "", key,
+                    occurrence_count, stamp, stamp, "",
+                    "unacknowledged", "", "", "", "", "", "", "", key,
                 ),
             )
             reopened.append(
@@ -238,7 +294,15 @@ def sync_operational_incidents(
                     "opened_at": stamp,
                     "last_seen_at": stamp,
                     "resolved_at": "",
-                })
+                    "response_state": "unacknowledged",
+                    "acknowledged_by": "",
+                    "acknowledged_at": "",
+                    "assigned_to": "",
+                    "maintenance_until": "",
+                    "response_note": "",
+                    "response_updated_by": "",
+                    "response_updated_at": "",
+                }, now=current)
             )
 
         for key, prior in existing.items():
@@ -264,7 +328,7 @@ def sync_operational_incidents(
                     "status": "resolved",
                     "resolved_at": stamp,
                     "last_seen_at": stamp,
-                })
+                }, now=current)
             )
 
     return {
@@ -275,7 +339,122 @@ def sync_operational_incidents(
     }
 
 
-def list_active_incidents() -> list[dict[str, Any]]:
+def update_incident_response(
+    incident_key: str,
+    *,
+    actor_username: str,
+    action: str,
+    assigned_to: str = "",
+    maintenance_minutes: int = 60,
+    note: str = "",
+    now: dt.datetime | None = None,
+) -> dict[str, Any] | None:
+    """Update human response state without changing automatic open/resolved state."""
+    key = str(incident_key or "").strip()[:240]
+    actor = str(actor_username or "").strip()[:100]
+    action_name = str(action or "").strip().lower()
+    if not key or not actor:
+        return None
+    if action_name not in {
+        "acknowledge",
+        "assign",
+        "unassign",
+        "maintenance",
+        "clear_maintenance",
+        "note",
+    }:
+        raise ValueError("不支援的 Incident 處置動作。")
+
+    current = _now(now)
+    stamp = current.isoformat()
+    clean_assignee = str(assigned_to or "").strip()[:100]
+    clean_note = str(note or "").strip()[:1000]
+    minutes = max(15, min(1440, int(maintenance_minutes or 60)))
+
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT * FROM operational_incidents WHERE incident_key={ph}",
+            (key,),
+        ).fetchone()
+        if not row:
+            return None
+        prior = dict(row)
+        if str(prior.get("status") or "") != "open":
+            raise ValueError("Incident 已恢復，不能再修改處置狀態。")
+
+        acknowledged_by = str(prior.get("acknowledged_by") or "")
+        acknowledged_at = str(prior.get("acknowledged_at") or "")
+        assigned = str(prior.get("assigned_to") or "")
+        maintenance_until = str(prior.get("maintenance_until") or "")
+        response_state = str(prior.get("response_state") or "unacknowledged")
+
+        if action_name == "acknowledge":
+            acknowledged_by = acknowledged_by or actor
+            acknowledged_at = acknowledged_at or stamp
+            response_state = "assigned" if assigned else "acknowledged"
+        elif action_name == "assign":
+            if not clean_assignee:
+                raise ValueError("請指定處理人員。")
+            acknowledged_by = acknowledged_by or actor
+            acknowledged_at = acknowledged_at or stamp
+            assigned = clean_assignee
+            response_state = "maintenance" if (
+                (_parse_time(maintenance_until) or current) > current
+                and bool(maintenance_until)
+            ) else "assigned"
+        elif action_name == "unassign":
+            assigned = ""
+            active_maintenance = bool(
+                (_parse_time(maintenance_until) or current) > current
+                and maintenance_until
+            )
+            response_state = (
+                "maintenance"
+                if active_maintenance
+                else "acknowledged"
+                if acknowledged_by
+                else "unacknowledged"
+            )
+        elif action_name == "maintenance":
+            acknowledged_by = acknowledged_by or actor
+            acknowledged_at = acknowledged_at or stamp
+            maintenance_until = (current + dt.timedelta(minutes=minutes)).isoformat()
+            response_state = "maintenance"
+        elif action_name == "clear_maintenance":
+            maintenance_until = ""
+            response_state = (
+                "assigned"
+                if assigned
+                else "acknowledged"
+                if acknowledged_by
+                else "unacknowledged"
+            )
+        elif action_name == "note":
+            if not clean_note:
+                raise ValueError("處置備註不可空白。")
+
+        fields = {
+            "response_state": response_state,
+            "acknowledged_by": acknowledged_by,
+            "acknowledged_at": acknowledged_at,
+            "assigned_to": assigned,
+            "maintenance_until": maintenance_until,
+            "response_note": clean_note if action_name == "note" else str(prior.get("response_note") or ""),
+            "response_updated_by": actor,
+            "response_updated_at": stamp,
+        }
+        conn.execute(
+            f"UPDATE operational_incidents SET "
+            + ",".join(f"{column}={ph}" for column in fields)
+            + f" WHERE incident_key={ph}",
+            (*fields.values(), key),
+        )
+        updated = {**prior, **fields}
+    return incident_dict(updated, now=current)
+
+
+def list_active_incidents(*, now: dt.datetime | None = None) -> list[dict[str, Any]]:
     try:
         with common_db.read_connection() as (conn, _kind):
             rows = conn.execute(
@@ -289,7 +468,8 @@ def list_active_incidents() -> list[dict[str, Any]]:
             type(exc).__name__,
         )
         return []
-    return [incident_dict(dict(row)) for row in rows]
+    current = _now(now)
+    return [incident_dict(dict(row), now=current) for row in rows]
 
 
 def list_recent_incidents(
@@ -316,7 +496,7 @@ def list_recent_incidents(
             type(exc).__name__,
         )
         return []
-    return [incident_dict(dict(row)) for row in rows]
+    return [incident_dict(dict(row), now=current) for row in rows]
 
 
 __all__ = [
@@ -324,4 +504,5 @@ __all__ = [
     "list_active_incidents",
     "list_recent_incidents",
     "sync_operational_incidents",
+    "update_incident_response",
 ]
