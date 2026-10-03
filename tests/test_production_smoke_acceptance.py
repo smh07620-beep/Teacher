@@ -20,6 +20,8 @@ class ProductionSmokeAcceptanceTests(unittest.TestCase):
             '"/system"',
             '"今天的學習，從這裡開始"',
             '"6.8.1"',
+            "_dns_diagnostic",
+            '"stage": "dns"',
             'health_deployment.get("branch") == "main"',
             'observed == expected',
         ):
@@ -49,9 +51,15 @@ class ProductionSmokeAcceptanceTests(unittest.TestCase):
         keepalive = (ROOT / ".github" / "workflows" / "supabase-keepalive.yml").read_text(encoding="utf-8")
         fallback = (ROOT / ".github" / "workflows" / "material-fallback-worker.yml").read_text(encoding="utf-8")
         target = "https://teacher-j3id.onrender.com"
-        self.assertIn(target, smoke)
-        self.assertIn(target + "/health", keepalive)
-        self.assertIn("TEACHER_BASE_URL: " + target, fallback)
+        override = "${{ vars.TEACHER_PRODUCTION_URL || '" + target + "' }}"
+
+        self.assertIn("TEACHER_PRODUCTION_URL: " + override, smoke)
+        self.assertIn("TEACHER_PRODUCTION_URL: " + override, keepalive)
+        self.assertIn("TEACHER_BASE_URL: " + override, fallback)
+        self.assertIn('--base-url "$TEACHER_PRODUCTION_URL"', smoke)
+        self.assertIn('"${TEACHER_PRODUCTION_URL%/}/health"', keepalive)
+        self.assertIn("socket.getaddrinfo", keepalive)
+        self.assertIn("socket.getaddrinfo", fallback)
 
 
 if __name__ == "__main__":
