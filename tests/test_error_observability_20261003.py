@@ -11,6 +11,7 @@ class ErrorObservability20261003Tests(unittest.TestCase):
     def test_external_io_fallbacks_emit_safe_operational_logs(self):
         r2 = ROOT.joinpath("teacher_app", "storage", "r2_budget.py").read_text(encoding="utf-8")
         reminders = ROOT.joinpath("teacher_app", "notifications", "reminders.py").read_text(encoding="utf-8")
+        incidents_source = ROOT.joinpath("teacher_app", "notifications", "incidents.py").read_text(encoding="utf-8")
         pgy = ROOT.joinpath("teacher_app", "pgy", "assessment_routes.py").read_text(encoding="utf-8")
         materials = ROOT.joinpath("teacher_app", "materials", "service.py").read_text(encoding="utf-8")
         scope_filter = ROOT.joinpath("teacher_app", "common", "scope_filter.py").read_text(encoding="utf-8")
@@ -46,6 +47,7 @@ class ErrorObservability20261003Tests(unittest.TestCase):
             ("email reminder event projection failed", reminders),
             ("operational incident reminder send failed", reminders),
             ("operational incident sync failed", reminders),
+            ("operational trend projection failed", incidents_source),
             ("operational metrics sample failed", reminders),
             ("PGY template temp cleanup failed", pgy),
             ("PGY EPA reference import failed", pgy),
