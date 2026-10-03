@@ -51,6 +51,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import notification_preference_migration as _notification_preference_migration  # noqa: F401
     from teacher_app.maintenance import material_job_progress_migration as _material_job_progress_migration  # noqa: F401
     from teacher_app.maintenance import operational_incident_migration as _operational_incident_migration  # noqa: F401
+    from teacher_app.maintenance import operational_incident_response_migration as _operational_incident_response_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
