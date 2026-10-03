@@ -3,9 +3,9 @@
  * workspace implementations remain authoritative.
  *
  * The final teacher persona navigation is owned by teacher-persona-isolation-
- * 1014.js. This layer adds contextual teaching tools and converges system
- * administration groups without introducing a second competing teacher-nav
- * observer.
+ * 1014.js. Structural system navigation is owned by workspace-shell-70.js.
+ * This layer only adds contextual tools and stable presentation labels; it does
+ * not rebuild either navigation tree.
  */
 (async function () {
   'use strict';
@@ -25,21 +25,6 @@
     persona() === 'system' || (!persona() && systemWorkspaceNames.has(workspace()))
   );
   const isTeacherPersona = () => Boolean(window.TeacherWorkspace1014) && persona() !== 'system';
-
-  function navGroup(label, buttons, compact = false) {
-    const usable = buttons.filter(Boolean);
-    if (!usable.length) return null;
-    const section = document.createElement('section');
-    section.className = `v580-admin-group${compact ? ' compact' : ''}`;
-    const heading = document.createElement('span');
-    heading.className = 'v580-admin-group-label';
-    heading.textContent = label;
-    const actions = document.createElement('div');
-    actions.className = 'v580-admin-group-actions';
-    usable.forEach(button => actions.appendChild(button));
-    section.append(heading, actions);
-    return section;
-  }
 
   function ensureTeacherContextTools() {
     if (!isTeacherPersona()) return false;
@@ -114,27 +99,29 @@
     const worker = existing('admin-nav-worker', '🖥️ Worker / Job 狀態');
     const maintenance = existing('admin-nav-maintenance', '🛡️ 備份維護');
     const audit = existing('admin-nav-audit', '🔎 稽核紀錄');
+    const allowed = new Set([people, system, worker, maintenance, audit].filter(Boolean).map(button => button.id));
 
-    const expected = [people, system, worker, maintenance, audit].filter(Boolean).map(button => button.id);
-    const current = [...navHost.querySelectorAll('.admin-nav-btn')].map(button => button.id);
-    const labels = [...navHost.querySelectorAll('.v580-admin-group-label')].map(label => label.textContent?.trim());
-    const desiredLabels = ['人員與權限', '系統健康與維運', '安全與稽核'].filter((label, index) => index !== 2 || audit);
-    const alreadyConverged = expected.length === current.length
-      && expected.every((id, index) => current[index] === id)
-      && desiredLabels.every(label => labels.includes(label));
+    [...navHost.querySelectorAll('.admin-nav-btn')].forEach(button => {
+      if (!allowed.has(button.id)) {
+        button.classList.add('hidden');
+        button.setAttribute('aria-hidden', 'true');
+      }
+    });
 
-    if (!alreadyConverged) {
-      const groups = [
-        navGroup('人員與權限', [people], true),
-        navGroup('系統健康與維運', [system, worker, maintenance], true),
-        navGroup('安全與稽核', [audit], true),
-      ].filter(Boolean);
-      navHost.replaceChildren(...groups);
-    }
+    const labels = {
+      people: '人員與權限',
+      operations: '系統健康與維運',
+      audit: '安全與稽核',
+    };
+    Object.entries(labels).forEach(([key, text]) => {
+      const label = navHost.querySelector(`[data-admin-nav-group="${key}"] .v580-admin-group-label`);
+      if (label && label.textContent !== text) label.textContent = text;
+    });
 
     const note = document.getElementById('system-focus-note-1014');
     if (note) {
-      note.textContent = '教材、出題、媒體與紙本輸出屬於教師工作；系統管理只保留人員權限、系統健康維運與稽核。';
+      const text = '教材、出題、媒體與紙本輸出屬於教師工作；系統管理只保留人員權限、系統健康維運與稽核。';
+      if (note.textContent !== text) note.textContent = text;
     }
     return true;
   }

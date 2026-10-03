@@ -88,22 +88,23 @@
   }
 
   function ensureNavigation() {
-    if (document.getElementById('admin-nav-worker')) return;
-    const groups = [...navHost.querySelectorAll('.v580-admin-group')];
-    const systemGroup = groups.find(group => group.querySelector('.v580-admin-group-label')?.textContent?.includes('系統與儲存'));
-    if (systemGroup) {
-      const actions = systemGroup.querySelector('.v580-admin-group-actions');
-      actions?.appendChild(workerButton());
+    const existingButton = document.getElementById('admin-nav-worker');
+    const operations = navHost.querySelector('[data-admin-nav-group="operations"] .v580-admin-group-actions');
+    if (operations) {
+      const button = existingButton || workerButton();
+      if (button.parentElement !== operations) operations.appendChild(button);
       return;
     }
+    if (existingButton && navHost.contains(existingButton)) return;
     const group = document.createElement('section');
     group.className = 'v580-admin-group compact';
+    group.dataset.adminNavGroup = 'operations';
     const label = document.createElement('span');
     label.className = 'v580-admin-group-label';
-    label.textContent = 'Worker 與佇列';
+    label.textContent = '系統健康與維運';
     const actions = document.createElement('div');
     actions.className = 'v580-admin-group-actions';
-    actions.appendChild(workerButton());
+    actions.appendChild(existingButton || workerButton());
     group.append(label, actions);
     navHost.appendChild(group);
   }

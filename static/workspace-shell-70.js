@@ -128,9 +128,10 @@
     return item;
   }
 
-  function navGroup(label, buttons, compact = false) {
+  function navGroup(label, buttons, compact = false, ownershipKey = '') {
     const section = document.createElement('section');
     section.className = `v580-admin-group${compact ? ' compact' : ''}`;
+    if (ownershipKey) section.dataset.adminNavGroup = ownershipKey;
     const title = document.createElement('span');
     title.className = 'v580-admin-group-label';
     title.textContent = label;
@@ -149,30 +150,24 @@
 
   function buildSystemNavigation() {
     if (!isSystemAdmin) return;
-    const teaching = [
-      existing('admin-nav-course-materials'),
-      existing('admin-nav-assessment'),
-      existing('admin-nav-teacher'),
-      existing('admin-nav-results'),
-      existing('admin-nav-word')
-    ];
     const people = [existing('admin-nav-people')];
-    const system = [existing('admin-nav-system')];
-    const maintenance = canMaintenance ? [button('admin-nav-maintenance', '🛡️ 備份維護', 'maintenance')] : [];
+    const operations = [
+      existing('admin-nav-system'),
+      existing('admin-nav-worker'),
+      canMaintenance ? button('admin-nav-maintenance', '🛡️ 備份維護', 'maintenance') : null,
+    ];
     const audit = canAudit ? [button('admin-nav-audit', '🔎 稽核紀錄', 'audit')] : [];
     navHost.replaceChildren(
-      navGroup('教學管理', teaching),
-      navGroup('人員與權限', people, true),
-      navGroup('系統與儲存', system, true),
-      navGroup('備份維護', maintenance, true),
-      navGroup('安全與稽核', audit, true)
+      navGroup('人員與權限', people, true, 'people'),
+      navGroup('系統健康與維運', operations, true, 'operations'),
+      navGroup('安全與稽核', audit, true, 'audit')
     );
   }
 
   function addEducationMaintenanceNavigation() {
     if (!isEducationAdmin || !canMaintenance) return;
     if (document.getElementById('admin-nav-maintenance')) return;
-    navHost.appendChild(navGroup('資料保護', [button('admin-nav-maintenance', '🛡️ 備份維護', 'maintenance')], true));
+    navHost.appendChild(navGroup('資料保護', [button('admin-nav-maintenance', '🛡️ 備份維護', 'maintenance')], true, 'maintenance'));
   }
 
   function exposeAuditorEntry() {
@@ -191,7 +186,7 @@
         window.toggleAdminModal?.(true);
       };
     });
-    navHost.replaceChildren(navGroup('稽核／唯讀', [button('admin-nav-audit', '🔎 稽核紀錄', 'audit')]));
+    navHost.replaceChildren(navGroup('稽核／唯讀', [button('admin-nav-audit', '🔎 稽核紀錄', 'audit')], false, 'audit'));
   }
 
   function markActive(id) {

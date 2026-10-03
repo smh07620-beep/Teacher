@@ -1,5 +1,6 @@
 /* Teacher 10/14 cut: keep system administration focused on platform governance.
  * Teaching work stays in the teacher persona; this file changes presentation only.
+ * Structural system navigation is owned by workspace-shell-70.js.
  */
 (async function () {
   'use strict';
@@ -19,40 +20,39 @@
   const navHost = document.querySelector('.v580-admin-groups');
   if (!navHost) return;
 
-  function existing(id, label = '') {
-    const item = document.getElementById(id);
-    if (!item || item.disabled || item.classList.contains('hidden')) return null;
-    if (label) item.textContent = label;
-    item.classList.remove('hidden');
-    item.removeAttribute('aria-hidden');
-    return item;
+  const TEACHER_OWNED_NAV_IDS = Object.freeze([
+    'admin-nav-course-materials',
+    'admin-nav-assessment',
+    'admin-nav-teacher',
+    'admin-nav-results',
+    'admin-nav-word',
+  ]);
+
+  function hideTeacherOwnedNavigation() {
+    TEACHER_OWNED_NAV_IDS.forEach(id => {
+      const item = document.getElementById(id);
+      if (!item) return;
+      item.classList.add('hidden');
+      item.setAttribute('aria-hidden', 'true');
+    });
   }
 
-  function hideTeacherOwnedWordEntry() {
-    const item = document.getElementById('admin-nav-word');
-    if (!item) return;
-    item.classList.add('hidden');
-    item.setAttribute('aria-hidden', 'true');
-  }
-
-  function navGroup(label, buttons) {
-    const usable = buttons.filter(Boolean);
-    if (!usable.length) return null;
-    const section = document.createElement('section');
-    section.className = 'v580-admin-group compact';
-    const heading = document.createElement('span');
-    heading.className = 'v580-admin-group-label';
-    heading.textContent = label;
-    const actions = document.createElement('div');
-    actions.className = 'v580-admin-group-actions';
-    usable.forEach(button => actions.appendChild(button));
-    section.append(heading, actions);
-    return section;
+  function ensureFocusNote() {
+    const banner = document.getElementById('rbac-workspace-banner');
+    if (!banner) return;
+    let note = document.getElementById('system-focus-note-1014');
+    if (!note) {
+      note = document.createElement('div');
+      note.id = 'system-focus-note-1014';
+      note.className = 'mt-2 text-[11px] text-slate-500';
+      banner.appendChild(note);
+    }
+    const text = '日常教材、媒體、出題、紙本輸出與範本維護已移至「教師工作區」；系統管理只保留平台治理與高風險維運。';
+    if (note.textContent !== text) note.textContent = text;
   }
 
   function leaveLegacyWordWorkspace() {
     if (params.get('workspace') !== 'word') return;
-    params.set('workspace', 'people');
     const url = new URL(window.location.href);
     url.searchParams.set('workspace', 'people');
     url.searchParams.set('persona', 'system');
@@ -60,38 +60,37 @@
     void window.switchAdminWorkspace?.('people', true);
   }
 
-  function rebuild() {
-    hideTeacherOwnedWordEntry();
-    const groups = [
-      navGroup('人員與權限', [existing('admin-nav-people', '👥 人員與權限')]),
-      navGroup('系統與儲存', [
-        existing('admin-nav-system', '⚙️ 系統與服務'),
-        existing('admin-nav-worker', '🖥️ Worker / Job 狀態'),
-      ]),
-      navGroup('資料保護', [existing('admin-nav-maintenance', '🛡️ 備份維護')]),
-      navGroup('安全與稽核', [existing('admin-nav-audit', '🔎 稽核紀錄')]),
-    ].filter(Boolean);
-    navHost.replaceChildren(...groups);
-
-    const banner = document.getElementById('rbac-workspace-banner');
-    if (banner && !document.getElementById('system-focus-note-1014')) {
-      const note = document.createElement('div');
-      note.id = 'system-focus-note-1014';
-      note.className = 'mt-2 text-[11px] text-slate-500';
-      note.textContent = '日常教材、媒體、出題、紙本輸出與範本維護已移至「教師工作區」；系統管理只保留平台治理與高風險維運。';
-      banner.appendChild(note);
-    }
+  function applySystemFocus() {
+    hideTeacherOwnedNavigation();
+    ensureFocusNote();
+    return true;
   }
 
-  rebuild();
+  applySystemFocus();
   leaveLegacyWordWorkspace();
 
-  const observer = new MutationObserver(() => {
-    const hasTeacherOwnedButton = navHost.querySelector('#admin-nav-course-materials,#admin-nav-assessment,#admin-nav-results,#admin-nav-word');
-    const workerReady = document.getElementById('admin-nav-worker');
-    if (hasTeacherOwnedButton || (workerReady && !navHost.contains(workerReady))) rebuild();
+  window.AdminWorkspaceShell?.addAfterWorkspace?.(() => applySystemFocus());
+  window.AdminWorkspaceShell?.addAfterModal?.(({show}) => {
+    if (show) applySystemFocus();
   });
-  observer.observe(navHost, { childList: true, subtree: true });
 
-  window.SystemAdminFocus1014 = Object.freeze({ rebuild });
+  // Compatibility scripts may still insert teacher-owned controls later. Hide
+  // those controls, but never rebuild or replace the canonical navigation tree.
+  const observer = new MutationObserver(records => {
+    const addedTeacherControl = records.some(record =>
+      [...(record.addedNodes || [])].some(node =>
+        node instanceof Element && (
+          TEACHER_OWNED_NAV_IDS.some(id => node.id === id) ||
+          TEACHER_OWNED_NAV_IDS.some(id => node.querySelector?.(`#${id}`))
+        )
+      )
+    );
+    if (addedTeacherControl) applySystemFocus();
+  });
+  observer.observe(navHost, {childList:true, subtree:true});
+
+  window.SystemAdminFocus1014 = Object.freeze({
+    apply: applySystemFocus,
+    rebuild: applySystemFocus,
+  });
 })();
