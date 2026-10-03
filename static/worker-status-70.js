@@ -249,6 +249,7 @@
       const activeWorkers = workerStatusAvailable ? workers.filter(worker => worker.status === 'online' || worker.status === 'busy') : [];
       const recentOfflineWorkers = workerStatusAvailable ? workers.filter(worker => worker.status === 'offline') : [];
       const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+      const problemJobs = Array.isArray(data.problemJobs) ? data.problemJobs : jobs.filter(job => ['failed','retry_wait'].includes(job.status));
       const staging = data.staging || {};
       const emptyWorkerMessage = recentOfflineWorkers.length
         ? '⚠ 目前沒有在線 Worker；下方仍保留最近 24 小時內的離線紀錄供檢查。'
@@ -284,8 +285,8 @@
           ${workerBody}
         </section>
         <section class="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm space-y-3">
-          <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">❌ 最近失敗／等待重試</h5><span class="text-[11px] text-slate-400">${jobs.filter(job=>['failed','retry_wait'].includes(job.status)).length} 筆</span></div>
-          <div class="space-y-2">${failureCards(jobs)}</div>
+          <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">❌ 最近失敗／等待重試</h5><span class="text-[11px] text-slate-400">${problemJobs.length} 筆</span></div>
+          <div class="space-y-2">${failureCards(problemJobs)}</div>
         </section>
         <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
           <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">最近背景工作</h5><span class="text-[11px] text-slate-400">最近 ${jobs.length} 筆</span></div>

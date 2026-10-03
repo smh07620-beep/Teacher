@@ -286,6 +286,7 @@ class MaterialJobRoutesBaseFreeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertEqual(body["jobs"][0]["id"], "job-1")
+        self.assertEqual(body["problemJobs"][0]["id"], "job-1")
         self.assertEqual(body["workers"], [{"workerId": "w1"}])
         self.assertEqual(body["r2Budget"], {"ok": True})
         self.assertEqual(body["pendingJobs"], 1)

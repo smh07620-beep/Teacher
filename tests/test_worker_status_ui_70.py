@@ -39,6 +39,7 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             "processingJobs",
             "retryJobs",
             "failedJobs",
+            "problemJobs",
             "workerVersion",
             "workerSha",
             "workerBranch",

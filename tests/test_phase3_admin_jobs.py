@@ -25,6 +25,7 @@ class Phase3AdminJobsTests(unittest.TestCase):
         ):
             self.assertIn(f'window.{name}', source)
         self.assertIn('/api/material-jobs?limit=20', source)
+        self.assertIn('problemJobs', source)
         self.assertIn('/retry', source)
         self.assertIn('/cancel', source)
         self.assertNotIn('X-Admin-Key', source)

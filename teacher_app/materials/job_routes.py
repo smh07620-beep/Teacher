@@ -105,6 +105,7 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
         ops = runtime.operations_status()
         return jsonify({
             "jobs": worker_repository.list_material_jobs(limit, connection_factory=connection_factory),
+            "problemJobs": worker_repository.list_problem_material_jobs(20, connection_factory=connection_factory),
             "backgroundEnabled": _runtime_bool(runtime.background_enabled),
             "workerEnabled": _runtime_bool(runtime.worker_enabled),
             "queueBackend": "material_jobs",

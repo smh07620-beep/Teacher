@@ -228,7 +228,7 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok) return;
       const recent = [...panel.children].find(node => node.textContent?.includes('最近背景工作'));
-      const failures = buildFailureSection(data.jobs || []);
+      const failures = buildFailureSection(data.problemJobs || data.jobs || []);
       if (recent) panel.insertBefore(failures, recent);
       else panel.appendChild(failures);
     } finally {

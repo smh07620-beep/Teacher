@@ -78,6 +78,7 @@
       const d=await r.json().catch(()=>({}));
       if(!r.ok) throw new Error(d.error||'背景工作讀取失敗');
       const jobs=d.jobs||[];
+      const problemJobs=Array.isArray(d.problemJobs)?d.problemJobs:jobs.filter(j=>['retry_wait','failed'].includes(j.status));
       const workerStatusAvailable=d.workerStatusAvailable!==false;
       const workers=workerStatusAvailable&&Array.isArray(d.workers)?d.workers:[];
       const worker=workers[0];
@@ -93,8 +94,8 @@
       const storageWarning=storageBlocked?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2 font-bold text-rose-800">⚠ Worker 儲存 preflight 未通過（'+escapeHtml(worker.storagePreflightBackend||'storage')+'）。系統不會讓它領取新教材；Queue 與 R2 原始檔會保持安全。'+(worker.storagePreflightError?'<div class="mt-1 font-normal">'+escapeHtml(worker.storagePreflightError)+'</div>':'')+'</div>':'';
       const workerUpdate=worker?.updateAvailable&&!protocolBlocked?'<div class="mt-1 text-amber-800 font-bold">⚠ Worker 有新版待更新；目前協議仍相容，可繼續處理。</div>':'';
       const workerChecked=worker?.lastUpdateCheckAt?`<div class="mt-1">Last update check: ${escapeHtml(worker.lastUpdateCheckAt)}</div>`:'';
-      const recentWorkerErrors=jobs.filter(j=>['retry_wait','failed'].includes(j.status)&&String(j.error||j.detail||'').trim()).length;
-      const recentTerminalFailures=jobs.filter(j=>j.status==='failed').length;
+      const recentWorkerErrors=problemJobs.filter(j=>String(j.error||j.detail||'').trim()).length;
+      const recentTerminalFailures=problemJobs.filter(j=>j.status==='failed').length;
       const summaryClass=workerStatusAvailable?'border-sky-200 bg-sky-50 text-sky-950':'border-rose-200 bg-rose-50 text-rose-800';
       const average=Math.max(0,Number(d.averageCompletedDurationSeconds||0));
       const averageText=average?` · 近期平均完成 ${durationLabel(average)}`:'';
