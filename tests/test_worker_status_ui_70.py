@@ -104,6 +104,10 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             "24 小時",
             "7 天",
             "尚未設定正式 SLO 門檻",
+            "容量判讀",
+            "趨勢異常判讀",
+            "持續惡化",
+            "單次尖峰",
         ):
             self.assertIn(marker, self.source)
         self.assertIn("Date.now()-cached.loadedAt<60000", self.source)
