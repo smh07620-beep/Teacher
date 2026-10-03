@@ -79,8 +79,8 @@ class NotificationPreference0106Tests(unittest.TestCase):
         self.assertIn("查看 Worker 狀態", ui)
         self.assertIn("notificationContext='system'", ui)
         self.assertIn("protectedCategories", service)
-        self.assertIn('CRITICAL_KINDS = {"material_failure", "worker_offline"}', service)
-        self.assertIn('["materialFailure", "workerOffline"]', service)
+        self.assertIn('"operational_incident"', service)\n        self.assertIn('"operational_recovery"', service)
+        self.assertIn('"operationalIncidents"', service)
 
     def test_payload_cannot_select_another_account_or_disable_protected_kind(self):
         source = ROOT.joinpath("teacher_app", "notifications", "preferences.py").read_text(encoding="utf-8")
