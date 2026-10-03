@@ -206,8 +206,34 @@
   }
 
   async function createAdminUserAccount(){
-      const status=document.getElementById('admin-user-status');const payload={username:document.getElementById('admin-user-username')?.value||'',password:document.getElementById('admin-user-password')?.value||'',name:document.getElementById('admin-user-name')?.value||'',empId:document.getElementById('admin-user-empid')?.value||'',role:document.getElementById('admin-user-role')?.value||'student',preferredArea:document.getElementById('admin-user-area')?.value||'internal',preferredGroup:document.getElementById('admin-user-group')?.value||'grpBio',professionalTitle:document.getElementById('admin-user-professional-title')?.value||'',responsibilityTags:adminProfileTags(document.getElementById('admin-user-responsibility-tags')?.value||'')};status.textContent='⏳ 建立帳號中…';
-      const r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),d=await r.json().catch(()=>({}));if(!r.ok){status.textContent='❌ '+(d.error||'建立失敗');return;}['admin-user-username','admin-user-password','admin-user-name','admin-user-empid','admin-user-professional-title','admin-user-responsibility-tags'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});status.textContent=`✅ 已建立 ${d.user.name}（${d.user.username}）`;await renderAdminUserAccounts();
+      const status=document.getElementById('admin-user-status');
+      const mainRole=canonicalUserRole(document.getElementById('admin-user-role')?.value||'student');
+      const roleSource=window.TeacherRoleSigning66;
+      const selectedRoles=typeof roleSource?.getCreateRoles==='function'?roleSource.getCreateRoles():[mainRole];
+      const roles=[...new Set((Array.isArray(selectedRoles)?selectedRoles:[]).map(canonicalUserRole).filter(Boolean))];
+      if(!roles.includes(mainRole))roles.unshift(mainRole);
+      const payload={
+          username:document.getElementById('admin-user-username')?.value||'',
+          password:document.getElementById('admin-user-password')?.value||'',
+          name:document.getElementById('admin-user-name')?.value||'',
+          empId:document.getElementById('admin-user-empid')?.value||'',
+          role:mainRole,
+          roles,
+          preferredArea:document.getElementById('admin-user-area')?.value||'internal',
+          preferredGroup:document.getElementById('admin-user-group')?.value||'grpBio',
+          professionalTitle:document.getElementById('admin-user-professional-title')?.value||'',
+          responsibilityTags:adminProfileTags(document.getElementById('admin-user-responsibility-tags')?.value||'')
+      };
+      if(status)status.textContent='⏳ 建立帳號中…';
+      const r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok){if(status)status.textContent='❌ '+(d.error||'建立失敗');return;}
+      ['admin-user-username','admin-user-password','admin-user-name','admin-user-empid','admin-user-professional-title','admin-user-responsibility-tags'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+      const savedRoles=Array.isArray(d.user?.roles)&&d.user.roles.length?d.user.roles:roles;
+      const successMessage=`✅ 已建立 ${d.user?.name||payload.name}（${d.user?.username||payload.username}）；身分：${savedRoles.map(role=>USER_ROLE_LABELS[role]||role).join('＋')}`;
+      await renderAdminUserAccounts();
+      try{await roleSource?.refresh?.();}catch(e){console.warn('Role manager refresh failed after account creation',e);}
+      if(status)status.textContent=successMessage;
   }
 
   function renderAdminActivitySummary(records){

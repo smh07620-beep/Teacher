@@ -330,30 +330,8 @@ window.TeacherRBAC681Ready = (async function () {
     });
   }
 
-  // Replace the final remaining ADMIN_KEY-era error text in the material list.
-  // The compatibility header is intentionally meaningless; the server uses the
-  // authenticated session and canonical RBAC/scope checks.
-  if (typeof window.fetchAdminMaterials === 'function') {
-    window.fetchAdminMaterials = async function (force = false) {
-      const now = Date.now();
-      if (!force && Array.isArray(adminMaterialsCache.data) && (now - adminMaterialsCache.at) < ADMIN_CACHE_MS) {
-        return adminMaterialsCache.data;
-      }
-      const res = await fetch('/api/slides/admin', {credentials:'same-origin', cache: 'no-store'});
-      const data = await res.json().catch(() => []);
-      if (res.status === 401) {
-        invalidateAdminMaterialsCache();
-        const next = encodeURIComponent(location.pathname + location.search);
-        location.href = `/login?next=${next}`;
-        throw new Error('登入已逾時，請重新登入。');
-      }
-      if (res.status === 403) throw new Error((data && data.error) || '沒有教材管理權限。');
-      if (!res.ok) throw new Error((data && data.error) || '無法取得教材清單');
-      const list = Array.isArray(data) ? data : [];
-      adminMaterialsCache = {data: list, at: Date.now()};
-      return list;
-    };
-  }
+  // Material list fetching is owned by admin-materials.js. RBAC UI must not
+  // replace that global after the async profile request completes.
 
   const observer = new MutationObserver(records => {
     for (const record of records) {

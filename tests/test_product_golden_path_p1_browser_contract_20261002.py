@@ -47,10 +47,21 @@ class ProductGoldenPathP1BrowserContractTests(unittest.TestCase):
         self.assertIn("if(existing)return existing", self.people)
         self.assertIn("ensureAdminUserCreatePanel();", self.people)
 
-    def test_account_creation_keeps_success_feedback_after_list_refresh(self):
-        self.assertIn("const successMessage = `✅ 已建立", self.roles_signing)
-        self.assertIn("if (status) status.textContent = successMessage;", self.roles_signing)
-        self.assertGreaterEqual(self.roles_signing.count("status.textContent = successMessage"), 2)
+    def test_account_creation_has_one_owner_and_keeps_roles_with_profile_metadata(self):
+        start = self.people.index("async function createAdminUserAccount()")
+        end = self.people.index("function renderAdminActivitySummary", start)
+        create = self.people[start:end]
+        self.assertIn("role:mainRole", create)
+        self.assertIn("roles,", create)
+        self.assertIn("professionalTitle:", create)
+        self.assertIn("responsibilityTags:", create)
+        self.assertIn("const successMessage=", create)
+        self.assertIn("window.createAdminUserAccount=createAdminUserAccount;", self.people)
+        self.assertNotIn("window.createAdminUserAccount =", self.roles_signing)
+        self.assertNotIn("__teacher66CreateWrapped", self.roles_signing)
+        self.assertIn("window.TeacherRoleSigning66 = Object.freeze", self.roles_signing)
+        self.assertIn("getCreateRoles", self.roles_signing)
+
 
 
 if __name__ == "__main__":

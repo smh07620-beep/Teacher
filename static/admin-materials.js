@@ -16,14 +16,16 @@
     if (!force && Array.isArray(adminMaterialsCache.data) && (now - adminMaterialsCache.at) < ADMIN_CACHE_MS) {
       return adminMaterialsCache.data;
     }
-    const res = await fetch('/api/slides/admin', {credentials:'same-origin'});
+    const res = await fetch('/api/slides/admin', {credentials:'same-origin', cache:'no-store'});
+    const data = await res.json().catch(() => []);
     if (res.status === 401) {
       window.invalidateAdminMaterialsCache();
-      alert('登入狀態已失效，請重新登入後再試。');
-      return null;
+      const next = encodeURIComponent(location.pathname + location.search);
+      location.href = `/login?next=${next}`;
+      throw new Error('登入已逾時，請重新登入。');
     }
-    const data = await res.json().catch(() => []);
-    if (!res.ok) throw new Error(data.error || '無法取得教材清單');
+    if (res.status === 403) throw new Error((data && data.error) || '沒有教材管理權限。');
+    if (!res.ok) throw new Error((data && data.error) || '無法取得教材清單');
     const list = Array.isArray(data) ? data : [];
     adminMaterialsCache = { data: list, at: Date.now() };
     return list;

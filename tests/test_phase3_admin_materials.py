@@ -28,6 +28,16 @@ class Phase3AdminMaterialsTests(unittest.TestCase):
         self.assertIn('/api/material-search/${encodeURIComponent(m.id)}/status', source)
         self.assertIn('/api/material-search/${encodeURIComponent(id)}/index', source)
 
+    def test_materials_fetch_has_one_canonical_owner(self):
+        materials = ROOT.joinpath('static/admin-materials.js').read_text(encoding='utf-8')
+        rbac = ROOT.joinpath('static/rbac-ui-681.js').read_text(encoding='utf-8')
+        self.assertIn('window.fetchAdminMaterials = async function', materials)
+        self.assertIn("res.status === 401", materials)
+        self.assertIn("location.href = `/login?next=${next}`", materials)
+        self.assertIn("res.status === 403", materials)
+        self.assertNotIn('window.fetchAdminMaterials =', rbac)
+        self.assertIn('Material list fetching is owned by admin-materials.js', rbac)
+
     def test_materials_module_keeps_existing_security_and_rbac_boundary(self):
         source = ROOT.joinpath('static/admin-materials.js').read_text(encoding='utf-8')
         self.assertNotIn('getAdminKey', source)

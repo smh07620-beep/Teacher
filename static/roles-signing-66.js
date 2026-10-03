@@ -59,6 +59,13 @@
     });
   }
 
+  function getCreateRoles() {
+    const primary = canonical(document.getElementById('admin-user-role')?.value || 'student');
+    const roles = checkedRoles('create').map(canonical);
+    if (!roles.includes(primary)) roles.unshift(primary);
+    return [...new Set(roles)];
+  }
+
   function installCreateRoles() {
     const primary = document.getElementById('admin-user-role');
     if (!primary || document.getElementById('role66-create-box')) return;
@@ -90,60 +97,6 @@
     primary.addEventListener('change', syncPrimary);
     syncPrimary();
 
-    if (window.__teacher66CreateWrapped) return;
-    window.__teacher66CreateWrapped = true;
-
-    window.createAdminUserAccount = async function () {
-      const status = document.getElementById('admin-user-status');
-
-      const mainRole = canonical(
-        document.getElementById('admin-user-role')?.value || 'student'
-      );
-
-      const roles = checkedRoles('create');
-      if (!roles.includes(mainRole)) roles.unshift(mainRole);
-
-      const payload = {
-        username: document.getElementById('admin-user-username')?.value || '',
-        password: document.getElementById('admin-user-password')?.value || '',
-        name: document.getElementById('admin-user-name')?.value || '',
-        empId: document.getElementById('admin-user-empid')?.value || '',
-        role: mainRole,
-        roles,
-        preferredArea: document.getElementById('admin-user-area')?.value || 'internal',
-        preferredGroup: document.getElementById('admin-user-group')?.value || 'grpBio'
-      };
-
-      if (status) status.textContent = '⏳ 建立帳號中…';
-
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        if (status) status.textContent = `❌ ${data.error || '建立帳號失敗'}`;
-        return;
-      }
-
-      const successMessage = `✅ 已建立 ${data.user?.name || payload.name}；身分：${(data.user?.roles || roles).map(r => ROLE_LABELS[r] || r).join('＋')}`;
-      if (status) status.textContent = successMessage;
-
-      const password = document.getElementById('admin-user-password');
-      if (password) password.value = '';
-
-      if (typeof renderAdminUserAccounts === 'function') {
-        await renderAdminUserAccounts();
-      }
-
-      await loadRoleManager();
-      if (status) status.textContent = successMessage;
-    };
   }
 
   let cachedUsers = [];
@@ -317,6 +270,11 @@
     installRoleManager();
     await loadRoleManager();
   }
+
+  window.TeacherRoleSigning66 = Object.freeze({
+    getCreateRoles,
+    refresh: loadRoleManager
+  });
 
   window.addEventListener('DOMContentLoaded', () => {
     setTimeout(init, 80);
