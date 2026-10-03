@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import math
 import os
 from collections import Counter
+from pathlib import Path
 from statistics import mean
 from typing import Any, Iterable, Mapping
 
 from teacher_app.common import db as common_db
+from teacher_app.materials.validation import IMAGE_EXT, MEDIA_EXT, PDF_EXT, TEXT_EXT
 from teacher_app.worker import operations as worker_operations
 
 
@@ -614,6 +617,393 @@ def _job_arrival_count(
     return int(dict(row).get("count") or 0) if row else 0, True
 
 
+
+_DOCUMENT_EXT = {
+    ".pptx", ".ppt", ".pdf", ".doc", ".docx", ".xls", ".xlsx",
+    ".odp", ".odt", ".ods", ".txt", ".csv", ".srt", ".vtt",
+}
+_WORKLOAD_LABELS = {
+    "document": "文件 / PDF / Office",
+    "media": "影音",
+    "image": "圖片",
+    "archive": "ZIP / 封裝",
+    "other": "其他",
+}
+
+
+def _json_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        return dict(value)
+    if not value:
+        return {}
+    try:
+        decoded = json.loads(str(value))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return dict(decoded) if isinstance(decoded, Mapping) else {}
+
+
+def _workload_kind(original_name: Any, result: Any = None) -> str:
+    payload = _json_mapping(result)
+    meta = _json_mapping(payload.get("storageMeta"))
+    media_kind = str(meta.get("mediaKind") or "").strip().lower()
+    if media_kind in {"video", "audio"}:
+        return "media"
+    ext = Path(str(original_name or "")).suffix.lower()
+    if ext in MEDIA_EXT:
+        return "media"
+    if ext in IMAGE_EXT:
+        return "image"
+    if ext == ".zip":
+        return "archive"
+    if ext in _DOCUMENT_EXT or ext in PDF_EXT or ext in TEXT_EXT:
+        return "document"
+    return "other"
+
+
+def _size_band(source_bytes: Any) -> str:
+    try:
+        value = max(0, int(source_bytes or 0))
+    except (TypeError, ValueError):
+        value = 0
+    if value < 10 * 1024 * 1024:
+        return "small"
+    if value < 100 * 1024 * 1024:
+        return "medium"
+    return "large"
+
+
+def _workload_rows(
+    *,
+    start: dt.datetime | None = None,
+    end: dt.datetime | None = None,
+    completed_only: bool = False,
+    backlog_only: bool = False,
+) -> tuple[list[dict[str, Any]], bool]:
+    clauses = []
+    values: list[Any] = []
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            if completed_only:
+                clauses.append("status='completed'")
+                if start is not None:
+                    clauses.append(f"finished_at >= {ph}")
+                    values.append(start.isoformat())
+                if end is not None:
+                    clauses.append(f"finished_at < {ph}")
+                    values.append(end.isoformat())
+            elif backlog_only:
+                clauses.append("status IN ('queued','retry_wait','processing')")
+            else:
+                if start is not None:
+                    clauses.append(f"created_at >= {ph}")
+                    values.append(start.isoformat())
+                if end is not None:
+                    clauses.append(f"created_at < {ph}")
+                    values.append(end.isoformat())
+            where = " WHERE " + " AND ".join(clauses) if clauses else ""
+            rows = conn.execute(
+                "SELECT id,status,created_at,started_at,finished_at,"
+                "original_name,source_bytes,result FROM material_jobs"
+                + where,
+                tuple(values),
+            ).fetchall()
+    except Exception as exc:
+        if _missing_material_job_history_schema(exc):
+            return [], False
+        text = str(exc or "").lower()
+        if (
+            "original_name" in text
+            or "source_bytes" in text
+            or "result" in text
+        ) and ("no such column" in text or "does not exist" in text):
+            return [], False
+        raise
+    return [dict(row) for row in rows], True
+
+
+def _completed_workload_metrics(row: Mapping[str, Any]) -> dict[str, Any] | None:
+    started = _parse_time(row.get("started_at"))
+    finished = _parse_time(row.get("finished_at"))
+    if not started or not finished:
+        return None
+    processing_seconds = (finished - started).total_seconds()
+    if processing_seconds < 0 or processing_seconds > 7 * 24 * 3600:
+        return None
+    result = _json_mapping(row.get("result"))
+    meta = _json_mapping(result.get("storageMeta"))
+    try:
+        pages = max(0, int(result.get("pageCount") or 0))
+    except (TypeError, ValueError):
+        pages = 0
+    try:
+        media_seconds = max(0.0, float(meta.get("durationSeconds") or 0))
+    except (TypeError, ValueError):
+        media_seconds = 0.0
+    try:
+        source_bytes = max(0, int(row.get("source_bytes") or 0))
+    except (TypeError, ValueError):
+        source_bytes = 0
+    return {
+        "kind": _workload_kind(row.get("original_name"), result),
+        "processingSeconds": float(processing_seconds),
+        "sourceBytes": source_bytes,
+        "sizeBand": _size_band(source_bytes),
+        "pageCount": pages,
+        "mediaDurationSeconds": media_seconds,
+        "transcodeMode": str(meta.get("transcodeMode") or ""),
+    }
+
+
+def build_workload_calibration(
+    *,
+    now: dt.datetime | None = None,
+    window_hours: int | None = None,
+    current_active_workers: int | None = None,
+) -> dict[str, Any]:
+    """Calibrate service time by material workload instead of equal-job weighting."""
+    current = _utc(now)
+    hours = int(
+        window_hours
+        if window_hours is not None
+        else _int_env("OPERATIONS_FORECAST_WINDOW_HOURS", 6, 2, 24)
+    )
+    hours = max(2, min(24, hours))
+    min_per_kind = _int_env(
+        "OPERATIONS_FORECAST_MIN_WORKLOAD_COMPLETED_JOBS",
+        2,
+        2,
+        20,
+    )
+    start = current - dt.timedelta(hours=hours)
+    completed_rows, completed_available = _workload_rows(
+        start=start,
+        end=current,
+        completed_only=True,
+    )
+    arrival_rows, arrivals_available = _workload_rows(
+        start=start,
+        end=current,
+    )
+    backlog_rows, backlog_available = _workload_rows(backlog_only=True)
+    if not (completed_available and arrivals_available and backlog_available):
+        return {
+            "available": False,
+            "fullyCalibrated": False,
+            "windowHours": hours,
+            "profiles": [],
+            "limitations": ["目前 schema 尚無完整 workload metadata，保留全體 Job Forecast。"],
+        }
+
+    completed_by_kind: dict[str, list[dict[str, Any]]] = {}
+    for row in completed_rows:
+        metric = _completed_workload_metrics(row)
+        if not metric:
+            continue
+        completed_by_kind.setdefault(metric["kind"], []).append(metric)
+
+    arrivals = Counter(
+        _workload_kind(row.get("original_name"), row.get("result"))
+        for row in arrival_rows
+    )
+    backlog = Counter(
+        _workload_kind(row.get("original_name"), row.get("result"))
+        for row in backlog_rows
+    )
+    backlog_bytes = Counter()
+    for row in backlog_rows:
+        kind = _workload_kind(row.get("original_name"), row.get("result"))
+        try:
+            backlog_bytes[kind] += max(0, int(row.get("source_bytes") or 0))
+        except (TypeError, ValueError):
+            pass
+
+    profiles = []
+    workload_nominal_demand = 0.0
+    workload_conservative_demand = 0.0
+    backlog_nominal_hours = 0.0
+    backlog_conservative_hours = 0.0
+    uncalibrated_arrivals = 0
+    uncalibrated_backlog = 0
+
+    kinds = sorted(
+        set(completed_by_kind) | set(arrivals) | set(backlog),
+        key=lambda kind: (
+            {"media": 0, "document": 1, "image": 2, "archive": 3, "other": 4}.get(kind, 9),
+            kind,
+        ),
+    )
+    for kind in kinds:
+        samples = completed_by_kind.get(kind, [])
+        durations = [row["processingSeconds"] for row in samples]
+        source_sizes = [row["sourceBytes"] for row in samples if row["sourceBytes"] > 0]
+        nominal = _percentile(durations, 0.5) if durations else 0.0
+        conservative = _percentile(durations, 0.95) if durations else 0.0
+        calibrated = len(durations) >= min_per_kind and nominal > 0 and conservative > 0
+        arrival_count = int(arrivals.get(kind) or 0)
+        arrival_rate = arrival_count / hours
+        backlog_count = int(backlog.get(kind) or 0)
+
+        if calibrated:
+            workload_nominal_demand += arrival_rate * nominal / 3600
+            workload_conservative_demand += arrival_rate * conservative / 3600
+            backlog_nominal_hours += backlog_count * nominal / 3600
+            backlog_conservative_hours += backlog_count * conservative / 3600
+        else:
+            uncalibrated_arrivals += arrival_count
+            uncalibrated_backlog += backlog_count
+
+        page_rows = [row for row in samples if row["pageCount"] > 0]
+        media_rows = [row for row in samples if row["mediaDurationSeconds"] > 0]
+        seconds_per_page = [
+            row["processingSeconds"] / row["pageCount"]
+            for row in page_rows
+            if row["pageCount"] > 0
+        ]
+        realtime_factors = [
+            row["processingSeconds"] / row["mediaDurationSeconds"]
+            for row in media_rows
+            if row["mediaDurationSeconds"] > 0
+        ]
+        size_bands = []
+        for band in ("small", "medium", "large"):
+            band_durations = [
+                row["processingSeconds"]
+                for row in samples
+                if row["sizeBand"] == band
+            ]
+            if not band_durations:
+                continue
+            size_bands.append({
+                "band": band,
+                "samples": len(band_durations),
+                "medianDurationSeconds": round(
+                    _percentile(band_durations, 0.5), 1
+                ),
+                "p95DurationSeconds": round(
+                    _percentile(band_durations, 0.95), 1
+                ),
+            })
+
+        profiles.append({
+            "kind": kind,
+            "label": _WORKLOAD_LABELS.get(kind, kind),
+            "calibrated": calibrated,
+            "completedSamples": len(durations),
+            "arrivalJobs": arrival_count,
+            "arrivalPerHour": round(arrival_rate, 2),
+            "backlogJobs": backlog_count,
+            "backlogBytes": int(backlog_bytes.get(kind) or 0),
+            "medianDurationSeconds": round(nominal, 1) if nominal else 0.0,
+            "p95DurationSeconds": round(conservative, 1) if conservative else 0.0,
+            "medianSourceBytes": round(_percentile(source_sizes, 0.5))
+            if source_sizes
+            else 0,
+            "pageMetadataCoverage": round(
+                len(page_rows) / len(samples), 4
+            ) if samples else 0.0,
+            "medianPageCount": round(
+                _percentile([row["pageCount"] for row in page_rows], 0.5), 1
+            ) if page_rows else 0.0,
+            "medianSecondsPerPage": round(
+                _percentile(seconds_per_page, 0.5), 2
+            ) if seconds_per_page else 0.0,
+            "mediaMetadataCoverage": round(
+                len(media_rows) / len(samples), 4
+            ) if samples else 0.0,
+            "medianMediaDurationSeconds": round(
+                _percentile(
+                    [row["mediaDurationSeconds"] for row in media_rows],
+                    0.5,
+                ),
+                1,
+            ) if media_rows else 0.0,
+            "medianProcessingToMediaRatio": round(
+                _percentile(realtime_factors, 0.5), 3
+            ) if realtime_factors else 0.0,
+            "sizeBands": size_bands,
+        })
+
+    active_workers = max(0, int(current_active_workers or 0))
+    fully_calibrated = (
+        bool(profiles)
+        and uncalibrated_arrivals == 0
+        and uncalibrated_backlog == 0
+        and any(profile["calibrated"] for profile in profiles)
+    )
+
+    def mixed_scenario(workers: int, conservative: bool) -> dict[str, Any]:
+        if not fully_calibrated or workers <= 0:
+            return {
+                "workers": workers,
+                "state": "unavailable",
+                "utilization": None,
+                "netWorkerHoursPerHour": None,
+                "backlogServiceHours": None,
+                "clearEtaSeconds": None,
+            }
+        demand = (
+            workload_conservative_demand
+            if conservative
+            else workload_nominal_demand
+        )
+        backlog_hours = (
+            backlog_conservative_hours
+            if conservative
+            else backlog_nominal_hours
+        )
+        net = workers - demand
+        eta = (
+            backlog_hours / net * 3600
+            if backlog_hours > 0 and net > 0
+            else 0
+            if backlog_hours == 0
+            else None
+        )
+        return {
+            "workers": workers,
+            "state": "clearing" if net > 0 else "growing",
+            "utilization": round(demand / workers, 4) if workers else None,
+            "netWorkerHoursPerHour": round(net, 3),
+            "backlogServiceHours": round(backlog_hours, 3),
+            "clearEtaSeconds": round(eta) if eta is not None else None,
+        }
+
+    limitations = []
+    if uncalibrated_arrivals:
+        limitations.append(
+            f"最近到達工作仍有 {uncalibrated_arrivals} 筆屬於樣本不足的 workload 類型。"
+        )
+    if uncalibrated_backlog:
+        limitations.append(
+            f"目前 backlog 仍有 {uncalibrated_backlog} 筆 workload 尚未完成校準。"
+        )
+    if not profiles:
+        limitations.append("目前沒有可用的 workload 完成樣本。")
+
+    return {
+        "available": bool(profiles),
+        "fullyCalibrated": fully_calibrated,
+        "windowHours": hours,
+        "minimumCompletedPerKind": min_per_kind,
+        "profiles": profiles,
+        "uncalibratedArrivalJobs": uncalibrated_arrivals,
+        "uncalibratedBacklogJobs": uncalibrated_backlog,
+        "nominalWorkerDemand": round(workload_nominal_demand, 3),
+        "conservativeWorkerDemand": round(workload_conservative_demand, 3),
+        "current": {
+            "nominal": mixed_scenario(active_workers, False),
+            "conservative": mixed_scenario(active_workers, True),
+        },
+        "plusOneWorker": {
+            "nominal": mixed_scenario(active_workers + 1, False),
+            "conservative": mixed_scenario(active_workers + 1, True),
+        },
+        "limitations": limitations,
+    }
+
+
 def _open_capacity_blockers() -> list[dict[str, str]]:
     blocking_codes = {
         "WORKER_OFFLINE",
@@ -773,6 +1163,12 @@ def build_capacity_forecast(
     plus_one_nominal = scenario(current_active + 1, nominal_per_worker)
     plus_one_conservative = scenario(current_active + 1, conservative_per_worker)
 
+    workload_calibration = build_workload_calibration(
+        now=current,
+        window_hours=window_hours,
+        current_active_workers=current_active,
+    )
+
     decision_state = "insufficient_data"
     decision_label = "資料不足，先累積真實吞吐量"
     decision_detail = "目前不應根據不完整樣本決定是否增加 Worker。"
@@ -876,6 +1272,7 @@ def build_capacity_forecast(
             "nominal": plus_one_nominal,
             "conservative": plus_one_conservative,
         },
+        "workloadCalibration": workload_calibration,
         "decision": {
             "state": decision_state,
             "label": decision_label,
@@ -1129,6 +1526,7 @@ def build_operational_dashboard(
 __all__ = [
     "analyze_operational_trends",
     "build_capacity_forecast",
+    "build_workload_calibration",
     "build_operational_dashboard",
     "record_operational_sample",
     "trend_incident_candidates",
