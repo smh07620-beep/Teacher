@@ -40,6 +40,26 @@ function Write-TeacherWorkerEvent {
   else { Write-Warning $fallback }
 }
 
+function Acquire-TeacherWorkerSupervisorLock {
+  $lockPath = Join-Path $root ".worker-supervisor.lock"
+  try {
+    # Keep this FileStream referenced for the lifetime of the supervisor.
+    # FileShare.None makes a second launcher on the same checkout fail closed
+    # without killing or disturbing the already-running Worker.
+    $script:TeacherWorkerSupervisorLock = [System.IO.File]::Open(
+      $lockPath,
+      [System.IO.FileMode]::OpenOrCreate,
+      [System.IO.FileAccess]::ReadWrite,
+      [System.IO.FileShare]::None
+    )
+    return $true
+  } catch [System.IO.IOException] {
+    Write-TeacherWorkerEvent -EntryType "Information" -EventId 1020 -Message "A Teacher material Worker supervisor is already running; duplicate launch was ignored."
+    Write-Host "Teacher material Worker is already running; duplicate launch ignored."
+    return $false
+  }
+}
+
 function Load-LocalWorkerEnvironment {
   $envFile = Join-Path $root ".local-worker.env"
   if (-not (Test-Path $envFile -PathType Leaf)) { return }
@@ -124,6 +144,9 @@ function Ensure-WorkerEnvironment {
   return $python
 }
 
+if (-not (Acquire-TeacherWorkerSupervisorLock)) {
+  exit 0
+}
 Load-LocalWorkerEnvironment
 $stableWorkerId = Ensure-StableWorkerId
 Add-MegaCmdPath
