@@ -74,6 +74,69 @@ class WorkerStatusObservabilityTests(unittest.TestCase):
         self.assertEqual(result["workerStatusError"], "")
         self.assertEqual(result["workers"], [])
 
+    def test_job_observability_distinguishes_long_running_from_stalled(self):
+        now = __import__("datetime").datetime(
+            2026, 10, 3, 12, 0, tzinfo=__import__("datetime").timezone.utc
+        )
+        healthy = operations.material_job_observability(
+            {
+                "status": "processing",
+                "startedAt": "2026-10-03T10:00:00+00:00",
+                "updatedAt": "2026-10-03T11:59:45+00:00",
+                "workerLastSeen": "2026-10-03T11:59:45+00:00",
+            },
+            now=now,
+            stale_seconds=1800,
+            heartbeat_warning_seconds=120,
+        )
+        self.assertEqual(healthy["observabilityState"], "active")
+        self.assertFalse(healthy["stalled"])
+        self.assertEqual(healthy["elapsedSeconds"], 7200)
+        self.assertEqual(healthy["heartbeatAgeSeconds"], 15)
+
+        delayed = operations.material_job_observability(
+            {
+                "status": "processing",
+                "startedAt": "2026-10-03T11:00:00+00:00",
+                "workerLastSeen": "2026-10-03T11:55:00+00:00",
+            },
+            now=now,
+            stale_seconds=1800,
+            heartbeat_warning_seconds=120,
+        )
+        self.assertEqual(delayed["observabilityState"], "heartbeat_delayed")
+        self.assertTrue(delayed["heartbeatDelayed"])
+        self.assertFalse(delayed["stalled"])
+
+        stalled = operations.material_job_observability(
+            {
+                "status": "processing",
+                "startedAt": "2026-10-03T10:00:00+00:00",
+                "workerLastSeen": "2026-10-03T11:20:00+00:00",
+            },
+            now=now,
+            stale_seconds=1800,
+            heartbeat_warning_seconds=120,
+        )
+        self.assertEqual(stalled["observabilityState"], "stalled")
+        self.assertTrue(stalled["stalled"])
+        self.assertEqual(stalled["staleThresholdSeconds"], 1800)
+
+    def test_retry_observability_exposes_next_retry_countdown(self):
+        now = __import__("datetime").datetime(
+            2026, 10, 3, 12, 0, tzinfo=__import__("datetime").timezone.utc
+        )
+        result = operations.material_job_observability(
+            {
+                "status": "retry_wait",
+                "createdAt": "2026-10-03T11:50:00+00:00",
+                "availableAt": "2026-10-03T12:02:00+00:00",
+            },
+            now=now,
+        )
+        self.assertEqual(result["observabilityState"], "retry_wait")
+        self.assertEqual(result["retryInSeconds"], 120)
+
     def test_status_api_and_frontends_expose_unavailable_state(self):
         routes = ROOT.joinpath("teacher_app", "materials", "job_routes.py").read_text(encoding="utf-8")
         worker_ui = ROOT.joinpath("static", "worker-status-70.js").read_text(encoding="utf-8")
