@@ -153,6 +153,36 @@ test('teacher persona full-page workspace never collapses to a blank surface', a
   expect(pageErrors).toEqual([]);
 });
 
+test('dual-role header stays stable and Worker navigation leaves teacher persona cleanly', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await open(page, '/system?area=internal&group=grpBio&module=materials&admin=1&workspace=course-materials&persona=teacher');
+  await page.waitForFunction(() => Boolean(window.TeacherRBAC681Ready));
+  await page.evaluate(() => window.TeacherRBAC681Ready);
+  await expect(page.locator('#admin-modal')).toBeVisible({ timeout: 10000 });
+
+  const switcher = page.locator('#teacher-persona-switch-1014');
+  await expect(switcher).toBeVisible();
+  await expect(switcher.getByRole('button', { name: /系統管理/ })).toHaveCount(1);
+  await expect(switcher.getByRole('button', { name: /教師工作區/ })).toHaveCount(1);
+
+  await page.evaluate(async () => {
+    await window.switchAdminWorkspace?.('assessment', true);
+  });
+  await expect(page.locator('#admin-section-quiz')).toBeVisible({ timeout: 10000 });
+  await expect(switcher.getByRole('button', { name: /系統管理/ })).toHaveCount(1);
+
+  await Promise.all([
+    page.waitForURL(url => url.searchParams.get('workspace') === 'worker' && url.searchParams.get('persona') === 'system', { timeout: 15000 }),
+    page.evaluate(() => window.switchAdminWorkspace?.('worker', true)),
+  ]);
+
+  await expect(page.locator('#admin-section-worker')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#admin-section-quiz')).toBeHidden();
+  await expect(page.locator('#admin-workspace-title')).toContainText('Worker');
+  await expect(page.locator('#teacher-persona-switch-1014').getByRole('button', { name: /系統管理/ })).toHaveCount(1);
+  await assertNoHorizontalOverflow(page);
+});
+
 test('teacher workspace renders Worker status without layout overflow', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await open(page, '/system?area=internal&group=grpBio&module=materials');
