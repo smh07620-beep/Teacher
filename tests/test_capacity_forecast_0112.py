@@ -55,6 +55,9 @@ class CapacityForecast0112Tests(unittest.TestCase):
         created,
         status="queued",
         duration_seconds=None,
+        original_name="material.pdf",
+        source_bytes=1024 * 1024,
+        result=None,
     ):
         started = ""
         finished = ""
@@ -72,8 +75,8 @@ class CapacityForecast0112Tests(unittest.TestCase):
                 """
                 INSERT INTO material_jobs(
                     id,status,priority,created_at,updated_at,available_at,
-                    started_at,finished_at,staging_path
-                ) VALUES(?,?,?,?,?,?,?,?,?)
+                    started_at,finished_at,staging_path,original_name,source_bytes,result
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     job_id,
@@ -85,6 +88,9 @@ class CapacityForecast0112Tests(unittest.TestCase):
                     started,
                     finished,
                     f"/tmp/{job_id}",
+                    original_name,
+                    source_bytes,
+                    __import__("json").dumps(result or {}, ensure_ascii=False),
                 ),
             )
         finally:
@@ -243,6 +249,121 @@ class CapacityForecast0112Tests(unittest.TestCase):
         self.assertEqual(result["decision"]["state"], "insufficient_data")
         self.assertEqual(result["current"]["nominal"]["state"], "unavailable")
         self.assertTrue(result["limitations"])
+
+    def test_workload_calibration_separates_documents_and_media_cost(self):
+        self.seed_six_fresh_snapshots(pending=2, active=1)
+
+        for index in range(2):
+            self.insert_job(
+                f"doc-{index}",
+                created=NOW - dt.timedelta(minutes=100 - index * 10),
+                duration_seconds=60,
+                original_name=f"doc-{index}.pdf",
+                source_bytes=5 * 1024 * 1024,
+                result={"pageCount": 10, "storageMeta": {}},
+            )
+            self.insert_job(
+                f"media-{index}",
+                created=NOW - dt.timedelta(minutes=80 - index * 10),
+                duration_seconds=1800,
+                original_name=f"media-{index}.mp4",
+                source_bytes=200 * 1024 * 1024,
+                result={
+                    "pageCount": 0,
+                    "storageMeta": {
+                        "mediaKind": "video",
+                        "durationSeconds": 3600,
+                        "transcodeMode": "transcode",
+                    },
+                },
+            )
+
+        with patch.dict(os.environ, {
+            **FORECAST_ENV,
+            "OPERATIONS_FORECAST_MIN_WORKLOAD_COMPLETED_JOBS": "2",
+        }, clear=False):
+            workload = history.build_workload_calibration(
+                now=NOW,
+                window_hours=2,
+                current_active_workers=1,
+            )
+
+        self.assertTrue(workload["available"])
+        self.assertTrue(workload["fullyCalibrated"])
+        profiles = {row["kind"]: row for row in workload["profiles"]}
+        self.assertEqual(profiles["document"]["medianDurationSeconds"], 60.0)
+        self.assertEqual(profiles["document"]["medianPageCount"], 10.0)
+        self.assertEqual(profiles["document"]["medianSecondsPerPage"], 6.0)
+        self.assertEqual(profiles["media"]["medianDurationSeconds"], 1800.0)
+        self.assertEqual(profiles["media"]["medianMediaDurationSeconds"], 3600.0)
+        self.assertEqual(profiles["media"]["medianProcessingToMediaRatio"], 0.5)
+        self.assertGreater(
+            profiles["media"]["medianDurationSeconds"],
+            profiles["document"]["medianDurationSeconds"] * 20,
+        )
+        self.assertGreater(workload["conservativeWorkerDemand"], 0)
+
+    def test_uncalibrated_media_backlog_disables_mixed_workload_eta(self):
+        self.seed_six_fresh_snapshots(pending=2, active=1)
+        for index in range(2):
+            self.insert_job(
+                f"doc-{index}",
+                created=NOW - dt.timedelta(minutes=90 - index * 10),
+                duration_seconds=60,
+                original_name=f"doc-{index}.pdf",
+                result={"pageCount": 10},
+            )
+        self.insert_job(
+            "queued-video",
+            created=NOW - dt.timedelta(minutes=5),
+            original_name="long-video.mp4",
+            source_bytes=500 * 1024 * 1024,
+        )
+
+        with patch.dict(os.environ, {
+            **FORECAST_ENV,
+            "OPERATIONS_FORECAST_MIN_WORKLOAD_COMPLETED_JOBS": "2",
+        }, clear=False):
+            workload = history.build_workload_calibration(
+                now=NOW,
+                window_hours=2,
+                current_active_workers=1,
+            )
+
+        self.assertFalse(workload["fullyCalibrated"])
+        self.assertEqual(workload["uncalibratedBacklogJobs"], 1)
+        self.assertEqual(workload["current"]["nominal"]["state"], "unavailable")
+        media = next(row for row in workload["profiles"] if row["kind"] == "media")
+        self.assertFalse(media["calibrated"])
+        self.assertEqual(media["backlogJobs"], 1)
+
+    def test_capacity_forecast_embeds_workload_profiles(self):
+        self.seed_six_fresh_snapshots(pending=1, active=1)
+        for index in range(2):
+            self.insert_job(
+                f"doc-{index}",
+                created=NOW - dt.timedelta(minutes=80 - index * 10),
+                duration_seconds=120,
+                original_name=f"slides-{index}.pptx",
+                source_bytes=15 * 1024 * 1024,
+                result={"pageCount": 20, "storageMeta": {}},
+            )
+        self.insert_job(
+            "queued-doc",
+            created=NOW - dt.timedelta(minutes=5),
+            original_name="new.pdf",
+        )
+        with patch.dict(os.environ, {
+            **FORECAST_ENV,
+            "OPERATIONS_FORECAST_MIN_COMPLETED_JOBS": "2",
+            "OPERATIONS_FORECAST_MIN_WORKLOAD_COMPLETED_JOBS": "2",
+        }, clear=False):
+            forecast = history.build_capacity_forecast(now=NOW)
+        self.assertIn("workloadCalibration", forecast)
+        profile = forecast["workloadCalibration"]["profiles"][0]
+        self.assertEqual(profile["kind"], "document")
+        self.assertTrue(profile["calibrated"])
+        self.assertTrue(profile["sizeBands"])
 
     def test_dashboard_includes_capacity_forecast_without_new_migration(self):
         self.seed_six_fresh_snapshots(pending=2, active=1)
