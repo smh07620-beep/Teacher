@@ -27,8 +27,9 @@ class FinalWholeRequestAuditTests(unittest.TestCase):
         matrix = ROOT.joinpath("RC_FEATURE_UI_COVERAGE_MATRIX.md").read_text(encoding="utf-8")
         architecture = ROOT.joinpath("ARCHITECTURE.md").read_text(encoding="utf-8")
         self.assertFalse(ROOT.joinpath("static", "exam-integrity.js").exists())
-        self.assertIn("`static/system-exam.js`", matrix)
-        self.assertNotIn("`static/exam-integrity.js`", matrix)
+        self.assertIn("`teacher_app.exams`, `static/system-exam.js`", matrix)
+        self.assertNotIn("`teacher_app.exams`, `static/exam-integrity.js`", matrix)
+        self.assertIn("retired browser `static/exam-integrity.js` has been removed", matrix)
         self.assertIn("retired no-op `static/exam-integrity.js`", architecture)
 
     def test_no_unreferenced_static_javascript_assets_remain(self):
