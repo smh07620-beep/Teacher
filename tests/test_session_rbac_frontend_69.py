@@ -27,9 +27,11 @@ class SessionRbacFrontend69Tests(unittest.TestCase):
         self.assertNotIn("X-Admin-Key", source)
 
     def test_role_material_list_no_longer_sends_fake_header(self):
-        source = self.source("rbac-ui-681.js")
+        source = self.source("admin-materials.js")
+        rbac = self.source("rbac-ui-681.js")
         self.assertIn("credentials:'same-origin'", source)
         self.assertNotIn("'X-Admin-Key': 'rbac-session'", source)
+        self.assertNotIn("window.fetchAdminMaterials =", rbac)
 
     def test_sensitive_bridge_uses_session_credentials_and_retries_428(self):
         source = self.source("sensitive-elevation-69.js")

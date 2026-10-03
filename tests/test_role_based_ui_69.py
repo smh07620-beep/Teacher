@@ -9,6 +9,7 @@ class RoleBasedWorkspace69Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = ROOT.joinpath('static', 'rbac-ui-681.js').read_text(encoding='utf-8')
+        cls.materials = ROOT.joinpath('static', 'admin-materials.js').read_text(encoding='utf-8')
 
     def test_students_do_not_get_management_entry(self):
         self.assertIn("if (!workspaceAccess)", self.source)
@@ -47,12 +48,14 @@ class RoleBasedWorkspace69Tests(unittest.TestCase):
         self.assertIn("button.classList.toggle('hidden', !allowed)", self.source)
 
     def test_material_session_expiry_no_longer_mentions_admin_key(self):
-        self.assertIn("登入已逾時，請重新登入", self.source)
-        self.assertIn("沒有教材管理權限", self.source)
-        self.assertIn("credentials:'same-origin'", self.source)
+        self.assertIn("登入已逾時，請重新登入", self.materials)
+        self.assertIn("沒有教材管理權限", self.materials)
+        self.assertIn("credentials:'same-origin'", self.materials)
         self.assertNotIn("'X-Admin-Key': 'rbac-session'", self.source)
-        self.assertNotIn("管理者金鑰錯誤", self.source)
-        self.assertNotIn("sessionStorage.removeItem('admin_key'", self.source)
+        self.assertNotIn("'X-Admin-Key': 'rbac-session'", self.materials)
+        self.assertNotIn("管理者金鑰錯誤", self.materials)
+        self.assertNotIn("sessionStorage.removeItem('admin_key'", self.materials)
+        self.assertNotIn("window.fetchAdminMaterials =", self.source)
 
     def test_publish_and_review_actions_follow_capabilities(self):
         self.assertIn("if (!has('exam.publish'))", self.source)
