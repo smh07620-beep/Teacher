@@ -2,10 +2,87 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
+import os
 from typing import Any, Iterable, Mapping
 
 from teacher_app.common import db as common_db
 from teacher_app.worker import operations as worker_operations
+
+
+LOGGER = logging.getLogger(__name__)
+_AI_QUEUE_SPECS = (
+    ("question", "ai_question_jobs", "AI 出題", "AI_QUESTION_FAILURE_BURST"),
+    ("script", "media_script_jobs", "AI 教材／講稿", "AI_SCRIPT_FAILURE_BURST"),
+    ("audio", "media_audio_jobs", "AI 語音", "AI_AUDIO_FAILURE_BURST"),
+    ("subtitle", "media_subtitle_jobs", "AI 字幕", "AI_SUBTITLE_FAILURE_BURST"),
+    ("presentation", "ai_presentation_jobs", "AI 投影片", "AI_PRESENTATION_FAILURE_BURST"),
+    ("video", "ai_video_jobs", "AI 影片", "AI_VIDEO_FAILURE_BURST"),
+)
+
+
+def _int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def _missing_relation(exc: BaseException) -> bool:
+    text = str(exc or "").lower()
+    return "no such table" in text or ("relation" in text and "does not exist" in text)
+
+
+def _ai_job_incident_candidates() -> list[dict[str, Any]]:
+    """Project sustained AI queue failures without exposing provider error text."""
+    threshold = _int_env("AI_INCIDENT_CONSECUTIVE_FAILURES", 2, 2, 10)
+    sample_limit = max(6, threshold + 2)
+    candidates: list[dict[str, Any]] = []
+    for queue_key, table, label, error_code in _AI_QUEUE_SPECS:
+        try:
+            with common_db.read_connection() as (conn, kind):
+                ph = common_db.placeholder(kind)
+                rows = conn.execute(
+                    f"SELECT id,status,updated_at FROM {table} "
+                    f"WHERE status IN ({ph},{ph}) "
+                    f"ORDER BY updated_at DESC,id DESC LIMIT {ph}",
+                    ("failed", "completed", sample_limit),
+                ).fetchall()
+        except Exception as exc:
+            if _missing_relation(exc):
+                # Mixed-version fixtures may not have every optional AI queue yet.
+                continue
+            LOGGER.warning(
+                "operational incident AI projection failed queue=%s error_type=%s",
+                queue_key,
+                type(exc).__name__,
+            )
+            raise
+
+        consecutive_failures = 0
+        for row in rows:
+            status = str(dict(row).get("status") or "")
+            if status == "completed":
+                break
+            if status == "failed":
+                consecutive_failures += 1
+            else:
+                break
+        if consecutive_failures < threshold:
+            continue
+        candidates.append({
+            "incidentKey": f"ai_queue_failure:{queue_key}",
+            "incidentType": "ai_queue_failure",
+            "category": "ai",
+            "severity": "critical" if consecutive_failures >= threshold + 1 else "warning",
+            "title": f"{label}背景工作連續失敗",
+            "detail": f"最近已連續 {consecutive_failures} 筆{label}背景工作失敗。",
+            "action": "查看 AI Worker、provider 額度／可用性與工作技術狀態；修復後可使用原工作安全重試。",
+            "errorCode": error_code,
+            "resourceId": queue_key,
+        })
+    return candidates
 
 
 def _now(value: dt.datetime | None = None) -> dt.datetime:
@@ -64,7 +141,11 @@ def sync_operational_incidents(
     current = _now(now)
     stamp = current.isoformat()
     explicit_candidates = candidates is not None
-    raw_candidates = list(candidates) if explicit_candidates else worker_operations.operational_incident_candidates(now=current)
+    if explicit_candidates:
+        raw_candidates = list(candidates)
+    else:
+        raw_candidates = worker_operations.operational_incident_candidates(now=current)
+        raw_candidates.extend(_ai_job_incident_candidates())
     confirmed_worker_recoveries = (
         set()
         if explicit_candidates
@@ -84,9 +165,13 @@ def sync_operational_incidents(
         ph = common_db.placeholder(kind)
         try:
             rows = conn.execute("SELECT * FROM operational_incidents").fetchall()
-        except Exception:
+        except Exception as exc:
             # Mixed-version safety: production requires 0108, but isolated old
             # fixtures must not create schema at runtime.
+            LOGGER.warning(
+                "operational incident persistence unavailable error_type=%s",
+                type(exc).__name__,
+            )
             return {"opened": [], "reopened": [], "resolved": [], "active": []}
         existing = {
             str(dict(row).get("incident_key") or ""): dict(row)
@@ -195,9 +280,14 @@ def list_active_incidents() -> list[dict[str, Any]]:
         with common_db.read_connection() as (conn, _kind):
             rows = conn.execute(
                 "SELECT * FROM operational_incidents WHERE status='open' "
-                "ORDER BY severity DESC,last_seen_at DESC"
+                "ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,"
+                "last_seen_at DESC"
             ).fetchall()
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning(
+            "operational incident read failed view=active error_type=%s",
+            type(exc).__name__,
+        )
         return []
     return [incident_dict(dict(row)) for row in rows]
 
@@ -215,10 +305,16 @@ def list_recent_incidents(
             rows = conn.execute(
                 f"SELECT * FROM operational_incidents "
                 f"WHERE status='open' OR (status='resolved' AND resolved_at>={ph}) "
-                f"ORDER BY CASE WHEN status='open' THEN 0 ELSE 1 END,severity DESC,last_seen_at DESC",
+                f"ORDER BY CASE WHEN status='open' THEN 0 ELSE 1 END,"
+                f"CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,"
+                f"last_seen_at DESC",
                 (cutoff,),
             ).fetchall()
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning(
+            "operational incident read failed view=recent error_type=%s",
+            type(exc).__name__,
+        )
         return []
     return [incident_dict(dict(row)) for row in rows]
 
