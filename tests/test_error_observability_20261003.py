@@ -1,6 +1,8 @@
 import unittest
 from pathlib import Path
 
+from teacher_app.worker import error_observability
+
 
 ROOT = Path(__file__).parents[1]
 
@@ -32,6 +34,38 @@ class ErrorObservability20261003Tests(unittest.TestCase):
 
         for source in (r2, reminders, pgy, materials, scope_filter):
             self.assertIn("error_type=%s", source)
+
+
+    def test_material_error_taxonomy_classifies_common_worker_failures(self):
+        cases = (
+            ("Temporary failure in name resolution", "下載原始檔", "DNS_RESOLUTION"),
+            ("LibreOffice conversion failed", "轉檔處理", "LIBREOFFICE_CONVERSION"),
+            ("ffmpeg encoder failed", "轉檔處理", "FFMPEG_CONVERSION"),
+            ("Cloudflare R2 AccessDenied", "正式發布", "R2_STORAGE"),
+            ("psycopg database connection failed", "完成確認", "DATABASE"),
+            ("Worker 下載檔案 SHA256 不符。", "驗證教材", "SOURCE_INTEGRITY"),
+        )
+        for message, stage, expected in cases:
+            with self.subTest(expected=expected):
+                result = error_observability.classify_material_error(message, stage=stage, status="failed")
+                self.assertEqual(result["errorCode"], expected)
+                self.assertTrue(result["errorMessage"])
+                self.assertTrue(result["errorAction"])
+
+    def test_material_error_taxonomy_covers_worker_heartbeat_states(self):
+        stalled = error_observability.classify_material_error("", status="processing", observability_state="stalled")
+        delayed = error_observability.classify_material_error("", status="processing", observability_state="heartbeat_delayed")
+        self.assertEqual(stalled["errorCode"], "WORKER_HEARTBEAT_STALLED")
+        self.assertEqual(delayed["errorCode"], "WORKER_HEARTBEAT_DELAYED")
+
+    def test_material_error_technical_detail_redacts_secrets(self):
+        raw = "Authorization: Bearer abc123 password=hunter2 https://user:secret@example.com/path?token=xyz"
+        safe = error_observability.sanitize_technical_detail(raw)
+        self.assertNotIn("abc123", safe)
+        self.assertNotIn("hunter2", safe)
+        self.assertNotIn(":secret@", safe)
+        self.assertNotIn("token=xyz", safe)
+        self.assertIn("***", safe)
 
 
 if __name__ == "__main__":
