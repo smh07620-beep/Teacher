@@ -213,15 +213,20 @@
   }
 
   function failureCards(jobs) {
-    const failed=jobs.filter(job=>['failed','retry_wait'].includes(job.status));
-    if(!failed.length)return '<div class="rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">目前最近工作沒有失敗或等待重試紀錄。</div>';
+    const failed=jobs.filter(job=>['failed','retry_wait'].includes(job.status)||['heartbeat_delayed','stalled'].includes(job.observabilityState));
+    if(!failed.length)return '<div class="rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">目前沒有失敗、等待重試或 heartbeat 異常工作。</div>';
     return failed.map(job=>{
-      const [icon,label,classes]=jobMeta(job.status);
-      return `<article class="rounded-xl border ${job.status==='failed'?'border-rose-200 bg-rose-50':'border-amber-200 bg-amber-50'} p-3 text-sm">
+      const [icon,label,classes]=job.observabilityState==='stalled'
+        ? ['🔴','可能卡住','text-rose-700 bg-rose-50 border-rose-200']
+        : job.observabilityState==='heartbeat_delayed'
+          ? ['🟠','回報延遲','text-amber-700 bg-amber-50 border-amber-200']
+          : jobMeta(job.status);
+      const critical=job.status==='failed'||job.observabilityState==='stalled';
+      return `<article class="rounded-xl border ${critical?'border-rose-200 bg-rose-50':'border-amber-200 bg-amber-50'} p-3 text-sm">
         <div class="flex flex-wrap items-start justify-between gap-2"><div><b>${escapeHtml(job.title||job.originalName||job.id)}</b><div class="mt-1 font-mono text-[10px] text-slate-500">${escapeHtml(job.id||'')}</div></div><span class="rounded-full border px-2 py-1 text-[10px] font-bold ${classes}">${icon} ${label}</span></div>
         <div class="mt-2 text-xs text-slate-700"><b>階段：</b>${escapeHtml(job.stage||'—')}　<b>嘗試：</b>${Number(job.attempts||0)}/${Number(job.maxAttempts||3)}</div>
-        <div class="mt-2 rounded-lg bg-white/80 px-2 py-2 text-xs ${job.error?'text-rose-700':'text-slate-600'}"><b>${job.error?'失敗原因':'詳細資訊'}：</b>${escapeHtml(job.error||job.detail||'Worker 未提供詳細原因')}</div>
-        <div class="mt-2 text-[10px] text-slate-500">建立 ${formatWhen(job.createdAt)} · 更新 ${formatWhen(job.updatedAt)} · Worker ${escapeHtml(job.workerId||'—')}</div>
+        <div class="mt-2 rounded-lg bg-white/80 px-2 py-2 text-xs ${job.error?'text-rose-700':'text-slate-600'}"><b>${job.error?'失敗原因':'詳細資訊'}：</b>${escapeHtml(job.error||job.observabilityDetail||job.detail||'Worker 未提供詳細原因')}</div>
+        <div class="mt-2 text-[10px] text-slate-500">建立 ${formatWhen(job.createdAt)} · 更新 ${formatWhen(job.updatedAt)} · Worker ${escapeHtml(job.workerId||'—')}${Number.isFinite(Number(job.heartbeatAgeSeconds))?` · heartbeat ${formatDuration(job.heartbeatAgeSeconds)}前`:''}</div>
       </article>`;
     }).join('');
   }
@@ -266,7 +271,10 @@
       const activeWorkers = workerStatusAvailable ? workers.filter(worker => worker.status === 'online' || worker.status === 'busy') : [];
       const recentOfflineWorkers = workerStatusAvailable ? workers.filter(worker => worker.status === 'offline') : [];
       const jobs = Array.isArray(data.jobs) ? data.jobs : [];
-      const problemJobs = Array.isArray(data.problemJobs) ? data.problemJobs : jobs.filter(job => ['failed','retry_wait'].includes(job.status));
+      const rawProblemJobs = Array.isArray(data.problemJobs) ? data.problemJobs : jobs.filter(job => ['failed','retry_wait'].includes(job.status));
+      const problemMap = new Map(rawProblemJobs.map(job => [String(job.id||''), job]));
+      jobs.filter(job => ['heartbeat_delayed','stalled'].includes(job.observabilityState)).forEach(job => problemMap.set(String(job.id||''), job));
+      const problemJobs = [...problemMap.values()];
       const staging = data.staging || {};
       const emptyWorkerMessage = recentOfflineWorkers.length
         ? '⚠ 目前沒有在線 Worker；下方仍保留最近 24 小時內的離線紀錄供檢查。'
@@ -307,7 +315,7 @@
           ${workerBody}
         </section>
         <section class="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm space-y-3">
-          <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">❌ 最近失敗／等待重試</h5><span class="text-[11px] text-slate-400">${problemJobs.length} 筆</span></div>
+          <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">⚠ 需要注意的工作</h5><span class="text-[11px] text-slate-400">${problemJobs.length} 筆</span></div>
           <div class="space-y-2">${failureCards(problemJobs)}</div>
         </section>
         <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
