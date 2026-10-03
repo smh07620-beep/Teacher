@@ -115,6 +115,42 @@ _RUNBOOKS = {
             "先處理共同根因，再逐筆重試失敗 Job。",
         ],
     },
+    "TREND_QUEUE_GROWTH": {
+        "title": "Queue 持續上升",
+        "steps": [
+            "先確認 Worker 是否全部在線，且沒有 stale / heartbeat 延遲。",
+            "查看同一時間的 P95 處理時間與 storage / conversion Incident。",
+            "不要因 queue 上升建立重複教材；先讓既有工作安全續接。",
+            "若依賴正常且 queue 仍持續上升，再評估 Worker 處理容量。",
+        ],
+    },
+    "TREND_PROCESSING_SLOWDOWN": {
+        "title": "教材處理時間惡化",
+        "steps": [
+            "比較最近與前一時段的 P95/平均處理時間與完成樣本數。",
+            "確認 FFmpeg、LibreOffice、storage provider 與網路是否變慢。",
+            "確認 Worker CPU / 硬體加速與磁碟空間是否正常。",
+            "先找共同根因；排除依賴問題後再評估增加 Worker 容量。",
+        ],
+    },
+    "TREND_INCIDENT_FREQUENCY": {
+        "title": "Incident 發生頻率上升",
+        "steps": [
+            "查看被點名的 component/error code 與前一相同時段比較。",
+            "優先檢查是否為同一共同依賴反覆故障。",
+            "依該 error code 的原始 Runbook 處理根因，而不是逐筆重試。",
+            "修復後持續觀察下一個相同時間窗是否回落。",
+        ],
+    },
+    "WORKER_CAPACITY_PRESSURE": {
+        "title": "Worker 容量壓力",
+        "steps": [
+            "先排除 Worker offline、storage、FFmpeg、LibreOffice 與網路異常。",
+            "確認 queue 是否持續增加，而不是短時間大量上傳造成的單次尖峰。",
+            "比較在線 Worker 數、P95 處理時間與最久等待時間。",
+            "只有在依賴正常且壓力持續時，才評估增加 Worker 或提升本機處理能力。",
+        ],
+    },
 }
 
 
