@@ -22,7 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      TEACHER_BASE_URL: https://teacher-j3id.onrender.com
+      # Single production URL source. Override with the repository variable without editing workflows.
+      TEACHER_PRODUCTION_URL: ${{ vars.TEACHER_PRODUCTION_URL || 'https://teacher-j3id.onrender.com' }}
       EXPECTED_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +35,7 @@ jobs:
       - name: Verify exact Render deployment and public read-only flows
         run: |
           python tools/production_smoke.py \
-            --base-url "$TEACHER_BASE_URL" \
+            --base-url "$TEACHER_PRODUCTION_URL" \
             --expected-commit "$EXPECTED_COMMIT" \
             --max-wait-seconds 720 \
             --poll-seconds 15
