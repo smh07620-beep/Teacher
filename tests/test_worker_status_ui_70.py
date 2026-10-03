@@ -66,6 +66,12 @@ class WorkerStatusUi70Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
+    def test_worker_navigation_uses_single_csp_dispatch_owner(self):
+        self.assertIn("button.dataset.adminWorkspace = 'worker'", self.source)
+        self.assertIn('button.setAttribute(\'data-csp-click\', "switchAdminWorkspace(\'worker\',true)")', self.source)
+        self.assertIn("button.onclick = null", self.source)
+        self.assertNotIn("button.onclick = () => window.switchAdminWorkspace?.('worker', true)", self.source)
+
     def test_worker_asset_loads_after_role_workspace_shell(self):
         from pgy_frontend import ASSET_MANIFEST
         body = ASSET_MANIFEST["system"]["body"]

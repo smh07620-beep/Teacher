@@ -69,10 +69,17 @@ class Phase3AdminWorkspaceRouterTests(unittest.TestCase):
         self.assertIn("document.querySelectorAll('.admin-section-panel').forEach", self.router)
         self.assertIn("item.id !== sectionId", self.router)
 
-    def test_workspace_state_and_nav_are_set_before_extension_dispatch(self):
+    def test_deferred_extension_workspace_waits_for_its_registered_owner(self):
+        self.assertIn("const DEFERRED_EXTENSION_WORKSPACES = new Set(['worker','maintenance','audit'])", self.router)
+        self.assertIn("async function resolveWorkspaceHandler(requested, workspace)", self.router)
+        self.assertIn("attempt < 60", self.router)
+        self.assertIn("await resolveWorkspaceHandler(requested, workspace)", self.router)
+        self.assertIn("工作區元件尚未完成載入", self.router)
+
+    def test_workspace_state_and_nav_are_set_before_extension_execution(self):
         dispatch = self.router[self.router.index('async function switchWorkspace'):self.router.index('async function toggleCoreModal')]
-        self.assertLess(dispatch.index('state.workspace = workspace'), dispatch.index('const extension ='))
-        self.assertLess(dispatch.index('paintWorkspaceNav(workspace)'), dispatch.index('const extension ='))
+        self.assertLess(dispatch.index('state.workspace = workspace'), dispatch.index('await extension(context)'))
+        self.assertLess(dispatch.index('paintWorkspaceNav(workspace)'), dispatch.index('await extension(context)'))
 
     def test_router_does_not_redefine_rbac_or_profile_metadata_as_policy(self):
         for forbidden in (

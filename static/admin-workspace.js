@@ -21,6 +21,7 @@
   const afterModalHooks = [];
   const PAGE_MODE_PARAM = 'admin';
   const SYSTEM_WORKSPACES = new Set(['people','system','worker','maintenance','audit']);
+  const DEFERRED_EXTENSION_WORKSPACES = new Set(['worker','maintenance','audit']);
   const WORKSPACE_META = Object.freeze({
     'course-materials': {
       icon: '📚',
@@ -91,6 +92,17 @@
     if (!key || typeof handler !== 'function') return () => {};
     workspaceHandlers.set(key, handler);
     return () => workspaceHandlers.delete(key);
+  }
+
+  async function resolveWorkspaceHandler(requested, workspace) {
+    let handler = workspaceHandlers.get(requested) || workspaceHandlers.get(workspace);
+    if (handler || !DEFERRED_EXTENSION_WORKSPACES.has(workspace)) return handler || null;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 25));
+      handler = workspaceHandlers.get(requested) || workspaceHandlers.get(workspace);
+      if (handler) return handler;
+    }
+    return null;
   }
 
   function normalizeWorkspace(name) {
@@ -247,6 +259,12 @@
     for (const guard of workspaceGuards) {
       if (await guard(context) === false) return false;
     }
+    const extension = await resolveWorkspaceHandler(requested, workspace);
+    if (!extension && DEFERRED_EXTENSION_WORKSPACES.has(workspace)) {
+      const status = document.getElementById('admin-workspace-status');
+      if (status) status.textContent = '工作區元件尚未完成載入，請重新整理後再試。';
+      return false;
+    }
     state.workspace = workspace;
     paintWorkspaceNav(workspace);
     paintWorkspaceHeader(workspace);
@@ -256,7 +274,6 @@
     // This prevents a valid system workspace URL from briefly falling back to
     // course-materials while account/job data is still loading.
     syncWorkspaceUrl(requested || workspace);
-    const extension = workspaceHandlers.get(requested) || workspaceHandlers.get(workspace);
     const result = extension
       ? await extension(context)
       : await switchCoreWorkspace(context);

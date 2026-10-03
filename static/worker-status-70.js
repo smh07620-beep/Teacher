@@ -76,8 +76,10 @@
       button.type = 'button';
       button.className = 'admin-nav-btn px-3 py-2 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200';
       button.textContent = '🖥️ Worker / Job 狀態';
-      button.onclick = () => window.switchAdminWorkspace?.('worker', true);
     }
+    button.onclick = null;
+    button.removeAttribute('onclick');
+    button.setAttribute('data-csp-click', "switchAdminWorkspace('worker',true)");
     button.dataset.adminWorkspace = 'worker';
     button.disabled = false;
     button.classList.remove('hidden');
