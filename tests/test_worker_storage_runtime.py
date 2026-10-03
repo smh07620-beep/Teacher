@@ -214,6 +214,55 @@ class WorkerStorageRuntimeTests(unittest.TestCase):
         self.assertEqual([item[2] for item in calls], [first[0], first[0]])
         self.assertEqual(calls[0][3]["Metadata"]["smh-object-key"], "source")
 
+    def test_r2_tree_reports_real_transferred_bytes(self):
+        adapter = WorkerMaterialStorageAdapter()
+        progress = []
+
+        class R2:
+            def upload_file(self, filename, bucket, key, ExtraArgs=None, Callback=None):
+                size = Path(filename).stat().st_size
+                if Callback is not None:
+                    first = max(1, size // 2)
+                    Callback(first)
+                    Callback(size - first)
+
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.pdf"
+            source.write_bytes(b"0123456789")
+            slides = temp / "slides"
+            slides.mkdir()
+            slide = slides / "slide-01.png"
+            slide.write_bytes(b"abcde")
+            derivative = temp / "index.txt"
+            derivative.write_bytes(b"xyz")
+            with patch(
+                "teacher_app.storage.worker_runtime.providers.r2_client",
+                return_value=R2(),
+            ), patch(
+                "teacher_app.storage.worker_runtime.providers.R2_BUCKET_NAME",
+                "bucket",
+            ):
+                adapter.upload_material_tree_to_r2(
+                    "material-progress",
+                    source,
+                    slides,
+                    1,
+                    derivatives={"index.txt": derivative},
+                    publish_key="pub-" + "a" * 64,
+                    source_sha256="b" * 64,
+                    progress_callback=lambda current, total, label: progress.append(
+                        (current, total, label)
+                    ),
+                )
+
+        self.assertTrue(progress)
+        self.assertEqual(progress[-1][0], progress[-1][1])
+        self.assertEqual(progress[-1][1], 18)
+        self.assertTrue(any(label == "原始教材" for _current, _total, label in progress))
+        self.assertTrue(any("預覽第 1/1 頁" in label for _current, _total, label in progress))
+        self.assertTrue(any("index.txt" in label for _current, _total, label in progress))
+
     def test_gdrive_upload_reuses_one_canonical_service(self):
         adapter = WorkerMaterialStorageAdapter()
         service = _DriveService()
