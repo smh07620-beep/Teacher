@@ -213,6 +213,9 @@
     const incident=metrics.incidents||{};
     const coverage=metrics.dataCoverage||{};
     const targets=metrics.targets||{};
+    const trend=metrics.trendAnalysis||{};
+    const trendSignals=Array.isArray(trend.signals)?trend.signals:[];
+    const capacity=trend.capacity||{};
     const series=Array.isArray(metrics.series)?metrics.series:[];
     const success=material.successRate===null||material.successRate===undefined?'資料不足':formatPercent(material.successRate);
     const workerAvailability=worker.observedAvailability===null||worker.observedAvailability===undefined?'採樣累積中':formatPercent(worker.observedAvailability);
@@ -228,6 +231,16 @@
     const baseline=metrics.targetsConfigured
       ? '正式 SLO 門檻已由環境設定；下方同時顯示實測值與目標。'
       : '目前先建立 baseline，尚未設定正式 SLO 門檻；不會用任意預設值判定通過／失敗。';
+    const capacityState=String(capacity.state||'normal');
+    const capacityClasses=capacityState==='pressure'
+      ? 'border-rose-200 bg-rose-50 text-rose-800'
+      : capacityState==='watch'
+        ? 'border-amber-200 bg-amber-50 text-amber-800'
+        : 'border-emerald-200 bg-emerald-50 text-emerald-800';
+    const capacityIcon=capacityState==='pressure'?'🔴':capacityState==='watch'?'🟠':'🟢';
+    const trendHtml=trendSignals.length
+      ? trendSignals.map(signal=>'<article class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><div class="flex flex-wrap items-center justify-between gap-2"><b>'+escapeHtml(signal.title||signal.code||'趨勢異常')+'</b><span class="font-mono text-[10px]">'+escapeHtml(signal.code||'')+'</span></div><div class="mt-1">'+escapeHtml(signal.detail||'')+'</div>'+(signal.action?'<div class="mt-1 font-semibold">建議：'+escapeHtml(signal.action)+'</div>':'')+'</article>').join('')
+      : '<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">目前沒有符合「持續惡化」條件的趨勢異常；單次尖峰不會被升級。</div>';
     return `<section id="worker-slo-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4 scroll-mt-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div><h5 class="font-black text-slate-900">📈 維運趨勢 / SLO</h5><p class="mt-1 text-[11px] text-slate-500">${escapeHtml(baseline)}</p></div>
@@ -241,6 +254,14 @@
         ${sloMetricCard('✅','教材成功率',success,'完成 '+Number(material.completedJobs||0)+' / terminal '+Number(material.terminalJobs||0),targetSuccess)}
         ${sloMetricCard('⏱️','教材 P95 處理時間',p95,formatSignedPercent(material.durationChangePercent),targetDuration)}
         ${sloMetricCard('🧯','Incident 平均 MTTR',mttr,'新開 '+Number(incident.opened||0)+' · 恢復 '+Number(incident.resolved||0)+' · 目前 '+Number(incident.currentlyOpen||0))}
+      </div>
+      <div class="rounded-xl border p-3 ${capacityClasses}">
+        <div class="flex flex-wrap items-center justify-between gap-2"><b class="text-sm">${capacityIcon} 容量判讀：${escapeHtml(capacity.label||'目前沒有持續容量壓力訊號')}</b><span class="text-[10px]">判讀窗 ${Number(trend.sampleWindowMinutes||0)} 分鐘</span></div>
+        <div class="mt-1 text-[11px]">此判讀會先排除單一尖峰；只有 queue、Worker 數與處理時間等證據持續惡化才升級。</div>
+      </div>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-700">趨勢異常判讀</b><span class="text-[10px] text-slate-400">${trendSignals.length} 個持續性訊號</span></div>
+        ${trendHtml}
       </div>
       <div class="grid lg:grid-cols-2 gap-3">
         <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
