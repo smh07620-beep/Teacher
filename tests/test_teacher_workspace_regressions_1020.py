@@ -54,6 +54,31 @@ def _delete_app():
     return app
 
 
+def test_teacher_exam_detail_reads_draft_by_persisted_id_and_scope():
+    app = _delete_app()
+    category = {"id": "quiz-draft", "group": "grpBio", "area": "internal", "title": "Draft", "active": False}
+    with app.test_client() as client, \
+         patch("teacher_app.assessments.routes.rbac_legacy_adapter.legacy_admin_guard", return_value=None), \
+         patch("teacher_app.assessments.routes.repository.get_category_full", return_value=category), \
+         patch("teacher_app.assessments.routes.scope_filter.scoped_groups", return_value=(g, None)) as scoped:
+        response = client.get("/api/quiz-categories/quiz-draft")
+    assert response.status_code == 200
+    assert response.get_json()["id"] == "quiz-draft"
+    assert response.get_json()["active"] is False
+    assert scoped.call_args.args[2] == {"grpBio"}
+
+
+def test_teacher_exam_detail_fails_closed_outside_persisted_group_scope():
+    app = _delete_app()
+    category = {"id": "quiz-other", "group": "grpHema", "area": "internal", "title": "Other", "active": False}
+    with app.test_client() as client, \
+         patch("teacher_app.assessments.routes.rbac_legacy_adapter.legacy_admin_guard", return_value=None), \
+         patch("teacher_app.assessments.routes.repository.get_category_full", return_value=category), \
+         patch("teacher_app.assessments.routes.scope_filter.scoped_groups", side_effect=lambda *_: (None, (jsonify({"error": "此資源不在你的授權範圍。"}), 403))):
+        response = client.get("/api/quiz-categories/quiz-other")
+    assert response.status_code == 403
+
+
 def test_scoped_teacher_can_delete_exam_in_own_group_only():
     app = _delete_app()
     category = {"id": "quiz-own", "group": "grpBio", "area": "internal", "title": "Own"}
