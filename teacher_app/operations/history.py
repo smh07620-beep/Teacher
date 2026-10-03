@@ -589,6 +589,301 @@ def analyze_operational_trends(
     }
 
 
+
+def _job_arrival_count(
+    start: dt.datetime,
+    end: dt.datetime,
+) -> tuple[int, bool]:
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            row = conn.execute(
+                f"SELECT COUNT(*) AS count FROM material_jobs "
+                f"WHERE created_at >= {ph} AND created_at < {ph}",
+                (start.isoformat(), end.isoformat()),
+            ).fetchone()
+    except Exception as exc:
+        if _missing_material_job_history_schema(exc):
+            return 0, False
+        text = str(exc or "").lower()
+        if "created_at" in text and (
+            "no such column" in text or "does not exist" in text
+        ):
+            return 0, False
+        raise
+    return int(dict(row).get("count") or 0) if row else 0, True
+
+
+def _open_capacity_blockers() -> list[dict[str, str]]:
+    blocking_codes = {
+        "WORKER_OFFLINE",
+        "WORKER_HEARTBEAT_STALLED",
+        "R2_STORAGE",
+        "GDRIVE_STORAGE",
+        "MEGA_STORAGE",
+        "OCI_STORAGE",
+        "STORAGE_PROVIDER",
+        "FFMPEG_CONVERSION",
+        "LIBREOFFICE_CONVERSION",
+        "DATABASE",
+        "DNS_RESOLUTION",
+        "TLS_CONNECTION",
+        "NETWORK_TIMEOUT",
+    }
+    try:
+        with common_db.read_connection() as (conn, _kind):
+            rows = conn.execute(
+                "SELECT error_code,title FROM operational_incidents "
+                "WHERE status='open'"
+            ).fetchall()
+    except Exception as exc:
+        text = str(exc or "").lower()
+        if "no such table" in text or ("relation" in text and "does not exist" in text):
+            return []
+        raise
+    blockers = []
+    for raw in rows:
+        row = dict(raw)
+        code = str(row.get("error_code") or "").strip().upper()
+        if code not in blocking_codes:
+            continue
+        blockers.append({
+            "code": code,
+            "title": str(row.get("title") or code)[:240],
+        })
+    return blockers
+
+
+def build_capacity_forecast(
+    *,
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
+    """Estimate service capacity and queue drain scenarios from real history."""
+    current = _utc(now)
+    window_hours = _int_env("OPERATIONS_FORECAST_WINDOW_HOURS", 6, 2, 24)
+    min_completed = _int_env("OPERATIONS_FORECAST_MIN_COMPLETED_JOBS", 3, 2, 50)
+    min_snapshot_coverage = _float_env(
+        "OPERATIONS_FORECAST_MIN_SNAPSHOT_COVERAGE",
+        0.5,
+        0.25,
+        1.0,
+    )
+    start = current - dt.timedelta(hours=window_hours)
+    arrivals, arrivals_available = _job_arrival_count(start, current)
+    durations = _completed_durations(start, current)
+    snapshots = _snapshot_rows_since(start)
+    expected_samples = window_hours * 6
+    coverage = min(1.0, len(snapshots) / max(1, expected_samples))
+    available_snapshots = [
+        row for row in snapshots if bool(row.get("worker_status_available"))
+    ]
+
+    latest = snapshots[-1] if snapshots else {}
+    latest_at = _parse_time(latest.get("sampled_at"))
+    sample_age = (
+        max(0, int((current - latest_at).total_seconds()))
+        if latest_at
+        else None
+    )
+    latest_fresh = sample_age is not None and sample_age <= 20 * 60
+    pending = int(latest.get("pending_jobs") or 0) if latest else 0
+    retry = int(latest.get("retry_jobs") or 0) if latest else 0
+    processing = int(latest.get("processing_jobs") or 0) if latest else 0
+    backlog = pending + retry + processing
+    current_active = (
+        int(latest.get("active_workers") or 0)
+        if latest_fresh and bool(latest.get("worker_status_available"))
+        else 0
+    )
+    average_active = (
+        mean(int(row.get("active_workers") or 0) for row in available_snapshots)
+        if available_snapshots
+        else 0.0
+    )
+
+    completion_count = len(durations)
+    arrival_rate = arrivals / window_hours if arrivals_available else None
+    observed_completion_rate = completion_count / window_hours
+    median_duration = _percentile(durations, 0.5) if durations else 0.0
+    p95_duration = _percentile(durations, 0.95) if durations else 0.0
+    nominal_per_worker = 3600 / median_duration if median_duration > 0 else None
+    conservative_per_worker = 3600 / p95_duration if p95_duration > 0 else None
+
+    blockers = _open_capacity_blockers()
+    enough_jobs = completion_count >= min_completed
+    enough_snapshots = coverage >= min_snapshot_coverage and latest_fresh
+    model_available = bool(
+        arrivals_available
+        and enough_jobs
+        and enough_snapshots
+        and nominal_per_worker
+        and conservative_per_worker
+        and current_active > 0
+    )
+
+    confidence = "unavailable"
+    reasons: list[str] = []
+    if not arrivals_available:
+        reasons.append("目前 schema 無法回算近期工作到達率")
+    if not enough_jobs:
+        reasons.append(
+            f"最近 {window_hours} 小時只有 {completion_count} 筆完成工作，"
+            f"至少需要 {min_completed} 筆"
+        )
+    if not enough_snapshots:
+        reasons.append(
+            f"Worker/queue 採樣覆蓋 {round(coverage * 100)}%，"
+            "或最新樣本已超過 20 分鐘"
+        )
+    if current_active <= 0:
+        reasons.append("最新可信樣本沒有在線 Worker")
+    if blockers:
+        reasons.append("目前仍有未排除的 Worker/provider/conversion Incident")
+
+    if model_available:
+        if blockers:
+            confidence = "low"
+        elif coverage >= 0.8 and completion_count >= max(5, min_completed):
+            confidence = "high"
+        else:
+            confidence = "medium"
+
+    def scenario(worker_count: int, per_worker: float | None) -> dict[str, Any]:
+        if not model_available or not per_worker or arrival_rate is None:
+            return {
+                "workers": worker_count,
+                "capacityPerHour": None,
+                "netDrainPerHour": None,
+                "clearEtaSeconds": None,
+                "state": "unavailable",
+            }
+        total_capacity = per_worker * max(0, worker_count)
+        net = total_capacity - arrival_rate
+        eta = (backlog / net * 3600) if backlog > 0 and net > 0 else 0 if backlog == 0 else None
+        return {
+            "workers": worker_count,
+            "capacityPerHour": round(total_capacity, 2),
+            "netDrainPerHour": round(net, 2),
+            "clearEtaSeconds": round(eta) if eta is not None else None,
+            "state": "clearing" if net > 0 else "growing",
+        }
+
+    current_nominal = scenario(current_active, nominal_per_worker)
+    current_conservative = scenario(current_active, conservative_per_worker)
+    plus_one_nominal = scenario(current_active + 1, nominal_per_worker)
+    plus_one_conservative = scenario(current_active + 1, conservative_per_worker)
+
+    decision_state = "insufficient_data"
+    decision_label = "資料不足，先累積真實吞吐量"
+    decision_detail = "目前不應根據不完整樣本決定是否增加 Worker。"
+    if model_available and blockers:
+        decision_state = "dependency_blocked"
+        decision_label = "先排除故障，再判斷容量"
+        decision_detail = (
+            "目前存在 Worker/provider/conversion Incident，處理速度可能被故障拖慢；"
+            "此時擴充 Worker 不一定能改善根因。"
+        )
+    elif model_available and backlog == 0:
+        decision_state = "no_backlog"
+        decision_label = "目前沒有待清 Queue"
+        decision_detail = "目前沒有 backlog，先持續累積高峰期資料再做容量決策。"
+    elif model_available and current_conservative["state"] == "clearing":
+        decision_state = "current_capacity_clearing"
+        decision_label = "目前容量在保守情境仍可消化 Queue"
+        decision_detail = (
+            "以近期 P95 處理時間估算，現有在線 Worker 的完成能力仍高於近期到達率。"
+        )
+    elif (
+        model_available
+        and current_nominal["state"] == "clearing"
+        and current_conservative["state"] == "growing"
+    ):
+        decision_state = "borderline"
+        decision_label = "目前容量接近臨界"
+        decision_detail = (
+            "以中位處理時間可清 Queue，但用 P95 保守估算時到達率可能超過處理能力；"
+            "建議先觀察下一個高峰時段。"
+        )
+    elif (
+        model_available
+        and current_nominal["state"] == "growing"
+        and plus_one_conservative["state"] == "clearing"
+    ):
+        decision_state = "one_more_worker_would_restore_drain"
+        decision_label = "多 1 台 Worker 的模型可恢復淨消化能力"
+        decision_detail = (
+            "現有容量的 nominal 模型已低於近期到達率，而增加 1 台後連 P95 保守情境也可清 Queue。"
+        )
+    elif (
+        model_available
+        and plus_one_nominal["state"] == "clearing"
+    ):
+        decision_state = "one_more_worker_may_help"
+        decision_label = "多 1 台 Worker 可能改善高峰 Queue"
+        decision_detail = (
+            "增加 1 台後 nominal 模型可恢復淨消化，但保守 P95 情境仍不足；"
+            "需先確認工作類型與依賴沒有持續變慢。"
+        )
+    elif model_available:
+        decision_state = "one_more_worker_insufficient"
+        decision_label = "單純增加 1 台 Worker 仍不足"
+        decision_detail = (
+            "即使多 1 台 Worker，近期到達率仍不低於估計處理能力；"
+            "應同時檢查工作尖峰、單 Job 耗時與 provider 吞吐。"
+        )
+
+    return {
+        "generatedAt": current.isoformat(),
+        "windowHours": window_hours,
+        "modelAvailable": model_available,
+        "confidence": confidence,
+        "limitations": reasons,
+        "sample": {
+            "arrivals": arrivals if arrivals_available else None,
+            "completedJobs": completion_count,
+            "snapshotCount": len(snapshots),
+            "expectedSnapshotCount": expected_samples,
+            "snapshotCoverage": round(coverage, 4),
+            "latestSampleAt": latest_at.isoformat() if latest_at else "",
+            "latestSampleAgeSeconds": sample_age,
+        },
+        "rates": {
+            "arrivalPerHour": round(arrival_rate, 2) if arrival_rate is not None else None,
+            "observedCompletedPerHour": round(observed_completion_rate, 2),
+            "medianCompletedDurationSeconds": round(median_duration, 1) if median_duration else 0.0,
+            "p95CompletedDurationSeconds": round(p95_duration, 1) if p95_duration else 0.0,
+            "nominalPerWorkerPerHour": round(nominal_per_worker, 2)
+            if nominal_per_worker
+            else None,
+            "conservativePerWorkerPerHour": round(conservative_per_worker, 2)
+            if conservative_per_worker
+            else None,
+            "averageActiveWorkers": round(average_active, 2),
+        },
+        "queue": {
+            "pending": pending,
+            "retry": retry,
+            "processing": processing,
+            "backlogJobs": backlog,
+            "currentActiveWorkers": current_active,
+        },
+        "blockers": blockers,
+        "current": {
+            "nominal": current_nominal,
+            "conservative": current_conservative,
+        },
+        "plusOneWorker": {
+            "nominal": plus_one_nominal,
+            "conservative": plus_one_conservative,
+        },
+        "decision": {
+            "state": decision_state,
+            "label": decision_label,
+            "detail": decision_detail,
+        },
+    }
+
+
 def trend_incident_candidates(
     *,
     now: dt.datetime | None = None,
@@ -826,12 +1121,14 @@ def build_operational_dashboard(
         "targets": targets,
         "targetsConfigured": any(value is not None for value in targets.values()),
         "trendAnalysis": analyze_operational_trends(now=current),
+        "capacityForecast": build_capacity_forecast(now=current),
         "series": series,
     }
 
 
 __all__ = [
     "analyze_operational_trends",
+    "build_capacity_forecast",
     "build_operational_dashboard",
     "record_operational_sample",
     "trend_incident_candidates",
