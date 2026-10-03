@@ -39,7 +39,7 @@ class ProductConvergence101Tests(unittest.TestCase):
         self.assertIn("final teacher persona navigation is owned by teacher-persona-isolation", self.shell)
         self.assertIn("Structural system navigation is owned by workspace-shell-70.js", self.shell)
         self.assertNotIn("navHost.replaceChildren", self.shell)
-        self.assertIn("does not rebuild either navigation tree", self.shell)
+        self.assertNotIn("navHost.replaceChildren", self.shell)
 
     def test_system_navigation_groups_infrastructure_by_human_job(self):
         for label in ("人員與權限", "系統健康與維運", "安全與稽核"):
