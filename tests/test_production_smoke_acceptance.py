@@ -30,15 +30,19 @@ class ProductionSmokeAcceptanceTests(unittest.TestCase):
         self.assertNotIn('method="PATCH"', source)
         self.assertNotIn('method="DELETE"', source)
 
-    def test_workflow_runs_after_successful_release_checks_on_main(self):
+    def test_workflow_is_post_deploy_and_does_not_deadlock_render_checks_pass(self):
         source = (ROOT / ".github" / "workflows" / "production-smoke.yml").read_text(encoding="utf-8")
-        self.assertIn("workflow_run:", source)
-        self.assertIn("- Teacher release checks", source)
-        self.assertIn("- main", source)
-        self.assertIn("github.event.workflow_run.conclusion == 'success'", source)
-        self.assertIn("github.event.workflow_run.head_sha || github.sha", source)
+        render = (ROOT / "render.yaml").read_text(encoding="utf-8")
+        self.assertIn("autoDeployTrigger: checksPass", render)
+        self.assertIn("schedule:", source)
+        self.assertIn('cron: "*/5 * * * *"', source)
+        self.assertIn("workflow_dispatch:", source)
+        self.assertNotIn("workflow_run:", source)
+        self.assertNotRegex(source, r"(?m)^\s*push:\s*$")
+        self.assertIn("EXPECTED_COMMIT: ${{ github.sha }}", source)
         self.assertIn("tools/production_smoke.py", source)
         self.assertIn("production-smoke-report.json", source)
+        self.assertIn("circular gate", source)
 
     def test_render_target_matches_existing_operational_workflows(self):
         smoke = (ROOT / ".github" / "workflows" / "production-smoke.yml").read_text(encoding="utf-8")

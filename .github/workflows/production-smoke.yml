@@ -1,13 +1,13 @@
 name: Production smoke acceptance
 
+# Render uses autoDeployTrigger: checksPass. This workflow must NOT run from
+# push/workflow_run for the same commit, otherwise Render waits for this smoke
+# check while the smoke check waits for Render to deploy: a circular gate.
+# Scheduled/manual runs are deployment-after checks and do not participate in
+# the deployment-precondition check suite.
 on:
-  workflow_run:
-    workflows:
-      - Teacher release checks
-    types:
-      - completed
-    branches:
-      - main
+  schedule:
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -19,16 +19,13 @@ concurrency:
 
 jobs:
   production-smoke:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       TEACHER_BASE_URL: https://teacher-j3id.onrender.com
-      EXPECTED_COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+      EXPECTED_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.EXPECTED_COMMIT }}
 
       - uses: actions/setup-python@v5
         with:
