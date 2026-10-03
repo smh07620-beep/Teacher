@@ -1,16 +1,89 @@
-"""10/14 media compatibility layer for browser-recorded WebM.
+"""Media compatibility and accelerated normalization for the material Worker.
 
 Chromium-class browsers may emit microphone-only recordings in a WebM
-container. The adapter also owns the fast media normalization path used by the
-Windows material Worker.
+container.  Stream inspection, safe remux, hardware H.264 selection and CPU
+fallback live here so the canonical Worker keeps one media policy.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
+from teacher_app.worker import media_acceleration
+
+
+def _run(worker, command, output: Path, *, timeout: int):
+    try:
+        completed = worker.subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except worker.subprocess.TimeoutExpired:
+        return None, "FFmpeg conversion timed out"
+    if completed.returncode == 0 and output.is_file() and output.stat().st_size > 0:
+        return completed, ""
+    detail = str(completed.stderr or completed.stdout or "").strip()
+    return completed, (detail[-300:] or "FFmpeg conversion failed")
+
+
+def _cpu_video_command(ffmpeg: str, source: Path, output: Path) -> list[str]:
+    return [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(source),
+        "-vf",
+        "scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        str(output),
+    ]
+
+
+def _hardware_video_command(
+    ffmpeg: str,
+    source: Path,
+    output: Path,
+    encoder: str,
+) -> list[str]:
+    return [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(source),
+        "-vf",
+        "scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+        *media_acceleration.encoder_args(encoder),
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        str(output),
+    ]
+
 
 def transcode_if_needed(worker, source, original, temp):
-    """Normalize media from ffprobe streams and remux web-safe media."""
+    """Normalize media using actual streams and fail-safe acceleration.
+
+    Priority:
+      1. remux already-web-safe MP4/M4V;
+      2. use a hardware H.264 encoder only after a real probe succeeded;
+      3. automatically fall back to libx264 if the hardware attempt fails.
+    """
     ext = Path(original).suffix.lower()
     if ext not in worker.VIDEO_EXT | worker.AUDIO_EXT:
         return source, original, {}, {}
@@ -52,6 +125,8 @@ def transcode_if_needed(worker, source, original, temp):
         and 0 < height <= 720
     )
     audio_remux = bool(is_audio and ext == ".m4a" and audio_codec == "aac")
+    hardware_encoder = ""
+    hardware_fallback = ""
 
     if is_video:
         output = Path(temp) / "web.mp4"
@@ -71,28 +146,34 @@ def transcode_if_needed(worker, source, original, temp):
                 "+faststart",
                 str(output),
             ]
+            completed, error = _run(worker, command, output, timeout=timeout)
+            if error:
+                raise RuntimeError(error)
+            transcode_mode = "remux"
         else:
-            command = [
-                ffmpeg,
-                "-y",
-                "-i",
-                str(source),
-                "-vf",
-                "scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-crf",
-                "23",
-                "-movflags",
-                "+faststart",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "128k",
-                str(output),
-            ]
+            acceleration = media_acceleration.detect_h264_encoder(worker)
+            hardware_encoder = str(acceleration.get("selected") or "")
+            completed = None
+            error = ""
+            if hardware_encoder:
+                command = _hardware_video_command(
+                    ffmpeg,
+                    Path(source),
+                    output,
+                    hardware_encoder,
+                )
+                completed, error = _run(worker, command, output, timeout=timeout)
+                if error:
+                    hardware_fallback = error[:240]
+                    output.unlink(missing_ok=True)
+            if not hardware_encoder or error:
+                command = _cpu_video_command(ffmpeg, Path(source), output)
+                completed, cpu_error = _run(worker, command, output, timeout=timeout)
+                if cpu_error:
+                    raise RuntimeError(f"FFmpeg conversion failed: {cpu_error}")
+                transcode_mode = "transcode"
+            else:
+                transcode_mode = "hardware"
         name = Path(original).with_suffix(".mp4").name
     else:
         output = Path(temp) / "web.m4a"
@@ -108,22 +189,11 @@ def transcode_if_needed(worker, source, original, temp):
         if not audio_remux:
             command.extend(["-b:a", "128k"])
         command.append(str(output))
+        completed, error = _run(worker, command, output, timeout=timeout)
+        if error:
+            raise RuntimeError(f"FFmpeg conversion failed: {error}")
         name = Path(original).with_suffix(".m4a").name
-
-    try:
-        completed = worker.subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-    except worker.subprocess.TimeoutExpired:
-        raise RuntimeError("FFmpeg conversion timed out")
-    if completed.returncode != 0 or not output.is_file() or output.stat().st_size <= 0:
-        raise RuntimeError(
-            f"FFmpeg conversion failed: {(completed.stderr or '')[-300:]}"
-        )
+        transcode_mode = "remux" if audio_remux else "transcode"
 
     if is_video:
         poster = Path(temp) / "poster.webp"
@@ -168,49 +238,67 @@ def transcode_if_needed(worker, source, original, temp):
             ),
         )
         for sidecar_cmd, target in sidecars:
-            try:
-                result = worker.subprocess.run(
-                    sidecar_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=min(timeout, 600),
-                    check=False,
-                )
-            except worker.subprocess.TimeoutExpired:
-                result = None
-            if (
-                result is not None
-                and result.returncode == 0
-                and target.is_file()
-                and target.stat().st_size > 0
-            ):
+            result, sidecar_error = _run(
+                worker,
+                sidecar_cmd,
+                target,
+                timeout=min(timeout, 600),
+            )
+            if result is not None and not sidecar_error:
                 derivatives[target.name] = target
 
-    fast_path = video_remux or audio_remux
     metadata.update(
         {
             "transcoded": True,
-            "transcodeMode": "remux" if fast_path else "transcode",
+            "transcodeMode": transcode_mode,
             "sourceOriginalName": original,
             "mediaKind": "video" if is_video else "audio",
             "normalizedMaxHeight": 720 if is_video else None,
-            "videoCrf": 23 if is_video and not video_remux else None,
-            "videoPreset": "veryfast" if is_video and not video_remux else "",
+            "videoCrf": 23 if is_video and transcode_mode == "transcode" else None,
+            "videoPreset": "veryfast" if is_video and transcode_mode == "transcode" else "",
+            "hardwareEncoderUsed": hardware_encoder if transcode_mode == "hardware" else "",
+            "hardwareEncoderAttempted": hardware_encoder if hardware_fallback else "",
+            "hardwareFallback": hardware_fallback,
         }
     )
     return (
         output,
         name,
-        {key: value for key, value in metadata.items() if value is not None},
+        {key: value for key, value in metadata.items() if value not in (None, "")},
         derivatives,
     )
 
 
 def install(worker) -> None:
-    """Install the narrow compatibility override on the imported Worker module."""
+    """Install stream-safe media handling and capability reporting."""
     worker._transcode_if_needed = lambda source, original, temp: transcode_if_needed(
         worker, source, original, temp
     )
+    if getattr(worker, "_teacher_media_acceleration_installed", False):
+        return
+    base_capability = worker.capability
+
+    def accelerated_capability():
+        values = dict(base_capability() or {})
+        try:
+            acceleration = media_acceleration.detect_h264_encoder(worker)
+            values["videoAcceleration"] = {
+                "enabled": bool(acceleration.get("enabled")),
+                "available": bool(acceleration.get("available")),
+                "encoder": str(acceleration.get("selected") or ""),
+                "preference": str(acceleration.get("preference") or "auto"),
+            }
+        except Exception:
+            values["videoAcceleration"] = {
+                "enabled": True,
+                "available": False,
+                "encoder": "",
+                "preference": "auto",
+            }
+        return values
+
+    worker.capability = accelerated_capability
+    worker._teacher_media_acceleration_installed = True
 
 
 __all__ = ["install", "transcode_if_needed"]
