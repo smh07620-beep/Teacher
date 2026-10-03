@@ -141,6 +141,24 @@ class WorkerRepositoryPhase4Tests(unittest.TestCase):
         self.assertNotIn("payload", public)
         self.assertEqual(public["title"], "Lesson")
 
+    def test_problem_jobs_are_independent_of_general_recent_window(self):
+        for idx in range(35):
+            stamp = f"2026-09-18T10:{idx:02d}:00+00:00"
+            job = self.job(f"job-success-{idx}", created=stamp)
+            job["status"] = "completed"
+            repository.create_material_job(job, connection_factory=self.connect)
+
+        problem = self.job("job-problem", created="2026-09-18T09:00:00+00:00")
+        problem["status"] = "failed"
+        problem["updated_at"] = "2026-09-18T11:00:00+00:00"
+        problem["error"] = "conversion failed"
+        repository.create_material_job(problem, connection_factory=self.connect)
+
+        recent = repository.list_material_jobs(30, connection_factory=self.connect)
+        problems = repository.list_problem_material_jobs(20, connection_factory=self.connect)
+        self.assertNotIn("job-problem", [item["id"] for item in recent])
+        self.assertEqual([item["id"] for item in problems], ["job-problem"])
+
     def test_sqlite_atomic_claim_allows_only_one_worker(self):
         repository.create_material_job(self.job(), connection_factory=self.connect)
 
