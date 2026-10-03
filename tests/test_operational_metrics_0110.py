@@ -190,6 +190,61 @@ class OperationalMetrics0110Tests(unittest.TestCase):
         )
         self.assertTrue(dashboard["series"])
 
+    def test_0110_migration_is_additive_without_worker_history_schema(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        try:
+            operational_metrics_history_110(conn, "sqlite")
+            tables = {
+                row["name"]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            self.assertIn("operational_metric_snapshots", tables)
+            self.assertIn("operational_incident_events", tables)
+
+            conn.execute(
+                "CREATE TABLE material_jobs (id TEXT PRIMARY KEY, status TEXT NOT NULL)"
+            )
+            operational_metrics_history_110(conn, "sqlite")
+            indexes = {
+                row["name"]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index'"
+                ).fetchall()
+            }
+            self.assertNotIn("idx_material_jobs_finished_at", indexes)
+        finally:
+            conn.close()
+
+    def test_dashboard_degrades_cleanly_without_material_job_history(self):
+        conn, _kind = self.connect()
+        try:
+            conn.execute("DROP TABLE material_jobs")
+        finally:
+            conn.close()
+
+        dashboard = history.build_operational_dashboard(window="24h", now=NOW)
+        self.assertFalse(dashboard["dataCoverage"]["materialJobHistoryAvailable"])
+        self.assertEqual(dashboard["material"]["terminalJobs"], 0)
+        self.assertIsNone(dashboard["material"]["successRate"])
+        self.assertIn("尚無可回算", dashboard["dataCoverage"]["note"])
+
+    def test_dashboard_degrades_cleanly_for_legacy_material_jobs_columns(self):
+        conn, _kind = self.connect()
+        try:
+            conn.execute("DROP TABLE material_jobs")
+            conn.execute(
+                "CREATE TABLE material_jobs (id TEXT PRIMARY KEY, status TEXT NOT NULL)"
+            )
+        finally:
+            conn.close()
+
+        dashboard = history.build_operational_dashboard(window="24h", now=NOW)
+        self.assertFalse(dashboard["dataCoverage"]["materialJobHistoryAvailable"])
+        self.assertEqual(dashboard["material"]["terminalJobs"], 0)
+
     def test_incident_transition_history_survives_snapshot_failure(self):
         opened = incidents.sync_operational_incidents(
             now=NOW,

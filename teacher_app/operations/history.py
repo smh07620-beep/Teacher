@@ -216,16 +216,38 @@ def record_operational_sample(
     }
 
 
-def _terminal_jobs_since(cutoff: dt.datetime) -> list[dict[str, Any]]:
-    with common_db.read_connection() as (conn, kind):
-        ph = common_db.placeholder(kind)
-        rows = conn.execute(
-            f"SELECT status,started_at,finished_at FROM material_jobs "
-            f"WHERE finished_at >= {ph} AND status IN ('completed','failed') "
-            f"ORDER BY finished_at ASC",
-            (cutoff.isoformat(),),
-        ).fetchall()
-    return [dict(row) for row in rows]
+def _missing_material_job_history_schema(exc: Exception) -> bool:
+    """Return True only for mixed-version schemas that cannot provide job history."""
+    text = str(exc or "").lower()
+    columns = ("started_at", "finished_at", "status")
+    if "no such table" in text and "material_jobs" in text:
+        return True
+    if "no such column" in text and any(column in text for column in columns):
+        return True
+    if "does not exist" in text and (
+        "material_jobs" in text or any(column in text for column in columns)
+    ):
+        return True
+    return False
+
+
+def _terminal_jobs_since(
+    cutoff: dt.datetime,
+) -> tuple[list[dict[str, Any]], bool]:
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            rows = conn.execute(
+                f"SELECT status,started_at,finished_at FROM material_jobs "
+                f"WHERE finished_at >= {ph} AND status IN ('completed','failed') "
+                f"ORDER BY finished_at ASC",
+                (cutoff.isoformat(),),
+            ).fetchall()
+    except Exception as exc:
+        if _missing_material_job_history_schema(exc):
+            return [], False
+        raise
+    return [dict(row) for row in rows], True
 
 
 def _job_period(rows: Iterable[Mapping[str, Any]], start: dt.datetime, end: dt.datetime) -> dict[str, Any]:
@@ -270,7 +292,7 @@ def build_operational_dashboard(
     start = current - dt.timedelta(hours=hours)
     previous_start = start - dt.timedelta(hours=hours)
 
-    terminal_rows = _terminal_jobs_since(previous_start)
+    terminal_rows, material_job_history_available = _terminal_jobs_since(previous_start)
     current_jobs = _job_period(terminal_rows, start, current)
     previous_jobs = _job_period(terminal_rows, previous_start, start)
 
@@ -404,6 +426,7 @@ def build_operational_dashboard(
         "generatedAt": current.isoformat(),
         "dataCoverage": {
             "sampledHistoryAvailable": bool(snapshots),
+            "materialJobHistoryAvailable": material_job_history_available,
             "firstSampleAt": first_sample_value,
             "windowSampleCount": len(snapshots),
             "expectedSampleCount": hours * 6,
@@ -412,7 +435,11 @@ def build_operational_dashboard(
             ),
             "note": (
                 "queue / Worker availability 自 0110 上線後每 10 分鐘採樣；"
-                "教材成功率與處理時間可由既有 material_jobs 回算。"
+                + (
+                    "教材成功率與處理時間可由既有 material_jobs 回算。"
+                    if material_job_history_available
+                    else "目前 schema 尚無可回算的 material_jobs 完成時間欄位。"
+                )
             ),
         },
         "material": {
