@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import logging
 import re
 import shutil
 import uuid
@@ -27,6 +28,7 @@ from teacher_app.materials.validation import ALLOWED_MATERIAL_EXTENSIONS, normal
 
 OFFICE_EXT = frozenset({".pptx", ".ppt", ".doc", ".docx", ".xls", ".xlsx", ".odp", ".odt", ".ods"})
 MATERIAL_TYPE_VALUES = frozenset(material_repository.MATERIAL_TYPES)
+LOGGER = logging.getLogger(__name__)
 
 
 class SyncUploadError(RuntimeError):
@@ -185,7 +187,12 @@ def process_upload(storage, form: Mapping[str, Any], runtime: SyncUploadRuntime)
             preview_ready = True
             try:
                 classification_text = runtime.extract_pdf_text(preview_path)
-            except Exception:
+            except Exception as exc:
+                LOGGER.warning(
+                    "material classification text extraction fallback ext=%s error_type=%s",
+                    ext[:16],
+                    type(exc).__name__,
+                )
                 classification_text = None
 
         if requested_material_type == "auto":

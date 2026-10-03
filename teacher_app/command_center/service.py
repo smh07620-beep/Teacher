@@ -8,6 +8,7 @@ not duplicate mutation workflows or authorization decisions.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from typing import Any, Mapping, Optional
 
 from teacher_app.command_center import audience, dashboard_service
@@ -19,6 +20,9 @@ from teacher_app.learning import access as learning_access
 from teacher_app.learning import assignment_service
 from teacher_app.pgy import service as pgy_service
 from teacher_app.worker import repository as worker_repository
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 ACTIONABLE_PGY = {
@@ -106,7 +110,11 @@ def _learner_action_items(user: Mapping[str, Any], current: dt.datetime) -> list
     """Project canonical dashboard learning state into one learner task list."""
     try:
         dashboard = dashboard_service.dashboard_summary(user, now=current)
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning(
+            "command center learner projection failed error_type=%s",
+            type(exc).__name__,
+        )
         return []
 
     values: list[dict[str, Any]] = []
@@ -201,7 +209,8 @@ def _teacher_review_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
     values = []
     try:
         rows = exam_records.list_records()
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("command center review projection failed error_type=%s", type(exc).__name__)
         return values
     for row in rows:
         if str(row.get("reviewStatus") or "completed") != "pending":
@@ -237,14 +246,20 @@ def _teacher_material_failure_items(user: Mapping[str, Any]) -> list[dict[str, A
     values = []
     try:
         jobs = worker_repository.list_material_jobs(80)
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("command center material failure projection failed error_type=%s", type(exc).__name__)
         return values
     for job in jobs:
         if str(job.get("status") or "") != "failed":
             continue
         try:
             full = worker_repository.get_material_job(str(job.get("id") or ""), include_payload=True) or job
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "command center material job detail fallback job_id=%s error_type=%s",
+                str(job.get("id") or "")[:100],
+                type(exc).__name__,
+            )
             full = job
         payload = full.get("payload") if isinstance(full.get("payload"), Mapping) else {}
         area = str(payload.get("area") or full.get("area") or "internal")
@@ -285,7 +300,8 @@ def _teacher_due_items(user: Mapping[str, Any], current: dt.datetime) -> list[di
     values = []
     try:
         assignments = assignment_service.admin_list(user, include_inactive=False)
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("command center assignment projection failed error_type=%s", type(exc).__name__)
         return values
     course_cache: dict[str, dict[str, Any]] = {}
     for assignment in assignments:
@@ -325,7 +341,8 @@ def _teacher_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
     values = []
     try:
         courses = course_repository.list_courses(None, None, True)
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("command center draft projection failed error_type=%s", type(exc).__name__)
         return values
     for course in courses:
         if course.get("active", True):

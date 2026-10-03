@@ -7,6 +7,7 @@ legacy host.
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from urllib.parse import quote
 
@@ -16,6 +17,9 @@ from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.config import teaching_usage_notice
 from teacher_app.materials import catalog, repository
 from teacher_app.storage.web_runtime import WebStorageRuntime, mega_web_status
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _login_required():
@@ -196,8 +200,11 @@ def register_material_delivery_routes(owner, *, paths, storage_runtime=None, mat
             try:
                 remote = runtime.mega_remote_join(runtime.mega_root(), "question-images", safe)
                 return runtime.mega_send_file(remote, safe, inline=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                LOGGER.warning(
+                    "material question image remote read failed backend=mega error_type=%s",
+                    type(exc).__name__,
+                )
         return jsonify({"error": "找不到題目影像"}), 404
 
     for rule, endpoint, view in (

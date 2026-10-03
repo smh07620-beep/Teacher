@@ -1,6 +1,6 @@
 """Authenticated account self-service and password recovery."""
 from __future__ import annotations
-import datetime as dt, hashlib, os, re, secrets, smtplib
+import datetime as dt, hashlib, logging, os, re, secrets, smtplib
 from email.message import EmailMessage
 from flask import g, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -8,6 +8,7 @@ from teacher_app.auth import repository, service
 from teacher_app.common import audit, db as common_db
 
 EMAIL_RE=re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+LOGGER=logging.getLogger(__name__)
 
 def _now(): return dt.datetime.now(dt.timezone.utc)
 def _iso(v): return v.isoformat()
@@ -97,8 +98,12 @@ def register_account_self_service(app):
             base=str(os.getenv("PUBLIC_BASE_URL","")).rstrip("/")
             link=f"{base}/reset-password?token={token}" if base else ""
             if link:
-                try:_send(str(row["email"]),"醫學檢驗教學平台｜重設密碼",f"請在 30 分鐘內使用以下連結重設密碼：\n\n{link}\n\n若非本人操作，請忽略此信。")
-                except Exception: pass
+                try:
+                    sent=_send(str(row["email"]),"醫學檢驗教學平台｜重設密碼",f"請在 30 分鐘內使用以下連結重設密碼：\n\n{link}\n\n若非本人操作，請忽略此信。")
+                    if not sent:
+                        LOGGER.warning("password reset email not sent reason=smtp_unavailable")
+                except Exception as exc:
+                    LOGGER.warning("password reset email send failed error_type=%s",type(exc).__name__)
         return jsonify({"ok":True,"message":"若帳號與 Email 資料相符，系統將寄出重設密碼信件。"})
 
     @app.post("/api/auth/reset-password")

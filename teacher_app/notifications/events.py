@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import logging
 from typing import Any, Mapping, Optional
 
 from teacher_app.command_center import dashboard_service, service
@@ -16,6 +17,9 @@ from teacher_app.worker import operations as worker_operations
 from teacher_app.notifications import incidents
 from teacher_app.common.errors import ApiError
 from teacher_app.exams import windows as exam_windows
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 EMAIL_ONCE_KINDS = {"retraining", "review", "material_failure", "worker_offline", "operational_incident", "operational_recovery"}
@@ -128,7 +132,11 @@ def _exam_deadline_events(user: Mapping[str, Any], current: dt.datetime) -> list
     """Add server-authoritative exam deadlines without reimplementing completion rules."""
     try:
         dashboard = dashboard_service.dashboard_summary(user, now=current)
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning(
+            "notification exam deadline projection failed error_type=%s",
+            type(exc).__name__,
+        )
         return []
     values: list[dict[str, Any]] = []
     for exam in dashboard.get("pendingExams") or []:
@@ -137,7 +145,12 @@ def _exam_deadline_events(user: Mapping[str, Any], current: dt.datetime) -> list
             continue
         try:
             window = exam_windows.get_window(exam_id) or {}
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "notification exam window lookup failed exam_id=%s error_type=%s",
+                exam_id[:100],
+                type(exc).__name__,
+            )
             continue
         enabled = window.get("reminder_enabled", window.get("reminderEnabled", True))
         if enabled in (False, 0, "0", "false", "False"):

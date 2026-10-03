@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import functools
+import logging
 import os
 import re
 from pathlib import Path
@@ -17,6 +18,9 @@ _PATTERNS = [
     (re.compile(r"(?i)(電話|TEL|PHONE)\s*[:：]?\s*[0-9()+\- ]{7,20}"), r"\1：[已遮罩]"),
     (re.compile(r"(?i)(生日|出生日期|DOB)\s*[:：]?\s*\d{2,4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?"), r"\1：[已遮罩]"),
 ]
+
+LOGGER = logging.getLogger(__name__)
+
 
 MEDIA_EXT = {
     ".png", ".jpg", ".jpeg", ".gif", ".webp",
@@ -133,8 +137,15 @@ def register_ai_privacy(app, *, material_lookup):
         for material_id in material_ids:
             try:
                 material = material_lookup(str(material_id))
-            except Exception:
-                material = None
+            except Exception as exc:
+                LOGGER.warning(
+                    "AI privacy material lookup failed error_type=%s",
+                    type(exc).__name__,
+                )
+                return jsonify({
+                    "error": "目前無法驗證教材的外部 AI 隱私條件，請稍後再試。",
+                    "code": "AI_PRIVACY_LOOKUP_UNAVAILABLE",
+                }), 503
             if not material:
                 continue
             filename = str(

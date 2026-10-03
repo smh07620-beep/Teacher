@@ -28,6 +28,14 @@ class ErrorObservability20261003Tests(unittest.TestCase):
         storage_web = ROOT.joinpath("teacher_app", "storage", "web_runtime.py").read_text(encoding="utf-8")
         storage_admin = ROOT.joinpath("teacher_app", "storage", "admin_service.py").read_text(encoding="utf-8")
         incidents_source = ROOT.joinpath("teacher_app", "notifications", "incidents.py").read_text(encoding="utf-8")
+        account_self_service = ROOT.joinpath("teacher_app", "auth", "self_service.py").read_text(encoding="utf-8")
+        upload_progress = ROOT.joinpath("teacher_app", "materials", "upload_progress.py").read_text(encoding="utf-8")
+        notification_events = ROOT.joinpath("teacher_app", "notifications", "events.py").read_text(encoding="utf-8")
+        command_center = ROOT.joinpath("teacher_app", "command_center", "service.py").read_text(encoding="utf-8")
+        delivery_routes = ROOT.joinpath("teacher_app", "materials", "delivery_routes.py").read_text(encoding="utf-8")
+        sync_upload = ROOT.joinpath("teacher_app", "materials", "sync_upload.py").read_text(encoding="utf-8")
+        protocol_version = ROOT.joinpath("teacher_app", "worker", "protocol_version.py").read_text(encoding="utf-8")
+        privacy_source = ROOT.joinpath("teacher_app", "common", "privacy.py").read_text(encoding="utf-8")
 
         for marker, source in (
             ("R2 upload session status count failed", r2),
@@ -64,6 +72,20 @@ class ErrorObservability20261003Tests(unittest.TestCase):
             ("operational incident persistence unavailable", incidents_source),
             ("operational incident read failed", incidents_source),
             ("operational incident AI projection failed", incidents_source),
+            ("password reset email send failed", account_self_service),
+            ("material upload progress write failed", upload_progress),
+            ("material upload progress read fallback", upload_progress),
+            ("notification exam deadline projection failed", notification_events),
+            ("notification exam window lookup failed", notification_events),
+            ("command center learner projection failed", command_center),
+            ("command center review projection failed", command_center),
+            ("command center material failure projection failed", command_center),
+            ("command center assignment projection failed", command_center),
+            ("command center draft projection failed", command_center),
+            ("material question image remote read failed", delivery_routes),
+            ("material classification text extraction fallback", sync_upload),
+            ("worker protocol heartbeat lookup failed", protocol_version),
+            ("AI privacy material lookup failed", privacy_source),
         ):
             self.assertIn(marker, source)
 
@@ -71,7 +93,9 @@ class ErrorObservability20261003Tests(unittest.TestCase):
             r2, reminders, pgy, materials, scope_filter, ai_fallback, ai_jobs,
             script_jobs, audio_jobs, subtitle_jobs, presentation_jobs, video_jobs,
             notification_prefs, storage_service, storage_worker, storage_web,
-            storage_admin, incidents_source,
+            storage_admin, incidents_source, account_self_service, upload_progress,
+            notification_events, command_center, delivery_routes, sync_upload,
+            protocol_version, privacy_source,
         ):
             self.assertIn("error_type=%s", source)
         self.assertIn("loop error type=", ai_worker)

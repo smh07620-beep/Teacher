@@ -8,8 +8,12 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import re
 from pathlib import Path
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class UploadProgressStore:
@@ -46,18 +50,26 @@ class UploadProgressStore:
         try:
             tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
             tmp.replace(path)
-        except Exception:
+        except Exception as exc:
             # Progress reporting is deliberately best-effort and must never make
             # an otherwise successful material upload fail.
-            pass
+            LOGGER.warning(
+                "material upload progress write failed progress_id=%s error_type=%s",
+                path.stem[:80],
+                type(exc).__name__,
+            )
 
     def clear(self, progress_id: str) -> None:
         path = self.path(progress_id)
         try:
             if path and path.exists():
                 path.unlink()
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.warning(
+                "material upload progress cleanup failed progress_id=%s error_type=%s",
+                path.stem[:80],
+                type(exc).__name__,
+            )
 
     def read(self, progress_id: str) -> dict | None:
         path = self.path(progress_id)
@@ -65,7 +77,12 @@ class UploadProgressStore:
             return None
         try:
             value = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "material upload progress read fallback progress_id=%s error_type=%s",
+                path.stem[:80],
+                type(exc).__name__,
+            )
             return None
         return value if isinstance(value, dict) else None
 

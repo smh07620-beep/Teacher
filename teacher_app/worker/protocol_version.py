@@ -7,12 +7,14 @@ reason work is intentionally staying queued.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Mapping
 
 
 MATERIAL_WORKER_PROTOCOL_VERSION = 2
 MIN_MATERIAL_WORKER_PROTOCOL_VERSION = 2
 _RUNTIME_CAPABILITY_KEYS = frozenset({"platform", "ffmpeg", "ffprobe", "libreOffice"})
+LOGGER = logging.getLogger(__name__)
 
 
 def _protocol_version(capabilities: Any) -> int:
@@ -97,8 +99,13 @@ def install_web_guards() -> None:
                     if str(item.get("worker_id") or item.get("workerId") or "") == str(worker_id):
                         heartbeat = item
                         break
-            except Exception:
+            except Exception as exc:
                 # A status lookup failure must not create a second queue outage.
+                LOGGER.warning(
+                    "worker protocol heartbeat lookup failed phase=claim worker_id=%s error_type=%s",
+                    str(worker_id)[:120],
+                    type(exc).__name__,
+                )
                 heartbeat = None
             if heartbeat is not None:
                 heartbeat_capabilities = heartbeat.get("capabilities")
@@ -133,7 +140,11 @@ def install_web_guards() -> None:
                         50, connection_factory=connection_factory
                     )
                 }
-            except Exception:
+            except Exception as exc:
+                LOGGER.warning(
+                    "worker protocol heartbeat lookup failed phase=status error_type=%s",
+                    type(exc).__name__,
+                )
                 heartbeat_map = {}
             for worker in data.get("workers", []):
                 item = heartbeat_map.get(str(worker.get("workerId") or ""), {})
