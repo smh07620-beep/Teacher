@@ -238,7 +238,15 @@ def record_operational_sample(
 def _missing_material_job_history_schema(exc: Exception) -> bool:
     """Return True only for mixed-version schemas that cannot provide job history."""
     text = str(exc or "").lower()
-    columns = ("started_at", "finished_at", "status")
+    columns = (
+        "started_at",
+        "finished_at",
+        "created_at",
+        "status",
+        "original_name",
+        "source_bytes",
+        "result",
+    )
     if "no such table" in text and "material_jobs" in text:
         return True
     if "no such column" in text and any(column in text for column in columns):
