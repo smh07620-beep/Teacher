@@ -49,6 +49,35 @@ class WorkerHeartbeatRetentionTests(unittest.TestCase):
         self.assertEqual(workers["worker-online"]["status"], "online")
         self.assertEqual(workers["worker-recent-offline"]["status"], "offline")
 
+    def test_status_collapses_superseded_ids_from_same_physical_machine(self):
+        now = dt.datetime.now(dt.timezone.utc)
+        heartbeats = [
+            {
+                "worker_id": "AB85-TeacherWorker-old12345",
+                "last_seen": (now - dt.timedelta(minutes=8)).isoformat(),
+                "capabilities": {"workerMachine": "AB85", "ffmpeg": {"available": True}},
+                "current_job_id": "",
+            },
+            {
+                "worker_id": "AB85-TeacherWorker",
+                "last_seen": (now - dt.timedelta(seconds=20)).isoformat(),
+                "capabilities": {"workerMachine": "AB85", "ffmpeg": {"available": True}},
+                "current_job_id": "",
+            },
+        ]
+        with (
+            patch.object(operations.repository, "queue_aggregates", return_value={}),
+            patch.object(operations.repository, "list_material_jobs", return_value=[]),
+            patch.object(operations.repository, "list_heartbeats", return_value=heartbeats),
+            patch.object(operations.r2_budget, "status", return_value={}),
+        ):
+            result = operations.status(lambda: {"available": True, "shared": True})
+
+        self.assertEqual(len(result["workers"]), 1)
+        self.assertEqual(result["workers"][0]["workerId"], "AB85-TeacherWorker")
+        self.assertEqual(result["workers"][0]["status"], "online")
+        self.assertEqual(result["workers"][0]["workerMachine"], "AB85")
+
     def test_worker_ui_prioritizes_active_and_collapses_recent_offline(self):
         source = ROOT.joinpath("static", "worker-status-70.js").read_text(encoding="utf-8")
         for marker in (
