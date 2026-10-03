@@ -57,6 +57,25 @@ class NotificationCenterUi86Tests(unittest.TestCase):
             self.assertIn(token, self.js)
         self.assertIn("isSystemContext()?Promise.resolve([])", self.js)
 
+    def test_system_notification_center_escapes_workspace_clipping_when_expanded(self):
+        admin_css = ROOT.joinpath("static", "admin.css").read_text(encoding="utf-8")
+        for token in (
+            "function openSystemOverlay(section)",
+            "function closeSystemOverlay(section)",
+            "notification-center-backdrop-71",
+            "notification-center-modal-open",
+            "document.body.appendChild(section)",
+            "event.key!=='Escape'",
+        ):
+            self.assertIn(token, self.js)
+        for token in (
+            "#notification-center-71.notification-center-modal-open",
+            ".notification-center-backdrop-71",
+            "body.notification-center-open-71",
+            "position: fixed !important",
+        ):
+            self.assertIn(token, admin_css)
+
     def test_browser_does_not_rebuild_actionable_event_identity(self):
         self.assertNotIn("notificationKey('pgy'", self.js)
         self.assertNotIn("notificationKey('course'", self.js)
