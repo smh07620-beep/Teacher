@@ -1,8 +1,7 @@
-/* Teacher 7.0 M3: system-admin Worker / job status surface.
+/* Teacher 7.0 M3: system-admin Worker / job status and incident response surface.
  *
- * Read-only operational UI. Server-side RBAC remains authoritative and this
- * file never sends worker tokens, storage credentials, ADMIN_KEY headers, or
- * mutation requests.
+ * Server-side RBAC remains authoritative. Incident response mutations use the
+ * authenticated session only and cannot mark a live operational failure resolved.
  */
 (async function () {
   'use strict';
@@ -78,6 +77,8 @@
 
   let refreshTimer = null;
   let loading = false;
+  let incidentResponders = [];
+  let respondersLoaded = false;
 
   function workerButton() {
     let button = document.getElementById('admin-nav-worker');
@@ -273,7 +274,68 @@
     return {href:'#worker-problems-70',label:'查看維運狀態'};
   }
 
-  function incidentCards(rows, emptyText='目前沒有事件。') {
+  async function loadIncidentResponders() {
+    if (respondersLoaded) return incidentResponders;
+    respondersLoaded = true;
+    try {
+      const response = await fetch('/api/operational-incidents/responders', {
+        credentials: 'same-origin',
+        cache: 'no-store'
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && Array.isArray(data.responders)) {
+        incidentResponders = data.responders;
+      }
+    } catch (_error) {
+      incidentResponders = [];
+    }
+    return incidentResponders;
+  }
+
+  async function updateIncidentResponse(card, key, payload) {
+    const status = card?.querySelector('[data-incident-response-status]');
+    const controls = card?.querySelectorAll('button,select,input') || [];
+    controls.forEach(control => { control.disabled = true; });
+    if (status) status.textContent = '⏳ 儲存處置狀態中…';
+    try {
+      const response = await fetch('/api/operational-incidents/' + encodeURIComponent(key), {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `更新失敗（${response.status}）`);
+      if (status) status.textContent = '✅ 處置狀態已更新';
+      await renderWorkerStatus(true);
+    } catch (error) {
+      if (status) status.textContent = '❌ ' + (error.message || '更新失敗');
+      controls.forEach(control => { control.disabled = false; });
+    }
+  }
+
+  function bindIncidentControls() {
+    panel.querySelectorAll('[data-incident-card]').forEach(card => {
+      const key = card.dataset.incidentKey || '';
+      card.querySelectorAll('[data-incident-response-action]').forEach(button => {
+        button.onclick = () => {
+          const action = button.dataset.incidentResponseAction || '';
+          const payload = {action};
+          if (action === 'assign') {
+            payload.assignedTo = card.querySelector('[data-incident-assignee]')?.value || '';
+          } else if (action === 'maintenance') {
+            payload.maintenanceMinutes = Number(card.querySelector('[data-incident-maintenance]')?.value || 60);
+          } else if (action === 'note') {
+            payload.note = card.querySelector('[data-incident-note]')?.value || '';
+          }
+          void updateIncidentResponse(card, key, payload);
+        };
+      });
+    });
+  }
+
+  function incidentCards(rows, emptyText='目前沒有事件。', responders=[]) {
     if(!rows.length)return '<div class="rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">'+escapeHtml(emptyText)+'</div>';
     return rows.map(incident=>{
       const open=incident.status==='open';
@@ -288,7 +350,15 @@
       const steps=Array.isArray(runbook.steps)?runbook.steps.filter(Boolean):[];
       const assignee=String(incident.assignedTo||'').trim();
       const maintenance=incident.maintenanceActive&&incident.maintenanceUntil?` · 維護至 ${formatWhen(incident.maintenanceUntil)}`:'';
-      return `<article class="rounded-xl border ${classes} p-3 text-sm" data-incident-type="${escapeHtml(incident.incidentType||'')}" data-incident-status="${open?'open':'resolved'}">
+      const responderOptions=['<option value="">未指派</option>',...(responders||[]).map(person=>{
+        const username=String(person.username||'');
+        const selected=username===assignee?' selected':'';
+        return '<option value="'+escapeHtml(username)+'"'+selected+'>'+escapeHtml(person.name||username)+' · '+escapeHtml(username)+'</option>';
+      })].join('');
+      const maintenanceControl=incident.maintenanceActive
+        ? '<button type="button" data-incident-response-action="clear_maintenance" class="rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-800">結束維護</button>'
+        : '<select data-incident-maintenance class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px]"><option value="30">維護 30 分</option><option value="60" selected>維護 1 小時</option><option value="240">維護 4 小時</option><option value="1440">維護 24 小時</option></select><button type="button" data-incident-response-action="maintenance" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold">開始維護</button>';
+      return `<article class="rounded-xl border ${classes} p-3 text-sm" data-incident-card data-incident-key="${escapeHtml(incident.incidentKey||'')}" data-incident-type="${escapeHtml(incident.incidentType||'')}" data-incident-status="${open?'open':'resolved'}">
         <div class="flex flex-wrap items-start justify-between gap-2">
           <div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] font-bold text-slate-600">${categoryIcon} ${escapeHtml(categoryLabel)}</span><span class="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] font-bold text-slate-600">發生 ${occurrences} 次</span></div><b class="mt-1.5 block text-slate-900">${escapeHtml(incident.title||'系統維運事件')}</b><div class="mt-1 font-mono text-[10px] text-slate-500">${escapeHtml(incident.errorCode||incident.incidentType||'')} · generation ${Number(incident.generation||1)}</div></div>
           <span class="rounded-full border px-2 py-1 text-[10px] font-bold ${responseClasses}">${responseIcon} ${escapeHtml(responseLabel)}</span>
@@ -296,9 +366,23 @@
         <div class="mt-2 text-xs text-slate-700">${escapeHtml(open?(incident.detail||'需要處理'):'系統已確認此事件恢復正常。')}</div>
         ${open&&incident.action?`<div class="mt-2 rounded-lg bg-white/70 px-2.5 py-2 text-xs font-semibold text-slate-700"><span class="text-slate-500">建議動作：</span>${escapeHtml(incident.action)}</div>`:''}
         ${(assignee||incident.acknowledgedBy||incident.responseNote||maintenance)?`<div class="mt-2 text-[11px] text-slate-600">${assignee?`負責人：<b>${escapeHtml(assignee)}</b> · `:''}${incident.acknowledgedBy?`確認：${escapeHtml(incident.acknowledgedBy)} · `:''}${incident.responseNote?`備註：${escapeHtml(incident.responseNote)}`:''}${maintenance}</div>`:''}
+        ${open?`<div class="mt-3 rounded-lg border border-slate-200 bg-white/80 p-2 space-y-2">
+          <div class="flex flex-wrap gap-2">
+            ${incident.responseState==='unacknowledged'?'<button type="button" data-incident-response-action="acknowledge" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold">✓ 已知悉</button>':''}
+            <select data-incident-assignee class="min-w-40 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px]">${responderOptions}</select>
+            <button type="button" data-incident-response-action="assign" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold">指派處理</button>
+            ${assignee?'<button type="button" data-incident-response-action="unassign" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px]">解除指派</button>':''}
+            ${maintenanceControl}
+          </div>
+          <div class="flex gap-2">
+            <input data-incident-note type="text" maxlength="1000" value="${escapeHtml(incident.responseNote||'')}" placeholder="處置備註（例如：已聯絡資訊室）" class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px]">
+            <button type="button" data-incident-response-action="note" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold">儲存備註</button>
+          </div>
+          <div data-incident-response-status class="text-[10px] text-slate-500"></div>
+        </div>`:''}
         ${steps.length?`<details class="mt-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-xs text-slate-700"><summary class="cursor-pointer font-bold">📋 ${escapeHtml(runbook.title||'處置步驟')}</summary><ol class="mt-2 list-decimal space-y-1 pl-5">${steps.map(step=>`<li>${escapeHtml(step)}</li>`).join('')}</ol></details>`:''}
         <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <div class="text-[10px] text-slate-500">首次 ${formatWhen(incident.openedAt)} · 最後觀察 ${formatWhen(incident.lastSeenAt)}${incident.resolvedAt?` · 恢復 ${formatWhen(incident.resolvedAt)}`:''}</div>
+          <div class="text-[10px] text-slate-500">首次 ${formatWhen(incident.openedAt)} · 最後觀察 ${formatWhen(incident.lastSeenAt)}${incident.resolvedAt?` · 恢復 ${formatWhen(incident.resolvedAt)}`:''}${incident.responseUpdatedBy?` · 最後處置 ${escapeHtml(incident.responseUpdatedBy)} ${formatWhen(incident.responseUpdatedAt)}`:''}</div>
           <a data-incident-action href="${escapeHtml(action.href)}" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50">${escapeHtml(action.label)} →</a>
         </div>
       </article>`;
@@ -339,6 +423,7 @@
         return;
       }
       if (!response.ok) throw new Error(data.error || `讀取失敗（${response.status}）`);
+      await loadIncidentResponders();
       const workerStatusAvailable = data.workerStatusAvailable !== false;
       const workerStatusError = data.workerStatusError || '無法讀取本機 Worker 狀態，請稍後再試。';
       const workers = Array.isArray(data.workers) ? data.workers : [];
@@ -399,8 +484,8 @@
         </section>
         <section id="worker-incidents-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4 scroll-mt-4">
           <div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-slate-900">🚨 維運事件</h5><p class="mt-1 text-[11px] text-slate-500">Worker、AI 與 Storage 的持續性問題集中在這裡；單次可恢復 fallback 不會升級成事件。</p></div><div class="flex gap-2 text-[11px]"><span class="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 font-bold text-rose-700">目前問題 ${currentIncidents.length}</span><span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 font-bold text-emerald-700">已恢復 ${resolvedIncidents.length}</span></div></div>
-          <div><div class="mb-2 text-xs font-black text-slate-700">目前問題</div><div class="space-y-2">${incidentCards(currentIncidents,'目前沒有需要處理的維運事件。')}</div></div>
-          <details class="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><summary class="cursor-pointer text-xs font-black text-slate-700">最近已恢復（24 小時） · ${resolvedIncidents.length} 筆</summary><div class="mt-3 space-y-2">${incidentCards(resolvedIncidents,'最近 24 小時沒有已恢復事件。')}</div></details>
+          <div><div class="mb-2 text-xs font-black text-slate-700">目前問題</div><div class="space-y-2">${incidentCards(currentIncidents,'目前沒有需要處理的維運事件。',incidentResponders)}</div></div>
+          <details class="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><summary class="cursor-pointer text-xs font-black text-slate-700">最近已恢復（24 小時） · ${resolvedIncidents.length} 筆</summary><div class="mt-3 space-y-2">${incidentCards(resolvedIncidents,'最近 24 小時沒有已恢復事件。',incidentResponders)}</div></details>
         </section>
         <section id="worker-problems-70" class="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm space-y-3 scroll-mt-4">
           <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">⚠ 需要注意的工作</h5><span class="text-[11px] text-slate-400">${problemJobs.length} 筆</span></div>
@@ -412,6 +497,7 @@
         </section>
         ${firstRunGuide()}`;
       document.getElementById('worker-refresh-70').onclick = () => renderWorkerStatus(true);
+      bindIncidentControls();
     } catch (error) {
       panel.innerHTML = `<section class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${escapeHtml(error.message || '無法讀取 Worker 狀態')}</section>${firstRunGuide()}`;
     } finally {
@@ -427,7 +513,7 @@
       modal.dataset.section = 'worker';
       markActive();
       const status = document.getElementById('admin-workspace-status');
-      if (status) status.textContent = '系統管理者唯讀檢視 Worker heartbeat、真實進度、卡住判定、重試與失敗原因。';
+      if (status) status.textContent = '系統管理者檢視 Worker / Job 狀態並處置 OPEN Incident；恢復仍由系統自動判定。';
       await renderWorkerStatus(Boolean(force));
       return true;
   });
