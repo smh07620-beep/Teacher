@@ -83,3 +83,35 @@ MATERIAL_SLO_P95_DURATION_SECONDS=
 ```
 
 When these values are absent, the UI labels the view as a baseline and does not invent a target.
+
+
+## Sustained trend anomaly and capacity analysis
+
+The 0110 history is also used for conservative trend detection. This does **not** create or assume formal SLO targets. It only promotes sustained deterioration into the existing Incident lifecycle after enough evidence is present.
+
+Default detection policy:
+
+- Queue growth: at least 6 ten-minute samples, net growth of at least 3 jobs, the second half of the window remains higher than the first half, almost all sample-to-sample moves are non-decreasing, and oldest pending age reaches at least 600 seconds.
+- Worker capacity pressure: Queue growth must already be confirmed, then either only one Worker is available or a multi-Worker pool loses at least one average active Worker during the same window. The message remains "possible capacity pressure"; it does not claim hardware is the cause until Worker/provider/conversion failures are excluded.
+- Processing slowdown: compare two equal 6-hour windows, require at least 3 completed jobs in each, and require P95 to increase by at least 1.5x and at least 60 seconds.
+- Incident-frequency growth: compare the most recent 24 hours with the previous 24 hours, require at least 3 opens for the same non-trend error code, and at least 2x the previous count (or 3 opens when the previous count was zero).
+- Trend-generated Incidents are excluded from the incident-frequency source count so the detector cannot recursively amplify itself.
+
+These signals reuse the existing Incident lifecycle, deduplication, acknowledgement/assignment/maintenance controls, Email policy and automatic recovery. If trend-history projection itself is unavailable, existing trend Incidents stay OPEN/unknown instead of being falsely marked recovered.
+
+Optional tuning knobs are Web/alert-runtime configuration, not Worker configuration:
+
+```text
+OPERATIONS_TREND_MIN_SAMPLES=6
+OPERATIONS_TREND_QUEUE_MIN_GROWTH=3
+OPERATIONS_TREND_QUEUE_OLDEST_SECONDS=600
+OPERATIONS_TREND_DURATION_WINDOW_HOURS=6
+OPERATIONS_TREND_DURATION_MIN_JOBS=3
+OPERATIONS_TREND_DURATION_RATIO=1.5
+OPERATIONS_TREND_DURATION_MIN_DELTA_SECONDS=60
+OPERATIONS_TREND_INCIDENT_WINDOW_HOURS=24
+OPERATIONS_TREND_INCIDENT_MIN_COUNT=3
+OPERATIONS_TREND_INCIDENT_RATIO=2.0
+```
+
+A single queue spike, one slow job, or one provider Incident is intentionally insufficient for a trend Incident.
