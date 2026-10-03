@@ -8,10 +8,13 @@ user preference.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from typing import Any, Iterable, Mapping
 
 from teacher_app.common import db as common_db
 from teacher_app.common.errors import ApiError
+
+LOGGER = logging.getLogger(__name__)
 
 DEFAULTS = {
     "courseDue": True,
@@ -57,10 +60,13 @@ def get_preferences(user: Mapping[str, Any] | None) -> dict[str, Any]:
                 item = dict(row)
                 for key, column in _DB_COLUMNS.items():
                     values[key] = bool(item.get(column, True))
-    except Exception:
+    except Exception as exc:
         # Mixed-version recovery: default-on ordinary notifications until the
         # additive migration is applied. Critical notifications remain protected.
-        pass
+        LOGGER.warning(
+            "notification preferences read fallback error_type=%s",
+            type(exc).__name__,
+        )
     return {
         "emailCategories": values,
         "protectedCategories": ["materialFailure", "workerOffline"],

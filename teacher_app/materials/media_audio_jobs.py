@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import os
 import uuid
 from typing import Any, Mapping
@@ -9,6 +10,9 @@ from typing import Any, Mapping
 from teacher_app.common import scope
 from teacher_app.materials import media_audio_repository, media_audio_runtime, media_script_repository
 from teacher_app.materials import repository as material_repository
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class MediaAudioLimitError(RuntimeError):
@@ -154,6 +158,11 @@ class MediaAudioJobProcessor:
                 )
             media_audio_repository.complete(job_id, token, result)
         except Exception as exc:
+            LOGGER.warning(
+                "AI media audio job failed job_id=%s error_type=%s",
+                str(job_id or "")[:120],
+                type(exc).__name__,
+            )
             media_audio_repository.fail(job_id, token, str(exc))
         return True
 
@@ -194,7 +203,12 @@ def public_job(job: Mapping[str, Any]) -> dict:
         if payload.get("preview") and payload.get("previewObjectKey"):
             try:
                 payload["previewUrl"] = media_audio_runtime.preview_url(str(payload.get("previewObjectKey") or ""))
-            except Exception:
+            except Exception as exc:
+                LOGGER.warning(
+                    "AI media audio preview URL failed job_id=%s error_type=%s",
+                    str(job.get("id") or "")[:120],
+                    type(exc).__name__,
+                )
                 payload["previewUrl"] = ""
             payload.pop("previewObjectKey", None)
         result["result"] = payload

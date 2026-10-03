@@ -99,8 +99,9 @@ def main() -> int:
             return 0
         except Exception as exc:
             # Web migrations and DB/network services can come up after the worker.
-            # Keep the worker alive and retry without claiming a job twice.
-            log(f"loop error: {str(exc)[:800]}")
+            # Keep the worker alive and retry without claiming a job twice. Do not
+            # print raw provider/DB exception text because it may contain secrets.
+            log(f"loop error type={type(exc).__name__}")
             time.sleep(poll_seconds)
 
 

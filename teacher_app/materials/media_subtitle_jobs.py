@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import os
 import re
 import uuid
@@ -9,6 +10,9 @@ from typing import Any, Mapping
 
 from teacher_app.materials import media_subtitle_repository, media_subtitle_runtime
 from teacher_app.materials import repository as material_repository
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class MediaSubtitleLimitError(RuntimeError):
@@ -134,6 +138,11 @@ class MediaSubtitleJobProcessor:
                 },
             )
         except Exception as exc:
+            LOGGER.warning(
+                "AI media subtitle job failed job_id=%s error_type=%s",
+                str(job_id or "")[:120],
+                type(exc).__name__,
+            )
             media_subtitle_repository.fail(job_id, token, str(exc))
         return True
 

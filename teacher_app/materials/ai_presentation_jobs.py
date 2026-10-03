@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import os
 import uuid
 
 from teacher_app.materials import ai_presentation_repository as repository
 from teacher_app.materials import ai_presentation_runtime
 from teacher_app.materials import ai_presentation_quality as quality
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _env_int(name: str, default: int, lower: int, upper: int) -> int:
@@ -100,6 +104,11 @@ class AiPresentationJobProcessor:
             if not repository.complete_job(job_id, token, result):
                 raise RuntimeError("PowerPoint 工作完成狀態已失效，未覆寫其他 Worker。")
         except Exception as exc:
+            LOGGER.warning(
+                "AI presentation job failed job_id=%s error_type=%s",
+                str(job_id or "")[:120],
+                type(exc).__name__,
+            )
             repository.fail_job(job_id, token, str(exc))
         return True
 

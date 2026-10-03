@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import os
 import uuid
 from typing import Any, Mapping
 
 from teacher_app.materials import media_script_repository, media_script_runtime
 from teacher_app.materials import repository as material_repository
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class MediaScriptLimitError(RuntimeError):
@@ -129,6 +133,11 @@ class MediaScriptJobProcessor:
             result = run_generation_sync(job.get("request") or {}, progress_callback=progress)
             media_script_repository.complete(job_id, token, result)
         except Exception as exc:
+            LOGGER.warning(
+                "AI media script job failed job_id=%s error_type=%s",
+                str(job_id or "")[:120],
+                type(exc).__name__,
+            )
             media_script_repository.fail(job_id, token, str(exc))
         return True
 

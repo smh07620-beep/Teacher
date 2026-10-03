@@ -7,6 +7,7 @@ malformed model output remain visible and never trigger provider hopping.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -20,6 +21,9 @@ from teacher_app.assessments import ai_runtime
 from teacher_app.assessments import repository as assessment_repository
 from teacher_app.common import privacy as ai_privacy
 from teacher_app.config import storage_paths
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -170,10 +174,19 @@ def run_with_fallback(
             }
         except Exception as exc:
             last_error = exc
-            if not is_retryable_provider_error(exc):
+            retryable = is_retryable_provider_error(exc)
+            next_provider = chain[index + 1] if retryable and index + 1 < len(chain) else ""
+            LOGGER.warning(
+                "AI provider attempt failed provider=%s next_provider=%s retryable=%s error_type=%s",
+                provider,
+                next_provider,
+                str(bool(retryable)).lower(),
+                type(exc).__name__,
+            )
+            if not retryable:
                 raise
-            if index + 1 < len(chain) and notify is not None:
-                notify(provider, chain[index + 1])
+            if next_provider and notify is not None:
+                notify(provider, next_provider)
     raise RuntimeError(
         "免費 AI 目前暫時無法使用：雲端額度/速率或服務可用性已達限制，"
         "且已設定的本機備援未能完成工作。請稍後再試。"

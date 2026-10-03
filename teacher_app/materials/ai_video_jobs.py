@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import os
 import uuid
 from typing import Any, Mapping
@@ -11,6 +12,9 @@ from teacher_app.materials import ai_video_repository as repository
 from teacher_app.materials import ai_video_runtime
 from teacher_app.materials.ai_video_storage import VideoStorage
 from teacher_app.materials.media_audio_runtime import _voice
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class AiVideoLimitError(RuntimeError):
@@ -65,6 +69,11 @@ class AiVideoJobProcessor:
             result = ai_video_runtime.generate_video(job=job, progress_callback=lambda percent, stage, detail: repository.set_progress(job_id, token, percent, stage, detail))
             repository.complete(job_id, token, result)
         except Exception as exc:
+            LOGGER.warning(
+                "AI video job failed job_id=%s error_type=%s",
+                str(job_id or "")[:120],
+                type(exc).__name__,
+            )
             repository.fail(job_id, token, str(exc))
         return True
 

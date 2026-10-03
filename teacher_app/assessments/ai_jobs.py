@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import os
 import uuid
 from pathlib import Path
@@ -10,6 +11,9 @@ from typing import Any, Callable, Mapping
 from teacher_app.assessments import ai_job_repository, repository
 from teacher_app.common import privacy as ai_privacy
 from teacher_app.materials import repository as material_repository
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class AiJobLimitError(RuntimeError):
@@ -170,6 +174,11 @@ class AiQuestionJobProcessor:
             )
             ai_job_repository.complete(job_id, token, result)
         except Exception as exc:
+            LOGGER.warning(
+                "AI question job failed job_id=%s error_type=%s",
+                str(job_id or "")[:120],
+                type(exc).__name__,
+            )
             ai_job_repository.fail(job_id, token, str(exc))
         return True
 
