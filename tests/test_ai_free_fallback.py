@@ -115,6 +115,37 @@ class FreeAIFallbackTests(unittest.TestCase):
                 )
         self.assertEqual(calls, ["groq"])
 
+    def test_provider_failures_are_logged_without_exception_message(self):
+        settings = self._settings()
+
+        def quota():
+            raise RuntimeError("token=do-not-log 429 rate limit")
+
+        with patch.object(
+            free_ai_fallback,
+            "provider_chain",
+            return_value=["groq", "gemini"],
+        ), patch.object(
+            free_ai_fallback.LOGGER,
+            "warning",
+        ) as warning:
+            value, meta = free_ai_fallback.run_with_fallback(
+                "groq",
+                cloud_callers={"groq": quota, "gemini": lambda: "ok"},
+                settings=settings,
+                local=self._local(),
+            )
+
+        self.assertEqual(value, "ok")
+        self.assertEqual(meta["provider"], "gemini")
+        rendered = "\n".join(str(call) for call in warning.call_args_list)
+        self.assertIn("AI provider attempt failed", rendered)
+        self.assertIn("groq", rendered)
+        self.assertIn("gemini", rendered)
+        self.assertIn("RuntimeError", rendered)
+        self.assertNotIn("do-not-log", rendered)
+
+
     def test_worker_runtime_reports_actual_fallback_provider_and_model(self):
         settings = self._settings()
         original_calls = []

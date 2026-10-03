@@ -111,6 +111,25 @@ class AiQuestionJobRepositoryTests(unittest.TestCase):
         self.assertEqual(persisted["status"], "completed")
         self.assertEqual(persisted["result"]["questions"][0]["question"], "worker result")
 
+    def test_processor_failure_logs_job_context_without_exception_message(self):
+        self.create_job("worker-failure")
+        processor = ai_jobs.AiQuestionJobProcessor(object())
+        with patch.object(
+            ai_jobs,
+            "run_generation_sync",
+            side_effect=RuntimeError("api_key=do-not-log"),
+        ), patch.object(ai_jobs.LOGGER, "warning") as warning:
+            self.assertTrue(processor.run_job("worker-failure"))
+
+        persisted = ai_job_repository.get_job("worker-failure")
+        self.assertEqual(persisted["status"], "failed")
+        rendered = "\n".join(str(call) for call in warning.call_args_list)
+        self.assertIn("AI question job failed", rendered)
+        self.assertIn("worker-failure", rendered)
+        self.assertIn("RuntimeError", rendered)
+        self.assertNotIn("do-not-log", rendered)
+
+
     def test_request_snapshot_deidentifies_focus_before_persistence(self):
         runtime = type("Runtime", (), {"max_materials": 4, "max_questions": 15})()
         with patch.object(

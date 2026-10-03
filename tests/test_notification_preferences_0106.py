@@ -45,6 +45,22 @@ class NotificationPreference0106Tests(unittest.TestCase):
             filtered_master_off = preferences.filter_email_events(rows, {"username": "u1"}, general_enabled=False)
             self.assertEqual([row["kind"] for row in filtered_master_off], ["material_failure", "worker_offline"])
 
+    def test_mixed_version_read_fallback_is_logged_without_database_message(self):
+        user = {"username": "teacher-a"}
+        with patch.object(
+            preferences.common_db,
+            "read_connection",
+            side_effect=RuntimeError("postgres://secret@example"),
+        ), patch.object(preferences.LOGGER, "warning") as warning:
+            result = preferences.get_preferences(user)
+
+        self.assertEqual(result["emailCategories"], preferences.DEFAULTS)
+        rendered = "\n".join(str(call) for call in warning.call_args_list)
+        self.assertIn("notification preferences read fallback", rendered)
+        self.assertIn("RuntimeError", rendered)
+        self.assertNotIn("secret", rendered)
+
+
     def test_preference_api_and_ui_are_session_scoped_and_do_not_hide_in_app_tasks(self):
         routes = ROOT.joinpath("teacher_app", "command_center", "notification_routes.py").read_text(encoding="utf-8")
         reminders = ROOT.joinpath("teacher_app", "notifications", "reminders.py").read_text(encoding="utf-8")

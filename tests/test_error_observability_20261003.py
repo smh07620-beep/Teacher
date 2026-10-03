@@ -14,6 +14,15 @@ class ErrorObservability20261003Tests(unittest.TestCase):
         pgy = ROOT.joinpath("teacher_app", "pgy", "assessment_routes.py").read_text(encoding="utf-8")
         materials = ROOT.joinpath("teacher_app", "materials", "service.py").read_text(encoding="utf-8")
         scope_filter = ROOT.joinpath("teacher_app", "common", "scope_filter.py").read_text(encoding="utf-8")
+        ai_fallback = ROOT.joinpath("teacher_app", "assessments", "free_ai_fallback.py").read_text(encoding="utf-8")
+        ai_jobs = ROOT.joinpath("teacher_app", "assessments", "ai_jobs.py").read_text(encoding="utf-8")
+        script_jobs = ROOT.joinpath("teacher_app", "materials", "media_script_jobs.py").read_text(encoding="utf-8")
+        audio_jobs = ROOT.joinpath("teacher_app", "materials", "media_audio_jobs.py").read_text(encoding="utf-8")
+        subtitle_jobs = ROOT.joinpath("teacher_app", "materials", "media_subtitle_jobs.py").read_text(encoding="utf-8")
+        presentation_jobs = ROOT.joinpath("teacher_app", "materials", "ai_presentation_jobs.py").read_text(encoding="utf-8")
+        video_jobs = ROOT.joinpath("teacher_app", "materials", "ai_video_jobs.py").read_text(encoding="utf-8")
+        notification_prefs = ROOT.joinpath("teacher_app", "notifications", "preferences.py").read_text(encoding="utf-8")
+        ai_worker = ROOT.joinpath("ai_question_worker.py").read_text(encoding="utf-8")
 
         for marker, source in (
             ("R2 upload session status count failed", r2),
@@ -29,11 +38,26 @@ class ErrorObservability20261003Tests(unittest.TestCase):
             ("material category label lookup failed", materials),
             ("scope resource lookup failed", scope_filter),
             ("scope authorization resolution denied", scope_filter),
+            ("AI provider attempt failed", ai_fallback),
+            ("AI question job failed", ai_jobs),
+            ("AI media script job failed", script_jobs),
+            ("AI media audio job failed", audio_jobs),
+            ("AI media audio preview URL failed", audio_jobs),
+            ("AI media subtitle job failed", subtitle_jobs),
+            ("AI presentation job failed", presentation_jobs),
+            ("AI video job failed", video_jobs),
+            ("notification preferences read fallback", notification_prefs),
         ):
             self.assertIn(marker, source)
 
-        for source in (r2, reminders, pgy, materials, scope_filter):
+        for source in (
+            r2, reminders, pgy, materials, scope_filter, ai_fallback, ai_jobs,
+            script_jobs, audio_jobs, subtitle_jobs, presentation_jobs, video_jobs,
+            notification_prefs,
+        ):
             self.assertIn("error_type=%s", source)
+        self.assertIn("loop error type=", ai_worker)
+        self.assertNotIn('loop error: {str(exc)', ai_worker)
 
 
     def test_material_error_taxonomy_classifies_common_worker_failures(self):
