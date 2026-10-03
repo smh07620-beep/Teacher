@@ -422,7 +422,7 @@ def _probe_media(source):
         "audioCodec":str(audio.get("codec_name") or ""),
     }
 
-def _transcode_if_needed(source,original,temp):
+def _transcode_if_needed(source,original,temp,progress_callback=None):
     ext=Path(original).suffix.lower(); ffmpeg=_bin("FFMPEG_PATH","ffmpeg")
     if ext not in VIDEO_EXT|AUDIO_EXT:return source,original,{},{}
     if not ffmpeg:raise RuntimeError("FFmpeg unavailable")
@@ -522,8 +522,31 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
     timings=timings if isinstance(timings,dict) else {}
     report=progress_callback if callable(progress_callback) else (lambda _stage,_detail="",_percent=None:None)
     material_id=str(job["materialId"])
+    media_progress_state={"percent":65,"label":""}
     page_progress_state={"percent":75}
     upload_progress_state={"percent":85}
+
+    def media_clock(seconds):
+        value=max(0,int(round(float(seconds or 0))))
+        hours,rem=divmod(value,3600); minutes,secs=divmod(rem,60)
+        return f"{hours:d}:{minutes:02d}:{secs:02d}" if hours else f"{minutes:02d}:{secs:02d}"
+
+    def media_progress(current,total,label="影音轉碼"):
+        total=max(0.001,float(total or 0)); current=max(0.0,min(total,float(current or 0)))
+        ratio=current/total
+        mapped=min(75,66+int(ratio*9))
+        persisted=max(int(media_progress_state["percent"]),mapped)
+        label=str(label or "影音轉碼")
+        if persisted==media_progress_state["percent"] and label==media_progress_state["label"]:
+            return
+        media_progress_state["percent"]=persisted
+        media_progress_state["label"]=label
+        actual_percent=max(0,min(100,int(round(ratio*100))))
+        report(
+            "轉檔處理",
+            f"{label} {actual_percent}%｜已處理 {media_clock(current)} / {media_clock(total)}",
+            persisted,
+        )
 
     def page_progress(current,total):
         total=max(1,int(total or 0)); current=max(0,min(total,int(current or 0)))
@@ -545,7 +568,12 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
         report("正式發布",f"R2 正式上傳 {current_mb:.1f}/{total_mb:.1f} MB{suffix}",percent)
 
     report("轉檔處理","正在依教材格式進行必要的轉檔與正規化。",66)
-    started=time.monotonic(); source,stored_name,media_meta,derivatives=_transcode_if_needed(source,original,temp); timings["mediaNormalizeMs"]=_elapsed_ms(started)
+    started=time.monotonic(); source,stored_name,media_meta,derivatives=_transcode_if_needed(
+        source,
+        original,
+        temp,
+        progress_callback=media_progress,
+    ); timings["mediaNormalizeMs"]=_elapsed_ms(started)
     backend=STORAGE.active_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
     publish_key=worker_protocol.material_publish_key(job.get("id"),material_id,source_sha256,backend)
     single=bool(backend=="mega" and STORAGE.single_preview and (ext==".pdf" or ext in OFFICE_EXT))
@@ -653,6 +681,10 @@ def process_one(api,job,capabilities=None):
         except Exception as report:log(f"failed to report {job_id}: {report}")
         log(f"job {job_id}: {message} timings_ms={json.dumps(timings,sort_keys=True,separators=(',',':'))}")
 def main():
+    # Direct Linux execution and the packaged Windows/GitHub launchers share
+    # the same stream-safe media normalization/progress implementation.
+    from teacher_app.worker.media_transcode_compat import install as install_media_compat
+    install_media_compat(sys.modules[__name__])
     try:
         if not acquire_worker_runtime_lock():
             log("another material Worker runtime is already active; duplicate process exiting")
