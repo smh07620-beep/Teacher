@@ -155,6 +155,29 @@ def install_web_guards() -> None:
                     worker["storagePreflightBackend"] = ""
                     worker["storagePreflightError"] = ""
                     worker["storagePreflightDetail"] = ""
+
+                acceleration = capabilities.get("videoAcceleration")
+                if isinstance(acceleration, Mapping):
+                    worker["videoAccelerationEnabled"] = bool(acceleration.get("enabled"))
+                    worker["videoAccelerationAvailable"] = bool(acceleration.get("available"))
+                    worker["videoAccelerationEncoder"] = str(acceleration.get("encoder") or "")[:64]
+                    worker["videoAccelerationPreference"] = str(acceleration.get("preference") or "auto")[:16]
+                else:
+                    worker["videoAccelerationEnabled"] = None
+                    worker["videoAccelerationAvailable"] = None
+                    worker["videoAccelerationEncoder"] = ""
+                    worker["videoAccelerationPreference"] = ""
+
+                office_warm = capabilities.get("libreOfficeWarm")
+                if isinstance(office_warm, Mapping):
+                    worker["libreOfficeWarmEnabled"] = bool(office_warm.get("enabled"))
+                    worker["libreOfficeWarmRunning"] = bool(office_warm.get("running"))
+                    worker["libreOfficeWarmMode"] = str(office_warm.get("mode") or "")[:32]
+                else:
+                    worker["libreOfficeWarmEnabled"] = None
+                    worker["libreOfficeWarmRunning"] = None
+                    worker["libreOfficeWarmMode"] = ""
+
                 worker["claimReady"] = bool(
                     compatible and _storage_preflight_allows_claim(capabilities)
                 )
