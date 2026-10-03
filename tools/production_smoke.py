@@ -16,8 +16,10 @@ from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 
+ROOT = Path(__file__).resolve().parents[1]
 REPORT_PATH = Path("production-smoke-report.json")
 USER_AGENT = "TeacherProductionSmoke/1.0"
+EXPECTED_VERSION = ROOT.joinpath("VERSION").read_text(encoding="utf-8").strip()
 
 
 @dataclass
@@ -55,6 +57,13 @@ def _dns_diagnostic(base_url: str) -> dict[str, Any]:
         }
     addresses = sorted({row[4][0] for row in rows})
     return {"ok": True, "stage": "dns", "host": host, "addresses": addresses}
+
+
+def _commit_matches(observed: str, expected: str) -> bool:
+    observed_value = str(observed or "").strip().lower()
+    expected_value = str(expected or "").strip().lower()
+    common_length = min(len(observed_value), len(expected_value))
+    return common_length >= 7 and observed_value[:common_length] == expected_value[:common_length]
 
 
 def _network_error_stage(exc: BaseException) -> str:
@@ -122,7 +131,7 @@ def _poll_exact_deployment(
     max_wait_seconds: int,
     poll_seconds: int,
 ) -> dict:
-    expected = expected_commit.strip().lower()[:12]
+    expected = expected_commit.strip().lower()
     _assert(bool(expected), "expected commit is required")
     deadline = time.monotonic() + max(1, max_wait_seconds)
     attempts = 0
@@ -158,10 +167,10 @@ def _poll_exact_deployment(
                         "configurationOk": (payload.get("configuration") or {}).get("ok"),
                         "dns": dns,
                     }
-                    if observed == expected:
+                    if _commit_matches(observed, expected):
                         return {"attempts": attempts, "payload": payload, "network": dns}
                     print(
-                        f"[production-smoke] waiting for Render commit {expected}; "
+                        f"[production-smoke] waiting for Render commit {expected[:12]}; "
                         f"currently {observed or 'unknown'} (attempt {attempts})",
                         flush=True,
                     )
@@ -191,7 +200,7 @@ def _poll_exact_deployment(
 
         if time.monotonic() >= deadline:
             raise AssertionError(
-                f"Render did not converge to commit {expected} within the acceptance window; "
+                f"Render did not converge to commit {expected[:12]} within the acceptance window; "
                 f"last observation={last_observation!r}"
             )
         time.sleep(max(1, poll_seconds))
@@ -215,7 +224,10 @@ def run(base_url: str, expected_commit: str, *, max_wait_seconds: int, poll_seco
     health_deployment = health.get("deployment") or {}
     _assert(health.get("ok") is True, "/health ok must be true")
     _assert(health.get("status") == "healthy", "/health status must be healthy")
-    _assert(health.get("version") == "6.8.1", f"unexpected production version: {health.get('version')!r}")
+    _assert(
+        health.get("version") == EXPECTED_VERSION,
+        f"unexpected production version: {health.get('version')!r}; expected {EXPECTED_VERSION!r}",
+    )
     _assert(health_deployment.get("provider") == "render", "production provider must be render")
     _assert(health_deployment.get("branch") == "main", f"production branch must be main, got {health_deployment.get('branch')!r}")
     _assert((health.get("database") or {}).get("ok") is True, "production database is not healthy")
