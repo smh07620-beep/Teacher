@@ -22,6 +22,21 @@ This map records the remaining compatibility wrapper chains that intentionally r
 | `courseWizard681OpenCourse` | `static/course-wizard-681.js` | `static/course-wizard-runtime-fix-1014.js` | Prevent duplicate/re-entrant finish rendering and route through the canonical workspace router. |
 | `markMaterialComplete` | `static/system-learner.js` | `static/teaching.js` | Canonical owner performs the single `/api/material-progress` write. Teaching only enforces the homepage-linked identity and refreshes reader controls after success. |
 
+## Classic-script compatibility chains
+
+These are not separate product owners, but classic scripts can reassign bare globals even without writing `window.<name>`. They therefore follow the same ownership rules and are part of the audit contract.
+
+| Global/API | Canonical owner | Wrapper chain | Wrapper responsibility |
+| --- | --- | --- | --- |
+| `adminQuestionEditFormHTML` | `static/admin-question-editor-ui.js` | `static/review-links-66.js` | Preserve the canonical question editor HTML and append review-source fields only. |
+| `renderQuestions` | `static/system-exam.js` | `static/review-links-66.js` | Preserve learner exam rendering, then inject review-source presentation. |
+| `renderSlidesGrid` | `static/system-learner.js` | `static/review-links-66.js` | Preserve the canonical material grid, then resolve a pending review deep-link. |
+| `teachingSavePage` | `static/teaching.js` | `static/teaching.js` reader-next wrapper → `static/review-links-66.js` review-context wrapper | Save the page once, then synchronize reader-next state and review context. |
+| `teachingNextMaterial` | `static/teaching.js` | `static/teaching.js` sequential-reader wrapper | Block next-material navigation until the current material is completed; no second persistence owner. |
+| `switchDynamicCategory` | `static/system-exam.js` | `static/teaching.js` empty-exam wrapper | Prevent an empty exam from creating/entering an attempt; otherwise call the canonical exam switch once. |
+| `buildCourseExamRow` | `static/system-learner.js` | `static/teaching.js` empty-exam presentation wrapper | Render zero-question exams as not-ready instead of actionable. |
+| `renderAdminQuizCategories` / `paintAdminQuizCategories` | `static/admin-question-bank.js` | `static/teacher-ui-resilience-1014.js` | Synchronize assessment scope and add empty-state recovery without owning question CRUD or fetch policy. |
+
 ## Duplicate owners removed in this audit
 
 - `createAdminUserAccount` — canonical owner: `static/admin-people.js`. `roles-signing-66.js` now only supplies selected roles through `TeacherRoleSigning66.getCreateRoles()`.
@@ -47,6 +62,7 @@ This map records the remaining compatibility wrapper chains that intentionally r
 3. Network response timing, `setTimeout`, or transient DOM presence must never decide which implementation owns a global.
 4. Do not attach both direct `onclick` navigation and `data-csp-click` to the same system navigation control.
 5. Extension workspace deep links must wait for their registered handler or fail closed; they must never show a stale section from another workspace.
+6. Bare classic-script reassignments (for example `renderQuestions = function...`) count as ownership changes exactly like `window.renderQuestions = ...`; they must be documented and guarded.
 
 
 ## Selector / dispatch collision audit
