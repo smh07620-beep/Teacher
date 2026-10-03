@@ -861,12 +861,53 @@ async function openCourseExam(catId){
 
 }
 
-function renderCourseOverview() {
-
-    const box=document.getElementById('course-overview'),grid=document.getElementById('course-overview-grid');if(!box||!grid)return;
+function ensureCourseOverviewSupportData(){
     if(!savedLearningLoaded&&!savedLearningLoading)void loadSavedLearningItems();
     if(!learningCalendarLoaded&&!learningCalendarLoading)void loadLearningCalendar();
     if(!completionCertificatesLoaded&&!completionCertificatesLoading)void loadCompletionCertificates();
+}
+
+function finalizeCourseOverview(grid,courses){
+    const cards=[...(grid?.querySelectorAll?.('details.course-learning-card')||[])];
+    (courses||[]).forEach(course=>{
+        const card=cards.find(node=>
+            String(node.dataset.courseLearningId||node.dataset.course||'')===String(course?.id||'')
+        );
+        if(!card)return;
+        card.dataset.courseLearningId=course.id||'';
+        const group=card.querySelector('.course-material-group');
+        if(!group)return;
+        const row=document.createElement('div');
+        row.className='flex items-center justify-between gap-3 border-t border-slate-100 pt-3';
+        row.innerHTML='<div><div class="text-xs font-black text-slate-700">💬 課程回饋與收藏</div><div class="text-[11px] text-slate-400 mt-0.5">分享學習體驗，或把課程加入跨裝置收藏。</div></div>';
+        const actions=document.createElement('div');
+        actions.className='flex flex-wrap justify-end gap-2';
+        const save=document.createElement('button');
+        save.type='button';
+        save.className='rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700';
+        save.textContent=savedLearningItems.has(savedLearningKey('course',course.id))?'★ 已收藏':'☆ 收藏課程';
+        save.addEventListener('click',()=>toggleSavedLearningItem('course',course.id));
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-800';
+        button.textContent='填寫回饋';
+        button.addEventListener('click',()=>openCourseFeedback(course.id,course.title||'課程'));
+        actions.append(save,button);
+        row.appendChild(actions);
+        group.appendChild(row);
+    });
+    renderLearningCalendar();
+    renderSavedLearningShelf();
+    renderCompletionCertificateShelf();
+    bindSavedLearningButtons(grid);
+    bindCompletionCertificateButtons(grid);
+    bindCourseFeedbackUI();
+}
+
+function renderCourseOverviewBase() {
+
+    const box=document.getElementById('course-overview'),grid=document.getElementById('course-overview-grid');if(!box||!grid)return;
+    ensureCourseOverviewSupportData();
 
     const groupMaterials=cachedSlidesList.filter(m=>(m.group||'grpBio')===currentGroupKey),quizzes=(cachedQuizCategories||[]).filter(q=>(q.group||currentGroupKey)===currentGroupKey&&(q.area||currentTrainingArea)===currentTrainingArea),courses=(cachedCourses||[]).filter(c=>(c.group||c.groupKey||currentGroupKey)===currentGroupKey);
 
@@ -877,15 +918,21 @@ function renderCourseOverview() {
     const renderCard=(c,index,isOrphan=false)=>{const mats=isOrphan?orphanMaterials:groupMaterials.filter(m=>m.courseId===c.id),exams=isOrphan?orphanQuizzes:quizzes.filter(q=>q.courseId===c.id),done=mats.filter(m=>myCompletedMaterials[m.id]).length,pct=mats.length?Math.round(done/mats.length*100):0,activeQuestions=exams.reduce((sum,q)=>sum+examBankCount(q),0);const desc=(!isOrphan&&c.desc&&c.desc.trim()!==c.title?.trim())?c.desc:(isOrphan?'未綁定課程的教材與考卷集中於此，管理者可於後台重新歸類。':'教材、題庫與考核集中在同一門課程中。');return `<details class="course-learning-card" ${index===0&&!isOrphan?'open':''}><summary class="course-learning-summary"><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="text-lg font-black text-slate-900">${isOrphan?'📁 通用／未歸類資源':`📘 ${escapeHtml(c.title||'未命名課程')}`}</span>${isOrphan?'<span class="text-[10px] font-bold rounded-full px-2 py-0.5 bg-amber-50 text-amber-700">待整理</span>':'<span class="text-[10px] font-bold rounded-full px-2 py-0.5 bg-emerald-50 text-emerald-700">● 啟用中</span>'}</div><p class="text-xs text-slate-500 mt-1 leading-5">${escapeHtml(desc)}</p><div class="flex flex-wrap gap-1.5 mt-2"><span class="course-stat-chip">📚 教材 ${mats.length} 份</span><span class="course-stat-chip">📝 題庫 ${activeQuestions} 題</span><span class="course-stat-chip">📋 考卷 ${exams.length} 份</span><span class="course-stat-chip">✅ 教材完成 ${done}/${mats.length}</span></div>${mats.length?`<div class="flex items-center gap-2 mt-2 max-w-lg"><div class="course-progress-mini flex-1"><span style="width:${pct}%"></span></div><span class="text-[10px] font-bold text-slate-500">${pct}%</span></div>`:''}</div><span class="course-learning-chevron">⌄</span></summary><div class="course-material-group space-y-4"><div><div class="flex items-center justify-between gap-2 mb-2"><h4 class="text-xs font-black tracking-wide text-slate-600">📚 學習教材</h4><span class="text-[11px] text-slate-400">教材 ${mats.length} 份</span></div><div class="space-y-2">${mats.length?mats.map(buildCourseMaterialRow).join(''):'<div class="course-empty-row">此課程尚未放置教材。</div>'}</div></div><div><div class="flex items-center justify-between gap-2 mb-2"><h4 class="text-xs font-black tracking-wide text-slate-600">📋 課後考核</h4><span class="text-[11px] text-slate-400">考卷 ${exams.length} 份</span></div><div class="space-y-2">${exams.length?exams.map(buildCourseExamRow).join(''):'<div class="course-empty-row">此課程尚未建立考卷。</div>'}</div></div></div></details>`;};
 
     let html=courses.map((c,i)=>renderCard(c,i,false)).join('');if(orphanMaterials.length||orphanQuizzes.length)html+=renderCard({id:'',title:'通用／未歸類資源',desc:''},courses.length,true);grid.innerHTML=html;
-    courses.forEach((course,index)=>{const card=grid.children[index];if(card)card.dataset.courseLearningId=course.id||'';const group=card?.querySelector('.course-material-group');if(!group)return;const row=document.createElement('div');row.className='flex items-center justify-between gap-3 border-t border-slate-100 pt-3';row.innerHTML='<div><div class="text-xs font-black text-slate-700">💬 課程回饋與收藏</div><div class="text-[11px] text-slate-400 mt-0.5">分享學習體驗，或把課程加入跨裝置收藏。</div></div>';const actions=document.createElement('div');actions.className='flex flex-wrap justify-end gap-2';const save=document.createElement('button');save.type='button';save.className='rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700';save.textContent=savedLearningItems.has(savedLearningKey('course',course.id))?'★ 已收藏':'☆ 收藏課程';save.addEventListener('click',()=>toggleSavedLearningItem('course',course.id));const button=document.createElement('button');button.type='button';button.className='rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-800';button.textContent='填寫回饋';button.addEventListener('click',()=>openCourseFeedback(course.id,course.title||'課程'));actions.append(save,button);row.appendChild(actions);group.appendChild(row);});
-    renderLearningCalendar();
-    renderSavedLearningShelf();
-    renderCompletionCertificateShelf();
-    bindSavedLearningButtons(grid);
-    bindCompletionCertificateButtons(grid);
-    bindCourseFeedbackUI();
+    finalizeCourseOverview(grid,courses);
 
 }
+
+function renderCourseOverview(){
+    const presenter=window.TeachingCourseOverview66?.render;
+    if(typeof presenter==='function')return presenter();
+    return renderCourseOverviewBase();
+}
+
+window.LearnerCourseOverview = Object.freeze({
+    renderBase: renderCourseOverviewBase,
+    finalize: finalizeCourseOverview,
+    ensureSupportData: ensureCourseOverviewSupportData
+});
 
 async function openCourseFeedback(courseId,courseTitle){
     const dialog=document.getElementById('course-feedback-dialog'),status=document.getElementById('course-feedback-status');if(!dialog)return;

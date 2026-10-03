@@ -22,6 +22,19 @@ class SavedLearningUi88Tests(unittest.TestCase):
             self.assertIn(token, self.learner)
         self.assertIn("register_saved_learning_routes", self.factory)
 
+    def test_course_presenter_keeps_saved_feedback_calendar_and_certificate_finalization(self):
+        self.assertIn("function finalizeCourseOverview(grid,courses)", self.learner)
+        for marker in (
+            "renderLearningCalendar();",
+            "renderSavedLearningShelf();",
+            "renderCompletionCertificateShelf();",
+            "bindSavedLearningButtons(grid);",
+            "bindCompletionCertificateButtons(grid);",
+            "bindCourseFeedbackUI();",
+        ):
+            self.assertIn(marker, self.learner)
+        self.assertIn("LearnerCourseOverview?.finalize?.(grid, courses)", self.teaching)
+
     def test_device_page_bookmark_remains_separate_from_account_saved_items(self):
         self.assertIn("Page bookmarks are device-local, never completion evidence", self.teaching)
         self.assertIn("localStorage.setItem(teachingBookmarkKey", self.teaching)

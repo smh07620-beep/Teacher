@@ -104,10 +104,11 @@ function teachingMaterialRow(m, index) {
     const page = teachingReadPage(m.id, m.pageCount || 0);
     return `<div class="teaching-step"><span class="teaching-step-number">${done ? '✓' : index + 1}</span><div class="teaching-step-body"><h5>${escapeHtml(m.title || m.filename || '教材')}</h5><div class="teaching-meta"><span>${escapeHtml(meta.label)}</span>${m.pageCount ? `<span>${Number(m.pageCount)} 頁</span>` : ''}<span>${done ? '已完成閱讀' : page ? `上次讀到第 ${page + 1} 頁` : '尚未標記完成'}</span></div>${m.desc ? `<p>${escapeHtml(m.desc)}</p>` : ''}</div><div class="teaching-actions"><button class="teaching-primary" data-material-open="${escapeHtml(m.id)}">${page ? '繼續閱讀' : meta.key === 'media' ? '播放教材' : '閱讀教材'}</button>${m.isBuiltin ? '' : `<button class="teaching-secondary" data-material-complete="${escapeHtml(m.id)}" ${done ? 'disabled' : ''}>${done ? '✓ 已完成' : '標記完成'}</button>`}</div></div>`;
 }
-function renderCourseOverview() {
+function renderTeachingCourseOverview() {
     const box = document.getElementById('course-overview'), grid = document.getElementById('course-overview-grid');
     if (!box || !grid) return;
     teachingWelcome(); box.classList.remove('hidden');
+    window.LearnerCourseOverview?.ensureSupportData?.();
     const query = (document.getElementById('learning-search')?.value || '').trim().toLowerCase();
     const filter = document.getElementById('learning-filter')?.value || 'all';
     const courses = cachedCourses.filter(c => c.group === currentGroupKey && c.area === currentTrainingArea);
@@ -138,7 +139,12 @@ function renderCourseOverview() {
     document.getElementById('course-overview-course-count').textContent = `課程 ${courses.length}`;
     document.getElementById('course-overview-material-count').textContent = `教材 ${materials.length}`;
     document.getElementById('course-overview-exam-count').textContent = `考卷 ${quizzes.length}`;
+    window.LearnerCourseOverview?.finalize?.(grid, courses);
 }
+
+window.TeachingCourseOverview66 = Object.freeze({
+    render: renderTeachingCourseOverview
+});
 
 function teachingEnsureDialog() {
     if (document.getElementById('teaching-dialog')) return;
