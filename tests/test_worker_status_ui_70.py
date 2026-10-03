@@ -117,6 +117,13 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             "Nominal ETA",
             "P95 保守 ETA",
             "Forecast 是容量情境模型",
+            "Workload 校準",
+            "文件、影音、圖片等分開學習處理成本",
+            "workload-adjusted",
+            "混合 workload 已完整校準",
+            "部分校準 / 保留全體 Forecast",
+            "秒/頁",
+            "處理/影音",
         ):
             self.assertIn(marker, self.source)
         self.assertIn("Date.now()-cached.loadedAt<60000", self.source)
