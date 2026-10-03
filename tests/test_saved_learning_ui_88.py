@@ -35,6 +35,12 @@ class SavedLearningUi88Tests(unittest.TestCase):
             self.assertIn(marker, self.learner)
         self.assertIn("LearnerCourseOverview?.finalize?.(grid, courses)", self.teaching)
 
+    def test_teaching_material_rows_reuse_canonical_saved_item_controls(self):
+        self.assertIn("const canonical = buildCourseMaterialRow(m)", self.teaching)
+        self.assertIn("teachingReadPage(m.id", self.teaching)
+        self.assertNotIn('data-material-complete="', self.teaching)
+        self.assertIn('data-save-learning-item="material"', self.learner)
+
     def test_device_page_bookmark_remains_separate_from_account_saved_items(self):
         self.assertIn("Page bookmarks are device-local, never completion evidence", self.teaching)
         self.assertIn("localStorage.setItem(teachingBookmarkKey", self.teaching)

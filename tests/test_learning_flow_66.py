@@ -84,6 +84,14 @@ class LearningFlow66Tests(
         self.assertIn("learning-filter", presenter)
         self.assertIn("learningObjectives", presenter)
 
+    def test_course_overview_base_fails_closed_to_current_area(self):
+        learner = self.source("static/system-learner.js")
+        start = learner.index("function renderCourseOverviewBase()")
+        end = learner.index("function renderCourseOverview()", start)
+        base = learner[start:end]
+        self.assertIn("(m.area||currentTrainingArea)===currentTrainingArea", base)
+        self.assertIn("(c.area||currentTrainingArea)===currentTrainingArea", base)
+
     def test_empty_exam_has_explicit_not_ready_state(self):
         source = self.source(
             "static/teaching.js"

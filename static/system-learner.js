@@ -909,7 +909,7 @@ function renderCourseOverviewBase() {
     const box=document.getElementById('course-overview'),grid=document.getElementById('course-overview-grid');if(!box||!grid)return;
     ensureCourseOverviewSupportData();
 
-    const groupMaterials=cachedSlidesList.filter(m=>(m.group||'grpBio')===currentGroupKey),quizzes=(cachedQuizCategories||[]).filter(q=>(q.group||currentGroupKey)===currentGroupKey&&(q.area||currentTrainingArea)===currentTrainingArea),courses=(cachedCourses||[]).filter(c=>(c.group||c.groupKey||currentGroupKey)===currentGroupKey);
+    const groupMaterials=cachedSlidesList.filter(m=>(m.group||'grpBio')===currentGroupKey&&(m.area||currentTrainingArea)===currentTrainingArea),quizzes=(cachedQuizCategories||[]).filter(q=>(q.group||currentGroupKey)===currentGroupKey&&(q.area||currentTrainingArea)===currentTrainingArea),courses=(cachedCourses||[]).filter(c=>(c.group||c.groupKey||currentGroupKey)===currentGroupKey&&(c.area||currentTrainingArea)===currentTrainingArea);
 
     const orphanMaterials=groupMaterials.filter(m=>!m.courseId||!courses.some(c=>c.id===m.courseId)),orphanQuizzes=quizzes.filter(q=>!q.courseId||!courses.some(c=>c.id===q.courseId));if(!courses.length&&!orphanMaterials.length&&!orphanQuizzes.length){box.classList.add('hidden');grid.innerHTML='';return;}box.classList.remove('hidden');
 
