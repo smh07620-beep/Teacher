@@ -256,6 +256,39 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
         self.assertEqual(progress.get_json()["job"]["stage"], "轉檔處理")
         self.assertEqual(progress.get_json()["job"]["progressPercent"], 66)
 
+        persisted = self.client.post(
+            "/api/material-worker/job-progress/progress",
+            json={
+                "workerId": "worker-a",
+                "stage": "建立預覽",
+                "detail": "預覽已開始建立",
+                "progressPercent": 79,
+            },
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(persisted.status_code, 200, persisted.get_data(as_text=True))
+        self.assertEqual(persisted.get_json()["job"]["progressPercent"], 79)
+
+        non_regressing = self.client.post(
+            "/api/material-worker/job-progress/progress",
+            json={
+                "workerId": "worker-a",
+                "stage": "建立預覽",
+                "detail": "較舊的進度回報不得讓百分比倒退",
+                "progressPercent": 72,
+            },
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(non_regressing.status_code, 200, non_regressing.get_data(as_text=True))
+        self.assertEqual(non_regressing.get_json()["job"]["progressPercent"], 79)
+
+        invalid_percent = self.client.post(
+            "/api/material-worker/job-progress/progress",
+            json={"workerId": "worker-a", "stage": "正式發布", "progressPercent": 100},
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(invalid_percent.status_code, 400)
+
         invalid = self.client.post(
             "/api/material-worker/job-progress/progress",
             json={"workerId": "worker-a", "stage": "任意階段"},
