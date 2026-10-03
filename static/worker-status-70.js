@@ -384,6 +384,7 @@
     if(category==='ai'||incident.incidentType==='ai_queue_failure')return ['🤖','AI'];
     if(category==='storage'||/(R2|GDRIVE|MEGA|OCI|STORAGE)/.test(code))return ['☁️','Storage'];
     if(category==='worker'||/WORKER|FFMPEG|LIBREOFFICE/.test(code))return ['🖥️','Worker'];
+    if(category==='trend'||category==='capacity'||incident.incidentType==='trend_anomaly')return ['📈','趨勢'];
     return ['🛠️','系統'];
   }
 
@@ -401,6 +402,7 @@
     const code=String(incident.errorCode||'').toUpperCase();
     const resource=String(incident.resourceId||'').toLowerCase();
     if(type==='worker_offline')return {href:'#worker-runtime-70',label:'查看 Worker'};
+    if(type==='trend_anomaly'||category==='trend'||category==='capacity')return {href:'#worker-slo-70',label:'查看 SLO 趨勢'};
     if(type==='job_stalled'||type==='failure_rate'||(type==='error_burst'&&category==='worker'))return {href:'#worker-problems-70',label:'查看異常工作'};
     if(category==='storage'||/(R2|GDRIVE|MEGA|OCI|STORAGE)/.test(code))return {href:'/system?admin=1&workspace=system&persona=system&from=incident&focus=storage',label:'前往系統與儲存'};
     if(category==='ai'||type==='ai_queue_failure'){
