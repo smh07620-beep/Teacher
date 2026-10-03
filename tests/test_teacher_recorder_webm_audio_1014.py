@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import unittest
@@ -18,6 +19,7 @@ class FakeWorker:
     os = __import__("os")
 
     commands = []
+    fail_encoder = ""
 
     class subprocess:
         TimeoutExpired = subprocess.TimeoutExpired
@@ -25,6 +27,8 @@ class FakeWorker:
         @staticmethod
         def run(command, **_kwargs):
             FakeWorker.commands.append(list(command))
+            if FakeWorker.fail_encoder and FakeWorker.fail_encoder in command:
+                return SimpleNamespace(returncode=1, stderr="hardware encoder failed")
             target = Path(command[-1])
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(b"normalized-media")
@@ -51,6 +55,17 @@ class FakeWorker:
 class TeacherRecorderWebmAudio1014Tests(unittest.TestCase):
     def setUp(self):
         FakeWorker.commands = []
+        FakeWorker.fail_encoder = ""
+        self.env = patch.dict(
+            os.environ,
+            {
+                "MATERIAL_VIDEO_HARDWARE_ACCELERATION": "false",
+                "MATERIAL_VIDEO_HARDWARE_ENCODER": "auto",
+            },
+            clear=False,
+        )
+        self.env.start()
+        self.addCleanup(self.env.stop)
 
     def test_audio_only_webm_uses_audio_transcode_path(self):
         with tempfile.TemporaryDirectory() as temp_name:
@@ -137,6 +152,71 @@ class TeacherRecorderWebmAudio1014Tests(unittest.TestCase):
             first = FakeWorker.commands[0]
             self.assertIn("libx264", first)
             self.assertIn("veryfast", first)
+
+    def test_hardware_encoder_is_used_after_probe_selection(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.mov"
+            source.write_bytes(b"mov-video")
+            FakeWorker.probe = {
+                "durationSeconds": 30.0,
+                "width": 1920,
+                "height": 1080,
+                "bitrate": 3000000,
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+            }
+            with patch(
+                "teacher_app.worker.media_transcode_compat.media_acceleration.detect_h264_encoder",
+                return_value={
+                    "enabled": True,
+                    "available": True,
+                    "selected": "h264_qsv",
+                    "selectedKind": "qsv",
+                    "preference": "auto",
+                },
+            ):
+                _output, _name, metadata, _derivatives = transcode_if_needed(
+                    FakeWorker, source, "1080p.mov", temp
+                )
+            first = FakeWorker.commands[0]
+            self.assertIn("h264_qsv", first)
+            self.assertNotIn("libx264", first)
+            self.assertEqual(metadata["transcodeMode"], "hardware")
+            self.assertEqual(metadata["hardwareEncoderUsed"], "h264_qsv")
+
+    def test_hardware_encoder_failure_falls_back_to_cpu_for_same_job(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.mov"
+            source.write_bytes(b"mov-video")
+            FakeWorker.probe = {
+                "durationSeconds": 30.0,
+                "width": 1920,
+                "height": 1080,
+                "bitrate": 3000000,
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+            }
+            FakeWorker.fail_encoder = "h264_qsv"
+            with patch(
+                "teacher_app.worker.media_transcode_compat.media_acceleration.detect_h264_encoder",
+                return_value={
+                    "enabled": True,
+                    "available": True,
+                    "selected": "h264_qsv",
+                    "selectedKind": "qsv",
+                    "preference": "auto",
+                },
+            ):
+                _output, _name, metadata, _derivatives = transcode_if_needed(
+                    FakeWorker, source, "1080p.mov", temp
+                )
+            self.assertIn("h264_qsv", FakeWorker.commands[0])
+            self.assertTrue(any("libx264" in command for command in FakeWorker.commands))
+            self.assertEqual(metadata["transcodeMode"], "transcode")
+            self.assertEqual(metadata["hardwareEncoderAttempted"], "h264_qsv")
+            self.assertIn("hardware encoder failed", metadata["hardwareFallback"])
 
     def test_job_commit_uses_normalized_audio_suffix_for_viewer(self):
         job = {
