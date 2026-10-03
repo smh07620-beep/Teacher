@@ -19,11 +19,12 @@ class ProductionSmokeAcceptanceTests(unittest.TestCase):
             '"/api/auth/me"',
             '"/system"',
             '"今天的學習，從這裡開始"',
-            '"6.8.1"',
+            "EXPECTED_VERSION",
+            'ROOT.joinpath("VERSION")',
             "_dns_diagnostic",
             '"stage": "dns"',
+            "_commit_matches",
             'health_deployment.get("branch") == "main"',
-            'observed == expected',
         ):
             self.assertIn(marker, source)
 
@@ -31,13 +32,14 @@ class ProductionSmokeAcceptanceTests(unittest.TestCase):
         self.assertNotIn('method="PUT"', source)
         self.assertNotIn('method="PATCH"', source)
         self.assertNotIn('method="DELETE"', source)
+        self.assertNotIn('"6.8.1"', source)
 
     def test_workflow_is_post_deploy_and_does_not_deadlock_render_checks_pass(self):
         source = (ROOT / ".github" / "workflows" / "production-smoke.yml").read_text(encoding="utf-8")
         render = (ROOT / "render.yaml").read_text(encoding="utf-8")
         self.assertIn("autoDeployTrigger: checksPass", render)
         self.assertIn("schedule:", source)
-        self.assertIn('cron: "*/5 * * * *"', source)
+        self.assertIn('cron: "*/15 * * * *"', source)
         self.assertIn("workflow_dispatch:", source)
         self.assertNotIn("workflow_run:", source)
         self.assertNotRegex(source, r"(?m)^\s*push:\s*$")
@@ -45,6 +47,8 @@ class ProductionSmokeAcceptanceTests(unittest.TestCase):
         self.assertIn("tools/production_smoke.py", source)
         self.assertIn("production-smoke-report.json", source)
         self.assertIn("circular gate", source)
+        self.assertIn("cancel-in-progress: false", source)
+        self.assertIn("--max-wait-seconds 720", source)
 
     def test_render_target_matches_existing_operational_workflows(self):
         smoke = (ROOT / ".github" / "workflows" / "production-smoke.yml").read_text(encoding="utf-8")
