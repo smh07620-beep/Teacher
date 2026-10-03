@@ -104,7 +104,10 @@ if (-not (Test-Path $python -PathType Leaf)) {
 $stableWorkerId = Ensure-StableWorkerId
 
 $powershell = (Get-Command powershell.exe -CommandType Application -ErrorAction Stop).Source
-$arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $launcher + '"'
+# Interactive-logon tasks must keep the user's MEGAcmd profile, but the
+# long-lived supervisor must not leave a visible console window that users can
+# accidentally close. Event Log remains the operational diagnostics surface.
+$arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $launcher + '"'
 $action = New-ScheduledTaskAction `
   -Execute $powershell `
   -Argument $arguments `
