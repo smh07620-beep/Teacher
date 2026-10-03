@@ -24,6 +24,7 @@ JOB_MUTABLE_FIELDS = {
     "max_attempts",
     "stage",
     "detail",
+    "progress_percent",
     "payload",
     "staging_path",
     "staging_backend",
@@ -237,21 +238,25 @@ MATERIAL_JOB_STAGE_PROGRESS = {
 }
 
 
-def material_job_progress_percent(status: Any, stage: Any) -> int:
-    """Project truthful UX progress from persisted queue state/checkpoints."""
+def material_job_progress_percent(status: Any, stage: Any, reported: Any = None) -> int:
+    """Expose persisted Worker progress, with stage projection for old rows/workers."""
     status_value = str(status or "")
     stage_value = str(stage or "")
+    try:
+        reported_value = max(0, min(100, int(reported or 0)))
+    except (TypeError, ValueError):
+        reported_value = 0
     if status_value == "completed":
-        return 100
-    if status_value in {"failed", "cancelled"}:
         return 100
     if status_value == "retry_wait":
         return 25
     if status_value == "queued":
         return 25
     if status_value == "processing":
-        return int(MATERIAL_JOB_STAGE_PROGRESS.get(stage_value, 30))
-    return 0
+        return reported_value or int(MATERIAL_JOB_STAGE_PROGRESS.get(stage_value, 30))
+    if status_value in {"failed", "cancelled"}:
+        return reported_value or 100
+    return reported_value
 
 
 def material_job_row_to_dict(
@@ -286,9 +291,11 @@ def material_job_row_to_dict(
         or ""
     )
     item["title"] = str((item.get("payload") or {}).get("title") or "")
+    reported_progress = item.pop("progress_percent", None)
     item["progressPercent"] = material_job_progress_percent(
         item.get("status"),
         item.get("stage"),
+        reported_progress,
     )
     staging_path = str(item.pop("staging_path", "") or "")
     if include_payload:
