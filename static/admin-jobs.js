@@ -24,6 +24,7 @@
   };
 
   function elapsedSeconds(job){
+    if(Number.isFinite(Number(job.elapsedSeconds)))return Math.max(0,Math.round(Number(job.elapsedSeconds)));
     const stamp=job.startedAt||job.createdAt||job.updatedAt;
     const parsed=new Date(stamp||Date.now()).getTime();
     if(!Number.isFinite(parsed))return 0;
@@ -37,6 +38,27 @@
     return `${Math.floor(value/3600)} 小時 ${Math.floor((value%3600)/60)} 分`;
   }
 
+  function observabilityBadge(job){
+    const state=String(job.observabilityState||'');
+    const meta={
+      active:['🟢','持續處理','text-emerald-700 bg-emerald-50 border-emerald-200'],
+      heartbeat_delayed:['🟠','回報延遲','text-amber-700 bg-amber-50 border-amber-200'],
+      stalled:['🔴','可能卡住','text-rose-700 bg-rose-50 border-rose-200'],
+      queued:['⚪','等待 Worker','text-slate-600 bg-slate-50 border-slate-200'],
+      retry_wait:['🟠','等待重試','text-amber-700 bg-amber-50 border-amber-200'],
+      completed:['🟢','已完成','text-emerald-700 bg-emerald-50 border-emerald-200'],
+      failed:['🔴','需要處理','text-rose-700 bg-rose-50 border-rose-200'],
+      cancelled:['⚪','已取消','text-slate-600 bg-slate-50 border-slate-200']
+    }[state];
+    return meta||['⚪',String(job.observabilityLabel||'狀態待確認'),'text-slate-600 bg-slate-50 border-slate-200'];
+  }
+
+  function heartbeatLabel(job){
+    if(job.status!=='processing')return '';
+    const age=Number(job.heartbeatAgeSeconds);
+    if(!Number.isFinite(age))return '尚未取得本輪 heartbeat';
+    return 'heartbeat '+durationLabel(age)+'前';
+  }
   function progressProjection(job,averageSeconds){
     const elapsed=elapsedSeconds(job);
     const average=Math.max(0,Number(averageSeconds||0));
@@ -53,7 +75,11 @@
 
   function humanJobHint(job){
     if(job.status==='completed')return '教材已完成處理，可以回到課程使用。';
-    if(job.status==='processing')return 'Worker 正在處理教材，完成後會自動更新。';
+    if(job.status==='processing'){
+      if(job.observabilityState==='stalled')return 'Worker heartbeat 已超過 stale 門檻，系統會依既有安全恢復機制處理；請先查看技術狀態，不要重複上傳。';
+      if(job.observabilityState==='heartbeat_delayed')return 'Worker 回報暫時延遲，但尚未達到卡住門檻；原始工作仍保留。';
+      return 'Worker heartbeat 正常，正在持續處理；即使超過近期平均也不代表卡住。';
+    }
     if(job.status==='retry_wait')return '前一次處理未完成，系統會自動再次處理；原始檔會保留。';
     if(job.status==='queued')return '教材已安全排隊；Worker 上線後會自動開始，不需要重新上傳。';
     if(job.status==='failed')return '處理尚未完成，請查看下方處理方式；若原始檔仍保留，可直接重新處理。';
@@ -101,7 +127,9 @@
       const average=Math.max(0,Number(d.averageCompletedDurationSeconds||0));
       const averageText=average?` · 近期平均完成 ${durationLabel(average)}`:'';
       const technicalSummary=`Worker：${workerLabel}　${escapeHtml(workerDetail)}${workerBuild}${workerUpdate}${workerChecked}${protocolWarning}${storageWarning}`;
-      const summary=`<div class="rounded-xl border ${summaryClass} p-3 text-xs"><b>背景教材處理</b><div class="mt-2">等待處理 ${Number(d.pendingJobs||0)+Number(d.retryJobs||0)} · 處理中 ${Number(d.processingJobs||0)} · 需要處理 ${Number(d.failedJobs||0)}${averageText}</div><div class="mt-1 font-bold ${recentWorkerErrors?'text-amber-800':'text-emerald-700'}">${recentWorkerErrors?'有教材需要留意；原始檔仍保留時可直接重新處理。':'目前沒有需要人工處理的教材工作。'}</div><details class="mt-2 rounded-lg border border-slate-200 bg-white/70 p-2"><summary class="cursor-pointer font-bold text-slate-600">查看 Worker 技術狀態</summary><div class="mt-2 text-slate-600">${technicalSummary}<div class="mt-1">近期 Worker 錯誤／重試 ${recentWorkerErrors} · 近期最終失敗 ${recentTerminalFailures}</div></div></details></div>`;
+      const livenessText='心跳正常 '+Number(d.healthyProcessingJobs||0)+' · 回報延遲 '+Number(d.heartbeatDelayedJobs||0)+' · 可能卡住 '+Number(d.stalledJobs||0);
+      const thresholdText='heartbeat 警戒 '+durationLabel(d.heartbeatWarningSeconds||120)+' · stale '+durationLabel(d.staleThresholdSeconds||1800);
+      const summary=`<div class="rounded-xl border ${summaryClass} p-3 text-xs"><b>背景教材處理</b><div class="mt-2">等待處理 ${Number(d.pendingJobs||0)+Number(d.retryJobs||0)} · 處理中 ${Number(d.processingJobs||0)} · 需要處理 ${Number(d.failedJobs||0)}${averageText}</div><div class="mt-1">${livenessText} · ${thresholdText}</div><div class="mt-1 font-bold ${recentWorkerErrors?'text-amber-800':'text-emerald-700'}">${recentWorkerErrors?'有教材需要留意；原始檔仍保留時可直接重新處理。':'目前沒有需要人工處理的教材工作。'}</div><details class="mt-2 rounded-lg border border-slate-200 bg-white/70 p-2"><summary class="cursor-pointer font-bold text-slate-600">查看 Worker 技術狀態</summary><div class="mt-2 text-slate-600">${technicalSummary}<div class="mt-1">近期 Worker 錯誤／重試 ${recentWorkerErrors} · 近期最終失敗 ${recentTerminalFailures}</div></div></details></div>`;
       if(!jobs.length){
         host.innerHTML=summary+'<p class="text-xs text-slate-400">目前沒有背景教材工作。</p>';
         window.scheduleMaterialJobsRefresh(false);
@@ -109,11 +137,13 @@
       }
       host.innerHTML=summary+jobs.map(j=>{
         const projection=progressProjection(j,average);
+        const [healthIcon,healthLabel,healthClass]=observabilityBadge(j);
+        const heartbeat=heartbeatLabel(j);
         const retry=j.status==='failed'&&j.attempts>=j.maxAttempts;
         const barClass=j.status==='failed'?'bg-rose-500':j.status==='retry_wait'?'bg-amber-500':j.status==='completed'?'bg-emerald-500':'bg-sky-500';
         const retained=j.stagingBackend==='r2'&&['retry_wait','failed'].includes(j.status)?'<p class="mt-1 text-[10px] font-bold text-violet-700">☁ 原始檔仍安全保留，可直接重新處理，不必重新上傳；成功完成後才會清除暫存。</p>':'';
-        const diagnostic=`<details class="mt-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2 text-[10px] text-slate-600"><summary class="cursor-pointer font-bold">查看處理細節</summary><div class="mt-2 space-y-1"><div><b>階段：</b>${escapeHtml(j.stage||'—')}</div>${j.detail?`<div><b>詳細資訊：</b>${escapeHtml(j.detail)}</div>`:''}${j.error?`<div class="text-rose-700"><b>Worker 錯誤：</b>${escapeHtml(j.error)}</div>`:''}<div>工作 ${escapeHtml(j.id)} · 第 ${Number(j.attempts||0)}/${Number(j.maxAttempts||3)} 次${j.materialId?` · 教材 ${escapeHtml(j.materialId)}`:''}</div></div></details>`;
-        return `<div class="rounded-xl border bg-white p-3"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><div class="flex items-center gap-2 flex-wrap"><span class="text-[10px] border rounded-full px-2 py-0.5 font-bold ${window.materialJobStatusClass(j.status)}">${escapeHtml(window.materialJobStatusLabel(j.status))}</span><b class="text-xs text-slate-800 truncate">${escapeHtml(j.result?.title||j.title||j.result?.filename||j.originalName||j.id)}</b><span class="text-[10px] text-slate-400">${formatFileBytes(j.sourceBytes||0)}</span></div><p class="text-[11px] text-slate-600 mt-1">${escapeHtml(humanJobHint(j))}</p>${retained}${diagnostic}</div><div class="flex gap-1 shrink-0">${retry?`<button data-csp-click="retryMaterialJob('${escapeHtml(j.id)}')" class="text-[10px] px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold">直接重新處理</button>`:''}${['queued','retry_wait'].includes(j.status)?`<button data-csp-click="cancelMaterialJob('${escapeHtml(j.id)}')" class="text-[10px] px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">取消</button>`:''}</div></div><div class="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>處理進度 ${projection.pct}% · 依 Worker 真實回報階段顯示；頁數／R2 上傳量已持久化</span><span>${escapeHtml(projection.timing)}</span></div><div class="mt-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full ${barClass} transition-all" style="width:${projection.pct}%"></div></div></div>`;
+        const diagnostic=`<details class="mt-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2 text-[10px] text-slate-600"><summary class="cursor-pointer font-bold">查看處理細節</summary><div class="mt-2 space-y-1"><div><b>階段：</b>${escapeHtml(j.stage||'—')} · <b>進度：</b>${projection.pct}%</div>${j.detail?`<div><b>詳細資訊：</b>${escapeHtml(j.detail)}</div>`:''}<div><b>處理狀態：</b>${escapeHtml(j.observabilityLabel||healthLabel)}${heartbeat?` · ${escapeHtml(heartbeat)}`:''}</div><div><b>判定：</b>${escapeHtml(j.observabilityDetail||'—')}</div>${j.error?`<div class="text-rose-700"><b>Worker 錯誤：</b>${escapeHtml(j.error)}</div>`:''}<div>工作 ${escapeHtml(j.id)} · 第 ${Number(j.attempts||0)}/${Number(j.maxAttempts||3)} 次${j.workerId?` · Worker ${escapeHtml(j.workerId)}`:''}${j.materialId?` · 教材 ${escapeHtml(j.materialId)}`:''}</div></div></details>`;
+        return `<div class="rounded-xl border bg-white p-3"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><div class="flex items-center gap-2 flex-wrap"><span class="text-[10px] border rounded-full px-2 py-0.5 font-bold ${window.materialJobStatusClass(j.status)}">${escapeHtml(window.materialJobStatusLabel(j.status))}</span><span class="text-[10px] border rounded-full px-2 py-0.5 font-bold ${healthClass}">${healthIcon} ${escapeHtml(healthLabel)}</span><b class="text-xs text-slate-800 truncate">${escapeHtml(j.result?.title||j.title||j.result?.filename||j.originalName||j.id)}</b><span class="text-[10px] text-slate-400">${formatFileBytes(j.sourceBytes||0)}</span></div><p class="text-[11px] text-slate-600 mt-1">${escapeHtml(humanJobHint(j))}</p>${retained}${diagnostic}</div><div class="flex gap-1 shrink-0">${retry?`<button data-csp-click="retryMaterialJob('${escapeHtml(j.id)}')" class="text-[10px] px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold">直接重新處理</button>`:''}${['queued','retry_wait'].includes(j.status)?`<button data-csp-click="cancelMaterialJob('${escapeHtml(j.id)}')" class="text-[10px] px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">取消</button>`:''}</div></div><div class="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>處理進度 ${projection.pct}% · 依 Worker 真實回報階段顯示；頁數／R2 上傳量已持久化</span><span>${escapeHtml(projection.timing)}</span></div><div class="mt-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full ${barClass} transition-all" style="width:${projection.pct}%"></div></div></div>`;
       }).join('');
       window.scheduleMaterialJobsRefresh(jobs.some(j=>['queued','retry_wait','processing'].includes(j.status)));
     }catch(err){
