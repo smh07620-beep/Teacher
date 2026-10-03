@@ -63,7 +63,13 @@ def sync_operational_incidents(
     """Open, refresh, reopen, and resolve incidents without duplicate rows."""
     current = _now(now)
     stamp = current.isoformat()
-    raw_candidates = list(candidates) if candidates is not None else worker_operations.operational_incident_candidates(now=current)
+    explicit_candidates = candidates is not None
+    raw_candidates = list(candidates) if explicit_candidates else worker_operations.operational_incident_candidates(now=current)
+    confirmed_worker_recoveries = (
+        set()
+        if explicit_candidates
+        else worker_operations.online_worker_recovery_keys(now=current)
+    )
     active: dict[str, dict[str, Any]] = {}
     for raw in raw_candidates:
         normalized = _normalize_candidate(raw)
@@ -153,6 +159,15 @@ def sync_operational_incidents(
         for key, prior in existing.items():
             if str(prior.get("status") or "") != "open" or key in active:
                 continue
+            if (
+                not explicit_candidates
+                and str(prior.get("incident_type") or "") == "worker_offline"
+            ):
+                identity = key.split(":", 1)[1].strip().lower() if ":" in key else ""
+                if not identity or identity not in confirmed_worker_recoveries:
+                    # Absence from the retained heartbeat list is not proof of
+                    # recovery. Only a fresh heartbeat closes Worker outages.
+                    continue
             conn.execute(
                 f"UPDATE operational_incidents SET status={ph},resolved_at={ph},last_seen_at={ph} "
                 f"WHERE incident_key={ph} AND status={ph}",
