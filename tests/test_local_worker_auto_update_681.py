@@ -242,6 +242,27 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
         self.assertNotIn("MATERIAL_WORKER_TOKEN", captured)
         self.assertNotIn("MEGA_PASSWORD", captured)
 
+    def test_worker_progress_payload_includes_persisted_percent(self):
+        captured = {}
+        api = object.__new__(material_worker.WorkerApi)
+        with patch.object(
+            api,
+            "post",
+            side_effect=lambda path, body: captured.update({"path": path, "body": body}) or {},
+        ):
+            api.progress("job-progress", "建立預覽", "正在建立預覽")
+        self.assertEqual(captured["path"], "/api/material-worker/job-progress/progress")
+        self.assertEqual(captured["body"]["progressPercent"], 76)
+
+        captured.clear()
+        with patch.object(
+            api,
+            "post",
+            side_effect=lambda path, body: captured.update({"path": path, "body": body}) or {},
+        ):
+            api.progress("job-progress", "建立預覽", "細部進度", progress_percent=81)
+        self.assertEqual(captured["body"]["progressPercent"], 81)
+
     def test_web_safely_preserves_and_exposes_worker_build_metadata(self):
         db = Path(self.temp.name) / "jobs.sqlite"
         def connect():
