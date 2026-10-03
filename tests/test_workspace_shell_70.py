@@ -12,17 +12,18 @@ class WorkspaceShell70Tests(unittest.TestCase):
         cls.source = ROOT.joinpath("static", "workspace-shell-70.js").read_text(encoding="utf-8")
         cls.frontend = ROOT.joinpath("pgy_frontend.py").read_text(encoding="utf-8")
 
-    def test_system_admin_is_split_into_focused_subworkspaces(self):
-        for marker in (
-            "navGroup('教學管理'",
-            "navGroup('人員與權限'",
-            "navGroup('系統與儲存'",
-            "navGroup('備份維護'",
-            "navGroup('安全與稽核'",
-            "admin-nav-maintenance",
-            "admin-nav-audit",
-        ):
-            self.assertIn(marker, self.source)
+    def test_system_extension_entries_do_not_rebuild_the_final_system_navigation(self):
+        self.assertIn("function ensureSystemNavigationEntries()", self.source)
+        self.assertIn("isSystemPersonaRoute()", self.source)
+        self.assertIn("admin-nav-maintenance", self.source)
+        self.assertIn("admin-nav-audit", self.source)
+        self.assertIn("document.getElementById('admin-nav-system')", self.source)
+        self.assertNotIn("function buildSystemNavigation()", self.source)
+        block = self.source[
+            self.source.index("function ensureSystemNavigationEntries()"):
+            self.source.index("function addEducationMaintenanceNavigation()")
+        ]
+        self.assertNotIn("navHost.replaceChildren", block)
 
     def test_dynamic_workspace_buttons_have_explicit_workspace_identity(self):
         self.assertIn("item.dataset.adminWorkspace = workspace", self.source)

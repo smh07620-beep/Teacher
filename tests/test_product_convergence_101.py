@@ -40,20 +40,16 @@ class ProductConvergence101Tests(unittest.TestCase):
         self.assertNotIn("navHost.replaceChildren(group)", self.shell)
         self.assertIn("contextual tools and never rewrites the navigation host", self.shell)
 
-    def test_system_navigation_groups_infrastructure_by_human_job(self):
-        for label in ("人員與權限", "系統健康與維運", "安全與稽核"):
-            self.assertIn(label, self.shell)
-        for existing_id in (
-            "admin-nav-people",
-            "admin-nav-system",
-            "admin-nav-worker",
-            "admin-nav-maintenance",
-            "admin-nav-audit",
-        ):
-            self.assertIn(existing_id, self.shell)
+    def test_system_navigation_delegates_to_the_single_focus_owner(self):
+        self.assertIn("window.SystemAdminFocus1014", self.shell)
+        self.assertIn("owner.rebuild()", self.shell)
+        self.assertNotIn("navHost.replaceChildren", self.shell)
+        self.assertNotIn("function existing(id, label = '')", self.shell)
+        self.assertIn("delegates to the sole", self.shell)
 
-    def test_system_nav_observer_does_not_self_trigger_on_stable_labels(self):
-        self.assertIn("if (label && button.textContent !== label) button.textContent = label;", self.shell)
+    def test_system_nav_observer_only_requests_canonical_reconciliation(self):
+        self.assertIn("const observer = new MutationObserver(() => refresh())", self.shell)
+        self.assertIn("if (isSystemPersona()) convergeSystemNavigation()", self.shell)
 
     def test_convergence_does_not_create_authorization_logic_or_secret_headers(self):
         self.assertIn("TeacherRBAC681Ready", self.shell)

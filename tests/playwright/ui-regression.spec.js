@@ -277,6 +277,44 @@ test('system admin sees canonical Worker offline notification in system workspac
   await assertNoHorizontalOverflow(page);
 });
 
+test('system Worker nav has one click owner and cannot open assessment authoring', async ({ page }) => {
+  await page.route('**/api/material-jobs?**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        jobs: [], workers: [], workerStatusAvailable: true,
+        pendingJobs: 0, processingJobs: 0, retryJobs: 0, failedJobs: 0,
+        recentTerminalJobs: 0, recentFailureRate: 0, averageCompletedDurationSeconds: 0,
+        staging: { backend: 'r2', available: true, shared: true },
+      }),
+    });
+  });
+  await page.setViewportSize({ width: 430, height: 932 });
+  await open(page, '/system?admin=1&workspace=people&persona=system');
+  await page.waitForFunction(() => Boolean(window.SystemAdminFocus1014 && window.AdminWorkspaceShell));
+  const worker = page.locator('#admin-nav-worker');
+  await expect(worker).toBeVisible({ timeout: 10000 });
+  const ownership = await worker.evaluate(button => ({
+    action: button.getAttribute('data-csp-click'),
+    onclickAttr: button.getAttribute('onclick'),
+    onclickProperty: typeof button.onclick === 'function',
+    workspace: button.dataset.adminWorkspace || '',
+  }));
+  expect(ownership.action).toBe("switchAdminWorkspace('worker',true)");
+  expect(ownership.onclickAttr).toBeNull();
+  expect(ownership.onclickProperty).toBe(false);
+  expect(ownership.workspace).toBe('worker');
+
+  await worker.click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe('worker');
+  await expect.poll(() => new URL(page.url()).searchParams.get('persona')).toBe('system');
+  await expect(page.locator('#admin-section-worker')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#admin-section-quiz')).toBeHidden();
+  await expect(page.locator('#teacher-content-studio-71')).toBeHidden();
+  await expect(page.locator('#admin-workspace-title')).toContainText('Worker');
+});
+
 test('Worker notification action cannot land on assessment or AI authoring', async ({ page }) => {
   await page.route('**/api/training-command-center/notifications', async route => {
     await route.fulfill({

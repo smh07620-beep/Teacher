@@ -28,7 +28,15 @@ class SystemAdminFocus1014Tests(unittest.TestCase):
             self.assertIn(label, self.source)
         self.assertNotIn("📄 紙本文件範本", self.source)
         self.assertNotIn("正式文件治理", self.source)
-        self.assertIn("navHost.replaceChildren(...groups)", self.source)
+        self.assertIn("navHost.replaceChildren(...spec.map(([label, buttons]) => navGroup(label, buttons)))", self.source)
+        self.assertIn("currentSignature !== desiredSignature", self.source)
+
+    def test_system_navigation_normalizes_one_click_owner_per_button(self):
+        self.assertIn("const NAV_WORKSPACES = Object.freeze", self.source)
+        self.assertIn("item.onclick = null", self.source)
+        self.assertIn("item.removeAttribute('onclick')", self.source)
+        self.assertIn("item.setAttribute('data-csp-click'", self.source)
+        self.assertIn("item.dataset.adminWorkspace = workspace", self.source)
 
     def test_paper_template_entry_is_owned_by_teacher_workspace(self):
         self.assertIn("document.getElementById('admin-nav-word')", self.source)
