@@ -17,7 +17,8 @@
   const aiMount = {section:null, placeholder:null, catId:''};
   const courseMount = {root:null, placeholder:null};
   const materialHubMount = {root:null, placeholder:null};
-  const studioState = {returnWorkspace:'assessment'};
+  const EXAM_PARAM='exam';
+  const studioState = {returnWorkspace:'assessment',openExamId:'',deepLinkHookBound:false};
 
   function scope(){
     return {
@@ -100,15 +101,34 @@
     restoreMaterialHub();
     document.getElementById(studioId)?.classList.add('hidden');
     delete document.body.dataset.teacherContentStudioOpen;
+    if(studioState.returnWorkspace==='assessment'){
+      studioState.openExamId='';
+      syncExamDeepLink('');
+    }
     if(restoreWorkspace && window.isAdminWorkspacePage?.()) void window.switchAdminWorkspace?.(studioState.returnWorkspace, false);
+  }
+
+  function syncExamDeepLink(catId=''){
+    if(!window.isAdminWorkspacePage?.() || !window.history?.replaceState)return;
+    const url=new URL(window.location.href);
+    if(catId)url.searchParams.set(EXAM_PARAM,String(catId));
+    else url.searchParams.delete(EXAM_PARAM);
+    window.history.replaceState(window.history.state,'',`${url.pathname}${url.search}${url.hash}`);
   }
 
   async function loadCategories(){
     const {area, group} = scope();
-    const response = await fetch(`/api/quiz-categories?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`, {credentials:'same-origin'});
+    const response = await fetch(`/api/quiz-categories/admin?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`, {credentials:'same-origin',cache:'no-store'});
     const data = await response.json().catch(() => []);
     if(!response.ok) throw new Error(data.error || '無法讀取考卷清單');
     return Array.isArray(data) ? data : [];
+  }
+
+  async function loadCategory(catId){
+    const response=await fetch(`/api/quiz-categories/${encodeURIComponent(catId)}`,{credentials:'same-origin',cache:'no-store'});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error || (response.status===404?'找不到此考卷，可能已被移除。':'無法讀取考卷'));
+    return data && typeof data==='object' ? data : {};
   }
 
   function timeout77(promise,ms,label){
@@ -135,6 +155,7 @@
   }
 
   async function renderExamManager(message=''){
+    studioState.openExamId=''; syncExamDeepLink('');
     restoreAiPanel(); restoreCourseWizard();
     const host=document.getElementById('teacher-content-studio-body-71'); if(!host)return;
     host.innerHTML='<p class="text-sm text-slate-500">正在讀取考卷…</p>';
@@ -170,14 +191,24 @@
 
   async function renderExamContainer(catId){
     if(!catId)return renderExamManager();
+    studioState.openExamId=String(catId); syncExamDeepLink(catId);
     restoreAiPanel(); restoreCourseWizard();
     const host=document.getElementById('teacher-content-studio-body-71'); if(!host)return;
     host.innerHTML='<p class="text-sm text-slate-500">正在開啟考卷…</p>';
     try{
-      const categories=await loadCategories(); const exam=categories.find(c=>String(c.id)===String(catId));
-      if(!exam)throw new Error('找不到此考卷，可能已被移除。');
+      const exam=await loadCategory(catId);
       host.innerHTML=`<div class="mx-auto max-w-4xl"><button type="button" data-studio-action="exam" class="text-sm font-bold text-slate-500">← 返回考卷管理</button><div class="mt-4 rounded-2xl border border-indigo-200 bg-white p-5"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-indigo-700">目前考卷</div><h4 class="mt-1 text-xl font-black text-slate-950">${esc(exam.title||catId)}</h4><p class="mt-1 text-xs text-slate-500">所有出題動作都直接加入這份考卷，不需要再次選考卷。</p></div><span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">題庫 ${Number(exam.questionCount||0)} 題</span></div><div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><button type="button" data-exam-action="question" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-indigo-300"><b>✏️ 一般考題</b><span class="mt-1 block text-xs text-slate-500">手動建立一般題目。</span></button><button type="button" data-exam-action="image" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-rose-300"><b>🖼️ 圖片判讀題</b><span class="mt-1 block text-xs text-slate-500">圖片、顯微鏡或血球判讀。</span></button><button type="button" data-exam-action="video" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-violet-300"><b>🎬 影片互動題</b><span class="mt-1 block text-xs text-slate-500">依影片流程建立互動題。</span></button><button type="button" data-exam-action="ai" data-exam-id="${esc(catId)}" class="rounded-xl border border-violet-200 bg-violet-50/40 p-4 text-left hover:border-violet-400"><b>✨ AI 輔助出題</b><span class="mt-1 block text-xs text-slate-500">自動讀取本考卷關聯教材，再選用途與題數。</span></button><button type="button" data-exam-action="questions" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-teal-300"><b>🧠 題目管理</b><span class="mt-1 block text-xs text-slate-500">搜尋、編輯與批次管理既有題目。</span></button><button type="button" data-exam-action="settings" data-exam-id="${esc(catId)}" class="rounded-xl border border-slate-200 p-4 text-left hover:border-slate-400"><b>⚙️ 考卷設定</b><span class="mt-1 block text-xs text-slate-500">抽題、及格分數、審核與發布。</span></button></div></div></div>`;
     }catch(error){host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3"><button type="button" data-studio-action="exam" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">返回考卷管理</button></div></div>`;}
+  }
+
+  async function restoreExamDeepLink(context={}){
+    if(context.workspace && context.workspace!=='assessment')return;
+    if(!canQuestion() || !window.isAdminWorkspacePage?.())return;
+    const catId=new URLSearchParams(window.location.search).get(EXAM_PARAM)||'';
+    const root=document.getElementById(studioId);
+    if(!catId || (studioState.openExamId===catId && root && !root.classList.contains('hidden')))return;
+    openStudio('assessment','評量與出題｜考卷工作畫面','目前考卷的手動出題、圖片／影片題、AI、題庫與設定集中在這個全頁工作畫面。');
+    await renderExamContainer(catId);
   }
 
   function showExamActionFailure(catId,error){
@@ -557,6 +588,14 @@
     consolidateMaterialWorkspace();
     window.teacherContentStudioOpen = openStudio;
     window.teacherContentStudioClose = closeStudio;
+    if(!studioState.deepLinkHookBound && window.AdminWorkspaceShell?.addAfterWorkspace){
+      studioState.deepLinkHookBound=true;
+      window.AdminWorkspaceShell.addAfterWorkspace(context=>restoreExamDeepLink(context));
+    }
+    const params=new URLSearchParams(window.location.search);
+    if(params.get('admin')==='1' && params.get('workspace')==='assessment' && params.get(EXAM_PARAM)){
+      setTimeout(()=>void restoreExamDeepLink({workspace:'assessment'}),0);
+    }
     document.addEventListener('click',event=>{
       if(!event.target.closest('.admin-nav-btn'))return;
       const root=document.getElementById(studioId);
