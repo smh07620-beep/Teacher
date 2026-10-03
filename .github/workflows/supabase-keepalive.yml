@@ -23,6 +23,9 @@ jobs:
     name: Wake Render and verify Supabase
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      # Single production URL source shared with smoke/fallback workflows.
+      TEACHER_PRODUCTION_URL: ${{ vars.TEACHER_PRODUCTION_URL || 'https://teacher-j3id.onrender.com' }}
     steps:
       - name: Call production health endpoint
         shell: bash
@@ -31,6 +34,25 @@ jobs:
 
           response="$(mktemp)"
           trap 'rm -f "$response"' EXIT
+
+          python3 - "$TEACHER_PRODUCTION_URL" <<'PY'
+          import socket
+          import sys
+          from urllib.parse import urlsplit
+
+          url = sys.argv[1].strip()
+          parsed = urlsplit(url)
+          host = parsed.hostname
+          if not host:
+              raise SystemExit(f"Invalid TEACHER_PRODUCTION_URL: {url!r}")
+          port = parsed.port or (443 if parsed.scheme == "https" else 80)
+          try:
+              rows = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+          except socket.gaierror as exc:
+              raise SystemExit(f"DNS resolution failed for {host}: {exc}") from exc
+          addresses = sorted({row[4][0] for row in rows})
+          print(f"DNS OK: {host} -> {', '.join(addresses)}")
+          PY
 
           # /health is intentionally used instead of /live: the canonical
           # health handler opens the configured database and reads
@@ -46,7 +68,7 @@ jobs:
             --connect-timeout 20 \
             --max-time 180 \
             --output "$response" \
-            "https://teacher-j3id.onrender.com/health"
+            "${TEACHER_PRODUCTION_URL%/}/health"
 
           python - "$response" <<'PY'
           import json
