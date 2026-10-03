@@ -83,6 +83,22 @@ def register_assessment_routes(owner):
             True,
         ))
 
+    def api_get_quiz_category(category_id):
+        denied = require_admin()
+        if denied:
+            return denied
+        category = repository.get_category_full(category_id)
+        if not category:
+            return jsonify({"error": "找不到此考卷"}), 404
+        # Resolve scope from the persisted assessment, never from browser
+        # query/body state.  This keeps direct teacher deep links fail-closed.
+        _user, scope_denied = scope_filter.scoped_groups(
+            app, "question.manage", {str(category.get("group") or "").strip()}
+        )
+        if scope_denied:
+            return scope_denied
+        return jsonify(category)
+
     def guarded(handler, *args, **kwargs):
         denied = require_admin()
         if denied:
@@ -192,6 +208,7 @@ def register_assessment_routes(owner):
     rules = (
         ("/api/quiz-categories", "api_list_quiz_categories", api_list_quiz_categories, ["GET"]),
         ("/api/quiz-categories/admin", "api_admin_list_quiz_categories", api_admin_list_quiz_categories, ["GET"]),
+        ("/api/quiz-categories/<category_id>", "api_get_quiz_category", api_get_quiz_category, ["GET"]),
         ("/api/quiz-categories", "api_create_quiz_category", api_create_quiz_category, ["POST"]),
         ("/api/quiz-categories/<category_id>", "api_update_quiz_category", api_update_quiz_category, ["PATCH"]),
         ("/api/quiz-categories/<category_id>/review", "api_review_quiz_category", api_review_quiz_category, ["POST"]),
