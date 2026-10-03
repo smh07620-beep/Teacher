@@ -23,6 +23,7 @@ from typing import Any
 
 from teacher_app.storage import providers
 from teacher_app.storage.service import StorageConfigurationError, StorageProviderAdapter, select_backend
+from teacher_app.worker.libreoffice_warm import WarmLibreOfficeConverter
 
 try:
     import pymupdf
@@ -63,6 +64,18 @@ class WorkerMaterialStorageAdapter:
             self.slide_format_name = "webp"
         self.webp_quality = max(70, min(96, int(os.environ.get("MATERIAL_WEBP_QUALITY", "88"))))
         self.soffice = os.environ.get("SOFFICE_PATH", "soffice")
+        try:
+            warm_startup = float(os.environ.get("MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS", "5") or 5)
+        except ValueError:
+            warm_startup = 5.0
+        self.libreoffice_warm_enabled = _env_true("MATERIAL_LIBREOFFICE_WARM_ENABLED", True)
+        self._libreoffice_warm = WarmLibreOfficeConverter(
+            self.soffice,
+            enabled=self.libreoffice_warm_enabled,
+            startup_timeout=warm_startup,
+        )
+        self._last_office_mode = ""
+        self._last_office_fallback = ""
 
     # ------------------------------------------------------------------
     # Provider selection / MEGAcmd runtime
@@ -402,7 +415,23 @@ class WorkerMaterialStorageAdapter:
         self._linearize_pdf_in_place(output_pdf)
         return page_count
 
-    def _office_to_pdf(self, source_path: Path, workdir: Path, *, timeout: int) -> Path:
+    def libreoffice_status(self) -> dict[str, object]:
+        status = dict(self._libreoffice_warm.status())
+        status["mode"] = self._last_office_mode
+        status["fallback"] = self._last_office_fallback[:240]
+        return status
+
+    def warmup_libreoffice(self) -> dict[str, object]:
+        """Best-effort prewarm; failure never blocks material claims."""
+        if not self.libreoffice_warm_enabled:
+            return self.libreoffice_status()
+        try:
+            self._libreoffice_warm.ensure_running()
+        except Exception as exc:
+            self._libreoffice_warm.last_error = type(exc).__name__
+        return self.libreoffice_status()
+
+    def _office_to_pdf_once(self, source_path: Path, workdir: Path, *, timeout: int) -> Path:
         profile_dir = workdir / f"profile-{uuid.uuid4().hex}"
         pdf_dir = workdir / f"pdf-{uuid.uuid4().hex}"
         profile_dir.mkdir(parents=True, exist_ok=True)
@@ -425,6 +454,31 @@ class WorkerMaterialStorageAdapter:
         if not pdfs:
             raise RuntimeError("LibreOffice 未產生 PDF")
         return pdfs[0]
+
+    def _office_to_pdf(self, source_path: Path, workdir: Path, *, timeout: int) -> Path:
+        self._last_office_mode = ""
+        self._last_office_fallback = ""
+        if self.libreoffice_warm_enabled:
+            for attempt in range(2):
+                pdf_dir = workdir / f"warm-pdf-{uuid.uuid4().hex}"
+                try:
+                    pdf = self._libreoffice_warm.convert_to_pdf(
+                        source_path,
+                        pdf_dir,
+                        timeout=timeout,
+                    )
+                    self._last_office_mode = "warm"
+                    return pdf
+                except Exception as exc:
+                    self._last_office_fallback = str(exc)[:240]
+                    if attempt == 0:
+                        try:
+                            self._libreoffice_warm.restart()
+                        except Exception:
+                            pass
+        pdf = self._office_to_pdf_once(source_path, workdir, timeout=timeout)
+        self._last_office_mode = "oneshot"
+        return pdf
 
     def prepare_office_pdf(self, source_path: Path, workdir: Path, *, timeout: int = 240) -> Path:
         source_path = Path(source_path)
