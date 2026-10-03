@@ -450,13 +450,15 @@ function reset(){
   render();loadMaterials();
 }
 
-window.courseWizard681HasPending=()=>Boolean(state.created&&!canLeaveCourse());
-window.courseWizard681PendingMessage=()=>state.failedUploads.length
-  ? '課程已建立，但仍有教材尚未完成。請先重試失敗教材或確認處理狀態。'
-  : '課程已建立，教材仍在上傳／排隊／轉檔／發布中。請等到全部顯示「已完成」再離開。';
+window.courseWizard681HasPending=()=>Boolean(state.busy||(state.created&&!canLeaveCourse()));
+window.courseWizard681PendingMessage=()=>state.busy&&!state.created
+  ? '課程與教材正在建立／上傳中，請先不要離開此工作畫面。'
+  : state.failedUploads.length
+    ? '課程已建立，但仍有教材尚未完成。請先重試失敗教材或確認處理狀態。'
+    : '課程已建立，教材仍在上傳／排隊／轉檔／發布中。請等到全部顯示「已完成」再離開。';
 
 window.addEventListener('beforeunload',event=>{
-  if(!state.created||canLeaveCourse())return;
+  if(!window.courseWizard681HasPending())return;
   event.preventDefault();
   event.returnValue='';
 });

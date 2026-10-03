@@ -58,6 +58,8 @@
 
   window.isTeacherMaterialUploadPending=()=>materialUploadCompletionPending;
   window.teacherMaterialUploadPendingMessage=()=>materialUploadPendingMessage;
+  window.beginTeacherMaterialUploadGuard=beginMaterialUploadGuard;
+  window.endTeacherMaterialUploadGuard=endMaterialUploadGuard;
 
   function materialUploadLeaveGuard(event){
     if(!materialUploadCompletionPending)return;

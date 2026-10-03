@@ -37,7 +37,12 @@ class TeacherMediaRecorder1014Tests(unittest.TestCase):
     def test_upload_reuses_browser_to_r2_client(self):
         self.assertIn("window.MaterialUploadClient.enqueue(form", self.source)
         self.assertIn("Browser → R2", self.source)
-        self.assertIn("Worker 會繼續處理", self.source)
+        self.assertIn("waitForAdminMaterialJobs", self.source)
+        self.assertIn("beginTeacherMaterialUploadGuard", self.source)
+        self.assertIn("endTeacherMaterialUploadGuard", self.source)
+        self.assertIn("教材已正式完成並寫入教材清單", self.source)
+        self.assertNotIn("可離開此頁", self.source)
+        self.assertNotIn("Worker 會繼續處理", self.source)
         self.assertNotIn("fetch('/api/slides/upload", self.source)
         self.assertNotIn("X-Admin-Key", self.source)
 

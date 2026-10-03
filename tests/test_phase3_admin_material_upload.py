@@ -128,6 +128,8 @@ const cryptoNode = require('crypto');
             "現在可以安全離開或返回課程",
             "R2 原始檔仍保留，可直接重新處理",
             "window.isTeacherMaterialUploadPending",
+            "window.beginTeacherMaterialUploadGuard",
+            "window.endTeacherMaterialUploadGuard",
             "MATERIAL_UPLOAD_PHASES",
             "R2 接收",
             "下載／驗證",

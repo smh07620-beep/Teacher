@@ -319,8 +319,8 @@
       status('請先完成一段錄音或錄影。', 'error');
       return;
     }
-    if (!window.MaterialUploadClient?.enqueue) {
-      status('教材安全上傳元件尚未載入，請重新整理後再試。', 'error');
+    if (!window.MaterialUploadClient?.enqueue || !window.waitForAdminMaterialJobs) {
+      status('教材安全上傳／進度元件尚未載入，請重新整理後再試。', 'error');
       return;
     }
     const title = String(document.getElementById('teacher-recorder-title-1014')?.value || '').trim();
@@ -351,19 +351,30 @@
     ['atlasCategory','atlasMagnification','atlasInterpretation','atlasClinical','atlasDifferential','atlasNormality','atlasTags'].forEach(name => form.append(name, ''));
 
     const upload = document.getElementById('teacher-record-upload-1014');
+    const statusNode = document.getElementById('teacher-recorder-status-1014');
     if (upload) upload.disabled = true;
+    window.beginTeacherMaterialUploadGuard?.('錄製教材正在上傳至 R2 或由 Worker 正式處理中，請先不要離開。');
     try {
       const result = await window.MaterialUploadClient.enqueue(form, {
         fileName: recordedFile.name,
         onProgress: event => status(`⬆️ Browser → R2 ${event.percent}%｜${(event.loaded/1024/1024).toFixed(1)} / ${(event.total/1024/1024).toFixed(1)} MB`),
       });
-      status(`✅ 已安全送入背景處理佇列${result?.jobId ? `｜${result.jobId}` : ''}。可離開此頁，Worker 會繼續處理。`, 'success');
+      if (!result?.jobId) throw new Error('上傳結果缺少背景工作編號，無法確認正式完成狀態。');
+      status(`⏳ ② 等待 Worker｜${result.jobId}；R2 接收完成不等於教材已完成。`);
+      const outcome = await window.waitForAdminMaterialJobs([String(result.jobId)], statusNode);
+      const job = outcome?.rows?.[0] || {};
+      if (!outcome?.allDone) {
+        throw new Error(job.error || job.detail || 'Worker 未能正式完成教材，請到 Worker / Job 狀態查看。');
+      }
+      status(`✅ 教材已正式完成並寫入教材清單｜${result.jobId}`, 'success');
       window.invalidateAdminMaterialsCache?.();
-      void window.renderAdminCourseMaterialHub?.(true);
-      void window.renderSlidesGrid?.();
+      await Promise.resolve(window.renderAdminCourseMaterialHub?.(true));
+      await Promise.resolve(window.renderSlidesGrid?.());
     } catch (error) {
-      status(`上傳失敗：${error.message}`, 'error');
+      status(`上傳／處理失敗：${error.message}`, 'error');
       if (upload) upload.disabled = false;
+    } finally {
+      window.endTeacherMaterialUploadGuard?.();
     }
   }
 
