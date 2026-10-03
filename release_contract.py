@@ -67,6 +67,7 @@ REQUIRED_MIGRATIONS = (
     "0106-notification-email-preferences",
     "0107-material-job-progress",
     "0108-operational-incidents",
+    "0109-operational-incident-response",
 )
 
 # Backward-compatible singular name used by older release checks.  It now
