@@ -292,6 +292,7 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
                 "error": "",
                 "stage": "重新排隊",
                 "detail": "使用既有原始檔重新處理，不需要重新上傳；自動重試次數已重新計算",
+                "progress_percent": 25,
                 "cancel_requested": False,
                 "worker_id": "",
             },
