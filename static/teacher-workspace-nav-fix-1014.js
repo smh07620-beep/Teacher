@@ -1,4 +1,4 @@
-/* Teacher 10/14: remove duplicate System persona entry; keep one explicit platform-admin entry. */
+/* Teacher 10/14: keep persona switching stable and bind the legacy platform entry. */
 (async function () {
   'use strict';
 
@@ -13,14 +13,6 @@
     url.searchParams.set('persona', 'system');
     url.searchParams.delete('teacherMode');
     return `${url.pathname}${url.search}${url.hash}`;
-  }
-
-  function removeDuplicatePersona() {
-    const host = document.getElementById('teacher-persona-switch-1014');
-    if (!host) return;
-    [...host.querySelectorAll('button')].forEach(button => {
-      if ((button.textContent || '').includes('系統管理')) button.remove();
-    });
   }
 
   function bindPlatformEntry() {
@@ -40,7 +32,9 @@
   }
 
   function sync() {
-    removeDuplicatePersona();
+    // teacher-workspace-1014.js is the single owner of the persona switcher.
+    // Do not remove its system button here; doing so caused the third persona
+    // to disappear on first paint and reappear after later workspace updates.
     bindPlatformEntry();
   }
 
