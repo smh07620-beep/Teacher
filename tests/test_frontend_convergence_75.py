@@ -102,10 +102,12 @@ class FrontendConvergence75Tests(unittest.TestCase):
         self.assertNotIn("window.populateAdminGroupSelects =", rbac)
 
         guard = core.index("for (const guard of workspaceGuards)")
-        extension = core.index("const extension = workspaceHandlers.get")
+        extension = core.index("const extension = await resolveWorkspaceHandler(requested, workspace)")
+        execute = core.index("await extension(context)")
         after = core.index("for (const hook of afterWorkspaceHooks)")
         self.assertLess(guard, extension)
-        self.assertLess(extension, after)
+        self.assertLess(extension, execute)
+        self.assertLess(execute, after)
 
         modal_guard = core.index("for (const guard of modalGuards)")
         modal_override = core.index("for (const override of modalOpenOverrides)")

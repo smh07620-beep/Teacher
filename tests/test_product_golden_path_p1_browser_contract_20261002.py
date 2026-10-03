@@ -29,8 +29,10 @@ class ProductGoldenPathP1BrowserContractTests(unittest.TestCase):
         )
 
     def test_workspace_url_stabilizes_before_async_renderer(self):
+        resolved_at = self.admin_workspace.index("const extension = await resolveWorkspaceHandler(requested, workspace)")
         sync_at = self.admin_workspace.index("syncWorkspaceUrl(requested || workspace);")
-        renderer_at = self.admin_workspace.index("const extension = workspaceHandlers.get(requested)")
+        renderer_at = self.admin_workspace.index("await extension(context)")
+        self.assertLess(resolved_at, sync_at)
         self.assertLess(sync_at, renderer_at)
 
     def test_multi_role_browser_gate_uses_canonical_rbac_profile(self):
