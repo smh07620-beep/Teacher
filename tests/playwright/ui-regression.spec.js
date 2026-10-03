@@ -388,3 +388,144 @@ test('Worker status error state is distinct from an offline Worker', async ({ pa
   await expect(error).toContainText('此訊息不代表 Worker 已離線');
   await assertNoHorizontalOverflow(page);
 });
+
+test('course overview keeps stable ownership and learner feature finalizers', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('smh_learner_name', '測試學員');
+    localStorage.setItem('smh_learner_empid', 'T9001');
+  });
+
+  await page.route('**/api/slides?**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{
+        id: 'mat-browser-owner',
+        title: 'Ownership 測試教材',
+        filename: 'ownership.pdf',
+        desc: '確認 teaching presenter 保留 canonical learner features',
+        area: 'internal',
+        group: 'grpBio',
+        courseId: 'course-browser-owner',
+        viewerMode: 'slides',
+        materialType: 'standard',
+        pageCount: 3,
+        active: true,
+      }]),
+    });
+  });
+
+  await page.route('**/api/courses?**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{
+        id: 'course-browser-owner',
+        title: 'Ownership 測試課程',
+        desc: 'Course overview ownership regression',
+        area: 'internal',
+        group: 'grpBio',
+        active: true,
+        materialOrder: ['mat-browser-owner'],
+        learningObjectives: '保留收藏功能\n保留回饋與完訓證明',
+        estimatedMinutes: 20,
+      }]),
+    });
+  });
+
+  await page.route('**/api/quiz-categories?**', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+
+  await page.route('**/api/my-progress?**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ materialsCompleted: {}, courses: [], records: [] }),
+    });
+  });
+
+  await page.route('**/api/saved-learning-items', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [{
+          itemType: 'course',
+          itemId: 'course-browser-owner',
+          title: 'Ownership 測試課程',
+          area: 'internal',
+          group: 'grpBio',
+        }],
+      }),
+    });
+  });
+
+  await page.route('**/api/learning-calendar?**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        events: [{
+          id: 'calendar-browser-owner',
+          kind: 'course_due',
+          title: 'Ownership 測試課程',
+          date: '2026-10-10',
+          at: '2026-10-10T09:00:00+08:00',
+          courseId: 'course-browser-owner',
+          target: 'course',
+          overdue: false,
+        }],
+      }),
+    });
+  });
+
+  await page.route('**/api/completion-certificates', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [{
+          id: 'CERT-OWNER-1',
+          courseId: 'course-browser-owner',
+          courseTitle: 'Ownership 測試課程',
+          area: 'internal',
+          group: 'grpBio',
+          currentStatus: 'current',
+        }],
+      }),
+    });
+  });
+
+  await page.setViewportSize({ width: 430, height: 932 });
+  await open(page, '/system?area=internal&group=grpBio&module=materials');
+
+  await page.waitForFunction(() =>
+    typeof window.renderSlidesGrid === 'function' &&
+    typeof window.renderCourseOverview === 'function' &&
+    Boolean(window.LearnerCourseOverview?.renderBase) &&
+    Boolean(window.TeachingCourseOverview66?.render)
+  );
+
+  const stableRenderer = await page.evaluate(async () => {
+    const before = window.renderCourseOverview;
+    await window.renderSlidesGrid();
+    window.renderCourseOverview();
+    return before === window.renderCourseOverview;
+  });
+  expect(stableRenderer).toBe(true);
+
+  await expect(page.locator('#course-overview-grid .course-learning-card')).toHaveCount(1);
+  await expect(page.locator('#course-overview-grid')).toContainText('Ownership 測試課程');
+  await expect(page.locator('#course-overview-grid')).toContainText('課程回饋與收藏');
+  await expect(page.locator('#course-overview-grid [data-save-learning-item="material"]')).toHaveCount(1);
+
+  await expect(page.locator('#saved-learning-items')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#saved-learning-items')).toContainText('Ownership 測試課程');
+  await expect(page.locator('#learning-calendar')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#learning-calendar')).toContainText('Ownership 測試課程');
+  await expect(page.locator('#completion-certificates')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#completion-certificates')).toContainText('CERT-OWNER-1');
+  await assertNoHorizontalOverflow(page);
+});
+
