@@ -79,6 +79,8 @@
   let loading = false;
   let incidentResponders = [];
   let respondersLoaded = false;
+  let sloWindow = '24h';
+  const sloCache = new Map();
 
   function workerButton() {
     let button = document.getElementById('admin-nav-worker');
@@ -146,6 +148,128 @@
       <div class="text-2xl font-black text-slate-950 mt-1">${Number(value || 0)}</div>
       <div class="text-[11px] text-slate-400 mt-1">${escapeHtml(note)}</div>
     </div>`;
+  }
+
+  const formatPercent = value => {
+    if (value === null || value === undefined || value === '') return '資料累積中';
+    const number = Number(value);
+    return Number.isFinite(number) ? (number * 100).toFixed(1) + '%' : '資料累積中';
+  };
+
+  const formatSignedPercent = value => {
+    if (value === null || value === undefined || value === '') return '尚無比較基準';
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '尚無比較基準';
+    if (Math.abs(number) < 0.05) return '與前期持平';
+    return (number > 0 ? '↑ 慢 ' : '↓ 快 ') + Math.abs(number).toFixed(1) + '%';
+  };
+
+  function sloMetricCard(icon,title,value,note,target='') {
+    return `<div class="rounded-xl border border-slate-200 bg-white p-3">
+      <div class="text-[11px] font-bold text-slate-500">${icon} ${escapeHtml(title)}</div>
+      <div class="mt-1 text-xl font-black text-slate-950">${escapeHtml(value)}</div>
+      <div class="mt-1 text-[10px] text-slate-500">${escapeHtml(note||'')}${target?` · 目標 ${escapeHtml(target)}`:''}</div>
+    </div>`;
+  }
+
+  function sloBarRows(series,key,maxValue,formatter) {
+    if(!series.length)return '<div class="text-xs text-slate-400">採樣資料累積中。</div>';
+    const ceiling=Math.max(1,Number(maxValue||0));
+    return '<div class="space-y-1.5">'+series.map(row=>{
+      const raw=Math.max(0,Number(row[key]||0));
+      const width=Math.max(raw>0?3:0,Math.min(100,raw/ceiling*100));
+      const when=new Date(row.sampledAt);
+      const label=Number.isNaN(when.getTime())?String(row.sampledAt||''):(
+        sloWindow==='7d'
+          ? when.toLocaleDateString(undefined,{month:'numeric',day:'numeric'})
+          : when.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})
+      );
+      return '<div class="grid grid-cols-[58px_minmax(0,1fr)_64px] items-center gap-2 text-[10px]"><span class="text-slate-400">'+escapeHtml(label)+'</span><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-slate-500" style="width:'+width.toFixed(1)+'%"></div></div><span class="text-right font-semibold text-slate-600">'+escapeHtml(formatter(raw))+'</span></div>';
+    }).join('')+'</div>';
+  }
+
+  async function loadOperationalMetrics(windowValue=sloWindow,force=false) {
+    const cached=sloCache.get(windowValue);
+    if(!force&&cached&&Date.now()-cached.loadedAt<60000)return cached.data;
+    try{
+      const response=await fetch('/api/operational-metrics?window='+encodeURIComponent(windowValue),{
+        credentials:'same-origin',
+        cache:'no-store'
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'SLO 指標讀取失敗');
+      sloCache.set(windowValue,{loadedAt:Date.now(),data});
+      return data;
+    }catch(_error){
+      return cached?.data||null;
+    }
+  }
+
+  function renderSloDashboard(metrics) {
+    if(!metrics)return `<section id="worker-slo-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div class="font-black text-slate-900">📈 維運趨勢 / SLO</div><div class="mt-2 text-xs text-slate-500">目前無法讀取趨勢資料；即時 Worker / Job 狀態不受影響。</div></section>`;
+    const material=metrics.material||{};
+    const queue=metrics.queue||{};
+    const worker=metrics.worker||{};
+    const incident=metrics.incidents||{};
+    const coverage=metrics.dataCoverage||{};
+    const targets=metrics.targets||{};
+    const series=Array.isArray(metrics.series)?metrics.series:[];
+    const success=material.successRate===null||material.successRate===undefined?'資料不足':formatPercent(material.successRate);
+    const workerAvailability=worker.observedAvailability===null||worker.observedAvailability===undefined?'採樣累積中':formatPercent(worker.observedAvailability);
+    const p95=Number(material.p95DurationSeconds||0)>0?formatDuration(material.p95DurationSeconds):'資料不足';
+    const mttr=Number(incident.averageMttrSeconds||0)>0?formatDuration(incident.averageMttrSeconds):(Number(incident.resolved||0)?'0 秒':'資料累積中');
+    const targetAvailability=targets.workerAvailabilityPercent!=null?'≥ '+Number(targets.workerAvailabilityPercent).toFixed(1)+'%':'';
+    const targetSuccess=targets.materialSuccessPercent!=null?'≥ '+Number(targets.materialSuccessPercent).toFixed(1)+'%':'';
+    const targetDuration=targets.materialP95DurationSeconds!=null?'≤ '+formatDuration(targets.materialP95DurationSeconds):'';
+    const top=Array.isArray(incident.topComponents)?incident.topComponents:[];
+    const maxPending=Math.max(1,...series.map(row=>Number(row.pendingJobsMax||0)));
+    const maxDuration=Math.max(1,...series.map(row=>Number(row.completedDurationAverageSeconds||0)));
+    const coveragePct=(Number(coverage.coveragePercent||0)*100).toFixed(1);
+    const baseline=metrics.targetsConfigured
+      ? '正式 SLO 門檻已由環境設定；下方同時顯示實測值與目標。'
+      : '目前先建立 baseline，尚未設定正式 SLO 門檻；不會用任意預設值判定通過／失敗。';
+    return `<section id="worker-slo-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4 scroll-mt-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div><h5 class="font-black text-slate-900">📈 維運趨勢 / SLO</h5><p class="mt-1 text-[11px] text-slate-500">${escapeHtml(baseline)}</p></div>
+        <div class="flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-[11px]">
+          <button type="button" data-slo-window="24h" class="rounded-lg px-3 py-1.5 font-bold ${sloWindow==='24h'?'bg-white text-slate-900 shadow-sm':'text-slate-500'}">24 小時</button>
+          <button type="button" data-slo-window="7d" class="rounded-lg px-3 py-1.5 font-bold ${sloWindow==='7d'?'bg-white text-slate-900 shadow-sm':'text-slate-500'}">7 天</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        ${sloMetricCard('🟢','Worker 採樣可用率',workerAvailability,'有效樣本 '+Number(worker.availableSamples||0)+'；未知 '+Number(worker.unknownSamples||0),targetAvailability)}
+        ${sloMetricCard('✅','教材成功率',success,'完成 '+Number(material.completedJobs||0)+' / terminal '+Number(material.terminalJobs||0),targetSuccess)}
+        ${sloMetricCard('⏱️','教材 P95 處理時間',p95,formatSignedPercent(material.durationChangePercent),targetDuration)}
+        ${sloMetricCard('🧯','Incident 平均 MTTR',mttr,'新開 '+Number(incident.opened||0)+' · 恢復 '+Number(incident.resolved||0)+' · 目前 '+Number(incident.currentlyOpen||0))}
+      </div>
+      <div class="grid lg:grid-cols-2 gap-3">
+        <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+          <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-700">Queue depth 趨勢</b><span class="text-[10px] text-slate-400">最高 ${Number(queue.maxPendingJobs||0)} · 最久等待 ${escapeHtml(formatDuration(queue.maxOldestPendingAgeSeconds||0))}</span></div>
+          <div class="mt-3">${sloBarRows(series,'pendingJobsAverage',maxPending,value=>Number(value).toFixed(1))}</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+          <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-700">完成處理時間趨勢</b><span class="text-[10px] text-slate-400">目前平均 ${escapeHtml(formatDuration(material.averageDurationSeconds||0))}</span></div>
+          <div class="mt-3">${sloBarRows(series,'completedDurationAverageSeconds',maxDuration,value=>formatDuration(value))}</div>
+        </div>
+      </div>
+      <div class="grid lg:grid-cols-2 gap-3">
+        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-xs text-slate-700">最常觸發 Incident 的元件</b><div class="mt-2 flex flex-wrap gap-2">${top.length?top.map(item=>'<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600">'+escapeHtml(item.code||'UNKNOWN')+' · '+Number(item.count||0)+'</span>').join(''):'<span class="text-[11px] text-slate-400">0110 Incident 歷史資料累積中。</span>'}</div></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-xs text-slate-700">資料覆蓋</b><div class="mt-2 text-[11px] text-slate-600">10 分鐘採樣 ${Number(coverage.windowSampleCount||0)} / ${Number(coverage.expectedSampleCount||0)}，覆蓋約 ${coveragePct}%${coverage.firstSampleAt?'；首次 '+escapeHtml(formatWhen(coverage.firstSampleAt)):''}。</div><div class="mt-1 text-[10px] text-slate-400">${escapeHtml(coverage.note||'')}</div></div>
+      </div>
+    </section>`;
+  }
+
+  function bindSloControls() {
+    panel.querySelectorAll('[data-slo-window]').forEach(button=>{
+      button.onclick=async()=>{
+        const next=button.dataset.sloWindow==='7d'?'7d':'24h';
+        if(next===sloWindow)return;
+        sloWindow=next;
+        const host=document.getElementById('worker-slo-70');
+        if(host)host.innerHTML='<div class="animate-pulse text-sm text-slate-400">讀取維運趨勢中…</div>';
+        await renderWorkerStatus(true);
+      };
+    });
   }
 
   function workerCard(worker) {
@@ -424,6 +548,7 @@
       }
       if (!response.ok) throw new Error(data.error || `讀取失敗（${response.status}）`);
       await loadIncidentResponders();
+      const sloMetrics = await loadOperationalMetrics(sloWindow, force);
       const workerStatusAvailable = data.workerStatusAvailable !== false;
       const workerStatusError = data.workerStatusError || '無法讀取本機 Worker 狀態，請稍後再試。';
       const workers = Array.isArray(data.workers) ? data.workers : [];
@@ -478,6 +603,7 @@
           <div class="text-xs rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">Shared staging：<b>${escapeHtml(staging.backend || '未設定')}</b> · ${staging.available ? '可用' : '不可用'}${staging.shared ? ' · Web/Worker 共用' : ''}</div>
           ${operationalIssueHtml}
         </section>
+        ${renderSloDashboard(sloMetrics)}
         <section id="worker-runtime-70" class="space-y-3 scroll-mt-4">
           <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
           ${workerBody}
@@ -498,6 +624,7 @@
         ${firstRunGuide()}`;
       document.getElementById('worker-refresh-70').onclick = () => renderWorkerStatus(true);
       bindIncidentControls();
+      bindSloControls();
     } catch (error) {
       panel.innerHTML = `<section class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${escapeHtml(error.message || '無法讀取 Worker 狀態')}</section>${firstRunGuide()}`;
     } finally {
