@@ -22,7 +22,9 @@ concurrency:
 jobs:
   production-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 12-minute deployment convergence + bounded retries for six public probes
+    # needs more room than the old 15-minute job budget.
+    timeout-minutes: 30
     env:
       # Single production URL source. Override with the repository variable without editing workflows.
       TEACHER_PRODUCTION_URL: ${{ vars.TEACHER_PRODUCTION_URL || 'https://teacher-j3id.onrender.com' }}

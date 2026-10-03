@@ -22,7 +22,9 @@ jobs:
   keepalive:
     name: Wake Render and verify Supabase
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # curl can make the initial attempt plus four retries. Keep each transfer
+    # bounded to 60 seconds and leave headroom for retry delays and validation.
+    timeout-minutes: 12
     env:
       # Single production URL source shared with smoke/fallback workflows.
       TEACHER_PRODUCTION_URL: ${{ vars.TEACHER_PRODUCTION_URL || 'https://teacher-j3id.onrender.com' }}
@@ -66,7 +68,7 @@ jobs:
             --retry-all-errors \
             --retry-delay 15 \
             --connect-timeout 20 \
-            --max-time 180 \
+            --max-time 60 \
             --output "$response" \
             "${TEACHER_PRODUCTION_URL%/}/health"
 
