@@ -45,7 +45,7 @@ class ErrorObservability20261003Tests(unittest.TestCase):
             ("email notification claim release failed", reminders),
             ("email reminder event projection failed", reminders),
             ("operational incident reminder send failed", reminders),
-            ("operational incident sync failed", reminders),
+            ("operational incident sync failed", reminders),\n            ("operational metrics sample failed", reminders),
             ("PGY template temp cleanup failed", pgy),
             ("PGY EPA reference import failed", pgy),
             ("PGY template delete failed", pgy),
