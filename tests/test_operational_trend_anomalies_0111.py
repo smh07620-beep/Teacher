@@ -231,6 +231,46 @@ class OperationalTrendAnomalies0111Tests(unittest.TestCase):
         self.assertEqual(frequency[0]["evidence"]["currentCount"], 3)
         self.assertEqual(frequency[0]["evidence"]["previousCount"], 1)
 
+    def test_projection_failure_keeps_existing_trend_incident_open(self):
+        candidate = {
+            "incidentKey": "trend:trend_queue_growth",
+            "incidentType": "trend_anomaly",
+            "category": "trend",
+            "severity": "warning",
+            "title": "教材 Queue 持續上升",
+            "detail": "queue rising",
+            "action": "inspect capacity",
+            "errorCode": "TREND_QUEUE_GROWTH",
+            "resourceId": "TREND_QUEUE_GROWTH",
+        }
+        incidents.sync_operational_incidents(
+            now=NOW,
+            candidates=[candidate],
+        )
+        with patch.object(
+            incidents.worker_operations,
+            "operational_incident_candidates",
+            return_value=[],
+        ), patch.object(
+            incidents,
+            "_ai_job_incident_candidates",
+            return_value=[],
+        ), patch.object(
+            incidents.operational_history,
+            "trend_incident_candidates",
+            side_effect=RuntimeError("history unavailable"),
+        ), patch.object(
+            incidents.worker_operations,
+            "online_worker_recovery_keys",
+            return_value=set(),
+        ):
+            result = incidents.sync_operational_incidents(
+                now=NOW + dt.timedelta(minutes=10)
+            )
+        self.assertEqual(result["resolved"], [])
+        self.assertEqual(len(result["active"]), 1)
+        self.assertEqual(result["active"][0]["status"], "open")
+
     def test_trend_candidate_uses_existing_incident_lifecycle_and_auto_resolves(self):
         trend_candidate = {
             "incidentKey": "trend:trend_queue_growth",
