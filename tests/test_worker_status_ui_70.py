@@ -108,6 +108,15 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             "趨勢異常判讀",
             "持續惡化",
             "單次尖峰",
+            "容量規劃 / Forecast",
+            "近期到達率",
+            "單 Worker nominal",
+            "單 Worker 保守值",
+            "目前 backlog",
+            "模擬多 1 台 Worker",
+            "Nominal ETA",
+            "P95 保守 ETA",
+            "Forecast 是容量情境模型",
         ):
             self.assertIn(marker, self.source)
         self.assertIn("Date.now()-cached.loadedAt<60000", self.source)
