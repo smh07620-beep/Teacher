@@ -9,6 +9,7 @@ from teacher_app.common import audit
 from teacher_app.common.auth import has_role, require_role
 from teacher_app.common.errors import ApiError
 from teacher_app.notifications import incidents, preferences
+from teacher_app.operations import history as operational_history
 
 
 def _install(app, rule: str, endpoint: str, methods: list[str], view_func) -> None:
@@ -90,6 +91,16 @@ def register_notification_state_routes(owner):
                 detail={"emailCategories": result["emailCategories"]},
             )
             return jsonify({"ok": True, **result})
+        except ApiError as exc:
+            return _error(exc)
+
+    def api_operational_metrics():
+        actor = _current_user(owner)
+        try:
+            require_role(actor, "system_admin")
+            requested = str(request.args.get("window") or "24h").strip().lower()
+            window = "7d" if requested == "7d" else "24h"
+            return jsonify(operational_history.build_operational_dashboard(window=window))
         except ApiError as exc:
             return _error(exc)
 
@@ -211,6 +222,13 @@ def register_notification_state_routes(owner):
         "api_notification_preferences_update",
         ["PATCH"],
         api_notification_preferences_update,
+    )
+    _install(
+        app,
+        "/api/operational-metrics",
+        "api_operational_metrics",
+        ["GET"],
+        api_operational_metrics,
     )
     _install(
         app,
