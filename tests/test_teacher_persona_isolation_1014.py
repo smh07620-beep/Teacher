@@ -12,6 +12,9 @@ class TeacherPersonaIsolation1014Tests(unittest.TestCase):
         cls.source = (ROOT / "static" / "teacher-persona-isolation-1014.js").read_text(encoding="utf-8")
         cls.system_focus = (ROOT / "static" / "system-admin-focus-1014.js").read_text(encoding="utf-8")
         cls.product_convergence = (ROOT / "static" / "product-convergence-101.js").read_text(encoding="utf-8")
+        cls.teacher_workspace = (ROOT / "static" / "teacher-workspace-1014.js").read_text(encoding="utf-8")
+        cls.nav_fix = (ROOT / "static" / "teacher-workspace-nav-fix-1014.js").read_text(encoding="utf-8")
+        cls.admin_router = (ROOT / "static" / "admin-workspace.js").read_text(encoding="utf-8")
         cls.body = ASSET_MANIFEST["system"]["body"]
 
     def test_teacher_persona_removes_platform_worker_navigation(self):
@@ -41,6 +44,17 @@ class TeacherPersonaIsolation1014Tests(unittest.TestCase):
         self.assertLess(self.body.index('/system-admin-focus-1014.js'), self.body.index('/teacher-persona-isolation-1014.js'))
         self.assertLess(self.body.index('/teacher-persona-isolation-1014.js'), self.body.index('/product-convergence-101.js'))
         self.assertLess(self.body.index('/product-convergence-101.js'), self.body.index('/teacher-action-queue-1024.js'))
+
+    def test_platform_workspaces_never_mount_teacher_persona_hooks(self):
+        self.assertIn("teacherOwnedWorkspaces.has(requestedWorkspace)", self.teacher_workspace)
+        self.assertNotIn("requestedPersona !== 'system'", self.teacher_workspace)
+        self.assertIn("SYSTEM_WORKSPACES.has(workspace)", self.admin_router)
+        self.assertIn("url.searchParams.set('persona', 'system')", self.admin_router)
+        self.assertIn("window.location.assign(workspaceUrl(requested || workspace))", self.admin_router)
+
+    def test_system_persona_button_is_not_removed_after_first_paint(self):
+        self.assertNotIn("removeDuplicatePersona", self.nav_fix)
+        self.assertIn("single owner of the persona switcher", self.nav_fix)
 
     def test_system_focus_only_runs_for_system_persona_or_legacy_system_workspace(self):
         self.assertIn("requestedPersona === 'system'", self.system_focus)
