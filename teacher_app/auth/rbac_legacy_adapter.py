@@ -41,6 +41,7 @@ LEGACY_ENDPOINT_POLICIES = {
     "api_ai_generate_questions": ("question.manage", "scoped"),
     "api_ai_import_questions": ("question.manage", "scoped"),
     "api_admin_list_quiz_categories": ("question.manage", "list"),
+    "api_get_quiz_category": ("question.manage", "capability"),
     "api_create_quiz_category": ("question.manage", "scoped"),
     "api_update_quiz_category": ("question.manage", "scoped"),
     "api_review_quiz_category": ("question.review", "scoped"),
