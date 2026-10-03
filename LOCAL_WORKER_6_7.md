@@ -376,3 +376,12 @@ MATERIAL_INCIDENT_FAILURE_RATE_PERCENT=50
 系統管理者可以在 Worker / Job 狀態頁直接「已知悉、指派處理、設定 15 分鐘～24 小時維護、填寫備註」。維護期間 Incident 仍保留在站內，只暫停新的 escalation Email；Worker heartbeat、stale recovery、queue/retry 與自動恢復判定全部照常運作。Incident 只能由真實恢復條件轉成 resolved，不能人工強制關閉。
 
 同一問題重新發生時會建立新的 generation，上一輪的已知悉、負責人、維護期限與備註不會自動套用。各 error code 的 Runbook 是非敏感、唯讀處置指引，不會從 Render 遠端命令院內 Worker 或雲端 provider。
+
+
+## 維運趨勢 / SLO 歷史（0110）
+
+`0110-operational-metrics-history` 由 Web/GitHub Actions 每 10 分鐘保存 queue / Worker / Incident 維運快照，**院內 Worker 不需要新增設定或更新 protocol**。
+
+Worker availability 與 queue depth 只能從 0110 上線後開始真實採樣，系統不會回填假的七天歷史；畫面會顯示首次採樣時間與資料覆蓋率。教材成功率、失敗率、平均/P95 處理時間則可直接使用既有 `material_jobs` 回算。
+
+正式 SLO 門檻預設不設定。若日後院內決定門檻，只需在 Render Web 端設定 `OPERATIONS_SLO_WORKER_AVAILABILITY_PERCENT`、`MATERIAL_SLO_SUCCESS_PERCENT`、`MATERIAL_SLO_P95_DURATION_SECONDS`；這些值不需要放進院內 `.local-worker.env`。
