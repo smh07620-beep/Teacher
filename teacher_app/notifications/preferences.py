@@ -2,8 +2,8 @@
 
 In-app actionable notifications remain complete.  These preferences only filter
 ordinary email delivery. Critical material-processing failures and confirmed
-Worker-offline outages are always eligible for email and cannot be disabled by
-user preference.
+operational incidents/recoveries are always eligible for email and cannot be
+disabled by user preference.
 """
 from __future__ import annotations
 
@@ -101,7 +101,7 @@ def update_preferences(user: Mapping[str, Any] | None, payload: Mapping[str, Any
         )
     return {
         "emailCategories": current,
-        "protectedCategories": ["materialFailure", "workerOffline"],
+        "protectedCategories": ["materialFailure", "workerOffline", "operationalIncidents"],
     }
 
 
