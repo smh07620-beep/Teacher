@@ -225,7 +225,8 @@
       return `<article class="rounded-xl border ${critical?'border-rose-200 bg-rose-50':'border-amber-200 bg-amber-50'} p-3 text-sm">
         <div class="flex flex-wrap items-start justify-between gap-2"><div><b>${escapeHtml(job.title||job.originalName||job.id)}</b><div class="mt-1 font-mono text-[10px] text-slate-500">${escapeHtml(job.id||'')}</div></div><span class="rounded-full border px-2 py-1 text-[10px] font-bold ${classes}">${icon} ${label}</span></div>
         <div class="mt-2 text-xs text-slate-700"><b>階段：</b>${escapeHtml(job.stage||'—')}　<b>嘗試：</b>${Number(job.attempts||0)}/${Number(job.maxAttempts||3)}</div>
-        <div class="mt-2 rounded-lg bg-white/80 px-2 py-2 text-xs ${job.error?'text-rose-700':'text-slate-600'}"><b>${job.error?'失敗原因':'詳細資訊'}：</b>${escapeHtml(job.error||job.observabilityDetail||job.detail||'Worker 未提供詳細原因')}</div>
+        <div class="mt-2 rounded-lg bg-white/80 px-2 py-2 text-xs ${critical?'text-rose-700':'text-slate-600'}"><b>${job.errorMessage?'判定':'詳細資訊'}：</b>${escapeHtml(job.errorMessage||job.observabilityDetail||job.detail||'Worker 未提供詳細原因')}${job.errorCode?` <span class="font-mono text-[10px]">[${escapeHtml(job.errorCode)}]</span>`:''}${job.errorAction?`<div class="mt-1 font-semibold">建議：${escapeHtml(job.errorAction)}</div>`:''}</div>
+        ${job.technicalDetail?`<details class="mt-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-[10px] text-slate-600"><summary class="cursor-pointer font-bold">技術細節</summary><div class="mt-1">${escapeHtml(job.technicalDetail)}</div></details>`:''}
         <div class="mt-2 text-[10px] text-slate-500">建立 ${formatWhen(job.createdAt)} · 更新 ${formatWhen(job.updatedAt)} · Worker ${escapeHtml(job.workerId||'—')}${Number.isFinite(Number(job.heartbeatAgeSeconds))?` · heartbeat ${formatDuration(job.heartbeatAgeSeconds)}前`:''}</div>
       </article>`;
     }).join('');
