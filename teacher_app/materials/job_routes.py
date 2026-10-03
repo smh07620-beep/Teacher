@@ -17,6 +17,7 @@ from teacher_app.common import scope
 from teacher_app.config import material_web_byte_upload_max_mb
 from teacher_app.materials.job_runtime import MaterialJobRuntime, from_compat_owner
 from teacher_app.materials.validation import ALLOWED_MATERIAL_EXTENSIONS, normalize_material_filename
+from teacher_app.notifications import incidents as operational_incidents
 from teacher_app.worker import operations as worker_operations
 from teacher_app.worker import repository as worker_repository
 
@@ -152,6 +153,7 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             "staleThresholdSeconds": ops.get("staleThresholdSeconds", 1800),
             "operationalIssues": ops.get("operationalIssues", []),
             "recentErrorCodes": ops.get("recentErrorCodes", []),
+            "incidents": operational_incidents.list_recent_incidents(now=now, resolved_hours=24),
             "r2Budget": ops.get("r2Budget", {}),
         })
 
