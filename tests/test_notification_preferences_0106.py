@@ -29,6 +29,8 @@ class NotificationPreference0106Tests(unittest.TestCase):
             {"kind": "review", "key": "v"},
             {"kind": "material_failure", "key": "f"},
             {"kind": "worker_offline", "key": "w"},
+            {"kind": "operational_incident", "key": "oi"},
+            {"kind": "operational_recovery", "key": "or"},
         ]
         stored = {
             "emailCategories": {
@@ -37,13 +39,19 @@ class NotificationPreference0106Tests(unittest.TestCase):
                 "retraining": False,
                 "teacherReview": False,
             },
-            "protectedCategories": ["materialFailure", "workerOffline"],
+            "protectedCategories": ["materialFailure", "workerOffline", "operationalIncidents"],
         }
         with patch.object(preferences, "get_preferences", return_value=stored):
             filtered = preferences.filter_email_events(rows, {"username": "u1"}, general_enabled=True)
-            self.assertEqual([row["kind"] for row in filtered], ["material_failure", "worker_offline"])
+            self.assertEqual(
+                [row["kind"] for row in filtered],
+                ["material_failure", "worker_offline", "operational_incident", "operational_recovery"],
+            )
             filtered_master_off = preferences.filter_email_events(rows, {"username": "u1"}, general_enabled=False)
-            self.assertEqual([row["kind"] for row in filtered_master_off], ["material_failure", "worker_offline"])
+            self.assertEqual(
+                [row["kind"] for row in filtered_master_off],
+                ["material_failure", "worker_offline", "operational_incident", "operational_recovery"],
+            )
 
     def test_mixed_version_read_fallback_is_logged_without_database_message(self):
         user = {"username": "teacher-a"}
@@ -79,7 +87,8 @@ class NotificationPreference0106Tests(unittest.TestCase):
         self.assertIn("查看 Worker 狀態", ui)
         self.assertIn("notificationContext='system'", ui)
         self.assertIn("protectedCategories", service)
-        self.assertIn('"operational_incident"', service)\n        self.assertIn('"operational_recovery"', service)
+        self.assertIn('"operational_incident"', service)
+        self.assertIn('"operational_recovery"', service)
         self.assertIn('"operationalIncidents"', service)
 
     def test_payload_cannot_select_another_account_or_disable_protected_kind(self):
