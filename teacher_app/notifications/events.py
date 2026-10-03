@@ -117,6 +117,10 @@ def _event(item: Mapping[str, Any]) -> dict[str, Any]:
         "errorCode": str(item.get("errorCode") or ""),
         "action": str(item.get("action") or ""),
         "generation": int(item.get("generation") or 0),
+        "responseState": str(item.get("responseState") or ""),
+        "assignedTo": str(item.get("assignedTo") or ""),
+        "maintenanceActive": bool(item.get("maintenanceActive")),
+        "maintenanceUntil": str(item.get("maintenanceUntil") or ""),
     }
 
 
@@ -254,8 +258,18 @@ def _operational_incident_events(
                 else str(incident.get("action") or "")
             ),
             "generation": generation,
+            "responseState": str(incident.get("responseState") or ""),
+            "assignedTo": str(incident.get("assignedTo") or ""),
+            "maintenanceActive": bool(incident.get("maintenanceActive")),
+            "maintenanceUntil": str(incident.get("maintenanceUntil") or ""),
         }
-        output.append(_event(item))
+        event = _event(item)
+        if bool(incident.get("maintenanceActive")) and not is_recovery:
+            # Maintenance never hides the in-app incident. It only pauses a new
+            # escalation email until the bounded maintenance window expires.
+            event["channels"] = ["in_app"]
+            event["emailPolicy"] = "none"
+        output.append(event)
     return output
 
 
