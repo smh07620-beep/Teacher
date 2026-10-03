@@ -403,3 +403,12 @@ Worker availability 與 queue depth 只能從 0110 上線後開始真實採樣�
 模型會顯示近期每小時到達率、單台 Worker nominal 吞吐量（完成 Job 中位處理時間）、P95 保守吞吐量、目前 backlog，以及現有 Worker / 多 1 台 Worker 的 Queue 清空 ETA。只有完成樣本、採樣覆蓋率與最新 Worker 狀態都足夠時才會估算；否則顯示「資料不足」。
 
 若目前有 Worker offline、R2/正式儲存、FFmpeg、LibreOffice、DNS/網路或資料庫 OPEN Incident，系統會優先顯示「先排除故障，再判斷容量」。Forecast 不會自動啟動第二台 Worker，也不會把故障造成的慢直接判成硬體不足。
+
+
+## Workload 分型容量校準
+
+Forecast 現在不再把所有教材視為同一種成本。Web 端會依既有 Job 資料分為文件、影音、圖片、ZIP/封裝與其他，分別學習中位/P95 處理時間。
+
+文件會使用既有完成結果的 `pageCount` 計算頁數與秒/頁；影音會使用 Worker 已保存的 `durationSeconds` 計算影音長度與處理/影音倍率；檔案大小則以 <10 MB、10–100 MB、>=100 MB 分組作為觀察證據。這些資料都已存在於目前 Worker 完成結果，因此 **不需要更新院內 Worker、不需要新增 migration，也不需要新增 `.local-worker.env`**。
+
+每個 workload 預設至少需要 2 筆完成樣本才納入混合容量 ETA。若 Queue 中出現尚未校準的長影音等類型，系統會標示「部分校準」，不會拿 PDF 的速度直接估算該影片。
