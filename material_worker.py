@@ -204,6 +204,11 @@ class WorkerApi:
         path=f"/api/material-worker/{job_id}/heartbeat" if job_id else "/api/material-worker/heartbeat"
         caps=capabilities if isinstance(capabilities,dict) else capability()
         return self.post(path,{"workerId":WORKER_ID,"capabilities":caps,**AUTO_UPDATER.metadata()})
+    def progress(self,job_id,stage,detail=""):
+        return self.post(
+            f"/api/material-worker/{job_id}/progress",
+            {"workerId":WORKER_ID,"stage":str(stage or ""),"detail":str(detail or "")[:500]},
+        )
     def download(self,job,target):
         url=str(job.get("downloadUrl") or "")
         headers={}
@@ -213,6 +218,14 @@ class WorkerApi:
                 raise RuntimeError("Worker 工作未提供安全下載位置。")
             url=BASE_URL+path; headers={**self.headers,"X-Teacher-Worker-Id":WORKER_ID}
         download(url,target,headers=headers)
+
+def _report_progress(api,job_id,stage,detail=""):
+    """Best-effort UX checkpoint; queue correctness never depends on reporting."""
+    try:
+        api.progress(job_id,stage,detail)
+    except Exception as exc:
+        log(f"progress {job_id} {stage} failed: {str(exc)[:240]}")
+
 
 def _sha256(path):
     digest=hashlib.sha256()
@@ -481,16 +494,19 @@ def _build_text_index(source,temp,prepared_pdf=None):
         "textIndexTruncated":truncated,
     }
 
-def publish_to_storage(source,original,job,temp,source_sha256,timings=None):
+def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progress_callback=None):
     """Publish through the Flask-free canonical worker storage adapter."""
     timings=timings if isinstance(timings,dict) else {}
+    report=progress_callback if callable(progress_callback) else (lambda _stage,_detail="":None)
     material_id=str(job["materialId"])
+    report("轉檔處理","正在依教材格式進行必要的轉檔與正規化。")
     started=time.monotonic(); source,stored_name,media_meta,derivatives=_transcode_if_needed(source,original,temp); timings["mediaNormalizeMs"]=_elapsed_ms(started)
     backend=STORAGE.active_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
     publish_key=worker_protocol.material_publish_key(job.get("id"),material_id,source_sha256,backend)
     single=bool(backend=="mega" and STORAGE.single_preview and (ext==".pdf" or ext in OFFICE_EXT))
     prepared_pdf=None
     if ext in OFFICE_EXT:
+        report("轉檔處理","正在使用 LibreOffice 建立可預覽的 PDF。")
         started=time.monotonic(); prepared_pdf=STORAGE.prepare_office_pdf(source,Path(temp)/"office-pdf",timeout=240); timings["officeToPdfMs"]=_elapsed_ms(started)
         try:
             office_status=STORAGE.libreoffice_status()
@@ -501,6 +517,7 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None):
             }
         except Exception:
             pass
+    report("建立預覽","正在建立教材預覽與可搜尋內容。")
     started=time.monotonic(); text_index,index_meta=_build_text_index(source,temp,prepared_pdf=prepared_pdf); timings["textIndexMs"]=_elapsed_ms(started)
     if text_index is not None:derivatives["index.txt"]=text_index
     media_meta={**media_meta,**index_meta}
@@ -508,28 +525,33 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None):
     if single:
         pages=STORAGE.build_single_preview_pdf(source,preview,prepared_pdf=prepared_pdf)
         if pages<=0 or not preview.is_file() or preview.stat().st_size<=0: raise RuntimeError("Office/PDF preview 產生失敗，不能完成工作。")
+        report("正式發布",f"正在將教材與預覽正式寫入 {backend.upper()}。")
         key,prefix,remote=STORAGE.upload_material_preview_to_mega(material_id,source,preview,pages,derivatives); meta={"previewMode":"single_pdf","previewFilename":"preview.pdf","slideFormat":"pdf",**(remote or {}),**media_meta}
     elif ext==".pdf" or ext in OFFICE_EXT:
         pages=STORAGE.convert_pdf_to_images(source if ext==".pdf" else prepared_pdf,slides)
         if pages<=0: raise RuntimeError("Office/PDF 頁面數為零，不能完成工作。")
+        report("正式發布",f"正在將教材與 {pages} 頁預覽正式寫入 {backend.upper()}。")
         if backend=="mega":key,prefix,remote=STORAGE.upload_material_tree_to_mega(material_id,source,slides,pages,derivatives)
         elif backend=="gdrive":key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256)
         elif backend=="r2":key,prefix,remote=STORAGE.upload_material_tree_to_r2(material_id,source,slides,pages,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256)
         else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA、Google Drive 或 R2。")
         meta={"slideFormat":STORAGE.slide_format(slides,pages),**(remote or {}),**media_meta}
     elif backend=="mega":
+        report("正式發布","正在將教材正式寫入 MEGA。")
         if ext in VIDEO_EXT|AUDIO_EXT:
             key,prefix,remote=STORAGE.upload_media_bundle_to_mega(material_id,source,derivatives)
             meta={**(remote or {}),**media_meta}
         else:
             key=STORAGE.upload_source_to_mega(material_id,source); prefix=""; meta=media_meta
     elif backend=="gdrive":
+        report("正式發布","正在將教材正式寫入 Google Drive。")
         if ext in VIDEO_EXT|AUDIO_EXT:
             key,prefix,remote=STORAGE.upload_media_bundle_to_gdrive(material_id,source,derivatives,original_name=stored_name,publish_key=publish_key,source_sha256=source_sha256)
             meta={**(remote or {}),**media_meta}
         else:
             key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,0,original_name=stored_name,publish_key=publish_key,source_sha256=source_sha256); meta={**(remote or {}),**media_meta}
     elif backend=="r2":
+        report("正式發布","正在將教材正式寫入 Cloudflare R2。")
         if ext in VIDEO_EXT|AUDIO_EXT:
             key,prefix,remote=STORAGE.upload_media_bundle_to_r2(material_id,source,derivatives,publish_key=publish_key,source_sha256=source_sha256)
         else:
@@ -546,17 +568,30 @@ def process_one(api,job,capabilities=None):
         with JobHeartbeat(api,job_id,capabilities=capabilities):
             with tempfile.TemporaryDirectory(prefix="teacher-local-worker-") as temp_name:
                 temp=Path(temp_name); staged=temp/"source.bin"
+                _report_progress(api,job_id,"下載原始檔","Worker 正在從安全暫存取得原始教材。")
                 started=time.monotonic(); api.download(job,staged); timings["downloadMs"]=_elapsed_ms(started)
+                _report_progress(api,job_id,"驗證教材","正在驗證檔案大小、SHA256、格式與安全性。")
                 started=time.monotonic(); original=validate_download(staged,job); timings["validateMs"]=_elapsed_ms(started)
                 # File content is staged as .bin, but processing must see the actual
                 # extension so LibreOffice and preview routing are deterministic.
                 source=temp/("source"+Path(original).suffix.lower()); staged.replace(source)
                 source_sha256=str(job.get("sourceSha256") or "").lower() or _sha256(source)
+                _report_progress(api,job_id,"內容準備","正在進行影像去除 EXIF 與教材內容安全整理。")
                 started=time.monotonic(); _sanitize_raster_image_in_place(source,source.suffix.lower()); timings["sanitizeMs"]=_elapsed_ms(started)
-                result=publish_to_storage(source,original,job,temp,source_sha256,timings=timings)
+                result=publish_to_storage(
+                    source,
+                    original,
+                    job,
+                    temp,
+                    source_sha256,
+                    timings=timings,
+                    progress_callback=lambda stage,detail="":_report_progress(api,job_id,stage,detail),
+                )
                 timings["processingBeforeReceiptMs"]=_elapsed_ms(job_started)
                 result["storageMeta"]={**dict(result.get("storageMeta") or {}),"workerTimingsMs":dict(timings)}
+                _report_progress(api,job_id,"發布確認","正式檔已寫入儲存端，正在建立不可重複發布的 receipt。")
                 started=time.monotonic(); published_job(api,job_id,result); published_ack_ms=_elapsed_ms(started)
+                _report_progress(api,job_id,"完成確認","發布已確認，正在寫入正式教材清單並清理 staging。")
         started=time.monotonic(); complete_job(api,job_id,result); complete_ack_ms=_elapsed_ms(started)
         final_timings={**timings,"publishedAckMs":published_ack_ms,"completeAckMs":complete_ack_ms,"totalMs":_elapsed_ms(job_started)}
         log(f"completed {job_id} timings_ms={json.dumps(final_timings,sort_keys=True,separators=(',',':'))}")

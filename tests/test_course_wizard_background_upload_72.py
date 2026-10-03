@@ -38,6 +38,8 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertIn('背景教材處理中', source)
         self.assertIn('row.error||row.detail', source)
         self.assertIn('averageCompletedDurationSeconds', source)
+        self.assertIn('progressPercent', source)
+        self.assertIn('依 Worker 真實回報階段顯示', source)
         self.assertIn('處理進度', source)
 
     def test_successful_course_creation_waits_for_material_completion_before_finish(self):

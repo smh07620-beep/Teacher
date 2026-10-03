@@ -32,6 +32,16 @@ _RATE: dict[str, list[float]] = {}
 PART_HASH_STRATEGY = "sha256-parts-v1"
 SINGLE_HASH_STRATEGY = "sha256-single-v1"
 SINGLE_PUT_MAX_BYTES = 32 * 1024 * 1024
+WORKER_PROGRESS_STAGES = frozenset({
+    "下載原始檔",
+    "驗證教材",
+    "內容準備",
+    "轉檔處理",
+    "建立預覽",
+    "正式發布",
+    "發布確認",
+    "完成確認",
+})
 
 
 def _now() -> str:
@@ -434,6 +444,36 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
             if error: return error
         return jsonify({"ok": True, "lastSeen": _heartbeat(runtime, worker_id, body.get("capabilities"), job_id, body)})
 
+    @app.post("/api/material-worker/<job_id>/progress")
+    def material_worker_progress(job_id):
+        denied = _worker_auth(runtime)
+        if denied: return denied
+        body = request.get_json(silent=True) or {}
+        worker_id = _worker_id(body.get("workerId"))
+        if not worker_id:
+            return jsonify({"error": "workerId 不合法。"}), 400
+        _job, error = _worker_owned(runtime, job_id, worker_id)
+        if error: return error
+        stage = str(body.get("stage") or "").strip()
+        detail = str(body.get("detail") or "").strip()[:500]
+        if stage not in WORKER_PROGRESS_STAGES:
+            return jsonify({"error": "Worker progress stage 不合法。"}), 400
+        now = _now()
+        updated = worker_repository.transition_owned_material_job(
+            job_id,
+            worker_id,
+            fields={
+                "updated_at": now,
+                "worker_last_seen": now,
+                "stage": stage,
+                "detail": detail,
+            },
+            connection_factory=runtime.connection_factory,
+        )
+        if not updated:
+            return jsonify({"error": "工作狀態或 Worker ownership 不符。"}), 409
+        return jsonify({"ok": True, "job": updated})
+
     @app.post("/api/material-worker/<job_id>/published")
     def material_worker_published(job_id):
         denied = _worker_auth(runtime)
@@ -447,6 +487,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         try:
             publish_key, backend, source_sha256, result = _published_identity(job, body)
             _record_r2_publish_objects(runtime, job, result)
+            stamp = _now()
             receipt, replayed = worker_repository.record_publish_receipt(
                 job_id=job_id,
                 publish_key=publish_key,
@@ -456,7 +497,18 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
                 worker_id=worker_id,
                 result=result,
                 provider_ref=str(result.get("storageKey") or ""),
-                stamp=_now(),
+                stamp=stamp,
+                connection_factory=runtime.connection_factory,
+            )
+            worker_repository.transition_owned_material_job(
+                job_id,
+                worker_id,
+                fields={
+                    "updated_at": stamp,
+                    "worker_last_seen": stamp,
+                    "stage": "發布確認",
+                    "detail": "正式儲存已完成，正在確認發布紀錄與教材清單。",
+                },
                 connection_factory=runtime.connection_factory,
             )
         except ValueError as exc:

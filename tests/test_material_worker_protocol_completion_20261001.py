@@ -108,6 +108,7 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
         self.assertIsNotNone(claimed)
         self.assertEqual(claimed["status"], "processing")
         self.assertEqual(claimed["attempts"], 1)
+        self.assertEqual(claimed["progressPercent"], 30)
         status = operations.status(lambda: {}, connection_factory=self.connect)
         self.assertTrue(status["workers"][0]["protocolCompatible"])
 
@@ -198,6 +199,7 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
         jobs = ROOT.joinpath("static", "admin-jobs.js").read_text(encoding="utf-8")
         entry = ROOT.joinpath("teacher_app", "worker", "material_worker_entry.py").read_text(encoding="utf-8")
         fallback = ROOT.joinpath("tools", "github_fallback_worker.py").read_text(encoding="utf-8")
+        worker = ROOT.joinpath("material_worker.py").read_text(encoding="utf-8")
 
         for marker in (
             "教材已完成，返回教材與課程",
@@ -207,6 +209,8 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
             "R2 原始檔仍保留",
             "不必重新上傳",
             "canLeaveCourse()",
+            "progressPercent",
+            "依 Worker 真實回報階段顯示",
         ):
             self.assertIn(marker, wizard)
         for marker in (
@@ -217,8 +221,21 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
             "估計剩餘約",
             "Video ",
             "LO warm",
+            "progressPercent",
+            "依 Worker 真實回報階段顯示",
         ):
             self.assertIn(marker, jobs)
+        for marker in (
+            "/api/material-worker/{job_id}/progress",
+            '"下載原始檔"',
+            '"驗證教材"',
+            '"轉檔處理"',
+            '"建立預覽"',
+            '"正式發布"',
+            '"發布確認"',
+            '"完成確認"',
+        ):
+            self.assertIn(marker, worker)
         self.assertIn("install_capability(worker)", entry)
         self.assertIn("install_capability(worker)", fallback)
 

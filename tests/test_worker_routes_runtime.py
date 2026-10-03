@@ -216,6 +216,7 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
             ("/api/material-worker/<job_id>/source", "material_worker_source", "GET"),
             ("/api/material-worker/heartbeat", "material_worker_heartbeat", "POST"),
             ("/api/material-worker/<job_id>/heartbeat", "material_worker_heartbeat", "POST"),
+            ("/api/material-worker/<job_id>/progress", "material_worker_progress", "POST"),
             ("/api/material-worker/<job_id>/published", "material_worker_published", "POST"),
             ("/api/material-worker/<job_id>/complete", "material_worker_complete", "POST"),
             ("/api/material-worker/<job_id>/retry", "material_worker_retry", "POST"),
@@ -232,6 +233,42 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
                 actual.add((rule.rule, rule.endpoint, method))
         self.assertTrue(expected.issubset(actual), sorted(expected - actual))
         self.assertIs(self.app.extensions["teacher_worker_web_runtime"], self.runtime)
+
+    def test_worker_progress_updates_owned_job_with_canonical_stage(self):
+        self.seed_job("job-progress")
+        claimed = self.client.post(
+            "/api/material-worker/claim",
+            json={"workerId": "worker-a", "capabilities": {}},
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(claimed.status_code, 200, claimed.get_data(as_text=True))
+
+        progress = self.client.post(
+            "/api/material-worker/job-progress/progress",
+            json={
+                "workerId": "worker-a",
+                "stage": "轉檔處理",
+                "detail": "正在建立可預覽內容",
+            },
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(progress.status_code, 200, progress.get_data(as_text=True))
+        self.assertEqual(progress.get_json()["job"]["stage"], "轉檔處理")
+        self.assertEqual(progress.get_json()["job"]["progressPercent"], 66)
+
+        invalid = self.client.post(
+            "/api/material-worker/job-progress/progress",
+            json={"workerId": "worker-a", "stage": "任意階段"},
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+        wrong_owner = self.client.post(
+            "/api/material-worker/job-progress/progress",
+            json={"workerId": "worker-b", "stage": "正式發布"},
+            headers=self.worker_headers(),
+        )
+        self.assertEqual(wrong_owner.status_code, 409)
 
     def test_r2_publish_receipt_records_only_scoped_final_objects(self):
         self.seed_job("job-r2")

@@ -221,6 +221,39 @@ def _transaction(
         conn.close()
 
 
+MATERIAL_JOB_STAGE_PROGRESS = {
+    "等待背景處理": 25,
+    "重新排隊": 25,
+    "背景處理中": 30,
+    "下載原始檔": 38,
+    "驗證教材": 48,
+    "內容準備": 56,
+    "轉檔處理": 66,
+    "建立預覽": 76,
+    "正式發布": 86,
+    "發布確認": 93,
+    "完成確認": 97,
+    "已完成": 100,
+}
+
+
+def material_job_progress_percent(status: Any, stage: Any) -> int:
+    """Project truthful UX progress from persisted queue state/checkpoints."""
+    status_value = str(status or "")
+    stage_value = str(stage or "")
+    if status_value == "completed":
+        return 100
+    if status_value in {"failed", "cancelled"}:
+        return 100
+    if status_value == "retry_wait":
+        return 25
+    if status_value == "queued":
+        return 25
+    if status_value == "processing":
+        return int(MATERIAL_JOB_STAGE_PROGRESS.get(stage_value, 30))
+    return 0
+
+
 def material_job_row_to_dict(
     row: Any,
     *,
@@ -253,6 +286,10 @@ def material_job_row_to_dict(
         or ""
     )
     item["title"] = str((item.get("payload") or {}).get("title") or "")
+    item["progressPercent"] = material_job_progress_percent(
+        item.get("status"),
+        item.get("stage"),
+    )
     staging_path = str(item.pop("staging_path", "") or "")
     if include_payload:
         item["stagingPath"] = staging_path
