@@ -69,6 +69,7 @@ REQUIRED_MIGRATIONS = (
     "0108-operational-incidents",
     "0109-operational-incident-response",
     "0110-operational-metrics-history",
+    "0111-forecast-prediction-calibration",
 )
 
 # Backward-compatible singular name used by older release checks.  It now
