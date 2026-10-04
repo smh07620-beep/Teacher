@@ -18,7 +18,7 @@ class ManagementSurfaceSimplification78Tests(unittest.TestCase):
 
     def test_exam_list_is_compact_searchable_and_paged(self):
         bank=self.src('static/admin-question-bank.js')
-        for marker in ('quizListView78','visible:20','teacher78FilterQuizCategories','teacher78SetQuizStatus','teacher78LoadMoreQuizCategories','data-quiz-overflow-78','開啟考卷'):
+        for marker in ('quizListView78','visible:20','teacher78FilterQuizCategories','teacher78SetQuizStatus','teacher78LoadMoreQuizCategories','data-quiz-overflow-78','查看考卷','繼續編輯'):
             self.assertIn(marker,bank)
         self.assertNotIn('🧠 題庫／AI（<span id="qcount-',bank)
         self.assertIn('window.openTeacherContentExam?.',bank)
