@@ -81,7 +81,7 @@ def _line(event: Mapping[str, Any]) -> str:
 def run_due_reminders() -> int:
     """Send one digest per eligible user from the same events used in-app."""
     now = dt.datetime.now(dt.timezone.utc)
-    days = max(1, int(os.getenv("EMAIL_REMINDER_DAYS", "3") or 3))
+    days = max(1, int(os.getenv("EMAIL_REMINDER_DAYS", "7") or 7))
     sent = 0
     for row in auth_repository.list_users():
         if not row.get("active") or not row.get("email"):
