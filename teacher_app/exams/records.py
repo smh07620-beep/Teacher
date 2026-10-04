@@ -25,6 +25,33 @@ def list_records() -> list[dict]:
     return [record_to_dict(row) for row in rows]
 
 
+def category_review_summary(category_ids: list[str]) -> dict[str, dict[str, int]]:
+    ids = [str(value or "").strip()[:100] for value in category_ids if str(value or "").strip()]
+    if not ids:
+        return {}
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        marks = ",".join([ph] * len(ids))
+        rows = conn.execute(
+            f"SELECT quiz_category_id,review_status,COUNT(*) AS cnt FROM exam_records "
+            f"WHERE quiz_category_id IN ({marks}) GROUP BY quiz_category_id,review_status",
+            tuple(ids),
+        ).fetchall()
+    summary: dict[str, dict[str, int]] = {value: {"pending": 0, "completed": 0, "total": 0} for value in ids}
+    for row in rows:
+        mapped = dict(row)
+        category_id = str(mapped.get("quiz_category_id") or "")
+        status = str(mapped.get("review_status") or "completed")
+        count = int(mapped.get("cnt", 0) or 0)
+        bucket = summary.setdefault(category_id, {"pending": 0, "completed": 0, "total": 0})
+        bucket["total"] += count
+        if status == "pending":
+            bucket["pending"] += count
+        else:
+            bucket["completed"] += count
+    return summary
+
+
 def clear_records() -> None:
     with common_db.transaction() as (conn, _kind):
         conn.execute("DELETE FROM exam_records")
@@ -276,4 +303,4 @@ def create_record(user: Mapping[str, Any], data: Mapping[str, Any]) -> str:
     return record_id
 
 
-__all__ = ["RecordError", "can_review_record", "clear_records", "create_record", "list_records", "review_record"]
+__all__ = ["RecordError", "can_review_record", "category_review_summary", "clear_records", "create_record", "list_records", "review_record"]
