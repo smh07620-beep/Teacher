@@ -74,6 +74,7 @@ ASSET_MANIFEST = {
             "/admin-announcements.js",
             "/admin-system.js",
             "/admin-competency-matrix-92.js",
+            "/training-intervention-f3.js",
             "/admin-materials.js",
             "/admin-question-bank.js",
             "/course-wizard-group-fix-1014.js",
