@@ -412,3 +412,14 @@ Forecast 現在不再把所有教材視為同一種成本。Web 端會依既有 
 文件會使用既有完成結果的 `pageCount` 計算頁數與秒/頁；影音會使用 Worker 已保存的 `durationSeconds` 計算影音長度與處理/影音倍率；檔案大小則以 <10 MB、10–100 MB、>=100 MB 分組作為觀察證據。這些資料都已存在於目前 Worker 完成結果，因此 **不需要更新院內 Worker、不需要新增 migration，也不需要新增 `.local-worker.env`**。
 
 每個 workload 預設至少需要 2 筆完成樣本才納入混合容量 ETA。若 Queue 中出現尚未校準的長影音等類型，系統會標示「部分校準」，不會拿 PDF 的速度直接估算該影片。
+
+
+## 高峰情境 / Capacity What-if
+
+system_admin 的 SLO / Forecast 頁現在可直接試算「如果現在一次加入這批教材，1 台或 2 台 Worker 需要多久清空」。
+
+文件會優先使用既有完成結果校準出的秒/頁；影音會優先使用處理時間/影音時長倍率。因此「10 份 PDF + 3 支 30 分鐘影片」不會被視為 13 筆等成本工作。
+
+試算只讀取 Web 端既有歷史與 Queue 狀態，不會建立 Job、不會自動啟動第二台 Worker，也不會修改 Task Scheduler。若某個 workload 樣本不足，整體 ETA 會標示不可安全估算；若目前有 Worker offline、R2、FFmpeg、LibreOffice 等 Incident，會先要求排除故障再做容量決策。
+
+**院內 Worker 不需要更新，也不需要新增 `.local-worker.env`。**
