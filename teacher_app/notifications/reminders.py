@@ -69,6 +69,27 @@ def _release_claim(username: str, key: str) -> None:
         )
 
 
+def _record_delivery_attempt(run_id: str, username: str, event: Mapping[str, Any], status: str, error_type: str = "") -> None:
+    try:
+        with common_db.transaction() as (conn, dbkind):
+            ph = common_db.placeholder(dbkind)
+            conn.execute(
+                f"INSERT INTO email_delivery_attempts(id,run_id,username,notification_key,kind,status,attempted_at,error_type) VALUES ({','.join([ph] * 8)})",
+                (
+                    uuid.uuid4().hex,
+                    str(run_id or "")[:64],
+                    str(username or "")[:100],
+                    str(event.get("key") or "")[:240],
+                    str(event.get("kind") or "")[:80],
+                    str(status or "")[:30],
+                    dt.datetime.now(dt.timezone.utc).isoformat(),
+                    str(error_type or "")[:160],
+                ),
+            )
+    except Exception as exc:
+        LOGGER.warning("email delivery observability write failed error_type=%s", type(exc).__name__)
+
+
 def _line(event: Mapping[str, Any]) -> str:
     label = str(event.get("badge") or event.get("kind") or "待辦")
     title = str(event.get("title") or "待處理項目")
@@ -83,6 +104,7 @@ def run_due_reminders() -> int:
     now = dt.datetime.now(dt.timezone.utc)
     days = max(1, int(os.getenv("EMAIL_REMINDER_DAYS", "7") or 7))
     sent = 0
+    run_id = uuid.uuid4().hex
     for row in auth_repository.list_users():
         if not row.get("active") or not row.get("email"):
             continue
@@ -122,8 +144,12 @@ def run_due_reminders() -> int:
             delivered = False
         if delivered:
             sent += 1
-        else:
             for event in claimed:
+                _record_delivery_attempt(run_id, user["username"], event, "sent")
+        else:
+            error_type = "smtp_send_failed"
+            for event in claimed:
+                _record_delivery_attempt(run_id, user["username"], event, "failed", error_type)
                 _release_claim(user["username"], event["key"])
     return sent
 
