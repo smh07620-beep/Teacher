@@ -99,6 +99,11 @@ def list_categories(base, group: str | None, area: str, include_inactive: bool) 
         with _CATEGORY_LIST_CACHE_LOCK:
             _CATEGORY_LIST_CACHE[key] = (time.monotonic(), copy.deepcopy(full_list))
 
+    for item in full_list:
+        try:
+            item["examWindow"] = exam_windows.get_window(str(item.get("id") or "")) or {}
+        except Exception:
+            item["examWindow"] = {}
     if include_inactive:
         return full_list
     return [item for item in full_list if bool(item.get("active"))]
