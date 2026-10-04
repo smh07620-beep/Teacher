@@ -48,7 +48,7 @@ class ProductUxConvergencePhaseDTests(unittest.TestCase):
         self.assertIn("box.dataset.productSection='current-work'", self.quiz)
         self.assertIn("section.dataset.productSection = 'history'", self.teacher)
         self.assertIn("歷史紀錄", self.teacher)
-        self.assertIn("待批改項目改由上方「需要我處理」直接進入", self.teacher)
+        self.assertIn("待批改會優先出現在「需要我處理」", self.teacher)
         self.assertIn("switchAdminWorkspace?.('results', true)", self.teacher)
 
     def test_learner_home_uses_the_same_four_section_contract(self):
