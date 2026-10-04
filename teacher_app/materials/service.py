@@ -276,6 +276,53 @@ def material_purge_readiness(material_id: str) -> dict:
     }
 
 
+def purge_material_storage(material_id: str, *, paths, storage_runtime=None) -> dict:
+    """Physically delete storage only after the caller has revalidated a blocker-free graph."""
+    entry = repository.get_material(material_id)
+    if not entry:
+        raise _fail("MATERIAL_NOT_FOUND", "找不到要永久清除的教材。", 404)
+    graph = repository.material_artifact_reference_graph(material_id)
+    if not graph.get("purgeAllowed"):
+        raise _fail("MATERIAL_PURGE_BLOCKED", "教材仍被版本或衍生內容引用，拒絕永久清除。", 409, referenceGraph=graph)
+
+    backend = str(entry.get("storageBackend") or "local").lower()
+    if backend not in canonical_storage.VALID_BACKENDS:
+        backend = "local"
+
+    def delete_local_material(payload):
+        upload_dir = Path(paths.upload_dir) / payload["id"]
+        slides_dir = Path(paths.uploaded_slides_dir) / payload["folder"]
+        if upload_dir.exists():
+            shutil.rmtree(upload_dir)
+        if slides_dir.exists():
+            shutil.rmtree(slides_dir)
+
+    if backend == "gdrive":
+        request = canonical_storage.DeleteRequest(backend, "material", entry)
+    elif backend == "mega":
+        meta = entry.get("storageMeta") or {}
+        request = canonical_storage.DeleteRequest(
+            backend, "object", meta.get("folderId") or meta.get("materialFolderId") or entry.get("storageKey", "")
+        )
+    elif backend in {"oci", "r2"}:
+        request = canonical_storage.DeleteRequest(backend, "prefix", f"materials/{entry['id']}/")
+    else:
+        request = canonical_storage.DeleteRequest("local", "material", entry)
+
+    adapters = (
+        storage_runtime.delete_adapters(local_delete_material=delete_local_material)
+        if storage_runtime is not None
+        else WebStorageRuntime(paths).delete_adapters(local_delete_material=delete_local_material)
+    )
+    try:
+        canonical_storage.delete_strict(request, adapters)
+    except Exception as exc:
+        cause = exc.cause if isinstance(exc, canonical_storage.StorageDeletionError) else exc
+        raise _fail("MATERIAL_PURGE_STORAGE_FAILED", f"永久清除教材儲存失敗：{cause}", 502) from exc
+    repository.delete_material_record(material_id)
+    return {"ok": True, "purged": True, "backend": backend}
+
+
 def delete_material(
     base_or_material_id,
     material_id: str | None = None,
