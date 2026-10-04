@@ -72,7 +72,7 @@ class StorageDeletionConvergenceTests(unittest.TestCase):
                 )
         record.assert_not_called()
 
-    def _material_base(self, mega_delete):
+    def _material_base(self, mega_delete, r2_delete_prefix=None):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
@@ -89,7 +89,7 @@ class StorageDeletionConvergenceTests(unittest.TestCase):
                 oci_delete_prefix=lambda _value: None,
                 r2_is_configured=lambda: True,
                 r2_delete_object=lambda _value: None,
-                r2_delete_prefix=lambda _value: None,
+                r2_delete_prefix=r2_delete_prefix or (lambda _value: None),
                 **kwargs,
             )
 
@@ -149,7 +149,7 @@ class StorageDeletionConvergenceTests(unittest.TestCase):
 
     def test_permanent_purge_deletes_storage_before_catalog_when_unreferenced(self):
         calls = []
-        base = self._material_base(lambda value: calls.append(value))
+        base = self._material_base(lambda _value: None, r2_delete_prefix=lambda value: calls.append(value))
         entry = {"id": "upload-1", "folder": "upload-1", "storageBackend": "r2", "storageKey": "materials/upload-1/source.pdf"}
         graph = {"materialId": "upload-1", "purgeAllowed": True, "blockers": []}
         runtime = type("Runtime", (), {"delete_adapters": lambda self, **kwargs: base.storage_delete_adapters(**kwargs)})()
