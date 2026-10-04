@@ -28,6 +28,15 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
                 group_key TEXT NOT NULL DEFAULT 'grpBio', training_area TEXT NOT NULL DEFAULT 'pgy',
                 status TEXT NOT NULL DEFAULT 'assigned'
             )""")
+            # GP-04 exercises the production submit path, including the
+            # server-authoritative deadline guard introduced by migration 0093.
+            # Keep this focused fixture schema-aligned instead of weakening
+            # teacher_app.exams.windows when a migration is missing.
+            conn.execute("""CREATE TABLE exam_windows (
+                quiz_category_id TEXT PRIMARY KEY, opens_at TEXT NOT NULL DEFAULT '',
+                closes_at TEXT NOT NULL DEFAULT '', reminder_enabled INTEGER NOT NULL DEFAULT 1,
+                updated_at TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT ''
+            )""")
             conn.execute(
                 "INSERT INTO user_accounts(username,emp_id,preferred_group) VALUES (?,?,?)",
                 ("student1", "S001", "grpBio"),
