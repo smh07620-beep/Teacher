@@ -72,7 +72,7 @@ test('large internal course scope stays interactive without summary warnings', a
   });
   const afterRerenderNodeCount = await page.locator('#admin-course-material-hub *').count();
   expect(afterRerenderNodeCount).toBeLessThan(initialNodeCount * 3);
-  await page.getByRole('button', { name: '製作語音／錄影' }).click();
+  await page.getByRole('button', { name: /從教材製作媒體/ }).click();
   expect(await page.evaluate(() => window.mediaOpened)).toBe(true);
   await page.getByRole('button', { name: '批次管理課程' }).click();
   await expect(page.locator('#teacher-batch-assignment-dialog-1014')).toHaveAttribute('open', '');
