@@ -15,5 +15,18 @@ def email_delivery_observability_112(conn, kind: str) -> None:
     )""")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_email_delivery_attempts_time ON email_delivery_attempts(attempted_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_email_delivery_attempts_status ON email_delivery_attempts(status,attempted_at)")
+    conn.execute("""CREATE TABLE IF NOT EXISTS email_reminder_runs (
+        id TEXT PRIMARY KEY,
+        started_at TEXT NOT NULL,
+        completed_at TEXT NOT NULL DEFAULT '',
+        expected_events INTEGER NOT NULL DEFAULT 0,
+        claimed_events INTEGER NOT NULL DEFAULT 0,
+        sent_events INTEGER NOT NULL DEFAULT 0,
+        failed_events INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'running',
+        error_type TEXT NOT NULL DEFAULT ''
+    )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_email_reminder_runs_started ON email_reminder_runs(started_at)")
+
 
 __all__=["email_delivery_observability_112"]
