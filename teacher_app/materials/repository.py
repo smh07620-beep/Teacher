@@ -325,3 +325,74 @@ def replace_category_assignments(category_id: str, material_ids: list[str], *, g
 def clear_category_assignment(conn, kind: str, category_id: str) -> None:
     ph = common_db.placeholder(kind)
     conn.execute(f"UPDATE materials SET category='' WHERE category={ph}", (category_id,))
+
+
+def replace_material_content_and_publish(
+    material_id: str,
+    *,
+    content: dict,
+    published_by: str,
+    change_reason: str,
+    requires_retraining: bool,
+) -> dict | None:
+    """Atomically point one canonical material at new content and append its version."""
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        select_sql = f"SELECT * FROM materials WHERE id={ph}"
+        if kind == "postgres":
+            select_sql += " FOR UPDATE"
+        row = conn.execute(select_sql, (material_id,)).fetchone()
+        if not row:
+            return None
+        previous = dict(row)
+        current_version = max(1, int(previous.get("current_version", 1) or 1))
+        new_version = current_version + 1
+        required_version = max(1, int(previous.get("required_completion_version", 1) or 1))
+        if requires_retraining:
+            required_version = new_version
+        fields = {
+            "filename": str(content.get("filename") or previous.get("filename") or "")[:255],
+            "title": str(content.get("title") or previous.get("title") or "")[:255],
+            "description": str(content.get("description") or previous.get("description") or "")[:1000],
+            "category": str(content.get("category") or previous.get("category") or "")[:100],
+            "course_id": str(content.get("course_id") or previous.get("course_id") or "")[:100],
+            "folder": str(content.get("folder") or previous.get("folder") or material_id)[:255],
+            "page_count": max(0, int(content.get("page_count", 0) or 0)),
+            "storage_filename": str(content.get("storage_filename") or "")[:255],
+            "storage_backend": str(content.get("storage_backend") or "local")[:40],
+            "storage_key": str(content.get("storage_key") or "")[:1000],
+            "slides_prefix": str(content.get("slides_prefix") or "")[:1000],
+            "storage_meta": str(content.get("storage_meta") or "{}"),
+            "material_type": str(content.get("material_type") or previous.get("material_type") or "standard")[:40],
+            "atlas_meta": str(content.get("atlas_meta") or "{}"),
+        }
+        assignments = ",".join(f"{name}={ph}" for name in fields)
+        conn.execute(
+            f"UPDATE materials SET {assignments},current_version={ph},required_completion_version={ph},"
+            f"version_updated_at={ph},version_updated_by={ph} WHERE id={ph}",
+            tuple(fields.values()) + (new_version, required_version, now, published_by, material_id),
+        )
+        updated = dict(previous)
+        updated.update(fields)
+        updated.update({
+            "current_version": new_version,
+            "required_completion_version": required_version,
+            "version_updated_at": now,
+            "version_updated_by": published_by,
+        })
+        conn.execute(
+            f"INSERT INTO material_versions "
+            f"(material_id,version,requires_retraining,change_reason,published_at,published_by,snapshot) "
+            f"VALUES ({','.join([ph] * 7)})",
+            (
+                material_id,
+                new_version,
+                requires_retraining if kind == "postgres" else int(requires_retraining),
+                str(change_reason or "")[:1000],
+                now,
+                str(published_by or "")[:100],
+                json.dumps(updated, ensure_ascii=False, separators=(",", ":"), default=str),
+            ),
+        )
+    return get_material(material_id)
