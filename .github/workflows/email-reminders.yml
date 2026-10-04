@@ -26,7 +26,7 @@ jobs:
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       SMTP_FROM: ${{ secrets.SMTP_FROM }}
       SMTP_STARTTLS: "true"
-      EMAIL_REMINDER_DAYS: "3"
+      EMAIL_REMINDER_DAYS: "7"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
