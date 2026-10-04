@@ -468,6 +468,17 @@ def get_publication_by_key(key: str):
     return _publication(row)
 
 
+def get_publication_for_presentation(presentation_id: str):
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT * FROM ai_presentation_publications "
+            f"WHERE presentation_id={ph} ORDER BY created_at DESC LIMIT 1",
+            (str(presentation_id or ""),),
+        ).fetchone()
+    return _publication(row)
+
+
 def create_publication(*, presentation_id, publication_material_id, actor_username, receipt, presentation_family_id="", presentation_revision_number=1, snapshot=None):
     key=publication_receipt_key(presentation_id,publication_material_id); existing=get_publication_by_key(key)
     if existing: return existing
@@ -484,6 +495,6 @@ __all__ = [
     "create_template","get_template","list_templates","create_job","get_job","get_job_by_idempotency_key","list_queued","claim_job","set_job_progress",
     "complete_job","fail_job","requeue_stale_processing","retry_failed_job","create_presentation","get_presentation","get_presentation_by_source_job_id",
     "list_presentations","list_family_revisions","latest_published","next_revision_number","create_revision","update_presentation_artifact","update_presentation_quality","set_status",
-    "publication_receipt_key","get_publication_by_key","create_publication",
+    "publication_receipt_key","get_publication_by_key","get_publication_for_presentation","create_publication",
     "sanitize_provenance","sanitize_layout_profile",
 ]

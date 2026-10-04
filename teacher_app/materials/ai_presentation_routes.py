@@ -21,6 +21,7 @@ from teacher_app.materials import ai_presentation_quality as quality
 from teacher_app.materials.ai_presentation_storage import PPTX_MIME, PresentationStorage, safe_filename
 from teacher_app.materials import media_script_repository
 from teacher_app.materials import repository as material_repository
+from teacher_app.materials import derivative_repository
 
 _TEACHER_APPROVAL_ROLES = {"clinical_teacher", "group_leader"}
 _PUBLISH_ROLES = {"clinical_teacher", "group_leader", "education_admin", "system_admin"}
@@ -650,6 +651,31 @@ def register_ai_presentation_routes(owner):
             presentation_family_id=str(current.get("presentationFamilyId") or current.get("id") or ""),
             presentation_revision_number=int(current.get("revisionNumber") or 1), snapshot=_publication_snapshot(current, manifest=manifest, warning_ack=warning_ack))
         try:
+            derivative = derivative_repository.record_publication(
+                material_id=material_id,
+                derivative_type="presentation",
+                derivative_id=str(current.get("id") or ""),
+                source_presentation_id=str(current.get("id") or ""),
+                source_presentation_revision=int(current.get("revisionNumber") or 1),
+                artifact={
+                    "backend": str(current.get("artifactBackend") or ""),
+                    "key": str(current.get("artifactStorageKey") or ""),
+                    "sha256": str(current.get("artifactSha256") or ""),
+                    "byteSize": int(current.get("artifactBytes") or 0),
+                    "mimeType": str(current.get("artifactMimeType") or ""),
+                },
+                receipt_key=str(receipt.get("receiptKey") or ""),
+                provenance={
+                    **dict(current.get("provenance") or {}),
+                    "qualityStatus": str(manifest.get("status") or ""),
+                    "qualityRulesetVersion": str(manifest.get("rulesetVersion") or ""),
+                    "presentationFamilyId": str(current.get("presentationFamilyId") or current.get("id") or ""),
+                },
+                published_by=str(user.get("username") or ""),
+            )
+        except (ValueError, RuntimeError) as exc:
+            return jsonify({"error":str(exc)}), 409
+        try:
             published = current if str(current.get("status") or "") == "published" else repository.set_status(
                 str(current.get("id") or ""), status="published", actor_username=str(user.get("username") or "")
             )
@@ -657,7 +683,12 @@ def register_ai_presentation_routes(owner):
             return jsonify({"error":str(exc)}), 409
         audit.record_event(actor=user, action="presentation.publish", target_type="ai_presentation", target_id=str(current.get("id") or ""),
                            group=str(current.get("group") or ""), after={"status":"published","publicationMaterialId":material_id,"receiptKey":receipt.get("receiptKey"),"qualityStatus":manifest.get("status")})
-        return jsonify({"ok":True,"presentation":_public_presentation(published or {}),"publicationReceipt":receipt})
+        return jsonify({
+            "ok":True,
+            "presentation":_public_presentation(published or {}),
+            "publicationReceipt":receipt,
+            "materialDerivative":derivative,
+        })
 
     app.extensions["teacher_ai_presentation_routes_registered"] = True
     return app

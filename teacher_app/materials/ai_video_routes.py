@@ -9,6 +9,8 @@ from teacher_app.common import audit, scope_filter
 from teacher_app.common.auth import has_role
 from teacher_app.materials import ai_presentation_repository as presentation_repository
 from teacher_app.materials import ai_video_jobs, ai_video_quality as quality, ai_video_renderer as renderer, ai_video_repository as repository
+from teacher_app.materials import derivative_repository
+from teacher_app.materials import repository as material_repository
 from teacher_app.materials.ai_video_storage import VideoStorage
 
 _TEACHER_ROLES = {"clinical_teacher", "group_leader"}
@@ -402,6 +404,26 @@ def register_ai_video_routes(owner):
                     "frameRenderer": video.get("frameRenderer"),
                 },
             )
+        presentation = presentation_repository.get_presentation(str(video.get("presentationId") or ""))
+        if not presentation:
+            return jsonify({"error": "找不到影片來源 PowerPoint revision，拒絕發布。"}), 409
+        presentation_publication = presentation_repository.get_publication_for_presentation(
+            str(presentation.get("id") or "")
+        )
+        material_id = str(
+            (presentation_publication or {}).get("publicationMaterialId")
+            or presentation.get("materialId")
+            or ""
+        )
+        material = material_repository.get_material(material_id) if material_id else None
+        if not material:
+            return jsonify({"error": "找不到影片所屬 canonical 教材，拒絕發布。"}), 409
+        denied = _scope(owner, str(material.get("group") or ""))
+        if denied:
+            return denied
+        if material.get("group") != video.get("group") or material.get("area") != video.get("area"):
+            return jsonify({"error": "影片與 canonical 教材範圍不一致，拒絕發布。"}), 409
+
         receipt_payload = {
             "videoId": video.get("id"),
             "videoRevision": video.get("revisionNumber"),
@@ -417,6 +439,7 @@ def register_ai_video_routes(owner):
             "qualityStatus": manifest.get("status"),
             "qualityRulesetVersion": manifest.get("rulesetVersion"),
             "frameRenderer": video.get("frameRenderer"),
+            "publicationMaterialId": material_id,
         }
         snapshot = {
             **receipt_payload,
@@ -432,6 +455,42 @@ def register_ai_video_routes(owner):
             video_family_id=str(video.get("videoFamilyId") or video.get("id") or ""),
             video_revision_number=int(video.get("revisionNumber") or 1),
         )
+        try:
+            derivative = derivative_repository.record_publication(
+                material_id=material_id,
+                derivative_type="video",
+                derivative_id=str(video.get("id") or ""),
+                source_presentation_id=str(presentation.get("id") or ""),
+                source_presentation_revision=int(presentation.get("revisionNumber") or 1),
+                artifact={
+                    "backend": str(video.get("artifactBackend") or ""),
+                    "key": str(video.get("artifactStorageKey") or ""),
+                    "sha256": str(video.get("artifactSha256") or ""),
+                    "byteSize": int(video.get("artifactBytes") or 0),
+                    "mimeType": str(video.get("artifactMimeType") or ""),
+                },
+                receipt_key=str(receipt.get("receiptKey") or ""),
+                provenance={
+                    "sourceMaterialId": material_id,
+                    "sourceMaterialVersion": int(
+                        (presentation.get("provenance") or {}).get("sourceMaterialVersion")
+                        or material.get("currentVersion")
+                        or 1
+                    ),
+                    "presentationId": str(presentation.get("id") or ""),
+                    "presentationRevision": int(presentation.get("revisionNumber") or 1),
+                    "presentationSha256": str(presentation.get("artifactSha256") or ""),
+                    "ttsProvider": str(video.get("ttsProvider") or ""),
+                    "ttsModel": str(video.get("ttsModel") or ""),
+                    "ttsVoice": str(video.get("ttsVoice") or ""),
+                    "frameRenderer": str(video.get("frameRenderer") or ""),
+                    "qualityStatus": str(manifest.get("status") or ""),
+                    "qualityRulesetVersion": str(manifest.get("rulesetVersion") or ""),
+                },
+                published_by=str(user.get("username") or ""),
+            )
+        except (ValueError, RuntimeError) as exc:
+            return jsonify({"error":str(exc)}), 409
         updated = repository.set_status(
             str(video_id),
             status="published",
@@ -450,7 +509,12 @@ def register_ai_video_routes(owner):
                 "frameRenderer": video.get("frameRenderer"),
             },
         )
-        return jsonify({"ok": True, "video": _public_video(updated or {}), "publicationReceipt": receipt})
+        return jsonify({
+            "ok": True,
+            "video": _public_video(updated or {}),
+            "publicationReceipt": receipt,
+            "materialDerivative": derivative,
+        })
 
     app.extensions["teacher_ai_video_routes_registered"] = True
     return app
