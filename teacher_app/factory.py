@@ -87,6 +87,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.learning.intervention_routes import register_training_intervention_routes
     from teacher_app.learning.certificate_routes import register_completion_certificate_routes
     from teacher_app.maintenance.health import register_health
+    from teacher_app.maintenance.production_readiness_routes import register_production_readiness_routes
     from teacher_app.maintenance.announcement_routes import register_announcement_routes
     from teacher_app.materials.upload_routes import register_upload_hardening
     from teacher_app.materials.delivery_routes import register_material_delivery_routes
@@ -153,6 +154,11 @@ def _register_production(app: Flask) -> Flask:
     app = register_general_audit_routes(app)
     app = register_training_audience_71(app)
     app = register_health(app, connection_factory=common_db.get_connection)
+    app = register_production_readiness_routes(
+        app,
+        material_runtime=app.extensions["teacher_material_job_runtime"],
+        connection_factory=common_db.get_connection,
+    )
     app = register_training_command_center(app)
     app = register_dashboard_routes(app)
     app = register_notification_state_routes(app)
