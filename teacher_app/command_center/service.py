@@ -123,10 +123,28 @@ def _learner_action_items(user: Mapping[str, Any], current: dt.datetime) -> list
 
     for course in pending_courses:
         course_id = str(course.get("id") or "")
+        next_kind = str(course.get("nextKind") or "")
+        resume_material_id = str(course.get("resumeMaterialId") or "")
+        resume_exam_id = str(course.get("resumeExamId") or "")
+        resume_progress = max(0, min(100, int(float(course.get("resumeProgress") or 0))))
+        target = "exam" if next_kind == "exam" and resume_exam_id else "materials"
+        resource_id = resume_exam_id if target == "exam" else course_id
+        if next_kind == "retraining":
+            action_label = "重新閱讀新版"
+        elif next_kind == "material" and resume_progress > 0:
+            action_label = f"繼續閱讀 {resume_progress}%"
+        elif next_kind == "material":
+            action_label = "開始閱讀"
+        elif target == "exam":
+            action_label = "開始考核"
+        else:
+            action_label = "繼續學習"
         values.append({
             "id": str(course.get("assignmentId") or course_id),
-            "resourceId": course_id,
+            "resourceId": resource_id,
             "courseId": course_id,
+            "materialId": resume_material_id,
+            "resumeProgress": resume_progress,
             "persona": "learner",
             "domain": "learning",
             "kind": "course",
@@ -142,8 +160,8 @@ def _learner_action_items(user: Mapping[str, Any], current: dt.datetime) -> list
                 + (" · 考核已通過" if course.get("examRequired") and course.get("examPassed") else " · 尚待考核" if course.get("examRequired") else "")
             ),
             "action": "course",
-            "actionLabel": "繼續學習",
-            "target": "materials",
+            "actionLabel": action_label,
+            "target": target,
         })
 
     for material in list(dashboard.get("pendingMaterials") or []):
@@ -166,9 +184,26 @@ def _learner_action_items(user: Mapping[str, Any], current: dt.datetime) -> list
             "area": str(material.get("area") or "internal"),
             "dueAt": "",
             "overdue": False,
-            "detail": "教材或 SOP 已更新重大版本，請完成最新版。" if retraining else "此教材尚未完成。",
+            "detail": (
+                "教材或 SOP 已更新重大版本，請完成最新版。"
+                if retraining
+                else (
+                    f"已閱讀 {int(float(material.get('progress') or 0))}%"
+                    if float(material.get("progress") or 0) > 0
+                    else "此教材尚未完成。"
+                )
+            ),
+            "progress": float(material.get("progress") or 0),
             "action": "material",
-            "actionLabel": "重新學習" if retraining else "前往教材",
+            "actionLabel": (
+                "重新學習"
+                if retraining
+                else (
+                    f"繼續閱讀 {int(float(material.get('progress') or 0))}%"
+                    if float(material.get("progress") or 0) > 0
+                    else "開始閱讀"
+                )
+            ),
             "target": "materials",
         })
 
@@ -347,6 +382,12 @@ def _teacher_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
     for course in courses:
         if course.get("active", True):
             continue
+        lifecycle = str(
+            course.get("lifecycleStatus")
+            or ("published" if course.get("active", True) else "draft")
+        )
+        if lifecycle not in {"draft", "ready"}:
+            continue
         if not _visible_to_teacher(user, course):
             continue
         course_id = str(course.get("id") or "")
@@ -358,15 +399,19 @@ def _teacher_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
             "domain": "courses",
             "kind": "draft",
             "title": str(course.get("title") or "未命名課程草稿"),
-            "status": "draft",
-            "statusLabel": "未發布草稿",
+            "status": lifecycle,
+            "statusLabel": "可發布" if lifecycle == "ready" else "未發布草稿",
             "group": str(course.get("group") or ""),
             "area": str(course.get("area") or ""),
             "dueAt": "",
             "overdue": False,
-            "detail": "此課程目前未啟用，學員尚無法使用。",
+            "detail": (
+                "課程已通過發布檢查，等待正式發布。"
+                if lifecycle == "ready"
+                else "此課程仍是草稿，學員尚無法使用。"
+            ),
             "action": "draft",
-            "actionLabel": "繼續編輯",
+            "actionLabel": "正式發布" if lifecycle == "ready" else "繼續編輯",
             "target": "course-materials",
         })
     return values
@@ -464,5 +509,9 @@ def build_summary(
             "teacher": len(teacher_items),
             **teacher_counts,
         },
+        "nextAction": next(
+            (dict(item) for item in items if item.get("persona") == "learner"),
+            None,
+        ),
         "items": items,
     }
