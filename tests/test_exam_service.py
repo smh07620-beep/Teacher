@@ -55,6 +55,25 @@ class ExamServiceTests(unittest.TestCase):
             self.assertNotIn("acceptedAnswers", serialized)
             self.assertNotIn("explanation", serialized)
 
+    def test_resume_is_blocked_when_exam_closes_after_attempt_started(self):
+        with patch.object(service, "assert_exam_open", return_value=None):
+            started = self._start()
+        with patch.object(service, "assert_exam_not_closed", side_effect=ApiError("EXAM_CLOSED", "此考核已超過最後考核日期，不能繼續作答或提交。", 403)):
+            with self.assertRaises(ApiError) as closed:
+                service.resume_attempt(self.base, self.base.user, started["attemptId"])
+        self.assertEqual(closed.exception.code, "EXAM_CLOSED")
+        self.assertEqual(closed.exception.status, 403)
+
+    def test_submit_is_blocked_when_exam_closes_after_attempt_started(self):
+        with patch.object(service, "assert_exam_open", return_value=None):
+            started = self._start()
+        with patch.object(service, "assert_exam_not_closed", side_effect=ApiError("EXAM_CLOSED", "此考核已超過最後考核日期，不能繼續作答或提交。", 403)):
+            with self.assertRaises(ApiError) as closed:
+                service.submit_attempt(self.base, self.base.user, started["attemptId"], submit_payload())
+        self.assertEqual(closed.exception.code, "EXAM_CLOSED")
+        self.assertEqual(closed.exception.status, 403)
+        self.assertEqual(self._counts(), ("started", 0, None))
+
     def test_server_grading_ignores_client_score(self):
         started = self._start()
         payload = submit_payload([0, "essay response"])
