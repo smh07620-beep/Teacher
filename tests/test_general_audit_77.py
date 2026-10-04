@@ -160,9 +160,9 @@ class GeneralAudit77Tests(unittest.TestCase):
             assessment_schema.init_schema(conn, kind)
             conn.execute("CREATE TABLE materials (id TEXT PRIMARY KEY, category TEXT NOT NULL DEFAULT '')")
             conn.execute(
-                "INSERT INTO quiz_categories(id,group_key,training_area,title,date_added,active,review_status) "
-                "VALUES(?,?,?,?,?,?,?)",
-                ("cat-audit", "grpBio", "internal", "Audit Exam", "now", 0, "draft"),
+                "INSERT INTO quiz_categories(id,group_key,training_area,title,date_added,active,review_status,audience) "
+                "VALUES(?,?,?,?,?,?,?,?)",
+                ("cat-audit", "grpBio", "internal", "Audit Exam", "now", 0, "draft", "一般人員"),
             )
             conn.execute(
                 "INSERT INTO quiz_questions(id,quiz_category_id,tag,question,question_type,options,correct,answer_config,explanation,sort_order,active) "
