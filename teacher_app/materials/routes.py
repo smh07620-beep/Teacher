@@ -127,6 +127,18 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
         )
         return jsonify(payload)
 
+    def api_material_purge_readiness(slide_id):
+        denied = require_admin()
+        if denied:
+            return denied
+        current_actor = actor() or {}
+        roles = set(current_actor.get("roles") or [])
+        if str(current_actor.get("role") or ""):
+            roles.add(str(current_actor.get("role")))
+        if "system_admin" not in roles:
+            return jsonify({"error": "只有系統管理員可以檢查教材永久清除條件。"}), 403
+        return jsonify(service.material_purge_readiness(slide_id))
+
     def api_list_material_versions(slide_id):
         denied = require_admin()
         if denied:
@@ -215,6 +227,7 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
     app.add_url_rule("/api/slides/admin", endpoint="api_admin_slides", view_func=api_admin_slides, methods=["GET"])
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_update_slide", view_func=api_update_slide, methods=["PATCH"])
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_delete_slide", view_func=api_delete_slide, methods=["DELETE"])
+    app.add_url_rule("/api/slides/<slide_id>/purge-readiness", endpoint="api_material_purge_readiness", view_func=api_material_purge_readiness, methods=["GET"])
     app.add_url_rule("/api/slides/<slide_id>/versions", endpoint="api_list_material_versions", view_func=api_list_material_versions, methods=["GET"])
     app.add_url_rule("/api/slides/<slide_id>/versions", endpoint="api_publish_material_version", view_func=api_publish_material_version, methods=["POST"])
     app.add_url_rule("/api/slides/<slide_id>/versions/<int:source_version>/restore", endpoint="api_restore_material_version", view_func=api_restore_material_version, methods=["POST"])
