@@ -340,12 +340,19 @@ def build_events(user: Optional[Mapping[str, Any]], *, now: Optional[dt.datetime
     }
 
 
-def email_events(user: Mapping[str, Any], *, now: Optional[dt.datetime] = None, days: int = 3) -> list[dict[str, Any]]:
+def email_events(
+    user: Mapping[str, Any],
+    *,
+    now: Optional[dt.datetime] = None,
+    days: int = 7,
+    milestones: tuple[int, ...] = (7, 3, 1),
+) -> list[dict[str, Any]]:
     current = now or dt.datetime.now(dt.timezone.utc)
     if current.tzinfo is None:
         current = current.replace(tzinfo=dt.timezone.utc)
     current = current.astimezone(dt.timezone.utc)
-    horizon = current + dt.timedelta(days=max(1, int(days)))
+    maximum = max(1, int(days))
+    checkpoints = tuple(sorted({int(value) for value in milestones if 0 < int(value) <= maximum}, reverse=True))
     output = []
     for event in build_events(user, now=current)["items"]:
         if "email" not in event.get("channels", []):
@@ -355,8 +362,20 @@ def email_events(user: Mapping[str, Any], *, now: Optional[dt.datetime] = None, 
             output.append(event)
             continue
         due = _parse_datetime(event.get("dueAt"))
-        if policy == "due" and due and due <= horizon:
-            output.append(event)
+        if policy != "due" or not due or due <= current:
+            continue
+        remaining = due - current
+        remaining_days = remaining.total_seconds() / 86400
+        milestone = next((value for value in checkpoints if remaining_days <= value), None)
+        if milestone is None:
+            continue
+        projected = dict(event)
+        projected["reminderMilestoneDays"] = milestone
+        projected["key"] = _stable_key("due_reminder", event.get("key"), milestone)
+        projected["detail"] = (
+            f"{str(event.get('detail') or '').strip()} · 距離截止約 {milestone} 天"
+        ).strip(" ·")
+        output.append(projected)
     return output
 
 
