@@ -237,7 +237,12 @@
       if(c?.active){
         const now=Date.now(), opens=c?.examWindow?.opens_at ? new Date(c.examWindow.opens_at).getTime() : 0, closes=c?.examWindow?.closes_at ? new Date(c.examWindow.closes_at).getTime() : 0;
         if(opens&&now<opens)return {label:'尚未開始',tone:'bg-sky-50 text-sky-700',next:'等待開放時間／檢查發布設定'};
-        if(closes&&now>closes)return {label:'已截止',tone:'bg-slate-200 text-slate-700',next:'查看待批改與結果'};
+        if(closes&&now>closes){
+          const pending=Number(c?.reviewSummary?.pending||0), total=Number(c?.reviewSummary?.total||0);
+          if(pending>0)return {label:'待批改',tone:'bg-indigo-50 text-indigo-700',next:`尚有 ${pending} 份作答待人工批改`};
+          if(total>0)return {label:'完成',tone:'bg-violet-50 text-violet-700',next:'查看考核結果與歷史紀錄'};
+          return {label:'已截止',tone:'bg-slate-200 text-slate-700',next:'目前沒有待批改作答'};
+        }
         return {label:'進行中',tone:'bg-emerald-50 text-emerald-700',next:'查看作答／待批改'};
       }
       if(c?.reviewStatus==='approved')return {label:'待發布',tone:'bg-sky-50 text-sky-700',next:'確認對象、期限後發布'};
