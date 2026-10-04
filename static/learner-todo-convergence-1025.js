@@ -17,7 +17,8 @@
     });
     if(moduleName==='exam'&&item?.resourceId)query.set('examId',String(item.resourceId));
     if(item?.courseId)query.set('courseId',String(item.courseId));
-    if(['material','retraining'].includes(item?.kind)&&item?.resourceId)query.set('materialId',String(item.resourceId));
+    if(item?.materialId)query.set('materialId',String(item.materialId));
+    else if(['material','retraining'].includes(item?.kind)&&item?.resourceId)query.set('materialId',String(item.resourceId));
     return `/system?${query.toString()}`;
   }
 
@@ -38,6 +39,7 @@
     const examCount=document.getElementById('v681-home-exams-pending');
     if(!list&&!count&&!learningCount&&!examCount)return;
     const items=(Array.isArray(command?.items)?command.items:[]).filter(item=>item?.persona==='learner');
+    const nextAction=command?.nextAction?.persona==='learner'?command.nextAction:(items[0]||null);
     const exams=items.filter(item=>item?.kind==='exam').length;
     const learning=Math.max(0,items.length-exams);
     if(count)count.textContent=String(items.length);
@@ -48,7 +50,8 @@
     list.innerHTML=items.length?items.slice(0,8).map(item=>{
       const due=item?.dueAt?`${item?.overdue?'已逾期':'期限'} ${String(item.dueAt).slice(0,10)}`:'';
       const detail=[due,item?.detail||''].filter(Boolean).join(' · ');
-      return `<a class="v56-assessment-row phase3-home-task-row" href="${taskHref(item)}"><span class="v56-assessment-badge ${item?.kind==='course'||item?.kind==='material'?'material':''}">${escapeHtml(badgeLabel(item))}</span><span><strong>${escapeHtml(item?.title||'待處理項目')}</strong><span>${escapeHtml(detail||item?.statusLabel||'前往處理')}</span></span><b aria-hidden="true">›</b></a>`;
+      const isNext=nextAction&&String(item.id||'')===String(nextAction.id||'')&&String(item.resourceId||'')===String(nextAction.resourceId||'');
+      return `<a ${isNext?'data-learner-next-action="1"':''} class="v56-assessment-row phase3-home-task-row" href="${taskHref(item)}"><span class="v56-assessment-badge ${item?.kind==='course'||item?.kind==='material'?'material':''}">${escapeHtml(isNext?'下一步':badgeLabel(item))}</span><span><strong>${escapeHtml(item?.title||'待處理項目')}</strong><span>${escapeHtml((isNext?(item?.actionLabel||'繼續學習')+' · ':'')+(detail||item?.statusLabel||'前往處理'))}</span></span><b aria-hidden="true">›</b></a>`;
     }).join(''):'<div class="v56-empty">目前沒有待辦，今天可以依自己的節奏繼續學習。</div>';
   }
 

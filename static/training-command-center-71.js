@@ -63,7 +63,8 @@
     });
     if (moduleName === 'exam' && item?.resourceId) query.set('examId', String(item.resourceId));
     if (item?.courseId) query.set('courseId', String(item.courseId));
-    if (item?.kind === 'material' || item?.kind === 'retraining') query.set('materialId', String(item.resourceId || item.id || ''));
+    if (item?.materialId) query.set('materialId', String(item.materialId));
+    else if (item?.kind === 'material' || item?.kind === 'retraining') query.set('materialId', String(item.resourceId || item.id || ''));
     return `/system?${query.toString()}`;
   }
 
@@ -89,6 +90,7 @@
       <div id="learning-status-detail-71" class="mt-3 space-y-4 border-t border-slate-100 pt-3">
         <section id="training-command-tasks-71">
           <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-800">📌 我的待辦</b><span id="training-command-status-71" class="text-[10px] text-slate-400">讀取中…</span></div>
+          <div id="training-command-next-71" class="mt-2"></div>
           <div id="training-command-list-71" class="space-y-2 mt-2"></div>
         </section>
       </div>`;
@@ -106,13 +108,26 @@
     const status = document.getElementById('training-command-status-71');
     const summaryLine = document.getElementById('training-command-summary-71');
     const list = document.getElementById('training-command-list-71');
-    if (!status || !summaryLine || !list) return;
+    const nextBox = document.getElementById('training-command-next-71');
+    if (!status || !summaryLine || !list || !nextBox) return;
 
     const learnerItems = (Array.isArray(command?.items) ? command.items : []).filter(item => item?.persona === 'learner');
+    const nextAction = command?.nextAction?.persona === 'learner' ? command.nextAction : learnerItems[0] || null;
     summaryLine.textContent = learnerItems.length ? `${learnerItems.length} 項需要處理` : '目前沒有待辦';
     const overdue = learnerItems.filter(item => item?.overdue).length;
     const retraining = learnerItems.filter(item => item?.kind === 'retraining').length;
     status.textContent = `${profile?.pgyLearner ? 'PGY／線上學習' : '線上學習'}${overdue ? ` · ${overdue} 項逾期` : ''}${retraining ? ` · ${retraining} 項需重訓` : ''}`;
+
+    if (nextAction) {
+      const nextMeta = [dueLabel(nextAction), nextAction?.detail || ''].filter(Boolean).join(' · ');
+      if (nextAction?.target === 'pgy-workflow') {
+        nextBox.innerHTML = `<article class="rounded-xl border-2 border-indigo-200 bg-indigo-50 px-3 py-3"><div class="text-[10px] font-black tracking-wide text-indigo-700">下一步</div><div class="mt-1 flex items-center justify-between gap-3"><div class="min-w-0"><b class="block text-sm text-slate-900 truncate">${escapeHtml(nextAction.title || 'PGY 訓練指派')}</b>${nextMeta ? `<span class="block text-[10px] text-slate-500 mt-1">${escapeHtml(nextMeta)}</span>` : ''}</div><button type="button" data-next-pgy class="shrink-0 rounded-lg bg-indigo-700 px-3 py-2 text-[11px] font-bold text-white">${escapeHtml(nextAction.actionLabel || '開啟')}</button></div></article>`;
+      } else {
+        nextBox.innerHTML = `<a data-learner-next-action href="${taskHref(nextAction)}" class="block rounded-xl border-2 border-teal-200 bg-teal-50 px-3 py-3"><div class="text-[10px] font-black tracking-wide text-teal-700">下一步</div><div class="mt-1 flex items-center justify-between gap-3"><div class="min-w-0"><b class="block text-sm text-slate-900 truncate">${escapeHtml(nextAction.title || '繼續學習')}</b>${nextMeta ? `<span class="block text-[10px] text-slate-500 mt-1">${escapeHtml(nextMeta)}</span>` : ''}</div><span class="shrink-0 rounded-lg bg-teal-700 px-3 py-2 text-[11px] font-bold text-white">${escapeHtml(nextAction.actionLabel || '繼續')} →</span></div></a>`;
+      }
+    } else {
+      nextBox.innerHTML = '<div class="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">✓ 目前沒有下一個必做項目。</div>';
+    }
 
     const rows = learnerItems.slice(0, 12).map(item => {
       const href = taskHref(item);
@@ -129,6 +144,7 @@
       ? rows.join('')
       : '<div class="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-700">✓ 目前沒有待處理的線上學習工作。</div>';
     list.querySelectorAll('[data-pgy-command]').forEach(button => button.addEventListener('click', openPGY));
+    nextBox.querySelector('[data-next-pgy]')?.addEventListener('click', openPGY);
   }
 
   async function load(force = false) {
