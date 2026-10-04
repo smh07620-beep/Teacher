@@ -352,8 +352,22 @@ def publish_category(base, category_id: str, *, publisher: str = "") -> dict:
         raise _fail("ASSESSMENT_NOT_FOUND", "找不到此考卷", 404)
     if entry.get("reviewStatus") != "approved":
         raise _fail("ASSESSMENT_NOT_REVIEWED", "此考卷尚未完成審核，不能發布", 409)
-    if not repository.list_questions(category_id, include_inactive=False):
+    questions = repository.list_questions(category_id, include_inactive=False)
+    if not questions:
         raise _fail("ASSESSMENT_EMPTY", "此考卷沒有啟用中的題目，不能發布", 409)
+    if not str(entry.get("audience") or "").strip():
+        raise _fail("ASSESSMENT_AUDIENCE_REQUIRED", "發布前必須設定適用人員", 409)
+    draw_count = max(0, int(entry.get("drawCount", 0) or 0))
+    if draw_count and draw_count > len(questions):
+        raise _fail("ASSESSMENT_DRAW_COUNT_INVALID", "抽題數不可大於目前啟用題目數", 409)
+    draw_rules = entry.get("drawRules") or {}
+    if isinstance(draw_rules, dict) and draw_rules.get("mode") == "type_quota":
+        quotas = draw_rules.get("quotas") or {}
+        quota_total = sum(max(0, int(value or 0)) for value in quotas.values()) if isinstance(quotas, dict) else 0
+        if quota_total <= 0:
+            raise _fail("ASSESSMENT_QUOTA_REQUIRED", "題型配額模式至少需要設定 1 題", 409)
+        if quota_total > len(questions):
+            raise _fail("ASSESSMENT_QUOTA_EXCEEDS_BANK", "題型配額總數不可大於目前啟用題目數", 409)
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     publisher = str(publisher or _compat_actor_label(base)).strip()[:100]
     if not publisher:
