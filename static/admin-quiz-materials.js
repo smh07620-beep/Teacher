@@ -33,7 +33,7 @@
     if(!list) return;
     const q=(document.getElementById(`qmaterial-search-${catId}`)?.value||'').trim().toLowerCase();
     const items=(state[catId]||[]).filter(m=>!q||`${m.title||''} ${m.filename||''}`.toLowerCase().includes(q));
-    list.innerHTML=items.length?items.map(m=>`<label class="flex items-center gap-2 rounded-lg border ${m.linked?'border-cyan-300 bg-white':'border-slate-200 bg-white/70'} px-3 py-2 text-xs"><input class="qmaterial-check-${catId}" data-mid="${escapeHtml(m.id)}" type="checkbox" ${m.linked?'checked':''}><span class="min-w-0 flex-1"><span class="font-bold text-slate-800 block truncate">${escapeHtml(m.title||m.filename)}</span><span class="text-[10px] text-slate-400">${escapeHtml(m.materialType||'standard')}${m.category&&!m.linked?' · 目前綁定其他考卷':''}</span></span></label>`).join(''):'<p class="text-xs text-slate-400 py-3">找不到符合的教材。</p>';
+    list.innerHTML=items.length?items.map(m=>`<label class="flex items-center gap-2 rounded-lg border ${m.linked?'border-cyan-300 bg-white':'border-slate-200 bg-white/70'} px-3 py-2 text-xs"><input class="qmaterial-check-${catId}" data-mid="${escapeHtml(m.id)}" type="checkbox" ${m.linked?'checked':''} ${m.active===false?'disabled':''}><span class="min-w-0 flex-1"><span class="font-bold text-slate-800 block truncate">${escapeHtml(m.title||m.filename)}</span><span class="text-[10px] ${m.active===false?'text-rose-500':'text-slate-400'}">${escapeHtml(m.materialType||'standard')}${m.active===false?' · 已停用，請先啟用教材':(m.category&&!m.linked?' · 目前綁定其他考卷':'')}</span></span></label>`).join(''):'<p class="text-xs text-slate-400 py-3">找不到符合的教材。</p>';
   };
 
   window.filterQuizMaterialLinker = function(catId){
