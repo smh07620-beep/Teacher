@@ -313,13 +313,27 @@ def material_ids_for_course(conn, kind: str, course_id: str) -> set[str]:
     return {str(dict(row).get("id") or "") for row in rows if dict(row).get("id")}
 
 
-def replace_category_assignments(category_id: str, material_ids: list[str], *, group_key: str, training_area: str) -> None:
+def replace_category_assignments(category_id: str, material_ids: list[str], *, group_key: str, training_area: str) -> set[str]:
+    """Replace and verify category links in one transaction; mismatch rolls back."""
+    expected = {str(value) for value in material_ids if str(value)}
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
         conn.execute(f"UPDATE materials SET category='' WHERE category={ph}", (category_id,))
-        if material_ids:
-            placeholders = ",".join([ph] * len(material_ids))
-            conn.execute(f"UPDATE materials SET category={ph} WHERE id IN ({placeholders}) AND group_key={ph} AND training_area={ph}", tuple([category_id] + list(material_ids) + [group_key, training_area]))
+        if expected:
+            ordered = sorted(expected)
+            placeholders = ",".join([ph] * len(ordered))
+            conn.execute(
+                f"UPDATE materials SET category={ph} WHERE id IN ({placeholders}) AND group_key={ph} AND training_area={ph}",
+                tuple([category_id] + ordered + [group_key, training_area]),
+            )
+        rows = conn.execute(
+            f"SELECT id FROM materials WHERE category={ph} AND group_key={ph} AND training_area={ph}",
+            (category_id, group_key, training_area),
+        ).fetchall()
+        persisted = {str(dict(row).get("id") or "") for row in rows if dict(row).get("id")}
+        if persisted != expected:
+            raise ValueError("material category assignment verification failed")
+        return persisted
 
 
 def material_ids_for_category(category_id: str, *, group_key: str = "", training_area: str = "") -> set[str]:
