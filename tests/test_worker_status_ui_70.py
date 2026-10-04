@@ -124,6 +124,16 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             "部分校準 / 保留全體 Forecast",
             "秒/頁",
             "處理/影音",
+            "高峰情境 / Capacity What-if",
+            "/api/operational-capacity-simulation?",
+            "10 文件 + 3×30分影音",
+            "試算高峰",
+            "1 台 Worker",
+            "2 台 Worker",
+            "峰值 backlog",
+            "主要瓶頸",
+            "影音時長校準",
+            "唯讀容量情境",
         ):
             self.assertIn(marker, self.source)
         self.assertIn("Date.now()-cached.loadedAt<60000", self.source)
