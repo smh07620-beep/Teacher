@@ -39,7 +39,9 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
                     material_type TEXT NOT NULL DEFAULT 'standard', atlas_meta TEXT NOT NULL DEFAULT '{}',
                     active INTEGER NOT NULL DEFAULT 1,
                     current_version INTEGER NOT NULL DEFAULT 1,
-                    required_completion_version INTEGER NOT NULL DEFAULT 1
+                    required_completion_version INTEGER NOT NULL DEFAULT 1,
+                    version_updated_at TEXT NOT NULL DEFAULT '',
+                    version_updated_by TEXT NOT NULL DEFAULT ''
                 )"""
             )
             conn.execute(
