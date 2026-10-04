@@ -335,8 +335,14 @@
     section.id = 'teacher-review-shortcut-1014';
     section.dataset.productSection = 'history';
     section.className = 'rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3';
-    section.innerHTML = `<div><b class="text-sm text-indigo-950">歷史紀錄</b><p class="mt-1 text-xs text-indigo-700">已完成與歷次評量紀錄集中在這裡；待批改項目改由上方「需要我處理」直接進入。</p></div><button id="teacher-open-review-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">查看評量紀錄</button>`;
+    section.innerHTML = `<div><b class="text-sm text-indigo-950">⑤ 待批改 → ⑥ 歷史紀錄</b><p class="mt-1 text-xs text-indigo-700">待批改會優先出現在「需要我處理」；完成後自動進入歷史紀錄，不需要切換到另一套教師評核功能。</p></div><div class="flex flex-wrap gap-2"><button id="teacher-open-pending-review-1014" type="button" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-black text-white">查看待批改</button><button id="teacher-open-review-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">查看歷史紀錄</button></div>`;
     panel.appendChild(section);
+    section.querySelector('#teacher-open-pending-review-1014')?.addEventListener('click', async () => {
+      state.mode = 'assessment';
+      await window.switchAdminWorkspace?.('teacher', true);
+      await window.switchTeacherMode?.('scoring');
+      markTeacherNav('assessment');
+    });
     section.querySelector('#teacher-open-review-1014')?.addEventListener('click', async () => {
       state.mode = 'assessment';
       await window.switchAdminWorkspace?.('results', true);
