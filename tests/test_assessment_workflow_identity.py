@@ -37,7 +37,9 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
                     storage_backend TEXT NOT NULL DEFAULT 'local', storage_key TEXT NOT NULL DEFAULT '',
                     slides_prefix TEXT NOT NULL DEFAULT '', storage_meta TEXT NOT NULL DEFAULT '{}',
                     material_type TEXT NOT NULL DEFAULT 'standard', atlas_meta TEXT NOT NULL DEFAULT '{}',
-                    active INTEGER NOT NULL DEFAULT 1
+                    active INTEGER NOT NULL DEFAULT 1,
+                    current_version INTEGER NOT NULL DEFAULT 1,
+                    required_completion_version INTEGER NOT NULL DEFAULT 1
                 )"""
             )
             conn.execute(
