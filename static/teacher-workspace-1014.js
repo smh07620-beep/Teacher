@@ -331,7 +331,6 @@
     if (!navHost) return;
     const buttons = [
       makeNavButton('teacher-nav-course-1014', '📚 教材與課程', openCourse),
-      makeNavButton('teacher-nav-media-1014', '🎙️ 媒體製作', openMedia),
       makeNavButton('teacher-nav-assessment-1014', '📝 評量與出題', openAssessment),
       makeNavButton('teacher-nav-documents-1014', '📄 紙本文件與匯出', openDocuments)
     ];
@@ -347,7 +346,7 @@
     const title = document.getElementById('admin-workspace-title');
     const summary = document.getElementById('admin-workspace-summary');
     if (title && !state.mode.startsWith('media')) title.textContent = '教師工作區';
-    if (summary && state.mode === 'course') summary.textContent = '教材與課程、媒體製作、評量與出題、紙本文件集中在同一教師工作台。';
+    if (summary && state.mode === 'course') summary.textContent = '先處理今天需要完成的工作，再進入教材與課程、評量與出題或紙本文件；媒體製作收在教材工具內。';
   }
 
   ensurePersonaSwitcher();
