@@ -1425,6 +1425,127 @@ def _prediction_table_unavailable(exc: Exception) -> bool:
     )
 
 
+def record_forecast_prediction_for_job(
+    job: Mapping[str, Any],
+    *,
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
+    """Persist one immutable pre-completion prediction for a claimed/queued job."""
+    current = _utc(now)
+    job_id = str(job.get("id") or "").strip()
+    if not job_id:
+        return {"available": True, "created": False, "reason": "missing_job_id"}
+
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            existing = conn.execute(
+                f"SELECT 1 FROM operational_forecast_predictions WHERE job_id={ph}",
+                (job_id,),
+            ).fetchone()
+    except Exception as exc:
+        if _prediction_table_unavailable(exc):
+            return {"available": False, "created": False, "reason": "migration_pending"}
+        raise
+    if existing:
+        return {"available": True, "created": False, "reason": "exists"}
+
+    workload = build_workload_calibration(
+        now=current,
+        current_active_workers=0,
+    )
+    profiles = {
+        str(profile.get("kind") or ""): dict(profile)
+        for profile in workload.get("profiles") or []
+        if profile.get("calibrated")
+    }
+    original_name = job.get("original_name")
+    if original_name in (None, ""):
+        original_name = job.get("originalName")
+    source_bytes = job.get("source_bytes")
+    if source_bytes in (None, ""):
+        source_bytes = job.get("sourceBytes")
+    workload_kind = _workload_kind(original_name)
+    profile = profiles.get(workload_kind)
+    if not profile:
+        return {
+            "available": True,
+            "created": False,
+            "reason": "workload_uncalibrated",
+            "workloadKind": workload_kind,
+        }
+
+    nominal = float(profile.get("medianDurationSeconds") or 0)
+    conservative = float(profile.get("p95DurationSeconds") or 0)
+    band = _size_band(source_bytes)
+    basis = "class_duration"
+    min_band_samples = _int_env(
+        "OPERATIONS_FORECAST_MIN_WORKLOAD_COMPLETED_JOBS",
+        2,
+        2,
+        20,
+    )
+    for band_profile in profile.get("sizeBands") or []:
+        if (
+            str(band_profile.get("band") or "") == band
+            and int(band_profile.get("samples") or 0) >= min_band_samples
+            and float(band_profile.get("medianDurationSeconds") or 0) > 0
+            and float(band_profile.get("p95DurationSeconds") or 0) > 0
+        ):
+            nominal = float(
+                band_profile.get("medianDurationSeconds") or nominal
+            )
+            conservative = float(
+                band_profile.get("p95DurationSeconds") or conservative
+            )
+            basis = f"size_band:{band}"
+            break
+    if nominal <= 0 or conservative <= 0:
+        return {
+            "available": True,
+            "created": False,
+            "reason": "invalid_profile",
+            "workloadKind": workload_kind,
+        }
+
+    prediction = {
+        "id": f"service:{job_id}",
+        "job_id": job_id,
+        "workload_kind": workload_kind,
+        "size_band": band,
+        "model_basis": basis,
+        "model_version": "workload-v1",
+        "sample_count": int(profile.get("completedSamples") or 0),
+        "predicted_nominal_seconds": round(nominal, 3),
+        "predicted_p95_seconds": round(conservative, 3),
+        "predicted_at": current.isoformat(),
+        "evaluation_status": "pending",
+    }
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        existing = conn.execute(
+            f"SELECT 1 FROM operational_forecast_predictions WHERE job_id={ph}",
+            (job_id,),
+        ).fetchone()
+        if existing:
+            return {"available": True, "created": False, "reason": "exists"}
+        columns = tuple(prediction.keys())
+        conn.execute(
+            f"INSERT INTO operational_forecast_predictions"
+            f"({','.join(columns)}) VALUES "
+            f"({','.join([ph] * len(columns))})",
+            tuple(prediction[column] for column in columns),
+        )
+    return {
+        "available": True,
+        "created": True,
+        "workloadKind": workload_kind,
+        "modelBasis": basis,
+        "predictedNominalSeconds": round(nominal, 3),
+        "predictedP95Seconds": round(conservative, 3),
+    }
+
+
 def reconcile_forecast_predictions(
     *,
     now: dt.datetime | None = None,
@@ -2356,6 +2477,7 @@ __all__ = [
     "build_workload_calibration",
     "simulate_capacity_what_if",
     "build_operational_dashboard",
+    "record_forecast_prediction_for_job",
     "reconcile_forecast_predictions",
     "record_operational_sample",
     "trend_incident_candidates",
