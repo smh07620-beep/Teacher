@@ -6,7 +6,8 @@ Flask view functions at runtime.
 """
 from __future__ import annotations
 
-from flask import g, jsonify, request
+from flask import current_app, g, jsonify, request
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.common import audit, scope
@@ -137,7 +138,54 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
             roles.add(str(current_actor.get("role")))
         if "system_admin" not in roles:
             return jsonify({"error": "只有系統管理員可以檢查教材永久清除條件。"}), 403
-        return jsonify(service.material_purge_readiness(slide_id))
+        payload = service.material_purge_readiness(slide_id)
+        if payload.get("purgeAllowed") and payload.get("materialExists"):
+            serializer = URLSafeTimedSerializer(str(current_app.secret_key), salt="material-purge-v1")
+            payload["confirmationToken"] = serializer.dumps({
+                "materialId": slide_id,
+                "graph": repository.material_artifact_reference_fingerprint(slide_id),
+                "actor": str(current_actor.get("username") or ""),
+            })
+            payload["confirmationText"] = str(payload.get("title") or slide_id)
+        return jsonify(payload)
+
+    def api_material_purge(slide_id):
+        denied = require_admin()
+        if denied:
+            return denied
+        current_actor = actor() or {}
+        roles = set(current_actor.get("roles") or [])
+        if str(current_actor.get("role") or ""):
+            roles.add(str(current_actor.get("role")))
+        if "system_admin" not in roles:
+            return jsonify({"error": "只有系統管理員可以永久清除教材。"}), 403
+        body = request.get_json(silent=True) or {}
+        token = str(body.get("confirmationToken") or "")
+        expected_text = str((repository.get_material(slide_id) or {}).get("title") or slide_id)
+        if str(body.get("confirmationText") or "") != expected_text:
+            return jsonify({"error": "確認文字不符，拒絕永久清除。"}), 409
+        serializer = URLSafeTimedSerializer(str(current_app.secret_key), salt="material-purge-v1")
+        try:
+            signed = serializer.loads(token, max_age=300)
+        except SignatureExpired:
+            return jsonify({"error": "永久清除確認已逾時，請重新檢查。"}), 409
+        except BadSignature:
+            return jsonify({"error": "永久清除確認無效。"}), 409
+        if (
+            str(signed.get("materialId") or "") != slide_id
+            or str(signed.get("actor") or "") != str(current_actor.get("username") or "")
+            or str(signed.get("graph") or "") != repository.material_artifact_reference_fingerprint(slide_id)
+        ):
+            return jsonify({"error": "教材引用狀態已改變，請重新檢查後再永久清除。"}), 409
+        try:
+            payload = service.purge_material_storage(slide_id, paths=paths, storage_runtime=runtime)
+        except ApiError as exc:
+            return _legacy_error(exc)
+        audit.record_event(
+            actor=current_actor, action="material.purge", target_type="material", target_id=slide_id,
+            group="", detail={"backend": payload.get("backend", ""), "confirmation": "two-phase"},
+        )
+        return jsonify(payload)
 
     def api_list_material_versions(slide_id):
         denied = require_admin()
@@ -228,6 +276,7 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_update_slide", view_func=api_update_slide, methods=["PATCH"])
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_delete_slide", view_func=api_delete_slide, methods=["DELETE"])
     app.add_url_rule("/api/slides/<slide_id>/purge-readiness", endpoint="api_material_purge_readiness", view_func=api_material_purge_readiness, methods=["GET"])
+    app.add_url_rule("/api/slides/<slide_id>/purge", endpoint="api_material_purge", view_func=api_material_purge, methods=["POST"])
     app.add_url_rule("/api/slides/<slide_id>/versions", endpoint="api_list_material_versions", view_func=api_list_material_versions, methods=["GET"])
     app.add_url_rule("/api/slides/<slide_id>/versions", endpoint="api_publish_material_version", view_func=api_publish_material_version, methods=["POST"])
     app.add_url_rule("/api/slides/<slide_id>/versions/<int:source_version>/restore", endpoint="api_restore_material_version", view_func=api_restore_material_version, methods=["POST"])
