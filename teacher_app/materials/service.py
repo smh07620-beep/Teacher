@@ -28,8 +28,8 @@ LOGGER = logging.getLogger(__name__)
 MATERIAL_TYPES = {"standard", "atlas", "infographic", "video", "troubleshooting", "sop", "case"}
 
 
-def _fail(code: str, message: str, status: int = 400) -> ApiError:
-    return ApiError(code, message, status=status)
+def _fail(code: str, message: str, status: int = 400, **extra) -> ApiError:
+    return ApiError(code, message, status=status, extra=extra or None)
 
 
 def _category_labels() -> dict[str, str]:
