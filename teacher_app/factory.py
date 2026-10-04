@@ -92,6 +92,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.materials.upload_routes import register_upload_hardening
     from teacher_app.materials.delivery_routes import register_material_delivery_routes
     from teacher_app.materials.routes import register_material_catalog_routes
+    from teacher_app.materials.material_impact_routes import register_material_impact_routes
     from teacher_app.materials.job_routes import register_material_job_routes
     from teacher_app.materials.job_runtime import build_canonical_runtime as build_material_job_runtime
     from teacher_app.materials import repository as material_repository
@@ -115,6 +116,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_page_routes(app, static_dir=app.static_folder, current_user=current_user)
     app = register_material_delivery_routes(app, paths=app.config["STORAGE_PATHS"])
     app = register_material_catalog_routes(app, paths=app.config["STORAGE_PATHS"])
+    app = register_material_impact_routes(app)
     app = register_material_job_routes(
         app,
         runtime=build_material_job_runtime(

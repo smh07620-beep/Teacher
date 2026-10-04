@@ -446,6 +446,27 @@
     if(reason===null) return;
     if(!reason.trim()) return alert('版本變更原因不可空白。');
     const requiresRetraining = confirm('這次改版是否要求相關學員重新完成教育訓練？\n\n「確定」＝要求重訓；「取消」＝保留既有完成資格。');
+    let impact=null;
+    try{
+      const impactResponse=await fetch(`/api/slides/${encodeURIComponent(id)}/impact?proposedVersion=${nextVersion}&requiresRetraining=${requiresRetraining?'true':'false'}`,{credentials:'same-origin',cache:'no-store'});
+      impact=await impactResponse.json().catch(()=>null);
+      if(!impactResponse.ok)throw new Error(impact?.error||'無法分析版本影響');
+    }catch(error){
+      return alert('版本影響分析失敗，為避免漏掉受影響內容，本次改版已停止：'+(error.message||'未知錯誤'));
+    }
+    const s=impact.summary||{};
+    const impactMessage=[
+      `版本影響分析：V${material.currentVersion||1} → V${nextVersion}`,
+      `• 來源考題：${Number(s.sourceQuestions||0)} 題（已發布考卷 ${Number(s.publishedExams||0)} 份）`,
+      `• AI PowerPoint：${Number(s.publishedPresentations||0)} 份`,
+      `• AI 教學影片：${Number(s.publishedVideos||0)} 支`,
+      `• 有效課程指派：${Number(s.activeAssignments||0)} 筆`,
+      `• 已完成此教材學員：${Number(s.completedLearners||0)} 位`,
+      requiresRetraining?`• 本次將要求 ${Number(impact.decision?.retrainingAffectedLearners||0)} 位完成者重新訓練`:'• 本次保留既有完成資格',
+      '',
+      '歷史考卷、舊版教材與既有 AI 成品不會被靜默改寫。'
+    ].join('\n');
+    if(!confirm(impactMessage+'\n\n確認了解影響並繼續？')) return;
     const finalMessage = requiresRetraining
       ? `將發布 V${nextVersion}，並把相關學員既有完成狀態標記為需重新訓練。歷史完成紀錄不會刪除。\n\n確定繼續？`
       : `將發布 V${nextVersion}，既有完成資格仍有效。\n\n確定繼續？`;
@@ -462,6 +483,29 @@
     await renderAdminMaterials(true);
     await renderAdminCourseMaterialHub(true);
     alert(`✅ 已發布 V${Number(data.version||nextVersion)}${requiresRetraining?'，並要求重新訓練。':'。'}`);
+  };
+
+  window.viewMaterialImpact = async function(id){
+    const material=(await fetchAdminMaterials())?.find(x=>x.id===id);
+    if(!material)return alert('找不到教材資料。');
+    const nextVersion=Number(material.currentVersion||1)+1;
+    const res=await fetch(`/api/slides/${encodeURIComponent(id)}/impact?proposedVersion=${nextVersion}`,{credentials:'same-origin',cache:'no-store'});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)return alert(data.error||'版本影響分析失敗');
+    const s=data.summary||{};
+    const recommendations=(data.recommendations||[]).map(item=>'• '+item.label+'：'+item.reason).join('\n');
+    alert([
+      `📌 ${material.title||'教材'}｜若發布 V${nextVersion} 的影響`,
+      '',
+      `來源考題：${Number(s.sourceQuestions||0)} 題`,
+      `受影響考卷：${Number(s.impactedExams||0)} 份（已發布 ${Number(s.publishedExams||0)}）`,
+      `AI PowerPoint：${Number(s.publishedPresentations||0)} 份`,
+      `AI 教學影片：${Number(s.publishedVideos||0)} 支`,
+      `課程指派：${Number(s.activeAssignments||0)} 筆`,
+      `已完成學員：${Number(s.completedLearners||0)} 位`,
+      '',
+      recommendations||'目前沒有額外需要處理的相依內容。'
+    ].join('\n'));
   };
 
   window.viewMaterialVersions = async function(id){
