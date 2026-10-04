@@ -365,6 +365,135 @@ class CapacityForecast0112Tests(unittest.TestCase):
         self.assertTrue(profile["calibrated"])
         self.assertTrue(profile["sizeBands"])
 
+    def test_peak_what_if_uses_pages_and_media_duration_calibration(self):
+        self.seed_six_fresh_snapshots(pending=0, active=1)
+
+        for index in range(2):
+            self.insert_job(
+                f"doc-whatif-{index}",
+                created=NOW - dt.timedelta(minutes=100 - index * 10),
+                duration_seconds=60,
+                original_name=f"doc-whatif-{index}.pdf",
+                source_bytes=5 * 1024 * 1024,
+                result={"pageCount": 10, "storageMeta": {}},
+            )
+            self.insert_job(
+                f"media-whatif-{index}",
+                created=NOW - dt.timedelta(minutes=80 - index * 10),
+                duration_seconds=1800,
+                original_name=f"media-whatif-{index}.mp4",
+                source_bytes=200 * 1024 * 1024,
+                result={
+                    "pageCount": 0,
+                    "storageMeta": {
+                        "mediaKind": "video",
+                        "durationSeconds": 3600,
+                        "transcodeMode": "transcode",
+                    },
+                },
+            )
+
+        with patch.dict(os.environ, {
+            **FORECAST_ENV,
+            "OPERATIONS_FORECAST_MIN_COMPLETED_JOBS": "3",
+            "OPERATIONS_FORECAST_MIN_WORKLOAD_COMPLETED_JOBS": "2",
+        }, clear=False):
+            result = history.simulate_capacity_what_if(
+                {
+                    "documentCount": 10,
+                    "documentPages": 20,
+                    "mediaCount": 3,
+                    "mediaMinutes": 30,
+                },
+                now=NOW,
+            )
+
+        self.assertTrue(result["available"])
+        components = {row["kind"]: row for row in result["components"]}
+        self.assertEqual(components["document"]["method"], "pages")
+        self.assertEqual(
+            components["document"]["nominalServiceSecondsEach"],
+            120.0,
+        )
+        self.assertEqual(components["media"]["method"], "media_duration")
+        self.assertEqual(
+            components["media"]["nominalServiceSecondsEach"],
+            900.0,
+        )
+        self.assertEqual(result["peakBacklogJobs"], 13)
+        self.assertEqual(result["bottleneck"]["kind"], "media")
+        self.assertGreater(result["oneWorker"]["nominal"]["clearEtaSeconds"], 0)
+        self.assertLess(
+            result["twoWorkers"]["nominal"]["clearEtaSeconds"],
+            result["oneWorker"]["nominal"]["clearEtaSeconds"],
+        )
+
+    def test_peak_what_if_refuses_eta_when_requested_media_is_uncalibrated(self):
+        self.seed_six_fresh_snapshots(pending=0, active=1)
+        for index in range(3):
+            self.insert_job(
+                f"doc-only-{index}",
+                created=NOW - dt.timedelta(minutes=90 - index * 10),
+                duration_seconds=60,
+                original_name=f"doc-only-{index}.pdf",
+                result={"pageCount": 10, "storageMeta": {}},
+            )
+
+        with patch.dict(os.environ, {
+            **FORECAST_ENV,
+            "OPERATIONS_FORECAST_MIN_WORKLOAD_COMPLETED_JOBS": "2",
+        }, clear=False):
+            result = history.simulate_capacity_what_if(
+                {
+                    "documentCount": 0,
+                    "mediaCount": 3,
+                    "mediaMinutes": 30,
+                },
+                now=NOW,
+            )
+
+        self.assertFalse(result["available"])
+        self.assertEqual(result["oneWorker"]["nominal"]["state"], "unavailable")
+        media = next(row for row in result["components"] if row["kind"] == "media")
+        self.assertFalse(media["calibrated"])
+        self.assertTrue(
+            any("影音" in text for text in result["limitations"])
+        )
+
+    def test_peak_what_if_bounds_untrusted_query_values(self):
+        self.seed_six_fresh_snapshots(pending=0, active=1)
+        for index in range(2):
+            self.insert_job(
+                f"doc-bound-{index}",
+                created=NOW - dt.timedelta(minutes=90 - index * 10),
+                duration_seconds=60,
+                original_name=f"doc-bound-{index}.pdf",
+                result={"pageCount": 10, "storageMeta": {}},
+            )
+
+        with patch.dict(os.environ, {
+            **FORECAST_ENV,
+            "OPERATIONS_FORECAST_MIN_WORKLOAD_COMPLETED_JOBS": "2",
+        }, clear=False):
+            result = history.simulate_capacity_what_if(
+                {
+                    "documentCount": 9999,
+                    "documentPages": 9999,
+                    "mediaCount": -3,
+                    "mediaMinutes": 9999,
+                    "imageCount": -1,
+                    "archiveCount": 9999,
+                },
+                now=NOW,
+            )
+
+        self.assertEqual(result["scenario"]["documentCount"], 100)
+        self.assertEqual(result["scenario"]["documentPages"], 500)
+        self.assertEqual(result["scenario"]["mediaCount"], 0)
+        self.assertEqual(result["scenario"]["mediaMinutes"], 240)
+        self.assertEqual(result["scenario"]["imageCount"], 0)
+        self.assertEqual(result["scenario"]["archiveCount"], 50)
+
     def test_dashboard_includes_capacity_forecast_without_new_migration(self):
         self.seed_six_fresh_snapshots(pending=2, active=1)
         self.seed_completed_jobs(count=3, duration_seconds=600)
