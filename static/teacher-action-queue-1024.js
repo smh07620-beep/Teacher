@@ -24,6 +24,7 @@
   const kindMeta = kind => ({
     review: ['✍️', '待批改', 'border-indigo-200 bg-indigo-50 text-indigo-800'],
     material_failure: ['🛠️', '教材需要處理', 'border-rose-200 bg-rose-50 text-rose-800'],
+    intervention: ['🧭', '介入追蹤', 'border-violet-200 bg-violet-50 text-violet-800'],
     due: ['⏰', '截止提醒', 'border-amber-200 bg-amber-50 text-amber-800'],
     draft: ['📝', '未發布草稿', 'border-slate-200 bg-slate-50 text-slate-700'],
   }[kind] || ['•', '待處理', 'border-slate-200 bg-slate-50 text-slate-700']);
@@ -221,10 +222,24 @@
     pulseTarget(card || document.getElementById('admin-course-material-hub'));
   }
 
+  async function openIntervention(item) {
+    await window.switchAdminWorkspace?.('course-materials', true);
+    if (typeof window.TeacherWorkspace1014?.openLearners === 'function') {
+      await window.TeacherWorkspace1014.openLearners();
+    }
+    const matrixButton = document.querySelector('[data-admin-competency-matrix], [data-teacher-capability="competency"]');
+    matrixButton?.click?.();
+    setTimeout(() => {
+      const target = document.getElementById('admin-competency-matrix-view') || matrixButton;
+      pulseTarget(target);
+    }, 160);
+  }
+
   async function openAction(item) {
     if (!item) return;
     if (item.kind === 'review') return openReview(item);
     if (item.kind === 'material_failure') return openMaterialFailure(item);
+    if (item.kind === 'intervention') return openIntervention(item);
     if (item.kind === 'due') return openDueAssignment(item);
     if (item.kind === 'draft') return openDraft(item);
     await window.TeacherWorkspace1014?.openCourse?.();
@@ -258,21 +273,29 @@
     const teacherItems = context === 'assessment'
       ? allTeacherItems.filter(item => item.kind === 'review')
       : allTeacherItems.filter(item => item.kind !== 'review');
+    const canonicalNext = data?.nextTeacherAction || teacherItems[0] || null;
+    teacherItems.sort((a,b)=>{
+      const aNext = canonicalNext && String(a.id||'')===String(canonicalNext.id||'');
+      const bNext = canonicalNext && String(b.id||'')===String(canonicalNext.id||'');
+      return Number(bNext)-Number(aNext);
+    });
     latestItems = teacherItems.slice(0, 12);
     const counts = data.counts || {};
     section.innerHTML = `
       <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <div class="flex items-center gap-2"><h4 class="text-base font-black text-slate-950">需要我處理</h4><span class="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white">${teacherItems.length}</span></div>
-          <p class="mt-1 text-xs text-slate-500">待批改、教材異常、截止提醒與未發布草稿集中在這裡；「前往處理」會直接定位到對應工作。</p>
+          <p class="mt-1 text-xs text-slate-500">今天先處理第一順位，再處理其餘工作；待批改、教材異常、介入追蹤、截止提醒與未發布草稿都來自同一個 canonical queue。</p>
         </div>
         <div class="flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-600">
           <span class="rounded-full bg-indigo-50 px-2 py-1">待批改 ${Number(counts.review || 0)}</span>
           <span class="rounded-full bg-rose-50 px-2 py-1">教材 ${Number(counts.materialFailure || 0)}</span>
+          <span class="rounded-full bg-violet-50 px-2 py-1">介入 ${Number(counts.intervention || 0)}</span>
           <span class="rounded-full bg-amber-50 px-2 py-1">截止 ${Number(counts.due || 0)}</span>
           <span class="rounded-full bg-slate-100 px-2 py-1">草稿 ${Number(counts.draft || 0)}</span>
         </div>
       </div>
+      ${canonicalNext ? `<div class="mt-3 rounded-xl border-2 border-teal-200 bg-teal-50 p-3"><div class="text-[10px] font-black tracking-wide text-teal-700">今天先處理</div><div class="mt-1 text-sm font-black text-slate-900">${escapeHtml(canonicalNext.title||'待處理工作')}</div><div class="mt-1 text-xs text-slate-600">${escapeHtml(canonicalNext.detail||canonicalNext.statusLabel||'')}</div></div>` : ''}
       <div class="mt-3 space-y-2" data-teacher-action-items>
         ${teacherItems.length ? latestItems.map(itemCard).join('') : '<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-4 text-sm font-bold text-emerald-800">✓ 目前沒有需要你處理的項目。</div>'}
       </div>

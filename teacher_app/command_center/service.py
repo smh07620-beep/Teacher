@@ -75,12 +75,13 @@ def _task_sort_key(item: Mapping[str, Any]):
     priority = {
         "review": 0,
         "material_failure": 1,
-        "retraining": 2,
-        "course": 3,
-        "exam": 4,
-        "material": 5,
-        "due": 6,
-        "draft": 7,
+        "intervention": 2,
+        "retraining": 3,
+        "course": 4,
+        "exam": 5,
+        "material": 6,
+        "due": 7,
+        "draft": 8,
     }.get(str(item.get("kind") or ""), 8)
     due = _parse_datetime(item.get("dueAt"))
     return (
@@ -426,6 +427,65 @@ def _teacher_material_failure_items(user: Mapping[str, Any]) -> list[dict[str, A
     return values
 
 
+def _teacher_intervention_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
+    if not (
+        has_permission(user, "training.compliance.read")
+        and has_permission(user, "learning.assign")
+    ):
+        return []
+    try:
+        data = intervention_service.manager_list(user)
+    except Exception as exc:
+        LOGGER.warning(
+            "command center intervention manager projection failed error_type=%s",
+            type(exc).__name__,
+        )
+        return []
+
+    values = []
+    for item in list(data.get("items") or []):
+        status = str(item.get("status") or "")
+        if status not in intervention_service.ACTIVE_CASE_STATUSES:
+            continue
+        course_id = str(item.get("courseId") or "")
+        course = course_repository.get_course(course_id) or {}
+        if not course or not _visible_to_teacher(user, course):
+            continue
+        ready = bool(item.get("resolutionEligible"))
+        kind = str(item.get("kind") or "")
+        values.append({
+            "id": str(item.get("id") or ""),
+            "resourceId": str(item.get("id") or ""),
+            "courseId": course_id,
+            "persona": "teacher",
+            "domain": "interventions",
+            "kind": "intervention",
+            "title": str(course.get("title") or "學員介入追蹤"),
+            "status": "ready_to_resolve" if ready else status,
+            "statusLabel": "證據已解除，可結案" if ready else {
+                "remediation": "補強追蹤",
+                "retraining": "重訓追蹤",
+                "overdue": "逾期追蹤",
+            }.get(kind, "介入追蹤"),
+            "group": str(course.get("group") or ""),
+            "area": str(course.get("area") or "internal"),
+            "dueAt": str((item.get("plan") or {}).get("dueAt") or ""),
+            "overdue": kind == "overdue",
+            "detail": (
+                "學員已解除原異常，請確認證據後結案。"
+                if ready
+                else str(item.get("learnerMessage") or "此學員已有正式介入案件待追蹤。")
+            ),
+            "username": str(item.get("username") or ""),
+            "action": "intervention",
+            "actionLabel": "前往結案" if ready else "查看介入追蹤",
+            "target": "teacher",
+            "interventionId": str(item.get("id") or ""),
+            "resolutionEligible": ready,
+        })
+    return values
+
+
 def _teacher_due_items(user: Mapping[str, Any], current: dt.datetime) -> list[dict[str, Any]]:
     if not has_permission(user, "learning.assign"):
         return []
@@ -522,6 +582,7 @@ def _teacher_action_items(user: Mapping[str, Any], current: dt.datetime) -> list
     values = []
     values.extend(_teacher_review_items(user))
     values.extend(_teacher_material_failure_items(user))
+    values.extend(_teacher_intervention_items(user))
     values.extend(_teacher_due_items(user, current))
     values.extend(_teacher_draft_items(user))
     return values
@@ -589,6 +650,7 @@ def build_summary(
     teacher_counts = {
         "review": sum(1 for item in teacher_items if item.get("kind") == "review"),
         "materialFailure": sum(1 for item in teacher_items if item.get("kind") == "material_failure"),
+        "intervention": sum(1 for item in teacher_items if item.get("kind") == "intervention"),
         "due": sum(1 for item in teacher_items if item.get("kind") == "due"),
         "draft": sum(1 for item in teacher_items if item.get("kind") == "draft"),
     }
@@ -608,6 +670,10 @@ def build_summary(
         },
         "nextAction": next(
             (dict(item) for item in items if item.get("persona") == "learner"),
+            None,
+        ),
+        "nextTeacherAction": next(
+            (dict(item) for item in items if item.get("persona") == "teacher"),
             None,
         ),
         "items": items,
