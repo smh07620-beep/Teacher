@@ -304,6 +304,20 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
         self.assertTrue(v1)
         self.assertTrue(v2)
 
+    def test_artifact_reference_graph_blocks_purge_for_version_history(self):
+        material_version_retraining_84(self.conn, "sqlite")
+        with patch.object(common_db, "read_connection", self._read):
+            graph = material_repository.material_artifact_reference_graph("mat-1")
+        self.assertFalse(graph["purgeAllowed"])
+        self.assertTrue(any(item["type"] == "material_versions" for item in graph["blockers"]))
+
+    def test_artifact_reference_graph_allows_unknown_unreferenced_material(self):
+        material_version_retraining_84(self.conn, "sqlite")
+        with patch.object(common_db, "read_connection", self._read):
+            graph = material_repository.material_artifact_reference_graph("never-existed")
+        self.assertTrue(graph["purgeAllowed"])
+        self.assertEqual(graph["blockers"], [])
+
     def test_material_version_history_survives_catalog_record_deletion(self):
         material_version_retraining_84(self.conn, "sqlite")
         with patch.object(common_db, "read_connection", self._read), patch.object(
