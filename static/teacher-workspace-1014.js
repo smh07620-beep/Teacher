@@ -309,6 +309,25 @@
     markTeacherNav('documents');
   }
 
+  function ensureAssessmentWorkflow() {
+    const panel = document.getElementById('admin-section-quiz');
+    if (!panel) return;
+    let flow = document.getElementById('teacher-assessment-flow-1014');
+    if (!flow) {
+      flow = document.createElement('section');
+      flow.id = 'teacher-assessment-flow-1014';
+      flow.className = 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm';
+      flow.innerHTML = `
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div><p class="admin-page-eyebrow text-indigo-700">ASSESSMENT FLOW</p><h4 class="text-base font-black text-slate-950">評量工作流程</h4><p class="mt-1 text-xs text-slate-500">從建立到批改使用同一條流程；題庫、AI 出題與教師評核不再拆成彼此競爭的入口。</p></div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 text-[10px] font-bold text-slate-700">
+            <span class="teacher-assessment-step-1014">1 建立評量</span><span class="teacher-assessment-step-1014">2 準備題目</span><span class="teacher-assessment-step-1014">3 對象／期限</span><span class="teacher-assessment-step-1014">4 審核發布</span><span class="teacher-assessment-step-1014">5 待批改</span><span class="teacher-assessment-step-1014">6 歷史紀錄</span>
+          </div>
+        </div>`;
+    }
+    if (flow.parentElement !== panel) panel.insertBefore(flow, panel.firstChild);
+  }
+
   function ensureAssessmentReviewShortcut() {
     const panel = document.getElementById('admin-section-quiz');
     if (!panel || document.getElementById('teacher-review-shortcut-1014')) return;
@@ -336,6 +355,7 @@
     ];
     navHost.replaceChildren(navGroup('教師工作台', buttons));
     markTeacherNav(state.mode === 'documents' ? 'documents' : (state.mode === 'media' ? 'media' : (params.get('workspace') === 'assessment' ? 'assessment' : 'course')));
+    ensureAssessmentWorkflow();
     ensureAssessmentReviewShortcut();
   }
 
@@ -354,12 +374,14 @@
 
   buildTeacherNavigation();
   ensureMediaWorkspace();
+  ensureAssessmentWorkflow();
   ensureAssessmentReviewShortcut();
   syncTeacherHeader();
 
   window.AdminWorkspaceShell?.addAfterWorkspace?.(({workspace}) => {
     ensurePersonaSwitcher();
     buildTeacherNavigation();
+    ensureAssessmentWorkflow();
     ensureAssessmentReviewShortcut();
     if (state.mode === 'media' && workspace === 'course-materials') {
       showMediaWorkspace();
