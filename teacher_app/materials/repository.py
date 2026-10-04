@@ -229,6 +229,78 @@ def material_version_row_to_dict(row) -> dict:
     }
 
 
+def material_artifact_reference_graph(material_id: str) -> dict:
+    """Describe every durable dependency that blocks permanent material purge."""
+    material_id = str(material_id or "").strip()
+    blockers: list[dict] = []
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+
+        if _table_exists(conn, kind, "material_versions"):
+            row = conn.execute(
+                f"SELECT COUNT(*) AS n FROM material_versions WHERE material_id={ph}", (material_id,)
+            ).fetchone()
+            count = int(dict(row).get("n", 0) or 0)
+            if count:
+                blockers.append({"type": "material_versions", "count": count})
+
+        presentation_ids: list[str] = []
+        if _table_exists(conn, kind, "ai_presentations"):
+            rows = conn.execute(
+                f"SELECT id,status,artifact_storage_key FROM ai_presentations WHERE material_id={ph}", (material_id,)
+            ).fetchall()
+            presentation_ids = [str(dict(row).get("id") or "") for row in rows if dict(row).get("id")]
+            if rows:
+                artifact_count = sum(1 for row in rows if str(dict(row).get("artifact_storage_key") or ""))
+                blockers.append({
+                    "type": "ai_presentations",
+                    "count": len(rows),
+                    "artifactCount": artifact_count,
+                })
+
+        video_ids: list[str] = []
+        if presentation_ids and _table_exists(conn, kind, "ai_presentation_videos"):
+            marks = ",".join([ph] * len(presentation_ids))
+            rows = conn.execute(
+                f"SELECT id,artifact_storage_key FROM ai_presentation_videos WHERE presentation_id IN ({marks})",
+                tuple(presentation_ids),
+            ).fetchall()
+            video_ids = [str(dict(row).get("id") or "") for row in rows if dict(row).get("id")]
+            if rows:
+                blockers.append({
+                    "type": "ai_videos",
+                    "count": len(rows),
+                    "artifactCount": sum(1 for row in rows if str(dict(row).get("artifact_storage_key") or "")),
+                })
+
+        if video_ids and _table_exists(conn, kind, "ai_video_publications"):
+            marks = ",".join([ph] * len(video_ids))
+            row = conn.execute(
+                f"SELECT COUNT(*) AS n FROM ai_video_publications WHERE video_id IN ({marks})",
+                tuple(video_ids),
+            ).fetchone()
+            count = int(dict(row).get("n", 0) or 0)
+            if count:
+                blockers.append({"type": "ai_video_publications", "count": count})
+
+        if presentation_ids and _table_exists(conn, kind, "ai_presentation_publications"):
+            marks = ",".join([ph] * len(presentation_ids))
+            row = conn.execute(
+                f"SELECT COUNT(*) AS n FROM ai_presentation_publications WHERE presentation_id IN ({marks})",
+                tuple(presentation_ids),
+            ).fetchone()
+            count = int(dict(row).get("n", 0) or 0)
+            if count:
+                blockers.append({"type": "ai_presentation_publications", "count": count})
+
+    return {
+        "materialId": material_id,
+        "purgeAllowed": not blockers,
+        "blockers": blockers,
+        "blockerCount": sum(int(item.get("count") or 0) for item in blockers),
+    }
+
+
 def material_version_storage_references(material_id: str) -> list[dict]:
     """Return durable provider locations referenced by immutable version snapshots."""
     refs: list[dict] = []
