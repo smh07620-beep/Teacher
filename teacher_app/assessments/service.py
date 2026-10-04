@@ -16,6 +16,7 @@ from teacher_app.common.errors import ApiError
 from teacher_app.courses import repository as course_repository
 from teacher_app.materials import repository as materials_repository
 from teacher_app.exams import windows as exam_windows
+from teacher_app.exams import records as exam_records
 from teacher_app.assessments import repository
 
 
@@ -99,11 +100,16 @@ def list_categories(base, group: str | None, area: str, include_inactive: bool) 
         with _CATEGORY_LIST_CACHE_LOCK:
             _CATEGORY_LIST_CACHE[key] = (time.monotonic(), copy.deepcopy(full_list))
 
+    review_summary = exam_records.category_review_summary([
+        str(item.get("id") or "") for item in full_list if item.get("id")
+    ])
     for item in full_list:
+        category_id = str(item.get("id") or "")
         try:
-            item["examWindow"] = exam_windows.get_window(str(item.get("id") or "")) or {}
+            item["examWindow"] = exam_windows.get_window(category_id) or {}
         except Exception:
             item["examWindow"] = {}
+        item["reviewSummary"] = review_summary.get(category_id, {"pending": 0, "completed": 0, "total": 0})
     if include_inactive:
         return full_list
     return [item for item in full_list if bool(item.get("active"))]
