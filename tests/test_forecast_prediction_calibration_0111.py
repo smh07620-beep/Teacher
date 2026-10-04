@@ -336,14 +336,6 @@ class ForecastPredictionCalibration0111Tests(unittest.TestCase):
         self.assertEqual(kinds, {"document", "media"})
 
     def test_stable_backtest_does_not_upgrade_sparse_forecast_confidence(self):
-        self.seed_document_history()
-        self.seed_snapshot()
-        self.insert_job(
-            "queued-stable",
-            status="queued",
-            created=NOW - dt.timedelta(minutes=5),
-            original_name="queued-stable.pdf",
-        )
         stable = {
             "available": True,
             "state": "stable",
@@ -353,7 +345,40 @@ class ForecastPredictionCalibration0111Tests(unittest.TestCase):
             "confidenceAdjustment": "none",
             "workloads": [],
         }
+        snapshots = [
+            {
+                "sampled_at": (
+                    NOW - dt.timedelta(minutes=(5 - index) * 10)
+                ).isoformat(),
+                "worker_status_available": 1,
+                "active_workers": 1,
+                "pending_jobs": 1,
+                "retry_jobs": 0,
+                "processing_jobs": 0,
+            }
+            for index in range(6)
+        ]
         with patch.object(
+            history,
+            "_job_arrival_count",
+            return_value=(4, True),
+        ), patch.object(
+            history,
+            "_completed_durations",
+            return_value=[60.0, 80.0, 100.0],
+        ), patch.object(
+            history,
+            "_snapshot_rows_since",
+            return_value=snapshots,
+        ), patch.object(
+            history,
+            "_open_capacity_blockers",
+            return_value=[],
+        ), patch.object(
+            history,
+            "build_workload_calibration",
+            return_value={"profiles": [], "fullyCalibrated": False},
+        ), patch.object(
             history,
             "build_forecast_accuracy",
             return_value=stable,
@@ -372,14 +397,6 @@ class ForecastPredictionCalibration0111Tests(unittest.TestCase):
         self.assertEqual(forecast["confidence"], "medium")
 
     def test_real_backtest_can_only_lower_existing_forecast_confidence(self):
-        self.seed_document_history()
-        self.seed_snapshot()
-        self.insert_job(
-            "queued-job",
-            status="queued",
-            created=NOW - dt.timedelta(minutes=5),
-            original_name="queued.pdf",
-        )
         high_error = {
             "available": True,
             "state": "low_trust",
@@ -389,7 +406,40 @@ class ForecastPredictionCalibration0111Tests(unittest.TestCase):
             "confidenceAdjustment": "downgrade_to_low",
             "workloads": [],
         }
+        snapshots = [
+            {
+                "sampled_at": (
+                    NOW - dt.timedelta(minutes=(11 - index) * 10)
+                ).isoformat(),
+                "worker_status_available": 1,
+                "active_workers": 1,
+                "pending_jobs": 1,
+                "retry_jobs": 0,
+                "processing_jobs": 0,
+            }
+            for index in range(12)
+        ]
         with patch.object(
+            history,
+            "_job_arrival_count",
+            return_value=(6, True),
+        ), patch.object(
+            history,
+            "_completed_durations",
+            return_value=[60.0, 70.0, 80.0, 90.0, 100.0],
+        ), patch.object(
+            history,
+            "_snapshot_rows_since",
+            return_value=snapshots,
+        ), patch.object(
+            history,
+            "_open_capacity_blockers",
+            return_value=[],
+        ), patch.object(
+            history,
+            "build_workload_calibration",
+            return_value={"profiles": [], "fullyCalibrated": False},
+        ), patch.object(
             history,
             "build_forecast_accuracy",
             return_value=high_error,
@@ -404,7 +454,7 @@ class ForecastPredictionCalibration0111Tests(unittest.TestCase):
         ):
             forecast = history.build_capacity_forecast(now=NOW)
 
-        self.assertEqual(forecast["rawConfidence"], "medium")
+        self.assertEqual(forecast["rawConfidence"], "high")
         self.assertEqual(forecast["confidence"], "low")
         self.assertIs(
             forecast["predictionCalibration"],
