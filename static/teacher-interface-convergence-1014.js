@@ -112,12 +112,12 @@
     const entry = document.createElement('section');
     entry.id = 'teacher-course-media-entry-1014';
     entry.className = 'mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-cyan-100 bg-cyan-50/50 px-4 py-3';
-    entry.innerHTML = '<div><b class="text-sm text-slate-900">教材與課程</b><p class="mt-0.5 text-[11px] text-slate-600">課程內容、教材與媒體製作集中在這裡。</p></div>';
+    entry.innerHTML = '<div><b class="text-sm text-slate-900">教材工作流程</b><p class="mt-0.5 text-[11px] text-slate-600">① 選擇課程　→　② 管理教材／版本　→　③ 需要時製作語音或錄影。新版教材請沿用原教材版本，不必重複建立教材卡。</p></div>';
 
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'shrink-0 rounded-xl border border-cyan-200 bg-white px-4 py-2 text-xs font-black text-cyan-800 hover:bg-cyan-50';
-    button.textContent = '🎙️ 製作語音／錄影';
+    button.textContent = '🎙️ 從教材製作媒體';
     button.addEventListener('click', async event => {
       event.preventDefault();
       await window.TeacherWorkspace1014?.openMedia?.();
