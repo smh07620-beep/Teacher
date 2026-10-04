@@ -26,6 +26,7 @@ from teacher_app.maintenance import operational_incident_response_migration as _
 from teacher_app.maintenance import operational_metrics_migration as _operational_metrics_migration  # noqa: F401
 from teacher_app.maintenance import forecast_prediction_migration as _forecast_prediction_migration  # noqa: F401
 from teacher_app.maintenance import email_delivery_migration as _email_delivery_migration  # noqa: F401
+from teacher_app.maintenance import course_lifecycle_migration as _course_lifecycle_migration  # noqa: F401
 
 
 sys.modules[__name__] = _migrations
