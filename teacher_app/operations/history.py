@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import math
 import os
 from collections import Counter
@@ -13,6 +14,9 @@ from typing import Any, Iterable, Mapping
 from teacher_app.common import db as common_db
 from teacher_app.materials.validation import IMAGE_EXT, MEDIA_EXT, PDF_EXT, TEXT_EXT
 from teacher_app.worker import operations as worker_operations
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _utc(value: dt.datetime | None = None) -> dt.datetime:
@@ -1395,6 +1399,406 @@ def simulate_capacity_what_if(
         "blockers": blockers,
         "limitations": list(dict.fromkeys(limitations)),
         "decision": decision,
+    }
+
+
+
+def _prediction_table_unavailable(exc: Exception) -> bool:
+    text = str(exc or "").lower()
+    return (
+        ("no such table" in text and "operational_forecast_predictions" in text)
+        or (
+            "relation" in text
+            and "operational_forecast_predictions" in text
+            and "does not exist" in text
+        )
+    )
+
+
+def reconcile_forecast_predictions(
+    *,
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
+    """Create pre-completion service-time predictions and score terminal jobs."""
+    current = _utc(now)
+    evaluated = 0
+    ignored = 0
+    created = 0
+
+    try:
+        with common_db.read_connection() as (conn, _kind):
+            rows = conn.execute(
+                """SELECT p.*,j.status AS job_status,j.started_at AS job_started_at,
+                          j.finished_at AS job_finished_at
+                   FROM operational_forecast_predictions p
+                   LEFT JOIN material_jobs j ON j.id=p.job_id
+                   WHERE p.evaluation_status='pending'"""
+            ).fetchall()
+    except Exception as exc:
+        if _prediction_table_unavailable(exc) or _missing_material_job_history_schema(exc):
+            return {
+                "available": False,
+                "created": 0,
+                "evaluated": 0,
+                "ignored": 0,
+            }
+        raise
+
+    pending_rows = [dict(row) for row in rows]
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        for row in pending_rows:
+            status = str(row.get("job_status") or "")
+            predicted_at = _parse_time(row.get("predicted_at"))
+            if status == "completed":
+                started = _parse_time(row.get("job_started_at"))
+                finished = _parse_time(row.get("job_finished_at"))
+                if not started or not finished:
+                    continue
+                actual = (finished - started).total_seconds()
+                if actual <= 0 or actual > 7 * 24 * 3600:
+                    continue
+                predicted = max(
+                    0.0, float(row.get("predicted_nominal_seconds") or 0)
+                )
+                predicted_p95 = max(
+                    0.0, float(row.get("predicted_p95_seconds") or 0)
+                )
+                absolute_error = abs(predicted - actual)
+                ape = absolute_error / actual if actual > 0 else 0.0
+                signed = (predicted - actual) / actual if actual > 0 else 0.0
+                p95_covered = predicted_p95 >= actual
+                covered_value = (
+                    bool(p95_covered)
+                    if kind == "postgres"
+                    else int(bool(p95_covered))
+                )
+                conn.execute(
+                    f"""UPDATE operational_forecast_predictions SET
+                        evaluation_status={ph},completed_at={ph},actual_seconds={ph},
+                        nominal_absolute_error_seconds={ph},
+                        nominal_absolute_percentage_error={ph},
+                        nominal_signed_percentage_error={ph},
+                        p95_covered={ph},evaluated_at={ph}
+                        WHERE id={ph}""",
+                    (
+                        "evaluated",
+                        finished.isoformat(),
+                        round(actual, 3),
+                        round(absolute_error, 3),
+                        round(ape, 6),
+                        round(signed, 6),
+                        covered_value,
+                        current.isoformat(),
+                        row.get("id"),
+                    ),
+                )
+                evaluated += 1
+            elif status in {"failed", "cancelled"}:
+                conn.execute(
+                    f"""UPDATE operational_forecast_predictions SET
+                        evaluation_status={ph},completed_at={ph},evaluated_at={ph}
+                        WHERE id={ph}""",
+                    (
+                        "ignored_terminal",
+                        str(row.get("job_finished_at") or current.isoformat()),
+                        current.isoformat(),
+                        row.get("id"),
+                    ),
+                )
+                ignored += 1
+            elif predicted_at and current - predicted_at > dt.timedelta(days=14):
+                conn.execute(
+                    f"""UPDATE operational_forecast_predictions SET
+                        evaluation_status={ph},evaluated_at={ph}
+                        WHERE id={ph}""",
+                    ("expired", current.isoformat(), row.get("id")),
+                )
+                ignored += 1
+
+    workload = build_workload_calibration(
+        now=current,
+        current_active_workers=0,
+    )
+    profiles = {
+        str(profile.get("kind") or ""): dict(profile)
+        for profile in workload.get("profiles") or []
+        if profile.get("calibrated")
+    }
+    backlog_rows, backlog_available = _workload_rows(backlog_only=True)
+    if not backlog_available:
+        return {
+            "available": True,
+            "created": created,
+            "evaluated": evaluated,
+            "ignored": ignored,
+        }
+
+    min_band_samples = _int_env(
+        "OPERATIONS_FORECAST_MIN_WORKLOAD_COMPLETED_JOBS",
+        2,
+        2,
+        20,
+    )
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        for job in backlog_rows:
+            job_id = str(job.get("id") or "").strip()
+            if not job_id:
+                continue
+            exists = conn.execute(
+                f"SELECT 1 FROM operational_forecast_predictions WHERE job_id={ph}",
+                (job_id,),
+            ).fetchone()
+            if exists:
+                continue
+            workload_kind = _workload_kind(job.get("original_name"))
+            profile = profiles.get(workload_kind)
+            if not profile:
+                continue
+            nominal = float(profile.get("medianDurationSeconds") or 0)
+            conservative = float(profile.get("p95DurationSeconds") or 0)
+            band = _size_band(job.get("source_bytes"))
+            basis = "class_duration"
+            for band_profile in profile.get("sizeBands") or []:
+                if (
+                    str(band_profile.get("band") or "") == band
+                    and int(band_profile.get("samples") or 0) >= min_band_samples
+                    and float(band_profile.get("medianDurationSeconds") or 0) > 0
+                    and float(band_profile.get("p95DurationSeconds") or 0) > 0
+                ):
+                    nominal = float(
+                        band_profile.get("medianDurationSeconds") or nominal
+                    )
+                    conservative = float(
+                        band_profile.get("p95DurationSeconds") or conservative
+                    )
+                    basis = f"size_band:{band}"
+                    break
+            if nominal <= 0 or conservative <= 0:
+                continue
+            prediction = {
+                "id": f"service:{job_id}",
+                "job_id": job_id,
+                "workload_kind": workload_kind,
+                "size_band": band,
+                "model_basis": basis,
+                "model_version": "workload-v1",
+                "sample_count": int(profile.get("completedSamples") or 0),
+                "predicted_nominal_seconds": round(nominal, 3),
+                "predicted_p95_seconds": round(conservative, 3),
+                "predicted_at": current.isoformat(),
+                "evaluation_status": "pending",
+            }
+            columns = tuple(prediction.keys())
+            try:
+                conn.execute(
+                    f"INSERT INTO operational_forecast_predictions"
+                    f"({','.join(columns)}) VALUES "
+                    f"({','.join([ph] * len(columns))})",
+                    tuple(prediction[column] for column in columns),
+                )
+                created += 1
+            except Exception:
+                existing = conn.execute(
+                    f"SELECT 1 FROM operational_forecast_predictions WHERE job_id={ph}",
+                    (job_id,),
+                ).fetchone()
+                if not existing:
+                    raise
+
+        retention = (current - dt.timedelta(days=90)).isoformat()
+        conn.execute(
+            f"""DELETE FROM operational_forecast_predictions
+                WHERE evaluation_status<>'pending'
+                  AND evaluated_at<>'' AND evaluated_at < {ph}""",
+            (retention,),
+        )
+
+    return {
+        "available": True,
+        "created": created,
+        "evaluated": evaluated,
+        "ignored": ignored,
+    }
+
+
+def _accuracy_group(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {
+            "evaluated": 0,
+            "medianAbsoluteErrorSeconds": 0.0,
+            "medianAbsolutePercentageError": None,
+            "meanAbsolutePercentageError": None,
+            "medianSignedBias": None,
+            "p95Coverage": None,
+            "bias": "unknown",
+        }
+    absolute_errors = [
+        float(row.get("nominal_absolute_error_seconds") or 0) for row in rows
+    ]
+    apes = [
+        max(0.0, float(row.get("nominal_absolute_percentage_error") or 0))
+        for row in rows
+    ]
+    signed = [
+        float(row.get("nominal_signed_percentage_error") or 0)
+        for row in rows
+    ]
+    covered = sum(bool(row.get("p95_covered")) for row in rows)
+    median_bias = _percentile(signed, 0.5)
+    bias = (
+        "optimistic"
+        if median_bias < -0.15
+        else "conservative"
+        if median_bias > 0.15
+        else "balanced"
+    )
+    return {
+        "evaluated": len(rows),
+        "medianAbsoluteErrorSeconds": round(
+            _percentile(absolute_errors, 0.5), 1
+        ),
+        "medianAbsolutePercentageError": round(
+            _percentile(apes, 0.5), 4
+        ),
+        "meanAbsolutePercentageError": round(mean(apes), 4),
+        "medianSignedBias": round(median_bias, 4),
+        "p95Coverage": round(covered / len(rows), 4),
+        "bias": bias,
+    }
+
+
+def build_forecast_accuracy(
+    *,
+    now: dt.datetime | None = None,
+    days: int = 7,
+) -> dict[str, Any]:
+    """Summarize strictly pre-completion prediction error and trust signals."""
+    current = _utc(now)
+    window_days = max(1, min(30, int(days or 7)))
+    cutoff = current - dt.timedelta(days=window_days)
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            rows = conn.execute(
+                f"""SELECT * FROM operational_forecast_predictions
+                    WHERE evaluation_status='evaluated'
+                      AND completed_at >= {ph}
+                    ORDER BY completed_at ASC""",
+                (cutoff.isoformat(),),
+            ).fetchall()
+            pending_row = conn.execute(
+                "SELECT COUNT(*) AS count FROM operational_forecast_predictions "
+                "WHERE evaluation_status='pending'"
+            ).fetchone()
+    except Exception as exc:
+        if _prediction_table_unavailable(exc):
+            return {
+                "available": False,
+                "windowDays": window_days,
+                "state": "not_started",
+                "label": "尚未開始回測",
+                "evaluated": 0,
+                "pending": 0,
+                "confidenceAdjustment": "none",
+                "workloads": [],
+            }
+        raise
+
+    evaluated_rows = [dict(row) for row in rows]
+    summary = _accuracy_group(evaluated_rows)
+    pending = int(dict(pending_row).get("count") or 0) if pending_row else 0
+    minimum = _int_env(
+        "OPERATIONS_FORECAST_ACCURACY_MIN_EVALUATED",
+        5,
+        3,
+        100,
+    )
+    warning_error = _float_env(
+        "OPERATIONS_FORECAST_ACCURACY_WARNING_ERROR_PERCENT",
+        30.0,
+        10.0,
+        200.0,
+    ) / 100.0
+    high_error = _float_env(
+        "OPERATIONS_FORECAST_ACCURACY_HIGH_ERROR_PERCENT",
+        50.0,
+        20.0,
+        300.0,
+    ) / 100.0
+    min_p95_coverage = _float_env(
+        "OPERATIONS_FORECAST_ACCURACY_MIN_P95_COVERAGE_PERCENT",
+        70.0,
+        30.0,
+        99.0,
+    ) / 100.0
+
+    count = int(summary.get("evaluated") or 0)
+    median_ape = summary.get("medianAbsolutePercentageError")
+    p95_coverage = summary.get("p95Coverage")
+    if count < minimum:
+        state = "collecting"
+        label = f"回測樣本累積中（{count}/{minimum}）"
+        adjustment = "none"
+    elif (
+        median_ape is not None
+        and median_ape >= high_error
+    ) or (
+        p95_coverage is not None
+        and p95_coverage < max(0.4, min_p95_coverage - 0.15)
+    ):
+        state = "low_trust"
+        label = "近期回測誤差偏高，Forecast 信心降至低"
+        adjustment = "downgrade_to_low"
+    elif (
+        median_ape is not None
+        and median_ape >= warning_error
+    ) or (
+        p95_coverage is not None
+        and p95_coverage < min_p95_coverage
+    ):
+        state = "caution"
+        label = "近期回測誤差上升，Forecast 信心下調一級"
+        adjustment = "downgrade_one"
+    else:
+        state = "stable"
+        label = "近期回測誤差穩定"
+        adjustment = "none"
+
+    workload_rows: dict[str, list[dict[str, Any]]] = {}
+    for row in evaluated_rows:
+        workload_rows.setdefault(
+            str(row.get("workload_kind") or "other"), []
+        ).append(row)
+    workloads = []
+    for kind, group in sorted(workload_rows.items()):
+        item = _accuracy_group(group)
+        item.update({
+            "kind": kind,
+            "label": _WORKLOAD_LABELS.get(kind, kind),
+        })
+        workloads.append(item)
+
+    return {
+        "available": True,
+        "windowDays": window_days,
+        "state": state,
+        "label": label,
+        "minimumEvaluated": minimum,
+        "pending": pending,
+        "confidenceAdjustment": adjustment,
+        **summary,
+        "workloads": workloads,
+        "heuristics": {
+            "warningMedianError": round(warning_error, 4),
+            "highMedianError": round(high_error, 4),
+            "minimumP95Coverage": round(min_p95_coverage, 4),
+        },
+        "note": (
+            "只評分 Job 完成前已固定的 service-time prediction；"
+            "未實際提交的 What-if 情境不納入準確率。"
+        ),
     }
 
 
