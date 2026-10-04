@@ -426,15 +426,20 @@ def update_category_materials(base, category_id: str, data: Mapping[str, Any]) -
     raw = data.get("materialIds") or []
     if not isinstance(raw, list):
         raise _fail("MATERIAL_IDS_INVALID", "materialIds 必須是陣列")
-    allowed = {
-        material.get("id")
+    scoped_materials = {
+        str(material.get("id") or ""): material
         for material in materials_repository.list_uploaded_materials(base, include_inactive=True)
         if material.get("group") == category.get("group") and material.get("area") == category.get("area")
     }
     selected: list[str] = []
     for value in raw:
         material_id = str(value).strip()
-        if material_id in allowed and material_id not in selected:
+        material = scoped_materials.get(material_id)
+        if not material:
+            raise _fail("MATERIAL_SCOPE_MISMATCH", "所選教材不存在或不在此考卷的組別／訓練區", 409)
+        if not material.get("active", True):
+            raise _fail("MATERIAL_INACTIVE", "停用教材不能關聯考卷；請先啟用教材", 409)
+        if material_id not in selected:
             selected.append(material_id)
     materials_repository.replace_category_assignments(
         category_id,
@@ -442,7 +447,14 @@ def update_category_materials(base, category_id: str, data: Mapping[str, Any]) -
         group_key=category.get("group"),
         training_area=category.get("area"),
     )
-    return {"ok": True, "linkedIds": selected, "linked": len(selected)}
+    persisted = materials_repository.material_ids_for_category(
+        category_id,
+        group_key=category.get("group"),
+        training_area=category.get("area"),
+    )
+    if persisted != set(selected):
+        raise _fail("MATERIAL_LINK_NOT_PERSISTED", "教材關聯未完整寫入，請重新整理後再試", 409)
+    return {"ok": True, "linkedIds": selected, "linked": len(persisted)}
 
 
 def delete_category(base, category_id: str) -> dict:
