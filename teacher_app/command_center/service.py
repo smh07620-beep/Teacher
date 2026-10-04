@@ -18,6 +18,7 @@ from teacher_app.courses import repository as course_repository
 from teacher_app.exams import records as exam_records
 from teacher_app.learning import access as learning_access
 from teacher_app.learning import assignment_service
+from teacher_app.learning import intervention_service
 from teacher_app.pgy import service as pgy_service
 from teacher_app.worker import repository as worker_repository
 
@@ -84,6 +85,7 @@ def _task_sort_key(item: Mapping[str, Any]):
     due = _parse_datetime(item.get("dueAt"))
     return (
         0 if item.get("overdue") else 1,
+        0 if item.get("interventionId") else 1,
         priority,
         due or dt.datetime.max.replace(tzinfo=dt.timezone.utc),
         str(item.get("title") or ""),
@@ -234,6 +236,101 @@ def _learner_action_items(user: Mapping[str, Any], current: dt.datetime) -> list
             "actionLabel": "前往補強再測" if remediation else "前往考核",
             "target": "exam",
         })
+
+    try:
+        intervention_rows = list(intervention_service.mine(user).get("items") or [])
+    except Exception as exc:
+        LOGGER.warning(
+            "command center intervention projection failed error_type=%s",
+            type(exc).__name__,
+        )
+        intervention_rows = []
+
+    intervention_labels = {
+        "overdue": "教師逾期追蹤",
+        "retraining": "教師重訓追蹤",
+        "remediation": "教師補強追蹤",
+    }
+    case_status_labels = {
+        "open": "待處理",
+        "in_progress": "處理中",
+        "ready_for_retest": "準備再測",
+    }
+    for case in intervention_rows:
+        case_status = str(case.get("status") or "")
+        if case_status not in intervention_service.ACTIVE_CASE_STATUSES:
+            continue
+        course_id = str(case.get("courseId") or "")
+        kind = str(case.get("kind") or "")
+        plan = dict(case.get("plan") or {})
+        item = next(
+            (entry for entry in values if str(entry.get("courseId") or "") == course_id),
+            None,
+        )
+        if item is None:
+            course = course_repository.get_course(course_id) or {}
+            if not course:
+                continue
+            item = {
+                "id": str(case.get("id") or course_id),
+                "resourceId": course_id,
+                "courseId": course_id,
+                "persona": "learner",
+                "domain": "learning",
+                "kind": "intervention",
+                "title": str(course.get("title") or case.get("courseTitle") or "教師追蹤項目"),
+                "status": case_status,
+                "statusLabel": intervention_labels.get(kind, "教師追蹤"),
+                "group": str(course.get("group") or ""),
+                "area": str(course.get("area") or "internal"),
+                "dueAt": str(plan.get("dueAt") or ""),
+                "overdue": kind == "overdue",
+                "detail": str(case.get("learnerMessage") or "請依教師追蹤計畫完成後續學習。"),
+                "action": "intervention",
+                "actionLabel": "查看學習要求",
+                "target": "materials",
+            }
+            values.append(item)
+
+        item["interventionId"] = str(case.get("id") or "")
+        item["interventionStatus"] = case_status
+        item["interventionKind"] = kind
+        item["interventionPlan"] = plan
+        item["status"] = case_status
+        item["statusLabel"] = (
+            intervention_labels.get(kind, "教師追蹤")
+            + " · "
+            + case_status_labels.get(case_status, case_status)
+        )
+        if case.get("learnerMessage"):
+            item["detail"] = str(case.get("learnerMessage") or "")
+
+        review_materials = list(plan.get("reviewMaterials") or [])
+        if kind == "remediation":
+            quiz_id = str(plan.get("quizCategoryId") or "")
+            if case_status == "ready_for_retest" and quiz_id:
+                item["target"] = "exam"
+                item["resourceId"] = quiz_id
+                item["materialId"] = ""
+                item["actionLabel"] = "進行再測"
+            elif review_materials:
+                material_id = str(review_materials[0].get("id") or "")
+                item["target"] = "materials"
+                item["materialId"] = material_id
+                item["actionLabel"] = "先完成補強教材"
+            elif quiz_id:
+                item["target"] = "exam"
+                item["resourceId"] = quiz_id
+                item["actionLabel"] = "前往補強再測"
+        elif kind == "retraining" and review_materials:
+            material_id = str(review_materials[0].get("id") or "")
+            item["target"] = "materials"
+            item["materialId"] = material_id
+            item["actionLabel"] = "重新閱讀指定教材"
+        elif kind == "overdue":
+            item["overdue"] = True
+            if not item.get("actionLabel"):
+                item["actionLabel"] = "優先完成逾期項目"
 
     return values
 

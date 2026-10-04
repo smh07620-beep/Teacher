@@ -67,7 +67,10 @@ def _href(item: Mapping[str, Any]) -> str:
         suffix = f"&courseId={course_id or resource_id}" if (course_id or resource_id) else ""
         return f"/system?area={area}&group={group}&admin=1&workspace=course-materials&persona=teacher&from=notification-center{suffix}"
     suffix = f"&courseId={course_id}" if course_id else ""
-    if item.get("kind") in {"material", "retraining"} and resource_id:
+    material_id = str(item.get("materialId") or "")
+    if material_id:
+        suffix += f"&materialId={material_id}"
+    elif item.get("kind") in {"material", "retraining"} and resource_id:
         suffix += f"&materialId={resource_id}"
     return f"/system?area={area}&group={group}&module=materials&from=notification-center{suffix}"
 
@@ -84,6 +87,7 @@ def _badge(kind: str, overdue: bool, status: str) -> str:
         "due": "即將到期",
         "draft": "草稿",
         "material": "教材",
+        "intervention": "教師追蹤",
         "worker_offline": "Worker 離線",
         "operational_incident": "系統事件",
         "operational_recovery": "已恢復",
