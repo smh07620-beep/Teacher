@@ -53,6 +53,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import operational_incident_migration as _operational_incident_migration  # noqa: F401
     from teacher_app.maintenance import operational_incident_response_migration as _operational_incident_response_migration  # noqa: F401
     from teacher_app.maintenance import operational_metrics_migration as _operational_metrics_migration  # noqa: F401
+    from teacher_app.maintenance import forecast_prediction_migration as _forecast_prediction_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
