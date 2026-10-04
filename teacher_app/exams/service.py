@@ -13,7 +13,7 @@ from teacher_app.common.errors import ApiError
 from teacher_app.exams import grading
 from teacher_app.exams import remediation
 from teacher_app.exams import repository as repo
-from teacher_app.exams.windows import assert_exam_open
+from teacher_app.exams.windows import assert_exam_not_closed, assert_exam_open
 from teacher_app.materials import repository as material_repository
 
 QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video")
@@ -168,7 +168,9 @@ def resume_attempt(base_or_user, user_or_attempt_id, attempt_id: str | None = No
     actor = require_user(user)
     conn, kind = repo._connect(base)
     try:
-        return attempt_response(_owned_started_attempt(conn, kind, actor, attempt_id))
+        attempt = _owned_started_attempt(conn, kind, actor, attempt_id)
+        assert_exam_not_closed(str(attempt.get("quiz_category_id") or ""))
+        return attempt_response(attempt)
     finally:
         conn.close()
 
@@ -194,6 +196,7 @@ def submit_attempt(base_or_user, user_or_attempt_id, attempt_id_or_data, data: M
     try:
         with repo.transaction(base) as (conn, kind):
             attempt = _owned_started_attempt(conn, kind, actor, attempt_id, submitting=True)
+            assert_exam_not_closed(str(attempt.get("quiz_category_id") or ""))
             evaluator_name = _text(attempt.get("evaluator_name"), 100)
             evaluator_title = _text(attempt.get("evaluator_title"), 100)
             questions = [dict(q) for q in repo.json_load(attempt.get("questions_json"), []) if isinstance(q, dict)]
