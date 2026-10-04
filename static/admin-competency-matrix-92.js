@@ -277,7 +277,7 @@
       <section id="admin-training-intervention-f3" class="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/30 p-3" data-username="${esc(item.username)}" data-course-id="${esc(item.courseId)}">
         <div class="text-xs text-slate-500">正在讀取介入追蹤…</div>
       </section>
-      <p class="mt-3 text-[10px] leading-5 text-slate-400">此區只顯示既有學習、考核與證明紀錄的可追溯摘要；介入追蹤不會直接改寫評核結果或資格狀態。</p>`;
+      <p class="mt-3 text-[10px] leading-5 text-slate-400">此區只顯示既有學習、考核與證明紀錄的可追溯摘要；不提供在矩陣直接改寫評核結果或資格狀態。介入追蹤只記錄處理流程，不會改寫原始證據。</p>`;
     panel.classList.remove('hidden');
     panel.dispatchEvent(new CustomEvent('training-intervention:evidence',{
       bubbles:true,
