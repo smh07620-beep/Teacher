@@ -135,6 +135,32 @@ class StorageDeletionConvergenceTests(unittest.TestCase):
         self.assertEqual(result["retainedVersionCount"], 1)
         delete_record.assert_called_once_with("upload-1")
 
+    def test_permanent_purge_refuses_any_reference_graph_blocker(self):
+        base = self._material_base(lambda value: None)
+        entry = {"id": "upload-1", "folder": "upload-1", "storageBackend": "r2", "storageKey": "materials/upload-1/source.pdf"}
+        graph = {"materialId": "upload-1", "purgeAllowed": False, "blockers": [{"type": "ai_presentations", "count": 1}]}
+        with patch.object(material_service.repository, "get_material", return_value=entry), patch.object(
+            material_service.repository, "material_artifact_reference_graph", return_value=graph
+        ), patch.object(material_service.repository, "delete_material_record") as delete_record:
+            with self.assertRaises(ApiError) as caught:
+                material_service.purge_material_storage("upload-1", paths=base)
+        self.assertEqual(caught.exception.status, 409)
+        delete_record.assert_not_called()
+
+    def test_permanent_purge_deletes_storage_before_catalog_when_unreferenced(self):
+        calls = []
+        base = self._material_base(lambda value: calls.append(value))
+        entry = {"id": "upload-1", "folder": "upload-1", "storageBackend": "r2", "storageKey": "materials/upload-1/source.pdf"}
+        graph = {"materialId": "upload-1", "purgeAllowed": True, "blockers": []}
+        with patch.object(material_service.repository, "get_material", return_value=entry), patch.object(
+            material_service.repository, "material_artifact_reference_graph", return_value=graph
+        ), patch.object(material_service.repository, "delete_material_record") as delete_record:
+            result = material_service.purge_material_storage("upload-1", paths=base)
+        self.assertTrue(result["purged"])
+        self.assertEqual(result["backend"], "r2")
+        self.assertTrue(calls)
+        delete_record.assert_called_once_with("upload-1")
+
     def test_material_delete_failure_keeps_db_row_and_maps_to_502(self):
         def fail(_value):
             raise RuntimeError("provider unavailable")
