@@ -134,6 +134,14 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             "主要瓶頸",
             "影音時長校準",
             "唯讀容量情境",
+            "Prediction Calibration / Forecast 回測",
+            "已回測預測",
+            "中位絕對誤差",
+            "P95 涵蓋率",
+            "預測偏差",
+            "原始 ",
+            "回測後",
+            "未實際提交的 What-if 不列入評分",
         ):
             self.assertIn(marker, self.source)
         self.assertIn("Date.now()-cached.loadedAt<60000", self.source)
