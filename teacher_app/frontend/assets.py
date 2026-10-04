@@ -53,6 +53,7 @@ ASSET_MANIFEST = {
             "/teacher-media-audio-1014.js",
             "/teacher-media-subtitle-1014.js",
             "/teacher-ai-presentation-1016.js",
+            "/teacher-ai-presentation-editor-f5.js",
             "/teacher-ai-video-1015.js",
             "/teacher-media-mvp-status-1014.js",
             "/teacher-media-status-fix-1014.js",
