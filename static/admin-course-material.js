@@ -87,9 +87,57 @@
       return `${meta[0]} ${meta[1]}`;
   }
 
+  function canSystemPurgeMaterial(){
+      const r=window.TeacherRBAC681||{};
+      const roles=r.roles instanceof Set?r.roles:new Set(Array.isArray(r.roles)?r.roles:[]);
+      return roles.has('system_admin')&&typeof r.hasPermission==='function'&&r.hasPermission('system.manage');
+  }
+
   function adminHubMaterialRow(m){
       const version=Math.max(1,Number(m.currentVersion||1));
-      return `<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.title||m.filename||'未命名教材')}</div><span class="rounded-full bg-white border border-slate-200 px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${version}</span></div><div class="text-[10px] text-slate-500 mt-1">${adminMaterialTypeBadge(m)}${m.categoryLabel?' · 對應：'+escapeHtml(m.categoryLabel):''}${m.active===false?' · 已停用':''}</div></div>${m.isBuiltin?'':`<div class="flex flex-wrap gap-1.5 shrink-0"><button data-csp-click="editAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white">管理教材</button><button data-csp-click="prepareMaterialVersionUpload('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-teal-700 text-white">上傳新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700">版本紀錄</button><button data-csp-click="toggleAdminMaterial('${m.id}',${m.active?'false':'true'})" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-amber-500 text-white">${m.active?'停用':'啟用'}</button></div>`}</div>`;
+      return `<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.title||m.filename||'未命名教材')}</div><span class="rounded-full bg-white border border-slate-200 px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${version}</span></div><div class="text-[10px] text-slate-500 mt-1">${adminMaterialTypeBadge(m)}${m.categoryLabel?' · 對應：'+escapeHtml(m.categoryLabel):''}${m.active===false?' · 已停用':''}</div></div>${m.isBuiltin?'':`<div class="flex flex-wrap gap-1.5 shrink-0"><button data-csp-click="editAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white">管理教材</button><button data-csp-click="prepareMaterialVersionUpload('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-teal-700 text-white">上傳新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700">版本紀錄</button><button data-csp-click="toggleAdminMaterial('${m.id}',${m.active?'false':'true'})" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-amber-500 text-white">${m.active?'停用':'啟用'}</button>${canSystemPurgeMaterial()?`<button type="button" data-material-purge-check="${escapeHtml(m.id||'')}" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-white text-rose-700">永久清除…</button>`:''}</div>`}</div>`;
+  }
+
+  function ensureMaterialPurgeDialog(){
+      let dialog=document.getElementById('material-purge-dialog');
+      if(dialog)return dialog;
+      dialog=document.createElement('dialog');dialog.id='material-purge-dialog';dialog.className='v561-profile-dialog';
+      dialog.innerHTML='<form class="v561-profile-card" method="dialog"><div class="v561-profile-head"><div><strong>永久清除教材</strong><span>僅系統管理員可使用；此操作會刪除實體儲存。</span></div><button type="button" data-purge-close aria-label="關閉">×</button></div><div data-purge-body class="space-y-3"></div><div class="v561-profile-actions"><button type="button" class="secondary" data-purge-close>關閉</button><button type="button" data-purge-submit class="hidden">永久清除</button></div></form>';
+      document.body.appendChild(dialog);
+      dialog.querySelectorAll('[data-purge-close]').forEach(button=>button.addEventListener('click',()=>dialog.close()));
+      dialog.querySelector('[data-purge-submit]')?.addEventListener('click',async()=>{
+          const state=dialog._purgeState||{},input=dialog.querySelector('[data-purge-confirmation]');
+          if(!state.token||!input)return;
+          const button=dialog.querySelector('[data-purge-submit]');button.disabled=true;button.textContent='永久清除中…';
+          try{
+              const response=await fetch('/api/slides/'+encodeURIComponent(state.id)+'/purge',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmationToken:state.token,confirmationText:input.value})});
+              const data=await response.json().catch(()=>({}));
+              if(!response.ok)throw new Error(data.error||'永久清除失敗');
+              dialog.close();await window.fetchAdminMaterials?.();await renderAdminCourseMaterialHub(true);
+          }catch(error){const status=dialog.querySelector('[data-purge-status]');if(status)status.textContent='❌ '+(error.message||'永久清除失敗');button.disabled=false;button.textContent='永久清除';}
+      });
+      return dialog;
+  }
+
+  async function inspectMaterialPurge(materialId){
+      if(!canSystemPurgeMaterial())return;
+      const dialog=ensureMaterialPurgeDialog(),body=dialog.querySelector('[data-purge-body]'),submit=dialog.querySelector('[data-purge-submit]');
+      dialog._purgeState={id:materialId,token:''};submit?.classList.add('hidden');
+      body.innerHTML='<div class="text-xs text-slate-500">正在重新檢查版本、PowerPoint、影片與發布引用…</div>';
+      if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
+      try{
+          const response=await fetch('/api/slides/'+encodeURIComponent(materialId)+'/purge-readiness',{credentials:'same-origin',cache:'no-store'});
+          const data=await response.json().catch(()=>({});
+          if(!response.ok)throw new Error(data.error||'無法檢查永久清除條件');
+          const blockers=Array.isArray(data.blockers)?data.blockers:[];
+          if(!data.purgeAllowed){
+              body.innerHTML='<div class="rounded-xl border border-amber-200 bg-amber-50 p-3"><b class="text-sm text-amber-900">目前不能永久清除</b><p class="mt-1 text-xs text-amber-800">仍有 '+Number(data.blockerCount||0)+' 筆引用。請先保留此教材，避免破壞歷史紀錄或已產生內容。</p></div><div class="space-y-1">'+blockers.map(item=>'<div class="text-xs text-slate-600">'+escapeHtml(item.type||'reference')+'：'+Number(item.count||0)+' 筆'+(item.artifactCount?'（artifact '+Number(item.artifactCount)+'）':'')+'</div>').join('')+'</div>';
+              return;
+          }
+          dialog._purgeState={id:materialId,token:data.confirmationToken||''};
+          body.innerHTML='<div class="rounded-xl border border-rose-200 bg-rose-50 p-3"><b class="text-sm text-rose-900">引用檢查已通過</b><p class="mt-1 text-xs text-rose-800">確認權杖僅短時間有效。送出時伺服器會再次檢查所有引用。</p></div><label class="block text-xs font-bold text-slate-700">輸入教材名稱「'+escapeHtml(data.confirmationText||materialId)+'」確認<input data-purge-confirmation autocomplete="off" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></label><p data-purge-status class="text-xs text-slate-500">永久清除後無法從教材版本歷程復原。</p>';
+          submit?.classList.remove('hidden');
+      }catch(error){body.innerHTML='<div class="text-xs text-rose-700">❌ '+escapeHtml(error.message||'檢查失敗')+'</div>';}
   }
 
   function learningAssignmentAudienceLabel(item){
@@ -192,6 +240,17 @@
       if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();else dialog.setAttribute('open','');
   }
 
+  function bindMaterialPurgeControls(box){
+      if(!box||box.dataset.materialPurgeBound==='1')return;
+      box.dataset.materialPurgeBound='1';
+      box.addEventListener('click',event=>{
+          const button=event.target.closest?.('[data-material-purge-check]');
+          if(!button)return;
+          event.preventDefault();event.stopPropagation();
+          inspectMaterialPurge(button.dataset.materialPurgeCheck||'');
+      });
+  }
+
   function bindLearningAssignmentControls(box,state){
       box._learningAssignmentState=state;
       if(box.dataset.learningAssignmentBound==='1')return;
@@ -239,6 +298,7 @@
 
   function paintAdminCourseMaterialHub(box,state){
       if(!box)return;
+      bindMaterialPurgeControls(box);
       const {area,group}=state;
       const courses=Array.isArray(state.courses)?state.courses:[];
       const visibleLimit=Math.max(30,Number(box.dataset.courseVisibleLimit)||30);
