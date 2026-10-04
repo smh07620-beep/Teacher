@@ -50,8 +50,13 @@ def sanitize_provenance(value: Mapping[str, Any] | None) -> dict[str, Any]:
         revision_number = int(payload.get("revisionNumber") or 1)
     except (TypeError, ValueError):
         revision_number = 1
+    try:
+        source_material_version = int(payload.get("sourceMaterialVersion") or 0)
+    except (TypeError, ValueError):
+        source_material_version = 0
     result = {
         "sourceMaterialId": clean(payload.get("sourceMaterialId"), 120),
+        "sourceMaterialVersion": max(0, min(100000, source_material_version)),
         "sourceDraftId": clean(payload.get("sourceDraftId"), 120),
         "sourceJobId": clean(payload.get("sourceJobId"), 120),
         "sourceChunkIds": [clean(item, 160) for item in list(payload.get("sourceChunkIds") or [])[:30]],

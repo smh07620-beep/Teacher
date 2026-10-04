@@ -398,9 +398,50 @@ def register_ai_presentation_routes(owner):
         if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
         item, denied = load_scoped(presentation_id, user)
         if denied: return denied
+        provenance = repository.sanitize_provenance(item.get("provenance") or {})
+        source_material = material_repository.get_material(str(provenance.get("sourceMaterialId") or ""))
+        source_draft = media_script_repository.get_script(str(provenance.get("sourceDraftId") or ""))
+        template = repository.get_template(str(provenance.get("templateId") or "")) if provenance.get("templateId") else None
+        captured_version = int(provenance.get("sourceMaterialVersion") or 0)
+        current_version = int((source_material or {}).get("currentVersion") or 0)
         return jsonify({
-            "presentationId": item.get("id"), "presentationFamilyId": item.get("presentationFamilyId"),
-            "revisionNumber": item.get("revisionNumber"), "provenance": item.get("provenance") or {},
+            "presentationId": item.get("id"),
+            "presentationFamilyId": item.get("presentationFamilyId"),
+            "revisionNumber": item.get("revisionNumber"),
+            "provenance": provenance,
+            "trace": {
+                "sourceMaterial": {
+                    "id": str((source_material or {}).get("id") or provenance.get("sourceMaterialId") or ""),
+                    "title": str((source_material or {}).get("title") or ""),
+                    "courseId": str((source_material or {}).get("courseId") or ""),
+                    "capturedVersion": captured_version,
+                    "currentVersion": current_version,
+                    "versionChanged": bool(captured_version and current_version and captured_version != current_version),
+                },
+                "sourceDraft": {
+                    "id": str((source_draft or {}).get("id") or provenance.get("sourceDraftId") or ""),
+                    "title": str((source_draft or {}).get("title") or ""),
+                    "status": str((source_draft or {}).get("status") or ""),
+                    "approvedBy": str((source_draft or {}).get("approvedBy") or provenance.get("teacherApprovedBy") or ""),
+                    "approvedAt": str((source_draft or {}).get("approvedAt") or provenance.get("teacherApprovedAt") or ""),
+                },
+                "rag": {
+                    "chunkCount": len(list(provenance.get("sourceChunkIds") or [])),
+                    "chunkIds": list(provenance.get("sourceChunkIds") or []),
+                },
+                "ai": {
+                    "provider": str(provenance.get("provider") or item.get("provider") or ""),
+                    "model": str(provenance.get("model") or item.get("model") or ""),
+                },
+                "template": {
+                    "id": str((template or {}).get("id") or provenance.get("templateId") or ""),
+                    "name": str((template or {}).get("name") or ""),
+                },
+                "approval": {
+                    "teacher": str(provenance.get("teacherApprovedBy") or ""),
+                    "at": str(provenance.get("teacherApprovedAt") or ""),
+                },
+            },
         })
 
     @app.get("/api/ai-presentations/<presentation_id>/history")

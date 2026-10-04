@@ -505,7 +505,9 @@ def _source_context(draft: dict, source: dict, *, template_id: str = "", revisio
         if value.strip():
             chunk_ids.append(value.strip())
     return {
-        "sourceMaterialId": str(source.get("id") or ""), "sourceDraftId": str(draft.get("id") or ""),
+        "sourceMaterialId": str(source.get("id") or ""),
+        "sourceMaterialVersion": max(1, int(source.get("currentVersion") or 1)),
+        "sourceDraftId": str(draft.get("id") or ""),
         "sourceJobId": str(draft.get("sourceJobId") or ""), "sourceChunkIds": chunk_ids,
         "provider": str(draft.get("provider") or ""), "model": str(draft.get("model") or ""),
         "templateId": str(template_id or ""), "teacherApprovedBy": str(draft.get("approvedBy") or ""),
