@@ -256,7 +256,29 @@
     const status=document.getElementById('admin-upload-status');
     if(status)status.innerHTML='🧾 準備更新「'+escapeHtml(material.title||material.filename||'教材')+'」：V'+Number(material.currentVersion||1)+' → V'+(Number(material.currentVersion||1)+1)+'<span class="block text-[11px] text-slate-500 mt-1">請只選擇 1 個新版檔案；取消選檔後不會保留這次更新目標。</span>';
     input?.scrollIntoView?.({behavior:'smooth',block:'center'});
-    input?.click?.();
+    if(input){
+      let pickerResolved=false;
+      const clearCancelledTarget=()=>{
+        window.setTimeout(()=>{
+          if(pickerResolved)return;
+          if(!input.files?.length){
+            explicitVersionTarget=null;
+            if(status)status.innerHTML='已取消上傳新版；未保留任何教材更新目標。';
+          }
+        },0);
+      };
+      const onSelection=()=>{
+        pickerResolved=true;
+        window.removeEventListener('focus',clearCancelledTarget);
+        if(!input.files?.length){
+          explicitVersionTarget=null;
+          if(status)status.innerHTML='已取消上傳新版；未保留任何教材更新目標。';
+        }
+      };
+      input.addEventListener('change',onSelection,{once:true});
+      window.addEventListener('focus',clearCancelledTarget,{once:true});
+      input.click();
+    }
   };
 
   window.adminUploadMaterials = async function(){
