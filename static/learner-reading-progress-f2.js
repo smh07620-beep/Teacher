@@ -59,7 +59,12 @@
       const response=await fetch('/api/learning-progress',{credentials:'same-origin',cache:'no-store'});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)return;
-      (data.items||[]).forEach(item=>cache.set(String(item.materialId||''),item));
+      (data.items||[]).forEach(item=>{
+        const id=String(item.materialId||'');
+        cache.set(id,item);
+        if(item.completed)window.LearnerMaterialProgress?.syncComplete?.(id,item.lastViewedAt||true);
+        else if(item.retrainingRequired)window.LearnerMaterialProgress?.syncComplete?.(id,false);
+      });
       paint();
     }catch(_){}
   }
@@ -78,8 +83,11 @@
   window.addEventListener('smartLearning67:progress',event=>{
     const item=event.detail||{};
     if(item.materialId)cache.set(String(item.materialId),item);
-    if(item.completed&&item.materialId&&window.myCompletedMaterials){
-      window.myCompletedMaterials[item.materialId]=item.lastViewedAt||true;
+    if(item.materialId&&item.completed){
+      window.LearnerMaterialProgress?.syncComplete?.(item.materialId,item.lastViewedAt||true);
+      window.dispatchEvent(new CustomEvent('teacher66:material-complete',{detail:{materialId:item.materialId}}));
+    }else if(item.materialId&&item.retrainingRequired){
+      window.LearnerMaterialProgress?.syncComplete?.(item.materialId,false);
     }
     paint();
   });

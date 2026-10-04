@@ -285,8 +285,13 @@ function teachingNextMedia() {
 
         return Boolean(
             id
-            && window.myCompletedMaterials
-            && window.myCompletedMaterials[id]
+            && (
+                window.LearnerMaterialProgress?.isComplete?.(id)
+                || (
+                    window.myCompletedMaterials
+                    && window.myCompletedMaterials[id]
+                )
+            )
         );
     }
 

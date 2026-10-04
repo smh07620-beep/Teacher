@@ -979,7 +979,17 @@ async function markMaterialComplete(materialId){
 }
 
 window.LearnerMaterialProgress = Object.freeze({
-    complete: markMaterialComplete
+    complete: markMaterialComplete,
+    isComplete(materialId){
+        return Boolean(myCompletedMaterials[String(materialId||'')]);
+    },
+    syncComplete(materialId, completedAt){
+        const id=String(materialId||'');
+        if(!id)return false;
+        if(completedAt)myCompletedMaterials[id]=completedAt;
+        else delete myCompletedMaterials[id];
+        return Boolean(myCompletedMaterials[id]);
+    }
 });
 
 function buildProgressCourseCard(c){
