@@ -189,25 +189,7 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
     try:
         draw_count = max(0, int(data.get("drawCount", entry.get("drawCount", 0)) or 0))
     except (TypeError, ValueError):
-        exam_window = exam_windows.get_window(category_id)
-    opens_at = str((exam_window or {}).get("opens_at") or "").strip()
-    closes_at = str((exam_window or {}).get("closes_at") or "").strip()
-    if not opens_at or not closes_at:
-        raise _fail("ASSESSMENT_WINDOW_REQUIRED", "發布前必須設定開始時間與最後考核日期", 409)
-    try:
-        opens_dt = datetime.datetime.fromisoformat(opens_at.replace("Z", "+00:00"))
-        closes_dt = datetime.datetime.fromisoformat(closes_at.replace("Z", "+00:00"))
-        if opens_dt.tzinfo is None:
-            opens_dt = opens_dt.replace(tzinfo=datetime.timezone.utc)
-        if closes_dt.tzinfo is None:
-            closes_dt = closes_dt.replace(tzinfo=datetime.timezone.utc)
-    except ValueError:
-        raise _fail("ASSESSMENT_WINDOW_INVALID", "考核時間格式不正確，請重新設定", 409)
-    if opens_dt >= closes_dt:
-        raise _fail("ASSESSMENT_WINDOW_INVALID", "最後考核日期必須晚於開始時間", 409)
-    if closes_dt <= datetime.datetime.now(datetime.timezone.utc):
-        raise _fail("ASSESSMENT_WINDOW_CLOSED", "最後考核日期必須晚於目前時間", 409)
-    draw_count = max(0, int(entry.get("drawCount", 0) or 0))
+        draw_count = max(0, int(entry.get("drawCount", 0) or 0))
     try:
         passing_score = max(1, min(100, int(data.get("passingScore", entry.get("passingScore", 80)) or 80)))
     except (TypeError, ValueError):
@@ -402,6 +384,24 @@ def publish_category(base, category_id: str, *, publisher: str = "") -> dict:
             raise _fail("ASSESSMENT_QUOTA_REQUIRED", "題型配額模式至少需要設定 1 題", 409)
         if quota_total > len(questions):
             raise _fail("ASSESSMENT_QUOTA_EXCEEDS_BANK", "題型配額總數不可大於目前啟用題目數", 409)
+    exam_window = exam_windows.get_window(category_id)
+    opens_at = str((exam_window or {}).get("opens_at") or "").strip()
+    closes_at = str((exam_window or {}).get("closes_at") or "").strip()
+    if not opens_at or not closes_at:
+        raise _fail("ASSESSMENT_WINDOW_REQUIRED", "發布前必須設定開始時間與最後考核日期", 409)
+    try:
+        opens_dt = datetime.datetime.fromisoformat(opens_at.replace("Z", "+00:00"))
+        closes_dt = datetime.datetime.fromisoformat(closes_at.replace("Z", "+00:00"))
+        if opens_dt.tzinfo is None:
+            opens_dt = opens_dt.replace(tzinfo=datetime.timezone.utc)
+        if closes_dt.tzinfo is None:
+            closes_dt = closes_dt.replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        raise _fail("ASSESSMENT_WINDOW_INVALID", "考核時間格式不正確，請重新設定", 409)
+    if opens_dt >= closes_dt:
+        raise _fail("ASSESSMENT_WINDOW_INVALID", "最後考核日期必須晚於開始時間", 409)
+    if closes_dt <= datetime.datetime.now(datetime.timezone.utc):
+        raise _fail("ASSESSMENT_WINDOW_CLOSED", "最後考核日期必須晚於目前時間", 409)
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     publisher = str(publisher or _compat_actor_label(base)).strip()[:100]
     if not publisher:
