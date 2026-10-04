@@ -413,6 +413,15 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         )
         if not job: return jsonify({"job": None})
         _heartbeat(runtime, worker_id, body.get("capabilities"), job["id"], body)
+        try:
+            from teacher_app.operations import history as operational_history
+            operational_history.record_forecast_prediction_for_job(job)
+        except Exception as exc:
+            LOGGER.warning(
+                "forecast prediction claim hook failed job_id=%s error_type=%s",
+                str(job.get("id") or "")[:120],
+                type(exc).__name__,
+            )
         response = {"id": job["id"], "workerId": worker_id, "attempts": job["attempts"], "maxAttempts": job["maxAttempts"], "materialId": job["materialId"], "originalName": job["originalName"], "sourceBytes": job["sourceBytes"], "sourceSha256": job["sourceSha256"], "payload": job.get("payload") or {}, "stagingBackend": job.get("stagingBackend")}
         if job.get("stagingBackend") == "r2":
             response["downloadUrl"] = runtime.r2_client_factory().generate_presigned_url("get_object", Params={"Bucket": str(_runtime_value(runtime.r2_bucket_name) or ""), "Key": job.get("stagingKey", "")}, ExpiresIn=int(_runtime_value(runtime.worker_url_ttl_seconds)))
