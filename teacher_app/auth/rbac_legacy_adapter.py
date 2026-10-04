@@ -24,6 +24,7 @@ LEGACY_ENDPOINT_POLICIES = {
     "api_delete_slide": ("material.manage", "scoped"),
     "api_list_material_versions": ("material.manage", "scoped"),
     "api_publish_material_version": ("material.manage", "scoped"),
+    "api_restore_material_version": ("material.manage", "scoped"),
     "material_upload_init": ("material.manage", "scoped"),
     "material_upload_complete": ("material.manage", "scoped"),
     "material_upload_abort": ("material.manage", "scoped"),
