@@ -33,7 +33,13 @@ def init_schema(conn: Any, kind: str) -> None:
             estimated_minutes INTEGER NOT NULL DEFAULT 0,
             start_date TEXT NOT NULL DEFAULT '',
             end_date TEXT NOT NULL DEFAULT '',
-            material_order TEXT NOT NULL DEFAULT '[]'
+            material_order TEXT NOT NULL DEFAULT '[]',
+            lifecycle_status TEXT NOT NULL DEFAULT 'published',
+            published_at TEXT NOT NULL DEFAULT '',
+            ended_at TEXT NOT NULL DEFAULT '',
+            archived_at TEXT NOT NULL DEFAULT '',
+            lifecycle_updated_at TEXT NOT NULL DEFAULT '',
+            lifecycle_updated_by TEXT NOT NULL DEFAULT ''
         )
         """
     )
@@ -44,6 +50,12 @@ def init_schema(conn: Any, kind: str) -> None:
         "start_date": "start_date TEXT NOT NULL DEFAULT ''",
         "end_date": "end_date TEXT NOT NULL DEFAULT ''",
         "material_order": "material_order TEXT NOT NULL DEFAULT '[]'",
+        "lifecycle_status": "lifecycle_status TEXT NOT NULL DEFAULT 'published'",
+        "published_at": "published_at TEXT NOT NULL DEFAULT ''",
+        "ended_at": "ended_at TEXT NOT NULL DEFAULT ''",
+        "archived_at": "archived_at TEXT NOT NULL DEFAULT ''",
+        "lifecycle_updated_at": "lifecycle_updated_at TEXT NOT NULL DEFAULT ''",
+        "lifecycle_updated_by": "lifecycle_updated_by TEXT NOT NULL DEFAULT ''",
     }
     for name, definition in definitions.items():
         if name in existing:
