@@ -11,6 +11,7 @@ from teacher_app.common import scope
 from teacher_app.courses import repository as course_repository
 from teacher_app.learning import access as learning_access
 from teacher_app.learning import completion as completion_rules
+from teacher_app.learning import repository as learning_repository
 from teacher_app.learning import versioning
 from teacher_app.materials import repository as material_repository
 
@@ -176,6 +177,13 @@ def my_progress(
         ).fetchall()
         records = [record_to_dict(row) for row in record_rows]
 
+    try:
+        smart_progress_rows = learning_repository.list_progress_for_user(
+            str(user.get("username") or "").strip().lower()
+        )
+    except Exception:
+        smart_progress_rows = []
+
     courses = course_repository.list_courses(
         normalized_area,
         normalized_group,
@@ -190,16 +198,35 @@ def my_progress(
     allowed_material_ids = {
         str(item.get("id") or "") for item in materials if item.get("id")
     }
-    valid_completed_ids, stale_completed_ids = versioning.valid_completed_material_ids(
+    legacy_valid_ids, legacy_stale_ids = versioning.valid_completed_material_ids(
         materials,
         progress_rows,
     )
+    smart_completed_rows = [
+        row for row in smart_progress_rows
+        if bool(row.get("completed", False))
+    ]
+    smart_valid_ids, smart_stale_ids = versioning.valid_completed_material_ids(
+        materials,
+        smart_completed_rows,
+    )
+    valid_completed_ids = legacy_valid_ids | smart_valid_ids
+    stale_completed_ids = (legacy_stale_ids | smart_stale_ids) - valid_completed_ids
     completed = {
         str(dict(row)["material_id"]): dict(row)["completed_at"]
         for row in progress_rows
         if str(dict(row).get("material_id") or "") in allowed_material_ids
         and str(dict(row).get("material_id") or "") in valid_completed_ids
     }
+    for row in smart_completed_rows:
+        material_id = str(row.get("material_id") or "")
+        if material_id in allowed_material_ids and material_id in smart_valid_ids:
+            completed[material_id] = str(
+                row.get("completed_at")
+                or row.get("last_viewed_at")
+                or completed.get(material_id)
+                or ""
+            )
     categories = assessment_repository.list_categories(
         normalized_group,
         normalized_area,

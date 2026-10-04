@@ -11,6 +11,7 @@ from teacher_app.courses import repository as course_repository
 from teacher_app.learning import access as learning_access
 from teacher_app.learning import assignment_service
 from teacher_app.learning import completion as completion_rules
+from teacher_app.learning import repository as learning_repository
 from teacher_app.learning import versioning
 from teacher_app.learning.progress_service import assessment_to_dict, record_to_dict
 from teacher_app.materials import repository as material_repository
@@ -67,6 +68,13 @@ def dashboard_summary(
             (emp_id,),
         ).fetchall()
 
+    try:
+        smart_progress_rows = learning_repository.list_progress_for_user(
+            str(user.get("username") or "").strip().lower()
+        )
+    except Exception:
+        smart_progress_rows = []
+
     all_records = [record_to_dict(row) for row in record_rows]
     assessments = [assessment_to_dict(row) for row in assessment_rows]
     display_name = requested_name
@@ -88,10 +96,47 @@ def dashboard_summary(
         if item.get("active", True)
     ]
     all_courses = course_repository.list_courses(None, None, False)
-    completed_material_ids, stale_completed_material_ids = versioning.valid_completed_material_ids(
+    legacy_completed_ids, legacy_stale_ids = versioning.valid_completed_material_ids(
         all_materials,
         progress_rows,
     )
+    smart_completed_rows = [
+        row for row in smart_progress_rows
+        if bool(row.get("completed", False))
+    ]
+    smart_completed_ids, smart_stale_ids = versioning.valid_completed_material_ids(
+        all_materials,
+        smart_completed_rows,
+    )
+    completed_material_ids = legacy_completed_ids | smart_completed_ids
+    stale_completed_material_ids = (
+        legacy_stale_ids | smart_stale_ids
+    ) - completed_material_ids
+    material_lookup = {
+        str(item.get("id") or ""): item
+        for item in all_materials
+        if item.get("id")
+    }
+    smart_progress_by_id = {}
+    for row in smart_progress_rows:
+        material_id = str(row.get("material_id") or "")
+        material = material_lookup.get(material_id)
+        if not material:
+            continue
+        raw_completed = bool(row.get("completed", False))
+        stale = raw_completed and not versioning.completion_is_current(
+            material,
+            row.get("completed_version", 1),
+        )
+        try:
+            progress_value = max(0.0, min(100.0, float(row.get("progress") or 0)))
+        except (TypeError, ValueError):
+            progress_value = 0.0
+        smart_progress_by_id[material_id] = {
+            "progress": 0.0 if stale else progress_value,
+            "lastViewedAt": str(row.get("last_viewed_at") or ""),
+            "retrainingRequired": stale,
+        }
 
     assignments = assignment_service.list_for_user(user)
     assignment_mode = bool(assignments)
@@ -311,6 +356,8 @@ def dashboard_summary(
                 "courseId": str(material.get("courseId") or ""),
                 "retrainingRequired": material_id in retraining_ids,
                 "requiredCompletionVersion": int(material.get("requiredCompletionVersion") or 1),
+                "progress": float((smart_progress_by_id.get(material_id) or {}).get("progress") or 0),
+                "lastViewedAt": str((smart_progress_by_id.get(material_id) or {}).get("lastViewedAt") or ""),
             }
         )
     pending_materials.sort(
@@ -319,6 +366,38 @@ def dashboard_summary(
             str(item.get("title") or ""),
         )
     )
+    pending_by_course: dict[str, list[dict]] = {}
+    for item in pending_materials:
+        pending_by_course.setdefault(str(item.get("courseId") or ""), []).append(item)
+    pending_exam_by_course = {
+        str(item.get("courseId") or ""): item
+        for item in pending_exams
+        if item.get("courseId")
+    }
+    for course in pending_courses:
+        course_id = str(course.get("id") or "")
+        candidates = pending_by_course.get(course_id, [])
+        candidates.sort(
+            key=lambda item: (
+                0 if item.get("retrainingRequired") else 1,
+                0 if float(item.get("progress") or 0) > 0 else 1,
+                -float(item.get("progress") or 0),
+                str(item.get("title") or ""),
+            )
+        )
+        if candidates:
+            resume = candidates[0]
+            course["nextKind"] = "retraining" if resume.get("retrainingRequired") else "material"
+            course["resumeMaterialId"] = str(resume.get("id") or "")
+            course["resumeMaterialTitle"] = str(resume.get("title") or "")
+            course["resumeProgress"] = float(resume.get("progress") or 0)
+        elif course.get("examRequired") and not course.get("examPassed"):
+            exam = pending_exam_by_course.get(course_id) or {}
+            if exam:
+                course["nextKind"] = "exam"
+                course["resumeExamId"] = str(exam.get("id") or "")
+                course["resumeExamTitle"] = str(exam.get("title") or "")
+
     retraining_version_keys = [
         f"{material_id}@{int(material_by_id.get(material_id, {}).get('requiredCompletionVersion') or 1)}"
         for material_id in sorted(retraining_ids)
