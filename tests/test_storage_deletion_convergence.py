@@ -152,10 +152,11 @@ class StorageDeletionConvergenceTests(unittest.TestCase):
         base = self._material_base(lambda value: calls.append(value))
         entry = {"id": "upload-1", "folder": "upload-1", "storageBackend": "r2", "storageKey": "materials/upload-1/source.pdf"}
         graph = {"materialId": "upload-1", "purgeAllowed": True, "blockers": []}
+        runtime = type("Runtime", (), {"delete_adapters": lambda self, **kwargs: base.storage_delete_adapters(**kwargs)})()
         with patch.object(material_service.repository, "get_material", return_value=entry), patch.object(
             material_service.repository, "material_artifact_reference_graph", return_value=graph
         ), patch.object(material_service.repository, "delete_material_record") as delete_record:
-            result = material_service.purge_material_storage("upload-1", paths=base)
+            result = material_service.purge_material_storage("upload-1", paths=base, storage_runtime=runtime)
         self.assertTrue(result["purged"])
         self.assertEqual(result["backend"], "r2")
         self.assertTrue(calls)
