@@ -269,6 +269,40 @@ class OperationalMetrics0110Tests(unittest.TestCase):
         self.assertEqual(dict(row)["event_type"], "opened")
         self.assertEqual(dict(row)["error_code"], "R2_STORAGE")
 
+    def test_capacity_what_if_api_is_system_admin_only(self):
+        app = Flask(__name__)
+        app.config.update(TESTING=True, SECRET_KEY="test")
+        owner = SimpleNamespace(app=app, _current_user=lambda: SYSTEM_USER)
+        register_notification_state_routes(owner)
+        client = app.test_client()
+
+        with patch(
+            "teacher_app.command_center.notification_routes.operational_history.simulate_capacity_what_if",
+            return_value={"available": True, "peakBacklogJobs": 13},
+        ) as simulator:
+            response = client.get(
+                "/api/operational-capacity-simulation"
+                "?documentCount=10&documentPages=20"
+                "&mediaCount=3&mediaMinutes=30"
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["available"])
+        simulator.assert_called_once()
+        scenario = simulator.call_args.args[0]
+        self.assertEqual(scenario["documentCount"], "10")
+        self.assertEqual(scenario["documentPages"], "20")
+        self.assertEqual(scenario["mediaCount"], "3")
+        self.assertEqual(scenario["mediaMinutes"], "30")
+
+        learner_app = Flask(__name__)
+        learner_app.config.update(TESTING=True, SECRET_KEY="test")
+        learner_owner = SimpleNamespace(app=learner_app, _current_user=lambda: LEARNER)
+        register_notification_state_routes(learner_owner)
+        denied = learner_app.test_client().get(
+            "/api/operational-capacity-simulation?documentCount=1"
+        )
+        self.assertEqual(denied.status_code, 403)
+
     def test_operational_metrics_api_is_system_admin_only(self):
         app = Flask(__name__)
         app.config.update(TESTING=True, SECRET_KEY="test")
