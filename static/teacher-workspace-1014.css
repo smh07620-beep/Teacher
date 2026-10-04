@@ -213,3 +213,21 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
     width: 100%;
   }
 }
+
+.teacher-assessment-step-1014 {
+  display: flex;
+  min-height: 2.4rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(224 231 255);
+  border-radius: .75rem;
+  background: rgb(238 242 255);
+  padding: .45rem .6rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 639px) {
+  #teacher-assessment-flow-1014 {
+    padding: 1rem;
+  }
+}
