@@ -110,6 +110,12 @@
     if(!audience)issues.push('適用人員未設定');
     if(questionCount<=0)issues.push('沒有可發布的題目');
     if(editingMeta?.reviewStatus!=='approved')issues.push('尚未完成審核');
+    const opensAt=document.getElementById('exam-settings-opens-at')?.value||'';
+    const closesAt=document.getElementById('exam-settings-closes-at')?.value||'';
+    if(!opensAt)issues.push('開始時間未設定');
+    if(!closesAt)issues.push('最後考核日期未設定');
+    if(opensAt&&closesAt&&new Date(opensAt)>=new Date(closesAt))issues.push('最後考核日期必須晚於開始時間');
+    if(closesAt&&new Date(closesAt)<=new Date())issues.push('最後考核日期必須晚於目前時間');
     const limited=document.getElementById('exam-draw-limited')?.checked;
     const drawCount=Math.max(0,Number(document.getElementById('exam-settings-draw-count')?.value||0));
     if(limited&&drawCount>questionCount)issues.push('抽題數超過目前題庫');
