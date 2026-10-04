@@ -32,11 +32,12 @@
     if (status()) status().textContent = '讀取考卷設定中…';
     await switchAdminSection('exam-settings', true); paintAdminWorkspaceNav('exams');
     try {
-      const [categoryResponse, courseResponse] = await Promise.all([
+      const [categoryResponse, courseResponse, windowResponse] = await Promise.all([
         fetch(`/api/quiz-categories/admin?group=${encodeURIComponent(group)}&area=${encodeURIComponent(area)}`, {}),
-        fetch(`/api/courses/admin?group=${encodeURIComponent(group)}&area=${encodeURIComponent(area)}`, {})
+        fetch(`/api/courses/admin?group=${encodeURIComponent(group)}&area=${encodeURIComponent(area)}`, {}),
+        fetch(`/api/exam-windows/${encodeURIComponent(catId)}`, {})
       ]);
-      const categories = await categoryResponse.json().catch(() => []), courses = await courseResponse.json().catch(() => []);
+      const categories = await categoryResponse.json().catch(() => []), courses = await courseResponse.json().catch(() => []), windowData = await windowResponse.json().catch(() => ({}));
       const category = (categories || []).find(item => item.id === catId); if (!category) throw new Error('找不到此考卷');
       editingMeta = {...category, group, area};
       document.getElementById('exam-settings-id').value = catId;
@@ -44,6 +45,11 @@
       document.getElementById('exam-settings-title').value = category.title || '';
       document.getElementById('exam-settings-desc').value = category.desc || '';
       document.getElementById('exam-settings-audience').value = category.audience || '';
+      const examWindow=windowData.window||{};
+      const localInput=value=>{if(!value)return ''; const date=new Date(value); if(Number.isNaN(date.getTime()))return ''; const pad=n=>String(n).padStart(2,'0'); return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;};
+      document.getElementById('exam-settings-opens-at').value=localInput(examWindow.opens_at);
+      document.getElementById('exam-settings-closes-at').value=localInput(examWindow.closes_at);
+      editingMeta.examWindow=examWindow;
       document.getElementById('exam-settings-passing-score').value = Number(category.passingScore || 80);
       document.getElementById('exam-settings-blind').checked = !!category.blindMode;
       const courseSelect = document.getElementById('exam-settings-course');
@@ -63,11 +69,13 @@
 
   function updateWorkflow(meta) {
     meta = meta || editingMeta || {};
+    const now=Date.now(), opens=meta.examWindow?.opens_at ? new Date(meta.examWindow.opens_at).getTime() : 0, closes=meta.examWindow?.closes_at ? new Date(meta.examWindow.closes_at).getTime() : 0;
+    const lifecycle=meta.active ? (opens&&now<opens?'scheduled':(closes&&now>closes?'closed':'open')) : '';
     const current = meta.active ? 'publish' : (meta.reviewStatus === 'approved' ? 'review' : 'settings');
     const order = {select:1, method:2, settings:3, review:4, publish:5};
     document.querySelectorAll('#exam-workflow-steps [data-stage]').forEach(element => { element.classList.toggle('is-done', order[element.dataset.stage] < (order[current] || 3)); element.classList.toggle('is-current', element.dataset.stage === current); });
     const workflowStatus = document.getElementById('exam-workflow-status');
-    if (workflowStatus) workflowStatus.textContent = meta.active ? `🚀 已發布${meta.publishedAt ? '・' + meta.publishedAt : ''}${meta.publicationHash ? '・快照 ' + meta.publicationHash.slice(0,10) : ''}` : (meta.reviewStatus === 'approved' ? `✅ 已由 ${meta.reviewerName || '審核者'} 審核，待發布` : '📝 草稿／設定中，完成預覽後請審核');
+    if (workflowStatus) workflowStatus.textContent = meta.active ? (lifecycle==='scheduled' ? '🕒 已發布・尚未開始' : lifecycle==='closed' ? '⏰ 已截止・等待批改／完成' : '🟢 進行中') + (meta.publicationHash ? '・快照 ' + meta.publicationHash.slice(0,10) : '') : (meta.reviewStatus === 'approved' ? `✅ 已由 ${meta.reviewerName || '審核者'} 審核，待發布` : '📝 草稿／設定中，完成預覽後請審核');
     const publish = document.getElementById('exam-publish-btn'); if (publish) publish.disabled = meta.reviewStatus !== 'approved' || !!meta.active;
   }
 
@@ -79,7 +87,7 @@
     const quotas = Object.fromEntries(types.map(type => [type, Math.max(0, parseInt(document.getElementById(`exam-quota-${type}`)?.value || '0', 10) || 0)]));
     if (quotaMode && Object.values(quotas).reduce((a,b) => a + b, 0) <= 0) { status().textContent = '❌ 題型配額至少要設定 1 題'; return; }
     const payload = {title, desc:document.getElementById('exam-settings-desc').value.trim(), audience:document.getElementById('exam-settings-audience').value.trim(), courseId:document.getElementById('exam-settings-course').value || '', drawCount:limited ? Math.max(1, parseInt(document.getElementById('exam-settings-draw-count').value || '1', 10) || 1) : 0, drawRules:quotaMode ? {mode:'type_quota', quotas} : {}, passingScore:Math.max(1, Math.min(100, parseInt(document.getElementById('exam-settings-passing-score').value || '80', 10) || 80)), blindMode:document.getElementById('exam-settings-blind').checked};
-    try { button.disabled = true; status().textContent = '⏳ 儲存設定中…'; const response = await fetch(`/api/quiz-categories/${catId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '修改失敗'); editingMeta = {...(editingMeta || {}), ...payload, reviewStatus:data.reviewStatus || 'draft', reviewerName:data.reviewerName || '', reviewedAt:data.reviewedAt || '', publishedAt:data.publishedAt || '', active:!!data.active}; invalidate(catId, editingMeta.group); clearExamDraft(catId); status().textContent = editingMeta.reviewStatus === 'draft' ? '✅ 設定已儲存；因內容已變更，考卷回到「待審核」狀態。' : '✅ 設定已儲存。'; updateWorkflow(editingMeta); } catch (error) { status().textContent = '❌ ' + error.message; } finally { button.disabled = false; }
+    try { button.disabled = true; status().textContent = '⏳ 儲存設定中…'; const opensAt=document.getElementById('exam-settings-opens-at')?.value||''; const closesAt=document.getElementById('exam-settings-closes-at')?.value||''; if(opensAt&&closesAt&&new Date(opensAt)>=new Date(closesAt))throw new Error('最後考核日期必須晚於開始日期'); const response = await fetch(`/api/quiz-categories/${catId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '修改失敗'); const windowResponse=await fetch(`/api/exam-windows/${catId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({opensAt,closesAt,reminderEnabled:true})}); const windowData=await windowResponse.json().catch(() => ({})); if(!windowResponse.ok)throw new Error(windowData.error||'考核時間儲存失敗'); editingMeta = {...(editingMeta || {}), ...payload, examWindow:windowData.window||{}, reviewStatus:data.reviewStatus || 'draft', reviewerName:data.reviewerName || '', reviewedAt:data.reviewedAt || '', publishedAt:data.publishedAt || '', active:!!data.active}; invalidate(catId, editingMeta.group); clearExamDraft(catId); status().textContent = editingMeta.reviewStatus === 'draft' ? '✅ 設定已儲存；因內容已變更，考卷回到「待審核」狀態。' : '✅ 設定已儲存。'; updateWorkflow(editingMeta); } catch (error) { status().textContent = '❌ ' + error.message; } finally { button.disabled = false; }
   }
 
   async function preview() {
