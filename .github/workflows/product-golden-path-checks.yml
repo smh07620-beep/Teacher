@@ -221,6 +221,21 @@ jobs:
           test ! -f material-fullstack-s3.pid || kill "$(cat material-fullstack-s3.pid)" || true
 
 
+  ai-media-production:
+    name: GP-09 AI teaching media production and publication path
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Source material → PowerPoint revision → provenance → video handoff → canonical material derivative history
+        run: python -m unittest discover -s tests -p 'test_f5_*.py' -v
+
+
   assignment-operational:
     name: GP-02 scoped course assignment path
     runs-on: ubuntu-latest
