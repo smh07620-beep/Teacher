@@ -232,16 +232,25 @@
       return !!box?.querySelector('[id^="qedit-"]:not(.hidden), textarea[id^="qedit-"]:focus, input[id^="qedit-"]:focus');
   }
 
+  function quizTeacherStatus78(c) {
+      const count=Number(c?.questionCount||0);
+      if(c?.active)return {label:'已發布',tone:'bg-emerald-50 text-emerald-700',next:'查看作答／待批改'};
+      if(c?.reviewStatus==='approved')return {label:'待發布',tone:'bg-sky-50 text-sky-700',next:'確認對象、期限後發布'};
+      if(count>0)return {label:'題目準備中',tone:'bg-indigo-50 text-indigo-700',next:'完成題目並送審'};
+      return {label:'草稿',tone:'bg-amber-100 text-amber-800',next:'新增或 AI 產生題目'};
+  }
+
   function quizCategoryCardHTML(c) {
+      const teacherStatus=quizTeacherStatus78(c);
       return `
           <article class="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden">
               <div class="p-4 flex items-start justify-between gap-3 flex-wrap bg-gradient-to-r from-white to-slate-50">
                   <div class="min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
                           <span class="font-black text-base text-slate-900 break-all">${escapeHtml(c.title)}</span>
-                          <span class="text-[11px] px-2 py-0.5 rounded-full ${c.active?'bg-emerald-50 text-emerald-700':(c.reviewStatus==='approved'?'bg-sky-50 text-sky-700':'bg-amber-100 text-amber-800')} font-bold">${c.active?'已發布':(c.reviewStatus==='approved'?'已審核・待發布':'草稿・待審核')}</span>${c.blindMode?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-slate-900 text-white font-bold">導師設定：盲測</span>':''}
+                          <span class="text-[11px] px-2 py-0.5 rounded-full ${teacherStatus.tone} font-bold">${teacherStatus.label}</span>${c.blindMode?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-slate-900 text-white font-bold">導師設定：盲測</span>':''}
                       </div>
-                      <div class="text-xs text-slate-500 mt-1">${escapeHtml(c.desc || '尚未填寫考卷說明')}</div>
+                      <div class="text-xs text-slate-500 mt-1">${escapeHtml(c.desc || '尚未填寫考卷說明')}</div><div class="mt-1 text-[10px] font-bold text-indigo-700">下一步：${escapeHtml(teacherStatus.next)}</div>
                       <div class="flex flex-wrap gap-1.5 mt-2"><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">👤 ${escapeHtml(examAudienceLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">🧠 題庫 ${Number(c.questionCount||0)} 題</span><span class="text-[10px] px-2 py-1 rounded-full bg-teal-50 text-teal-700">📋 ${escapeHtml(examDrawLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">🎯 及格 ${Number(c.passingScore||80)} 分</span>${c.publicationHash?`<span class="text-[10px] px-2 py-1 rounded-full bg-violet-50 text-violet-700" title="發布快照 SHA-256：${escapeHtml(c.publicationHash)}">🔒 快照 ${escapeHtml(c.publicationHash.slice(0,10))}</span>`:''}</div>
                   </div>
                   <div class="flex gap-2 shrink-0 items-center">
