@@ -352,7 +352,16 @@ def email_events(
         current = current.replace(tzinfo=dt.timezone.utc)
     current = current.astimezone(dt.timezone.utc)
     maximum = max(1, int(days))
-    checkpoints = tuple(sorted({int(value) for value in milestones if 0 < int(value) <= maximum}))
+    configured = tuple(sorted({int(value) for value in milestones if int(value) > 0}))
+    # A shortened EMAIL_REMINDER_DAYS value is a single configured horizon
+    # (legacy/operational behavior), not a request to emit every smaller
+    # canonical 7/3/1 milestone at once.  At the default/full horizon we keep
+    # the nearest canonical milestone so 7d, 3d and 1d reminders have distinct
+    # stable keys.
+    if configured and maximum < max(configured):
+        checkpoints = (maximum,)
+    else:
+        checkpoints = tuple(value for value in configured if value <= maximum)
     output = []
     for event in build_events(user, now=current)["items"]:
         if "email" not in event.get("channels", []):
