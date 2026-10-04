@@ -352,7 +352,7 @@ def email_events(
         current = current.replace(tzinfo=dt.timezone.utc)
     current = current.astimezone(dt.timezone.utc)
     maximum = max(1, int(days))
-    checkpoints = tuple(sorted({int(value) for value in milestones if 0 < int(value) <= maximum}, reverse=True))
+    checkpoints = tuple(sorted({int(value) for value in milestones if 0 < int(value) <= maximum}))
     output = []
     for event in build_events(user, now=current)["items"]:
         if "email" not in event.get("channels", []):
