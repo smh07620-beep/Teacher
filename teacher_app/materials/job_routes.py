@@ -225,6 +225,10 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
                     "atlasNormality": request.form.get("atlasNormality", "").strip()[:40],
                     "atlasTags": request.form.get("atlasTags", "").strip()[:300],
                     "materialId": material_id,
+                    "targetMaterialId": request.form.get("targetMaterialId", "").strip()[:100],
+                    "versionChangeReason": request.form.get("versionChangeReason", "").strip()[:1000],
+                    "requiresRetraining": request.form.get("requiresRetraining", "false").strip().lower() in {"1", "true", "yes", "on"},
+                    "uploadActor": "",
                     "sourceSha256": source_sha256,
                 }
                 staging_backend, staging_key, staging_path = runtime.upload_staging(
