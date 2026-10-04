@@ -218,6 +218,23 @@
     return data;
   }
 
+  async function loadEmailDeliveryHealth() {
+    try {
+      const response=await fetch('/api/email-delivery-health',{credentials:'same-origin',cache:'no-store'});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Email 通知健康狀態讀取失敗');
+      return data;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function renderEmailDeliveryHealth(data) {
+    if(!data)return '<section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><h5 class="font-black text-slate-900">✉️ Email 通知健康狀態</h5><p class="mt-2 text-xs text-slate-500">目前無法讀取寄送紀錄；不影響其他維運狀態。</p></section>';
+    const today=data.today||{}, failed=Number(today.failed||0);
+    return '<section id="email-delivery-health-70" class="rounded-2xl border '+(failed?'border-rose-200':'border-slate-200')+' bg-white p-4 shadow-sm"><div class="flex flex-wrap items-start justify-between gap-3"><div><h5 class="font-black text-slate-900">✉️ Email 通知健康狀態</h5><p class="mt-1 text-[11px] text-slate-500">7／3／1 天學習與考核提醒的實際寄送結果；失敗寄送會保留重試資格。</p></div><span class="rounded-full px-2 py-1 text-[10px] font-black '+(failed?'bg-rose-50 text-rose-700':'bg-emerald-50 text-emerald-700')+'">'+(failed?'需要檢查':'正常')+'</span></div><div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2"><div class="rounded-xl bg-slate-50 p-3"><div class="text-[10px] text-slate-500">今日嘗試</div><div class="text-xl font-black">'+Number(today.attempted||0)+'</div></div><div class="rounded-xl bg-emerald-50 p-3"><div class="text-[10px] text-emerald-700">成功事件</div><div class="text-xl font-black text-emerald-800">'+Number(today.sent||0)+'</div></div><div class="rounded-xl bg-rose-50 p-3"><div class="text-[10px] text-rose-700">失敗事件</div><div class="text-xl font-black text-rose-800">'+failed+'</div></div><div class="rounded-xl bg-slate-50 p-3"><div class="text-[10px] text-slate-500">最近寄送</div><div class="mt-1 text-xs font-bold">'+formatWhen(data.lastDeliveryAt)+'</div></div></div>'+(data.lastErrorType?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">最近失敗：'+escapeHtml(data.lastErrorType)+'</div>':'')+'</section>';
+  }
+
   async function loadOperationalMetrics(windowValue=sloWindow,force=false) {
     const cached=sloCache.get(windowValue);
     if(!force&&cached&&Date.now()-cached.loadedAt<60000)return cached.data;
@@ -833,7 +850,7 @@
       }
       if (!response.ok) throw new Error(data.error || `讀取失敗（${response.status}）`);
       await loadIncidentResponders();
-      const sloMetrics = await loadOperationalMetrics(sloWindow, force);
+      const [sloMetrics,emailHealth] = await Promise.all([loadOperationalMetrics(sloWindow, force),loadEmailDeliveryHealth()]);
       const workerStatusAvailable = data.workerStatusAvailable !== false;
       const workerStatusError = data.workerStatusError || '無法讀取本機 Worker 狀態，請稍後再試。';
       const workers = Array.isArray(data.workers) ? data.workers : [];
@@ -889,6 +906,7 @@
           ${operationalIssueHtml}
         </section>
         ${renderSloDashboard(sloMetrics)}
+        ${renderEmailDeliveryHealth(emailHealth)}
         <section id="worker-runtime-70" class="space-y-3 scroll-mt-4">
           <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
           ${workerBody}
