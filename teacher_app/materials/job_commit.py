@@ -32,6 +32,7 @@ def commit(job: dict, result: dict) -> dict:
     existing = material_repository.get_material(material_id)
     if existing:
         return existing
+    target_material_id = str(payload.get("targetMaterialId") or "").strip()
     backend = str(result.get("storageBackend") or "").lower()
     if backend not in {"mega", "gdrive", "r2", "oci", "local"}:
         raise ValueError("Worker 回報的儲存後端不合法。")
@@ -113,6 +114,30 @@ def commit(job: dict, result: dict) -> dict:
         ),
         "active": True,
     }
+    if target_material_id:
+        target = material_repository.get_material(target_material_id)
+        if not target:
+            raise ValueError("指定要更新版本的教材不存在。")
+        if target.get("group") != group_key or target.get("area") != training_area:
+            raise ValueError("新版教材的組別／訓練區域與原教材不一致。")
+        reason = str(payload.get("versionChangeReason") or "").strip()[:1000]
+        if not reason:
+            raise ValueError("建立教材新版時必須提供版本變更原因。")
+        requires_retraining = payload.get("requiresRetraining", False)
+        if type(requires_retraining) is not bool:
+            raise ValueError("教材新版的重新訓練設定格式不正確。")
+        published_by = str(payload.get("uploadActor") or "system:worker").strip()[:100]
+        updated = material_repository.replace_material_content_and_publish(
+            target_material_id,
+            content=entry,
+            published_by=published_by or "system:worker",
+            change_reason=reason,
+            requires_retraining=requires_retraining,
+        )
+        if not updated:
+            raise ValueError("指定要更新版本的教材不存在。")
+        return updated
+
     material_repository.insert_material(entry, ignore_conflict=True)
     return material_repository.get_material(material_id) or entry
 
