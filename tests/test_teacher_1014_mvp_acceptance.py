@@ -30,12 +30,13 @@ class Teacher1014MvpAcceptanceTests(unittest.TestCase):
     def test_acceptance_teacher_navigation_is_exactly_the_1014_first_cut(self):
         expected = (
             "📚 教材與課程",
-            "🎙️ 媒體製作",
             "📝 評量與出題",
             "📄 紙本文件與匯出",
         )
         for label in expected:
             self.assertIn(label, self.workspace)
+        self.assertNotIn("🎙️ 媒體製作", self.workspace)
+        self.assertIn("媒體製作收在教材工具內", self.workspace)
         for deferred in ("我的學員", "臨床技能評核", "能力追蹤", "教學分析"):
             self.assertNotIn(deferred, self.workspace)
         self.assertIn("navHost.replaceChildren(navGroup('教師工作台', buttons))", self.workspace)
