@@ -149,5 +149,13 @@ const cryptoNode = require('crypto');
             self.assertIn(f"fd.append('{field}'", source)
 
 
+    def test_explicit_version_picker_clears_target_on_cancel(self):
+        source = ROOT.joinpath('static', 'admin-material-upload.js').read_text(encoding='utf-8')
+        self.assertIn("window.addEventListener('focus',clearCancelledTarget,{once:true})", source)
+        self.assertIn("explicitVersionTarget=null", source)
+        self.assertIn("已取消上傳新版；未保留任何教材更新目標。", source)
+        self.assertIn("if(explicitVersionTarget&&files.length!==1)", source)
+
+
 if __name__ == '__main__':
     unittest.main()
