@@ -78,7 +78,7 @@
     const list = $('teacher-ai-video-results-1015');
     if (!list) return;
     if (!presentationId) {
-      list.textContent = '請先輸入已核准 PowerPoint revision ID。';
+      list.textContent = '請先選擇已核准 PowerPoint revision。';
       return;
     }
     try {

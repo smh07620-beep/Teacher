@@ -380,6 +380,28 @@
     syncSharedSource();
   }
 
+  window.addEventListener('teacher-ai-presentation-video-request', async event => {
+    const presentationId=String(event.detail?.presentationId||'');
+    const materialId=String(event.detail?.materialId||'');
+    if(!presentationId)return;
+    try { await window.TeacherWorkspace1014?.openMedia?.(); } catch (_) {}
+    install();
+    const shared=$('teacher-media-source-1018');
+    if(shared&&materialId&&[...shared.options].some(option=>option.value===materialId)){
+      shared.value=materialId;
+      syncSharedSource();
+    }
+    if(materialId)await refreshPresentationChoices(materialId);
+    const select=$('teacher-ai-video-presentation-1015');
+    if(select&&[...select.options].some(option=>option.value===presentationId)){
+      select.value=presentationId;
+      select.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    showMode('video');
+    const status=$('teacher-ai-video-status-1015');
+    if(status)status.textContent='已帶入核准 PowerPoint；選擇旁白聲音後即可建立教學影片。';
+    $('teacher-media-panel-video-1018')?.scrollIntoView?.({behavior:'smooth',block:'start'});
+  });
   window.addEventListener('teacher-media-source-options-1014', handleSourceOptions);
 
   async function hydrate(generation) {
