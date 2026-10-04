@@ -113,6 +113,7 @@ ASSET_MANIFEST = {
             "/product-convergence-101.js",
             "/teacher-action-queue-1024.js",
             "/teacher-learners-p2.js",
+            "/learner-reading-progress-f2.js",
         ),
     },
 }

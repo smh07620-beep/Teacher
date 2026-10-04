@@ -21,6 +21,16 @@ def get_progress(material_id: str, username: str) -> dict:
     return dict(row) if row else {}
 
 
+
+def list_progress_for_user(username: str) -> list[dict]:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        rows = conn.execute(
+            f"SELECT * FROM learning_progress WHERE username={ph} ORDER BY last_viewed_at DESC",
+            (username,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
 def upsert_progress(
     material_id: str,
     username: str,

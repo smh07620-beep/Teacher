@@ -136,17 +136,10 @@ def register_smart_learning(
             return None
         return material
 
-    @app.get("/api/learning-progress/<material_id>")
-    def learning_progress_get(material_id):
-        user, denied = _user(owner)
-        if denied:
-            return denied
-        material = visible_material(user, material_id)
-        if not material:
-            return jsonify({"error": "找不到教材"}), 404
-        data = repository.get_progress(material_id, user["username"])
+    def progress_payload(material_id, material, data):
+        current_version = versioning.current_version(material)
         if not data:
-            return jsonify({
+            return {
                 "materialId": material_id,
                 "position": {},
                 "progress": 0,
@@ -156,32 +149,87 @@ def register_smart_learning(
                 "watchedBuckets": [],
                 "completionThreshold": 0.9,
                 "completedVersion": 0,
-                "currentVersion": versioning.current_version(material),
+                "currentVersion": current_version,
                 "requiredCompletionVersion": versioning.required_completion_version(material),
                 "retrainingRequired": False,
-            })
+            }
+
         raw_completed = bool(data.get("completed", False))
         completed_version = data.get("completed_version", 1)
         version_status = versioning.classify_completion(material, completed_version)
-        data["completed"] = raw_completed and version_status["completionCurrent"]
-        data["completedVersion"] = version_status["completedVersion"] if raw_completed else 0
-        data["currentVersion"] = version_status["currentVersion"]
-        data["requiredCompletionVersion"] = version_status["requiredCompletionVersion"]
-        data["retrainingRequired"] = raw_completed and not version_status["completionCurrent"]
-        data.pop("completed_version", None)
+        retraining_required = raw_completed and not version_status["completionCurrent"]
+
         try:
-            data["position"] = json.loads(data.get("position", "{}"))
+            position = json.loads(data.get("position", "{}"))
         except Exception:
-            data["position"] = {}
-        data["materialId"] = data.pop("material_id")
-        data.pop("username", None)
-        try:
-            data["watchedBuckets"] = json.loads(data.pop("watched_buckets", "[]"))
-        except Exception:
-            data["watchedBuckets"] = []
-        data["lastPositionSeconds"] = data.pop("last_position_seconds", 0)
-        data["completionThreshold"] = data.pop("completion_threshold", 0.9)
-        return jsonify(data)
+            position = {}
+        if not isinstance(position, dict):
+            position = {}
+
+        if retraining_required:
+            position = {}
+            progress = 0
+            last_position = 0
+            duration = 0
+            watched = []
+        else:
+            progress = float(data.get("progress", 0) or 0)
+            last_position = float(data.get("last_position_seconds", 0) or 0)
+            duration = float(data.get("duration", 0) or 0)
+            try:
+                watched = json.loads(data.get("watched_buckets", "[]"))
+            except Exception:
+                watched = []
+            if not isinstance(watched, list):
+                watched = []
+
+        return {
+            "materialId": material_id,
+            "position": position,
+            "progress": max(0, min(100, progress)),
+            "completed": raw_completed and version_status["completionCurrent"],
+            "lastPositionSeconds": last_position,
+            "duration": duration,
+            "watchedBuckets": watched,
+            "completionThreshold": float(data.get("completion_threshold", 0.9) or 0.9),
+            "completedVersion": version_status["completedVersion"] if raw_completed else 0,
+            "currentVersion": version_status["currentVersion"],
+            "requiredCompletionVersion": version_status["requiredCompletionVersion"],
+            "retrainingRequired": retraining_required,
+        }
+
+    @app.get("/api/learning-progress")
+    def learning_progress_list():
+        user, denied = _user(owner)
+        if denied:
+            return denied
+        materials = {
+            str(item.get("id") or ""): item
+            for item in material_repository.list_uploaded_materials(include_inactive=False)
+            if item.get("id") and learning_access.can_access_learning_item(user, item)
+        }
+        rows = repository.list_progress_for_user(str(user.get("username") or ""))
+        items = []
+        for row in rows:
+            material_id = str(row.get("material_id") or "")
+            material = materials.get(material_id)
+            if material:
+                items.append(progress_payload(material_id, material, row))
+        return jsonify({"items": items})
+
+    @app.get("/api/learning-progress/<material_id>")
+    def learning_progress_get(material_id):
+        user, denied = _user(owner)
+        if denied:
+            return denied
+        material = visible_material(user, material_id)
+        if not material:
+            return jsonify({"error": "找不到教材"}), 404
+        return jsonify(progress_payload(
+            material_id,
+            material,
+            repository.get_progress(material_id, user["username"]),
+        ))
 
     @app.put("/api/learning-progress/<material_id>")
     def learning_progress_put(material_id):
@@ -193,13 +241,16 @@ def register_smart_learning(
             return jsonify({"error": "找不到教材"}), 404
 
         body = request.get_json(silent=True) or {}
-        position = body.get("position") or {}
-        if not isinstance(position, dict):
+        requested_position = body.get("position") or {}
+        if not isinstance(requested_position, dict):
             return jsonify({"error": "position 格式錯誤"}), 400
-        try:
-            progress = max(0, min(100, float(body.get("progress", 0))))
-        except (TypeError, ValueError):
-            return jsonify({"error": "progress 格式錯誤"}), 400
+
+        existing = repository.get_progress(material_id, user["username"])
+        existing_payload = progress_payload(material_id, material, existing)
+        current_version = versioning.current_version(material)
+        completion_already_current = bool(existing_payload.get("completed"))
+        reset_evidence = bool(existing_payload.get("retrainingRequired"))
+
         try:
             duration = max(0.0, float(body.get("duration", 0) or 0))
             last = max(0.0, min(duration, float(body.get("lastPositionSeconds", 0) or 0)))
@@ -216,13 +267,58 @@ def register_smart_learning(
 
         threshold = 0.9
         media_request = duration > 0 or "watchedBuckets" in body or "lastPositionSeconds" in body
-        completed = content.resolved_completion(
-            duration,
-            buckets,
-            body.get("completed", False),
-            media_request,
-            threshold,
-        )
+        position = dict(requested_position)
+
+        if media_request:
+            position["version"] = current_version
+            completed = completion_already_current or content.media_completion(duration, buckets, threshold)
+            if duration > 0:
+                covered = sum(
+                    min(10.0, max(0.0, duration - bucket * 10))
+                    for bucket in set(buckets)
+                )
+                progress = min(100.0, (covered / duration) * 100.0)
+            else:
+                progress = 0.0
+        else:
+            try:
+                page = int(requested_position.get("page") or 0)
+                total_pages = int(requested_position.get("totalPages") or 0)
+            except (TypeError, ValueError):
+                page = total_pages = 0
+
+            if 1 <= page <= total_pages and total_pages > 0:
+                visited = []
+                if not reset_evidence and existing:
+                    try:
+                        prior_position = json.loads(existing.get("position", "{}"))
+                    except Exception:
+                        prior_position = {}
+                    if (
+                        isinstance(prior_position, dict)
+                        and int(prior_position.get("version") or current_version) == current_version
+                    ):
+                        prior_visited = prior_position.get("visitedPages") or []
+                        if isinstance(prior_visited, list):
+                            visited.extend(prior_visited)
+                visited.append(page)
+                document = content.document_completion(total_pages, visited, threshold)
+                position = {
+                    "page": page,
+                    "totalPages": total_pages,
+                    "visitedPages": document["visitedPages"],
+                    "version": current_version,
+                }
+                progress = float(document["progress"])
+                completed = completion_already_current or bool(document["completed"])
+            else:
+                try:
+                    progress = max(0, min(100, float(body.get("progress", 0))))
+                except (TypeError, ValueError):
+                    return jsonify({"error": "progress 格式錯誤"}), 400
+                position["version"] = current_version
+                completed = completion_already_current or bool(body.get("completed", False))
+
         now = _now()
         repository.upsert_progress(
             material_id,
@@ -246,22 +342,23 @@ def register_smart_learning(
             repository.set_completed_version(
                 material_id,
                 user["username"],
-                versioning.current_version(material),
+                current_version,
             )
+
         return jsonify({
             "ok": True,
             "materialId": material_id,
             "position": position,
-            "progress": progress,
+            "progress": round(float(progress), 2),
             "completed": completed,
             "lastPositionSeconds": last,
             "duration": duration,
             "watchedBuckets": buckets,
             "lastViewedAt": now,
-            "completedVersion": versioning.current_version(material) if completed else 0,
-            "currentVersion": versioning.current_version(material),
+            "completedVersion": current_version if completed else int(existing_payload.get("completedVersion") or 0),
+            "currentVersion": current_version,
             "requiredCompletionVersion": versioning.required_completion_version(material),
-            "retrainingRequired": False,
+            "retrainingRequired": bool(reset_evidence and not completed),
         })
 
     @app.get("/api/material-search")

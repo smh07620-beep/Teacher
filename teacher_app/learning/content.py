@@ -65,6 +65,39 @@ def media_completion(duration, watched_buckets, threshold: float = 0.9) -> bool:
     return covered >= duration * threshold
 
 
+
+def document_completion(total_pages, visited_pages, threshold: float = 0.9) -> dict:
+    """Return server-derived document progress from visited 1-based pages.
+
+    Completion requires both the configured coverage threshold and evidence that
+    the learner reached the final page. A direct jump to the last page therefore
+    cannot be treated as full completion.
+    """
+    try:
+        total = max(0, int(total_pages or 0))
+    except (TypeError, ValueError):
+        total = 0
+    threshold = max(0.0, min(1.0, float(threshold)))
+    if total <= 0:
+        return {"completed": False, "progress": 0.0, "visitedPages": []}
+
+    visited = set()
+    for value in visited_pages or []:
+        try:
+            page = int(value)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= page <= total:
+            visited.add(page)
+
+    progress = min(100.0, (len(visited) / total) * 100.0)
+    completed = total in visited and (progress / 100.0) >= threshold
+    return {
+        "completed": completed,
+        "progress": round(progress, 2),
+        "visitedPages": sorted(visited),
+    }
+
 def resolved_completion(duration, watched_buckets, client_completed, is_media, threshold: float = 0.9) -> bool:
     """Ignore client completion flags for media, retain legacy document flow."""
     return media_completion(duration, watched_buckets, threshold) if is_media else bool(client_completed)
