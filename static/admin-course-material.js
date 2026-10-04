@@ -127,7 +127,7 @@
       if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
       try{
           const response=await fetch('/api/slides/'+encodeURIComponent(materialId)+'/purge-readiness',{credentials:'same-origin',cache:'no-store'});
-          const data=await response.json().catch(()=>({});
+          const data=await response.json().catch(()=>({}));
           if(!response.ok)throw new Error(data.error||'無法檢查永久清除條件');
           const blockers=Array.isArray(data.blockers)?data.blockers:[];
           if(!data.purgeAllowed){
