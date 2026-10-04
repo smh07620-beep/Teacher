@@ -157,15 +157,18 @@ class NotificationEventConvergence1025Tests(unittest.TestCase):
         ]}
         with patch.object(events,"build_events",return_value=rows):
             selected=events.email_events(USER,now=NOW,days=3)
-        self.assertEqual([row["key"] for row in selected],["soon","failure"])
+        self.assertEqual(len(selected),2)
+        self.assertEqual(selected[0]["reminderMilestoneDays"],3)
+        self.assertNotEqual(selected[0]["key"],"soon")
+        self.assertEqual(selected[1]["key"],"failure")
 
     def test_due_email_uses_separate_7_3_1_day_milestone_keys(self):
         due="2026-10-08T12:00:00+00:00"
         rows={"items":[{"key":"exam-base","kind":"exam","channels":["in_app","email"],"emailPolicy":"due","dueAt":due,"detail":"考核已設定最後作答時間"}]}
         with patch.object(events,"build_events",return_value=rows):
             seven=events.email_events(USER,now=NOW,days=7)
-            three=events.email_events(USER,now=NOW+dt.timedelta(days=4),days=7)
-            one=events.email_events(USER,now=NOW+dt.timedelta(days=6),days=7)
+            three=events.email_events(USER,now=NOW+dt.timedelta(days=4, seconds=1),days=7)
+            one=events.email_events(USER,now=NOW+dt.timedelta(days=6, seconds=1),days=7)
         self.assertEqual(seven[0]["reminderMilestoneDays"],7)
         self.assertEqual(three[0]["reminderMilestoneDays"],3)
         self.assertEqual(one[0]["reminderMilestoneDays"],1)
