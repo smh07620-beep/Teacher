@@ -917,6 +917,9 @@ def build_workload_calibration(
             "medianSecondsPerPage": round(
                 _percentile(seconds_per_page, 0.5), 2
             ) if seconds_per_page else 0.0,
+            "p95SecondsPerPage": round(
+                _percentile(seconds_per_page, 0.95), 2
+            ) if seconds_per_page else 0.0,
             "mediaMetadataCoverage": round(
                 len(media_rows) / len(samples), 4
             ) if samples else 0.0,
@@ -929,6 +932,9 @@ def build_workload_calibration(
             ) if media_rows else 0.0,
             "medianProcessingToMediaRatio": round(
                 _percentile(realtime_factors, 0.5), 3
+            ) if realtime_factors else 0.0,
+            "p95ProcessingToMediaRatio": round(
+                _percentile(realtime_factors, 0.95), 3
             ) if realtime_factors else 0.0,
             "sizeBands": size_bands,
         })
@@ -1000,6 +1006,8 @@ def build_workload_calibration(
         "uncalibratedBacklogJobs": uncalibrated_backlog,
         "nominalWorkerDemand": round(workload_nominal_demand, 3),
         "conservativeWorkerDemand": round(workload_conservative_demand, 3),
+        "nominalBacklogServiceHours": round(backlog_nominal_hours, 3),
+        "conservativeBacklogServiceHours": round(backlog_conservative_hours, 3),
         "current": {
             "nominal": mixed_scenario(active_workers, False),
             "conservative": mixed_scenario(active_workers, True),
@@ -1009,6 +1017,384 @@ def build_workload_calibration(
             "conservative": mixed_scenario(active_workers + 1, True),
         },
         "limitations": limitations,
+    }
+
+
+
+def _bounded_scenario_int(
+    scenario: Mapping[str, Any],
+    key: str,
+    *,
+    default: int = 0,
+    minimum: int = 0,
+    maximum: int = 100,
+) -> int:
+    try:
+        value = int(scenario.get(key, default) or 0)
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def _bounded_scenario_float(
+    scenario: Mapping[str, Any],
+    key: str,
+    *,
+    default: float,
+    minimum: float,
+    maximum: float,
+) -> float:
+    try:
+        value = float(scenario.get(key, default) or default)
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def simulate_capacity_what_if(
+    scenario: Mapping[str, Any],
+    *,
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
+    """Simulate a one-time peak batch against current workload-calibrated demand."""
+    current = _utc(now)
+    forecast = build_capacity_forecast(now=current)
+    workload = dict(forecast.get("workloadCalibration") or {})
+    profiles = {
+        str(profile.get("kind") or ""): dict(profile)
+        for profile in workload.get("profiles") or []
+    }
+
+    document_count = _bounded_scenario_int(
+        scenario, "documentCount", maximum=100
+    )
+    document_pages = _bounded_scenario_float(
+        scenario,
+        "documentPages",
+        default=20,
+        minimum=1,
+        maximum=500,
+    )
+    media_count = _bounded_scenario_int(
+        scenario, "mediaCount", maximum=50
+    )
+    media_minutes = _bounded_scenario_float(
+        scenario,
+        "mediaMinutes",
+        default=30,
+        minimum=1,
+        maximum=240,
+    )
+    image_count = _bounded_scenario_int(
+        scenario, "imageCount", maximum=100
+    )
+    archive_count = _bounded_scenario_int(
+        scenario, "archiveCount", maximum=50
+    )
+
+    requested = [
+        ("document", document_count),
+        ("media", media_count),
+        ("image", image_count),
+        ("archive", archive_count),
+    ]
+    total_jobs = sum(count for _kind, count in requested)
+    limitations: list[str] = []
+    components: list[dict[str, Any]] = []
+    scenario_nominal_hours = 0.0
+    scenario_conservative_hours = 0.0
+
+    for kind, count in requested:
+        if count <= 0:
+            continue
+        profile = profiles.get(kind) or {}
+        if not profile.get("calibrated"):
+            limitations.append(
+                f"{_WORKLOAD_LABELS.get(kind, kind)} 尚未有足夠完成樣本，"
+                "不能安全估算這批高峰工作。"
+            )
+            components.append({
+                "kind": kind,
+                "label": _WORKLOAD_LABELS.get(kind, kind),
+                "count": count,
+                "calibrated": False,
+                "nominalServiceSecondsEach": None,
+                "conservativeServiceSecondsEach": None,
+                "method": "unavailable",
+            })
+            continue
+
+        nominal_each = float(profile.get("medianDurationSeconds") or 0)
+        conservative_each = float(profile.get("p95DurationSeconds") or 0)
+        method = "class_duration"
+
+        if kind == "document":
+            nominal_per_page = float(profile.get("medianSecondsPerPage") or 0)
+            conservative_per_page = float(profile.get("p95SecondsPerPage") or 0)
+            if nominal_per_page > 0 and conservative_per_page > 0:
+                nominal_each = document_pages * nominal_per_page
+                conservative_each = document_pages * conservative_per_page
+                method = "pages"
+        elif kind == "media":
+            nominal_ratio = float(
+                profile.get("medianProcessingToMediaRatio") or 0
+            )
+            conservative_ratio = float(
+                profile.get("p95ProcessingToMediaRatio") or 0
+            )
+            if nominal_ratio > 0 and conservative_ratio > 0:
+                media_seconds = media_minutes * 60
+                nominal_each = media_seconds * nominal_ratio
+                conservative_each = media_seconds * conservative_ratio
+                method = "media_duration"
+
+        if nominal_each <= 0 or conservative_each <= 0:
+            limitations.append(
+                f"{_WORKLOAD_LABELS.get(kind, kind)} 校準資料不完整，"
+                "無法取得 nominal / P95 service time。"
+            )
+            components.append({
+                "kind": kind,
+                "label": _WORKLOAD_LABELS.get(kind, kind),
+                "count": count,
+                "calibrated": False,
+                "nominalServiceSecondsEach": None,
+                "conservativeServiceSecondsEach": None,
+                "method": "unavailable",
+            })
+            continue
+
+        nominal_hours = count * nominal_each / 3600
+        conservative_hours = count * conservative_each / 3600
+        scenario_nominal_hours += nominal_hours
+        scenario_conservative_hours += conservative_hours
+        components.append({
+            "kind": kind,
+            "label": _WORKLOAD_LABELS.get(kind, kind),
+            "count": count,
+            "calibrated": True,
+            "method": method,
+            "inputPagesEach": document_pages if kind == "document" else None,
+            "inputMediaMinutesEach": media_minutes if kind == "media" else None,
+            "nominalServiceSecondsEach": round(nominal_each, 1),
+            "conservativeServiceSecondsEach": round(conservative_each, 1),
+            "nominalWorkerHours": round(nominal_hours, 3),
+            "conservativeWorkerHours": round(conservative_hours, 3),
+        })
+
+    fully_estimable = (
+        total_jobs > 0
+        and bool(workload.get("fullyCalibrated"))
+        and not limitations
+        and all(component.get("calibrated") for component in components)
+    )
+    if total_jobs <= 0:
+        limitations.append("請至少輸入一種高峰 workload。")
+    if not workload.get("fullyCalibrated"):
+        limitations.append(
+            "目前到達流量或既有 backlog 仍含未校準 workload，"
+            "因此不能把 What-if 與目前 Queue 合併成可信 ETA。"
+        )
+
+    baseline_nominal = float(workload.get("nominalWorkerDemand") or 0)
+    baseline_conservative = float(
+        workload.get("conservativeWorkerDemand") or 0
+    )
+    backlog_nominal = float(
+        workload.get("nominalBacklogServiceHours") or 0
+    )
+    backlog_conservative = float(
+        workload.get("conservativeBacklogServiceHours") or 0
+    )
+    current_backlog_jobs = int(
+        (forecast.get("queue") or {}).get("backlogJobs") or 0
+    )
+    peak_backlog_jobs = current_backlog_jobs + total_jobs
+
+    def worker_scenario(workers: int, conservative: bool) -> dict[str, Any]:
+        if not fully_estimable:
+            return {
+                "workers": workers,
+                "state": "unavailable",
+                "baselineUtilization": None,
+                "netWorkerHoursPerHour": None,
+                "peakBacklogJobs": peak_backlog_jobs,
+                "peakServiceHours": None,
+                "clearEtaSeconds": None,
+            }
+        demand = baseline_conservative if conservative else baseline_nominal
+        existing = backlog_conservative if conservative else backlog_nominal
+        injected = (
+            scenario_conservative_hours
+            if conservative
+            else scenario_nominal_hours
+        )
+        service_hours = existing + injected
+        net = workers - demand
+        eta = (
+            service_hours / net * 3600
+            if service_hours > 0 and net > 0
+            else 0
+            if service_hours == 0
+            else None
+        )
+        return {
+            "workers": workers,
+            "state": "clearing" if net > 0 else "growing",
+            "baselineUtilization": round(demand / workers, 4)
+            if workers
+            else None,
+            "netWorkerHoursPerHour": round(net, 3),
+            "peakBacklogJobs": peak_backlog_jobs,
+            "peakServiceHours": round(service_hours, 3),
+            "clearEtaSeconds": round(eta) if eta is not None else None,
+        }
+
+    one_nominal = worker_scenario(1, False)
+    one_conservative = worker_scenario(1, True)
+    two_nominal = worker_scenario(2, False)
+    two_conservative = worker_scenario(2, True)
+
+    bottleneck = None
+    calibrated_components = [
+        component
+        for component in components
+        if component.get("calibrated")
+    ]
+    if calibrated_components:
+        biggest = max(
+            calibrated_components,
+            key=lambda item: float(item.get("conservativeWorkerHours") or 0),
+        )
+        total_conservative = sum(
+            float(item.get("conservativeWorkerHours") or 0)
+            for item in calibrated_components
+        )
+        bottleneck = {
+            "kind": biggest.get("kind"),
+            "label": biggest.get("label"),
+            "conservativeWorkerHours": biggest.get(
+                "conservativeWorkerHours"
+            ),
+            "share": round(
+                float(biggest.get("conservativeWorkerHours") or 0)
+                / total_conservative,
+                4,
+            )
+            if total_conservative > 0
+            else 0.0,
+        }
+
+    decision = {
+        "state": "insufficient_data",
+        "label": "目前無法安全估算這個高峰情境",
+        "detail": "先累積缺少的 workload 完成樣本，再進行 Worker 數量比較。",
+    }
+    blockers = list(forecast.get("blockers") or [])
+    if fully_estimable and blockers:
+        decision = {
+            "state": "dependency_blocked",
+            "label": "可試算，但先排除目前故障",
+            "detail": (
+                "What-if 數學可以計算，但目前有 Worker/provider/conversion "
+                "Incident，實際速度可能偏離校準值。"
+            ),
+        }
+    elif fully_estimable and one_conservative["state"] == "clearing":
+        decision = {
+            "state": "one_worker_sufficient",
+            "label": "1 台 Worker 在 P95 保守情境仍可清空",
+            "detail": (
+                "在目前背景到達率持續存在的前提下，1 台 Worker 的保守容量"
+                "仍高於負載；第 2 台主要縮短高峰等待時間。"
+            ),
+        }
+    elif (
+        fully_estimable
+        and one_nominal["state"] == "clearing"
+        and one_conservative["state"] == "growing"
+        and two_conservative["state"] == "clearing"
+    ):
+        decision = {
+            "state": "two_workers_for_resilience",
+            "label": "1 台接近臨界，2 台可承受 P95 高峰",
+            "detail": (
+                "1 台在 nominal 情境可清 Queue，但 P95 保守情境會持續堆積；"
+                "2 台可恢復保守淨消化能力。"
+            ),
+        }
+    elif (
+        fully_estimable
+        and one_nominal["state"] == "growing"
+        and two_conservative["state"] == "clearing"
+    ):
+        decision = {
+            "state": "two_workers_recommended_for_peak",
+            "label": "這個高峰情境需要 2 台才有保守淨消化能力",
+            "detail": (
+                "1 台連 nominal 容量都低於背景到達率；2 台在 P95 情境"
+                "仍可逐步清空 Queue。"
+            ),
+        }
+    elif fully_estimable and two_nominal["state"] == "clearing":
+        decision = {
+            "state": "two_workers_may_help",
+            "label": "2 台可改善，但 P95 仍有壓力",
+            "detail": (
+                "2 台 Worker 在 nominal 情境可清空，但 P95 保守情境仍可能"
+                "持續堆積；應先降低主要 bottleneck workload 的單 Job 成本。"
+            ),
+        }
+    elif fully_estimable:
+        decision = {
+            "state": "more_than_two_or_optimize",
+            "label": "2 台 Worker 仍不足以穩定承受此高峰",
+            "detail": (
+                "在目前背景到達率與 workload service time 下，單純增加到 2 台"
+                "仍不足；需降低瓶頸處理時間或重新規劃高峰上傳節奏。"
+            ),
+        }
+
+    return {
+        "generatedAt": current.isoformat(),
+        "scenario": {
+            "documentCount": document_count,
+            "documentPages": document_pages,
+            "mediaCount": media_count,
+            "mediaMinutes": media_minutes,
+            "imageCount": image_count,
+            "archiveCount": archive_count,
+            "totalJobs": total_jobs,
+        },
+        "available": fully_estimable,
+        "windowHours": int(workload.get("windowHours") or 0),
+        "components": components,
+        "scenarioNominalWorkerHours": round(
+            scenario_nominal_hours, 3
+        ),
+        "scenarioConservativeWorkerHours": round(
+            scenario_conservative_hours, 3
+        ),
+        "currentBacklogJobs": current_backlog_jobs,
+        "peakBacklogJobs": peak_backlog_jobs,
+        "baseline": {
+            "nominalWorkerDemand": round(baseline_nominal, 3),
+            "conservativeWorkerDemand": round(
+                baseline_conservative, 3
+            ),
+        },
+        "oneWorker": {
+            "nominal": one_nominal,
+            "conservative": one_conservative,
+        },
+        "twoWorkers": {
+            "nominal": two_nominal,
+            "conservative": two_conservative,
+        },
+        "bottleneck": bottleneck,
+        "blockers": blockers,
+        "limitations": list(dict.fromkeys(limitations)),
+        "decision": decision,
     }
 
 
@@ -1535,6 +1921,7 @@ __all__ = [
     "analyze_operational_trends",
     "build_capacity_forecast",
     "build_workload_calibration",
+    "simulate_capacity_what_if",
     "build_operational_dashboard",
     "record_operational_sample",
     "trend_incident_candidates",
