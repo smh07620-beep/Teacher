@@ -252,6 +252,9 @@
     if(!material)return alert('找不到教材資料。');
     explicitVersionTarget=material;
     const input=document.getElementById('admin-pptx-upload-input');
+    if(input)input.value='';
+    const status=document.getElementById('admin-upload-status');
+    if(status)status.innerHTML='🧾 準備更新「'+escapeHtml(material.title||material.filename||'教材')+'」：V'+Number(material.currentVersion||1)+' → V'+(Number(material.currentVersion||1)+1)+'<span class="block text-[11px] text-slate-500 mt-1">請只選擇 1 個新版檔案；取消選檔後不會保留這次更新目標。</span>';
     input?.scrollIntoView?.({behavior:'smooth',block:'center'});
     input?.click?.();
   };
@@ -259,7 +262,17 @@
   window.adminUploadMaterials = async function(){
     const input=document.getElementById('admin-pptx-upload-input');
     const files=Array.from(input?.files||[]);
-    if(!files.length){ alert('請先選擇要上傳的教材檔案。'); return; }
+    if(!files.length){
+      explicitVersionTarget=null;
+      alert('請先選擇要上傳的教材檔案。');
+      return;
+    }
+    if(explicitVersionTarget&&files.length!==1){
+      explicitVersionTarget=null;
+      input.value='';
+      alert('「上傳新版」一次只能選擇 1 個檔案，請重新選擇。');
+      return;
+    }
     const title=document.getElementById('admin-material-title').value.trim();
     const desc=document.getElementById('admin-material-desc').value.trim();
     const group=document.getElementById('admin-material-group').value;
