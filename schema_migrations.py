@@ -28,6 +28,7 @@ from teacher_app.maintenance import forecast_prediction_migration as _forecast_p
 from teacher_app.maintenance import email_delivery_migration as _email_delivery_migration  # noqa: F401
 from teacher_app.maintenance import course_lifecycle_migration as _course_lifecycle_migration  # noqa: F401
 from teacher_app.maintenance import training_intervention_migration as _training_intervention_migration  # noqa: F401
+from teacher_app.maintenance import material_derivative_migration as _material_derivative_migration  # noqa: F401
 
 
 sys.modules[__name__] = _migrations

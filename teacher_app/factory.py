@@ -57,6 +57,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import email_delivery_migration as _email_delivery_migration  # noqa: F401
     from teacher_app.maintenance import course_lifecycle_migration as _course_lifecycle_migration  # noqa: F401
     from teacher_app.maintenance import training_intervention_migration as _training_intervention_migration  # noqa: F401
+    from teacher_app.maintenance import material_derivative_migration as _material_derivative_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
