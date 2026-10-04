@@ -40,11 +40,12 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
     def test_teacher_navigation_is_focused_on_first_cut(self):
         for label in (
             "📚 教材與課程",
-            "🎙️ 媒體製作",
             "📝 評量與出題",
             "📄 紙本文件與匯出",
         ):
             self.assertIn(label, self.source)
+        self.assertNotIn("🎙️ 媒體製作", self.source)
+        self.assertIn("媒體製作收在教材工具內", self.source)
         self.assertIn("navHost.replaceChildren(navGroup('教師工作台', buttons))", self.source)
 
     def test_media_workspace_reuses_course_material_scope(self):
