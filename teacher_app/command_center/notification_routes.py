@@ -8,7 +8,7 @@ from teacher_app.command_center import notification_state
 from teacher_app.common import audit
 from teacher_app.common.auth import has_role, require_role
 from teacher_app.common.errors import ApiError
-from teacher_app.notifications import incidents, preferences
+from teacher_app.notifications import delivery_health, incidents, preferences
 from teacher_app.operations import history as operational_history
 
 
@@ -91,6 +91,14 @@ def register_notification_state_routes(owner):
                 detail={"emailCategories": result["emailCategories"]},
             )
             return jsonify({"ok": True, **result})
+        except ApiError as exc:
+            return _error(exc)
+
+    def api_email_delivery_health():
+        actor = _current_user(owner)
+        try:
+            require_role(actor, "system_admin")
+            return jsonify(delivery_health.build_email_delivery_health())
         except ApiError as exc:
             return _error(exc)
 
@@ -240,6 +248,13 @@ def register_notification_state_routes(owner):
         "api_notification_preferences_update",
         ["PATCH"],
         api_notification_preferences_update,
+    )
+    _install(
+        app,
+        "/api/email-delivery-health",
+        "api_email_delivery_health",
+        ["GET"],
+        api_email_delivery_health,
     )
     _install(
         app,
