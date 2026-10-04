@@ -10,7 +10,8 @@ class F3TrainingInterventionUiTests(unittest.TestCase):
         source=ROOT.joinpath("static","admin-competency-matrix-92.js").read_text(encoding="utf-8")
         self.assertIn("admin-training-intervention-f3",source)
         self.assertIn("training-intervention:evidence",source)
-        self.assertIn("介入追蹤不會直接改寫評核結果",source)
+        self.assertIn("不提供在矩陣直接改寫評核結果或資格狀態",source)
+        self.assertIn("介入追蹤只記錄處理流程，不會改寫原始證據",source)
 
     def test_intervention_ui_supports_full_case_actions(self):
         source=ROOT.joinpath("static","training-intervention-f3.js").read_text(encoding="utf-8")
