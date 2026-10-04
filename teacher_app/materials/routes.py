@@ -178,12 +178,46 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
             )
         return jsonify(payload), 201
 
+    def api_restore_material_version(slide_id, source_version):
+        denied = require_admin()
+        if denied:
+            return denied
+        before = repository.get_material(slide_id)
+        current_actor = actor() or {}
+        body = request.get_json(silent=True) or {}
+        try:
+            payload = service.restore_material_version(
+                slide_id,
+                source_version,
+                body,
+                actor_username=str(current_actor.get("username") or ""),
+            )
+        except ApiError as exc:
+            return _legacy_error(exc)
+        after = repository.get_material(slide_id)
+        audit.record_event(
+            actor=current_actor,
+            action="material.version.restore",
+            target_type="material",
+            target_id=slide_id,
+            group=str((after or before or {}).get("group") or ""),
+            before=snapshot(before),
+            after=snapshot(after),
+            detail={
+                "restoredFromVersion": int(source_version),
+                "changeReason": str(body.get("changeReason") or "")[:1000],
+                "requiresRetraining": bool(payload.get("requiresRetraining")),
+            },
+        )
+        return jsonify(payload), 201
+
     app.add_url_rule("/api/slides", endpoint="api_list_slides", view_func=api_list_slides, methods=["GET"])
     app.add_url_rule("/api/slides/admin", endpoint="api_admin_slides", view_func=api_admin_slides, methods=["GET"])
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_update_slide", view_func=api_update_slide, methods=["PATCH"])
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_delete_slide", view_func=api_delete_slide, methods=["DELETE"])
     app.add_url_rule("/api/slides/<slide_id>/versions", endpoint="api_list_material_versions", view_func=api_list_material_versions, methods=["GET"])
     app.add_url_rule("/api/slides/<slide_id>/versions", endpoint="api_publish_material_version", view_func=api_publish_material_version, methods=["POST"])
+    app.add_url_rule("/api/slides/<slide_id>/versions/<int:source_version>/restore", endpoint="api_restore_material_version", view_func=api_restore_material_version, methods=["POST"])
     app.extensions["teacher_material_catalog_routes_registered"] = True
     return app
 
