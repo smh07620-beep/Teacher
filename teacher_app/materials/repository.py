@@ -322,6 +322,24 @@ def replace_category_assignments(category_id: str, material_ids: list[str], *, g
             conn.execute(f"UPDATE materials SET category={ph} WHERE id IN ({placeholders}) AND group_key={ph} AND training_area={ph}", tuple([category_id] + list(material_ids) + [group_key, training_area]))
 
 
+def material_ids_for_category(category_id: str, *, group_key: str = "", training_area: str = "") -> set[str]:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        clauses = [f"category={ph}"]
+        params: list[Any] = [category_id]
+        if group_key:
+            clauses.append(f"group_key={ph}")
+            params.append(group_key)
+        if training_area:
+            clauses.append(f"training_area={ph}")
+            params.append(training_area)
+        rows = conn.execute(
+            f"SELECT id FROM materials WHERE {' AND '.join(clauses)}",
+            tuple(params),
+        ).fetchall()
+    return {str(dict(row).get("id") or "") for row in rows if dict(row).get("id")}
+
+
 def clear_category_assignment(conn, kind: str, category_id: str) -> None:
     ph = common_db.placeholder(kind)
     conn.execute(f"UPDATE materials SET category='' WHERE category={ph}", (category_id,))
