@@ -287,6 +287,9 @@ def delete_material(
     if backend not in canonical_storage.VALID_BACKENDS:
         backend = "local"
 
+    version_refs = repository.material_version_storage_references(material_id)
+    preserve_version_storage = bool(version_refs)
+
     if paths is None and base is not None:
         paths = SimpleNamespace(
             upload_dir=Path(base.UPLOAD_DIR),
@@ -325,7 +328,12 @@ def delete_material(
     else:
         adapters = WebStorageRuntime(paths).delete_adapters(local_delete_material=delete_local_material)
     try:
-        canonical_storage.delete_strict(request, adapters)
+        # Version history is immutable and may be restored later.  If any
+        # historical snapshot references provider storage, retain the provider
+        # objects when removing the catalog row.  A dedicated retention purge
+        # must prove references are gone before physical deletion.
+        if not preserve_version_storage:
+            canonical_storage.delete_strict(request, adapters)
     except Exception as exc:
         cause = exc.cause if isinstance(exc, canonical_storage.StorageDeletionError) else exc
         failures = {
@@ -346,4 +354,4 @@ def delete_material(
         pass
 
     repository.delete_material_record(material_id)
-    return {"ok": True}
+    return {"ok": True, "versionStorageRetained": preserve_version_storage, "retainedVersionCount": len(version_refs)}
