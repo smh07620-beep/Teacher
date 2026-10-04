@@ -111,11 +111,28 @@ class StorageDeletionConvergenceTests(unittest.TestCase):
             "storageMeta": {"folderId": "/materials/upload-1"},
         }
         with patch.object(material_service.repository, "get_material", return_value=entry), patch.object(
-            material_service.repository, "delete_material_record"
-        ) as delete_record:
+            material_service.repository, "material_version_storage_references", return_value=[]
+        ), patch.object(material_service.repository, "delete_material_record") as delete_record:
             result = material_service.delete_material(base, "upload-1")
-        self.assertEqual(result, {"ok": True})
+        self.assertEqual(result, {"ok": True, "versionStorageRetained": False, "retainedVersionCount": 0})
         self.assertEqual(calls, ["/materials/upload-1"])
+        delete_record.assert_called_once_with("upload-1")
+
+    def test_material_delete_retains_provider_storage_when_version_history_references_it(self):
+        calls = []
+        base = self._material_base(lambda value: calls.append(value))
+        entry = {
+            "id": "upload-1", "folder": "upload-1", "storageBackend": "mega",
+            "storageKey": "/materials/upload-1/source.pptx", "storageMeta": {"folderId": "/materials/upload-1"},
+        }
+        refs = [{"version": 1, "backend": "mega", "storageKey": "/materials/upload-1/source.pptx", "slidesPrefix": ""}]
+        with patch.object(material_service.repository, "get_material", return_value=entry), patch.object(
+            material_service.repository, "material_version_storage_references", return_value=refs
+        ), patch.object(material_service.repository, "delete_material_record") as delete_record:
+            result = material_service.delete_material(base, "upload-1")
+        self.assertEqual(calls, [])
+        self.assertTrue(result["versionStorageRetained"])
+        self.assertEqual(result["retainedVersionCount"], 1)
         delete_record.assert_called_once_with("upload-1")
 
     def test_material_delete_failure_keeps_db_row_and_maps_to_502(self):
@@ -130,8 +147,8 @@ class StorageDeletionConvergenceTests(unittest.TestCase):
             "storageMeta": {"folderId": "/materials/upload-1"},
         }
         with patch.object(material_service.repository, "get_material", return_value=entry), patch.object(
-            material_service.repository, "delete_material_record"
-        ) as delete_record:
+            material_service.repository, "material_version_storage_references", return_value=[]
+        ), patch.object(material_service.repository, "delete_material_record") as delete_record:
             with self.assertRaises(ApiError) as caught:
                 material_service.delete_material(base, "upload-1")
         self.assertEqual(caught.exception.status, 502)
