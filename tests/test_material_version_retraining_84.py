@@ -144,6 +144,37 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
         self.assertEqual(rows[0]["version"], 1)
         self.assertEqual(rows[0]["changeReason"], "initial publication")
 
+    def test_replacement_upload_keeps_one_material_and_appends_binary_snapshot(self):
+        material_version_retraining_84(self.conn, "sqlite")
+        replacement = {
+            **material_entry("worker-temp"),
+            "filename": "AG158-revised.pdf",
+            "title": "AG158 水質監測 SOP",
+            "page_count": 12,
+            "storage_backend": "r2",
+            "storage_key": "materials/worker-temp/source.pdf",
+            "slides_prefix": "materials/worker-temp/slides/",
+            "storage_meta": '{"previewMode":"single_pdf"}',
+        }
+        with patch.object(common_db, "read_connection", self._read), patch.object(
+            common_db, "transaction", self._tx
+        ):
+            updated = material_repository.replace_material_content_and_publish(
+                "mat-1",
+                content=replacement,
+                published_by="leader.bio",
+                change_reason="更新水質處置流程",
+                requires_retraining=True,
+            )
+            history = material_repository.list_material_versions("mat-1")
+        self.assertEqual(updated["id"], "mat-1")
+        self.assertEqual(updated["currentVersion"], 2)
+        self.assertEqual(updated["requiredCompletionVersion"], 2)
+        self.assertEqual(updated["storageKey"], "materials/worker-temp/source.pdf")
+        self.assertEqual([row["version"] for row in history], [2, 1])
+        self.assertEqual(history[0]["snapshot"]["storage_key"], "materials/worker-temp/source.pdf")
+        self.assertEqual(history[1]["snapshot"]["storage_key"], "")
+
     def test_version_helper_separates_current_and_stale_completions(self):
         materials = [
             {"id": "minor", "currentVersion": 2, "requiredCompletionVersion": 1},
