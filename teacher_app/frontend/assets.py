@@ -114,6 +114,7 @@ ASSET_MANIFEST = {
             "/teacher-action-queue-1024.js",
             "/teacher-learners-p2.js",
             "/learner-reading-progress-f2.js",
+            "/course-lifecycle-f2.js",
         ),
     },
 }
