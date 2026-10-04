@@ -221,6 +221,51 @@ def publish_material_version(
     }
 
 
+def restore_material_version(
+    material_id: str,
+    source_version: int,
+    data: Mapping[str, Any],
+    *,
+    actor_username: str,
+) -> dict:
+    material_id = str(material_id or "").strip()
+    entry = repository.get_material(material_id)
+    if not entry:
+        raise _fail("MATERIAL_NOT_FOUND", "找不到可管理的教材", 404)
+    try:
+        source_version = int(source_version)
+    except (TypeError, ValueError):
+        raise _fail("MATERIAL_VERSION_INVALID", "版本編號不正確")
+    if source_version < 1 or source_version >= int(entry.get("currentVersion") or 1):
+        raise _fail("MATERIAL_VERSION_RESTORE_INVALID", "只能回復目前版本以前的歷史版本")
+    reason = str(data.get("changeReason") or "").strip()[:1000]
+    if not reason:
+        raise _fail("MATERIAL_VERSION_REASON_REQUIRED", "請輸入本次版本回復原因")
+    requires_retraining = data.get("requiresRetraining", False)
+    if type(requires_retraining) is not bool:
+        raise _fail("MATERIAL_VERSION_RETRAINING_INVALID", "重新訓練設定格式不正確")
+    actor_username = str(actor_username or "").strip()[:100]
+    if not actor_username:
+        raise _fail("MATERIAL_VERSION_ACTOR_REQUIRED", "無法確認版本發布者", 401)
+    updated = repository.restore_material_version(
+        material_id,
+        source_version,
+        published_by=actor_username,
+        change_reason=reason,
+        requires_retraining=requires_retraining,
+    )
+    if not updated:
+        raise _fail("MATERIAL_VERSION_NOT_FOUND", "找不到指定的歷史版本", 404)
+    return {
+        "ok": True,
+        "material": updated,
+        "version": int(updated.get("currentVersion") or 1),
+        "restoredFromVersion": source_version,
+        "requiredCompletionVersion": int(updated.get("requiredCompletionVersion") or 1),
+        "requiresRetraining": requires_retraining,
+    }
+
+
 def delete_material(
     base_or_material_id,
     material_id: str | None = None,
