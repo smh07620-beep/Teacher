@@ -167,3 +167,49 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+
+/* Teacher desk convergence: primary jobs stay compact and mobile-safe. */
+.teacher-home-intro-1024 {
+  overflow: hidden;
+}
+.teacher-home-job-1024 {
+  min-width: 0;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.9rem;
+  background: rgb(248 250 252);
+  padding: 0.9rem;
+  text-align: left;
+  transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+}
+.teacher-home-job-1024:hover {
+  border-color: rgb(153 246 228);
+  background: rgb(240 253 250);
+  transform: translateY(-1px);
+}
+.teacher-home-job-1024 b,
+.teacher-home-job-1024 span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.teacher-home-job-1024 b {
+  color: rgb(15 23 42);
+  font-size: .875rem;
+}
+.teacher-home-job-1024 span {
+  margin-top: .25rem;
+  color: rgb(100 116 139);
+  font-size: .7rem;
+  line-height: 1.45;
+}
+@media (max-width: 639px) {
+  .teacher-home-intro-1024 {
+    padding: 1rem;
+  }
+  .teacher-home-jobs-1024 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .teacher-home-job-1024 {
+    width: 100%;
+  }
+}
