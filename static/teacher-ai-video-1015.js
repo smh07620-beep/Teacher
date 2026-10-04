@@ -1,3 +1,4 @@
+/* AI VIDEO · PHASE 6 renderer contract; product surface is converged into F5. */
 /* Teacher video Phase 6 workspace: approved PPT -> resilient renderer -> MP4 -> teacher review/publish. */
 (async function () {
   'use strict';

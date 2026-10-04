@@ -216,14 +216,8 @@
     });
   }
 
-  const observer=new MutationObserver(records=>{
-    if(records.some(record=>[...(record.addedNodes||[])].some(node=>node instanceof Element&&(node.matches?.('[data-presentation-id]')||node.querySelector?.('[data-presentation-id]'))))){
-      decorate();
-    }
-  });
-  observer.observe(document.body,{childList:true,subtree:true});
+  window.addEventListener('teacher-ai-presentation-rendered-f5',()=>decorate());
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>decorate(),{once:true});
   else decorate();
-
   window.TeacherAIPresentationEditorF5=Object.freeze({open:openEditor,decorate});
 })();
