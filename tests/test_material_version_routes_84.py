@@ -58,6 +58,28 @@ class MaterialVersionRoute84Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
         publish.assert_called_once()
 
+    def test_group_leader_can_restore_own_group_version_as_new_version(self):
+        before = {
+            "id": "mat-bio", "title": "Bio SOP", "group": "grpBio", "area": "internal",
+            "currentVersion": 3, "requiredCompletionVersion": 1, "active": True,
+        }
+        after = {**before, "currentVersion": 4}
+        with patch.object(routes.repository, "get_material", side_effect=[before, before, after]), patch.object(
+            routes.service,
+            "restore_material_version",
+            return_value={
+                "ok": True, "material": after, "version": 4, "restoredFromVersion": 1,
+                "requiredCompletionVersion": 1, "requiresRetraining": False,
+            },
+        ) as restore, patch.object(routes.audit, "record_event") as audit:
+            response = self.client.post(
+                "/api/slides/mat-bio/versions/1/restore",
+                json={"changeReason": "回復已核准版本", "requiresRetraining": False},
+            )
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        restore.assert_called_once()
+        self.assertEqual(audit.call_args.kwargs["action"], "material.version.restore")
+
     def test_group_leader_cannot_publish_version_for_another_group(self):
         cross_group = {
             "id": "mat-hema",
