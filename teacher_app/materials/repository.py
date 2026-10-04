@@ -383,21 +383,24 @@ def replace_material_content_and_publish(
         required_version = max(1, int(previous.get("required_completion_version", 1) or 1))
         if requires_retraining:
             required_version = new_version
+        def supplied(name: str, fallback=None):
+            return content[name] if name in content else fallback
+
         fields = {
-            "filename": str(content.get("filename") or previous.get("filename") or "")[:255],
-            "title": str(content.get("title") or previous.get("title") or "")[:255],
-            "description": str(content.get("description") or previous.get("description") or "")[:1000],
-            "category": str(content.get("category") or previous.get("category") or "")[:100],
-            "course_id": str(content.get("course_id") or previous.get("course_id") or "")[:100],
-            "folder": str(content.get("folder") or previous.get("folder") or material_id)[:255],
-            "page_count": max(0, int(content.get("page_count", 0) or 0)),
-            "storage_filename": str(content.get("storage_filename") or "")[:255],
-            "storage_backend": str(content.get("storage_backend") or "local")[:40],
-            "storage_key": str(content.get("storage_key") or "")[:1000],
-            "slides_prefix": str(content.get("slides_prefix") or "")[:1000],
-            "storage_meta": str(content.get("storage_meta") or "{}"),
-            "material_type": str(content.get("material_type") or previous.get("material_type") or "standard")[:40],
-            "atlas_meta": str(content.get("atlas_meta") or "{}"),
+            "filename": str(supplied("filename", previous.get("filename")) or "")[:255],
+            "title": str(supplied("title", previous.get("title")) or "")[:255],
+            "description": str(supplied("description", previous.get("description")) or "")[:1000],
+            "category": str(supplied("category", previous.get("category")) or "")[:100],
+            "course_id": str(supplied("course_id", previous.get("course_id")) or "")[:100],
+            "folder": str(supplied("folder", previous.get("folder") or material_id) or "")[:255],
+            "page_count": max(0, int(supplied("page_count", previous.get("page_count", 0)) or 0)),
+            "storage_filename": str(supplied("storage_filename", previous.get("storage_filename")) or "")[:255],
+            "storage_backend": str(supplied("storage_backend", previous.get("storage_backend") or "local") or "local")[:40],
+            "storage_key": str(supplied("storage_key", previous.get("storage_key")) or "")[:1000],
+            "slides_prefix": str(supplied("slides_prefix", previous.get("slides_prefix")) or "")[:1000],
+            "storage_meta": str(supplied("storage_meta", previous.get("storage_meta") or "{}") or "{}"),
+            "material_type": str(supplied("material_type", previous.get("material_type") or "standard") or "standard")[:40],
+            "atlas_meta": str(supplied("atlas_meta", previous.get("atlas_meta") or "{}") or "{}"),
         }
         assignments = ",".join(f"{name}={ph}" for name in fields)
         conn.execute(
