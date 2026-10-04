@@ -349,6 +349,8 @@ def build_matrix(
                 "materialsCompleted": int(completion.get("materialsCompleted", 0) or 0),
                 "materialsTotal": int(completion.get("materialsTotal", 0) or 0),
                 "materialsComplete": bool(completion.get("materialsComplete")),
+                "requiredMaterialIds": sorted(required_material_ids),
+                "retrainingMaterialIds": sorted(required_material_ids & stale_material_ids),
                 "retrainingRequired": retraining,
                 "examRequired": bool(completion.get("examRequired")),
                 "examPassed": bool(completion.get("examPassed")),

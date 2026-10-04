@@ -72,6 +72,7 @@ REQUIRED_MIGRATIONS = (
     "0111-forecast-prediction-calibration",
     "0112-email-delivery-observability",
     "0113-course-lifecycle",
+    "0114-training-interventions",
 )
 
 # Backward-compatible singular name used by older release checks.  It now

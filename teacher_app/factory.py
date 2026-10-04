@@ -56,6 +56,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import forecast_prediction_migration as _forecast_prediction_migration  # noqa: F401
     from teacher_app.maintenance import email_delivery_migration as _email_delivery_migration  # noqa: F401
     from teacher_app.maintenance import course_lifecycle_migration as _course_lifecycle_migration  # noqa: F401
+    from teacher_app.maintenance import training_intervention_migration as _training_intervention_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
@@ -82,6 +83,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.learning.saved_routes import register_saved_learning_routes
     from teacher_app.learning.calendar_routes import register_learning_calendar_routes
     from teacher_app.learning.compliance_routes import register_training_compliance_routes
+    from teacher_app.learning.intervention_routes import register_training_intervention_routes
     from teacher_app.learning.certificate_routes import register_completion_certificate_routes
     from teacher_app.maintenance.health import register_health
     from teacher_app.maintenance.announcement_routes import register_announcement_routes
@@ -178,6 +180,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_saved_learning_routes(app)
     app = register_learning_calendar_routes(app)
     app = register_training_compliance_routes(app)
+    app = register_training_intervention_routes(app)
     app = register_completion_certificate_routes(app)
     app = register_announcement_routes(app)
     app = register_free_worker(
