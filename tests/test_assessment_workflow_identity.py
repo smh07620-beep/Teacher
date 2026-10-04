@@ -44,6 +44,13 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
                     version_updated_by TEXT NOT NULL DEFAULT ''
                 )"""
             )
+            conn.execute("""CREATE TABLE material_versions (
+                material_id TEXT NOT NULL, version INTEGER NOT NULL,
+                requires_retraining INTEGER NOT NULL DEFAULT 0,
+                change_reason TEXT NOT NULL DEFAULT '', published_at TEXT NOT NULL,
+                published_by TEXT NOT NULL DEFAULT '', snapshot TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY(material_id,version)
+            )""")
             conn.execute(
                 "INSERT INTO quiz_categories(id,group_key,training_area,title,date_added,active,review_status) "
                 "VALUES(?,?,?,?,?,?,?)",
