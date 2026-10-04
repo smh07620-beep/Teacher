@@ -232,10 +232,20 @@ def record_operational_sample(
             (cutoff,),
         )
 
+    prediction_calibration = {}
+    try:
+        prediction_calibration = reconcile_forecast_predictions(now=current)
+    except Exception as exc:
+        LOGGER.warning(
+            "forecast prediction calibration failed error_type=%s",
+            type(exc).__name__,
+        )
+
     return {
         "sampledAt": sampled.isoformat(),
         "activeWorkers": active_workers,
         "openIncidents": open_incidents,
+        "predictionCalibration": prediction_calibration,
     }
 
 
@@ -1936,6 +1946,22 @@ def build_capacity_forecast(
         else:
             confidence = "medium"
 
+    raw_confidence = confidence
+    prediction_accuracy = build_forecast_accuracy(now=current, days=7)
+    adjustment = str(
+        prediction_accuracy.get("confidenceAdjustment") or "none"
+    )
+    if model_available and adjustment == "downgrade_to_low":
+        confidence = "low"
+        reasons.append("近 7 日事前預測回測誤差偏高，模型信心已降至低。")
+    elif model_available and adjustment == "downgrade_one":
+        confidence = {
+            "high": "medium",
+            "medium": "low",
+            "low": "low",
+        }.get(confidence, confidence)
+        reasons.append("近 7 日事前預測回測誤差上升，模型信心已下調一級。")
+
     def scenario(worker_count: int, per_worker: float | None) -> dict[str, Any]:
         if not model_available or not per_worker or arrival_rate is None:
             return {
@@ -2030,7 +2056,9 @@ def build_capacity_forecast(
         "generatedAt": current.isoformat(),
         "windowHours": window_hours,
         "modelAvailable": model_available,
+        "rawConfidence": raw_confidence,
         "confidence": confidence,
+        "predictionCalibration": prediction_accuracy,
         "limitations": reasons,
         "sample": {
             "arrivals": arrivals if arrivals_available else None,
@@ -2324,9 +2352,11 @@ def build_operational_dashboard(
 __all__ = [
     "analyze_operational_trends",
     "build_capacity_forecast",
+    "build_forecast_accuracy",
     "build_workload_calibration",
     "simulate_capacity_what_if",
     "build_operational_dashboard",
+    "reconcile_forecast_predictions",
     "record_operational_sample",
     "trend_incident_candidates",
 ]
