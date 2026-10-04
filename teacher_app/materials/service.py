@@ -266,6 +266,16 @@ def restore_material_version(
     }
 
 
+def material_purge_readiness(material_id: str) -> dict:
+    material = repository.get_material(material_id)
+    graph = repository.material_artifact_reference_graph(material_id)
+    return {
+        **graph,
+        "materialExists": bool(material),
+        "title": str((material or {}).get("title") or ""),
+    }
+
+
 def delete_material(
     base_or_material_id,
     material_id: str | None = None,
