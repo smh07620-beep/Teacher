@@ -6,6 +6,7 @@ and storage SDK/process ownership remain outside this module.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 from pathlib import Path
 
@@ -299,6 +300,12 @@ def material_artifact_reference_graph(material_id: str) -> dict:
         "blockers": blockers,
         "blockerCount": sum(int(item.get("count") or 0) for item in blockers),
     }
+
+
+def material_artifact_reference_fingerprint(material_id: str) -> str:
+    graph = material_artifact_reference_graph(material_id)
+    payload = json.dumps(graph, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def material_version_storage_references(material_id: str) -> list[dict]:
