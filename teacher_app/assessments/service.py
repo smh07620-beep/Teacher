@@ -476,19 +476,15 @@ def update_category_materials(base, category_id: str, data: Mapping[str, Any]) -
             raise _fail("MATERIAL_INACTIVE", "停用教材不能關聯考卷；請先啟用教材", 409)
         if material_id not in selected:
             selected.append(material_id)
-    materials_repository.replace_category_assignments(
-        category_id,
-        selected,
-        group_key=category.get("group"),
-        training_area=category.get("area"),
-    )
-    persisted = materials_repository.material_ids_for_category(
-        category_id,
-        group_key=category.get("group"),
-        training_area=category.get("area"),
-    )
-    if persisted != set(selected):
-        raise _fail("MATERIAL_LINK_NOT_PERSISTED", "教材關聯未完整寫入，請重新整理後再試", 409)
+    try:
+        persisted = materials_repository.replace_category_assignments(
+            category_id,
+            selected,
+            group_key=category.get("group"),
+            training_area=category.get("area"),
+        )
+    except ValueError:
+        raise _fail("MATERIAL_LINK_NOT_PERSISTED", "教材關聯未完整寫入，已取消本次變更，請重新整理後再試", 409)
     return {"ok": True, "linkedIds": selected, "linked": len(persisted)}
 
 
