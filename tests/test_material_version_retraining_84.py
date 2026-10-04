@@ -280,6 +280,30 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row["completed_version"], 4)
 
+    def test_version_storage_reference_index_keeps_v1_and_v2_provider_locations(self):
+        material_version_retraining_84(self.conn, "sqlite")
+        with patch.object(common_db, "read_connection", self._read), patch.object(
+            common_db, "transaction", self._tx
+        ):
+            self.conn.execute(
+                "UPDATE materials SET storage_backend='r2',storage_key='materials/v1/source.pdf',slides_prefix='materials/v1/slides' WHERE id='mat-1'"
+            )
+            self.conn.execute(
+                "UPDATE material_versions SET snapshot=? WHERE material_id='mat-1' AND version=1",
+                ('{"storage_backend":"r2","storage_key":"materials/v1/source.pdf","slides_prefix":"materials/v1/slides"}',),
+            )
+            material_repository.replace_material_content_and_publish(
+                "mat-1",
+                content={**material_entry("temp"), "storage_backend": "r2", "storage_key": "materials/v2/source.pdf", "slides_prefix": "materials/v2/slides"},
+                published_by="admin", change_reason="V2", requires_retraining=False,
+            )
+            refs = material_repository.material_version_storage_references("mat-1")
+            v1 = material_repository.storage_location_referenced_by_version(backend="r2", storage_key="materials/v1/source.pdf")
+            v2 = material_repository.storage_location_referenced_by_version(backend="r2", storage_key="materials/v2/source.pdf")
+        self.assertEqual({row["storageKey"] for row in refs}, {"materials/v1/source.pdf", "materials/v2/source.pdf"})
+        self.assertTrue(v1)
+        self.assertTrue(v2)
+
     def test_material_version_history_survives_catalog_record_deletion(self):
         material_version_retraining_84(self.conn, "sqlite")
         with patch.object(common_db, "read_connection", self._read), patch.object(
