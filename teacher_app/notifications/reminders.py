@@ -90,6 +90,22 @@ def _record_delivery_attempt(run_id: str, username: str, event: Mapping[str, Any
         LOGGER.warning("email delivery observability write failed error_type=%s", type(exc).__name__)
 
 
+def _start_reminder_run(run_id: str, started_at: str) -> None:
+    with common_db.transaction() as (conn, dbkind):
+        ph = common_db.placeholder(dbkind)
+        conn.execute(f"INSERT INTO email_reminder_runs(id,started_at,status) VALUES ({ph},{ph},{ph})",(run_id,started_at,"running"))
+
+
+def _finish_reminder_run(run_id: str, *, expected: int, claimed: int, sent_events: int, failed_events: int) -> None:
+    try:
+        with common_db.transaction() as (conn, dbkind):
+            ph = common_db.placeholder(dbkind)
+            status = "partial" if failed_events else "completed"
+            conn.execute(f"UPDATE email_reminder_runs SET completed_at={ph},expected_events={ph},claimed_events={ph},sent_events={ph},failed_events={ph},status={ph} WHERE id={ph}",(dt.datetime.now(dt.timezone.utc).isoformat(),expected,claimed,sent_events,failed_events,status,run_id))
+    except Exception as exc:
+        LOGGER.warning("email reminder run observability write failed error_type=%s", type(exc).__name__)
+
+
 def _line(event: Mapping[str, Any]) -> str:
     label = str(event.get("badge") or event.get("kind") or "待辦")
     title = str(event.get("title") or "待處理項目")
@@ -105,6 +121,8 @@ def run_due_reminders() -> int:
     days = max(1, int(os.getenv("EMAIL_REMINDER_DAYS", "7") or 7))
     sent = 0
     run_id = uuid.uuid4().hex
+    expected_events = claimed_events = sent_events = failed_events = 0
+    _start_reminder_run(run_id, now.isoformat())
     for row in auth_repository.list_users():
         if not row.get("active") or not row.get("email"):
             continue
@@ -123,7 +141,9 @@ def run_due_reminders() -> int:
                 type(exc).__name__,
             )
             continue
+        expected_events += len(candidates)
         claimed = [event for event in candidates if _claim(user["username"], event["key"], event["kind"])]
+        claimed_events += len(claimed)
         if not claimed:
             continue
         name = str(row.get("display_name") or row["username"])
@@ -145,12 +165,15 @@ def run_due_reminders() -> int:
         if delivered:
             sent += 1
             for event in claimed:
+                sent_events += 1
                 _record_delivery_attempt(run_id, user["username"], event, "sent")
         else:
             error_type = "smtp_send_failed"
             for event in claimed:
+                failed_events += 1
                 _record_delivery_attempt(run_id, user["username"], event, "failed", error_type)
                 _release_claim(user["username"], event["key"])
+    _finish_reminder_run(run_id, expected=expected_events, claimed=claimed_events, sent_events=sent_events, failed_events=failed_events)
     return sent
 
 
