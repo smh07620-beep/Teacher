@@ -32,6 +32,58 @@
     return data;
   }
 
+  function filterQuery(){
+    const query=new URLSearchParams();
+    const area=document.getElementById('admin-compliance-area')?.value||'';
+    const group=document.getElementById('admin-compliance-group')?.value||'';
+    const courseId=document.getElementById('admin-compliance-course')?.value||'';
+    if(area)query.set('area',area);
+    if(group)query.set('group',group);
+    if(courseId)query.set('courseId',courseId);
+    return query;
+  }
+
+  function ensureOverview(){
+    const view=document.getElementById('admin-competency-matrix-view');
+    const summary=document.getElementById('admin-competency-matrix-summary');
+    if(!view||!summary)return null;
+    let host=document.getElementById('admin-training-intervention-overview-f3');
+    if(host)return host;
+    host=document.createElement('section');
+    host.id='admin-training-intervention-overview-f3';
+    host.className='mb-3 rounded-xl border border-indigo-100 bg-indigo-50/30 p-3';
+    host.innerHTML='<div class="text-xs text-slate-500">正在讀取介入成效…</div>';
+    summary.before(host);
+    return host;
+  }
+
+  async function loadOverview(){
+    const host=ensureOverview();
+    if(!host)return;
+    try{
+      const data=await request('/api/training-interventions?'+filterQuery().toString());
+      const s=data.summary||{};
+      const avg=s.averageResolutionHours===null||s.averageResolutionHours===undefined?'—':Number(s.averageResolutionHours).toFixed(1)+' 小時';
+      host.innerHTML=
+        '<div class="flex items-center justify-between gap-2"><div><b class="text-xs text-slate-900">🧭 介入追蹤成效</b><p class="mt-1 text-[10px] text-slate-500">只統計正式介入案件；結案仍需真實學習／考核證據解除異常。</p></div><button type="button" data-intervention-overview-refresh class="text-[10px] font-bold text-indigo-700">↻ 更新</button></div>'+
+        '<div class="mt-2 grid grid-cols-2 md:grid-cols-5 gap-2">'+[
+          ['處理中',s.active||0],
+          ['可結案',s.readyToResolve||0],
+          ['已結案',s.resolved||0],
+          ['結案率',Number(s.resolutionRate||0).toFixed(1)+'%'],
+          ['平均結案時間',avg]
+        ].map(([label,value])=>'<div class="rounded-lg border border-indigo-100 bg-white px-2.5 py-2"><div class="text-[9px] text-slate-400">'+label+'</div><div class="mt-0.5 text-sm font-black text-slate-900">'+esc(value)+'</div></div>').join('')+
+        '</div>';
+      host.querySelector('[data-intervention-overview-refresh]')?.addEventListener('click',()=>void loadOverview());
+    }catch(error){
+      if(error.code==='FORBIDDEN'){
+        host.remove();
+        return;
+      }
+      host.innerHTML='<div class="text-xs text-rose-700">❌ '+esc(error.message||'介入成效讀取失敗')+'</div>';
+    }
+  }
+
   function planHtml(caseItem){
     const plan=caseItem?.plan||{};
     const materials=Array.isArray(plan.reviewMaterials)?plan.reviewMaterials:[];
@@ -105,6 +157,9 @@
       return;
     }
 
+    const eligibility=active?.resolutionEligible
+      ? '<div class="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] font-bold text-emerald-700">✓ 真實證據已解除原異常，目前可以結案。</div>'
+      : '';
     host.innerHTML=
       '<div class="flex flex-wrap items-start justify-between gap-3">'+
         '<div><div class="flex items-center gap-2"><b class="text-xs text-slate-900">🧭 教學介入追蹤</b><span class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">'+esc(labels[active.status]||active.status)+'</span></div>'+
@@ -115,7 +170,7 @@
         '<label class="text-[11px] font-bold text-slate-600">給學員的訊息<textarea data-intervention-learner-message rows="3" class="learning-input mt-1 w-full">'+esc(active.learnerMessage||'')+'</textarea></label>'+
         '<label class="text-[11px] font-bold text-slate-600">內部追蹤備註<textarea data-intervention-internal-note rows="3" class="learning-input mt-1 w-full">'+esc(active.internalNote||'')+'</textarea></label>'+
       '</div>'+
-      planHtml(active)+
+      planHtml(active)+eligibility+
       '<div class="mt-3 flex items-center gap-2"><button type="button" data-intervention-save class="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-[11px] font-bold text-indigo-700">儲存訊息／備註</button><span data-intervention-feedback class="text-[10px] text-slate-400"></span></div>';
     bind(host,item,active);
   }
@@ -130,6 +185,7 @@
           body:JSON.stringify({username:item.username,courseId:item.courseId})
         });
         await loadFor(item,host);
+        await loadOverview();
       }catch(error){
         alert(error.message||'建立介入追蹤失敗');
         if(button)button.disabled=false;
@@ -149,6 +205,7 @@
         });
         if(feedback)feedback.textContent='✓ 已儲存';
         await loadFor(item,host);
+        await loadOverview();
       }catch(error){
         if(feedback)feedback.textContent='❌ '+(error.message||'儲存失敗');
       }
@@ -169,11 +226,16 @@
           })
         });
         await loadFor(item,host);
+        await loadOverview();
       }catch(error){
         alert(error.message||'介入狀態更新失敗');
         button.disabled=false;
       }
     }));
+  }
+
+  for(const id of ['admin-compliance-area','admin-compliance-group','admin-compliance-course']){
+    document.getElementById(id)?.addEventListener('change',()=>void loadOverview());
   }
 
   document.addEventListener('training-intervention:evidence',event=>{
@@ -182,5 +244,7 @@
     if(item&&host)void loadFor(item,host);
   });
 
-  window.TrainingInterventionF3=Object.freeze({loadFor});
+  window.TrainingInterventionF3=Object.freeze({loadFor,loadOverview});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>void loadOverview(),{once:true});
+  else void loadOverview();
 })();

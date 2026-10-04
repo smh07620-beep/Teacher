@@ -293,6 +293,8 @@ def update_case(
             "completed": bool(row.get("completed")),
             "examPassed": bool(row.get("examPassed")),
             "materialsComplete": bool(row.get("materialsComplete")),
+            "certificateStatus": str(row.get("certificateStatus") or "none"),
+            "certificateId": str(row.get("certificateId") or ""),
             "verifiedAt": resolved_at,
         }
     elif target_status == "cancelled":
@@ -341,6 +343,29 @@ def update_case(
     return {"ok": True, "intervention": updated}
 
 
+def _parse_time(value: Any) -> dt.datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = dt.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def _resolution_hours(item: Mapping[str, Any]) -> float | None:
+    created = _parse_time(item.get("createdAt"))
+    resolved = _parse_time(item.get("resolvedAt"))
+    if not created or not resolved or resolved < created:
+        return None
+    return round((resolved - created).total_seconds() / 3600, 2)
+
+
 def manager_list(
     actor: Mapping[str, Any] | None,
     *,
@@ -357,29 +382,78 @@ def manager_list(
         course_id=course_id,
         include_inactive_users=True,
     )
-    visible_pairs = {
-        (str(item.get("username") or "").lower(), str(item.get("courseId") or ""))
+    row_by_pair = {
+        (str(item.get("username") or "").lower(), str(item.get("courseId") or "")): item
         for item in matrix.get("rows", [])
     }
+    visible_pairs = set(row_by_pair)
     rows = intervention_repository.list_interventions(
         course_id=course_id,
         status=status,
         include_terminal=True,
     )
-    items = [
-        item
-        for item in rows
-        if (item.get("username"), item.get("courseId")) in visible_pairs
+    items = []
+    for raw in rows:
+        pair = (raw.get("username"), raw.get("courseId"))
+        if pair not in visible_pairs:
+            continue
+        item = dict(raw)
+        evidence = dict(row_by_pair.get(pair) or {})
+        current_status = str(evidence.get("status") or "")
+        item["currentEvidenceStatus"] = current_status
+        item["resolutionEligible"] = bool(
+            item.get("status") in ACTIVE_CASE_STATUSES
+            and current_status not in MANAGED_SOURCE_STATUSES
+        )
+        item["currentEvidence"] = {
+            "completed": bool(evidence.get("completed")),
+            "materialsComplete": bool(evidence.get("materialsComplete")),
+            "examPassed": bool(evidence.get("examPassed")),
+            "certificateStatus": str(evidence.get("certificateStatus") or "none"),
+            "certificateId": str(evidence.get("certificateId") or ""),
+        }
+        elapsed = _resolution_hours(item)
+        if elapsed is not None:
+            item["resolutionHours"] = elapsed
+        items.append(item)
+
+    active = [item for item in items if item.get("status") in ACTIVE_CASE_STATUSES]
+    resolved = [item for item in items if item.get("status") == "resolved"]
+    closed_for_rate = [
+        item for item in items
+        if item.get("status") in ACTIVE_CASE_STATUSES or item.get("status") == "resolved"
     ]
+    durations = [
+        float(item["resolutionHours"])
+        for item in resolved
+        if item.get("resolutionHours") is not None
+    ]
+    by_kind = {}
+    for kind in sorted(MANAGED_SOURCE_STATUSES):
+        kind_items = [item for item in items if item.get("kind") == kind]
+        by_kind[kind] = {
+            "total": len(kind_items),
+            "active": sum(1 for item in kind_items if item.get("status") in ACTIVE_CASE_STATUSES),
+            "resolved": sum(1 for item in kind_items if item.get("status") == "resolved"),
+        }
+
     return {
         "scope": matrix.get("scope", {}),
         "summary": {
             "total": len(items),
+            "active": len(active),
             "open": sum(1 for item in items if item.get("status") == "open"),
             "inProgress": sum(1 for item in items if item.get("status") == "in_progress"),
             "readyForRetest": sum(1 for item in items if item.get("status") == "ready_for_retest"),
-            "resolved": sum(1 for item in items if item.get("status") == "resolved"),
+            "readyToResolve": sum(1 for item in active if item.get("resolutionEligible")),
+            "resolved": len(resolved),
             "cancelled": sum(1 for item in items if item.get("status") == "cancelled"),
+            "resolutionRate": round(
+                (len(resolved) / len(closed_for_rate) * 100) if closed_for_rate else 0,
+                1,
+            ),
+            "averageResolutionHours": round(sum(durations) / len(durations), 1) if durations else None,
+            "byKind": by_kind,
         },
         "items": items,
     }
