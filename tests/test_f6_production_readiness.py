@@ -37,11 +37,21 @@ class F6ProductionReadinessTests(unittest.TestCase):
                 connection_factory=lambda:None,
                 backup_builder=backup,
                 email_builder=email,
+                rehearsal_builder=lambda _backup,_factory=None:{
+                    "safeToAttemptRestore":True,
+                    "totals":{"compatibleRows":1,"skippedRows":0},
+                },
+                recovery_builder=lambda _factory=None:{
+                    "ok":True,"errorCount":0,"warningCount":0,
+                },
             )
         self.assertTrue(data["ready"])
         self.assertEqual(data["status"],"production_ready")
         self.assertEqual(data["storage"]["backend"],"r2")
         self.assertEqual(data["worker"]["active"],1)
+        self.assertTrue(data["backup"]["restoreRehearsalOk"])
+        self.assertTrue(data["recovery"]["ok"])
+        self.assertTrue(data["gate"]["productionReady"])
 
     def test_worker_offline_and_unshared_storage_are_blockers(self):
         health_payload={
@@ -57,6 +67,13 @@ class F6ProductionReadinessTests(unittest.TestCase):
                 material_runtime=self.runtime(active=False,shared=False),
                 backup_builder=lambda _factory=None:{"format":"teacher-backup-v1","sha256":"abc","tables":{}},
                 email_builder=lambda:{"schedule":{"health":"healthy"}},
+                rehearsal_builder=lambda _backup,_factory=None:{
+                    "safeToAttemptRestore":True,
+                    "totals":{"compatibleRows":1,"skippedRows":0},
+                },
+                recovery_builder=lambda _factory=None:{
+                    "ok":True,"errorCount":0,"warningCount":0,
+                },
             )
         keys={item["key"] for item in data["blockers"]}
         self.assertIn("shared_storage",keys)
@@ -77,6 +94,13 @@ class F6ProductionReadinessTests(unittest.TestCase):
                 material_runtime=self.runtime(),
                 backup_builder=lambda _factory=None:{"format":"teacher-backup-v1","sha256":"abc","tables":{}},
                 email_builder=lambda:{"schedule":{"health":"missing_run","issue":"missing"}},
+                rehearsal_builder=lambda _backup,_factory=None:{
+                    "safeToAttemptRestore":True,
+                    "totals":{"compatibleRows":1,"skippedRows":0},
+                },
+                recovery_builder=lambda _factory=None:{
+                    "ok":True,"errorCount":0,"warningCount":0,
+                },
             )
         self.assertTrue(data["ready"])
         self.assertEqual(data["warnings"][0]["key"],"email")

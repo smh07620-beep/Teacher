@@ -170,6 +170,7 @@ GitHub Actions 的 `Teacher release checks` 會執行 Python compile、完整 re
 - `docs/MATERIAL_VERSION_RETRAINING_0084.md`：教材/SOP 版本歷史與重新訓練完成證據
 - `docs/NOTIFICATION_READ_STATE_0086.md`：通知中心跨裝置已讀／未讀狀態與事件 key 契約
 - `docs/ACCESSIBILITY_REGRESSION.md`：Playwright accessibility/WCAG regression gate 與涵蓋範圍
+- `docs/PRODUCTION_READINESS_F6.md`：F6 正式環境驗收、教材改版影響、備份還原演練與 Production Ready gate
 - `docs/COURSE_FEEDBACK_0087.md`：一般課程學員回饋、scope 與匿名管理彙總契約
 - `docs/SAVED_LEARNING_ITEMS_0088.md`：跨裝置課程／教材收藏與 browser-local 頁碼 bookmark 分工
 - `VERSION` / `release_contract.py`：目前正式 release contract

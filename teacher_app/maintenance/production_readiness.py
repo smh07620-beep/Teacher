@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping
 
 from teacher_app.maintenance import backup as maintenance_backup
-from teacher_app.maintenance import health
+from teacher_app.maintenance import health, recovery_audit
 from teacher_app.notifications import delivery_health
 
 
@@ -29,6 +29,8 @@ def build_acceptance(
     connection_factory: Callable | None = None,
     backup_builder: Callable | None = None,
     email_builder: Callable | None = None,
+    rehearsal_builder: Callable | None = None,
+    recovery_builder: Callable | None = None,
 ) -> dict[str, Any]:
     ready_payload, _ready_status = health.ready_state(connection_factory)
     deployment = dict(ready_payload.get("deployment") or {})
@@ -70,26 +72,53 @@ def build_acceptance(
         email_ok = False
 
     backup_factory = backup_builder or maintenance_backup.build_backup
+    rehearsal_factory = rehearsal_builder or maintenance_backup.restore_rehearsal
     try:
         backup = dict(backup_factory(connection_factory) or {})
         backup_tables = dict(backup.get("tables") or {})
-        backup_ok = bool(backup.get("sha256") and backup.get("format") == maintenance_backup.BACKUP_FORMAT)
+        backup_ok = bool(
+            backup.get("sha256")
+            and backup.get("format") == maintenance_backup.BACKUP_FORMAT
+        )
+        rehearsal = dict(rehearsal_factory(backup, connection_factory) or {})
+        restore_rehearsal_ok = bool(rehearsal.get("safeToAttemptRestore"))
         backup_summary = {
             "ok": backup_ok,
             "createdAt": str(backup.get("createdAt") or ""),
             "tableCount": len(backup_tables),
-            "rowCount": sum(len(rows) for rows in backup_tables.values() if isinstance(rows, list)),
+            "rowCount": sum(
+                len(rows) for rows in backup_tables.values() if isinstance(rows, list)
+            ),
             "sha256Present": bool(backup.get("sha256")),
+            "restoreRehearsalOk": restore_rehearsal_ok,
+            "restoreRehearsalTotals": dict(rehearsal.get("totals") or {}),
         }
     except Exception as exc:
         backup_ok = False
+        restore_rehearsal_ok = False
         backup_summary = {
             "ok": False,
             "tableCount": 0,
             "rowCount": 0,
             "sha256Present": False,
+            "restoreRehearsalOk": False,
+            "restoreRehearsalTotals": {},
             "error": type(exc).__name__,
         }
+
+    recovery_factory = recovery_builder or recovery_audit.build_recovery_audit
+    try:
+        recovery = dict(recovery_factory(connection_factory) or {})
+        recovery_ok = bool(recovery.get("ok"))
+    except Exception as exc:
+        recovery = {
+            "ok": False,
+            "status": "unavailable",
+            "errorCount": 1,
+            "warningCount": 0,
+            "error": type(exc).__name__,
+        }
+        recovery_ok = False
 
     production = str(deployment.get("provider") or "") == "render"
     checks = [
@@ -146,6 +175,21 @@ def build_acceptance(
             backup_ok,
             f"tables={backup_summary.get('tableCount',0)} rows={backup_summary.get('rowCount',0)}",
         ),
+        _check(
+            "restore_rehearsal",
+            "Restore rehearsal",
+            restore_rehearsal_ok,
+            "compatible="
+            + str(backup_summary.get("restoreRehearsalTotals", {}).get("compatibleRows", 0))
+            + " skipped="
+            + str(backup_summary.get("restoreRehearsalTotals", {}).get("skippedRows", 0)),
+        ),
+        _check(
+            "reference_integrity",
+            "DB / artifact reference integrity",
+            recovery_ok,
+            f"errors={int(recovery.get('errorCount') or 0)} warnings={int(recovery.get('warningCount') or 0)}",
+        ),
     ]
     blockers = [item for item in checks if item["required"] and not item["ok"]]
     warnings = [item for item in checks if not item["required"] and not item["ok"]]
@@ -173,6 +217,14 @@ def build_acceptance(
         },
         "email": email,
         "backup": backup_summary,
+        "recovery": recovery,
+        "gate": {
+            "preDeploy": (
+                "Teacher release + Product Golden Path + Playwright + Windows Worker"
+            ),
+            "postDeploy": "production-readiness",
+            "productionReady": bool(production and not blockers),
+        },
     }
 
 
