@@ -201,3 +201,54 @@ Both nominal (class median) and conservative (class P95) versions are shown for 
 If any recent arrival or current backlog belongs to a workload class without enough completed samples, the mixed ETA is intentionally marked unavailable/partially calibrated. The previous all-Job Forecast remains visible as a fallback, but the UI explicitly says that the workload-aware model is incomplete. This prevents document performance from being applied to a long video without evidence.
 
 No new migration is required because `material_jobs.original_name`, `source_bytes`, `result.pageCount`, and `result.storageMeta.durationSeconds` already exist.
+
+
+## Peak workload Capacity What-if
+
+The system-admin SLO workspace now provides a **read-only** peak-capacity simulator. It does not create material jobs, change queue priority, start a Worker, or write operational state.
+
+The default mixed preset is intentionally concrete: 10 documents plus three 30-minute media files. Administrators can change:
+
+- document count and average pages per document;
+- media count and average media minutes;
+- image count;
+- ZIP/archive count.
+
+Server-side input is bounded even though the form also has HTML limits:
+
+```text
+documents: 0–100
+document pages: 1–500
+media: 0–50
+media minutes: 1–240
+images: 0–100
+archives: 0–50
+```
+
+Simulation uses the workload calibration already learned from real jobs:
+
+- documents prefer median/P95 **seconds per page** when page metadata is available, otherwise the class median/P95 job duration;
+- media prefer median/P95 **processing-to-media-duration ratio**, otherwise the class median/P95 job duration;
+- image/archive workloads use their class service-time distribution.
+
+A peak batch is added to the current calibrated backlog while recent workload arrival demand is assumed to continue. For each 1-Worker and 2-Worker scenario:
+
+```text
+net Worker-hours/hour = Worker count - background workload demand
+peak service hours = current backlog service hours + injected peak service hours
+clear ETA = peak service hours / positive net Worker-hours/hour
+```
+
+The output shows nominal and P95-conservative ETA, background utilization, peak backlog job count, and the workload responsible for the largest share of injected P95 Worker-hours.
+
+The model intentionally refuses a combined ETA when any requested workload, recent arrival workload, or existing backlog workload is not calibrated. For example, a long video cannot inherit PDF service time merely because documents have many samples.
+
+If a Worker/storage/conversion/network/database blocking Incident is open, calculations may still be shown as a planning reference, but the recommendation is explicitly **repair the dependency first**. The simulator never performs automatic scale-out.
+
+API:
+
+```text
+GET /api/operational-capacity-simulation
+```
+
+It is session-authenticated and restricted to `system_admin`. It is GET/read-only so it does not require a mutation/CSRF workflow.
