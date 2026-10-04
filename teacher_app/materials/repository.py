@@ -229,6 +229,54 @@ def material_version_row_to_dict(row) -> dict:
     }
 
 
+def material_version_storage_references(material_id: str) -> list[dict]:
+    """Return durable provider locations referenced by immutable version snapshots."""
+    refs: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for version in list_material_versions(material_id):
+        snapshot = dict(version.get("snapshot") or {})
+        backend = str(snapshot.get("storage_backend") or "local").lower()
+        key = str(snapshot.get("storage_key") or "")
+        prefix = str(snapshot.get("slides_prefix") or "")
+        identity = (backend, key, prefix)
+        if (key or prefix) and identity not in seen:
+            seen.add(identity)
+            refs.append({
+                "version": int(version.get("version") or 1),
+                "backend": backend,
+                "storageKey": key,
+                "slidesPrefix": prefix,
+            })
+    return refs
+
+
+def storage_location_referenced_by_version(*, backend: str, storage_key: str = "", slides_prefix: str = "") -> bool:
+    backend = str(backend or "").lower()
+    key = str(storage_key or "")
+    prefix = str(slides_prefix or "")
+    if not key and not prefix:
+        return False
+    with common_db.read_connection() as (conn, kind):
+        if not _table_exists(conn, kind, "material_versions"):
+            return False
+        rows = conn.execute("SELECT snapshot FROM material_versions").fetchall()
+    for row in rows:
+        raw = dict(row).get("snapshot") or "{}"
+        try:
+            snapshot = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+        except Exception:
+            continue
+        if str(snapshot.get("storage_backend") or "local").lower() != backend:
+            continue
+        historical_key = str(snapshot.get("storage_key") or "")
+        historical_prefix = str(snapshot.get("slides_prefix") or "")
+        if key and historical_key == key:
+            return True
+        if prefix and historical_prefix == prefix:
+            return True
+    return False
+
+
 def list_material_versions(material_id: str) -> list[dict]:
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
