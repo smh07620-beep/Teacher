@@ -21,6 +21,7 @@ from flask import g, jsonify, request, send_file
 
 from teacher_app.common import scope, scope_filter
 from teacher_app.learning.routes import auto_index_material
+from teacher_app.materials import repository as material_repository
 from teacher_app.materials.validation import normalize_material_filename
 from teacher_app.worker import protocol as worker_protocol
 from teacher_app.worker import repository as worker_repository
@@ -735,6 +736,17 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
                     raise ValueError("續傳檔案指紋分段大小與上傳工作不符。")
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        target_material_id = str(body.get("targetMaterialId") or "").strip()[:100]
+        if target_material_id:
+            target = material_repository.get_material(target_material_id)
+            requested_group = scope.normalize_group(body.get("group", scope.DEFAULT_GROUP))
+            requested_area = scope.normalize_area(body.get("area", scope.DEFAULT_TRAINING_AREA))
+            if not target:
+                return jsonify({"error": "指定要更新版本的教材不存在。", "code": "target_material_missing"}), 409
+            if target.get("group") != requested_group or target.get("area") != requested_area:
+                return jsonify({"error": "新版教材的組別／訓練區域與原教材不一致。", "code": "target_material_scope_mismatch"}), 409
+            if not str(body.get("versionChangeReason") or "").strip():
+                return jsonify({"error": "建立教材新版時必須提供版本變更原因。", "code": "version_reason_required"}), 400
         upload_id = "matup-" + uuid.uuid4().hex[:20]; job_id = "matjob-" + uuid.uuid4().hex[:16]; material_id = "upload-" + hashlib.sha256(job_id.encode()).hexdigest()[:12]
         key = f"_staging/material-jobs/{job_id}/source{ext}"
         # The filename remains in PostgreSQL/session payloads.  S3 metadata
@@ -749,7 +761,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
                 multipart = runtime.r2_client_factory().create_multipart_upload(Bucket=str(_runtime_value(runtime.r2_bucket_name) or ""), Key=key, ContentType=_content_type_for(original), Metadata=metadata)
                 r2_upload_id = str(multipart["UploadId"])
             actor_username = str((current_actor() or {}).get("username") or "").strip()[:100]
-            payload = {"originalName": original, "sourceMime": _content_type_for(original), "title": str(body.get("title") or "")[:255], "desc": str(body.get("desc") or "")[:1000], "category": str(body.get("category") or "")[:100], "group": scope.normalize_group(body.get("group", scope.DEFAULT_GROUP)), "area": scope.normalize_area(body.get("area", scope.DEFAULT_TRAINING_AREA)), "courseId": str(body.get("courseId") or "")[:100], "materialType": str(body.get("materialType") or "standard")[:40], "atlasCategory": str(body.get("atlasCategory") or "").strip()[:120], "atlasMagnification": str(body.get("atlasMagnification") or "").strip()[:80], "atlasInterpretation": str(body.get("atlasInterpretation") or "").strip()[:1000], "atlasClinical": str(body.get("atlasClinical") or "").strip()[:1000], "atlasDifferential": str(body.get("atlasDifferential") or "").strip()[:1000], "atlasNormality": str(body.get("atlasNormality") or "").strip()[:40], "atlasTags": str(body.get("atlasTags") or "").strip()[:300], "materialId": material_id, "sourceSha256": sha, "integrityMode": integrity_mode, "uploadMode": upload_mode, "uploadActor": actor_username, "uploadIdentity": upload_identity, "targetMaterialId": str(body.get("targetMaterialId") or "").strip()[:100], "versionChangeReason": str(body.get("versionChangeReason") or "").strip()[:1000], "requiresRetraining": (body.get("requiresRetraining") is True or str(body.get("requiresRetraining") or "").strip().lower() in {"1", "true", "yes", "on"})}
+            payload = {"originalName": original, "sourceMime": _content_type_for(original), "title": str(body.get("title") or "")[:255], "desc": str(body.get("desc") or "")[:1000], "category": str(body.get("category") or "")[:100], "group": scope.normalize_group(body.get("group", scope.DEFAULT_GROUP)), "area": scope.normalize_area(body.get("area", scope.DEFAULT_TRAINING_AREA)), "courseId": str(body.get("courseId") or "")[:100], "materialType": str(body.get("materialType") or "standard")[:40], "atlasCategory": str(body.get("atlasCategory") or "").strip()[:120], "atlasMagnification": str(body.get("atlasMagnification") or "").strip()[:80], "atlasInterpretation": str(body.get("atlasInterpretation") or "").strip()[:1000], "atlasClinical": str(body.get("atlasClinical") or "").strip()[:1000], "atlasDifferential": str(body.get("atlasDifferential") or "").strip()[:1000], "atlasNormality": str(body.get("atlasNormality") or "").strip()[:40], "atlasTags": str(body.get("atlasTags") or "").strip()[:300], "materialId": material_id, "sourceSha256": sha, "integrityMode": integrity_mode, "uploadMode": upload_mode, "uploadActor": actor_username, "uploadIdentity": upload_identity, "targetMaterialId": target_material_id, "versionChangeReason": str(body.get("versionChangeReason") or "").strip()[:1000], "requiresRetraining": (body.get("requiresRetraining") is True or str(body.get("requiresRetraining") or "").strip().lower() in {"1", "true", "yes", "on"})}
             now = _now()
             worker_repository.create_upload_session(
                 {
