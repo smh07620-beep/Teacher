@@ -42,6 +42,24 @@ class F2CourseLifecycleTests(unittest.TestCase):
         conn.close()
         self.assertEqual(rows,{"a":"published","b":"draft"})
 
+    def test_migration_is_safe_without_courses_table(self):
+        conn=sqlite3.connect(":memory:")
+        conn.row_factory=sqlite3.Row
+        conn.isolation_level=None
+        course_lifecycle_113(conn,"sqlite")
+        conn.close()
+
+    def test_migration_preserves_minimal_legacy_courses_without_active_column(self):
+        conn=sqlite3.connect(":memory:")
+        conn.row_factory=sqlite3.Row
+        conn.isolation_level=None
+        conn.execute("CREATE TABLE courses(id TEXT PRIMARY KEY,title TEXT NOT NULL DEFAULT '')")
+        conn.execute("INSERT INTO courses(id,title) VALUES('legacy','Legacy')")
+        course_lifecycle_113(conn,"sqlite")
+        row=conn.execute("SELECT lifecycle_status FROM courses WHERE id='legacy'").fetchone()
+        conn.close()
+        self.assertEqual(row["lifecycle_status"],"published")
+
     def test_new_service_course_is_hidden_draft(self):
         course=service.create_course(None,{"area":"internal","group":"grpBio","title":"Draft"})
         self.assertEqual(course["lifecycleStatus"],"draft")

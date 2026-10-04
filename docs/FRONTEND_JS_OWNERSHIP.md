@@ -21,7 +21,7 @@ This map records the remaining compatibility wrapper chains that intentionally r
 | `buildCourseMaterialRow` | `static/system-learner.js` | `static/learner-content-audience-1014.js` | Add learner-visible audience badges to canonical course-material rows. |
 | `courseWizard681OpenCourse` | `static/course-wizard-681.js` | `static/course-wizard-runtime-fix-1014.js` | Prevent duplicate/re-entrant finish rendering and route through the canonical workspace router. |
 | `markMaterialComplete` | `static/system-learner.js` | `static/teaching.js` → `static/learner-reading-progress-f2.js` | Canonical owner remains the legacy fallback writer and now exposes read/sync helpers for the lexical completion map. Teaching enforces homepage-linked identity and reads completion through that owner; F2 intercepts automatically tracked PDF/PPT/media so they use server-derived `/api/learning-progress` evidence, sync current-version completion back to the owner, and leave unsupported formats on the legacy fallback. |
-| `renderCourseOverview` | `static/system-learner.js` stable dispatcher | `static/teaching.js` registers `TeachingCourseOverview66.render` | Teaching provides the ordered/searchable course presentation; shared learner finalization still renders saved items, feedback, calendar, and completion certificates. The global function itself is never reassigned by Teaching. |
+| `renderCourseOverview` | `static/system-learner.js` stable dispatcher | `static/teaching.js` registers `TeachingCourseOverview66.render` → `static/learner-reading-progress-f2.js` | Teaching provides the ordered/searchable course presentation without replacing the global. F2 wraps the stable dispatcher only to repaint canonical server-derived reading progress after the canonical render completes. |
 
 ## Classic-script compatibility chains
 
@@ -31,7 +31,7 @@ These are not separate product owners, but classic scripts can reassign bare glo
 | --- | --- | --- | --- |
 | `adminQuestionEditFormHTML` | `static/admin-question-editor-ui.js` | `static/review-links-66.js` | Preserve the canonical question editor HTML and append review-source fields only. |
 | `renderQuestions` | `static/system-exam.js` | `static/review-links-66.js` | Preserve learner exam rendering, then inject review-source presentation. |
-| `renderSlidesGrid` | `static/system-learner.js` | `static/review-links-66.js` | Preserve the canonical material grid, then resolve a pending review deep-link. |
+| `renderSlidesGrid` | `static/system-learner.js` | `static/review-links-66.js` → `static/learner-reading-progress-f2.js` | Review-links resolves a pending review deep-link. F2 then refreshes `/api/learning-progress` and repaints server-derived reading/completion state after the canonical grid render. |
 | `teachingSavePage` | `static/teaching.js` | `static/teaching.js` reader-next wrapper → `static/review-links-66.js` review-context wrapper | Save the page once, then synchronize reader-next state and review context. |
 | `teachingNextMaterial` | `static/teaching.js` | `static/teaching.js` sequential-reader wrapper | Block next-material navigation until the current material is completed; no second persistence owner. |
 | `switchDynamicCategory` | `static/system-exam.js` | `static/teaching.js` empty-exam wrapper | Prevent an empty exam from creating/entering an attempt; otherwise call the canonical exam switch once. |
