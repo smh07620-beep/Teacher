@@ -7,8 +7,9 @@ class SmartLearning67Tests(unittest.TestCase):
     def test_reader_tracks_page_without_open_equals_complete(self):
         source=ROOT.joinpath('static/smart-learning-67.js').read_text(encoding='utf-8')
         self.assertIn('learning-progress',source)
-        self.assertIn('p>=t',source)
-        self.assertIn('save({page:p}',source)
+        self.assertIn('totalPages:t',source)
+        self.assertIn("completed:false",source)
+        self.assertNotIn('p>=t',source)
     def test_adapter_keeps_legacy_app(self):
         entrypoint=ROOT.joinpath('pgy_app.py').read_text(encoding='utf-8')
         factory=ROOT.joinpath('teacher_app','factory.py').read_text(encoding='utf-8')

@@ -20,7 +20,7 @@ This map records the remaining compatibility wrapper chains that intentionally r
 | `buildSlideCardHTML` | `static/system-learner.js` | `static/learner-content-audience-1014.js` | Add learner-visible audience badges to canonical material cards. |
 | `buildCourseMaterialRow` | `static/system-learner.js` | `static/learner-content-audience-1014.js` | Add learner-visible audience badges to canonical course-material rows. |
 | `courseWizard681OpenCourse` | `static/course-wizard-681.js` | `static/course-wizard-runtime-fix-1014.js` | Prevent duplicate/re-entrant finish rendering and route through the canonical workspace router. |
-| `markMaterialComplete` | `static/system-learner.js` | `static/teaching.js` | Canonical owner performs the single `/api/material-progress` write. Teaching only enforces the homepage-linked identity and refreshes reader controls after success. |
+| `markMaterialComplete` | `static/system-learner.js` | `static/teaching.js` → `static/learner-reading-progress-f2.js` | Canonical owner remains the legacy fallback writer. Teaching enforces homepage-linked identity; F2 intercepts automatically tracked PDF/PPT/media so they use server-derived `/api/learning-progress` evidence instead of self-declared completion, while unsupported formats fall through to the canonical owner. |
 | `renderCourseOverview` | `static/system-learner.js` stable dispatcher | `static/teaching.js` registers `TeachingCourseOverview66.render` | Teaching provides the ordered/searchable course presentation; shared learner finalization still renders saved items, feedback, calendar, and completion certificates. The global function itself is never reassigned by Teaching. |
 
 ## Classic-script compatibility chains

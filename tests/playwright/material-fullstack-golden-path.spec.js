@@ -10,7 +10,7 @@ async function login(page) {
   await page.locator('#login-username').fill('gp01teacher');
   await page.locator('#login-password').fill(fixturePassword);
   await Promise.all([
-    page.waitForURL(url => !url.pathname.endsWith('/login'), { timeout: 15000 }),
+    page.waitForURL(url => !url.pathname.endsWith('/login'), { timeout: 15000, waitUntil: 'domcontentloaded' }),
     page.locator('#login-form button[type="submit"]').click(),
   ]);
   await page.waitForFunction(() => Boolean(window.MaterialUploadClient?.directUpload), null, { timeout: 15000 });
