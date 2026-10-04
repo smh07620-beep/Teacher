@@ -35,6 +35,10 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
                 ("cat-1", "grpBio", "internal", "考卷", "now", 0, "draft"),
             )
             conn.execute(
+                "UPDATE quiz_categories SET audience=? WHERE id=?",
+                ("一般人員", "cat-1"),
+            )
+            conn.execute(
                 "INSERT INTO quiz_questions(id,quiz_category_id,tag,question,question_type,options,correct,answer_config,sort_order,active) "
                 "VALUES(?,?,?,?,?,?,?,?,?,?)",
                 ("q-1", "cat-1", "一般", "題目", "choice", '["A","B"]', 0, "{}", 0, 1),
@@ -117,6 +121,19 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         self.assertEqual(snapshot["category"]["reviewerTitle"], "教學行政管理師")
         self.assertEqual(snapshot["questions"][0]["version"], 1)
         self.assertRegex(snapshot["questions"][0]["questionHash"], r"^[0-9a-f]{64}$")
+
+    def test_publish_fails_closed_when_audience_is_missing(self):
+        reviewed = self.client.post("/api/quiz-categories/cat-1/review")
+        self.assertEqual(reviewed.status_code, 200, reviewed.get_data(as_text=True))
+        conn, _ = self.connect()
+        try:
+            conn.execute("UPDATE quiz_categories SET audience='' WHERE id='cat-1'")
+        finally:
+            conn.close()
+        published = self.client.post("/api/quiz-categories/cat-1/publish")
+        self.assertEqual(published.status_code, 409, published.get_data(as_text=True))
+        self.assertEqual(published.get_json()["error"], "發布前必須設定適用人員")
+        self.assertEqual(self.category()["active"], 0)
 
     def test_category_delete_resolves_scope_from_target_category(self):
         self.actor = {
