@@ -210,6 +210,40 @@
     }
   };
 
+  async function resolveMaterialVersionIntent(file,meta){
+    const materials=(await window.fetchAdminMaterials?.())||[];
+    const filename=String(file?.name||'').trim().toLocaleLowerCase();
+    const title=String(meta?.title||'').trim().toLocaleLowerCase();
+    const candidates=materials.filter(item=>{
+      if(!item||item.isBuiltin)return false;
+      if(String(item.group||'')!==String(meta?.group||''))return false;
+      if(String(item.area||'')!==String(meta?.area||''))return false;
+      const sameCourse=!meta?.courseId||!item.courseId||String(item.courseId)===String(meta.courseId);
+      if(!sameCourse)return false;
+      const sameFile=filename&&String(item.filename||'').trim().toLocaleLowerCase()===filename;
+      const sameTitle=title&&String(item.title||'').trim().toLocaleLowerCase()===title;
+      return sameFile||sameTitle;
+    });
+    if(!candidates.length)return {};
+    const current=candidates[0];
+    const nextVersion=Number(current.currentVersion||1)+1;
+    const useVersion=confirm(
+      '偵測到可能是同一份教材：\n\n「'+String(current.title||current.filename||'教材')+'」 V'+Number(current.currentVersion||1)+
+      '\n\n按「確定」＝把這次上傳建立為 V'+nextVersion+'，學員只看到新版；舊版保留在版本歷程。\n按「取消」＝不要覆蓋，下一步可選擇另存新教材。'
+    );
+    if(!useVersion){
+      return confirm('確定要把這個檔案另存成一份新的教材嗎？\n\n這會在教材清單新增另一筆資料；若只是修訂原教材，建議選擇建立新版。')?{}:null;
+    }
+    const reason=prompt('建立 V'+nextVersion+'｜請輸入本次版本變更原因：','');
+    if(reason===null||!reason.trim()){
+      alert('建立新版必須填寫版本變更原因，本次檔案不會上傳。');
+      return null;
+    }
+    const requiresRetraining=confirm('這次內容變更是否需要學員重新完成訓練？\n\n「確定」＝要求重訓；「取消」＝既有完成資格仍有效。');
+    if(!confirm('確認以「'+String(current.title||current.filename||'教材')+'」的 V'+nextVersion+' 發布？\n\n舊版會保留在版本歷程，不會再新增一張重複教材卡。'))return null;
+    return {targetMaterialId:String(current.id||''),versionChangeReason:reason.trim(),requiresRetraining};
+  }
+
   window.adminUploadMaterials = async function(){
     const input=document.getElementById('admin-pptx-upload-input');
     const files=Array.from(input?.files||[]);
@@ -234,6 +268,11 @@
       const area=document.getElementById('admin-material-area')?.value||currentTrainingArea;
       const courseId=document.getElementById('admin-material-course')?.value||'';
       const materialType=document.getElementById('admin-material-type')?.value||'standard';
+      const versionIntent=await resolveMaterialVersionIntent(file,{title,group,area,courseId});
+      if(versionIntent===null){
+        failed.push({name:file.name,error:'教師取消本次上傳'});
+        continue;
+      }
       const fd=new FormData();
       fd.append('file',file);
       fd.append('title',title);
@@ -244,6 +283,11 @@
       fd.append('courseId',courseId);
       fd.append('materialType',materialType);
       fd.append('progressId',progressId);
+      if(versionIntent.targetMaterialId){
+        fd.append('targetMaterialId',versionIntent.targetMaterialId);
+        fd.append('versionChangeReason',versionIntent.versionChangeReason);
+        fd.append('requiresRetraining',versionIntent.requiresRetraining?'true':'false');
+      }
       fd.append('atlasCategory',document.getElementById('admin-atlas-category')?.value||'');
       fd.append('atlasMagnification',document.getElementById('admin-atlas-magnification')?.value||'');
       fd.append('atlasInterpretation',document.getElementById('admin-atlas-interpretation')?.value||'');
