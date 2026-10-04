@@ -67,6 +67,13 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
             ],
         )
         self.window_patch = patch.object(service, "assert_exam_open", return_value=None)
+        # submit_attempt uses exams.windows.assert_exam_not_closed directly;
+        # route its read connection to this test's SQLite database too.
+        self.window_db_patch = patch.object(
+            service.assert_exam_not_closed.__globals__["common_db"],
+            "read_connection",
+            side_effect=lambda: self._read_connection(),
+        )
         self.shuffle_patch = patch.object(service.random, "shuffle", side_effect=lambda items: None)
         self.transaction_patch = patch.object(
             records.common_db,
@@ -77,6 +84,7 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
             self.category_patch,
             self.questions_patch,
             self.window_patch,
+            self.window_db_patch,
             self.shuffle_patch,
             self.transaction_patch,
         ):
@@ -88,6 +96,14 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
 
     def tearDown(self):
         self.base.close()
+
+    @contextmanager
+    def _read_connection(self):
+        conn, kind = self.base._db_conn()
+        try:
+            yield conn, kind
+        finally:
+            conn.close()
 
     @contextmanager
     def _transaction(self):
