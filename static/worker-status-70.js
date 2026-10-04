@@ -247,6 +247,8 @@
     const trendSignals=Array.isArray(trend.signals)?trend.signals:[];
     const capacity=trend.capacity||{};
     const forecast=metrics.capacityForecast||{};
+    const predictionAccuracy=forecast.predictionCalibration||{};
+    const predictionWorkloads=Array.isArray(predictionAccuracy.workloads)?predictionAccuracy.workloads:[];
     const forecastRates=forecast.rates||{};
     const forecastQueue=forecast.queue||{};
     const forecastDecision=forecast.decision||{};
@@ -282,7 +284,10 @@
       ? trendSignals.map(signal=>'<article class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><div class="flex flex-wrap items-center justify-between gap-2"><b>'+escapeHtml(signal.title||signal.code||'趨勢異常')+'</b><span class="font-mono text-[10px]">'+escapeHtml(signal.code||'')+'</span></div><div class="mt-1">'+escapeHtml(signal.detail||'')+'</div>'+(signal.action?'<div class="mt-1 font-semibold">建議：'+escapeHtml(signal.action)+'</div>':'')+'</article>').join('')
       : '<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">目前沒有符合「持續惡化」條件的趨勢異常；單次尖峰不會被升級。</div>';
     const forecastConfidence=String(forecast.confidence||'unavailable');
-    const forecastConfidenceLabel=forecastConfidence==='high'?'高':forecastConfidence==='medium'?'中':forecastConfidence==='low'?'低':'尚不可估';
+    const rawForecastConfidence=String(forecast.rawConfidence||forecastConfidence||'unavailable');
+    const confidenceText=value=>value==='high'?'高':value==='medium'?'中':value==='low'?'低':'尚不可估';
+    const forecastConfidenceLabel=confidenceText(forecastConfidence);
+    const rawForecastConfidenceLabel=confidenceText(rawForecastConfidence);
     const arrivalRate=forecastRates.arrivalPerHour==null?'—':Number(forecastRates.arrivalPerHour).toFixed(2)+' / 小時';
     const workerRate=forecastRates.nominalPerWorkerPerHour==null?'—':Number(forecastRates.nominalPerWorkerPerHour).toFixed(2)+' / 小時';
     const workerConservative=forecastRates.conservativePerWorkerPerHour==null?'—':Number(forecastRates.conservativePerWorkerPerHour).toFixed(2)+' / 小時';
@@ -338,6 +343,35 @@
           +'<div class="text-[10px] text-slate-400">試算時間：'+escapeHtml(formatWhen(whatIfResult.generatedAt))+'。這是唯讀容量情境，不會建立 Job、啟動 Worker 或修改排程。</div>'
           +'</div>'
         : '<div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">輸入高峰批次後按「試算高峰」，系統會用目前實測 workload 模型比較 1 台與 2 台 Worker。</div>';
+
+    const predictionState=String(predictionAccuracy.state||'not_started');
+    const predictionClasses=predictionState==='low_trust'
+      ? 'border-rose-200 bg-rose-50'
+      : predictionState==='caution'
+        ? 'border-amber-200 bg-amber-50'
+        : predictionState==='stable'
+          ? 'border-emerald-200 bg-emerald-50'
+          : 'border-slate-200 bg-slate-50';
+    const predictionMedianError=predictionAccuracy.medianAbsolutePercentageError==null
+      ? '資料累積中'
+      : formatPercent(predictionAccuracy.medianAbsolutePercentageError);
+    const predictionP95Coverage=predictionAccuracy.p95Coverage==null
+      ? '資料累積中'
+      : formatPercent(predictionAccuracy.p95Coverage);
+    const signedBias=predictionAccuracy.medianSignedBias;
+    const predictionBiasLabel=predictionAccuracy.bias==='optimistic'
+      ? '偏樂觀（實際常比預估慢）'
+      : predictionAccuracy.bias==='conservative'
+        ? '偏保守（實際常比預估快）'
+        : predictionAccuracy.bias==='balanced'
+          ? '大致平衡'
+          : '資料累積中';
+    const predictionBiasValue=signedBias==null
+      ? '—'
+      : ((Number(signedBias)>=0?'+':'')+(Number(signedBias)*100).toFixed(1)+'%');
+    const predictionWorkloadHtml=predictionWorkloads.length
+      ? predictionWorkloads.map(item=>'<div class="rounded-lg border border-slate-200 bg-white p-2.5 text-[11px]"><div class="flex items-center justify-between gap-2"><b>'+escapeHtml(item.label||item.kind||'workload')+'</b><span class="text-[10px] text-slate-400">'+Number(item.evaluated||0)+' 筆</span></div><div class="mt-1 text-slate-600">中位誤差 '+escapeHtml(item.medianAbsolutePercentageError==null?'—':formatPercent(item.medianAbsolutePercentageError))+' · P95涵蓋 '+escapeHtml(item.p95Coverage==null?'—':formatPercent(item.p95Coverage))+'</div><div class="mt-1 text-[10px] text-slate-400">'+escapeHtml(item.bias==='optimistic'?'偏樂觀':item.bias==='conservative'?'偏保守':item.bias==='balanced'?'平衡':'資料不足')+'</div></div>').join('')
+      : '<div class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400">尚無已完成且可回測的事前預測。</div>';
 
     const workloadProfileHtml=workloadProfiles.length
       ? workloadProfiles.map(profile=>{
@@ -404,6 +438,21 @@
               <div><span class="text-slate-400">P95 保守 ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(plusOneConservative))}</div><div class="text-[10px] text-slate-400">淨消化 ${plusOneConservative.netDrainPerHour==null?'—':Number(plusOneConservative.netDrainPerHour).toFixed(2)+'/h'}</div></div>
             </div>
           </div>
+        </div>
+        <div class="mt-3 rounded-xl border p-3 ${predictionClasses}">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div><b class="text-sm text-slate-900">🎯 Prediction Calibration / Forecast 回測</b><div class="mt-1 text-[10px] text-slate-500">只比較 Job 完成前已固定的 service-time prediction 與真實 finished_at − started_at；未實際提交的 What-if 不列入評分。</div></div>
+            <span class="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700">${escapeHtml(predictionAccuracy.label||'尚未開始回測')}</span>
+          </div>
+          <div class="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
+            ${sloMetricCard('🧪','已回測預測',String(Number(predictionAccuracy.evaluated||0))+' 筆','待完成 '+Number(predictionAccuracy.pending||0)+' 筆')}
+            ${sloMetricCard('🎯','中位絕對誤差',predictionMedianError,'中位時間誤差 '+formatDuration(predictionAccuracy.medianAbsoluteErrorSeconds||0))}
+            ${sloMetricCard('🛡️','P95 涵蓋率',predictionP95Coverage,'實際處理時間落在 P95 預估內的比例')}
+            ${sloMetricCard('↔️','預測偏差',predictionBiasValue,predictionBiasLabel)}
+          </div>
+          <div class="mt-3 rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-[11px] text-slate-600"><b>Forecast 信心：</b>原始 ${escapeHtml(rawForecastConfidenceLabel)} → 回測後 ${escapeHtml(forecastConfidenceLabel)}${rawForecastConfidence!==forecastConfidence?'（已依真實誤差下調）':''}</div>
+          <div class="mt-3 grid md:grid-cols-2 xl:grid-cols-4 gap-2">${predictionWorkloadHtml}</div>
+          <div class="mt-2 text-[10px] text-slate-400">${escapeHtml(predictionAccuracy.note||'0111 上線後開始累積回測；舊 Job 不會事後補造預測。')}</div>
         </div>
         <div class="mt-3 rounded-xl border border-slate-200 bg-white/80 p-3">
           <div class="flex flex-wrap items-center justify-between gap-2"><b class="text-xs text-slate-800">🧩 Workload 校準</b><span class="text-[10px] font-bold ${workload.fullyCalibrated?'text-emerald-700':'text-amber-700'}">${workload.fullyCalibrated?'混合 workload 已完整校準':'部分校準 / 保留全體 Forecast'}</span></div>
