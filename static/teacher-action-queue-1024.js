@@ -79,7 +79,10 @@
       intro.querySelector('[data-teacher-home-job="assessment"]')?.addEventListener('click', () => window.TeacherWorkspace1014?.openAssessment?.());
       intro.querySelector('[data-teacher-home-job="documents"]')?.addEventListener('click', () => window.TeacherWorkspace1014?.openDocuments?.());
     }
-    if (intro.parentElement !== panel) panel.insertBefore(intro, section || panel.firstChild);
+    if (intro.parentElement !== panel) {
+      const anchor = section?.parentElement === panel ? section : panel.firstChild;
+      panel.insertBefore(intro, anchor || null);
+    }
   }
 
   function ensureSection() {
@@ -102,7 +105,8 @@
       const anchor = context === 'assessment'
         ? (document.getElementById('teacher-review-shortcut-1014') || panel.firstChild)
         : (document.getElementById('teacher-context-tools-101') || panel.firstChild);
-      panel.insertBefore(section, anchor || null);
+      const safeAnchor = anchor?.parentElement === panel ? anchor : panel.firstChild;
+      panel.insertBefore(section, safeAnchor || null);
     }
     return section;
   }
