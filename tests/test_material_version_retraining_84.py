@@ -201,6 +201,36 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
         self.assertEqual([row["version"] for row in history], [3, 2, 1])
         self.assertEqual(history[0]["changeReason"], "回復 V1")
 
+    def test_restore_exactly_reinstates_explicit_empty_snapshot_fields(self):
+        material_version_retraining_84(self.conn, "sqlite")
+        with patch.object(common_db, "read_connection", self._read), patch.object(
+            common_db, "transaction", self._tx
+        ):
+            material_repository.replace_material_content_and_publish(
+                "mat-1",
+                content={
+                    **material_entry("temp"),
+                    "description": "V2 說明",
+                    "category": "cat-v2",
+                    "course_id": "course-v2",
+                    "storage_key": "materials/v2/source.pdf",
+                },
+                published_by="admin",
+                change_reason="V2",
+                requires_retraining=False,
+            )
+            restored = material_repository.restore_material_version(
+                "mat-1", 1, published_by="admin", change_reason="精確回復 V1", requires_retraining=False
+            )
+            history = material_repository.list_material_versions("mat-1")
+        self.assertEqual(restored["desc"], "")
+        self.assertEqual(restored["category"], "")
+        self.assertEqual(restored["courseId"], "")
+        self.assertEqual(restored["storageKey"], "")
+        self.assertEqual(history[0]["snapshot"]["description"], "")
+        self.assertEqual(history[0]["snapshot"]["category"], "")
+        self.assertEqual(history[0]["snapshot"]["course_id"], "")
+
     def test_version_helper_separates_current_and_stale_completions(self):
         materials = [
             {"id": "minor", "currentVersion": 2, "requiredCompletionVersion": 1},
