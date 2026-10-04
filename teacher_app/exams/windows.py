@@ -20,15 +20,27 @@ def get_window(category_id):
         ph=common_db.placeholder(kind); row=conn.execute(f"SELECT * FROM exam_windows WHERE quiz_category_id={ph}",(category_id,)).fetchone()
     return dict(row) if row else None
 
+def _window_time(raw):
+    text=str(raw or "").strip()
+    if not text:return None
+    value=dt.datetime.fromisoformat(text.replace("Z","+00:00"))
+    if value.tzinfo is None:value=value.replace(tzinfo=dt.timezone.utc)
+    return value.astimezone(dt.timezone.utc)
+
 def assert_exam_open(category_id):
     item=get_window(category_id)
     if not item:return
     now=dt.datetime.now(dt.timezone.utc)
     for field,code,msg,cmp in (("opens_at","EXAM_NOT_OPEN","此考核尚未開放。","before"),("closes_at","EXAM_CLOSED","此考核已超過最後考核日期。","after")):
-        raw=str(item.get(field) or "")
-        if raw:
-            value=dt.datetime.fromisoformat(raw.replace("Z","+00:00"))
-            if (cmp=="before" and now<value) or (cmp=="after" and now>value): raise ApiError(code,msg,403,{"examWindow":True})
+        value=_window_time(item.get(field))
+        if value and ((cmp=="before" and now<value) or (cmp=="after" and now>value)): raise ApiError(code,msg,403,{"examWindow":True})
+
+def assert_exam_not_closed(category_id):
+    item=get_window(category_id)
+    if not item:return
+    closes=_window_time(item.get("closes_at"))
+    if closes and dt.datetime.now(dt.timezone.utc)>closes:
+        raise ApiError("EXAM_CLOSED","此考核已超過最後考核日期，不能繼續作答或提交。",403,{"examWindow":True,"closed":True})
 
 def register_exam_window_routes(app):
     if app.extensions.get("teacher_exam_windows_registered"):return app
@@ -55,4 +67,4 @@ def register_exam_window_routes(app):
         return jsonify({"ok":True,"window":get_window(category_id)})
     app.extensions["teacher_exam_windows_registered"]=True
     return app
-__all__=["assert_exam_open","get_window","register_exam_window_routes"]
+__all__=["assert_exam_not_closed","assert_exam_open","get_window","register_exam_window_routes"]
