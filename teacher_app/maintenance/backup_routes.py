@@ -14,6 +14,7 @@ from flask import g, has_request_context, jsonify, request, send_file
 from teacher_app.common import audit, db as common_db
 from teacher_app.common.auth import has_permission, normalize_role, user_roles
 from teacher_app.maintenance import backup as maintenance_backup
+from teacher_app.maintenance import recovery_audit
 from teacher_app.storage import providers
 from teacher_app.storage.web_runtime import WebStorageRuntime
 
@@ -141,6 +142,41 @@ def register_backup_restore(owner, *, connection_factory=_DEFAULT_CONNECTION_FAC
             as_attachment=True,
             download_name=f"teacher-backup-{stamp}.zip",
         )
+
+    @app.post("/api/maintenance/restore/rehearsal")
+    def teacher_backup_restore_rehearsal():
+        user, denied = _auth(owner, {"education_admin", "system_admin"})
+        if denied:
+            return denied
+        if str(request.form.get("confirm", "")) != "REHEARSE":
+            return jsonify({"error": "還原演練前請輸入 REHEARSE 確認。"}), 400
+        try:
+            payload = _read_backup_upload()
+            report = maintenance_backup.restore_rehearsal(payload, connection_factory)
+            audit.record_event(
+                actor=user,
+                action="backup.restore_rehearsal",
+                target_type="backup",
+                target_id=str(payload.get("createdAt") or ""),
+                detail={
+                    "safeToAttemptRestore": bool(report.get("safeToAttemptRestore")),
+                    "totals": report.get("totals") or {},
+                },
+            )
+            return jsonify({"ok": True, "report": report})
+        except Exception as exc:
+            return jsonify({"error": str(exc)[:500]}), 400
+
+    @app.get("/api/maintenance/recovery-audit")
+    def teacher_recovery_audit():
+        user, denied = _auth(owner, {"education_admin", "system_admin"})
+        if denied:
+            return denied
+        try:
+            report = recovery_audit.build_recovery_audit(connection_factory)
+            return jsonify(report)
+        except Exception as exc:
+            return jsonify({"error": str(exc)[:500]}), 503
 
     @app.post("/api/maintenance/restore")
     def teacher_backup_restore():

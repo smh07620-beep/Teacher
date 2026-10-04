@@ -29,6 +29,12 @@ DEFAULT_TABLES = (
     "media_audio_jobs", "media_subtitle_jobs", "media_subtitles",
     "ai_presentation_templates", "ai_presentation_jobs", "ai_presentations", "ai_presentation_publications",
     "ai_video_jobs", "ai_presentation_videos", "ai_video_publications",
+    "learning_assignments", "material_progress", "material_versions",
+    "training_interventions", "material_derivative_publications",
+    "email_delivery_attempts", "email_reminder_runs", "notification_state", "notification_preferences",
+    "material_jobs", "material_upload_sessions", "worker_heartbeats", "material_publish_receipts",
+    "r2_usage_ledger", "operational_incidents", "operational_incident_responses",
+    "operational_metric_samples", "forecast_predictions",
 )
 
 
@@ -161,6 +167,78 @@ def parse_backup_zip(raw: bytes, *, max_expanded_mb: int = 500) -> dict[str, Any
     if not stored_sha or not hmac.compare_digest(stored_sha, expected_sha):
         raise ValueError("備份 SHA256 驗證失敗。")
     return payload
+
+
+def restore_rehearsal(
+    payload: dict[str, Any],
+    connection_factory: Callable | None = None,
+) -> dict[str, Any]:
+    """Validate one backup against the current schema without writing any rows."""
+    tables = payload.get("tables") if isinstance(payload, dict) else None
+    if payload.get("format") != BACKUP_FORMAT or not isinstance(tables, dict):
+        raise ValueError("不是 Teacher 備份格式。")
+
+    report: dict[str, Any] = {
+        "format": payload.get("format"),
+        "backupCreatedAt": str(payload.get("createdAt") or ""),
+        "backupVersion": str(payload.get("version") or ""),
+        "safeToAttemptRestore": True,
+        "tables": {},
+        "totals": {
+            "sourceRows": 0,
+            "compatibleRows": 0,
+            "skippedRows": 0,
+            "missingTables": 0,
+        },
+    }
+    with _read_scope(connection_factory) as (conn, kind):
+        existing = _existing_tables(conn, kind)
+        for table, rows in tables.items():
+            if table not in DEFAULT_TABLES or not isinstance(rows, list):
+                continue
+            source_rows = len(rows)
+            report["totals"]["sourceRows"] += source_rows
+            if table not in existing:
+                report["tables"][table] = {
+                    "exists": False,
+                    "sourceRows": source_rows,
+                    "compatibleRows": 0,
+                    "skippedRows": source_rows,
+                    "missingColumns": [],
+                }
+                report["totals"]["missingTables"] += 1
+                report["totals"]["skippedRows"] += source_rows
+                report["safeToAttemptRestore"] = False
+                continue
+
+            destination_columns = _table_columns(conn, kind, table)
+            compatible_rows = 0
+            skipped_rows = 0
+            source_columns: set[str] = set()
+            for row in rows:
+                if not isinstance(row, dict) or not row:
+                    skipped_rows += 1
+                    continue
+                source_columns.update(str(key) for key in row)
+                compatible = compatible_restore_row(table, row, destination_columns)
+                if compatible:
+                    compatible_rows += 1
+                else:
+                    skipped_rows += 1
+            missing_columns = sorted(source_columns - destination_columns)
+            report["tables"][table] = {
+                "exists": True,
+                "sourceRows": source_rows,
+                "compatibleRows": compatible_rows,
+                "skippedRows": skipped_rows,
+                "missingColumns": missing_columns,
+            }
+            report["totals"]["compatibleRows"] += compatible_rows
+            report["totals"]["skippedRows"] += skipped_rows
+            if source_rows and compatible_rows == 0:
+                report["safeToAttemptRestore"] = False
+
+    return report
 
 
 def restore_backup(payload: dict[str, Any], connection_factory: Callable | None = None) -> dict[str, int]:
