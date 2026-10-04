@@ -294,6 +294,15 @@ def material_artifact_reference_graph(material_id: str) -> dict:
             if count:
                 blockers.append({"type": "ai_presentation_publications", "count": count})
 
+        if _table_exists(conn, kind, "material_derivative_publications"):
+            row = conn.execute(
+                f"SELECT COUNT(*) AS n FROM material_derivative_publications WHERE material_id={ph}",
+                (material_id,),
+            ).fetchone()
+            count = int(dict(row).get("n", 0) or 0)
+            if count:
+                blockers.append({"type": "material_derivative_publications", "count": count})
+
     return {
         "materialId": material_id,
         "purgeAllowed": not blockers,

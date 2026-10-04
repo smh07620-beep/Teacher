@@ -18,7 +18,7 @@ from teacher_app.assessments import repository as assessment_repository
 from teacher_app.common import scope
 from teacher_app.common.errors import ApiError
 from teacher_app.courses import repository as course_repository
-from teacher_app.materials import catalog, repository
+from teacher_app.materials import catalog, derivative_repository, repository
 from teacher_app import storage as canonical_storage
 from teacher_app.storage.web_runtime import WebStorageRuntime
 
@@ -180,7 +180,18 @@ def list_material_versions(material_id: str) -> list[dict]:
     material_id = str(material_id or "").strip()
     if not repository.get_material(material_id):
         raise _fail("MATERIAL_NOT_FOUND", "找不到可管理的教材", 404)
-    return repository.list_material_versions(material_id)
+    versions = repository.list_material_versions(material_id)
+    derivatives = derivative_repository.list_for_material(material_id)
+    by_version: dict[int, list[dict]] = {}
+    for item in derivatives:
+        by_version.setdefault(int(item.get("materialVersion") or 1), []).append(item)
+    return [
+        {
+            **version,
+            "derivatives": by_version.get(int(version.get("version") or 1), []),
+        }
+        for version in versions
+    ]
 
 
 def publish_material_version(

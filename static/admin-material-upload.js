@@ -474,7 +474,15 @@
       const retraining=v.requiresRetraining?'｜要求重訓':'';
       const who=v.publishedBy?`｜${v.publishedBy}`:'';
       const when=v.publishedAt?`｜${v.publishedAt}`:'';
-      return `V${Number(v.version||1)}${retraining}${who}${when}\n${v.changeReason||'未填寫變更原因'}`;
+      const derivatives=Array.isArray(v.derivatives)?v.derivatives:[];
+      const derived=derivatives.length
+        ? '\n衍生內容：'+derivatives.map(item=>{
+            const type=item.type==='video'?'AI 教學影片':'AI PowerPoint';
+            const revision=Number(item.sourcePresentationRevision||0);
+            return type+(revision?' r'+revision:'')+'｜'+String(item.publishedAt||'').slice(0,10);
+          }).join('、')
+        : '';
+      return `V${Number(v.version||1)}${retraining}${who}${when}\n${v.changeReason||'未填寫變更原因'}${derived}`;
     }).join('\n\n');
     const material=(await fetchAdminMaterials())?.find(x=>x.id===id);
     const current=Number(material?.currentVersion||rows[0]?.version||1);
