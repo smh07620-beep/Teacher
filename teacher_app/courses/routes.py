@@ -4,7 +4,7 @@ from __future__ import annotations
 from flask import g, jsonify, request
 
 from teacher_app.auth import rbac_legacy_adapter
-from teacher_app.common import scope
+from teacher_app.common import scope, scope_filter
 from teacher_app.common.errors import ApiError
 from teacher_app.courses import service
 
@@ -66,6 +66,29 @@ def register_course_routes(owner):
         except ApiError as exc:
             return _legacy_error(exc)
 
+    def api_course_readiness(course_id):
+        denied = scope_filter.require_permission(app, "course.manage")
+        if denied:
+            return denied
+        try:
+            return jsonify(service.publication_readiness(course_id))
+        except ApiError as exc:
+            return _legacy_error(exc)
+
+    def api_course_lifecycle(course_id):
+        denied = scope_filter.require_permission(app, "course.manage")
+        if denied:
+            return denied
+        try:
+            body = request.get_json(silent=True) or {}
+            return jsonify(service.transition_lifecycle(
+                course_id,
+                body.get("action"),
+                getattr(g, "teacher_user", None),
+            ))
+        except ApiError as exc:
+            return _legacy_error(exc)
+
     def api_delete_course(course_id):
         denied = require_admin()
         if denied:
@@ -98,6 +121,8 @@ def register_course_routes(owner):
         ("/api/courses/admin", "api_courses_admin", api_courses_admin, ["GET"]),
         ("/api/courses", "api_create_course", api_create_course, ["POST"]),
         ("/api/courses/<course_id>", "api_update_course", api_update_course, ["PATCH"]),
+        ("/api/courses/<course_id>/readiness", "api_course_readiness", api_course_readiness, ["GET"]),
+        ("/api/courses/<course_id>/lifecycle", "api_course_lifecycle", api_course_lifecycle, ["POST"]),
         ("/api/courses/<course_id>", "api_delete_course", api_delete_course, ["DELETE"]),
         ("/api/courses/<course_id>/plan", "api_get_teaching_plan", api_get_teaching_plan, ["GET"]),
         ("/api/courses/<course_id>/plan", "api_save_teaching_plan", api_save_teaching_plan, ["PUT"]),

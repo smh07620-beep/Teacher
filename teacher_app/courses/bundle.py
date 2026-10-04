@@ -179,7 +179,9 @@ def _create_course(conn, kind: str, core: Mapping[str, Any]) -> str:
         description=core["desc"],
         sort_order=order,
         date_added=_display_time(),
-        active=True,
+        active=False,
+        lifecycle_status="draft",
+        lifecycle_updated_by="",
     )
     return course_id
 
@@ -241,7 +243,8 @@ def _stored_result(
             "group": core["group"],
             "title": core["title"],
             "desc": core["desc"],
-            "active": True,
+            "active": False,
+            "lifecycleStatus": "draft",
         },
         "quizCategory": (
             {

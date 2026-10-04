@@ -155,6 +155,16 @@ def build_assignment(
     course = course_repository.get_course(course_id)
     if not course:
         raise ApiError("COURSE_NOT_FOUND", "找不到課程。", status=404)
+    lifecycle = str(
+        course.get("lifecycleStatus")
+        or ("published" if course.get("active") else "draft")
+    )
+    if lifecycle != "published" or not course.get("active", False):
+        raise ApiError(
+            "COURSE_NOT_PUBLISHED",
+            "課程尚未正式發布，請先完成發布檢查再指派學員。",
+            status=409,
+        )
 
     assignee_type = str(data.get("assigneeType") or "").strip().lower()
     if assignee_type not in ASSIGNEE_TYPES:

@@ -11,7 +11,7 @@ import re
 import uuid
 from typing import Any, Mapping
 
-from teacher_app.common import db as common_db
+from teacher_app.common import audit, db as common_db
 from teacher_app.common import scope
 from teacher_app.common.errors import ApiError
 from teacher_app.assessments import repository as assessments_repository
@@ -45,6 +45,8 @@ def create_course(base, data: Mapping[str, Any]) -> dict:
         title=title,
         description=desc,
         date_added=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        active=False,
+        lifecycle_status="draft",
     )
 
 
@@ -54,10 +56,147 @@ def update_course(base, course_id: str, data: Mapping[str, Any]) -> dict:
         raise _fail("COURSE_NOT_FOUND", "找不到課程", 404)
     title = str(data.get("title", entry["title"])).strip()[:255]
     desc = str(data.get("desc", entry.get("desc", ""))).strip()[:2000]
-    active = bool(data.get("active", entry.get("active", True)))
+    # Lifecycle owns learner visibility. Legacy edit payloads cannot bypass
+    # publication readiness by toggling active directly.
+    active = bool(entry.get("active", False))
     repository.update_course(course_id, title=title, description=desc, active=active)
     return {"ok": True}
 
+
+
+COURSE_LIFECYCLE = {"draft", "ready", "published", "ended", "archived"}
+
+
+def publication_readiness(course_id: str) -> dict:
+    course = repository.get_course(course_id)
+    if not course:
+        raise _fail("COURSE_NOT_FOUND", "找不到課程", 404)
+
+    linked_materials = [
+        item
+        for item in materials_repository.list_uploaded_materials(include_inactive=True)
+        if str(item.get("courseId") or "") == course_id
+    ]
+    active_materials = [item for item in linked_materials if item.get("active", True)]
+    linked_exams = [
+        item
+        for item in assessments_repository.list_categories(include_inactive=True)
+        if str(item.get("courseId") or "") == course_id
+    ]
+    unpublished_exams = [item for item in linked_exams if not item.get("active", False)]
+
+    blockers = []
+    if not str(course.get("title") or "").strip():
+        blockers.append({"code": "COURSE_TITLE_REQUIRED", "message": "課程名稱尚未完成。"})
+    if not active_materials:
+        blockers.append({"code": "COURSE_MATERIAL_REQUIRED", "message": "至少需要 1 份可使用教材。"})
+    if unpublished_exams:
+        blockers.append({
+            "code": "COURSE_EXAM_UNPUBLISHED",
+            "message": f"尚有 {len(unpublished_exams)} 份考卷未完成審核／發布。",
+        })
+
+    return {
+        "courseId": course_id,
+        "lifecycleStatus": course.get(
+            "lifecycleStatus",
+            "published" if course.get("active") else "draft",
+        ),
+        "ready": not blockers,
+        "blockers": blockers,
+        "checks": {
+            "activeMaterials": len(active_materials),
+            "linkedMaterials": len(linked_materials),
+            "publishedExams": len(linked_exams) - len(unpublished_exams),
+            "linkedExams": len(linked_exams),
+        },
+    }
+
+
+def transition_lifecycle(
+    course_id: str,
+    action: str,
+    actor: Mapping[str, Any] | None,
+) -> dict:
+    course = repository.get_course(course_id)
+    if not course:
+        raise _fail("COURSE_NOT_FOUND", "找不到課程", 404)
+
+    action = str(action or "").strip().lower()
+    current = str(
+        course.get("lifecycleStatus")
+        or ("published" if course.get("active") else "draft")
+    )
+    transitions = {
+        "mark_ready": ("ready", False),
+        "publish": ("published", True),
+        "end": ("ended", False),
+        "archive": ("archived", False),
+        "reopen": ("draft", False),
+    }
+    if action not in transitions:
+        raise _fail(
+            "COURSE_LIFECYCLE_ACTION_INVALID",
+            "不支援的課程狀態操作。",
+            400,
+        )
+
+    target, active = transitions[action]
+    if current == target:
+        return {
+            "ok": True,
+            "course": course,
+            "readiness": publication_readiness(course_id),
+        }
+
+    allowed = {
+        "draft": {"mark_ready", "publish"},
+        "ready": {"publish", "reopen"},
+        "published": {"end", "archive"},
+        "ended": {"archive", "reopen"},
+        "archived": {"reopen"},
+    }
+    if action not in allowed.get(current, set()):
+        raise _fail(
+            "COURSE_LIFECYCLE_CONFLICT",
+            f"課程目前為 {current}，不能執行此操作。",
+            409,
+        )
+
+    readiness = publication_readiness(course_id)
+    if action in {"mark_ready", "publish"} and not readiness["ready"]:
+        raise ApiError(
+            "COURSE_NOT_READY",
+            "課程尚未符合發布條件。",
+            status=409,
+            extra={"readiness": readiness},
+        )
+
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    username = str((actor or {}).get("username") or "")[:100]
+    updated = repository.update_lifecycle(
+        course_id,
+        status=target,
+        active=active,
+        actor=username,
+        updated_at=now,
+    ) or course
+    audit.record_event(
+        actor=actor,
+        action=f"course.lifecycle.{action}",
+        target_type="course",
+        target_id=course_id,
+        group=str(course.get("group") or ""),
+        scope={"area": course.get("area"), "group": course.get("group")},
+        before={"lifecycleStatus": current, "active": bool(course.get("active"))},
+        after={"lifecycleStatus": target, "active": active},
+        detail={"readiness": readiness["checks"]},
+    )
+    return {
+        "ok": True,
+        "course": updated,
+        "readiness": publication_readiness(course_id),
+    }
 
 def delete_course(base, course_id: str) -> dict:
     if not repository.get_course(course_id):
@@ -117,9 +256,10 @@ def save_teaching_plan(base, course_id: str, data: Any) -> dict:
                 raise ValueError("日期格式不正確")
         if start and end and start > end:
             raise ValueError("結束日期不可早於開始日期")
-        active = data.get("active", course["active"])
-        if type(active) is not bool:
+        requested_active = data.get("active", course["active"])
+        if type(requested_active) is not bool:
             raise ValueError("課程狀態格式不正確")
+        active = bool(course.get("active", False))
         material_order = data.get("materialOrder", course["materialOrder"])
         if (
             not isinstance(material_order, list)
