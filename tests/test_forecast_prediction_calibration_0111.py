@@ -335,6 +335,42 @@ class ForecastPredictionCalibration0111Tests(unittest.TestCase):
         kinds = {row["kind"] for row in accuracy["workloads"]}
         self.assertEqual(kinds, {"document", "media"})
 
+    def test_stable_backtest_does_not_upgrade_sparse_forecast_confidence(self):
+        self.seed_document_history()
+        self.seed_snapshot()
+        self.insert_job(
+            "queued-stable",
+            status="queued",
+            created=NOW - dt.timedelta(minutes=5),
+            original_name="queued-stable.pdf",
+        )
+        stable = {
+            "available": True,
+            "state": "stable",
+            "label": "近期回測誤差穩定",
+            "evaluated": 12,
+            "pending": 0,
+            "confidenceAdjustment": "none",
+            "workloads": [],
+        }
+        with patch.object(
+            history,
+            "build_forecast_accuracy",
+            return_value=stable,
+        ), patch.dict(
+            os.environ,
+            {
+                "OPERATIONS_FORECAST_WINDOW_HOURS": "2",
+                "OPERATIONS_FORECAST_MIN_COMPLETED_JOBS": "3",
+                "OPERATIONS_FORECAST_MIN_SNAPSHOT_COVERAGE": "0.5",
+            },
+            clear=False,
+        ):
+            forecast = history.build_capacity_forecast(now=NOW)
+
+        self.assertEqual(forecast["rawConfidence"], "medium")
+        self.assertEqual(forecast["confidence"], "medium")
+
     def test_real_backtest_can_only_lower_existing_forecast_confidence(self):
         self.seed_document_history()
         self.seed_snapshot()
@@ -368,7 +404,7 @@ class ForecastPredictionCalibration0111Tests(unittest.TestCase):
         ):
             forecast = history.build_capacity_forecast(now=NOW)
 
-        self.assertEqual(forecast["rawConfidence"], "high")
+        self.assertEqual(forecast["rawConfidence"], "medium")
         self.assertEqual(forecast["confidence"], "low")
         self.assertIs(
             forecast["predictionCalibration"],
