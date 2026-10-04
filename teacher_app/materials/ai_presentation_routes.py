@@ -224,10 +224,24 @@ def register_ai_presentation_routes(owner):
         user = _actor(owner)
         if not user:
             return jsonify({"error":"請先登入。","loginRequired":True}), 401
+        storage = PresentationStorage().capability()
         return jsonify({
-            "storage": PresentationStorage().capability(), "workerRequired": True,
-            "requiresApprovedSlideDraft": True, "teacherApprovalRoles": sorted(_TEACHER_APPROVAL_ROLES),
+            "productPhase": "F5",
+            "storage": storage,
+            "workerRequired": True,
+            "requiresApprovedSlideDraft": True,
+            "teacherApprovalRoles": sorted(_TEACHER_APPROVAL_ROLES),
             "qualityRulesetVersion": quality.RULESET_VERSION,
+            "workflow": {
+                "source": "approved-slides-draft",
+                "template": "group-area-template",
+                "render": "dedicated-ai-worker",
+                "artifact": "shared-durable-pptx",
+                "review": "immutable-revision",
+                "teacherApproval": True,
+                "videoHandoff": True,
+                "ready": bool(storage.get("available")),
+            },
             "capabilities": {name: _presentation_allowed(user, name) for name in _PRESENTATION_CAPABILITIES},
         })
 
