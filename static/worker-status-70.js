@@ -89,6 +89,16 @@
   let respondersLoaded = false;
   let sloWindow = '24h';
   const sloCache = new Map();
+  let whatIfScenario = {
+    documentCount: 10,
+    documentPages: 20,
+    mediaCount: 3,
+    mediaMinutes: 30,
+    imageCount: 0,
+    archiveCount: 0
+  };
+  let whatIfResult = null;
+  let whatIfLoading = false;
 
   function workerButton() {
     let button = document.getElementById('admin-nav-worker');
@@ -196,6 +206,18 @@
     }).join('')+'</div>';
   }
 
+  async function loadCapacitySimulation(scenario) {
+    const params=new URLSearchParams();
+    Object.entries(scenario||{}).forEach(([key,value])=>params.set(key,String(value??'')));
+    const response=await fetch('/api/operational-capacity-simulation?'+params.toString(),{
+      credentials:'same-origin',
+      cache:'no-store'
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||'高峰容量試算失敗');
+    return data;
+  }
+
   async function loadOperationalMetrics(windowValue=sloWindow,force=false) {
     const cached=sloCache.get(windowValue);
     if(!force&&cached&&Date.now()-cached.loadedAt<60000)return cached.data;
@@ -287,6 +309,36 @@
       if(scenario.clearEtaSeconds==null)return '無法淨消化';
       return formatDuration(scenario.clearEtaSeconds);
     };
+    const whatIfEta=scenario=>{
+      if(!scenario||scenario.state==='unavailable')return '資料不足';
+      if(Number(scenario.clearEtaSeconds)===0)return '目前無 backlog';
+      if(scenario.clearEtaSeconds==null)return '持續堆積';
+      return formatDuration(scenario.clearEtaSeconds);
+    };
+    const whatIfDecision=whatIfResult?.decision||{};
+    const whatIfBottleneck=whatIfResult?.bottleneck||null;
+    const whatIfOne=whatIfResult?.oneWorker||{};
+    const whatIfTwo=whatIfResult?.twoWorkers||{};
+    const whatIfLimitations=Array.isArray(whatIfResult?.limitations)?whatIfResult.limitations:[];
+    const whatIfComponents=Array.isArray(whatIfResult?.components)?whatIfResult.components:[];
+    const whatIfResultHtml=whatIfLoading
+      ? '<div class="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 animate-pulse">正在用目前實測 workload 模型計算高峰情境…</div>'
+      : whatIfResult
+        ? '<div class="space-y-3">'
+          +'<div class="rounded-xl border '+(whatIfResult.available?'border-slate-200 bg-white':'border-amber-200 bg-amber-50')+' p-3">'
+          +'<div class="flex flex-wrap items-start justify-between gap-2"><div><b class="text-sm text-slate-900">'+escapeHtml(whatIfDecision.label||'高峰試算結果')+'</b><div class="mt-1 text-[11px] text-slate-500">'+escapeHtml(whatIfDecision.detail||'')+'</div></div><span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold">峰值 backlog '+Number(whatIfResult.peakBacklogJobs||0)+' 筆</span></div>'
+          +(whatIfBottleneck?'<div class="mt-2 text-[11px] text-slate-600"><b>主要瓶頸：</b>'+escapeHtml(whatIfBottleneck.label||whatIfBottleneck.kind||'')+' · 約占這批 P95 workload '+(Number(whatIfBottleneck.share||0)*100).toFixed(1)+'%</div>':'')
+          +'</div>'
+          +'<div class="grid lg:grid-cols-2 gap-3">'
+          +'<div class="rounded-xl border border-slate-200 bg-white p-3 text-xs"><b>1 台 Worker</b><div class="mt-2 grid grid-cols-2 gap-2"><div><span class="text-slate-400">Nominal ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfOne.nominal))+'</div><div class="text-[10px] text-slate-400">背景利用率 '+(whatIfOne.nominal?.baselineUtilization==null?'—':(Number(whatIfOne.nominal.baselineUtilization)*100).toFixed(1)+'%')+'</div></div><div><span class="text-slate-400">P95 ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfOne.conservative))+'</div><div class="text-[10px] text-slate-400">背景利用率 '+(whatIfOne.conservative?.baselineUtilization==null?'—':(Number(whatIfOne.conservative.baselineUtilization)*100).toFixed(1)+'%')+'</div></div></div></div>'
+          +'<div class="rounded-xl border border-slate-200 bg-white p-3 text-xs"><b>2 台 Worker</b><div class="mt-2 grid grid-cols-2 gap-2"><div><span class="text-slate-400">Nominal ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfTwo.nominal))+'</div><div class="text-[10px] text-slate-400">背景利用率 '+(whatIfTwo.nominal?.baselineUtilization==null?'—':(Number(whatIfTwo.nominal.baselineUtilization)*100).toFixed(1)+'%')+'</div></div><div><span class="text-slate-400">P95 ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfTwo.conservative))+'</div><div class="text-[10px] text-slate-400">背景利用率 '+(whatIfTwo.conservative?.baselineUtilization==null?'—':(Number(whatIfTwo.conservative.baselineUtilization)*100).toFixed(1)+'%')+'</div></div></div></div>'
+          +'</div>'
+          +(whatIfComponents.length?'<div class="flex flex-wrap gap-2">'+whatIfComponents.map(item=>'<span class="rounded-full border px-2 py-1 text-[10px] font-semibold '+(item.calibrated?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-amber-200 bg-amber-50 text-amber-700')+'">'+escapeHtml(item.label||item.kind||'')+' × '+Number(item.count||0)+' · '+(item.method==='pages'?'頁數校準':item.method==='media_duration'?'影音時長校準':item.method==='class_duration'?'類型中位/P95':'不可估')+'</span>').join('')+'</div>':'')
+          +(whatIfLimitations.length?'<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800"><b>限制：</b> '+whatIfLimitations.map(item=>escapeHtml(item)).join(' · ')+'</div>':'')
+          +'<div class="text-[10px] text-slate-400">試算時間：'+escapeHtml(formatWhen(whatIfResult.generatedAt))+'。這是唯讀容量情境，不會建立 Job、啟動 Worker 或修改排程。</div>'
+          +'</div>'
+        : '<div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">輸入高峰批次後按「試算高峰」，系統會用目前實測 workload 模型比較 1 台與 2 台 Worker。</div>';
+
     const workloadProfileHtml=workloadProfiles.length
       ? workloadProfiles.map(profile=>{
           const calibrated=Boolean(profile.calibrated);
@@ -363,6 +415,22 @@
           </div>
           ${Array.isArray(workload.limitations)&&workload.limitations.length?'<div class="mt-2 text-[10px] text-amber-700">'+workload.limitations.map(item=>escapeHtml(item)).join(' · ')+'</div>':''}
         </div>
+        <div class="mt-3 rounded-xl border border-slate-300 bg-slate-50/80 p-3">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div><b class="text-sm text-slate-900">🧪 高峰情境 / Capacity What-if</b><div class="mt-1 text-[10px] text-slate-500">把一批教材瞬間加入目前 Queue，再假設近期背景到達率持續存在，比較 1 台與 2 台 Worker。</div></div>
+            <div class="flex flex-wrap gap-1.5"><button type="button" data-capacity-preset="docs" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600">10 份文件</button><button type="button" data-capacity-preset="mixed" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600">10 文件 + 3×30分影音</button></div>
+          </div>
+          <div class="mt-3 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2 text-xs">
+            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">文件數</span><input data-capacity-field="documentCount" type="number" min="0" max="100" value="${Number(whatIfScenario.documentCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">平均頁數</span><input data-capacity-field="documentPages" type="number" min="1" max="500" value="${Number(whatIfScenario.documentPages||20)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">影音數</span><input data-capacity-field="mediaCount" type="number" min="0" max="50" value="${Number(whatIfScenario.mediaCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">平均影音分鐘</span><input data-capacity-field="mediaMinutes" type="number" min="1" max="240" value="${Number(whatIfScenario.mediaMinutes||30)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">圖片數</span><input data-capacity-field="imageCount" type="number" min="0" max="100" value="${Number(whatIfScenario.imageCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">ZIP 數</span><input data-capacity-field="archiveCount" type="number" min="0" max="50" value="${Number(whatIfScenario.archiveCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-2"><button type="button" data-capacity-whatif-run class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50" ${whatIfLoading?'disabled':''}>${whatIfLoading?'試算中…':'試算高峰'}</button><span class="text-[10px] text-slate-400">文件優先用秒/頁；影音優先用處理/影音倍率；樣本不足時不硬算。</span></div>
+          <div class="mt-3">${whatIfResultHtml}</div>
+        </div>
         <div class="mt-3 rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-700"><b>判讀：</b>${escapeHtml(forecastDecision.detail||'樣本仍在累積。')}</div>
         ${blockers.length?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800"><b>先排除 Incident：</b> '+blockers.map(item=>escapeHtml(item.code||item.title||'')).join('、')+'</div>':''}
         ${forecastLimitations.length?'<details class="mt-2 text-[10px] text-slate-500"><summary class="cursor-pointer font-bold">模型限制 / 為什麼目前信心不足</summary><ul class="mt-1 list-disc space-y-1 pl-5">'+forecastLimitations.map(item=>'<li>'+escapeHtml(item)+'</li>').join('')+'</ul></details>':''}
@@ -383,6 +451,46 @@
         <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-xs text-slate-700">資料覆蓋</b><div class="mt-2 text-[11px] text-slate-600">10 分鐘採樣 ${Number(coverage.windowSampleCount||0)} / ${Number(coverage.expectedSampleCount||0)}，覆蓋約 ${coveragePct}%${coverage.firstSampleAt?'；首次 '+escapeHtml(formatWhen(coverage.firstSampleAt)):''}。</div><div class="mt-1 text-[10px] text-slate-400">${escapeHtml(coverage.note||'')}</div></div>
       </div>
     </section>`;
+  }
+
+  function bindCapacitySimulationControls() {
+    panel.querySelectorAll('[data-capacity-field]').forEach(input=>{
+      const key=String(input.dataset.capacityField||'');
+      input.oninput=()=>{
+        const value=Number(input.value);
+        if(Number.isFinite(value))whatIfScenario={...whatIfScenario,[key]:value};
+      };
+    });
+    panel.querySelectorAll('[data-capacity-preset]').forEach(button=>{
+      button.onclick=()=>{
+        if(button.dataset.capacityPreset==='docs'){
+          whatIfScenario={documentCount:10,documentPages:20,mediaCount:0,mediaMinutes:30,imageCount:0,archiveCount:0};
+        }else{
+          whatIfScenario={documentCount:10,documentPages:20,mediaCount:3,mediaMinutes:30,imageCount:0,archiveCount:0};
+        }
+        whatIfResult=null;
+        renderWorkerStatus(true);
+      };
+    });
+    const run=panel.querySelector('[data-capacity-whatif-run]');
+    if(run)run.onclick=async()=>{
+      if(whatIfLoading)return;
+      whatIfLoading=true;
+      await renderWorkerStatus(false);
+      try{
+        whatIfResult=await loadCapacitySimulation(whatIfScenario);
+      }catch(error){
+        whatIfResult={
+          available:false,
+          generatedAt:new Date().toISOString(),
+          decision:{label:'高峰試算失敗',detail:String(error?.message||error||'無法完成試算')},
+          limitations:[String(error?.message||error||'無法完成試算')]
+        };
+      }finally{
+        whatIfLoading=false;
+        await renderWorkerStatus(false);
+      }
+    };
   }
 
   function bindSloControls() {
@@ -753,6 +861,7 @@
       document.getElementById('worker-refresh-70').onclick = () => renderWorkerStatus(true);
       bindIncidentControls();
       bindSloControls();
+      bindCapacitySimulationControls();
     } catch (error) {
       panel.innerHTML = `<section class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${escapeHtml(error.message || '無法讀取 Worker 狀態')}</section>${firstRunGuide()}`;
     } finally {
