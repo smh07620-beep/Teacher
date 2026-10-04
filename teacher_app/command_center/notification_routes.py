@@ -104,6 +104,24 @@ def register_notification_state_routes(owner):
         except ApiError as exc:
             return _error(exc)
 
+    def api_operational_capacity_simulation():
+        actor = _current_user(owner)
+        try:
+            require_role(actor, "system_admin")
+            scenario = {
+                "documentCount": request.args.get("documentCount", 0),
+                "documentPages": request.args.get("documentPages", 20),
+                "mediaCount": request.args.get("mediaCount", 0),
+                "mediaMinutes": request.args.get("mediaMinutes", 30),
+                "imageCount": request.args.get("imageCount", 0),
+                "archiveCount": request.args.get("archiveCount", 0),
+            }
+            return jsonify(
+                operational_history.simulate_capacity_what_if(scenario)
+            )
+        except ApiError as exc:
+            return _error(exc)
+
     def api_operational_incident_responders():
         actor = _current_user(owner)
         try:
@@ -229,6 +247,13 @@ def register_notification_state_routes(owner):
         "api_operational_metrics",
         ["GET"],
         api_operational_metrics,
+    )
+    _install(
+        app,
+        "/api/operational-capacity-simulation",
+        "api_operational_capacity_simulation",
+        ["GET"],
+        api_operational_capacity_simulation,
     )
     _install(
         app,
