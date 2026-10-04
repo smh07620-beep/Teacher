@@ -159,6 +159,23 @@ class NotificationEventConvergence1025Tests(unittest.TestCase):
             selected=events.email_events(USER,now=NOW,days=3)
         self.assertEqual([row["key"] for row in selected],["soon","failure"])
 
+    def test_due_email_uses_separate_7_3_1_day_milestone_keys(self):
+        due="2026-10-08T12:00:00+00:00"
+        rows={"items":[{"key":"exam-base","kind":"exam","channels":["in_app","email"],"emailPolicy":"due","dueAt":due,"detail":"考核已設定最後作答時間"}]}
+        with patch.object(events,"build_events",return_value=rows):
+            seven=events.email_events(USER,now=NOW,days=7)
+            three=events.email_events(USER,now=NOW+dt.timedelta(days=4),days=7)
+            one=events.email_events(USER,now=NOW+dt.timedelta(days=6),days=7)
+        self.assertEqual(seven[0]["reminderMilestoneDays"],7)
+        self.assertEqual(three[0]["reminderMilestoneDays"],3)
+        self.assertEqual(one[0]["reminderMilestoneDays"],1)
+        self.assertEqual(len({seven[0]["key"],three[0]["key"],one[0]["key"]}),3)
+
+    def test_due_email_does_not_send_after_deadline(self):
+        rows={"items":[{"key":"exam-base","kind":"exam","channels":["in_app","email"],"emailPolicy":"due","dueAt":"2026-09-30T12:00:00+00:00"}]}
+        with patch.object(events,"build_events",return_value=rows):
+            self.assertEqual(events.email_events(USER,now=NOW,days=7),[])
+
     def test_notifications_route_is_get_only(self):
         app=Flask(__name__);app.config.update(TESTING=True,SECRET_KEY="test")
         owner=SimpleNamespace(app=app,_current_user=lambda:USER)
