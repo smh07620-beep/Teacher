@@ -7,7 +7,8 @@ from unittest.mock import patch
 
 from flask import Flask, g
 
-from teacher_app.assessments import routes, schema
+from teacher_app.assessments import ai_jobs, routes, schema
+from teacher_app.materials import repository as material_repository
 
 
 class AssessmentWorkflowIdentityTests(unittest.TestCase):
@@ -27,7 +28,17 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         try:
             schema.init_schema(conn, kind)
             conn.execute(
-                "CREATE TABLE materials (id TEXT PRIMARY KEY, category TEXT NOT NULL DEFAULT '')"
+                """CREATE TABLE materials (
+                    id TEXT PRIMARY KEY, filename TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
+                    description TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT '',
+                    group_key TEXT NOT NULL DEFAULT '', training_area TEXT NOT NULL DEFAULT 'internal',
+                    course_id TEXT NOT NULL DEFAULT '', folder TEXT NOT NULL DEFAULT '', page_count INTEGER NOT NULL DEFAULT 0,
+                    date_added TEXT NOT NULL DEFAULT '', storage_filename TEXT NOT NULL DEFAULT '',
+                    storage_backend TEXT NOT NULL DEFAULT 'local', storage_key TEXT NOT NULL DEFAULT '',
+                    slides_prefix TEXT NOT NULL DEFAULT '', storage_meta TEXT NOT NULL DEFAULT '{}',
+                    material_type TEXT NOT NULL DEFAULT 'standard', atlas_meta TEXT NOT NULL DEFAULT '{}',
+                    active INTEGER NOT NULL DEFAULT 1
+                )"""
             )
             conn.execute(
                 "INSERT INTO quiz_categories(id,group_key,training_area,title,date_added,active,review_status) "
@@ -121,6 +132,34 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         self.assertEqual(snapshot["category"]["reviewerTitle"], "教學行政管理師")
         self.assertEqual(snapshot["questions"][0]["version"], 1)
         self.assertRegex(snapshot["questions"][0]["questionHash"], r"^[0-9a-f]{64}$")
+
+    def test_new_material_link_is_persisted_and_ai_job_can_read_same_material(self):
+        material_repository.insert_material({
+            "id": "mat-new", "filename": "new.pdf", "title": "新教材", "description": "",
+            "category": "", "group_key": "grpBio", "training_area": "internal", "course_id": "",
+            "folder": "mat-new", "page_count": 1, "date_added": "now",
+            "storage_filename": "new.pdf", "storage_backend": "local", "storage_key": "",
+            "slides_prefix": "", "storage_meta": "{}", "material_type": "standard",
+            "atlas_meta": "{}", "active": True,
+        })
+        linked = self.client.put(
+            "/api/quiz-categories/cat-1/materials",
+            json={"materialIds": ["mat-new"]},
+        )
+        self.assertEqual(linked.status_code, 200, linked.get_data(as_text=True))
+        self.assertEqual(linked.get_json()["linkedIds"], ["mat-new"])
+        listed = self.client.get("/api/quiz-categories/cat-1/materials")
+        self.assertEqual(listed.status_code, 200, listed.get_data(as_text=True))
+        item = next(x for x in listed.get_json()["items"] if x["id"] == "mat-new")
+        self.assertTrue(item["linked"])
+
+        runtime = type("Runtime", (), {"max_materials": 4, "max_questions": 15})()
+        values = ai_jobs.prepare_request(
+            {"quizCategoryId": "cat-1", "materialIds": ["mat-new"]},
+            runtime,
+            self.actor,
+        )
+        self.assertEqual(values["request"]["materialIds"], ["mat-new"])
 
     def test_publish_fails_closed_when_audience_is_missing(self):
         reviewed = self.client.post("/api/quiz-categories/cat-1/review")
