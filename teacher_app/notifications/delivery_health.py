@@ -42,8 +42,8 @@ def build_email_delivery_health(*, now: dt.datetime | None = None) -> dict:
         health, issue = "missing_run", "今日提醒排程應已執行，但尚未找到執行紀錄。"
     elif ran_today and str(run.get("status") or "") in {"running","failed","partial"}:
         health, issue = "delivery_issue", "今日提醒排程未完整完成，請檢查寄送設定或執行紀錄。"
-    elif ran_today and expected > sent_events + failed_events + int(run.get("claimed_events",0) or 0):
-        health, issue = "delivery_gap", "預計提醒與實際處理數量不一致。"
+    elif ran_today and int(run.get("claimed_events",0) or 0) != sent_events + failed_events:
+        health, issue = "delivery_gap", "已取得寄送資格的提醒與實際寄送結果數量不一致。"
     return {
         "generatedAt": current.isoformat(),
         "today": {"sent": counts.get("sent", 0), "failed": counts.get("failed", 0), "attempted": sum(counts.values())},
