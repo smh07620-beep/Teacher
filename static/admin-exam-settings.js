@@ -93,7 +93,28 @@
   }
 
   async function review() { const catId = document.getElementById('exam-settings-id').value; if (!catId) return; await preview(); try { status().textContent = '⏳ 正在檢查題目完整性並送出審核…'; const response = await fetch(`/api/quiz-categories/${catId}/review`, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.issues?.length ? `${data.error}：${data.issues.join('、')}` : (data.error || '審核失敗')); const reviewerName=data.reviewerName || '目前登入者'; const reviewer=document.getElementById('exam-reviewer-name'); if(reviewer) reviewer.value=reviewerName; editingMeta = {...(editingMeta || {}), reviewStatus:'approved', reviewerName, reviewedAt:data.reviewedAt, active:false}; status().textContent = `✅ 審核完成：${reviewerName}；現在可發布考卷。`; updateWorkflow(editingMeta); adminQuizCategoriesCache.clear(); } catch (error) { status().textContent = '❌ ' + error.message; } }
-  async function publish() { const catId = document.getElementById('exam-settings-id').value; if (!catId) return; try { status().textContent = '⏳ 正在建立不可漂移發布快照並發布…'; const response = await fetch(`/api/quiz-categories/${catId}/publish`, {method:'POST', }), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '發布失敗'); editingMeta = {...(editingMeta || {}), active:true, publishedAt:data.publishedAt, reviewStatus:'approved', publicationId:data.publicationId || '', publicationHash:data.publicationHash || '', publishedBy:data.publishedBy || ''}; status().textContent = `🚀 考卷已發布${data.publishedBy ? '（發布者：' + data.publishedBy + '）' : ''}；已保存 ${Number(data.snapshotQuestionCount || 0)} 題發布快照${data.publicationHash ? '（' + data.publicationHash.slice(0,10) + '…）' : ''}。`; updateWorkflow(editingMeta); adminQuizCategoriesCache.clear(); Object.keys(dynamicCategoriesCache).forEach(key => delete dynamicCategoriesCache[key]); } catch (error) { status().textContent = '❌ ' + error.message; } }
+  function publicationIssues() {
+    const issues=[];
+    const title=document.getElementById('exam-settings-title')?.value.trim();
+    const audience=document.getElementById('exam-settings-audience')?.value.trim();
+    const questionCount=Math.max(0,Number(editingMeta?.questionCount||0));
+    if(!title)issues.push('考卷名稱未設定');
+    if(!audience)issues.push('適用人員未設定');
+    if(questionCount<=0)issues.push('沒有可發布的題目');
+    if(editingMeta?.reviewStatus!=='approved')issues.push('尚未完成審核');
+    const limited=document.getElementById('exam-draw-limited')?.checked;
+    const drawCount=Math.max(0,Number(document.getElementById('exam-settings-draw-count')?.value||0));
+    if(limited&&drawCount>questionCount)issues.push('抽題數超過目前題庫');
+    const quotaMode=document.getElementById('exam-draw-quota')?.checked;
+    if(quotaMode){
+      const quotaTotal=updateQuotaTotal();
+      if(quotaTotal<=0)issues.push('題型配額尚未設定');
+      if(quotaTotal>questionCount)issues.push('題型配額總數超過目前題庫');
+    }
+    return issues;
+  }
+
+  async function publish() { const catId = document.getElementById('exam-settings-id').value; if (!catId) return; const issues=publicationIssues(); if(issues.length){status().textContent='❌ 發布前請先完成：'+issues.join('、'); return;} if(!confirm('確認發布這份考卷？系統會建立不可變發布快照，學員將依目前設定看到正式版本。'))return; try { status().textContent = '⏳ 正在建立不可漂移發布快照並發布…'; const response = await fetch(`/api/quiz-categories/${catId}/publish`, {method:'POST', }), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '發布失敗'); editingMeta = {...(editingMeta || {}), active:true, publishedAt:data.publishedAt, reviewStatus:'approved', publicationId:data.publicationId || '', publicationHash:data.publicationHash || '', publishedBy:data.publishedBy || ''}; status().textContent = `🚀 考卷已發布${data.publishedBy ? '（發布者：' + data.publishedBy + '）' : ''}；已保存 ${Number(data.snapshotQuestionCount || 0)} 題發布快照${data.publicationHash ? '（' + data.publicationHash.slice(0,10) + '…）' : ''}。`; updateWorkflow(editingMeta); adminQuizCategoriesCache.clear(); Object.keys(dynamicCategoriesCache).forEach(key => delete dynamicCategoriesCache[key]); } catch (error) { status().textContent = '❌ ' + error.message; } }
   async function toggleBlindMode(catId, enabled) { const button = document.getElementById(`blind-toggle-${catId}`); if (button) { button.disabled = true; button.textContent = '⏳ 更新盲測…'; } try { const response = await fetch(`/api/quiz-categories/${catId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({blindMode:!!enabled})}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '盲測設定失敗'); const area = document.getElementById('admin-quiz-area')?.value || currentTrainingArea, group = document.getElementById('admin-quiz-group')?.value || currentGroupKey; adminQuizCategoriesCache.delete(adminScopeKey(area, group)); await renderAdminQuizCategories(true); } catch (error) { alert(error.message); if (button) { button.disabled = false; button.textContent = '🕶️ 盲測設定'; } } }
 
   window.adminEditQuizCategory = catId => openSettings(catId);
