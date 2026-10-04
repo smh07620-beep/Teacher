@@ -234,6 +234,23 @@ class WorkerRoutesRuntimeTests(unittest.TestCase):
         self.assertTrue(expected.issubset(actual), sorted(expected - actual))
         self.assertIs(self.app.extensions["teacher_worker_web_runtime"], self.runtime)
 
+    def test_forecast_prediction_hook_is_fail_soft_for_worker_claim(self):
+        self.seed_job("job-prediction-hook")
+        with patch(
+            "teacher_app.operations.history.record_forecast_prediction_for_job",
+            side_effect=RuntimeError("prediction history unavailable"),
+        ):
+            claimed = self.client.post(
+                "/api/material-worker/claim",
+                json={"workerId": "worker-a", "capabilities": {}},
+                headers=self.worker_headers(),
+            )
+        self.assertEqual(claimed.status_code, 200, claimed.get_data(as_text=True))
+        self.assertEqual(
+            claimed.get_json()["job"]["id"],
+            "job-prediction-hook",
+        )
+
     def test_worker_progress_updates_owned_job_with_canonical_stage(self):
         self.seed_job("job-progress")
         claimed = self.client.post(
