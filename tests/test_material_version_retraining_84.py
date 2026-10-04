@@ -175,6 +175,32 @@ class MaterialVersionRetraining84Tests(unittest.TestCase):
         self.assertEqual(history[0]["snapshot"]["storage_key"], "materials/worker-temp/source.pdf")
         self.assertEqual(history[1]["snapshot"]["storage_key"], "")
 
+    def test_restore_old_version_republishes_as_new_version_without_deleting_history(self):
+        material_version_retraining_84(self.conn, "sqlite")
+        with patch.object(common_db, "read_connection", self._read), patch.object(
+            common_db, "transaction", self._tx
+        ):
+            material_repository.replace_material_content_and_publish(
+                "mat-1",
+                content={**material_entry("temp"), "storage_key": "materials/v2/source.pdf"},
+                published_by="admin",
+                change_reason="V2",
+                requires_retraining=False,
+            )
+            restored = material_repository.restore_material_version(
+                "mat-1",
+                1,
+                published_by="admin",
+                change_reason="回復 V1",
+                requires_retraining=True,
+            )
+            history = material_repository.list_material_versions("mat-1")
+        self.assertEqual(restored["currentVersion"], 3)
+        self.assertEqual(restored["requiredCompletionVersion"], 3)
+        self.assertEqual(restored["storageKey"], "")
+        self.assertEqual([row["version"] for row in history], [3, 2, 1])
+        self.assertEqual(history[0]["changeReason"], "回復 V1")
+
     def test_version_helper_separates_current_and_stale_completions(self):
         materials = [
             {"id": "minor", "currentVersion": 2, "requiredCompletionVersion": 1},
