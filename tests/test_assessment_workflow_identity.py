@@ -49,6 +49,15 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
                 "UPDATE quiz_categories SET audience=? WHERE id=?",
                 ("一般人員", "cat-1"),
             )
+            conn.execute("""CREATE TABLE exam_windows (
+                quiz_category_id TEXT PRIMARY KEY, opens_at TEXT NOT NULL DEFAULT '',
+                closes_at TEXT NOT NULL DEFAULT '', reminder_enabled INTEGER NOT NULL DEFAULT 1,
+                updated_at TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT ''
+            )""")
+            conn.execute(
+                "INSERT INTO exam_windows(quiz_category_id,opens_at,closes_at) VALUES(?,?,?)",
+                ("cat-1", "2026-01-01T00:00:00+00:00", "2099-12-31T23:59:00+00:00"),
+            )
             conn.execute(
                 "INSERT INTO quiz_questions(id,quiz_category_id,tag,question,question_type,options,correct,answer_config,sort_order,active) "
                 "VALUES(?,?,?,?,?,?,?,?,?,?)",
@@ -130,6 +139,8 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         self.assertEqual(snapshot["schemaVersion"], 2)
         self.assertEqual(snapshot["category"]["publishedBy"], "Server Admin")
         self.assertEqual(snapshot["category"]["reviewerTitle"], "教學行政管理師")
+        self.assertEqual(snapshot["category"]["examWindow"]["opensAt"], "2026-01-01T00:00:00+00:00")
+        self.assertEqual(snapshot["category"]["examWindow"]["closesAt"], "2099-12-31T23:59:00+00:00")
         self.assertEqual(snapshot["questions"][0]["version"], 1)
         self.assertRegex(snapshot["questions"][0]["questionHash"], r"^[0-9a-f]{64}$")
 
@@ -160,6 +171,19 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
             self.actor,
         )
         self.assertEqual(values["request"]["materialIds"], ["mat-new"])
+
+    def test_publish_fails_closed_when_exam_window_is_missing(self):
+        reviewed = self.client.post("/api/quiz-categories/cat-1/review")
+        self.assertEqual(reviewed.status_code, 200, reviewed.get_data(as_text=True))
+        conn, _ = self.connect()
+        try:
+            conn.execute("DELETE FROM exam_windows WHERE quiz_category_id='cat-1'")
+        finally:
+            conn.close()
+        published = self.client.post("/api/quiz-categories/cat-1/publish")
+        self.assertEqual(published.status_code, 409, published.get_data(as_text=True))
+        self.assertEqual(published.get_json()["error"], "發布前必須設定開始時間與最後考核日期")
+        self.assertEqual(self.category()["active"], 0)
 
     def test_publish_fails_closed_when_audience_is_missing(self):
         reviewed = self.client.post("/api/quiz-categories/cat-1/review")
