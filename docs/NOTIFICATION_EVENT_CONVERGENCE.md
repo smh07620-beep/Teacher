@@ -252,3 +252,46 @@ GET /api/operational-capacity-simulation
 ```
 
 It is session-authenticated and restricted to `system_admin`. It is GET/read-only so it does not require a mutation/CSRF workflow.
+
+
+## Forecast prediction calibration (0111)
+
+Migration `0111-forecast-prediction-calibration` adds `operational_forecast_predictions`, a bounded operational table for **pre-completion** service-time predictions and their later backtest results.
+
+The integrity rule is deliberate: a prediction is created before the material Job finishes and is immutable thereafter. Completed jobs are then scored against `finished_at - started_at`. Failed/cancelled jobs are marked ignored instead of being treated as prediction misses.
+
+Prediction capture has two paths:
+
+- the Worker claim route records a best-effort prediction immediately so short PDF/Office jobs are not lost between ten-minute samplers;
+- the ten-minute operational sampler also reconciles/evaluates predictions and backfills predictions for still-pending jobs that were not captured at claim.
+
+The claim hook is fail-soft. Missing migration state, insufficient workload history, or prediction persistence failure never blocks Worker ownership or material processing.
+
+The backtest stores no material content or filename. It retains only job id, workload class, size band, model basis/version, sample count, nominal/P95 predicted seconds, actual service time and error metrics. Evaluated rows are retained for 90 days.
+
+Accuracy metrics are calculated over a rolling seven-day window:
+
+- median absolute error seconds;
+- median and mean absolute percentage error;
+- signed median bias (optimistic / balanced / conservative);
+- P95 coverage: fraction of real service times that were at or below the pre-completion P95 estimate;
+- per-workload accuracy for document/media/image/archive/other.
+
+Only real submitted jobs count. Capacity What-if inputs that were never actually uploaded are **not** backtest observations.
+
+Forecast confidence uses backtest results only as a one-way safety adjustment. Stable accuracy does not upgrade a forecast whose snapshot/job coverage only justifies medium confidence. Poor real-world accuracy can downgrade confidence:
+
+```text
+OPERATIONS_FORECAST_ACCURACY_MIN_EVALUATED=5
+OPERATIONS_FORECAST_ACCURACY_WARNING_ERROR_PERCENT=30
+OPERATIONS_FORECAST_ACCURACY_HIGH_ERROR_PERCENT=50
+OPERATIONS_FORECAST_ACCURACY_MIN_P95_COVERAGE_PERCENT=70
+```
+
+Defaults mean:
+
+- fewer than five evaluated predictions: collecting only, no confidence adjustment;
+- median absolute percentage error >= 30% or P95 coverage below 70%: lower confidence one level;
+- median error >= 50% or materially lower P95 coverage: force confidence to low.
+
+These are model-trust heuristics, not organizational SLO targets. The UI always shows both the raw evidence-based Forecast confidence and the post-backtest confidence when they differ.
