@@ -15,6 +15,7 @@ from teacher_app.common import scope
 from teacher_app.common.errors import ApiError
 from teacher_app.courses import repository as course_repository
 from teacher_app.materials import repository as materials_repository
+from teacher_app.exams import windows as exam_windows
 from teacher_app.assessments import repository
 
 
@@ -177,7 +178,25 @@ def update_category(base, category_id: str, data: Mapping[str, Any]) -> dict:
     try:
         draw_count = max(0, int(data.get("drawCount", entry.get("drawCount", 0)) or 0))
     except (TypeError, ValueError):
-        draw_count = max(0, int(entry.get("drawCount", 0) or 0))
+        exam_window = exam_windows.get_window(category_id)
+    opens_at = str((exam_window or {}).get("opens_at") or "").strip()
+    closes_at = str((exam_window or {}).get("closes_at") or "").strip()
+    if not opens_at or not closes_at:
+        raise _fail("ASSESSMENT_WINDOW_REQUIRED", "發布前必須設定開始時間與最後考核日期", 409)
+    try:
+        opens_dt = datetime.datetime.fromisoformat(opens_at.replace("Z", "+00:00"))
+        closes_dt = datetime.datetime.fromisoformat(closes_at.replace("Z", "+00:00"))
+        if opens_dt.tzinfo is None:
+            opens_dt = opens_dt.replace(tzinfo=datetime.timezone.utc)
+        if closes_dt.tzinfo is None:
+            closes_dt = closes_dt.replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        raise _fail("ASSESSMENT_WINDOW_INVALID", "考核時間格式不正確，請重新設定", 409)
+    if opens_dt >= closes_dt:
+        raise _fail("ASSESSMENT_WINDOW_INVALID", "最後考核日期必須晚於開始時間", 409)
+    if closes_dt <= datetime.datetime.now(datetime.timezone.utc):
+        raise _fail("ASSESSMENT_WINDOW_CLOSED", "最後考核日期必須晚於目前時間", 409)
+    draw_count = max(0, int(entry.get("drawCount", 0) or 0))
     try:
         passing_score = max(1, min(100, int(data.get("passingScore", entry.get("passingScore", 80)) or 80)))
     except (TypeError, ValueError):
@@ -292,7 +311,7 @@ def list_publications(base, category_id: str) -> list[dict]:
     ]
 
 
-def publication_snapshot(category_id: str, *, published_by: str = "") -> tuple[dict, str, str]:
+def publication_snapshot(category_id: str, *, published_by: str = "", exam_window: Mapping[str, Any] | None = None) -> tuple[dict, str, str]:
     category = repository.get_category_full(category_id)
     if not category:
         raise ValueError("找不到此考卷")
@@ -337,6 +356,10 @@ def publication_snapshot(category_id: str, *, published_by: str = "") -> tuple[d
             "reviewerTitle": category.get("reviewerTitle", ""),
             "reviewedAt": category.get("reviewedAt", ""),
             "publishedBy": str(published_by or "")[:100],
+            "examWindow": {
+                "opensAt": str((exam_window or {}).get("opens_at") or ""),
+                "closesAt": str((exam_window or {}).get("closes_at") or ""),
+            },
         },
         "questions": [question_snapshot(question) for question in questions],
     }
@@ -375,6 +398,7 @@ def publish_category(base, category_id: str, *, publisher: str = "") -> dict:
     snapshot, snapshot_hash, publication_id = publication_snapshot(
         category_id,
         published_by=publisher,
+        exam_window=exam_window,
     )
     repository.publish_category(
         category_id,
