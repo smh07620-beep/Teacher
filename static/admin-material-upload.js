@@ -415,7 +415,28 @@
       const when=v.publishedAt?`｜${v.publishedAt}`:'';
       return `V${Number(v.version||1)}${retraining}${who}${when}\n${v.changeReason||'未填寫變更原因'}`;
     }).join('\n\n');
-    alert(`教材版本紀錄\n\n${text}`);
+    const material=(await fetchAdminMaterials())?.find(x=>x.id===id);
+    const current=Number(material?.currentVersion||rows[0]?.version||1);
+    const choice=prompt(`教材版本紀錄（目前 V${current}）\n\n${text}\n\n若要回復舊版，請輸入版本號（例如 2）；只查看請按取消：`,'');
+    if(choice===null||!String(choice).trim()) return;
+    const sourceVersion=Number(choice);
+    if(!Number.isInteger(sourceVersion)||sourceVersion<1||sourceVersion>=current) return alert('只能選擇目前版本以前的有效版本。');
+    if(!rows.some(v=>Number(v.version)===sourceVersion)) return alert('找不到指定版本。');
+    const reason=prompt(`將 V${sourceVersion} 的內容重新發布為 V${current+1}。\n請輸入回復原因：`,'');
+    if(reason===null||!reason.trim()) return alert('版本回復原因不可空白。');
+    const requiresRetraining=confirm('回復後是否要求相關學員重新完成訓練？\n\n「確定」＝要求重訓；「取消」＝保留既有完成資格。');
+    if(!confirm(`確認將 V${sourceVersion} 的內容重新發布為 V${current+1}？\n\nV1～V${current} 的歷史都會保留，不會刪除。`)) return;
+    const restore=await fetch(`/api/slides/${encodeURIComponent(id)}/versions/${sourceVersion}/restore`,{
+      method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
+      body:JSON.stringify({changeReason:reason.trim(),requiresRetraining})
+    });
+    const restored=await restore.json().catch(()=>({}));
+    if(!restore.ok) return alert(restored.error||'版本回復失敗');
+    invalidateAdminMaterialsCache();
+    await renderAdminMaterials(true);
+    await renderAdminCourseMaterialHub(true);
+    await renderSlidesGrid();
+    alert(`✅ 已將 V${sourceVersion} 內容重新發布為 V${Number(restored.version||current+1)}。`);
   };
 
   window.deleteAdminMaterial = async function(id){
