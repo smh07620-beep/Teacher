@@ -396,3 +396,34 @@ def replace_material_content_and_publish(
             ),
         )
     return get_material(material_id)
+
+
+def restore_material_version(
+    material_id: str,
+    source_version: int,
+    *,
+    published_by: str,
+    change_reason: str,
+    requires_retraining: bool,
+) -> dict | None:
+    """Republish an immutable historical snapshot as a new current version."""
+    history = list_material_versions(material_id)
+    source = next((row for row in history if int(row.get("version") or 0) == int(source_version)), None)
+    if not source:
+        return None
+    snapshot = dict(source.get("snapshot") or {})
+    content = {
+        key: snapshot.get(key)
+        for key in (
+            "filename", "title", "description", "category", "course_id", "folder",
+            "page_count", "storage_filename", "storage_backend", "storage_key",
+            "slides_prefix", "storage_meta", "material_type", "atlas_meta",
+        )
+    }
+    return replace_material_content_and_publish(
+        material_id,
+        content=content,
+        published_by=published_by,
+        change_reason=change_reason,
+        requires_retraining=requires_retraining,
+    )
