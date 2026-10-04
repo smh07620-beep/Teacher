@@ -244,6 +244,18 @@
     return {targetMaterialId:String(current.id||''),versionChangeReason:reason.trim(),requiresRetraining};
   }
 
+  let explicitVersionTarget=null;
+
+  window.prepareMaterialVersionUpload = async function(id){
+    const materials=(await window.fetchAdminMaterials?.())||[];
+    const material=materials.find(item=>String(item.id||'')===String(id||''));
+    if(!material)return alert('找不到教材資料。');
+    explicitVersionTarget=material;
+    const input=document.getElementById('admin-pptx-upload-input');
+    input?.scrollIntoView?.({behavior:'smooth',block:'center'});
+    input?.click?.();
+  };
+
   window.adminUploadMaterials = async function(){
     const input=document.getElementById('admin-pptx-upload-input');
     const files=Array.from(input?.files||[]);
@@ -268,7 +280,21 @@
       const area=document.getElementById('admin-material-area')?.value||currentTrainingArea;
       const courseId=document.getElementById('admin-material-course')?.value||'';
       const materialType=document.getElementById('admin-material-type')?.value||'standard';
-      const versionIntent=await resolveMaterialVersionIntent(file,{title,group,area,courseId});
+      let versionIntent;
+      if(explicitVersionTarget){
+        const current=explicitVersionTarget;
+        const nextVersion=Number(current.currentVersion||1)+1;
+        const reason=prompt('更新「'+String(current.title||current.filename||'教材')+'」為 V'+nextVersion+'｜請輸入變更原因：','');
+        if(reason===null||!reason.trim()){
+          versionIntent=null;
+        }else{
+          const requiresRetraining=confirm('這次更新是否需要學員重新完成訓練？\n\n「確定」＝要求重訓；「取消」＝保留既有完成資格。');
+          versionIntent={targetMaterialId:String(current.id||''),versionChangeReason:reason.trim(),requiresRetraining};
+        }
+        explicitVersionTarget=null;
+      }else{
+        versionIntent=await resolveMaterialVersionIntent(file,{title,group,area,courseId});
+      }
       if(versionIntent===null){
         failed.push({name:file.name,error:'教師取消本次上傳'});
         continue;
