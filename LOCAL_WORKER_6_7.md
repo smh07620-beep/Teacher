@@ -423,3 +423,14 @@ system_admin 的 SLO / Forecast 頁現在可直接試算「如果現在一次加
 試算只讀取 Web 端既有歷史與 Queue 狀態，不會建立 Job、不會自動啟動第二台 Worker，也不會修改 Task Scheduler。若某個 workload 樣本不足，整體 ETA 會標示不可安全估算；若目前有 Worker offline、R2、FFmpeg、LibreOffice 等 Incident，會先要求排除故障再做容量決策。
 
 **院內 Worker 不需要更新，也不需要新增 `.local-worker.env`。**
+
+
+## Forecast 準確度回測（0111）
+
+Web 端現在會在教材 Job **完成以前**固定一筆 service-time prediction，等 Job 真正 completed 後再與實際 `finished_at - started_at` 比較。這可避免事後看到結果才重新估算造成的資料洩漏。
+
+Worker claim 成功後會 best-effort 觸發預測紀錄，但此 hook 完全 fail-soft：回測資料表尚未完成 migration、樣本不足或回測寫入失敗，都不會阻止 Worker 領取或處理教材。每 10 分鐘維運採樣也會做補漏與完成後結算。
+
+SLO / Forecast 畫面會顯示中位絕對誤差、P95 涵蓋率、預測偏樂觀/偏保守，以及文件/影音等各 workload 回測結果。真實誤差變差時只會把 Forecast 信心往下調，不會因回測看起來漂亮就忽略原本資料覆蓋不足。
+
+這一段不需要修改院內 `.local-worker.env` 或 Worker protocol。0111 migration 只存在 Web/DB，院內 Worker 仍使用相同 HTTPS claim/progress/publish/complete contract。
