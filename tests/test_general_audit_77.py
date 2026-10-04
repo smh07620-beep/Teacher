@@ -164,6 +164,15 @@ class GeneralAudit77Tests(unittest.TestCase):
                 "VALUES(?,?,?,?,?,?,?,?)",
                 ("cat-audit", "grpBio", "internal", "Audit Exam", "now", 0, "draft", "一般人員"),
             )
+            conn.execute("""CREATE TABLE IF NOT EXISTS exam_windows (
+                quiz_category_id TEXT PRIMARY KEY, opens_at TEXT NOT NULL DEFAULT '',
+                closes_at TEXT NOT NULL DEFAULT '', reminder_enabled INTEGER NOT NULL DEFAULT 1,
+                updated_at TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT ''
+            )""")
+            conn.execute(
+                "INSERT INTO exam_windows(quiz_category_id,opens_at,closes_at) VALUES(?,?,?)",
+                ("cat-audit", "2026-01-01T00:00:00+00:00", "2099-12-31T23:59:00+00:00"),
+            )
             conn.execute(
                 "INSERT INTO quiz_questions(id,quiz_category_id,tag,question,question_type,options,correct,answer_config,explanation,sort_order,active) "
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
