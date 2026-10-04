@@ -172,6 +172,31 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         )
         self.assertEqual(values["request"]["materialIds"], ["mat-new"])
 
+    def test_linked_material_version_replacement_keeps_canonical_ai_source(self):
+        material_repository.insert_material({
+            "id": "mat-versioned", "filename": "v1.pdf", "title": "版本教材", "description": "",
+            "category": "", "group_key": "grpBio", "training_area": "internal", "course_id": "",
+            "folder": "mat-versioned", "page_count": 1, "date_added": "now",
+            "storage_filename": "v1.pdf", "storage_backend": "local", "storage_key": "v1",
+            "slides_prefix": "", "storage_meta": "{}", "material_type": "standard",
+            "atlas_meta": "{}", "active": True,
+        })
+        linked = self.client.put("/api/quiz-categories/cat-1/materials", json={"materialIds": ["mat-versioned"]})
+        self.assertEqual(linked.status_code, 200, linked.get_data(as_text=True))
+        updated = material_repository.replace_material_content_and_publish(
+            "mat-versioned",
+            content={"filename": "v2.pdf", "title": "版本教材", "storage_filename": "v2.pdf", "storage_backend": "r2", "storage_key": "v2"},
+            published_by="root",
+            change_reason="更新教材內容",
+            requires_retraining=False,
+        )
+        self.assertEqual(updated["id"], "mat-versioned")
+        self.assertEqual(updated["category"], "cat-1")
+        runtime = type("Runtime", (), {"max_materials": 4, "max_questions": 15})()
+        values = ai_jobs.prepare_request({"quizCategoryId": "cat-1", "materialIds": ["mat-versioned"]}, runtime, self.actor)
+        self.assertEqual(values["request"]["materialIds"], ["mat-versioned"])
+        self.assertEqual(material_repository.get_material("mat-versioned")["filename"], "v2.pdf")
+
     def test_publish_fails_closed_when_exam_window_is_missing(self):
         reviewed = self.client.post("/api/quiz-categories/cat-1/review")
         self.assertEqual(reviewed.status_code, 200, reviewed.get_data(as_text=True))
