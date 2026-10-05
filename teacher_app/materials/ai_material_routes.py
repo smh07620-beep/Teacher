@@ -84,7 +84,7 @@ def register_ai_material_routes(owner):
         if len(reference_ids) > 9:
             return jsonify({"error": "一次最多可使用 10 份原始資料。"}), 400
         body["referenceMaterialIds"] = reference_ids
-        readiness_error = _ai_worker_online_error()
+        readiness_error = _ai_worker_online_error(required_queue="media_scripts")
         if readiness_error:
             return readiness_error
         try:
