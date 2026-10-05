@@ -8,6 +8,9 @@ import sys
 import threading
 import time
 
+import requests
+
+from teacher_app import config as teacher_config
 from teacher_app.assessments import ai_jobs, free_ai_fallback
 from teacher_app.assessments.question_runtime import build_canonical_question_runtime
 from teacher_app.materials import (
@@ -55,7 +58,9 @@ def _ai_worker_capabilities() -> dict:
         "workerKind": "ai",
         "workerMachine": str(socket.gethostname() or "")[:80],
         "heartbeatContract": 2,
-        "heartbeatTransport": "database",
+        "heartbeatTransport": "database+web",
+        "databaseIdentity": teacher_config.database_identity(),
+        "databaseReady": True,
         "kokoro": {
             "available": bool(kokoro_ready and numpy_ready and misaki_ready),
             "kokoro": kokoro_ready,
@@ -78,14 +83,46 @@ class _AIHeartbeat:
         self._thread = None
         self._consecutive_failures = 0
 
+    def _post_web_heartbeat(self, capabilities: dict) -> None:
+        base_url = str(os.environ.get("TEACHER_BASE_URL") or "").strip().rstrip("/")
+        token = str(os.environ.get("MATERIAL_WORKER_TOKEN") or "").strip()
+        if not base_url or not token:
+            return
+        response = requests.post(
+            base_url + "/api/material-worker/heartbeat",
+            json={"workerId": self.worker_id, "capabilities": capabilities},
+            headers={"Authorization": "Bearer " + token},
+            timeout=10,
+        )
+        if response.status_code >= 300:
+            raise RuntimeError(f"AI Worker Web heartbeat rejected with HTTP {response.status_code}")
+
     def pulse(self) -> None:
         stamp = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
-        worker_repository.upsert_heartbeat(
-            self.worker_id,
-            last_seen=stamp,
-            capabilities=_ai_worker_capabilities(),
-            current_job_id="",
-        )
+        capabilities = _ai_worker_capabilities()
+        try:
+            worker_repository.upsert_heartbeat(
+                self.worker_id,
+                last_seen=stamp,
+                capabilities=capabilities,
+                current_job_id="",
+            )
+        except Exception:
+            degraded = dict(capabilities)
+            degraded["databaseReady"] = False
+            degraded["heartbeatTransport"] = "web-diagnostic"
+            try:
+                self._post_web_heartbeat(degraded)
+            except Exception:
+                pass
+            raise
+        try:
+            self._post_web_heartbeat(capabilities)
+        except Exception as exc:
+            # Direct DB heartbeat remains authoritative for queue health.  A Web
+            # diagnostic heartbeat failure must not make an otherwise healthy
+            # AI Worker exit.
+            log(f"web heartbeat diagnostic failed type={type(exc).__name__}")
 
     def _pulse_once(self) -> bool:
         try:
