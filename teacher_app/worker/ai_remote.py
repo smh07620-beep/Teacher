@@ -53,7 +53,13 @@ def transport_mode() -> str:
     if configured not in {"", "auto"}:
         raise RuntimeError("AI_WORKER_TRANSPORT 必須是 auto、https 或 database。")
     base_url = str(os.environ.get("TEACHER_BASE_URL") or "").strip()
-    return TRANSPORT_HTTPS if base_url and _worker_token() else TRANSPORT_DATABASE
+    if base_url and _worker_token():
+        return TRANSPORT_HTTPS
+    raise RuntimeError(
+        "AI Worker auto 模式只允許 HTTPS 443；請設定 TEACHER_BASE_URL 與 "
+        "AI_WORKER_TOKEN（或 MATERIAL_WORKER_TOKEN）。若要使用舊版直連資料庫，"
+        "必須明確設定 AI_WORKER_TRANSPORT=database。"
+    )
 
 
 def web_transport_enabled() -> bool:
