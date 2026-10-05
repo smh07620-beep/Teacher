@@ -23,6 +23,37 @@ def _scope(owner, group: str):
     return denied
 
 
+_AI_QUEUE_NAMES = {"ai_questions", "media_scripts", "ai_presentations", "ai_videos", "media_audio", "media_subtitles"}
+
+
+def _is_ai_worker_heartbeat(row: dict, capabilities: dict) -> bool:
+    """Recognize current and older dedicated AI Worker heartbeat shapes."""
+    kind = str(capabilities.get("workerKind") or "").strip().lower()
+    worker_id = str(row.get("worker_id") or row.get("workerId") or "").strip().lower()
+    queues = capabilities.get("queues")
+    queue_names = {str(item or "").strip() for item in queues} if isinstance(queues, (list, tuple, set)) else set()
+    return bool(kind == "ai" or worker_id.endswith("-ai") or queue_names.intersection(_AI_QUEUE_NAMES))
+
+
+def _kokoro_capability(capabilities: dict) -> bool | None:
+    """Read Kokoro readiness from current heartbeat data and compatible legacy keys."""
+    kokoro = capabilities.get("kokoro")
+    if isinstance(kokoro, dict) and "available" in kokoro:
+        return bool(kokoro.get("available"))
+    for key in ("kokoroInstalled", "kokoroAvailable", "kokoro_available"):
+        if key in capabilities:
+            return bool(capabilities.get(key))
+    tts = capabilities.get("tts")
+    if isinstance(tts, dict):
+        nested = tts.get("kokoro")
+        if isinstance(nested, dict) and "available" in nested:
+            return bool(nested.get("available"))
+        for key in ("kokoroInstalled", "kokoroAvailable", "kokoro_available"):
+            if key in tts:
+                return bool(tts.get(key))
+    return None
+
+
 def _ai_worker_status() -> dict:
     status = {
         "seen": False,
@@ -42,7 +73,7 @@ def _ai_worker_status() -> dict:
         latest_seen = None
         for row in worker_repository.list_heartbeats(100):
             capabilities = row.get("capabilities") or {}
-            if not isinstance(capabilities, dict) or str(capabilities.get("workerKind") or "") != "ai":
+            if not isinstance(capabilities, dict) or not _is_ai_worker_heartbeat(row, capabilities):
                 continue
             raw_seen = str(row.get("last_seen") or row.get("lastSeen") or "").strip()
             try:
@@ -62,8 +93,7 @@ def _ai_worker_status() -> dict:
         now = dt.datetime.now(dt.timezone.utc)
         heartbeat_age = max(0, int((now - latest_seen).total_seconds()))
         online = heartbeat_age <= 120
-        kokoro = capabilities.get("kokoro") if isinstance(capabilities.get("kokoro"), dict) else {}
-        kokoro_installed = bool(kokoro.get("available")) if "available" in kokoro else None
+        kokoro_installed = _kokoro_capability(capabilities)
 
         diagnostic_code = "worker_ready"
         diagnostic_message = "AI Worker 與 Kokoro 已回報，可建立語音試聽。"
@@ -103,6 +133,24 @@ def _ai_worker_status() -> dict:
             "diagnosticMessage": "Web 無法讀取 AI Worker heartbeat 狀態；請檢查資料庫連線與 worker heartbeat table。",
         })
     return status
+
+
+def _worker_ready_error():
+    """Fail closed before enqueueing work that can only run on the local AI Worker."""
+    worker = _ai_worker_status()
+    if not worker.get("online"):
+        return jsonify({
+            "error": str(worker.get("diagnosticMessage") or "本機 AI Worker 尚未在線。"),
+            "workerOffline": True,
+            "worker": worker,
+        }), 503
+    if worker.get("kokoroInstalled") is not True:
+        return jsonify({
+            "error": str(worker.get("diagnosticMessage") or "Kokoro 語音能力尚未就緒。"),
+            "kokoroUnavailable": True,
+            "worker": worker,
+        }), 503
+    return None
 
 
 def register_media_audio_routes(owner):
@@ -175,17 +223,9 @@ def register_media_audio_routes(owner):
                 "preview": True,
                 "result": cached,
             })
-        worker = _ai_worker_status()
-        if not worker.get("online"):
-            return jsonify({
-                "error": "本機 AI Worker 尚未在線，無法建立新的語音試聽。請先啟動 Teacher AI Worker；已有快取試聽仍可直接播放。",
-                "workerOffline": True,
-            }), 503
-        if worker.get("kokoroInstalled") is not True:
-            return jsonify({
-                "error": "AI Worker 已連線，但 Kokoro 語音套件尚未就緒。請在院內 Worker 更新 AI dependencies 後重啟。",
-                "kokoroUnavailable": True,
-            }), 503
+        readiness_error = _worker_ready_error()
+        if readiness_error:
+            return readiness_error
         try:
             job = media_audio_jobs.enqueue_preview(body, user)
         except media_audio_jobs.MediaAudioLimitError as exc:
@@ -219,6 +259,9 @@ def register_media_audio_routes(owner):
             return denied
         if str(script.get("status") or "") != "approved":
             return jsonify({"error": "只有授課教師已核准的講稿可以產生 AI 語音。"}), 409
+        readiness_error = _worker_ready_error()
+        if readiness_error:
+            return readiness_error
         try:
             job = media_audio_jobs.enqueue(body, user)
         except media_audio_jobs.MediaAudioLimitError as exc:
