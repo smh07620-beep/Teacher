@@ -131,6 +131,20 @@ def enqueue_preview(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
     if not media_audio_runtime.configured():
         raise RuntimeError("免費本機 AI 語音尚未啟用；請完成 Cloudflare R2 與本機 Kokoro AI Worker 設定。")
     values = prepare_preview_request(data, actor)
+    stale_minutes = _env_int("MEDIA_AUDIO_PREVIEW_STALE_MINUTES", 8, 3, 120)
+    cutoff = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=stale_minutes)).isoformat()
+    media_audio_repository.expire_stale_previews(cutoff)
+
+    # Preview clicks are idempotent per user + voice. Reuse the in-flight job
+    # instead of creating duplicates that later trip the preview queue limit.
+    existing = media_audio_repository.active_preview_job_for_actor(
+        values["actor_username"],
+        str((values.get("request") or {}).get("voice") or ""),
+    )
+    if existing:
+        existing["_reusedActive"] = True
+        return existing
+
     _enforce_queue_limits(values["actor_username"], preview=True)
     return media_audio_repository.create_job(values)
 
@@ -202,6 +216,7 @@ def public_job(job: Mapping[str, Any]) -> dict:
         "scriptId": job.get("scriptId"),
         "materialId": job.get("materialId"),
         "preview": bool(request_data.get("preview")),
+        "reusedActive": bool(job.get("_reusedActive")),
         "progress": {
             "percent": job.get("progressPercent", 0),
             "stage": job.get("progressStage", ""),
