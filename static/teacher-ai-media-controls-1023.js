@@ -72,9 +72,9 @@
       .sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b), 'zh-Hant'));
   }
 
-  function paintSelect(select, rows, emptyText) {
+  function paintSelect(select, rows, emptyText, preferredValue = null) {
     if (!select) return;
-    const previous = select.value;
+    const previous = preferredValue == null ? select.value : String(preferredValue || '');
     select.replaceChildren(new Option(rows.length ? '選擇來源教材／內容…' : emptyText, ''));
     rows.forEach(item => select.add(new Option(sourceLabel(item), String(item.id || ''))));
     if (previous && rows.some(item => String(item.id) === previous)) select.value = previous;
@@ -163,7 +163,7 @@
     select.disabled = false;
     const status = $('teacher-ai-video-status-1015');
     if (status && !usable.length) status.textContent = '目前尚無可直接製作影片的已核准 PowerPoint；請按「建立／匯入 PowerPoint」加入資料後完成核准。';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    if (select.value !== previous) select.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   }
 
@@ -294,8 +294,8 @@
     if (!shared) return false;
     if (sourceRefreshPromise) return sourceRefreshPromise;
     if (!force && materials.length && Date.now() - sourceRefreshAt < 2000) {
-      paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材');
-      paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳');
+      paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
+      paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳', selectedBeforeRefresh);
       showSourceAvailability(materials);
       sourcesLoadedAt = Date.now();
       broadcastSources(shared);
@@ -303,6 +303,7 @@
       return true;
     }
     const generation = ++refreshGeneration;
+    const selectedBeforeRefresh = String(shared.value || lastSourceSelection || '');
     shared.disabled = true;
     shared.replaceChildren(new Option('正在讀取可用教材…', ''));
     sourceRefreshPromise = (async () => {
