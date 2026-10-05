@@ -20,7 +20,7 @@
   };
   const busy = value => {
     const button = $('teacher-ai-video-generate-1015');
-    if (button) button.disabled = value || !status?.storage?.available || !status?.capabilities?.['video.create'];
+    if (button) button.disabled = value || !status?.ready || !status?.capabilities?.['video.create'];
   };
   async function api(path, options = {}, timeoutMs = 15000) {
     const controller = new AbortController();
@@ -74,12 +74,16 @@
       renderVoiceHealth(audioStatus);
       const provider = $('teacher-ai-video-provider-1015');
       if (provider) {
-        provider.textContent = status.storage?.available
-          ? '本機 AI｜隱私模式'
-          : 'AI 影片服務尚未啟用';
+        provider.textContent = status.ready
+          ? '本機 AI 已就緒｜隱私模式'
+          : status.storage?.available
+            ? 'AI Worker／Kokoro 尚未就緒'
+            : 'AI 影片服務尚未啟用';
       }
       const renderer = $('teacher-ai-video-renderer-1015');
-      if (renderer) renderer.textContent = '品質檢查與教師核准後才能發布';
+      if (renderer) renderer.textContent = status.ready
+        ? '品質檢查與教師核准後才能發布'
+        : (status.diagnostic?.message || '等待 AI Worker 與 Kokoro 回報');
       busy(false);
     } catch (error) {
       note(error.message, true);
@@ -151,6 +155,7 @@
   async function generate() {
     const presentationId = $('teacher-ai-video-presentation-1015')?.value.trim();
     if (!presentationId) return note('請填入已核准 PowerPoint revision ID。', true);
+    if (!status?.ready) return note(status?.diagnostic?.message || 'AI Worker／Kokoro 尚未就緒，暫不能建立影片。', true);
     if (!confirm(`確定建立 AI 教學影片嗎？\n\nRenderer 順序：${rendererPolicyText()}\n\n若 PowerPoint 過期或不可用，Worker 會自動改用 LibreOffice。完成後仍需教師預覽與核准。`)) return;
     busy(true);
     try {
