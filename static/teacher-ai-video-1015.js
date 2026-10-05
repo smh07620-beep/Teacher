@@ -50,12 +50,17 @@
     if (!host) return;
     const worker = data?.worker || {};
     const workerText = worker.online ? '🟢 AI Worker 在線' : worker.seen ? '🔴 AI Worker 離線' : '🟠 AI Worker 尚未回報';
-    const kokoroText = worker.kokoroInstalled === true ? '🟢 Kokoro 已安裝' : worker.kokoroInstalled === false ? '🔴 Kokoro 未安裝' : '🟠 Kokoro 待確認';
+    const kokoroText = worker.kokoroInstalled === true
+      ? '🟢 Kokoro 已安裝'
+      : worker.kokoroInstalled === false
+        ? '🔴 Kokoro 未安裝'
+        : worker.seen ? '🟠 Kokoro 能力未回報' : '⚪ Kokoro 等待 AI Worker';
     const r2Text = data?.r2Ready ? '🟢 R2 正常' : '🔴 R2 未設定';
     host.className = data?.readyForPreview
       ? 'mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[10px] leading-5 text-emerald-800'
       : 'mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] leading-5 text-amber-800';
-    host.textContent = `${workerText} · ${kokoroText} · ${r2Text}`;
+    const diagnostic = String(data?.diagnostic?.message || '').trim();
+    host.innerHTML = `<div>${escape(workerText)} · ${escape(kokoroText)} · ${escape(r2Text)}</div>${diagnostic && !data?.readyForPreview ? `<div class="mt-1 font-bold">${escape(diagnostic)}</div>` : ''}`;
   }
 
   async function loadStatus() {
