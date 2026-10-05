@@ -6,7 +6,7 @@ if (process.env.TEACHER_PLAYWRIGHT_BROWSER) {
   test.use({ launchOptions: { executablePath: process.env.TEACHER_PLAYWRIGHT_BROWSER } });
 }
 
-test('AI PowerPoint stays in the authoring workspace while media studio only consumes approved revisions', async ({ page }) => {
+test('AI PowerPoint stays mounted in the unified studio across course hub repaint', async ({ page }) => {
   await page.setContent(`
     <main>
       <section id="admin-course-material-hub">
@@ -30,6 +30,7 @@ test('AI PowerPoint stays in the authoring workspace while media studio only con
         <section id="teacher-media-script-1014">
           <label>來源教材<select id="teacher-script-material-1014"><option value="doc-1">教材文件</option></select></label>
         </section>
+        <section id="teacher-recorder-1014"><h4>老師錄影</h4></section>
       </section>
     </main>
   `);
@@ -40,7 +41,6 @@ test('AI PowerPoint stays in the authoring workspace while media studio only con
       hasPermission: permission => permission === 'material.manage'
     });
     window.TeacherMediaSubtitle1014 = { selectMaterial: value => { window.subtitleSource = value; } };
-    window.TeacherWorkspace1014 = { openCourse: async () => { window.legacyCourseJumped = true; } };
     window.fetch = async url => ({ ok: true, json: async () => String(url).includes('/api/ai-presentations') ? [] : [] });
   });
 
@@ -48,17 +48,21 @@ test('AI PowerPoint stays in the authoring workspace while media studio only con
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
 
   await expect(page.locator('#teacher-ai-media-studio-1018')).toHaveCount(1);
-  await expect(page.getByRole('tab')).toHaveCount(3);
-  await expect(page.locator('#teacher-ai-material-presentation-stage-1014 > #teacher-ai-presentation-1016')).toHaveCount(1);
-  await expect(page.locator('#teacher-media-advanced-1018 #teacher-ai-presentation-1016')).toHaveCount(0);
-  await expect(page.locator('#teacher-media-advanced-1018 > summary')).toHaveText('媒體版本、品質與進階資訊');
+  await expect(page.getByRole('tab')).toHaveCount(4);
+  await expect(page.locator('#teacher-media-tab-presentation-1018')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#teacher-media-panel-presentation-1018 #teacher-ai-material-1014')).toBeVisible();
+  await expect(page.locator('#teacher-media-panel-presentation-1018 #teacher-ai-presentation-1016')).toHaveCount(1);
+  await expect(page.locator('#teacher-media-panel-recording-1018 #teacher-recorder-1014')).toHaveCount(1);
+  await expect(page.locator('#teacher-media-video-captions-1018 #teacher-media-subtitle-1014')).toHaveCount(1);
+  await expect(page.locator('#teacher-media-advanced-1018 > summary')).toHaveText('版本、品質與進階資訊');
 
-  // PowerPoint authoring remains owned by the authoring workspace; the media
-  // studio must not recreate the duplicate shortcut that was removed in F5.
-  await expect(page.getByRole('button', { name: '🖥️ AI PowerPoint 製作' })).toHaveCount(0);
-  await expect(page.locator('#admin-course-material-hub #teacher-ai-presentation-1016')).toBeVisible();
+  // The course hub may repaint repeatedly, but PowerPoint authoring now lives
+  // under the stable media studio and must not be destroyed with that repaint.
+  await page.locator('#admin-course-material-hub').evaluate(node => { node.innerHTML = '<div class="admin-course-dashboard">重新整理完成</div>'; });
+  await expect(page.locator('#teacher-media-panel-presentation-1018 #teacher-ai-material-1014')).toBeVisible();
+  await expect(page.locator('#teacher-media-panel-presentation-1018 #teacher-ai-presentation-1016')).toHaveCount(1);
+  await expect(page.locator('#admin-course-material-hub #teacher-ai-material-1014')).toHaveCount(0);
   await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => Boolean(window.legacyCourseJumped))).toBe(false);
 });
 
 test('legacy MVP readiness summary is removed instead of duplicating the media studio', async ({ page }) => {
