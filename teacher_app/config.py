@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
+from urllib.parse import unquote, urlsplit
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping
@@ -99,6 +101,40 @@ def storage_paths(*, ensure: bool = True) -> StoragePaths:
 
 def database_url() -> str:
     return os.environ.get("DATABASE_URL", "").strip()
+
+
+def database_identity(env: Mapping[str, str] | None = None) -> str:
+    """Return a non-secret stable identity for the configured production database.
+
+    Supabase direct and pooler URLs may use different hosts. Prefer the project
+    ref when it can be derived from either the direct hostname or pooler
+    username; otherwise hash only host/port/database name. Credentials are never
+    returned or hashed into user-visible diagnostics.
+    """
+    source = os.environ if env is None else env
+    raw = str(source.get("DATABASE_URL", "") or "").strip()
+    if not raw:
+        return ""
+    try:
+        parsed = urlsplit(raw)
+    except ValueError:
+        return ""
+    host = str(parsed.hostname or "").strip().lower()
+    database = unquote(str(parsed.path or "").lstrip("/")).strip().lower()
+    username = unquote(str(parsed.username or "")).strip().lower()
+    project_ref = ""
+    direct = re.fullmatch(r"db\.([a-z0-9-]+)\.supabase\.co", host)
+    pooled = re.fullmatch(r"postgres\.([a-z0-9-]+)", username)
+    if direct:
+        project_ref = direct.group(1)
+    elif pooled:
+        project_ref = pooled.group(1)
+    if project_ref:
+        basis = f"supabase|{project_ref}|{database or 'postgres'}"
+    else:
+        port = parsed.port or ""
+        basis = f"postgres|{host}|{port}|{database}"
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:16]
 
 
 def sqlite_path() -> Path:
