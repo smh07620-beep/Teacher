@@ -124,9 +124,8 @@
     presentationMaterialId = normalizedMaterialId;
     const generation = ++presentationRequestGeneration;
     const prior = select.value;
-    const group = new URLSearchParams(window.location.search).get('group')
-      || window.currentGroupKey
-      || String(R.user?.preferredGroup || '');
+    const explicitGroup = new URLSearchParams(window.location.search).get('group') || window.currentGroupKey || '';
+    const group = explicitGroup || (R.crossGroup ? '' : String(R.user?.preferredGroup || ''));
     select.replaceChildren(new Option('讀取所有已核准 PowerPoint…', ''));
     select.disabled = true;
     presentationRequest = (async () => {
