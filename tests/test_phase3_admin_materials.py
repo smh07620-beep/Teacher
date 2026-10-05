@@ -28,6 +28,12 @@ class Phase3AdminMaterialsTests(unittest.TestCase):
         self.assertIn('/api/material-search/${encodeURIComponent(m.id)}/status', source)
         self.assertIn('/api/material-search/${encodeURIComponent(id)}/index', source)
 
+    def test_material_list_ignores_stale_concurrent_responses(self):
+        materials = ROOT.joinpath('static/admin-materials.js').read_text(encoding='utf-8')
+        self.assertIn('adminMaterialsRequestGeneration', materials)
+        self.assertIn('generation === adminMaterialsRequestGeneration', materials)
+        self.assertIn('An older response must never replace a newer completed material list', materials)
+
     def test_materials_fetch_has_one_canonical_owner(self):
         materials = ROOT.joinpath('static/admin-materials.js').read_text(encoding='utf-8')
         rbac = ROOT.joinpath('static/rbac-ui-681.js').read_text(encoding='utf-8')
