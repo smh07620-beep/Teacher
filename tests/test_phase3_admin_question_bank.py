@@ -31,6 +31,12 @@ class Phase3AdminQuestionBankTests(unittest.TestCase):
         self.assertIn('/api/quiz-categories/admin?group=', source)
         self.assertNotIn('X-Admin-Key', source)
 
+    def test_course_wizard_area_starts_from_route_scope(self):
+        source = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
+        self.assertIn("option.value === currentTrainingArea", source)
+        self.assertIn("wizardArea.value = currentTrainingArea", source)
+        self.assertIn("option.value === currentGroupKey", source)
+
     def test_question_bank_module_keeps_existing_rbac_boundary(self):
         source = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
         self.assertNotIn('getAdminKey', source)
