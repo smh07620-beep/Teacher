@@ -381,11 +381,17 @@
     if (cached) {
       audio.src = cached;
       audio.classList.remove('hidden');
-      try { await audio.play(); } catch (_) {}
-      if (status) status.textContent = `${voiceLabel(voice)} 試聽`;
+      button.textContent = '▶ 播放試聽';
+      try {
+        await audio.play();
+        if (status) status.textContent = `${voiceLabel(voice)}｜正在播放`;
+      } catch (error) {
+        if (status) status.textContent = `❌ 試聽檔案已準備完成，請使用播放器按播放：${error?.message || '瀏覽器阻擋自動播放'}`;
+      }
       return;
     }
     const original = button.textContent;
+    let prepared = false;
     button.disabled = true;
     button.textContent = '準備試聽…';
     if (status) status.textContent = '第一次使用此聲音時，AI Worker 會先建立短版試聽。';
@@ -397,6 +403,7 @@
       if (!response.ok) throw new Error(first.error || '無法建立語音試聽');
       const jobId = first.jobId || '';
       if (!jobId) throw new Error('沒有取得試聽工作 ID');
+      if (first.reusedActive && status) status.textContent = '前一次相同聲音的試聽仍在處理，已接續等待，不會重複建立工作。';
       let completed = null;
       for (let attempt = 0; attempt < 150; attempt += 1) {
         await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 500 : 1200));
@@ -411,17 +418,19 @@
         }
       }
       const url = completed?.result?.previewUrl || '';
-      if (!url) throw new Error('語音試聽尚未完成，請稍後再試');
+      if (!url) throw new Error('語音試聽等待逾時；舊工作會自動清理，請稍後重新試聽');
       previewCache.set(voice, url);
+      audio.pause?.();
       audio.src = url;
       audio.classList.remove('hidden');
-      if (status) status.textContent = `${voiceLabel(voice)}｜可重複播放`;
-      try { await audio.play(); } catch (_) {}
+      audio.load?.();
+      prepared = true;
+      if (status) status.textContent = `${voiceLabel(voice)}｜試聽已準備完成，請再按一次「播放試聽」`;
     } catch (error) {
       if (status) status.textContent = `❌ ${error.message}`;
     } finally {
       button.disabled = false;
-      button.textContent = original;
+      button.textContent = prepared ? '▶ 播放試聽' : original;
     }
   }
 
