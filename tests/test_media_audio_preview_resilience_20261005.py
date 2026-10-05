@@ -44,6 +44,31 @@ class MediaAudioPreviewResilienceTests(unittest.TestCase):
         self.assertEqual(response.get_json()["result"]["mimeType"], "audio/wav")
         enqueue.assert_not_called()
 
+    def test_uncached_preview_fails_fast_when_ai_worker_is_offline(self):
+        app = Flask(__name__ + "-offline")
+
+        @app.before_request
+        def bind_user():
+            g.teacher_user = {
+                "username": "teacher1",
+                "roles": ["clinical_teacher"],
+                "preferredGroup": "grpBio",
+                "preferredArea": "internal",
+            }
+
+        register_media_audio_routes(app)
+        with app.test_client() as client, \
+             patch("teacher_app.materials.media_audio_routes.scope_filter.require_permission", return_value=None), \
+             patch("teacher_app.materials.media_audio_routes.media_audio_runtime.cached_voice_preview", return_value={}), \
+             patch("teacher_app.materials.media_audio_routes._ai_worker_status", return_value={"online": False, "seen": False, "kokoroInstalled": None}), \
+             patch("teacher_app.materials.media_audio_routes.media_audio_jobs.enqueue_preview") as enqueue:
+            response = client.post("/api/media-audio/preview", json={"voice": "zf_xiaoxiao"})
+
+        self.assertEqual(response.status_code, 503)
+        self.assertTrue(response.get_json()["workerOffline"])
+        self.assertIn("AI Worker", response.get_json()["error"])
+        enqueue.assert_not_called()
+
     def test_repeated_preview_click_reuses_same_active_voice_job(self):
         stamp = dt.datetime.now(dt.timezone.utc).isoformat()
         existing = {
