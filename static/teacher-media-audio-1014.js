@@ -12,6 +12,8 @@
   let pollToken = 0;
   let statusInfo = null;
   let scripts = [];
+  let approvedScriptsGeneration = 0;
+  let approvedScriptsMaterialId = '';
 
   const voiceLabel = value => ({
     zf_xiaoxiao: '曉曉｜女聲', zf_xiaobei: '小北｜女聲', zf_xiaoni: '小妮｜女聲',
@@ -89,6 +91,7 @@
     try {
       const data = await fetchJson('/api/media-audio/status', {credentials:'same-origin', cache:'no-store'});
       statusInfo = data || {};
+      window.TeacherMediaAudioStatus1014 = statusInfo;
       const voice = document.getElementById('teacher-audio-voice-1014');
       if (voice) {
         voice.replaceChildren();
@@ -125,32 +128,37 @@
       return data;
     } catch (error) {
       statusInfo = {enabled:false};
+      window.TeacherMediaAudioStatus1014 = statusInfo;
       setBusy(false);
       setStatus(`AI 語音狀態讀取失敗：${error.message}`, 'error');
       return statusInfo;
     }
   }
 
-  async function loadApprovedScripts() {
+  async function loadApprovedScripts(materialIdOverride = '') {
     const select = document.getElementById('teacher-audio-script-1014');
     if (!select) return;
-    const previous = select.value;
-    select.innerHTML = '<option value="">讀取已核准講稿…</option>';
-    const materialId = sourceMaterialId();
+    const materialId = String(materialIdOverride || sourceMaterialId() || '');
+    const generation = ++approvedScriptsGeneration;
+    const sameMaterial = approvedScriptsMaterialId === materialId;
+    const previous = sameMaterial ? select.value : '';
+    approvedScriptsMaterialId = materialId;
     if (!materialId) {
       scripts = [];
-      select.innerHTML = '<option value="">請先在上方選擇來源教材</option>';
+      select.replaceChildren(new Option('請先在上方選擇來源教材', ''));
       setStatus('先選擇教材並完成「教師核准講稿」，才能產生 AI 語音。');
       return;
     }
+    if (!sameMaterial || !select.options.length) select.replaceChildren(new Option('讀取已核准講稿…', ''));
     try {
       const response = await fetch(`/api/media-scripts?materialId=${encodeURIComponent(materialId)}`, {
         credentials:'same-origin', cache:'no-store'
       });
       const data = await response.json().catch(() => []);
       if (!response.ok) throw new Error(data.error || '無法讀取講稿');
+      if (generation !== approvedScriptsGeneration || approvedScriptsMaterialId !== materialId) return;
       scripts = (Array.isArray(data) ? data : []).filter(item => item.status === 'approved');
-      select.innerHTML = '<option value="">選擇已核准講稿…</option>';
+      select.replaceChildren(new Option(scripts.length ? '選擇已核准講稿…' : '這份教材尚無已核准講稿', ''));
       scripts.forEach(script => {
         const option = document.createElement('option');
         option.value = script.id || '';
@@ -158,7 +166,6 @@
         select.appendChild(option);
       });
       if (!scripts.length) {
-        select.innerHTML = '<option value="">這份教材尚無已核准講稿</option>';
         setStatus('這份教材目前沒有已核准講稿；請先完成講稿編修與教師核准。');
       } else {
         if (scripts.some(script => script.id === previous)) select.value = previous;
@@ -166,8 +173,9 @@
         setStatus(`已找到 ${scripts.length} 份已核准講稿，可選擇後產生 AI 語音。`, 'success');
       }
     } catch (error) {
+      if (generation !== approvedScriptsGeneration || approvedScriptsMaterialId !== materialId) return;
       scripts = [];
-      select.innerHTML = '<option value="">讀取講稿失敗</option>';
+      select.replaceChildren(new Option('讀取講稿失敗', ''));
       setStatus(`講稿讀取失敗：${error.message}`, 'error');
     }
   }
@@ -226,7 +234,7 @@
       return;
     }
     if (!statusInfo?.enabled) {
-      setStatus('AI 語音尚未啟用；請由系統管理者完成 OPENAI_API_KEY 與 R2 設定。', 'error');
+      setStatus('AI 語音尚未啟用；請確認本機 Kokoro AI Worker 與 R2 設定。', 'error');
       return;
     }
     const script = scripts.find(item => item.id === scriptId);
@@ -298,10 +306,10 @@
     else media.prepend(section);
 
     document.getElementById('teacher-audio-generate-1014')?.addEventListener('click', generateAudio);
-    document.getElementById('teacher-script-material-1014')?.addEventListener('change', () => {
+    window.addEventListener('teacher-media-source-selected-1027', event => {
       activeJobId = '';
       pollToken += 1;
-      void loadApprovedScripts();
+      void loadApprovedScripts(String(event.detail?.materialId || ''));
     });
     markCardReady();
     void Promise.all([loadStatus(), loadApprovedScripts()]);
