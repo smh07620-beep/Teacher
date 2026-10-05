@@ -34,6 +34,12 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertNotIn('api.openai.com', self.runtime)
         self.assertNotIn('OPENAI_API_KEY', self.runtime)
 
+    def test_kokoro_pipeline_is_reused_and_preview_text_stays_short(self):
+        self.assertIn("_KOKORO_PIPELINE", self.runtime)
+        self.assertIn("def _kokoro_pipeline", self.runtime)
+        self.assertIn("pipeline = _kokoro_pipeline(repo_id)", self.runtime)
+        self.assertIn('VOICE_PREVIEW_TEXT = "您好，這是醫學檢驗教學平台的 AI 語音試聽。"', self.runtime)
+
     def test_render_and_local_env_do_not_require_openai(self):
         self.assertIn('AI_TTS_PROVIDER\n        value: kokoro', self.render)
         self.assertIn('FREE_ONLY_MODE\n        value: "true"', self.render)
