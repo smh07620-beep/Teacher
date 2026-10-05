@@ -43,6 +43,14 @@ class TeacherAuthoringSourceFix1017Tests(unittest.TestCase):
         self.assertIn('draft.get("draftType") != "slides"', self.presentation_routes)
         self.assertIn('draft.get("status") != "approved"', self.presentation_routes)
 
+    def test_powerpoint_multi_source_picker_uses_teacher_scope(self):
+        material = ROOT.joinpath("static", "teacher-ai-material-1014.js").read_text(encoding="utf-8")
+        self.assertIn("R.user?.preferredGroup", material)
+        self.assertIn("R.user?.preferredArea", material)
+        self.assertIn("String(item.group) === String(group)", material)
+        self.assertIn("String(item.area) === String(area)", material)
+        self.assertIn("referenceMaterialIds", material)
+
     def test_subtitle_has_its_own_visible_media_picker(self):
         for marker in (
             "teacher-subtitle-material-1017",
