@@ -72,8 +72,9 @@ def _ai_worker_status() -> dict:
         "heartbeatTransport": "",
         "diagnosticCode": "worker_not_seen",
         "diagnosticMessage": (
-            "尚未收到院內 AI Worker heartbeat。Windows 排程顯示 RUNNING 只代表 supervisor 還在；"
-            "請確認院內 Worker 已更新到目前 main，並可透過 HTTPS 443 連到 Render Web。"
+            "尚未收到院內 AI Worker HTTPS heartbeat。Windows 排程顯示 RUNNING 只代表 supervisor 還在；"
+            "請確認院內 Worker 已更新到目前 main、AI_WORKER_TRANSPORT=https，且 "
+            "TEACHER_BASE_URL 與 Worker token 可透過 HTTPS 443 連到 Render Web。"
         ),
     }
     try:
@@ -133,15 +134,15 @@ def _ai_worker_status() -> dict:
             online = False
             diagnostic_code = "worker_database_unavailable"
             diagnostic_message = (
-                "AI Worker supervisor 有執行，但無法寫入正式 DATABASE_URL；"
-                "請檢查院內 .local-worker.env 的 DATABASE_URL 與 Supabase 連線。"
+                "偵測到舊版 direct-database AI Worker heartbeat，但院內環境無法使用該傳輸。"
+                "請更新 Worker 至目前 main，設定 AI_WORKER_TRANSPORT=https，改由 Render HTTPS 443 control plane 回報。"
             )
         elif not https_control and database_identity_match is False:
             online = False
             diagnostic_code = "worker_database_mismatch"
             diagnostic_message = (
-                "AI Worker 已啟動，但它連到的資料庫與 Render Web 不是同一個正式資料庫。"
-                "請讓院內 .local-worker.env 的 DATABASE_URL 指向與 Render 相同的 Supabase 專案。"
+                "偵測到舊版 direct-database AI Worker，且資料庫識別與 Render Web 不一致。"
+                "正式院內 Worker 請改用 AI_WORKER_TRANSPORT=https，由 Render HTTPS 443 control plane 統一存取資料庫。"
             )
         elif not online:
             diagnostic_code = "worker_offline"
