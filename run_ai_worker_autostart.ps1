@@ -81,12 +81,9 @@ function Test-AIWorkerConfiguration {
   } elseif ($transport -eq "auto") {
     if ($webReady) {
       $env:AI_WORKER_TRANSPORT = "https"
-    } elseif ($databaseReady) {
-      $env:AI_WORKER_TRANSPORT = "database"
-      Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2204 -Message "AI Worker fell back to legacy direct database transport because HTTPS control settings are incomplete."
     } else {
-      Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3101 -Message "No usable AI Worker control transport is configured."
-      Write-Warning "Configure TEACHER_BASE_URL + Worker token for HTTPS mode, or DATABASE_URL for legacy database mode."
+      Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3101 -Message "AI Worker auto transport requires the HTTPS 443 control plane; direct database fallback is disabled."
+      Write-Warning "Configure TEACHER_BASE_URL + AI_WORKER_TOKEN (or MATERIAL_WORKER_TOKEN). Legacy direct database mode is allowed only when AI_WORKER_TRANSPORT=database is explicitly set."
       exit 20
     }
   } else {
