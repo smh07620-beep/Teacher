@@ -152,7 +152,10 @@ def register_production_hardening(
                         }), 429, {"Retry-After": str(retry)}
                     failures_state[key] = {"failures": failures, "blocked_until": 0}
 
-        worker_api = request.path.startswith("/api/material-worker/")
+        worker_api = (
+            request.path.startswith("/api/material-worker/")
+            or request.path.startswith("/api/ai-worker/")
+        )
         if (
             csrf_origin_check
             and request.path.startswith("/api/")
