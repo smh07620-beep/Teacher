@@ -22,6 +22,7 @@ from teacher_app.materials.ai_presentation_storage import PPTX_MIME, Presentatio
 from teacher_app.materials import media_script_repository
 from teacher_app.materials import repository as material_repository
 from teacher_app.materials import derivative_repository
+from teacher_app.materials.media_audio_routes import _ai_worker_online_error, _ai_worker_status
 
 _TEACHER_APPROVAL_ROLES = {"clinical_teacher", "group_leader"}
 _PUBLISH_ROLES = {"clinical_teacher", "group_leader", "education_admin", "system_admin"}
@@ -226,9 +227,26 @@ def register_ai_presentation_routes(owner):
         if not user:
             return jsonify({"error":"請先登入。","loginRequired":True}), 401
         storage = PresentationStorage().capability()
+        worker = _ai_worker_status()
+        ready = bool(storage.get("available") and worker.get("online"))
+        if not storage.get("available"):
+            diagnostic = str(storage.get("reason") or "PowerPoint 共用儲存尚未就緒。")
+        elif not worker.get("online"):
+            diagnostic = str(worker.get("diagnosticMessage") or "AI Worker 尚未在線。")
+        else:
+            diagnostic = "AI Worker 與 PowerPoint 共用儲存均已就緒。"
         return jsonify({
             "productPhase": "F5",
             "storage": storage,
+            "worker": worker,
+            "ready": ready,
+            "diagnostic": {
+                "code": "ready" if ready else (
+                    "storage_not_ready" if not storage.get("available")
+                    else str(worker.get("diagnosticCode") or "worker_not_ready")
+                ),
+                "message": diagnostic,
+            },
             "workerRequired": True,
             "requiresApprovedSlideDraft": True,
             "teacherApprovalRoles": sorted(_TEACHER_APPROVAL_ROLES),
@@ -241,7 +259,7 @@ def register_ai_presentation_routes(owner):
                 "review": "immutable-revision",
                 "teacherApproval": True,
                 "videoHandoff": True,
-                "ready": bool(storage.get("available")),
+                "ready": ready,
             },
             "capabilities": {name: _presentation_allowed(user, name) for name in _PRESENTATION_CAPABILITIES},
         })
@@ -311,6 +329,9 @@ def register_ai_presentation_routes(owner):
             if not template or not template.get("active"): return jsonify({"error":"PowerPoint 範本不存在或已停用。"}), 404
             if template.get("group") != draft.get("group") or template.get("area") != draft.get("area"):
                 return jsonify({"error":"只能使用同組、同訓練範圍的 PowerPoint 範本。"}), 403
+        readiness_error = _ai_worker_online_error()
+        if readiness_error:
+            return readiness_error
         try:
             PresentationStorage().backend()
             slides = body.get("slides"); slides = ai_presentation_runtime.normalize_slides(slides) if isinstance(slides, list) else None
