@@ -401,48 +401,83 @@
       try {
         await audio.play();
         if (status) status.textContent = `${voiceLabel(voice)}｜正在播放`;
-      } catch (error) {
-        if (status) status.textContent = `❌ 試聽檔案已準備完成，請使用播放器按播放：${error?.message || '瀏覽器阻擋自動播放'}`;
+      } catch (_) {
+        if (status) status.textContent = `${voiceLabel(voice)}｜試聽已準備，可直接播放`;
       }
       return;
     }
+
     const original = button.textContent;
     let prepared = false;
+    let backgroundPending = false;
     button.disabled = true;
-    button.textContent = '準備試聽…';
-    if (status) status.textContent = '第一次使用此聲音時，AI Worker 會先建立短版試聽。';
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = '產生中…';
+    if (status) status.textContent = '正在準備短版試聽…';
+
     try {
       const first = await fetchJsonWithTimeout('/api/media-audio/preview', {
         method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({voice})
-      });
+      }, 12000);
       const jobId = first.jobId || '';
       let completed = first.status === 'completed' ? first : null;
       if (!completed && !jobId) throw new Error('沒有取得試聽工作 ID');
-      if (first.reusedActive && status) status.textContent = '前一次相同聲音的試聽仍在處理，已接續等待，不會重複建立工作。';
-      for (let attempt = 0; !completed && attempt < 60; attempt += 1) {
-        await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 500 : 1200));
-        const data = await fetchJsonWithTimeout(`/api/media-audio/jobs/${encodeURIComponent(jobId)}`, {credentials:'same-origin', cache:'no-store'});
-        if (data.status === 'failed') throw new Error(data.error || '語音試聽產生失敗');
-        if (data.status === 'completed') { completed = data; break; }
-        if (status) {
-          const progress = data.progress || {};
-          status.textContent = `${progress.stage || 'AI 語音試聽處理中…'}｜${Math.round(Number(progress.percent || 0))}%${progress.detail ? `｜${progress.detail}` : ''}`;
+
+      const deadline = Date.now() + 45000;
+      let transientTimeouts = 0;
+      while (!completed && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        try {
+          const data = await fetchJsonWithTimeout(
+            `/api/media-audio/jobs/${encodeURIComponent(jobId)}`,
+            {credentials:'same-origin', cache:'no-store'},
+            8000
+          );
+          transientTimeouts = 0;
+          if (data.status === 'failed') throw new Error(data.error || '語音試聽產生失敗');
+          if (data.status === 'completed') { completed = data; break; }
+          if (status) status.textContent = '正在準備短版試聽…';
+        } catch (error) {
+          if (!String(error?.message || '').includes('回應逾時')) throw error;
+          transientTimeouts += 1;
+          if (transientTimeouts >= 3) {
+            backgroundPending = true;
+            break;
+          }
+          if (status) status.textContent = '連線較慢，仍在準備試聽…';
         }
       }
+
       const url = completed?.result?.previewUrl || '';
-      if (!url) throw new Error('本機 Kokoro AI Worker 尚未完成試聽；已停止持續讀取，請確認 Worker 在線後再試。');
+      if (!url) {
+        backgroundPending = true;
+        if (status) status.textContent = '第一次載入較久，試聽會在背景完成；稍後再按一次即可。';
+        return;
+      }
+
       previewCache.set(voice, url);
       audio.pause?.();
       audio.src = url;
       audio.classList.remove('hidden');
       audio.load?.();
       prepared = true;
-      if (status) status.textContent = `${voiceLabel(voice)}｜試聽已準備完成，請再按一次「播放試聽」`;
+      button.textContent = '▶ 播放試聽';
+      try {
+        await audio.play();
+        if (status) status.textContent = `${voiceLabel(voice)}｜正在播放`;
+      } catch (_) {
+        if (status) status.textContent = `${voiceLabel(voice)}｜試聽已準備，可直接播放`;
+      }
     } catch (error) {
-      if (status) status.textContent = `❌ ${error.message}`;
+      const timedOut = String(error?.message || '').includes('回應逾時');
+      if (status) status.textContent = timedOut
+        ? '連線較慢，試聽仍會在背景完成；稍後再按一次即可。'
+        : `❌ ${error.message}`;
+      backgroundPending = timedOut;
     } finally {
       button.disabled = false;
-      button.textContent = prepared ? '▶ 播放試聽' : original;
+      button.removeAttribute('aria-busy');
+      if (!prepared) button.textContent = backgroundPending ? '▶ 再試一次' : original;
     }
   }
 
