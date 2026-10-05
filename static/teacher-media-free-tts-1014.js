@@ -29,9 +29,9 @@
       const response = await fetch('/api/media-audio/status', {credentials:'same-origin', cache:'no-store'});
       const data = await response.json().catch(() => ({}));
       const provider = document.getElementById('teacher-audio-provider-1014');
-      if (provider) provider.textContent = response.ok && data.enabled
-        ? `已啟用｜本機 Kokoro / ${data.model || 'Kokoro'}｜輸出保存至 R2`
-        : '待設定｜本機 Kokoro AI Worker + Cloudflare R2';
+      if (provider) provider.textContent = response.ok && data.readyForPreview
+        ? `AI 語音可用｜本機 Kokoro / ${data.model || 'Kokoro'}`
+        : response.ok && data.enabled ? 'AI 語音待 AI Worker' : '待設定｜本機 Kokoro AI Worker + Cloudflare R2';
       const status = document.getElementById('teacher-audio-status-1014');
       if (status && !data.enabled && (status.textContent || '').includes('OPENAI_API_KEY')) {
         status.textContent = '免費 AI 語音尚未啟用；請確認本機 Kokoro AI Worker 與 R2 設定。';
