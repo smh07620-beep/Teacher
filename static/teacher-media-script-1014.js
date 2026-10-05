@@ -40,12 +40,16 @@
     if (typeof loader === 'function') await loader();
   }
 
+  function updateMaterialCache(rows) {
+    materials = (Array.isArray(rows) ? rows : []).filter(item => item && item.id && !item.isBuiltin);
+    return materials;
+  }
+
   async function fetchMaterials() {
     const response = await fetch('/api/slides/admin', {credentials:'same-origin', cache:'no-store'});
     const data = await response.json().catch(() => []);
     if (!response.ok) throw new Error(data.error || '無法讀取教材清單');
-    materials = (Array.isArray(data) ? data : []).filter(item => !item.isBuiltin && item.active !== false);
-    return materials;
+    return updateMaterialCache(data);
   }
 
   async function paintMaterialOptions() {
@@ -287,7 +291,6 @@
       pollToken += 1;
       void loadSavedScripts();
     });
-    void paintMaterialOptions();
     return true;
   }
 
@@ -297,6 +300,10 @@
     });
     observer.observe(document.body, {childList:true, subtree:true});
   }
+
+  window.addEventListener('teacher-media-source-options-1014', event => {
+    updateMaterialCache(event.detail?.materials);
+  });
 
   window.TeacherMediaScript1014 = Object.freeze({ generateScript, loadSavedScripts });
 })();
