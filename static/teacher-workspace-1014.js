@@ -181,7 +181,7 @@
     section.innerHTML = `
       <section id="teacher-media-studio-shell-1018" class="teacher-media-shell-compact-1018 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 px-1">
         <div><p class="admin-page-eyebrow text-cyan-700">AI MEDIA STUDIO</p><h4 class="text-xl font-black text-slate-950">🎬 AI 媒體製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">從教材建立語音、字幕與教學影片。</p></div>
-        <div class="teacher-media-shell-actions-1014 flex flex-wrap items-center gap-2"><span class="admin-workspace-chip">本機 AI｜隱私模式</span><button id="teacher-media-pick-material-1014" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">📚 回教材與課程</button></div>
+        <div class="teacher-media-shell-actions-1014 flex flex-wrap items-center gap-2"><span class="admin-workspace-chip">本機 AI｜隱私模式</span><button id="teacher-media-open-presentation-1014" type="button" class="rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-bold text-violet-700 hover:bg-violet-50">🖥️ AI PowerPoint</button><button id="teacher-media-pick-material-1014" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">📚 回教材與課程</button></div>
       </section>`;
     content.appendChild(section);
     normalizeMediaShell(section);
@@ -220,14 +220,6 @@
       if (legacyCard && legacyCard !== shell && shell.contains(legacyCard)) legacyCard.remove();
     });
 
-    const existingButton = shell.querySelector('#teacher-media-pick-material-1014');
-    if (existingButton) {
-      if (existingButton.dataset.teacherMediaBackBound !== '1') {
-        existingButton.dataset.teacherMediaBackBound = '1';
-        existingButton.addEventListener('click', () => openCourse());
-      }
-      return;
-    }
     let actions = shell.querySelector(':scope > .teacher-media-shell-actions-1014');
     if (!actions) {
       actions = document.createElement('div');
@@ -236,14 +228,34 @@
       if (privacy) actions.appendChild(privacy);
       shell.appendChild(actions);
     }
-    const button = document.createElement('button');
-    button.id = 'teacher-media-pick-material-1014';
-    button.type = 'button';
-    button.className = 'rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50';
-    button.textContent = '📚 回教材與課程';
-    button.dataset.teacherMediaBackBound = '1';
-    button.addEventListener('click', () => openCourse());
-    actions.appendChild(button);
+
+    let presentationButton = shell.querySelector('#teacher-media-open-presentation-1014');
+    if (!presentationButton) {
+      presentationButton = document.createElement('button');
+      presentationButton.id = 'teacher-media-open-presentation-1014';
+      presentationButton.type = 'button';
+      presentationButton.className = 'rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-bold text-violet-700 hover:bg-violet-50';
+      presentationButton.textContent = '🖥️ AI PowerPoint';
+      actions.appendChild(presentationButton);
+    }
+    if (presentationButton.dataset.teacherPresentationBound !== '1') {
+      presentationButton.dataset.teacherPresentationBound = '1';
+      presentationButton.addEventListener('click', () => openPresentation());
+    }
+
+    let existingButton = shell.querySelector('#teacher-media-pick-material-1014');
+    if (!existingButton) {
+      existingButton = document.createElement('button');
+      existingButton.id = 'teacher-media-pick-material-1014';
+      existingButton.type = 'button';
+      existingButton.className = 'rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50';
+      existingButton.textContent = '📚 回教材與課程';
+      actions.appendChild(existingButton);
+    }
+    if (existingButton.dataset.teacherMediaBackBound !== '1') {
+      existingButton.dataset.teacherMediaBackBound = '1';
+      existingButton.addEventListener('click', () => openCourse());
+    }
   }
 
   function showMediaWorkspace() {
@@ -282,6 +294,20 @@
     await window.switchAdminWorkspace?.('course-materials', true);
     restoreCourseWorkspace();
     markTeacherNav('course');
+  }
+
+  async function openPresentation() {
+    await openCourse();
+    const hub = document.getElementById('admin-course-material-hub');
+    window.TeacherAIMaterial1014?.ensureMounted?.(hub || null);
+    const target = document.getElementById('teacher-ai-presentation-1016')
+      || document.getElementById('teacher-ai-material-presentation-stage-1014')
+      || document.getElementById('teacher-ai-material-1014');
+    if (target) {
+      target.classList.remove('hidden');
+      target.removeAttribute('aria-hidden');
+      target.scrollIntoView?.({block: 'start', behavior: 'smooth'});
+    }
   }
 
   async function openAssessment() {
@@ -408,7 +434,7 @@
 
   window.TeacherWorkspace1014 = Object.freeze({
     canLearn, canTeach, canSystem,
-    openCourse, openMedia, openAssessment, openDocuments,
+    openCourse, openPresentation, openMedia, openAssessment, openDocuments,
     learningUrl, ensurePersonaSwitcher
   });
 
