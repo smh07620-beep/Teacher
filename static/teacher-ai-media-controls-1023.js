@@ -81,6 +81,12 @@
     select.disabled = !rows.length;
   }
 
+  function broadcastSources(shared = $('teacher-media-source-1018')) {
+    window.dispatchEvent(new CustomEvent('teacher-media-source-options-1014', {
+      detail: {materials: materials.slice(), selectedId: shared?.value || '', canonical: true}
+    }));
+  }
+
   function setSharedHint(message, error = false) {
     const hint = $('teacher-media-next-step-1018');
     if (!hint) return;
@@ -266,9 +272,7 @@
       lastSourceSelection = materialId;
       window.TeacherMediaSubtitle1014?.selectMaterial?.(materialId);
       window.dispatchEvent(new CustomEvent('teacher-media-source-selected-1027', {detail:{materialId}}));
-      if (!window.TeacherAIMediaStudio1018?.refreshPresentationChoices) {
-        void refreshVideoPresentations(materialId, {force});
-      }
+      void refreshVideoPresentations(materialId, {force});
     }
     if (!materialId) {
       setSharedHint(materials.length
@@ -294,6 +298,7 @@
       paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳');
       showSourceAvailability(materials);
       sourcesLoadedAt = Date.now();
+      broadcastSources(shared);
       syncSelectedSource();
       return true;
     }
@@ -309,6 +314,7 @@
       paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材');
       paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳');
       showSourceAvailability(materials);
+      broadcastSources(shared);
       syncSelectedSource();
       return true;
     })();
