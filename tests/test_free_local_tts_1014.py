@@ -75,6 +75,13 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn("worker_not_seen", self.routes)
         self.assertIn("kokoro_unavailable", self.routes)
         self.assertIn("readyForPreview", self.status_ui)
+        self.assertIn("statusUnavailable", self.audio_ui)
+        self.assertIn("AI Worker 狀態讀取失敗", self.audio_ui)
+        self.assertIn("Kokoro 無法確認", self.audio_ui)
+        self.assertIn("statusUnavailable", self.video_ui)
+        self.assertIn("AI Worker 狀態讀取失敗", self.video_ui)
+        self.assertIn("Kokoro 無法確認", self.video_ui)
+        self.assertIn("AI Worker 狀態讀取失敗", self.status_ui)
         self.assertIn("Kokoro 能力未回報", self.audio_ui)
         self.assertIn("Kokoro 能力未回報", self.video_ui)
 
