@@ -144,7 +144,7 @@ class MediaSubtitle98Tests(unittest.TestCase):
         self.assertIn("visible_to_user", source)
         self.assertIn('action="media.subtitle.approve"', source)
         self.assertIn("_ai_worker_online_error", source)
-        self.assertIn("readiness_error = _ai_worker_online_error()", source)
+        self.assertIn('_ai_worker_online_error(required_queue="media_subtitles")', source)
         self.assertIn("text/vtt", source)
 
     def test_worker_env_example_keeps_raw_media_local_by_default(self):
