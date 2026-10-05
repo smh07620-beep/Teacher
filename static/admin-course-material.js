@@ -429,7 +429,24 @@
 
       // Presentation refresh is deliberately nonblocking. Keep a handle for
       // diagnostics without forcing every caller to wait for a slow provider.
-      box._adminCourseMaterialRefresh=Promise.allSettled(jobs);
+      // Multiple workspace modules can request a refresh at nearly the same time.
+      // If this generation finishes after a newer render has taken ownership,
+      // reconcile once more from the now-fresh shared caches instead of silently
+      // discarding the completed material/course data and leaving a stale 0/0 card.
+      const refreshPromise=Promise.allSettled(jobs).then(results=>{
+          paintCurrent();
+          if(box.dataset.courseScope===key && box.dataset.courseRenderGeneration!==generation){
+              if(box.dataset.courseReconcileScheduled!=='1'){
+                  box.dataset.courseReconcileScheduled='1';
+                  queueMicrotask(()=>{
+                      delete box.dataset.courseReconcileScheduled;
+                      if(box.dataset.courseScope===key) void renderAdminCourseMaterialHub(false);
+                  });
+              }
+          }
+          return results;
+      });
+      box._adminCourseMaterialRefresh=refreshPromise;
       return state;
   }
 
