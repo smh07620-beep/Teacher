@@ -138,6 +138,21 @@
     const button = $('teacher-ai-video-voice-preview-1015');
     const player = $('teacher-ai-video-voice-player-1015');
     if (!voice) return note('請先選擇要試聽的旁白聲音。', true);
+
+    // A prepared preview must be started by a real click. Browsers can block
+    // delayed autoplay after the Worker/R2 round-trip, so do not hide that error.
+    if (player?.dataset.previewUrl && player.dataset.previewVoice === voice) {
+      player.src = player.dataset.previewUrl;
+      player.hidden = false;
+      try {
+        await player.play();
+        note('▶ 正在播放旁白聲音試聽。');
+      } catch (error) {
+        note(`試聽檔案已準備完成，請使用下方播放器按播放。瀏覽器訊息：${error?.message || '自動播放被阻擋'}`, true);
+      }
+      return;
+    }
+
     if (button) button.disabled = true;
     note('正在準備旁白聲音試聽…');
     try {
@@ -147,23 +162,30 @@
         body: JSON.stringify({voice})
       });
       if (!job.jobId) throw new Error('伺服器未回傳語音試聽工作 ID');
-      for (let attempt = 0; attempt < 90; attempt += 1) {
+      if (job.reusedActive) note('前一次相同聲音的試聽仍在處理，已接續等待，不會重複建立工作。');
+      for (let attempt = 0; attempt < 150; attempt += 1) {
         const progress = await api(`/api/media-audio/jobs/${encodeURIComponent(job.jobId)}`);
         if (progress.status === 'completed') {
           const url = progress.result?.previewUrl;
           if (!url) throw new Error('語音試聽已完成，但暫時沒有可播放檔案');
           if (player) {
+            player.pause?.();
             player.src = url;
+            player.dataset.previewUrl = url;
+            player.dataset.previewVoice = voice;
             player.hidden = false;
-            await player.play().catch(() => {});
+            player.load?.();
           }
-          note('✅ 旁白聲音試聽已就緒；可在下方播放器重播。');
+          if (button) button.textContent = '▶ 播放試聽';
+          note('✅ 旁白聲音試聽已準備完成；請再按一次「播放試聽」或使用下方播放器。');
           return;
         }
         if (progress.status === 'failed') throw new Error(progress.error || '語音試聽失敗');
+        const detail = progress.progress || {};
+        note(`${detail.stage || 'AI 語音試聽處理中…'}｜${Math.round(Number(detail.percent || 0))}%${detail.detail ? `｜${detail.detail}` : ''}`);
         await new Promise(resolve => setTimeout(resolve, 1200));
       }
-      throw new Error('語音試聽仍在處理，可稍後再試。');
+      throw new Error('語音試聽等待逾時；舊工作會自動清理，請稍後重新試聽。');
     } catch (error) {
       note(`旁白聲音試聽失敗：${error.message}`, true);
     } finally {
