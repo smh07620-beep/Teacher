@@ -53,11 +53,11 @@ test('AI PowerPoint stays in the authoring workspace while media studio only con
   await expect(page.locator('#teacher-media-advanced-1018 #teacher-ai-presentation-1016')).toHaveCount(0);
   await expect(page.locator('#teacher-media-advanced-1018 > summary')).toHaveText('媒體版本、品質與進階資訊');
 
-  const shortcut = page.getByRole('button', { name: '🖥️ AI PowerPoint 製作' });
-  await expect(shortcut).toBeVisible();
-  await shortcut.click();
-  await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toBeVisible();
-  await expect(page.locator('#teacher-media-powerpoint-body-1024 > #teacher-ai-material-1014')).toBeVisible();
+  // PowerPoint authoring remains owned by the authoring workspace; the media
+  // studio must not recreate the duplicate shortcut that was removed in F5.
+  await expect(page.getByRole('button', { name: '🖥️ AI PowerPoint 製作' })).toHaveCount(0);
+  await expect(page.locator('#admin-course-material-hub #teacher-ai-presentation-1016')).toBeVisible();
+  await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => Boolean(window.legacyCourseJumped))).toBe(false);
 });
 

@@ -60,13 +60,17 @@ class R2BudgetRuntimeTests(unittest.TestCase):
         values.update(changes)
         return r2_budget.R2BudgetPolicy(**values)
 
-    def test_reservation_is_atomic_and_status_counts_reserved_bytes(self):
+    def test_reservation_is_atomic_idempotent_and_status_counts_reserved_bytes(self):
         policy = self.policy()
-        r2_budget.reserve_upload("one", "_staging/one", 120 * 1024 * 1024, policy=policy)
-        with self.assertRaises(sqlite3.IntegrityError):
-            r2_budget.reserve_upload("one", "_staging/one", 120 * 1024 * 1024, policy=policy)
+        size = 120 * 1024 * 1024
+        r2_budget.reserve_upload("one", "_staging/one", size, policy=policy)
+        # Exact HTTPS Worker replay is intentionally idempotent: a lost response
+        # must not double-reserve free-tier capacity.
+        r2_budget.reserve_upload("one", "_staging/one", size, policy=policy)
+        with self.assertRaisesRegex(ValueError, "uploadId"):
+            r2_budget.reserve_upload("one", "_staging/different", size, policy=policy)
         current = r2_budget.status(policy=policy)
-        self.assertEqual(current["reservedBytes"], 120 * 1024 * 1024)
+        self.assertEqual(current["reservedBytes"], size)
         self.assertTrue(current["estimatedOnly"])
 
     def test_hard_staging_limit_includes_live_ledger_bytes(self):

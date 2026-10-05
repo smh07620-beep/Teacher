@@ -89,7 +89,7 @@ class AIWorkerHttpsControlPlane20261005Tests(unittest.TestCase):
         self.assertIn("AI_WORKER_TRANSPORT=https", env_example)
         self.assertIn("AI_WORKER_TOKEN=", env_example)
         self.assertIn("AI_WORKER_TOKEN", render)
-        self.assertIn("outbound HTTPS 443", run_ps1)
+        self.assertIn("HTTPS 443 control plane", run_ps1)
         self.assertNotIn("send_file(", remote)
         self.assertNotIn("upload_file(", remote)
 

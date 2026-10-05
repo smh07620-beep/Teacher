@@ -40,7 +40,8 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
 
     def test_ai_worker_uses_https_control_plane_without_hospital_postgres(self):
         for marker in (
-            "AI_WORKER_TRANSPORT",
+            "ai_remote.transport_mode()",
+            "ai_remote.TRANSPORT_HTTPS",
             "AIWorkerApi",
             "install_remote_repository_proxies",
             "control_transport=",

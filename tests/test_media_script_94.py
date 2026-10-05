@@ -145,7 +145,17 @@ class MediaScriptFrontend94Tests(unittest.TestCase):
         self.assertIn("question_processor.run_next_queued()", self.worker)
         self.assertIn("script_processor.run_next_queued()", self.worker)
         self.assertIn("audio_processor.run_next_queued()", self.worker)
-        self.assertIn("must not starve teacher script or narration work", self.worker)
+        queue_calls = [
+            "question_processor.run_next_queued()",
+            "script_processor.run_next_queued()",
+            "presentation_processor.run_next_queued()",
+            "video_processor.run_next_queued()",
+            "audio_processor.run_next_queued()",
+            "subtitle_processor.run_next_queued()",
+        ]
+        positions = [self.worker.index(marker) for marker in queue_calls]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("Give every domain queue one chance per loop", self.worker)
 
     def test_frontend_does_not_fake_tts_or_auto_publish(self):
         self.assertNotIn("speechSynthesis.speak", self.source)

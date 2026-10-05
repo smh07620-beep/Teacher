@@ -20,7 +20,8 @@ class TeacherMediaDirectPowerPoint1026Tests(unittest.TestCase):
         self.assertIn("refreshVideoPresentations",source)
         self.assertIn("presentationRefreshPromise",source)
         self.assertIn("presentationRefreshController",source)
-        self.assertIn("讀取所有已核准 PowerPoint",source)
+        self.assertIn("讀取已準備影片畫面",source)
+        self.assertIn("尚無已準備影片畫面",source)
         self.assertIn("/api/ai-presentations",source)
 
     def test_authoring_workspace_still_accepts_multiple_arbitrary_files(self):

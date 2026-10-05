@@ -162,7 +162,7 @@
     else if (usable.length === 1) select.value = String(usable[0].id || '');
     select.disabled = false;
     const status = $('teacher-ai-video-status-1015');
-    if (status && !usable.length) status.textContent = '目前尚無可直接製作影片的已核准 PowerPoint；請按「建立／匯入 PowerPoint」加入資料後完成核准。';
+    if (status && !usable.length) status.textContent = '目前尚無可直接製作影片的已準備畫面；可在「教學影片」按「＋ 加入 PDF／Word／圖片／文字」加入來源，完成教師核准後即可使用。';
     if (select.value !== previous) select.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   }
@@ -221,7 +221,7 @@
           signal: controller.signal,
         });
         const body = await response.json().catch(() => []);
-        if (!response.ok) throw new Error(body?.error || '無法讀取 PowerPoint 版本');
+        if (!response.ok) throw new Error(body?.error || '無法讀取影片畫面版本');
         if (generation !== presentationRefreshGeneration) return false;
         presentationCache = {
           group: groupKey,
@@ -233,10 +233,10 @@
       } catch (error) {
         if (generation !== presentationRefreshGeneration) return false;
         if (error?.name === 'AbortError' && !timedOut) return false;
-        select.replaceChildren(new Option(timedOut ? 'PowerPoint 讀取逾時｜請重試' : '影片畫面版本讀取失敗', ''));
+        select.replaceChildren(new Option(timedOut ? '影片畫面讀取逾時｜請重試' : '影片畫面版本讀取失敗', ''));
         select.disabled = true;
         const status = $('teacher-ai-video-status-1015');
-        const message = timedOut ? 'PowerPoint 清單讀取逾時，請按重新整理或稍後再試。' : `影片畫面讀取失敗：${error.message}`;
+        const message = timedOut ? '影片畫面清單讀取逾時，請按重新整理或稍後再試。' : `影片畫面讀取失敗：${error.message}`;
         if (status && status.textContent !== message) status.textContent = message;
         return false;
       } finally {
@@ -367,8 +367,8 @@
   }
 
   function improvePowerPointEntry() {
-    // F6 convergence: the source header owns the single PowerPoint entry.
-    // Remove the older duplicate shortcut card when legacy hydration recreates it.
+    // F6 convergence: PowerPoint authoring is owned outside the media studio.
+    // Remove duplicate shortcuts if legacy hydration recreates them.
     $('teacher-media-powerpoint-entry-1018')?.remove();
     $('teacher-media-direct-powerpoint-1026')?.remove();
     $('teacher-ai-video-powerpoint-author-1027')?.remove();

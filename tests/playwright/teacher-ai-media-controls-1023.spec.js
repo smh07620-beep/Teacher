@@ -379,7 +379,8 @@ test('PowerPoint authoring mounts inline even when course hub was never opened',
   await page.addScriptTag({ path: asset('teacher-ai-material-1014.js') });
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
   await expect(page.locator('#teacher-ai-material-1014')).toHaveCount(0);
-  await page.locator('#teacher-media-direct-powerpoint-1026').click();
+  await expect(page.locator('#teacher-media-direct-powerpoint-1026')).toHaveCount(0);
+  await page.evaluate(() => window.TeacherAIMediaControls1023.openPowerPointWorkspace());
   await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toBeVisible();
   await expect(page.locator('#teacher-media-powerpoint-body-1024 > #teacher-ai-material-1014')).toBeVisible();
   await expect(page.locator('#teacher-media-next-step-1018')).not.toContainText('尚未載入完成');
