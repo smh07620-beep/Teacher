@@ -212,6 +212,7 @@
         if (progress.status === 'completed') {
           const url = progress.result?.previewUrl;
           if (!url) throw new Error('語音試聽已完成，但暫時沒有可播放檔案');
+          let started = false;
           if (player) {
             player.pause?.();
             player.src = url;
@@ -219,9 +220,18 @@
             player.dataset.previewVoice = voice;
             player.hidden = false;
             player.load?.();
+            try {
+              await player.play();
+              started = true;
+            } catch (_) {
+              // The first preview may finish after the browser's user-gesture
+              // autoplay window. Keep the native player visible as the safe fallback.
+            }
           }
           if (button) button.textContent = '▶ 播放試聽';
-          note('✅ 旁白聲音試聽已準備完成；請再按一次「播放試聽」或使用下方播放器。');
+          note(started
+            ? '▶ 正在播放旁白聲音試聽。'
+            : '✅ 試聽檔案已準備完成；若瀏覽器未自動播放，請按「播放試聽」或下方播放器。');
           return;
         }
         if (progress.status === 'failed') throw new Error(progress.error || '語音試聽失敗');
