@@ -401,7 +401,6 @@
     bindSharedSource();
     showMode(activeMode);
     if ($('teacher-script-material-1014')) {
-      void window.TeacherMediaSourceFix1014?.refreshMaterials?.();
       syncSharedSource();
     }
     return true;
