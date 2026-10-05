@@ -55,10 +55,12 @@ class Teacher1014UiHotfixTests(unittest.TestCase):
             self.assertIn(marker, self.paper)
         self.assertNotIn('X-Admin-Key', self.paper)
 
-    def test_ai_voice_readiness_checks_free_local_service_status(self):
-        self.assertIn('/api/media-audio/status', self.media)
+    def test_ai_voice_readiness_uses_canonical_service_status(self):
+        self.assertIn('TeacherMediaAudioStatus1014', self.media)
+        self.assertIn('teacher-media-audio-status-1014', self.media)
         self.assertIn('免費 AI 語音', self.media)
         self.assertIn('本機 Kokoro', self.media)
+        self.assertNotIn("fetch('/api/media-audio/status'", self.media)
         self.assertNotIn('OPENAI_API_KEY', self.media)
         self.assertNotIn('X-Admin-Key', self.media)
 
