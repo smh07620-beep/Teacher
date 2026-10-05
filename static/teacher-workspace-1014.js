@@ -180,8 +180,8 @@
     section.className = 'hidden space-y-5';
     section.innerHTML = `
       <section id="teacher-media-studio-shell-1018" class="teacher-media-shell-compact-1018 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 px-1">
-        <div><p class="admin-page-eyebrow text-cyan-700">AI MEDIA STUDIO</p><h4 class="text-xl font-black text-slate-950">🎬 AI 媒體製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">從教材建立語音、字幕與教學影片。</p></div>
-        <div class="teacher-media-shell-actions-1014 flex flex-wrap items-center gap-2"><span class="admin-workspace-chip">本機 AI｜隱私模式</span><button id="teacher-media-open-presentation-1014" type="button" class="rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-bold text-violet-700 hover:bg-violet-50">🖥️ AI PowerPoint</button><button id="teacher-media-pick-material-1014" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">📚 回教材與課程</button></div>
+        <div><p class="admin-page-eyebrow text-cyan-700">TEACHER CONTENT STUDIO</p><h4 class="text-xl font-black text-slate-950">🧰 教材媒體製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">同一頁完成 AI PowerPoint、講稿與配音、老師錄影、字幕與 AI 教學影片。</p></div>
+        <div class="teacher-media-shell-actions-1014 flex flex-wrap items-center gap-2"><span class="admin-workspace-chip">本機 AI｜隱私模式</span><button id="teacher-media-pick-material-1014" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">📚 回教材與課程</button></div>
       </section>`;
     content.appendChild(section);
     normalizeMediaShell(section);
@@ -229,19 +229,9 @@
       shell.appendChild(actions);
     }
 
-    let presentationButton = shell.querySelector('#teacher-media-open-presentation-1014');
-    if (!presentationButton) {
-      presentationButton = document.createElement('button');
-      presentationButton.id = 'teacher-media-open-presentation-1014';
-      presentationButton.type = 'button';
-      presentationButton.className = 'rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-bold text-violet-700 hover:bg-violet-50';
-      presentationButton.textContent = '🖥️ AI PowerPoint';
-      actions.appendChild(presentationButton);
-    }
-    if (presentationButton.dataset.teacherPresentationBound !== '1') {
-      presentationButton.dataset.teacherPresentationBound = '1';
-      presentationButton.addEventListener('click', () => openPresentation());
-    }
+    // PowerPoint is now the first stable tab in the unified studio; remove the
+    // legacy shortcut that previously flashed while the course hub repainted.
+    shell.querySelector('#teacher-media-open-presentation-1014')?.remove();
 
     let existingButton = shell.querySelector('#teacher-media-pick-material-1014');
     if (!existingButton) {
