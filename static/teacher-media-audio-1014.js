@@ -147,13 +147,13 @@
     }
   }
 
-  async function loadApprovedScripts(materialIdOverride = '') {
+  async function loadApprovedScripts(materialIdOverride = '', preferredScriptId = '') {
     const select = document.getElementById('teacher-audio-script-1014');
     if (!select) return;
     const materialId = String(materialIdOverride || sourceMaterialId() || '');
     const generation = ++approvedScriptsGeneration;
     const sameMaterial = approvedScriptsMaterialId === materialId;
-    const previous = sameMaterial ? select.value : '';
+    const previous = String(preferredScriptId || (sameMaterial ? select.value : '') || '');
     approvedScriptsMaterialId = materialId;
     if (!materialId) {
       scripts = [];
@@ -180,7 +180,7 @@
       if (!scripts.length) {
         setStatus('這份教材目前沒有已核准講稿；請先完成講稿編修與教師核准。');
       } else {
-        if (scripts.some(script => script.id === previous)) select.value = previous;
+        if (scripts.some(script => String(script.id) === previous)) select.value = previous;
         else if (scripts.length === 1) select.value = scripts[0].id || '';
         setStatus(`已找到 ${scripts.length} 份已核准講稿，可選擇後產生 AI 語音。`, 'success');
       }
@@ -300,7 +300,7 @@
     section.className = 'bg-white border border-emerald-200 rounded-2xl p-5 shadow-sm space-y-5';
     section.innerHTML = `
       <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-        <div><p class="admin-page-eyebrow text-emerald-700">AI NARRATION</p><h4 class="text-lg font-black text-slate-950">🎧 已核准講稿 → AI 語音</h4><p class="mt-1 text-xs text-slate-500">只有授課教師已核准的講稿才能送出。語音由 AI Worker 產生，完成後直接保存至 R2 並加入原課程教材，不讓 Render Web 處理大型媒體工作。</p></div>
+        <div><p class="admin-page-eyebrow text-emerald-700">STEP 2 · NARRATION</p><h4 class="text-lg font-black text-slate-950">🎧 核准講稿 → 選聲音 → AI 配音</h4><p class="mt-1 text-xs text-slate-500">上一步講稿核准後會自動帶入這裡；選聲音、試聽並產生正式配音，不需要重新建立另一份內容。</p></div>
         <span id="teacher-audio-provider-1014" class="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-600">檢查服務中…</span>
       </div>
       <div id="teacher-audio-health-1014" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">正在確認 AI Worker、Kokoro 與 R2…</div>
@@ -322,6 +322,16 @@
       activeJobId = '';
       pollToken += 1;
       void loadApprovedScripts(String(event.detail?.materialId || ''));
+    });
+    window.addEventListener('teacher-media-script-approved-1027', event => {
+      const materialId = String(event.detail?.materialId || sourceMaterialId() || '');
+      const scriptId = String(event.detail?.scriptId || '');
+      void loadApprovedScripts(materialId, scriptId).then(() => {
+        if (scriptId && document.getElementById('teacher-audio-script-1014')?.value === scriptId) {
+          setStatus('✅ 講稿已核准並帶入配音步驟；現在可直接選聲音、試聽並產生 AI 語音。', 'success');
+          document.getElementById('teacher-audio-voice-1014')?.focus?.();
+        }
+      });
     });
     markCardReady();
     void Promise.all([loadStatus(), loadApprovedScripts()]);
