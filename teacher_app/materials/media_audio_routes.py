@@ -135,8 +135,8 @@ def _ai_worker_status() -> dict:
     return status
 
 
-def _worker_ready_error():
-    """Fail closed before enqueueing work that can only run on the local AI Worker."""
+def _ai_worker_online_error():
+    """Fail closed for queues that require the dedicated AI Worker process."""
     worker = _ai_worker_status()
     if not worker.get("online"):
         return jsonify({
@@ -144,6 +144,15 @@ def _worker_ready_error():
             "workerOffline": True,
             "worker": worker,
         }), 503
+    return None
+
+
+def _worker_ready_error():
+    """Fail closed for narration/video work that additionally requires Kokoro."""
+    online_error = _ai_worker_online_error()
+    if online_error:
+        return online_error
+    worker = _ai_worker_status()
     if worker.get("kokoroInstalled") is not True:
         return jsonify({
             "error": str(worker.get("diagnosticMessage") or "Kokoro 語音能力尚未就緒。"),
