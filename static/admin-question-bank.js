@@ -56,6 +56,19 @@
     }
     const wizardArea=document.getElementById('wizard-area');
     if(wizardArea){
+      // Keep the teacher course/material workspace on the route's canonical
+      // training area.  The HTML default can otherwise remain "pgy" even when
+      // the user entered /system?area=internal, causing a successful Worker
+      // publication to disappear from the visible course hub.
+      if ([...wizardArea.options].some(option => option.value === currentTrainingArea)) {
+        wizardArea.value = currentTrainingArea;
+      }
+      if (wizardSel) {
+        wizardSel.innerHTML = window.groupOptionsForArea(wizardArea.value || currentTrainingArea);
+        if ([...wizardSel.options].some(option => option.value === currentGroupKey)) {
+          wizardSel.value = currentGroupKey;
+        }
+      }
       wizardArea.onchange=()=>{
         if(wizardSel){
           wizardSel.innerHTML=window.groupOptionsForArea(wizardArea.value);
