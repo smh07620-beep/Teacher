@@ -206,9 +206,16 @@
     if (button) button.disabled = true;
     try {
       const script = await updateSavedScript('approved');
-      status(`✅ 講稿已由 ${script.approvedBy || '目前教師'} 核准。後續 AI 語音只會使用已核准講稿。`, 'success');
+      status(`✅ 講稿已由 ${script.approvedBy || '目前教師'} 核准。已直接銜接下一步 AI 配音。`, 'success');
       await loadSavedScripts();
       await syncNarrationOptions();
+      window.dispatchEvent(new CustomEvent('teacher-media-script-approved-1027', {
+        detail: {
+          materialId: document.getElementById('teacher-script-material-1014')?.value || '',
+          scriptId: script.id || activeScriptId,
+          title: script.title || ''
+        }
+      }));
     } catch (error) {
       if (button) button.disabled = false;
       status(`核准失敗：${error.message}`, 'error');
@@ -274,7 +281,7 @@
     section.id = 'teacher-media-script-1014';
     section.className = 'bg-white border border-indigo-200 rounded-2xl p-5 shadow-sm space-y-5';
     section.innerHTML = `
-      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-indigo-700">SCRIPT STUDIO</p><h4 class="text-lg font-black text-slate-950">📝 教材轉教學講稿</h4><p class="mt-1 text-xs text-slate-500">從既有教材文字索引建立講稿草稿；AI 不得自行增加教材未支持的醫療內容，正式影音前必須由老師核准。</p></div><span class="rounded-full bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-700">AI 草稿 → 教師核准</span></div>
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-indigo-700">STEP 1 · SCRIPT</p><h4 class="text-lg font-black text-slate-950">📝 先建立並核准講稿</h4><p class="mt-1 text-xs text-slate-500">來源可由上方教材／來源內容帶入；講稿核准後會直接銜接下方 AI 配音，不必切換到另一套流程。</p></div><span class="rounded-full bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-700">AI 草稿 → 教師核准</span></div>
       <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-xs font-bold text-slate-600 xl:col-span-2">來源教材<select id="teacher-script-material-1014" class="learning-input mt-1"><option value="">讀取教材中…</option></select></label><label class="text-xs font-bold text-slate-600">目標長度<select id="teacher-script-minutes-1014" class="learning-input mt-1"><option value="3">約 3 分鐘</option><option value="5" selected>約 5 分鐘</option><option value="10">約 10 分鐘</option><option value="15">約 15 分鐘</option><option value="20">約 20 分鐘</option></select></label><label class="text-xs font-bold text-slate-600">講課語氣<select id="teacher-script-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
       <div class="flex flex-col sm:flex-row gap-2"><input id="teacher-script-focus-1014" class="learning-input flex-1" maxlength="500" placeholder="選填：特別聚焦，例如抗體鑑定判讀步驟、QC 異常處理"><button id="teacher-script-generate-1014" type="button" class="rounded-xl bg-indigo-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">✨ AI 產生講稿草稿</button></div>
       <div id="teacher-script-status-1014" class="text-xs text-slate-600">選擇教材後即可產生講稿。</div>
