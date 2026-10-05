@@ -99,6 +99,45 @@ def active_preview_count_for_actor(username: str) -> int:
     return int(dict(row).get("n", 0) or 0)
 
 
+def active_preview_job_for_actor(username: str, voice: str = "") -> dict | None:
+    """Return the caller's newest in-flight preview for the requested voice."""
+    normalized_voice = str(voice or "").strip().lower()
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        rows = conn.execute(
+            f"SELECT * FROM media_audio_jobs "
+            f"WHERE actor_username={ph} AND status IN ({ph},{ph}) AND script_id={ph} "
+            f"ORDER BY created_at DESC LIMIT 20",
+            (username, *ACTIVE_STATUSES, ""),
+        ).fetchall()
+    jobs = [project_job(row) for row in rows]
+    if not normalized_voice:
+        return jobs[0] if jobs else None
+    for job in jobs:
+        request_data = job.get("request") or {}
+        if str(request_data.get("voice") or "").strip().lower() == normalized_voice:
+            return job
+    return None
+
+
+def expire_stale_previews(cutoff: str) -> int:
+    """Fail abandoned preview jobs so disposable trials cannot block new previews forever."""
+    stamp = now()
+    message = "舊的語音試聽工作已自動結束；請重新試聽。"
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        cursor = conn.execute(
+            f"UPDATE media_audio_jobs SET status={ph},progress_percent={ph},progress_stage={ph},progress_detail={ph},"
+            f"error={ph},claim_token={ph},completed_at={ph},updated_at={ph} "
+            f"WHERE script_id={ph} AND status IN ({ph},{ph}) AND updated_at<{ph}",
+            (
+                "failed", 0, "語音試聽已逾時", message, message, "", stamp, stamp,
+                "", *ACTIVE_STATUSES, cutoff,
+            ),
+        )
+    return int(getattr(cursor, "rowcount", 0) or 0)
+
+
 def active_formal_count_for_actor(username: str) -> int:
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -269,6 +308,7 @@ def requeue_stale_processing(cutoff: str) -> int:
 
 
 __all__ = [
-    "ACTIVE_STATUSES", "active_count_for_actor", "active_formal_job_for_actor", "claim", "complete", "create_job", "fail", "get_job",
-    "list_queued", "now", "recent_count_for_actor", "requeue_stale_processing", "set_progress", "total_active_count",
+    "ACTIVE_STATUSES", "active_count_for_actor", "active_formal_job_for_actor", "active_preview_job_for_actor", "claim", "complete", "create_job",
+    "expire_stale_previews", "fail", "get_job", "list_queued", "now", "recent_count_for_actor", "requeue_stale_processing",
+    "set_progress", "total_active_count",
 ]
