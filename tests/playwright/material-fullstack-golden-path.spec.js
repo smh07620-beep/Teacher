@@ -74,12 +74,28 @@ test('GP-01 full stack Browser -> R2 -> real Worker -> Database -> Browser', asy
   expect(material.storageBackend).toBe('r2');
   expect(material.storageKey).toMatch(/^materials\/upload-[^/]+\/source\.txt$/);
 
-  await page.evaluate(async () => {
-    if (typeof window.renderAdminCourseMaterialHub === 'function') {
+  const refreshCourseHub = async () => {
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForFunction(
+      () => typeof window.renderAdminCourseMaterialHub === 'function',
+      null,
+      { timeout: 15000 },
+    );
+    await page.evaluate(async () => {
       await window.renderAdminCourseMaterialHub(true);
       const hub = document.getElementById('admin-course-material-hub');
       if (hub?._adminCourseMaterialRefresh) await hub._adminCourseMaterialRefresh;
-    }
-  });
+    });
+  };
+  try {
+    await refreshCourseHub();
+  } catch (error) {
+    // Teacher persona reconciliation can perform one late same-origin
+    // navigation after login. Retry only that browser-context race; all
+    // Browser → R2 → Worker → DB assertions above have already passed.
+    if (!/Execution context was destroyed|navigation/i.test(String(error))) throw error;
+    await page.waitForLoadState('domcontentloaded');
+    await refreshCourseHub();
+  }
   await expect(page.locator('body')).toContainText('Full-stack R2 Worker 教材', { timeout: 15000 });
 });
