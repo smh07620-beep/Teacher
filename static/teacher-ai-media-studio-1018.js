@@ -53,7 +53,7 @@
       return;
     }
     if (isCaptionSource(item)) {
-      message.textContent = '推薦下一步：這是影音來源，可在「AI 字幕」建立字幕草稿，再由教師核准發布。';
+      message.textContent = '推薦下一步：這是影音來源，可在「教學影片」內建立字幕草稿，或直接進行老師錄影後續處理。';
       return;
     }
     const presentation = $('teacher-ai-video-presentation-1015');
@@ -61,7 +61,7 @@
       message.textContent = '推薦下一步：已有可用 PowerPoint，可在「教學影片」選擇旁白後建立影片。';
       return;
     }
-    message.textContent = '推薦下一步：先在「AI 配音」建立並核准講稿，再產生 AI 語音。';
+    message.textContent = '推薦下一步：可製作 AI PowerPoint、建立講稿與配音，或直接開始老師錄影。';
   }
 
   function syncSourceOptions() {
@@ -170,8 +170,14 @@
   }
 
   function showMode(next, focus = false) {
+    const modes = ['presentation', 'narration', 'recording', 'video'];
+    if (!modes.includes(next)) next = 'narration';
+    const previous = activeMode;
     activeMode = next;
-    ['narration', 'subtitle', 'video'].forEach(mode => {
+    if (previous === 'recording' && next !== 'recording') {
+      window.TeacherMediaRecorder1014?.cleanup?.();
+    }
+    modes.forEach(mode => {
       const tab = $(`teacher-media-tab-${mode}-1018`);
       const panel = $(`teacher-media-panel-${mode}-1018`);
       const selected = mode === next;
@@ -185,16 +191,29 @@
       }
       if (panel) panel.hidden = !selected;
     });
+    if (next === 'presentation') {
+      const host = $('teacher-media-panel-presentation-1018');
+      const authoring = window.TeacherAIMaterial1014?.ensureMounted?.(host || null);
+      authoring?.classList.remove('hidden');
+      authoring?.removeAttribute('aria-hidden');
+      window.TeacherAIMaterial1014?.paintMaterialOptions?.($('teacher-media-source-1018')?.value || '');
+    }
     if (focus) $(`teacher-media-tab-${next}-1018`)?.focus();
   }
 
   function installTabs(studio) {
-    if ($('teacher-media-tab-narration-1018')) return;
+    if ($('teacher-media-tab-presentation-1018')) return;
     const tabs = document.createElement('div');
     tabs.className = 'teacher-media-tabs-1018 flex gap-2 overflow-x-auto';
     tabs.setAttribute('role', 'tablist');
-    tabs.setAttribute('aria-label', 'AI 媒體製作模式');
-    [['narration', '🎙️ 講稿與配音'], ['subtitle', '💬 AI 字幕'], ['video', '🎬 教學影片']].forEach(([mode, label]) => {
+    tabs.setAttribute('aria-label', '教材媒體製作模式');
+    const modes = [
+      ['presentation', '🖥️ AI PowerPoint'],
+      ['narration', '🎙️ 講稿與配音'],
+      ['recording', '📹 老師自己錄影'],
+      ['video', '🎬 教學影片'],
+    ];
+    modes.forEach(([mode, label]) => {
       const tab = document.createElement('button');
       tab.id = `teacher-media-tab-${mode}-1018`;
       tab.type = 'button';
@@ -204,7 +223,7 @@
       tab.setAttribute('aria-controls', `teacher-media-panel-${mode}-1018`);
       tab.addEventListener('click', () => showMode(mode));
       tab.addEventListener('keydown', event => {
-        const order = ['narration', 'subtitle', 'video'];
+        const order = modes.map(([key]) => key);
         const index = order.indexOf(mode);
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault();
@@ -217,7 +236,7 @@
     studio.appendChild(tabs);
     const host = document.createElement('div');
     host.className = 'teacher-media-panels-1018';
-    ['narration', 'subtitle', 'video'].forEach(mode => {
+    modes.forEach(([mode]) => {
       const panel = document.createElement('section');
       panel.id = `teacher-media-panel-${mode}-1018`;
       panel.className = 'teacher-media-panel-1018 space-y-4';
@@ -291,14 +310,24 @@
   }
 
   function attachPanels(studio) {
+    const presentation = $('teacher-media-panel-presentation-1018');
     const narration = $('teacher-media-panel-narration-1018');
-    const subtitle = $('teacher-media-panel-subtitle-1018');
+    const recording = $('teacher-media-panel-recording-1018');
     const video = $('teacher-media-panel-video-1018');
-    if (!narration || !subtitle || !video) return false;
+    if (!presentation || !narration || !recording || !video) return false;
 
-    restorePowerPointAuthoring();
     humanizeExistingPanels();
     replaceVideoIdInput();
+
+    const authoring = window.TeacherAIMaterial1014?.ensureMounted?.(presentation) || $('teacher-ai-material-1014');
+    if (authoring) {
+      if (authoring.parentElement !== presentation) presentation.appendChild(authoring);
+      authoring.classList.remove('hidden');
+      authoring.removeAttribute('aria-hidden');
+      $('teacher-media-waiting-presentation-1018')?.remove();
+    } else {
+      waiting(presentation, 'teacher-media-waiting-presentation-1018', 'AI PowerPoint 製作功能載入中…');
+    }
 
     let narrationFlow = $('teacher-media-narration-flow-1028');
     if (!narrationFlow) {
@@ -314,10 +343,11 @@
       $('teacher-media-script-history-1018')?.remove();
       scriptPanel.classList.remove('hidden');
       scriptPanel.removeAttribute('aria-hidden');
-      const scriptSource = $('teacher-script-material-1014')?.closest('label');
-      scriptSource?.classList.add('teacher-media-legacy-source-1018');
+      $('teacher-script-material-1014')?.closest('label')?.classList.add('teacher-media-legacy-source-1018');
       $('teacher-script-refresh-materials-1014')?.parentElement?.classList.add('teacher-media-legacy-source-1018');
       if (scriptPanel.parentElement !== narration) narration.appendChild(scriptPanel);
+    } else {
+      waiting(narration, 'teacher-media-waiting-script-1018', '講稿功能載入中…');
     }
 
     const audioPanel = $('teacher-media-audio-1014');
@@ -328,13 +358,12 @@
       waiting(narration, 'teacher-media-waiting-audio-1018', 'AI 配音功能載入中…');
     }
 
-    const subtitlePanel = $('teacher-media-subtitle-1014');
-    if (subtitlePanel) {
-      $('teacher-media-waiting-subtitle-1018')?.remove();
-      if (subtitlePanel.parentElement !== subtitle) subtitle.appendChild(subtitlePanel);
-      $('teacher-subtitle-material-1017')?.closest('label')?.classList.add('teacher-media-legacy-source-1018');
+    const recorderPanel = $('teacher-recorder-1014');
+    if (recorderPanel) {
+      $('teacher-media-waiting-recorder-1018')?.remove();
+      if (recorderPanel.parentElement !== recording) recording.appendChild(recorderPanel);
     } else {
-      waiting(subtitle, 'teacher-media-waiting-subtitle-1018', 'AI 字幕功能載入中…');
+      waiting(recording, 'teacher-media-waiting-recorder-1018', '老師錄影功能載入中…');
     }
 
     const videoPanel = $('teacher-ai-video-1015');
@@ -345,29 +374,44 @@
       waiting(video, 'teacher-media-waiting-video-1018', '教學影片功能載入中…');
     }
 
+    let captions = $('teacher-media-video-captions-1018');
+    if (!captions) {
+      captions = makeDetails('字幕與校正', 'teacher-media-video-captions-1018');
+      const helper = document.createElement('p');
+      helper.className = 'mt-2 text-xs leading-5 text-slate-600';
+      helper.textContent = 'AI 字幕整合在影片流程內：影音來源完成後產生字幕草稿，由教師校正後再發布。';
+      captions.appendChild(helper);
+      video.appendChild(captions);
+    }
+    const subtitlePanel = $('teacher-media-subtitle-1014');
+    if (subtitlePanel) {
+      $('teacher-media-waiting-subtitle-1018')?.remove();
+      if (subtitlePanel.parentElement !== captions) captions.appendChild(subtitlePanel);
+      $('teacher-subtitle-material-1017')?.closest('label')?.classList.add('teacher-media-legacy-source-1018');
+    } else {
+      waiting(captions, 'teacher-media-waiting-subtitle-1018', 'AI 字幕功能載入中…');
+    }
+
     let advanced = $('teacher-media-advanced-1018');
     if (!advanced) {
-      advanced = makeDetails('媒體版本、品質與進階資訊', 'teacher-media-advanced-1018');
+      advanced = makeDetails('版本、品質與進階資訊', 'teacher-media-advanced-1018');
       const technical = document.createElement('p');
       technical.id = 'teacher-media-advanced-note-1018';
       technical.className = 'mt-3 text-xs leading-5 text-slate-600';
-      technical.textContent = '此處只保留媒體版本、品質檢查與發布說明；AI PowerPoint 製作仍在「教材與課程」主工作台。背景服務與儲存設定不會顯示敏感識別值。';
+      technical.textContent = 'PowerPoint、講稿／配音、老師錄影與 AI 教學影片共用同一個製作室；背景服務、版本與品質資訊集中在此處。';
       advanced.appendChild(technical);
       studio.appendChild(advanced);
     } else {
-      const heading = advanced.querySelector(':scope > summary');
-      if (heading) heading.textContent = '媒體版本、品質與進階資訊';
       const technical = $('teacher-media-advanced-note-1018');
-      if (technical) technical.textContent = '此處只保留媒體版本、品質檢查與發布說明；AI PowerPoint 製作仍在「教材與課程」主工作台。背景服務與儲存設定不會顯示敏感識別值。';
+      if (technical) technical.textContent = 'PowerPoint、講稿／配音、老師錄影與 AI 教學影片共用同一個製作室；背景服務、版本與品質資訊集中在此處。';
     }
-    restorePowerPointAuthoring();
     return true;
   }
 
   function fullyHydrated() {
     const studio = $('teacher-ai-media-studio-1018');
     if (!studio) return false;
-    return ['teacher-media-audio-1014', 'teacher-media-subtitle-1014', 'teacher-ai-video-1015', 'teacher-media-script-1014']
+    return ['teacher-ai-material-1014', 'teacher-media-audio-1014', 'teacher-media-subtitle-1014', 'teacher-ai-video-1015', 'teacher-media-script-1014', 'teacher-recorder-1014']
       .every(id => $(id)?.closest('#teacher-ai-media-studio-1018'));
   }
 
@@ -400,7 +444,7 @@
       studio.className = 'space-y-4';
       const sourceBox = document.createElement('div');
       sourceBox.className = 'rounded-2xl border border-cyan-100 bg-cyan-50/50 p-4';
-      sourceBox.innerHTML = '<label class="block text-sm font-black text-slate-800">來源教材／來源內容（講稿、配音、字幕、影片皆可用）<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
+      sourceBox.innerHTML = '<label class="block text-sm font-black text-slate-800">來源教材／來源內容（PowerPoint、講稿／配音、影片共用；直接錄影可不選）<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
       studio.appendChild(sourceBox);
       installTabs(studio);
       installPowerPointShortcut();
@@ -489,6 +533,8 @@
 
   window.TeacherAIMediaStudio1018 = Object.freeze({
     refresh: refreshLifecycle,
+    showMode: (mode, focus = false) => { install(); showMode(mode, focus); },
+    activeMode: () => activeMode,
     refreshPresentationChoices: (materialId, options = {}) => refreshPresentationChoices(materialId, options),
   });
   refreshLifecycle();
