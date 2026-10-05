@@ -7,6 +7,7 @@ from teacher_app.common import audit, content_audience, scope_filter
 from teacher_app.common.auth import has_permission
 from teacher_app.materials import media_subtitle_jobs, media_subtitle_repository, media_subtitle_runtime
 from teacher_app.materials import repository as material_repository
+from teacher_app.materials.media_audio_routes import _ai_worker_online_error
 
 
 def _actor(owner=None):
@@ -66,6 +67,9 @@ def register_media_subtitle_routes(owner):
         denied = _scope(owner, str(material.get("group") or ""))
         if denied:
             return denied
+        readiness_error = _ai_worker_online_error()
+        if readiness_error:
+            return readiness_error
         try:
             job = media_subtitle_jobs.enqueue(body, user)
         except media_subtitle_jobs.MediaSubtitleLimitError as exc:
