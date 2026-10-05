@@ -110,6 +110,16 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
         self.assertIn('/api/storage/migrate-to-r2', source)
         self.assertNotIn('X-Admin-Key', source)
 
+    def test_system_status_uses_canonical_health_for_diagnostics_and_deploy_identity(self):
+        source = ROOT.joinpath('static/admin-system.js').read_text(encoding='utf-8')
+        self.assertIn("fetch('/health'", source)
+        self.assertIn("h.deployment||{}", source)
+        self.assertIn("h.configuration?.ok", source)
+        self.assertIn("h.migrations?.ok", source)
+        self.assertIn("系統診斷", source)
+        self.assertNotIn("/api/deployment", source)
+        self.assertNotIn("/api/system-diagnostics", source)
+
     def test_system_module_keeps_existing_security_boundary(self):
         source = ROOT.joinpath('static/admin-system.js').read_text(encoding='utf-8')
         self.assertNotIn('getAdminKey', source)
