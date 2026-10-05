@@ -44,6 +44,11 @@ class NotificationCenterUi86Tests(unittest.TestCase):
         ):
             self.assertIn(token, self.dashboard)
 
+    def test_recovered_operational_incidents_are_informational_not_pending_work(self):
+        self.assertIn("!['announcement','operational_recovery'].includes(row.kind)", self.js)
+        self.assertIn("item.kind==='operational_recovery'", self.js)
+        self.assertIn("查看目前狀態", self.js)
+
     def test_system_admin_notifications_use_system_workspace_not_hidden_learner_dom(self):
         for token in (
             "function isSystemContext()",
