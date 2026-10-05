@@ -54,6 +54,8 @@ def _ai_worker_capabilities() -> dict:
     return {
         "workerKind": "ai",
         "workerMachine": str(socket.gethostname() or "")[:80],
+        "heartbeatContract": 2,
+        "heartbeatTransport": "database",
         "kokoro": {
             "available": bool(kokoro_ready and numpy_ready and misaki_ready),
             "kokoro": kokoro_ready,
@@ -69,8 +71,12 @@ class _AIHeartbeat:
     def __init__(self, interval_seconds: int = 30):
         self.worker_id = _ai_worker_id()
         self.interval_seconds = max(10, min(90, int(interval_seconds or 30)))
+        self.failure_limit = _env_int("AI_WORKER_HEARTBEAT_FAILURE_LIMIT", 5, 2, 20)
+        self.startup_attempts = _env_int("AI_WORKER_HEARTBEAT_STARTUP_ATTEMPTS", 3, 1, 10)
         self._stop = threading.Event()
+        self._fatal = threading.Event()
         self._thread = None
+        self._consecutive_failures = 0
 
     def pulse(self) -> None:
         stamp = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
@@ -81,18 +87,45 @@ class _AIHeartbeat:
             current_job_id="",
         )
 
-    def _run(self) -> None:
-        while not self._stop.wait(self.interval_seconds):
-            try:
-                self.pulse()
-            except Exception as exc:
-                log(f"heartbeat error type={type(exc).__name__}")
-
-    def __enter__(self):
+    def _pulse_once(self) -> bool:
         try:
             self.pulse()
         except Exception as exc:
-            log(f"heartbeat startup error type={type(exc).__name__}")
+            self._consecutive_failures += 1
+            log(
+                "heartbeat write failed "
+                f"type={type(exc).__name__} consecutive={self._consecutive_failures}/{self.failure_limit}"
+            )
+            if self._consecutive_failures >= self.failure_limit:
+                self._fatal.set()
+            return False
+        if self._consecutive_failures:
+            log("heartbeat write recovered")
+        self._consecutive_failures = 0
+        return True
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.interval_seconds):
+            self._pulse_once()
+            if self._fatal.is_set():
+                return
+
+    def raise_if_unhealthy(self) -> None:
+        if self._fatal.is_set():
+            raise RuntimeError(
+                "AI Worker heartbeat has repeatedly failed; refusing to remain falsely healthy."
+            )
+
+    def __enter__(self):
+        for attempt in range(1, self.startup_attempts + 1):
+            if self._pulse_once():
+                break
+            if attempt < self.startup_attempts:
+                time.sleep(min(5, attempt * 2))
+        else:
+            raise RuntimeError(
+                "AI Worker startup heartbeat could not be persisted to the production database."
+            )
         self._thread = threading.Thread(target=self._run, name="teacher-ai-heartbeat", daemon=True)
         self._thread.start()
         return self
@@ -131,9 +164,10 @@ def main() -> int:
     )
     log(_renderer_status_line())
     heartbeat_seconds = _env_int("AI_WORKER_HEARTBEAT_SECONDS", 30, 10, 90)
-    with _AIHeartbeat(heartbeat_seconds):
+    with _AIHeartbeat(heartbeat_seconds) as heartbeat:
         while True:
             try:
+                heartbeat.raise_if_unhealthy()
                 now = time.monotonic()
                 if now >= next_recovery:
                     recovered_questions = question_processor.recover_stale()
