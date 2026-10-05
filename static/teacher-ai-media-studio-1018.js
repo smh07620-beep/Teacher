@@ -368,7 +368,16 @@
     const shared = $('teacher-media-source-1018');
     if (!shared || shared.dataset.mediaStudioBound === '1') return;
     shared.dataset.mediaStudioBound = '1';
-    shared.addEventListener('change', syncSharedSource);
+    shared.addEventListener('change', () => {
+      // Once the canonical controls are present they own source propagation.
+      // Keep this fallback only for older/partial hydration so one user change
+      // cannot trigger two presentation refreshes and reset the visible select.
+      if (window.TeacherAIMediaControls1023) {
+        updateRecommendation();
+        return;
+      }
+      syncSharedSource();
+    });
   }
 
   function install() {
@@ -395,11 +404,15 @@
     }
 
     attachPanels(studio);
-    syncSourceOptions();
+    // teacher-ai-media-controls-1023.js is the single owner of the visible
+    // source picker once it exists. Re-copying the legacy hidden select during
+    // this hydrate loop made the visible selection jump back to "讀取中".
+    if (!window.TeacherAIMediaControls1023) syncSourceOptions();
     bindSharedSource();
     showMode(activeMode);
     if ($('teacher-script-material-1014')) {
-      syncSharedSource();
+      if (window.TeacherAIMediaControls1023) updateRecommendation();
+      else syncSharedSource();
     }
     return true;
   }
