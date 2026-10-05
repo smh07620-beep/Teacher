@@ -126,7 +126,7 @@
     const prior = select.value;
     const explicitGroup = new URLSearchParams(window.location.search).get('group') || window.currentGroupKey || '';
     const group = explicitGroup || (R.crossGroup ? '' : String(R.user?.preferredGroup || ''));
-    select.replaceChildren(new Option('讀取所有已核准 PowerPoint…', ''));
+    select.replaceChildren(new Option('讀取已準備影片畫面…', ''));
     select.disabled = true;
     presentationRequest = (async () => {
       const query = group ? `?group=${encodeURIComponent(group)}` : '';
@@ -142,10 +142,10 @@
       const usable = (Array.isArray(rows) ? rows : []).filter(item =>
         item?.artifactReady && ['approved', 'published'].includes(String(item.status || ''))
       );
-      select.replaceChildren(new Option(usable.length ? '選擇已核准 PowerPoint…' : '尚無已核准 PowerPoint', ''));
+      select.replaceChildren(new Option(usable.length ? '選擇已準備影片畫面…' : '尚無已準備影片畫面', ''));
       usable.forEach(item => {
         const preferred = normalizedMaterialId && String(item.materialId || '') === normalizedMaterialId ? '｜目前來源' : '';
-        const label = `${item.title || '教學 PowerPoint'}｜版本 ${Number(item.revisionNumber || 1)}${item.status === 'published' ? '｜已發布' : '｜已核准'}${preferred}`;
+        const label = `${item.title || '教學畫面'}｜版本 ${Number(item.revisionNumber || 1)}${item.status === 'published' ? '｜已發布' : '｜已核准'}${preferred}`;
         select.appendChild(new Option(label, String(item.id || '')));
       });
       select.disabled = !usable.length;
@@ -158,10 +158,10 @@
       return await presentationRequest;
     } catch (error) {
       if (generation !== presentationRequestGeneration) return;
-      select.replaceChildren(new Option('PowerPoint 版本讀取失敗', ''));
+      select.replaceChildren(new Option('影片畫面版本讀取失敗', ''));
       select.disabled = true;
       const status = $('teacher-ai-video-status-1015');
-      if (status) status.textContent = `PowerPoint 讀取失敗：${error.message}`;
+      if (status) status.textContent = `影片畫面讀取失敗：${error.message}`;
       return false;
     } finally {
       if (generation === presentationRequestGeneration) presentationRequest = null;
@@ -261,7 +261,7 @@
     select.id = input.id;
     select.className = input.className;
     select.disabled = true;
-    select.appendChild(new Option('讀取所有已核准 PowerPoint…', ''));
+    select.appendChild(new Option('讀取已準備影片畫面…', ''));
     input.replaceWith(select);
     if (label?.firstChild?.nodeType === Node.TEXT_NODE) label.firstChild.textContent = '已核准 PowerPoint';
     select.addEventListener('change', updateRecommendation);
@@ -283,9 +283,11 @@
   }
 
   function installPowerPointShortcut() {
-    // PowerPoint authoring now has one canonical entry in the shared source header.
-    // Remove the older duplicate shortcut card if an older hydration pass left it behind.
+    // PowerPoint authoring belongs to the AI source authoring workspace.
+    // Media/video must not recreate a second PowerPoint entry.
     $('teacher-media-powerpoint-entry-1018')?.remove();
+    $('teacher-media-direct-powerpoint-1026')?.remove();
+    $('teacher-ai-video-powerpoint-author-1027')?.remove();
   }
 
   function attachPanels(studio) {
@@ -398,7 +400,7 @@
       studio.className = 'space-y-4';
       const sourceBox = document.createElement('div');
       sourceBox.className = 'rounded-2xl border border-cyan-100 bg-cyan-50/50 p-4';
-      sourceBox.innerHTML = '<div class="grid lg:grid-cols-[1fr_auto] gap-3 lg:items-end"><label class="block text-sm font-black text-slate-800">來源教材／來源內容（講稿、配音、字幕、影片皆可用）<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><div class="rounded-xl border border-violet-200 bg-white p-3 min-w-[240px]"><div class="text-[10px] font-black text-violet-700">AI POWERPOINT</div><button id="teacher-media-direct-powerpoint-1026" type="button" class="mt-1 w-full rounded-lg bg-violet-700 px-3 py-2 text-xs font-black text-white">🖥️ AI PowerPoint 製作</button><div class="mt-1 text-[10px] text-slate-500">PowerPoint 保留單一入口；影片也可從 PDF／Word／圖片／文字等私人來源開始</div></div></div><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
+      sourceBox.innerHTML = '<label class="block text-sm font-black text-slate-800">來源教材／來源內容（講稿、配音、字幕、影片皆可用）<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
       studio.appendChild(sourceBox);
       installTabs(studio);
       installPowerPointShortcut();
@@ -460,7 +462,7 @@
     }
     showMode('video');
     const status=$('teacher-ai-video-status-1015');
-    if(status)status.textContent='已帶入核准 PowerPoint；選擇旁白聲音後即可建立教學影片。';
+    if(status)status.textContent='已帶入核准影片畫面；選擇旁白聲音後即可建立教學影片。';
     $('teacher-media-panel-video-1018')?.scrollIntoView?.({behavior:'smooth',block:'start'});
   });
   window.addEventListener('teacher-media-source-options-1014', handleSourceOptions);
