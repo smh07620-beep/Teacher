@@ -897,7 +897,7 @@
             ${queueCard('⏳', '待處理', data.pendingJobs, 'queued + retry_wait')}
             ${queueCard('⚙️', '處理中', data.processingJobs, '正在由本機 Worker 執行')}
             ${queueCard('🔁', '等待重試', data.retryJobs, '保留原始檔後再次處理')}
-            ${queueCard('❌', '失敗', data.failedJobs, '下方直接顯示失敗原因')}
+            ${queueCard('❌', `近${Number(data.failedAttentionHours||24)}小時失敗`, data.failedJobs, Number(data.failedJobsTotal||0) > Number(data.failedJobs||0) ? `歷史共 ${Number(data.failedJobsTotal||0)} 筆；舊失敗保留在紀錄但不持續亮紅燈` : '近期失敗會在下方顯示原因')}
           </div>
           <div class="grid sm:grid-cols-3 gap-2 text-xs">
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">最舊待處理等待：</span><b>${formatDuration(data.oldestPendingAgeSeconds)}</b>${data.oldestPendingAt ? ` · ${formatWhen(data.oldestPendingAt)}` : ''}</div>
@@ -905,7 +905,7 @@
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">平均完成時間：</span><b>${formatDuration(data.averageCompletedDurationSeconds)}</b></div>
           </div>
           <div class="grid sm:grid-cols-3 gap-2 text-xs">
-            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2"><span class="text-emerald-700">🟢 Heartbeat 正常：</span><b>${Number(data.healthyProcessingJobs||0)}</b></div>
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2"><span class="text-emerald-700">🟢 處理中 heartbeat 正常：</span><b>${Number(data.healthyProcessingJobs||0)}</b><div class="mt-1 text-[10px]">在線 Worker ${activeWorkers.length} 台</div></div>
             <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"><span class="text-amber-700">🟠 回報延遲：</span><b>${Number(data.heartbeatDelayedJobs||0)}</b><div class="mt-1 text-[10px]">警戒 ${formatDuration(data.heartbeatWarningSeconds||120)}</div></div>
             <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2"><span class="text-rose-700">🔴 可能卡住：</span><b>${Number(data.stalledJobs||0)}</b><div class="mt-1 text-[10px]">stale ${formatDuration(data.staleThresholdSeconds||1800)}</div></div>
           </div>
