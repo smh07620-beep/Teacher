@@ -50,3 +50,33 @@ test('formal narration job disables the single preview control with one status m
   await expect(narration.locator('#teacher-audio-status-1014')).toContainText('正式 AI 語音工作正在排隊或處理中');
   await expect(narration.locator('#teacher-audio-status-1014')).toHaveCount(1);
 });
+
+test('approved narration source ignores stale responses when source changes quickly', async ({ page }) => {
+  await page.setContent('<main><section id="teacher-media-production-1014"><section id="teacher-media-script-1014"></section></section><select id="teacher-script-material-1014"><option value="">來源</option></select></main>');
+  await page.evaluate(() => {
+    window.TeacherRBAC681Ready = Promise.resolve({ roles: new Set(['clinical_teacher']), hasPermission: permission => permission === 'material.manage' });
+    window.fetch = async url => {
+      const value = String(url);
+      if (value === '/api/media-audio/status') return { ok: true, json: async () => ({ enabled: true, defaultVoice: 'zf_xiaoxiao', voices: ['zf_xiaoxiao'] }) };
+      if (value.includes('materialId=doc-1')) {
+        await new Promise(resolve => setTimeout(resolve, 80));
+        return { ok: true, json: async () => [{ id: 'script-1', title: '舊來源', status: 'approved' }] };
+      }
+      if (value.includes('materialId=doc-2')) {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        return { ok: true, json: async () => [{ id: 'script-2', title: '新來源', status: 'approved' }] };
+      }
+      if (value.startsWith('/api/media-scripts')) return { ok: true, json: async () => [] };
+      return { ok: true, json: async () => ({}) };
+    };
+  });
+  await page.addScriptTag({ path: asset('teacher-media-audio-1014.js') });
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('teacher-media-source-selected-1027', { detail: { materialId: 'doc-1' } }));
+    window.dispatchEvent(new CustomEvent('teacher-media-source-selected-1027', { detail: { materialId: 'doc-2' } }));
+  });
+  const select = page.locator('#teacher-audio-script-1014');
+  await expect(select).toHaveValue('script-2');
+  await expect(select).toContainText('新來源');
+  await expect(select).not.toContainText('舊來源');
+});
