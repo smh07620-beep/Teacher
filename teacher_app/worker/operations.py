@@ -807,6 +807,11 @@ def status(
                     "whisperInstalled": bool((capabilities.get("whisper") or {}).get("available")),
                     "heartbeatContract": int(capabilities.get("heartbeatContract") or 0),
                     "heartbeatTransport": str(capabilities.get("heartbeatTransport") or "")[:32],
+                    "controlPlaneReady": (
+                        None
+                        if capabilities.get("controlPlaneReady") is None
+                        else bool(capabilities.get("controlPlaneReady"))
+                    ),
                     "databaseReady": (
                         None
                         if capabilities.get("databaseReady") is None
