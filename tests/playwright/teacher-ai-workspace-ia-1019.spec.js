@@ -40,11 +40,12 @@ test('AI PowerPoint stays in the authoring workspace while media studio only con
       hasPermission: permission => permission === 'material.manage'
     });
     window.TeacherMediaSubtitle1014 = { selectMaterial: value => { window.subtitleSource = value; } };
-    window.TeacherWorkspace1014 = { openCourse: async () => { window.powerPointWorkspaceOpened = true; } };
+    window.TeacherWorkspace1014 = { openCourse: async () => { window.legacyCourseJumped = true; } };
     window.fetch = async url => ({ ok: true, json: async () => String(url).includes('/api/ai-presentations') ? [] : [] });
   });
 
   await page.addScriptTag({ path: asset('teacher-ai-media-studio-1018.js') });
+  await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
 
   await expect(page.locator('#teacher-ai-media-studio-1018')).toHaveCount(1);
   await expect(page.getByRole('tab')).toHaveCount(3);
@@ -55,7 +56,9 @@ test('AI PowerPoint stays in the authoring workspace while media studio only con
   const shortcut = page.getByRole('button', { name: '🖥️ AI PowerPoint 製作' });
   await expect(shortcut).toBeVisible();
   await shortcut.click();
-  await expect.poll(() => page.evaluate(() => window.powerPointWorkspaceOpened)).toBe(true);
+  await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toBeVisible();
+  await expect(page.locator('#teacher-media-powerpoint-body-1024 > #teacher-ai-material-1014')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Boolean(window.legacyCourseJumped))).toBe(false);
 });
 
 test('legacy MVP readiness summary is removed instead of duplicating the media studio', async ({ page }) => {
