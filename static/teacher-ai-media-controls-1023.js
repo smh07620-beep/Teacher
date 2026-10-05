@@ -106,7 +106,7 @@
     box.className = 'hidden mt-3 rounded-xl border border-dashed border-cyan-200 bg-white/80 p-4 text-sm text-slate-700';
     box.innerHTML = `
       <b class="text-slate-900">目前沒有可選的已完成教材</b>
-      <p class="mt-1 text-xs leading-5 text-slate-600">一般教材可直接在這一頁上傳；如果要用多份 PDF、Word、PPT、Excel、圖片或文字產生簡報，請使用右側唯一的「AI PowerPoint 製作」。</p>
+      <p class="mt-1 text-xs leading-5 text-slate-600">一般教材可直接在這一頁上傳；影片需要其他來源時，可在「教學影片」直接加入 PDF、Word、PPTX、Excel、圖片或文字。</p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button id="teacher-media-empty-upload-1024" type="button" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">📚 上傳一般教材</button>
         <button id="teacher-media-source-refresh-1024" type="button" class="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-800">↻ 重新整理教材</button>
@@ -134,7 +134,7 @@
         if (paragraph) paragraph.textContent = `${errorMessage}。可按「重新整理教材」再試一次，或直接在本頁上傳一般教材。`;
       } else {
         if (heading) heading.textContent = '目前沒有可選的已完成教材';
-        if (paragraph) paragraph.textContent = '一般教材可直接在這一頁上傳；若要用多份原始資料產生簡報，請使用右側唯一的「AI PowerPoint 製作」。';
+        if (paragraph) paragraph.textContent = '一般教材可直接在這一頁上傳；需要製作簡報時請回 AI 來源內容工作台，不在媒體區重複顯示入口。';
       }
     }
   }
@@ -152,10 +152,10 @@
           || String(a.title || '').localeCompare(String(b.title || ''), 'zh-Hant')
           || Number(b.revisionNumber || 0) - Number(a.revisionNumber || 0);
       });
-    select.replaceChildren(new Option(usable.length ? '選擇已核准 PowerPoint…' : '尚無已核准 PowerPoint', ''));
+    select.replaceChildren(new Option(usable.length ? '選擇已準備影片畫面…' : '尚無已準備影片畫面', ''));
     usable.forEach(item => {
       const preferred = preferredMaterialId && String(item.materialId || '') === String(preferredMaterialId) ? '｜目前來源' : '';
-      const label = `${item.title || '教學 PowerPoint'}｜版本 ${Number(item.revisionNumber || 1)}${item.status === 'published' ? '｜已發布' : '｜已核准'}${preferred}`;
+      const label = `${item.title || '教學畫面'}｜版本 ${Number(item.revisionNumber || 1)}${item.status === 'published' ? '｜已發布' : '｜已核准'}${preferred}`;
       select.add(new Option(label, String(item.id || '')));
     });
     if (previous && usable.some(item => String(item.id) === previous)) select.value = previous;
@@ -203,7 +203,7 @@
     presentationRefreshController = controller;
     presentationRefreshKey = requestKey;
     const generation = ++presentationRefreshGeneration;
-    select.replaceChildren(new Option('讀取所有已核准 PowerPoint…', ''));
+    select.replaceChildren(new Option('讀取已準備影片畫面…', ''));
     select.disabled = true;
 
     const task = (async () => {
@@ -233,10 +233,10 @@
       } catch (error) {
         if (generation !== presentationRefreshGeneration) return false;
         if (error?.name === 'AbortError' && !timedOut) return false;
-        select.replaceChildren(new Option(timedOut ? 'PowerPoint 讀取逾時｜請重試' : 'PowerPoint 版本讀取失敗', ''));
+        select.replaceChildren(new Option(timedOut ? 'PowerPoint 讀取逾時｜請重試' : '影片畫面版本讀取失敗', ''));
         select.disabled = true;
         const status = $('teacher-ai-video-status-1015');
-        const message = timedOut ? 'PowerPoint 清單讀取逾時，請按重新整理或稍後再試。' : `PowerPoint 讀取失敗：${error.message}`;
+        const message = timedOut ? 'PowerPoint 清單讀取逾時，請按重新整理或稍後再試。' : `影片畫面讀取失敗：${error.message}`;
         if (status && status.textContent !== message) status.textContent = message;
         return false;
       } finally {
@@ -277,7 +277,7 @@
     if (!materialId) {
       setSharedHint(materials.length
         ? '請先選擇來源教材／來源內容。'
-        : '目前沒有已完成教材。可直接在本頁上傳一般教材，或用下方「多資料 AI PowerPoint」加入原始資料。');
+        : '目前沒有已完成教材。可直接在本頁上傳一般教材，或在影片區加入來源資料。');
       return;
     }
     const item = materials.find(row => String(row.id) === materialId);
@@ -286,7 +286,7 @@
     ].filter(Boolean).join(' ')) || String(item?.storageBackend || '').toLowerCase() === 'external';
     setSharedHint(isMedia
       ? '已選擇影音來源：可直接建立 AI 字幕；若已有核准講稿，也可產生 AI 配音。'
-      : '已選擇教材來源：先建立／核准講稿即可產生 AI 配音；建立並核准 PowerPoint 後可製作教學影片。');
+      : '已選擇教材來源：先建立／核准講稿即可產生 AI 配音；準備好影片畫面版本後即可製作教學影片。');
   }
 
   async function refreshSources({force = false} = {}) {
@@ -370,8 +370,8 @@
     // F6 convergence: the source header owns the single PowerPoint entry.
     // Remove the older duplicate shortcut card when legacy hydration recreates it.
     $('teacher-media-powerpoint-entry-1018')?.remove();
-    const direct = $('teacher-media-direct-powerpoint-1026');
-    if (direct && direct.textContent !== '🖥️ AI PowerPoint 製作') direct.textContent = '🖥️ AI PowerPoint 製作';
+    $('teacher-media-direct-powerpoint-1026')?.remove();
+    $('teacher-ai-video-powerpoint-author-1027')?.remove();
   }
 
   function improveVideoHelp() {
@@ -693,7 +693,7 @@
 
   document.addEventListener('click', event => {
     const target = event.target?.closest?.(
-      '#teacher-media-open-powerpoint-1018,#teacher-media-direct-powerpoint-1026,#teacher-media-powerpoint-close-1024,#teacher-media-empty-upload-1024,#teacher-media-source-refresh-1024,#teacher-media-general-upload-close-1025,#teacher-media-general-upload-start-1025'
+      '#teacher-media-open-powerpoint-1018,#teacher-media-powerpoint-close-1024,#teacher-media-empty-upload-1024,#teacher-media-source-refresh-1024,#teacher-media-general-upload-close-1025,#teacher-media-general-upload-start-1025'
     );
     if (target) {
       event.preventDefault();
