@@ -77,6 +77,8 @@ test('GP-01 full stack Browser -> R2 -> real Worker -> Database -> Browser', asy
   await page.evaluate(async () => {
     if (typeof window.renderAdminCourseMaterialHub === 'function') {
       await window.renderAdminCourseMaterialHub(true);
+      const hub = document.getElementById('admin-course-material-hub');
+      if (hub?._adminCourseMaterialRefresh) await hub._adminCourseMaterialRefresh;
     }
   });
   await expect(page.locator('body')).toContainText('Full-stack R2 Worker 教材', { timeout: 15000 });
