@@ -153,6 +153,7 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             "oldestPendingAt": ops.get("oldestPendingAt", ""),
             "oldestPendingAgeSeconds": ops.get("oldestPendingAgeSeconds", 0),
             "recentTerminalJobs": ops.get("recentTerminalJobs", 0),
+            "metricsWindowHours": ops.get("metricsWindowHours", 24),
             "recentFailureRate": ops.get("recentFailureRate", 0),
             "averageCompletedDurationSeconds": ops.get("averageCompletedDurationSeconds", 0),
             "healthyProcessingJobs": ops.get("healthyProcessingJobs", 0),
