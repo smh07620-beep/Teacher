@@ -31,7 +31,6 @@ test('shared AI media source loads directly and drives narration subtitle and vi
           <select id="teacher-ai-video-presentation-1015"><option value="">請先選擇來源教材</option></select>
           <p id="teacher-ai-video-status-1015"></p>
         </section>
-        <button id="teacher-media-direct-powerpoint-1026" type="button">AI PowerPoint 製作</button>
       </section>
     </main>
   `);
@@ -75,7 +74,7 @@ test('shared AI media source loads directly and drives narration subtitle and vi
 
   await expect(page.locator('#teacher-subtitle-language-1014')).toHaveJSProperty('tagName', 'SELECT');
   await expect(page.locator('#teacher-subtitle-language-1014')).toHaveValue('zh-TW');
-  await expect(page.locator('#teacher-media-direct-powerpoint-1026')).toHaveText('🖥️ AI PowerPoint 製作');
+  await expect(page.locator('#teacher-media-direct-powerpoint-1026')).toHaveCount(0);
   await expect(page.locator('#teacher-media-powerpoint-entry-1018')).toHaveCount(0);
 
   await source.selectOption('doc-1');
@@ -96,7 +95,6 @@ test('approved PowerPoint list loads independently of material selection and coa
         <select id="teacher-ai-video-presentation-1015"><option value="">初始</option></select>
         <p id="teacher-ai-video-status-1015"></p>
       </section>
-      <button id="teacher-media-direct-powerpoint-1026" type="button">AI PowerPoint 製作</button>
     </section>
   `);
   await installTeacherRBAC(page);
@@ -126,12 +124,11 @@ test('approved PowerPoint list loads independently of material selection and coa
   await expect.poll(() => page.evaluate(() => window.pptFetchCount1026)).toBeLessThanOrEqual(2);
 });
 
-test('empty media source has one PowerPoint entry and an inline ordinary material upload action', async ({ page }) => {
+test('empty media source has no duplicate PowerPoint entry and keeps inline ordinary upload', async ({ page }) => {
   await page.setContent(`
     <section id="teacher-media-production-1014">
       <label>來源教材／來源內容<select id="teacher-media-source-1018" disabled><option>正在載入可用教材…</option></select></label>
       <p id="teacher-media-next-step-1018"></p>
-      <button id="teacher-media-direct-powerpoint-1026" type="button">AI PowerPoint 製作</button>
     </section>
   `);
   await installTeacherRBAC(page);
@@ -148,7 +145,7 @@ test('empty media source has one PowerPoint entry and an inline ordinary materia
   await expect(page.locator('#teacher-media-empty-upload-1024')).toHaveText('📚 上傳一般教材');
   await expect(page.locator('#teacher-media-source-refresh-1024')).toBeVisible();
   await expect(page.locator('#teacher-media-powerpoint-entry-1018')).toHaveCount(0);
-  await expect(page.locator('#teacher-media-direct-powerpoint-1026')).toHaveCount(1);
+  await expect(page.locator('#teacher-media-direct-powerpoint-1026')).toHaveCount(0);
   await expect(page.locator('#teacher-media-next-step-1018')).toContainText('本頁上傳一般教材');
 });
 
@@ -220,7 +217,6 @@ test('multi-source PowerPoint opens inline and does not run the old jump-back ha
         <section id="teacher-ai-media-studio-1018">
           <label>來源教材／來源內容<select id="teacher-media-source-1018"><option value="">來源</option></select></label>
           <p id="teacher-media-next-step-1018"></p>
-          <button id="teacher-media-direct-powerpoint-1026" type="button">AI PowerPoint 製作</button>
           <div id="teacher-media-tabs-placeholder">媒體頁籤</div>
         </section>
       </section>
@@ -235,7 +231,7 @@ test('multi-source PowerPoint opens inline and does not run the old jump-back ha
 
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
   await expect.poll(() => page.evaluate(() => Boolean(window.TeacherAIMediaControls1023))).toBe(true);
-  await page.locator('#teacher-media-direct-powerpoint-1026').click();
+  await page.evaluate(() => window.TeacherAIMediaControls1023.openPowerPointWorkspace());
 
   await expect.poll(() => page.evaluate(() => window.oldJumpCalls)).toBe(0);
   await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toBeVisible();
@@ -369,7 +365,6 @@ test('PowerPoint authoring mounts inline even when course hub was never opened',
         <section id="teacher-ai-media-studio-1018">
           <div class="rounded-2xl"><select id="teacher-media-source-1018"><option value="">來源</option></select></div>
           <p id="teacher-media-next-step-1018"></p>
-          <button id="teacher-media-direct-powerpoint-1026" type="button">🖥️ AI PowerPoint 製作</button>
         </section>
       </section>
     </main>
