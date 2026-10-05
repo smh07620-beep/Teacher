@@ -7,6 +7,7 @@ import logging
 import os
 from typing import Callable
 
+from teacher_app import config as teacher_config
 from teacher_app.storage import r2_budget
 from teacher_app.worker import error_observability, repository
 
@@ -789,6 +790,13 @@ def status(
                 if str(value or "").strip()
             ] if isinstance(queues, (list, tuple, set)) else []
             kokoro = capabilities.get("kokoro") or {}
+            worker_database_identity = str(capabilities.get("databaseIdentity") or "").strip()
+            web_database_identity = teacher_config.database_identity()
+            database_identity_match = (
+                None
+                if not worker_database_identity or not web_database_identity
+                else worker_database_identity == web_database_identity
+            )
             ai_workers.append(
                 {
                     "workerId": str(item.get("worker_id") or item.get("workerId") or ""),
@@ -800,6 +808,12 @@ def status(
                     "whisperInstalled": bool((capabilities.get("whisper") or {}).get("available")),
                     "heartbeatContract": int(capabilities.get("heartbeatContract") or 0),
                     "heartbeatTransport": str(capabilities.get("heartbeatTransport") or "")[:32],
+                    "databaseReady": (
+                        None
+                        if capabilities.get("databaseReady") is None
+                        else bool(capabilities.get("databaseReady"))
+                    ),
+                    "databaseIdentityMatch": database_identity_match,
                 }
             )
     except Exception:
