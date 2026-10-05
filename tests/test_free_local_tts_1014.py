@@ -15,6 +15,7 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         cls.ui = (ROOT / "static" / "teacher-media-free-tts-1014.js").read_text(encoding="utf-8")
         cls.audio_ui = (ROOT / "static" / "teacher-media-audio-1014.js").read_text(encoding="utf-8")
         cls.video_ui = (ROOT / "static" / "teacher-ai-video-1015.js").read_text(encoding="utf-8")
+        cls.status_ui = (ROOT / "static" / "teacher-media-status-fix-1014.js").read_text(encoding="utf-8")
         cls.worker = (ROOT / "ai_question_worker.py").read_text(encoding="utf-8")
         cls.routes = (ROOT / "teacher_app" / "materials" / "media_audio_routes.py").read_text(encoding="utf-8")
         cls.worker_ops = (ROOT / "teacher_app" / "worker" / "operations.py").read_text(encoding="utf-8")
@@ -62,6 +63,15 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn('Kokoro 已安裝', self.audio_ui)
         self.assertIn('R2 正常', self.audio_ui)
         self.assertIn('teacher-ai-video-voice-health-1015', self.video_ui)
+
+    def test_voice_readiness_reports_actionable_worker_diagnostics(self):
+        self.assertIn("heartbeatAgeSeconds", self.routes)
+        self.assertIn("diagnosticMessage", self.routes)
+        self.assertIn("worker_not_seen", self.routes)
+        self.assertIn("kokoro_unavailable", self.routes)
+        self.assertIn("readyForPreview", self.status_ui)
+        self.assertIn("Kokoro 能力未回報", self.audio_ui)
+        self.assertIn("Kokoro 能力未回報", self.video_ui)
 
     def test_ai_heartbeat_does_not_appear_as_duplicate_material_worker(self):
         self.assertIn('capabilities.get("workerKind")', self.worker_ops)
