@@ -30,13 +30,18 @@
     if (!host) return;
     const worker = data?.worker || {};
     const workerText = worker.online ? '🟢 AI Worker 在線' : worker.seen ? '🔴 AI Worker 離線' : '🟠 AI Worker 尚未回報';
-    const kokoroText = worker.kokoroInstalled === true ? '🟢 Kokoro 已安裝' : worker.kokoroInstalled === false ? '🔴 Kokoro 未安裝' : '🟠 Kokoro 待確認';
+    const kokoroText = worker.kokoroInstalled === true
+      ? '🟢 Kokoro 已安裝'
+      : worker.kokoroInstalled === false
+        ? '🔴 Kokoro 未安裝'
+        : worker.seen ? '🟠 Kokoro 能力未回報' : '⚪ Kokoro 等待 AI Worker';
     const r2Text = data?.r2Ready ? '🟢 R2 正常' : '🔴 R2 未設定';
     const ready = !!data?.readyForPreview;
     host.className = ready
       ? 'rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-900'
       : 'rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900';
-    host.innerHTML = `<div class="font-black">AI 語音服務</div><div class="mt-1 flex flex-wrap gap-x-3 gap-y-1"><span>${workerText}</span><span>${kokoroText}</span><span>${r2Text}</span></div>${worker.lastSeen ? `<div class="mt-1 text-[10px] opacity-70">AI Worker 最後回報：${escapeHtml(new Date(worker.lastSeen).toLocaleString())}</div>` : ''}`;
+    const diagnostic = String(data?.diagnostic?.message || '').trim();
+    host.innerHTML = `<div class="font-black">AI 語音服務</div><div class="mt-1 flex flex-wrap gap-x-3 gap-y-1"><span>${workerText}</span><span>${kokoroText}</span><span>${r2Text}</span></div>${worker.lastSeen ? `<div class="mt-1 text-[10px] opacity-70">AI Worker 最後回報：${escapeHtml(new Date(worker.lastSeen).toLocaleString())}</div>` : ''}${diagnostic && !ready ? `<div class="mt-1 text-[10px] leading-4 font-bold">${escapeHtml(diagnostic)}</div>` : ''}`;
   }
 
   async function fetchJson(url, options = {}, timeoutMs = 15000) {
