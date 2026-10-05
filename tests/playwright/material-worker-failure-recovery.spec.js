@@ -52,6 +52,8 @@ test('GP-05 same retried job succeeds once when the healthy Worker returns', asy
   await page.evaluate(async () => {
     if (typeof window.renderAdminCourseMaterialHub === 'function') {
       await window.renderAdminCourseMaterialHub(true);
+      const hub = document.getElementById('admin-course-material-hub');
+      if (hub?._adminCourseMaterialRefresh) await hub._adminCourseMaterialRefresh;
     }
   });
   await expect(page.locator('body')).toContainText('GP05 Worker 失敗恢復教材', { timeout: 15000 });
