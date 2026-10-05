@@ -100,7 +100,7 @@
     box.className = 'hidden mt-3 rounded-xl border border-dashed border-cyan-200 bg-white/80 p-4 text-sm text-slate-700';
     box.innerHTML = `
       <b class="text-slate-900">目前沒有可選的已完成教材</b>
-      <p class="mt-1 text-xs leading-5 text-slate-600">一般教材可直接在這一頁上傳；如果要用多份 PDF、Word、PPT、Excel、圖片或文字產生簡報，請使用下方唯一的「多資料 AI PowerPoint」。</p>
+      <p class="mt-1 text-xs leading-5 text-slate-600">一般教材可直接在這一頁上傳；如果要用多份 PDF、Word、PPT、Excel、圖片或文字產生簡報，請使用右側唯一的「AI PowerPoint 製作」。</p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button id="teacher-media-empty-upload-1024" type="button" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">📚 上傳一般教材</button>
         <button id="teacher-media-source-refresh-1024" type="button" class="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-800">↻ 重新整理教材</button>
@@ -128,7 +128,7 @@
         if (paragraph) paragraph.textContent = `${errorMessage}。可按「重新整理教材」再試一次，或直接在本頁上傳一般教材。`;
       } else {
         if (heading) heading.textContent = '目前沒有可選的已完成教材';
-        if (paragraph) paragraph.textContent = '一般教材可直接在這一頁上傳；若要用多份原始資料產生簡報，請使用下方唯一的「多資料 AI PowerPoint」。';
+        if (paragraph) paragraph.textContent = '一般教材可直接在這一頁上傳；若要用多份原始資料產生簡報，請使用右側唯一的「AI PowerPoint 製作」。';
       }
     }
   }
