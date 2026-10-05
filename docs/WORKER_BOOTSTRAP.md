@@ -119,7 +119,7 @@ After setup/restart:
 1. both `Teacher Material Worker` and `Teacher AI Worker` scheduled tasks should exist;
 2. the AI Worker should emit its normal startup/heartbeat events without exposing configuration values;
 3. AI Worker startup should report candidate states for `powerpoint-com`, `libreoffice-headless`, and `text-fallback` without local paths;
-4. Web and Worker must use the same production `DATABASE_URL` and shared durable storage configuration;
+4. the hospital AI Worker should use the Render HTTPS 443 control plane (`TEACHER_BASE_URL` + Worker token); direct production `DATABASE_URL` is legacy fallback only, while shared durable storage configuration remains available locally for large artifacts;
 5. FFmpeg must be discoverable in the scheduled-task environment before AI video jobs are relied on;
 6. LibreOffice should be detected on the Worker when PowerPoint cannot be relied on;
 7. run one controlled `approved PowerPoint -> renderer chain -> AI video -> preview -> teacher approval -> publish` smoke test.
