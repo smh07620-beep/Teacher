@@ -293,6 +293,7 @@
     const shared = $('teacher-media-source-1018');
     if (!shared) return false;
     if (sourceRefreshPromise) return sourceRefreshPromise;
+    const selectedBeforeRefresh = String(shared.value || lastSourceSelection || '');
     if (!force && materials.length && Date.now() - sourceRefreshAt < 2000) {
       paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
       paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳', selectedBeforeRefresh);
@@ -303,7 +304,6 @@
       return true;
     }
     const generation = ++refreshGeneration;
-    const selectedBeforeRefresh = String(shared.value || lastSourceSelection || '');
     shared.disabled = true;
     shared.replaceChildren(new Option('正在讀取可用教材…', ''));
     sourceRefreshPromise = (async () => {
@@ -312,8 +312,8 @@
       materials = scopedMaterials(body);
       sourceRefreshAt = Date.now();
       sourcesLoadedAt = sourceRefreshAt;
-      paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材');
-      paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳');
+      paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
+      paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳', selectedBeforeRefresh);
       showSourceAvailability(materials);
       broadcastSources(shared);
       syncSelectedSource();
