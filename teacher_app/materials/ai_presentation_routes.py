@@ -228,11 +228,17 @@ def register_ai_presentation_routes(owner):
             return jsonify({"error":"請先登入。","loginRequired":True}), 401
         storage = PresentationStorage().capability()
         worker = _ai_worker_status()
-        ready = bool(storage.get("available") and worker.get("online"))
+        ready = bool(
+            storage.get("available")
+            and worker.get("online")
+            and "ai_presentations" in set(worker.get("queues") or [])
+        )
         if not storage.get("available"):
             diagnostic = str(storage.get("reason") or "PowerPoint 共用儲存尚未就緒。")
         elif not worker.get("online"):
             diagnostic = str(worker.get("diagnosticMessage") or "AI Worker 尚未在線。")
+        elif "ai_presentations" not in set(worker.get("queues") or []):
+            diagnostic = "AI Worker 已在線，但尚未回報 ai_presentations queue；請更新院內 Worker 後重啟。"
         else:
             diagnostic = "AI Worker 與 PowerPoint 共用儲存均已就緒。"
         return jsonify({
