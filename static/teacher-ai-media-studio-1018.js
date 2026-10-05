@@ -87,8 +87,15 @@
 
   function syncSharedSource({forcePresentation = false} = {}) {
     const shared = $('teacher-media-source-1018');
+    if (!shared) return;
+    const canonical = window.TeacherAIMediaControls1023?.syncSelectedSource;
+    if (typeof canonical === 'function') {
+      canonical({force: forcePresentation});
+      updateRecommendation();
+      return;
+    }
     const legacy = $('teacher-script-material-1014');
-    if (!shared || !legacy) return;
+    if (!legacy) return;
     if (legacy.value !== shared.value) {
       legacy.value = shared.value;
       legacy.dispatchEvent(new Event('change', { bubbles: true }));
@@ -278,29 +285,10 @@
     if (panel && stage && panel.parentElement !== stage) stage.appendChild(panel);
   }
 
-  function installPowerPointShortcut(studio) {
-    if (!studio || $('teacher-media-powerpoint-entry-1018')) return;
-    const entry = document.createElement('section');
-    entry.id = 'teacher-media-powerpoint-entry-1018';
-    entry.className = 'rounded-2xl border border-violet-100 bg-violet-50/60 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3';
-    entry.innerHTML = '<div><b class="text-sm text-violet-950">🖥️ 需要建立新的 PowerPoint？</b><p class="mt-1 text-xs text-violet-800">AI PowerPoint 製作室位於「教材與課程」，可上傳多份原始資料、AI 統整/RAG、核准大綱後建立簡報。</p></div>';
-    const button = document.createElement('button');
-    button.id = 'teacher-media-open-powerpoint-1018';
-    button.type = 'button';
-    button.className = 'shrink-0 rounded-xl bg-violet-700 px-4 py-2.5 text-xs font-black text-white';
-    button.textContent = '🖥️ AI PowerPoint 製作';
-    button.addEventListener('click', async () => {
-      await window.TeacherWorkspace1014?.openCourse?.();
-      setTimeout(() => {
-        const target = $('teacher-ai-material-1014');
-        target?.scrollIntoView?.({block: 'start', behavior: 'smooth'});
-        $('teacher-ai-material-file-1014')?.focus?.();
-      }, 60);
-    });
-    entry.appendChild(button);
-    const tabs = studio.querySelector('.teacher-media-tabs-1018');
-    if (tabs) studio.insertBefore(entry, tabs);
-    else studio.appendChild(entry);
+  function installPowerPointShortcut() {
+    // PowerPoint authoring now has one canonical entry in the shared source header.
+    // Remove the older duplicate shortcut card if an older hydration pass left it behind.
+    $('teacher-media-powerpoint-entry-1018')?.remove();
   }
 
   function attachPanels(studio) {
@@ -399,14 +387,14 @@
       studio.className = 'space-y-4';
       const sourceBox = document.createElement('div');
       sourceBox.className = 'rounded-2xl border border-cyan-100 bg-cyan-50/50 p-4';
-      sourceBox.innerHTML = '<div class="grid lg:grid-cols-[1fr_auto] gap-3 lg:items-end"><label class="block text-sm font-black text-slate-800">來源教材／來源內容（AI 配音、字幕可用）<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><div class="rounded-xl border border-violet-200 bg-white p-3"><div class="text-[10px] font-black text-violet-700">POWERPOINT 不必先建教材</div><button id="teacher-media-direct-powerpoint-1026" type="button" class="mt-1 rounded-lg bg-violet-700 px-3 py-2 text-xs font-black text-white">📎 直接丟資料做 PowerPoint</button><div class="mt-1 text-[10px] text-slate-500">PDF／Word／PPT／Excel／圖片／文字，可多選或拖曳</div></div></div><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
+      sourceBox.innerHTML = '<div class="grid lg:grid-cols-[1fr_auto] gap-3 lg:items-end"><label class="block text-sm font-black text-slate-800">來源教材／來源內容（AI 配音、字幕可用）<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><div class="rounded-xl border border-violet-200 bg-white p-3 min-w-[240px]"><div class="text-[10px] font-black text-violet-700">AI POWERPOINT</div><button id="teacher-media-direct-powerpoint-1026" type="button" class="mt-1 w-full rounded-lg bg-violet-700 px-3 py-2 text-xs font-black text-white">🖥️ AI PowerPoint 製作</button><div class="mt-1 text-[10px] text-slate-500">同一入口：PDF／Word／PPTX／Excel／圖片／文字，可多選、貼入或拖曳</div></div></div><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
       studio.appendChild(sourceBox);
       installTabs(studio);
-      installPowerPointShortcut(studio);
+      installPowerPointShortcut();
       shell.insertAdjacentElement('afterend', studio);
     } else {
       installTabs(studio);
-      installPowerPointShortcut(studio);
+      installPowerPointShortcut();
     }
 
     attachPanels(studio);
