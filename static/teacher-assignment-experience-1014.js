@@ -35,6 +35,22 @@
     return VOICE_LABELS[String(value || '').trim()] || '中文語音';
   }
 
+  async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 15000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {...options, signal: controller.signal});
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || '服務暫時無法回應');
+      return data;
+    } catch (error) {
+      if (error?.name === 'AbortError') throw new Error('AI 語音服務回應逾時，已停止這次讀取。');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function fetchAudienceOptions(area, group) {
     const key = `${area || 'internal'}::${group || ''}`;
     if (audienceCache.has(key)) return audienceCache.get(key);
@@ -396,20 +412,16 @@
     button.textContent = '準備試聽…';
     if (status) status.textContent = '第一次使用此聲音時，AI Worker 會先建立短版試聽。';
     try {
-      const response = await fetch('/api/media-audio/preview', {
+      const first = await fetchJsonWithTimeout('/api/media-audio/preview', {
         method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({voice})
       });
-      const first = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(first.error || '無法建立語音試聽');
       const jobId = first.jobId || '';
-      if (!jobId) throw new Error('沒有取得試聽工作 ID');
+      let completed = first.status === 'completed' ? first : null;
+      if (!completed && !jobId) throw new Error('沒有取得試聽工作 ID');
       if (first.reusedActive && status) status.textContent = '前一次相同聲音的試聽仍在處理，已接續等待，不會重複建立工作。';
-      let completed = null;
-      for (let attempt = 0; attempt < 150; attempt += 1) {
+      for (let attempt = 0; !completed && attempt < 60; attempt += 1) {
         await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 500 : 1200));
-        const poll = await fetch(`/api/media-audio/jobs/${encodeURIComponent(jobId)}`, {credentials:'same-origin', cache:'no-store'});
-        const data = await poll.json().catch(() => ({}));
-        if (!poll.ok) throw new Error(data.error || '無法讀取試聽進度');
+        const data = await fetchJsonWithTimeout(`/api/media-audio/jobs/${encodeURIComponent(jobId)}`, {credentials:'same-origin', cache:'no-store'});
         if (data.status === 'failed') throw new Error(data.error || '語音試聽產生失敗');
         if (data.status === 'completed') { completed = data; break; }
         if (status) {
@@ -418,7 +430,7 @@
         }
       }
       const url = completed?.result?.previewUrl || '';
-      if (!url) throw new Error('語音試聽等待逾時；舊工作會自動清理，請稍後重新試聽');
+      if (!url) throw new Error('本機 Kokoro AI Worker 尚未完成試聽；已停止持續讀取，請確認 Worker 在線後再試。');
       previewCache.set(voice, url);
       audio.pause?.();
       audio.src = url;
@@ -451,6 +463,9 @@
     audio.preload = 'none';
     audio.className = 'hidden h-9 max-w-full';
     host.append(button, audio);
+    audio.addEventListener('error', () => {
+      if (sharedStatus) sharedStatus.textContent = '❌ 語音檔無法播放；請確認 R2 回應為 audio/wav，且 CSP 允許該 HTTPS 網址。';
+    });
     select.insertAdjacentElement('afterend', host);
     const setFormalBusy = event => {
       const busy = Boolean(event?.detail?.busy);

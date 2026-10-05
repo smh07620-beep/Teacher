@@ -73,6 +73,13 @@ def _voice(value: str | None) -> str:
     return voice if voice in ALLOWED_VOICES else DEFAULT_VOICE
 
 
+def _preview_identity(voice: str | None) -> tuple[str, str, str]:
+    normalized_voice = _voice(voice)
+    model = str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    model_key = hashlib.sha256(model.encode("utf-8")).hexdigest()[:10]
+    return normalized_voice, model, f"system/voice-previews/kokoro/{model_key}/{normalized_voice}.wav"
+
+
 def _material_id(job_id: str) -> str:
     digest = hashlib.sha256(str(job_id).encode("utf-8")).hexdigest()[:24]
     return f"mat-ai-audio-{digest}"
@@ -221,10 +228,7 @@ def generate_voice_preview(*, job_id: str, voice: str, progress_callback=None) -
         raise RuntimeError("Cloudflare R2 尚未完成設定，無法提供 AI 語音試聽。")
     if _provider() != DEFAULT_PROVIDER:
         raise RuntimeError("目前只允許免費本機 Kokoro 語音。")
-    voice = _voice(voice)
-    model = str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    model_key = hashlib.sha256(model.encode("utf-8")).hexdigest()[:10]
-    object_key = f"system/voice-previews/kokoro/{model_key}/{voice}.wav"
+    voice, model, object_key = _preview_identity(voice)
     client = providers.r2_client()
 
     if progress_callback:
@@ -238,6 +242,7 @@ def generate_voice_preview(*, job_id: str, voice: str, progress_callback=None) -
             "voice": voice,
             "model": model,
             "replayed": True,
+            "mimeType": "audio/wav",
         }
 
     if progress_callback:
@@ -272,6 +277,32 @@ def generate_voice_preview(*, job_id: str, voice: str, progress_callback=None) -
         "voice": voice,
         "model": model,
         "replayed": False,
+        "mimeType": "audio/wav",
+    }
+
+
+def cached_voice_preview(voice: str | None) -> dict:
+    """Return a ready cached preview without waiting for the local Worker."""
+    if not configured():
+        return {}
+    normalized_voice, model, object_key = _preview_identity(voice)
+    try:
+        existing_bytes = _existing_r2(providers.r2_client(), object_key)
+        if existing_bytes <= 0:
+            return {}
+        r2_ledger.record_object(object_key, existing_bytes, estimated_operations=1, is_staging=False)
+        url = preview_url(object_key)
+    except Exception:
+        return {}
+    if not url:
+        return {}
+    return {
+        "preview": True,
+        "previewUrl": url,
+        "voice": normalized_voice,
+        "model": model,
+        "replayed": True,
+        "mimeType": "audio/wav",
     }
 
 
@@ -383,6 +414,7 @@ __all__ = [
     "configured",
     "generate_audio",
     "generate_voice_preview",
+    "cached_voice_preview",
     "preview_url",
     "public_status",
 ]

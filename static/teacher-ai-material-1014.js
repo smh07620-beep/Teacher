@@ -52,7 +52,7 @@
 
   function setBusy(busy) {
     ['teacher-ai-material-generate-1014','teacher-ai-material-upload-1014','teacher-ai-material-save-1014',
-     'teacher-ai-material-approve-1014','teacher-ai-material-publish-1014'].forEach(id => {
+     'teacher-ai-material-paste-add-1014','teacher-ai-material-approve-1014','teacher-ai-material-publish-1014'].forEach(id => {
       const button = document.getElementById(id);
       if (button) button.disabled = busy;
     });
@@ -140,27 +140,27 @@
     throw new Error(`${label}等待逾時，工作仍可能在背景繼續。`);
   }
 
-  async function uploadSource() {
-    const input = document.getElementById('teacher-ai-material-file-1014');
-    const files = [...(input?.files || [])];
-    if (!files.length) return status('請先選擇 PDF、Word、PPT、圖片或文字資料。', 'error');
+  async function uploadAuthoringFiles(files) {
+    const normalizedFiles = [...(files || [])];
+    if (!normalizedFiles.length) return status('請先選擇 PDF、Word、PPTX、圖片或文字資料。', 'error');
     if (!window.MaterialUploadClient?.enqueue) return status('教材安全上傳元件尚未載入。', 'error');
     const {area, group} = currentScope();
     setBusy(true);
     const token = ++pollToken;
     try {
       const uploaded = [];
-      for (let index = 0; index < files.length; index += 1) {
-        const file = files[index];
+      for (let index = 0; index < normalizedFiles.length; index += 1) {
+        const file = normalizedFiles[index];
         const title = file.name.replace(/\.[^.]+$/, '') || file.name;
         const fd = new FormData();
         fd.append('file', file); fd.append('title', title);
         fd.append('desc', 'AI PowerPoint authoring source；教師確認前不提供學員使用。');
         fd.append('group', group); fd.append('area', area); fd.append('courseId', ''); fd.append('category', ''); fd.append('materialType', 'standard');
-        status(`正在上傳原始資料 ${index + 1}/${files.length}｜${file.name}`);
+        status(`正在上傳原始資料 ${index + 1}/${normalizedFiles.length}｜${file.name}`);
         const queued = await window.MaterialUploadClient.enqueue(fd, {
           fileName: file.name,
-          onProgress: event => status(`安全上傳 ${index + 1}/${files.length}・${event.percent}%｜${file.name}`),
+          fallbackToSameOriginQueue: false,
+          onProgress: event => status(`安全上傳 ${index + 1}/${normalizedFiles.length}・${event.percent}%｜${file.name}`),
         });
         const jobId = queued.jobId || '', materialId = queued.materialId || '';
         if (!jobId || !materialId) throw new Error('伺服器沒有回傳教材工作 ID');
@@ -173,12 +173,33 @@
       authoringSourceIds = [...new Set([...authoringSourceIds, ...uploaded])];
       await paintMaterialOptions();
       renderAuthoringSources();
-      input.value = '';
       status(`✅ 已加入 ${uploaded.length} 份原始資料並保持為作者草稿；可先統整/RAG 再建立投影片大綱。`, 'success');
+      return true;
     } catch (error) {
       status(`來源資料處理失敗：${error.message}`, 'error');
+      return false;
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function uploadSource() {
+    const input = document.getElementById('teacher-ai-material-file-1014');
+    const completed = await uploadAuthoringFiles(input?.files || []);
+    if (completed && input) input.value = '';
+  }
+
+  async function addPastedSource() {
+    const titleInput = document.getElementById('teacher-ai-material-paste-title-1014');
+    const textInput = document.getElementById('teacher-ai-material-paste-1014');
+    const body = String(textInput?.value || '').trim();
+    if (body.length < 20) return status('請貼入至少 20 個字的 SOP、教學內容或補充資料。', 'error');
+    const title = String(titleInput?.value || '貼入文字資料').trim() || '貼入文字資料';
+    const file = new File([body], safeTextFilename(title), {type:'text/plain;charset=utf-8', lastModified:Date.now()});
+    const completed = await uploadAuthoringFiles([file]);
+    if (completed) {
+      if (titleInput) titleInput.value = '';
+      if (textInput) textInput.value = '';
     }
   }
 
@@ -420,8 +441,8 @@
     section.id = 'teacher-ai-material-1014';
     section.className = 'mb-5 rounded-2xl border border-violet-200 bg-white p-5 shadow-sm space-y-5';
     section.innerHTML = `
-      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-violet-700">AI POWERPOINT AUTHORING</p><h4 class="text-xl font-black text-slate-950">✨ AI PowerPoint 原始資料工作台</h4><p class="mt-1 text-sm text-slate-600">先上傳多份原始資料，AI Worker 統整/RAG 後產生可核准的投影片大綱；正式教材仍只在明確發布後建立。</p></div><details class="text-sm text-slate-600"><summary class="cursor-pointer font-bold text-violet-700">使用說明</summary><p class="mt-2 max-w-xl leading-6">上傳的 PDF、Word、PPT、圖片或文字只會作為 authoring source，預設保持草稿、不能自動發布。既有教材可選作補充參考來源。</p></details></div>
-      <div class="rounded-2xl border border-violet-200 bg-violet-50/40 p-4"><div class="flex flex-col lg:flex-row lg:items-end gap-3"><label class="flex-1 text-sm font-bold text-slate-700">Step 1｜上傳原始資料（可多選或拖曳）<input id="teacher-ai-material-file-1014" type="file" multiple class="mt-1 block w-full text-sm" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.txt,.md,.png,.jpg,.jpeg,.webp"></label><button id="teacher-ai-material-upload-1014" type="button" class="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-black text-white">⬆️ 加入原始資料</button></div><p class="mt-2 text-xs text-slate-600">這些檔案只作 AI 製作來源，會保持草稿且不會自動對學員公開。</p><div id="teacher-ai-material-uploaded-sources-1014" class="mt-3 flex flex-wrap gap-2"></div></div>
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-violet-700">AI POWERPOINT AUTHORING</p><h4 class="text-xl font-black text-slate-950">✨ AI PowerPoint 原始資料工作台</h4><p class="mt-1 text-sm text-slate-600">可直接上傳文件或貼入文字，AI Worker 統整/RAG 後產生可核准的投影片大綱；既有教材只是可選來源。</p></div><details class="text-sm text-slate-600"><summary class="cursor-pointer font-bold text-violet-700">使用說明</summary><p class="mt-2 max-w-xl leading-6">PDF、Word、PPTX、SOP、圖片與貼入文字都可作為 authoring source，預設保持草稿、不能自動發布。既有教材可選作補充參考來源。</p></details></div>
+      <div class="rounded-2xl border border-violet-200 bg-violet-50/40 p-4 space-y-4"><div class="flex flex-col lg:flex-row lg:items-end gap-3"><label class="flex-1 text-sm font-bold text-slate-700">Step 1A｜上傳文件／SOP（可多選或拖曳）<input id="teacher-ai-material-file-1014" type="file" multiple class="mt-1 block w-full text-sm" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.odt,.ods,.txt,.csv,.png,.jpg,.jpeg,.webp"></label><button id="teacher-ai-material-upload-1014" type="button" class="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-black text-white">⬆️ 加入原始資料</button></div><div class="rounded-xl border border-violet-100 bg-white/80 p-3"><div class="grid gap-3 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] lg:items-end"><label class="text-sm font-bold text-slate-700">Step 1B｜文字標題<input id="teacher-ai-material-paste-title-1014" maxlength="120" class="learning-input mt-1" placeholder="例如：生化檢驗 SOP"></label><label class="text-sm font-bold text-slate-700">直接貼入文字<textarea id="teacher-ai-material-paste-1014" rows="5" maxlength="60000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-6" placeholder="貼上 SOP、課程重點、會議紀錄或其他要製作成 PowerPoint 的內容"></textarea></label><button id="teacher-ai-material-paste-add-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-black text-violet-700">＋ 加入貼入文字</button></div></div><p class="text-xs text-slate-600">這些資料只作 AI 製作來源，會保持草稿且不會自動對學員公開。</p><div id="teacher-ai-material-uploaded-sources-1014" class="flex flex-wrap gap-2"></div></div>
       <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-sm font-bold text-slate-700 xl:col-span-2">既有教材（可選參考來源）<select id="teacher-ai-material-source-1014" multiple size="4" class="learning-input mt-1"><option value="">讀取教材中…</option></select></label><label class="text-sm font-bold text-slate-700">產出類型<select id="teacher-ai-material-type-1014" class="learning-input mt-1"><option value="slides" selected>投影片大綱</option><option value="handout">教學講義</option><option value="summary">重點摘要</option><option value="script">教學講稿</option><option value="quiz">測驗題草稿</option><option value="objectives">課程學習目標</option></select></label><label class="text-sm font-bold text-slate-700">文字風格<select id="teacher-ai-material-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
       <div class="grid md:grid-cols-[1fr_auto] gap-3"><div class="grid sm:grid-cols-[1fr_160px] gap-3"><input id="teacher-ai-material-focus-1014" class="learning-input" maxlength="500" placeholder="Step 2｜選填：特別聚焦的重點"><select id="teacher-ai-material-minutes-1014" class="learning-input" title="教學講稿目標長度；其他產出類型會作為篇幅參考"><option value="3">精簡</option><option value="5" selected>標準</option><option value="10">較完整</option><option value="15">深入</option></select></div><button id="teacher-ai-material-generate-1014" type="button" class="rounded-xl bg-violet-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40">Step 2｜AI 統整</button></div>
       <div id="teacher-ai-material-status-1014" class="text-sm text-slate-600">可先上傳來源資料，或直接選擇既有教材。</div>
@@ -432,6 +453,7 @@
     const dashboard = box.querySelector('.admin-course-dashboard');
     box.insertBefore(section, dashboard || box.firstChild);
     document.getElementById('teacher-ai-material-upload-1014')?.addEventListener('click', uploadSource);
+    document.getElementById('teacher-ai-material-paste-add-1014')?.addEventListener('click', addPastedSource);
     document.getElementById('teacher-ai-material-generate-1014')?.addEventListener('click', generateDraft);
     document.getElementById('teacher-ai-material-save-1014')?.addEventListener('click', saveDraft);
     document.getElementById('teacher-ai-material-approve-1014')?.addEventListener('click', approveDraft);

@@ -22,15 +22,24 @@
     const button = $('teacher-ai-video-generate-1015');
     if (button) button.disabled = value || !status?.storage?.available || !status?.capabilities?.['video.create'];
   };
-  async function api(path, options) {
-    const response = await fetch(path, Object.assign({credentials:'same-origin', cache:'no-store'}, options));
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(data.error || 'AI 影片服務無法回應');
-      error.payload = data;
+  async function api(path, options = {}, timeoutMs = 15000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(path, Object.assign({credentials:'same-origin', cache:'no-store', signal:controller.signal}, options));
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(data.error || 'AI 影片服務無法回應');
+        error.payload = data;
+        throw error;
+      }
+      return data;
+    } catch (error) {
+      if (error?.name === 'AbortError') throw new Error('AI 服務回應逾時，已停止這次讀取；請稍後重試。');
       throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    return data;
   }
   function rendererPolicyText() {
     const order = status?.rendererPolicy?.order || ['powerpoint-com','libreoffice-headless','text-fallback'];
@@ -115,6 +124,7 @@
       const progress = data.progress || {};
       note(`${progress.stage || data.status || 'AI 影片處理中'}｜${Math.round(Number(progress.percent || 0))}%${progress.detail ? `｜${progress.detail}` : ''}`);
       if (data.status === 'completed') {
+        active = '';
         busy(false);
         note('✅ MP4 已保存並完成 Phase 6 品質檢查；請預覽後由授課教師核准。');
         await loadVideos();
@@ -148,6 +158,7 @@
       if (!active) throw new Error('伺服器未回傳影片工作 ID');
       await watch(active, ++poll);
     } catch (error) {
+      active = '';
       busy(false);
       note(`AI 影片產生失敗：${error.message}`, true);
     }
@@ -180,10 +191,13 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({voice})
       });
-      if (!job.jobId) throw new Error('伺服器未回傳語音試聽工作 ID');
+      let progress = job;
+      if (job.status !== 'completed' && !job.jobId) throw new Error('伺服器未回傳語音試聽工作 ID');
       if (job.reusedActive) note('前一次相同聲音的試聽仍在處理，已接續等待，不會重複建立工作。');
-      for (let attempt = 0; attempt < 150; attempt += 1) {
-        const progress = await api(`/api/media-audio/jobs/${encodeURIComponent(job.jobId)}`);
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        if (progress.status !== 'completed') {
+          progress = await api(`/api/media-audio/jobs/${encodeURIComponent(job.jobId)}`);
+        }
         if (progress.status === 'completed') {
           const url = progress.result?.previewUrl;
           if (!url) throw new Error('語音試聽已完成，但暫時沒有可播放檔案');
@@ -204,7 +218,7 @@
         note(`${detail.stage || 'AI 語音試聽處理中…'}｜${Math.round(Number(detail.percent || 0))}%${detail.detail ? `｜${detail.detail}` : ''}`);
         await new Promise(resolve => setTimeout(resolve, 1200));
       }
-      throw new Error('語音試聽等待逾時；舊工作會自動清理，請稍後重新試聽。');
+      throw new Error('本機 AI Worker 尚未完成試聽；已停止持續讀取，請確認 Worker 在線後再試。');
     } catch (error) {
       note(`旁白聲音試聽失敗：${error.message}`, true);
     } finally {
@@ -264,6 +278,7 @@
     $('teacher-ai-video-generate-1015').addEventListener('click', generate);
     $('teacher-ai-video-refresh-1015').addEventListener('click', loadVideos);
     $('teacher-ai-video-voice-preview-1015').addEventListener('click', () => void previewNarrationVoice());
+    $('teacher-ai-video-voice-player-1015').addEventListener('error', () => note('語音檔無法播放；請確認 R2 音訊回應為 audio/wav，且瀏覽器 CSP 允許該 HTTPS 網址。', true));
     void loadStatus();
     return true;
   }

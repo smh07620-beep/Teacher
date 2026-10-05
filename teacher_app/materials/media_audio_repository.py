@@ -205,6 +205,23 @@ def active_formal_job_for_actor(username: str) -> dict | None:
     return project_job(row)
 
 
+def fail_queued_preview(job_id: str, expected_updated_at: str, message: str) -> bool:
+    """Fail one still-unclaimed preview without racing a Worker claim."""
+    stamp = now()
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        cursor = conn.execute(
+            f"UPDATE media_audio_jobs SET status={ph},progress_percent={ph},progress_stage={ph},"
+            f"progress_detail={ph},error={ph},completed_at={ph},updated_at={ph} "
+            f"WHERE id={ph} AND status={ph} AND script_id={ph} AND updated_at={ph}",
+            (
+                "failed", 0, "語音試聽等待逾時", str(message or "")[:1000],
+                str(message or "")[:2000], stamp, stamp, job_id, "queued", "", expected_updated_at,
+            ),
+        )
+    return bool(int(getattr(cursor, "rowcount", 0) or 0))
+
+
 def total_active_count() -> int:
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -309,6 +326,6 @@ def requeue_stale_processing(cutoff: str) -> int:
 
 __all__ = [
     "ACTIVE_STATUSES", "active_count_for_actor", "active_formal_job_for_actor", "active_preview_job_for_actor", "claim", "complete", "create_job",
-    "expire_stale_previews", "fail", "get_job", "list_queued", "now", "recent_count_for_actor", "requeue_stale_processing",
+    "expire_stale_previews", "fail", "fail_queued_preview", "get_job", "list_queued", "now", "recent_count_for_actor", "requeue_stale_processing",
     "set_progress", "total_active_count",
 ]

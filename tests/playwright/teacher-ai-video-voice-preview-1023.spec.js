@@ -34,3 +34,25 @@ test('AI teaching video lets the teacher preview the selected narration voice', 
   await expect.poll(() => page.evaluate(() => window.playCalls)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.calls)).toContainEqual({ url: '/api/media-audio/preview', method: 'POST' });
 });
+
+test('AI teaching video plays an already cached WAV without starting a poll loop', async ({ page }) => {
+  await page.setContent('<main><section id="teacher-media-production-1014"></section></main>');
+  await page.evaluate(() => {
+    window.TeacherRBAC681Ready = Promise.resolve({ roles: new Set(['clinical_teacher']) });
+    window.HTMLMediaElement.prototype.load = () => {};
+    window.HTMLMediaElement.prototype.play = () => Promise.resolve();
+    window.previewPolls = 0;
+    window.fetch = async (url, options = {}) => {
+      if (String(url) === '/api/ai-videos/status') return { ok: true, json: async () => ({ storage: { available: true }, capabilities: { 'video.create': true } }) };
+      if (String(url) === '/api/media-audio/preview') return { ok: true, json: async () => ({ status: 'completed', result: { previewUrl: 'https://r2.example/voice.wav', mimeType: 'audio/wav' } }) };
+      if (String(url).includes('/api/media-audio/jobs/')) window.previewPolls += 1;
+      return { ok: true, json: async () => ({}) };
+    };
+  });
+
+  await page.addScriptTag({ path: asset('teacher-ai-video-1015.js') });
+  await page.getByRole('button', { name: '▶ 試聽聲音' }).click();
+  await expect(page.locator('#teacher-ai-video-voice-player-1015')).toHaveAttribute('src', 'https://r2.example/voice.wav');
+  await expect.poll(() => page.evaluate(() => window.previewPolls)).toBe(0);
+  await expect(page.locator('#teacher-ai-video-status-1015')).toContainText('試聽已準備完成');
+});

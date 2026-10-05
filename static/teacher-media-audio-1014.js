@@ -37,6 +37,22 @@
     host.innerHTML = `<div class="font-black">AI 語音服務</div><div class="mt-1 flex flex-wrap gap-x-3 gap-y-1"><span>${workerText}</span><span>${kokoroText}</span><span>${r2Text}</span></div>${worker.lastSeen ? `<div class="mt-1 text-[10px] opacity-70">AI Worker 最後回報：${escapeHtml(new Date(worker.lastSeen).toLocaleString())}</div>` : ''}`;
   }
 
+  async function fetchJson(url, options = {}, timeoutMs = 15000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {...options, signal: controller.signal});
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'AI 語音服務暫時無法回應');
+      return data;
+    } catch (error) {
+      if (error?.name === 'AbortError') throw new Error('AI 語音服務回應逾時，請稍後重試。');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   function setStatus(message, tone = 'normal') {
     const node = document.getElementById('teacher-audio-status-1014');
     if (!node) return;
@@ -71,9 +87,7 @@
 
   async function loadStatus() {
     try {
-      const response = await fetch('/api/media-audio/status', {credentials:'same-origin', cache:'no-store'});
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || '無法讀取 AI 語音狀態');
+      const data = await fetchJson('/api/media-audio/status', {credentials:'same-origin', cache:'no-store'});
       statusInfo = data || {};
       const voice = document.getElementById('teacher-audio-voice-1014');
       if (voice) {

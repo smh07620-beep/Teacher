@@ -285,3 +285,84 @@ test('course wizard upload is forced to Browser to R2 and cannot fall back to di
   await expect.poll(() => page.evaluate(() => Boolean(window.wizardUploadOptions1024?.onFallback))).toBe(false);
   await expect.poll(() => page.evaluate(() => Boolean(window.fallbackCalled1024))).toBe(false);
 });
+
+test('F5 hydration and observers issue one PowerPoint request per selected source', async ({ page }) => {
+  await page.setContent(`
+    <main><section id="teacher-media-production-1014">
+      <section id="teacher-media-studio-shell-1018"></section>
+      <section id="teacher-media-audio-1014"></section>
+      <section id="teacher-media-subtitle-1014"></section>
+      <section id="teacher-ai-video-1015"><select id="teacher-ai-video-presentation-1015"></select><p id="teacher-ai-video-status-1015"></p></section>
+      <section id="teacher-media-script-1014"><select id="teacher-script-material-1014"><option value="">來源</option></select></section>
+    </section></main>
+  `);
+  await installTeacherRBAC(page);
+  await page.evaluate(() => {
+    window.presentationRequests1025 = 0;
+    window.slideRequests1025 = 0;
+    window.fetch = async url => {
+      const value = String(url);
+      if (value === '/api/slides/admin') {
+        window.slideRequests1025 += 1;
+        return { ok: true, json: async () => [{ id: 'doc-1', title: 'SOP', group: 'grpBio', area: 'internal' }] };
+      }
+      if (value.includes('/api/ai-presentations')) {
+        window.presentationRequests1025 += 1;
+        return { ok: true, json: async () => [{ id: 'ppt-1', title: 'SOP 簡報', materialId: 'doc-1', status: 'approved', artifactReady: true }] };
+      }
+      return { ok: true, json: async () => [] };
+    };
+  });
+
+  await page.addScriptTag({ path: asset('teacher-ai-media-studio-1018.js') });
+  await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  const source = page.locator('#teacher-media-source-1018');
+  await expect(source).toBeEnabled();
+  await source.selectOption('doc-1');
+  await expect(page.locator('#teacher-ai-video-presentation-1015')).toHaveValue('ppt-1');
+  await page.locator('main').evaluate(main => {
+    for (let index = 0; index < 20; index += 1) main.appendChild(document.createElement('div'));
+  });
+  await page.waitForTimeout(800);
+  await expect.poll(() => page.evaluate(() => window.presentationRequests1025)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.slideRequests1025)).toBe(1);
+});
+
+test('AI PowerPoint accepts pasted SOP text as a private authoring source', async ({ page }) => {
+  await page.setContent('<main><section id="admin-course-material-hub"><div class="admin-course-dashboard"></div><section id="teacher-media-script-1014"></section></section></main>');
+  await installTeacherRBAC(page);
+  await page.evaluate(() => {
+    window.pastedSource1025 = null;
+    window.MaterialUploadClient = {
+      enqueue: async (form, options) => {
+        const file = form.get('file');
+        window.pastedSource1025 = {
+          name: file?.name || '',
+          text: await file.text(),
+          fallbackToSameOriginQueue: options?.fallbackToSameOriginQueue,
+        };
+        return { jobId: 'job-text-1', materialId: 'mat-text-1' };
+      }
+    };
+    window.fetch = async (url, options = {}) => {
+      const value = String(url);
+      if (value === '/api/slides/admin') return { ok: true, json: async () => window.pastedSource1025 ? [{ id: 'mat-text-1', title: '急件 SOP', group: 'grpBio', area: 'internal', active: false }] : [] };
+      if (value.includes('/api/material-jobs/job-text-1')) return { ok: true, json: async () => ({ status: 'completed', stage: '完成' }) };
+      if (value.includes('/api/slides/mat-text-1') && options.method === 'PATCH') return { ok: true, json: async () => ({ ok: true }) };
+      return { ok: true, json: async () => ({}) };
+    };
+  });
+
+  await page.addScriptTag({ path: asset('teacher-ai-material-1014.js') });
+  await page.locator('#teacher-ai-material-paste-title-1014').fill('急件 SOP');
+  await page.locator('#teacher-ai-material-paste-1014').fill('檢體收到後先確認病人識別，再依序完成離心、分析與異常結果複核。');
+  await page.locator('#teacher-ai-material-paste-add-1014').click();
+
+  await expect(page.locator('#teacher-ai-material-status-1014')).toContainText('已加入 1 份原始資料');
+  await expect.poll(() => page.evaluate(() => window.pastedSource1025)).toEqual({
+    name: '急件 SOP.txt',
+    text: '檢體收到後先確認病人識別，再依序完成離心、分析與異常結果複核。',
+    fallbackToSameOriginQueue: false,
+  });
+  await expect(page.locator('#teacher-ai-material-uploaded-sources-1014')).toContainText('急件 SOP');
+});

@@ -28,5 +28,7 @@ class TeacherAudioPreviewConvergence1024Tests(unittest.TestCase):
 
     def test_preview_progress_reports_worker_state_instead_of_only_preparing(self):
         self.assertIn("progress.detail", ASSIGNMENT)
-        self.assertIn("attempt < 150", ASSIGNMENT)
+        self.assertIn("attempt < 60", ASSIGNMENT)
+        self.assertIn("fetchJsonWithTimeout", ASSIGNMENT)
+        self.assertIn("請確認 Worker 在線後再試", ASSIGNMENT)
         self.assertNotIn("目前已有 AI 語音工作排隊或執行中", ASSIGNMENT)

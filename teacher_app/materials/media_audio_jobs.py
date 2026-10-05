@@ -38,6 +38,36 @@ def _voice(value: Any) -> str:
     return voice
 
 
+def _parse_stamp(value: Any) -> dt.datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def expire_unclaimed_preview(job: Mapping[str, Any] | None) -> dict | None:
+    """Turn an abandoned queued preview into a clear retryable failure."""
+    current = dict(job or {})
+    request_data = current.get("request") or {}
+    if current.get("status") != "queued" or not bool(request_data.get("preview")):
+        return current or None
+    updated = _parse_stamp(current.get("updatedAt") or current.get("createdAt"))
+    timeout_seconds = _env_int("MEDIA_AUDIO_PREVIEW_QUEUE_TIMEOUT_SECONDS", 45, 15, 300)
+    if updated is None or (dt.datetime.now(dt.timezone.utc) - updated).total_seconds() < timeout_seconds:
+        return current
+    message = "本機 Kokoro AI Worker 尚未取得試聽工作，已停止等待；請確認 Worker 在線後再試。"
+    media_audio_repository.fail_queued_preview(
+        str(current.get("id") or ""), str(current.get("updatedAt") or ""), message
+    )
+    return media_audio_repository.get_job(str(current.get("id") or "")) or current
+
+
 def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
     username = _username(actor)
     if not username:
@@ -137,14 +167,15 @@ def enqueue_preview(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
 
     # Preview clicks are idempotent per user + voice. Reuse the in-flight job
     # instead of creating duplicates that later trip the preview queue limit.
-    existing = media_audio_repository.active_preview_job_for_actor(
-        values["actor_username"],
-        str((values.get("request") or {}).get("voice") or ""),
+    existing = expire_unclaimed_preview(
+        media_audio_repository.active_preview_job_for_actor(
+            values["actor_username"],
+            str((values.get("request") or {}).get("voice") or ""),
+        )
     )
-    if existing:
+    if existing and str(existing.get("status") or "") in media_audio_repository.ACTIVE_STATUSES:
         existing["_reusedActive"] = True
         return existing
-
     _enforce_queue_limits(values["actor_username"], preview=True)
     return media_audio_repository.create_job(values)
 
@@ -208,6 +239,7 @@ class MediaAudioJobProcessor:
 
 
 def public_job(job: Mapping[str, Any]) -> dict:
+    job = expire_unclaimed_preview(job) or job
     status = str(job.get("status") or "queued")
     request_data = job.get("request") or {}
     result = {
@@ -251,6 +283,7 @@ __all__ = [
     "MediaAudioLimitError",
     "enqueue",
     "enqueue_preview",
+    "expire_unclaimed_preview",
     "prepare_preview_request",
     "prepare_request",
     "public_job",

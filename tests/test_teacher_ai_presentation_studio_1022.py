@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class TeacherAiPresentationStudio1022Tests(unittest.TestCase):
     def test_authoring_sources_use_direct_upload_and_remain_private_by_default(self):
         source = (ROOT / "static" / "teacher-ai-material-1014.js").read_text(encoding="utf-8")
-        for marker in ("MaterialUploadClient.enqueue", "multiple", ".xlsx", "active:false", "data-remove-authoring-source", "teacher-ai-material-request-publication"):
+        for marker in ("MaterialUploadClient.enqueue", "multiple", ".xlsx", ".pdf", ".docx", ".pptx", "teacher-ai-material-paste-1014", "addPastedSource", "active:false", "data-remove-authoring-source", "teacher-ai-material-request-publication"):
             self.assertIn(marker, source)
 
 
@@ -31,3 +31,17 @@ class TeacherAiPresentationStudio1022Tests(unittest.TestCase):
         source = (ROOT / "static" / "teacher-interface-convergence-1014.js").read_text(encoding="utf-8")
         for marker in ("details.querySelectorAll('[data-teacher-manage-course-1014]')", "manages.forEach(node => node.remove())", "manage.parentElement !== actionHost"):
             self.assertIn(marker, source)
+
+    def test_media_loading_has_one_presentation_owner_and_bounded_requests(self):
+        studio = (ROOT / "static" / "teacher-ai-media-studio-1018.js").read_text(encoding="utf-8")
+        controls = (ROOT / "static" / "teacher-ai-media-controls-1023.js").read_text(encoding="utf-8")
+        video = (ROOT / "static" / "teacher-ai-video-1015.js").read_text(encoding="utf-8")
+        self.assertIn("presentationMaterialId", studio)
+        self.assertIn("refreshPresentationChoices:", studio)
+        self.assertIn("TeacherAIMediaStudio1018?.refreshPresentationChoices", controls)
+        self.assertIn("sourceRefreshPromise", controls)
+        self.assertIn("scheduleEnhance();", controls)
+        self.assertNotIn("[0, 400, 1200, 3000, 7000, 12000]", controls)
+        self.assertIn("AbortController", studio)
+        self.assertIn("AbortController", controls)
+        self.assertIn("AbortController", video)

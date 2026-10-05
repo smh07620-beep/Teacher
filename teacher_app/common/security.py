@@ -213,14 +213,17 @@ def register_production_hardening(
             "script-src-attr 'none'; "
         )
         connect_sources = "'self' https:"
+        media_sources = "'self' data: blob: https:"
         loopback_r2 = _loopback_r2_connect_source()
         if loopback_r2:
             connect_sources += f" {loopback_r2}"
+            media_sources += f" {loopback_r2}"
         csp = (
             "default-src 'self'; "
             + script_src
             + "style-src 'self' 'unsafe-inline' https:; "
-            "img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; "
+            "img-src 'self' data: blob: https:; "
+            + f"media-src {media_sources}; "
             "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com; "
             + f"connect-src {connect_sources}; "
             + "frame-ancestors 'self'; base-uri 'self'; object-src 'none'"

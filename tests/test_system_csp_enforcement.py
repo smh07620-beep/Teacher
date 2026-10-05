@@ -132,6 +132,7 @@ class SystemCspEnforcementTests(unittest.TestCase):
             register_production_hardening(app, current_user=lambda: None)
             csp = app.test_client().get("/").headers["Content-Security-Policy"]
         self.assertIn("connect-src 'self' https: http://127.0.0.1:9000", csp)
+        self.assertIn("media-src 'self' data: blob: https: http://127.0.0.1:9000", csp)
 
         other = Flask(__name__ + "-r2-external-http")
         other.config.update(TESTING=True, SECRET_KEY="test")

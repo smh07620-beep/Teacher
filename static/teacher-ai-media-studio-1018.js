@@ -12,6 +12,25 @@
   let sourceMaterials = [];
   let activeMode = 'narration';
   let retryGeneration = 0;
+  let presentationMaterialId = null;
+  let presentationRequest = null;
+  let presentationRequestGeneration = 0;
+
+  async function fetchJson(url, options = {}, timeoutMs = 12000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {...options, signal: controller.signal});
+      const body = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(body?.error || '服務暫時無法回應');
+      return body;
+    } catch (error) {
+      if (error?.name === 'AbortError') throw new Error('讀取逾時，請按重新整理後再試。');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   function isCaptionSource(item) {
     const text = [item?.materialType, item?.mimeType, item?.sourceMimeType, item?.filename, item?.title]
@@ -66,7 +85,7 @@
     updateRecommendation();
   }
 
-  function syncSharedSource() {
+  function syncSharedSource({forcePresentation = false} = {}) {
     const shared = $('teacher-media-source-1018');
     const legacy = $('teacher-script-material-1014');
     if (!shared || !legacy) return;
@@ -75,36 +94,52 @@
       legacy.dispatchEvent(new Event('change', { bubbles: true }));
     }
     window.TeacherMediaSubtitle1014?.selectMaterial?.(shared.value || '');
-    if (!window.TeacherAIMediaControls1023?.refreshVideoPresentations) {
-      void refreshPresentationChoices(shared.value || '');
+    const materialId = shared.value || '';
+    if (forcePresentation || materialId !== presentationMaterialId) {
+      void refreshPresentationChoices(materialId, {force: forcePresentation});
     }
     updateRecommendation();
   }
 
-  async function refreshPresentationChoices(materialId = '') {
+  async function refreshPresentationChoices(materialId = '', {force = false} = {}) {
+    const normalizedMaterialId = String(materialId || '');
     const owner = window.TeacherAIMediaControls1023?.refreshVideoPresentations;
-    if (typeof owner === 'function') return owner(materialId);
+    if (typeof owner === 'function') {
+      presentationMaterialId = normalizedMaterialId;
+      return owner(normalizedMaterialId, {force});
+    }
     const select = $('teacher-ai-video-presentation-1015');
     if (!select || select.tagName !== 'SELECT') return false;
+    if (!force && normalizedMaterialId === presentationMaterialId && presentationRequest) {
+      return presentationRequest;
+    }
+    if (!force && normalizedMaterialId === presentationMaterialId && !presentationRequest) return false;
+    presentationMaterialId = normalizedMaterialId;
+    const generation = ++presentationRequestGeneration;
     const prior = select.value;
     const group = new URLSearchParams(window.location.search).get('group')
       || window.currentGroupKey
       || String(R.user?.preferredGroup || '');
     select.replaceChildren(new Option('讀取所有已核准 PowerPoint…', ''));
     select.disabled = true;
-    try {
+    presentationRequest = (async () => {
       const query = group ? `?group=${encodeURIComponent(group)}` : '';
-      const response = await fetch(`/api/ai-presentations${query}`, {
+      const rows = await fetchJson(`/api/ai-presentations${query}`, {
         credentials: 'same-origin', cache: 'no-store'
       });
-      const rows = await response.json().catch(() => []);
-      if (!response.ok) throw new Error(rows?.error || '無法讀取 PowerPoint 版本');
+      if (generation !== presentationRequestGeneration || normalizedMaterialId !== presentationMaterialId) return false;
+      window.TeacherPresentationChoicesCache1026 = {
+        group: String(group || ''),
+        loadedAt: Date.now(),
+        rows: Array.isArray(rows) ? rows : [],
+      };
       const usable = (Array.isArray(rows) ? rows : []).filter(item =>
         item?.artifactReady && ['approved', 'published'].includes(String(item.status || ''))
       );
       select.replaceChildren(new Option(usable.length ? '選擇已核准 PowerPoint…' : '尚無已核准 PowerPoint', ''));
       usable.forEach(item => {
-        const label = `${item.title || '教學 PowerPoint'}｜版本 ${Number(item.revisionNumber || 1)}${item.status === 'published' ? '｜已發布' : '｜已核准'}`;
+        const preferred = normalizedMaterialId && String(item.materialId || '') === normalizedMaterialId ? '｜目前來源' : '';
+        const label = `${item.title || '教學 PowerPoint'}｜版本 ${Number(item.revisionNumber || 1)}${item.status === 'published' ? '｜已發布' : '｜已核准'}${preferred}`;
         select.appendChild(new Option(label, String(item.id || '')));
       });
       select.disabled = !usable.length;
@@ -112,13 +147,18 @@
       else if (usable.length === 1) select.value = String(usable[0].id || '');
       select.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
+    })();
+    try {
+      return await presentationRequest;
     } catch (error) {
+      if (generation !== presentationRequestGeneration) return;
       select.replaceChildren(new Option('PowerPoint 版本讀取失敗', ''));
       select.disabled = true;
       const status = $('teacher-ai-video-status-1015');
-      if (status) status.textContent = error.message;
+      if (status) status.textContent = `PowerPoint 讀取失敗：${error.message}`;
       return false;
     } finally {
+      if (generation === presentationRequestGeneration) presentationRequest = null;
       updateRecommendation();
     }
   }
@@ -400,7 +440,7 @@
       shared.value=materialId;
       syncSharedSource();
     }
-    if(materialId)await refreshPresentationChoices(materialId);
+    if(materialId)await refreshPresentationChoices(materialId, {force:true});
     const select=$('teacher-ai-video-presentation-1015');
     if(select&&[...select.options].some(option=>option.value===presentationId)){
       select.value=presentationId;
@@ -433,6 +473,9 @@
     }
   });
 
-  window.TeacherAIMediaStudio1018 = Object.freeze({ refresh: refreshLifecycle });
+  window.TeacherAIMediaStudio1018 = Object.freeze({
+    refresh: refreshLifecycle,
+    refreshPresentationChoices: (materialId, options = {}) => refreshPresentationChoices(materialId, options),
+  });
   refreshLifecycle();
 })();

@@ -13,7 +13,7 @@
   let selectedDraft = null, capabilities = {}, qualityRulesetVersion = '';
   function scope() { const q = new URLSearchParams(location.search); return {group:q.get('group') || window.currentGroupKey || 'grpBio', area:q.get('area') || window.currentTrainingArea || 'internal'}; }
   function note(message, bad = false) { const n = $('teacher-ai-presentation-status-1016'); if (n) { n.textContent = message; n.className = bad ? 'text-sm font-bold text-rose-700' : 'text-sm text-slate-600'; } }
-  async function api(path, options) { const r = await fetch(path, Object.assign({credentials:'same-origin', cache:'no-store'}, options)); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'AI PowerPoint 服務無法回應'); return d; }
+  async function api(path, options = {}, timeoutMs = 15000) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeoutMs); try { const r = await fetch(path, Object.assign({credentials:'same-origin', cache:'no-store', signal:controller.signal}, options)); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'AI PowerPoint 服務無法回應'); return d; } catch (error) { if (error?.name === 'AbortError') throw new Error('AI PowerPoint 服務回應逾時，已停止這次讀取；請按「讀取版本」重試。'); throw error; } finally { clearTimeout(timer); } }
   function setBusy(value) { ['teacher-ai-presentation-generate-1016','teacher-ai-presentation-refresh-1016','teacher-ai-presentation-create-material-1016'].forEach(id => { const b = $(id); if (b) b.disabled = value; }); }
   function syncDraft() {
     const approved = selectedDraft?.draftType === 'slides' && selectedDraft?.status === 'approved';

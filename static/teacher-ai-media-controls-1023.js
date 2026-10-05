@@ -24,7 +24,26 @@
   let presentationRefreshPromise = null;
   let presentationRefreshKey = '';
   let presentationCache = { group: '', loadedAt: 0, rows: [] };
+  let sourceRefreshPromise = null;
+  let sourceRefreshAt = 0;
+  let enhanceScheduled = false;
   const powerpointOrigin = { parent: null, next: null, panel: null };
+
+  async function fetchJson(url, options = {}, timeoutMs = 12000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {...options, signal: controller.signal});
+      const body = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(body?.error || '服務暫時無法回應');
+      return body;
+    } catch (error) {
+      if (error?.name === 'AbortError') throw new Error('讀取逾時，請按重新整理後再試。');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   function currentScope() {
     const params = new URLSearchParams(window.location.search);
@@ -146,6 +165,18 @@
     const { group } = currentScope();
     const groupKey = String(group || '');
     const now = Date.now();
+    const sharedCache = window.TeacherPresentationChoicesCache1026;
+
+    if (!force && sharedCache
+        && String(sharedCache.group || '') === groupKey
+        && now - Number(sharedCache.loadedAt || 0) < 15000) {
+      presentationCache = {
+        group: groupKey,
+        loadedAt: Number(sharedCache.loadedAt || now),
+        rows: Array.isArray(sharedCache.rows) ? sharedCache.rows : [],
+      };
+      return paintVideoPresentations(presentationCache.rows, materialId);
+    }
 
     if (!force && presentationCache.group === groupKey
         && Number(presentationCache.loadedAt || 0) > 0
@@ -188,6 +219,7 @@
           loadedAt: Date.now(),
           rows: Array.isArray(body) ? body : [],
         };
+        window.TeacherPresentationChoicesCache1026 = {...presentationCache};
         return paintVideoPresentations(presentationCache.rows, materialId);
       } catch (error) {
         if (generation !== presentationRefreshGeneration) return false;
@@ -227,7 +259,9 @@
     }
     window.TeacherMediaSubtitle1014?.selectMaterial?.(materialId);
     void window.TeacherMediaAudio1014?.loadApprovedScripts?.();
-    void refreshVideoPresentations(materialId);
+    if (!window.TeacherAIMediaStudio1018?.refreshPresentationChoices) {
+      void refreshVideoPresentations(materialId);
+    }
     if (!materialId) {
       setSharedHint(materials.length
         ? '請先選擇來源教材／來源內容。'
@@ -243,24 +277,35 @@
       : '已選擇教材來源：先建立／核准講稿即可產生 AI 配音；建立並核准 PowerPoint 後可製作教學影片。');
   }
 
-  async function refreshSources() {
+  async function refreshSources({force = false} = {}) {
     const shared = $('teacher-media-source-1018');
     if (!shared) return false;
-    const generation = ++refreshGeneration;
-    shared.disabled = true;
-    shared.replaceChildren(new Option('正在讀取可用教材…', ''));
-    try {
-      const response = await fetch('/api/slides/admin', { credentials: 'same-origin', cache: 'no-store' });
-      const body = await response.json().catch(() => []);
-      if (!response.ok) throw new Error(body?.error || '無法讀取教材清單');
-      if (generation !== refreshGeneration) return false;
-      materials = scopedMaterials(body);
+    if (sourceRefreshPromise) return sourceRefreshPromise;
+    if (!force && materials.length && Date.now() - sourceRefreshAt < 2000) {
       paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材');
       paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳');
       showSourceAvailability(materials);
       sourcesLoadedAt = Date.now();
       syncSelectedSource();
       return true;
+    }
+    const generation = ++refreshGeneration;
+    shared.disabled = true;
+    shared.replaceChildren(new Option('正在讀取可用教材…', ''));
+    sourceRefreshPromise = (async () => {
+      const body = await fetchJson('/api/slides/admin', { credentials: 'same-origin', cache: 'no-store' });
+      if (generation !== refreshGeneration) return false;
+      materials = scopedMaterials(body);
+      sourceRefreshAt = Date.now();
+      sourcesLoadedAt = sourceRefreshAt;
+      paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材');
+      paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳');
+      showSourceAvailability(materials);
+      syncSelectedSource();
+      return true;
+    })();
+    try {
+      return await sourceRefreshPromise;
     } catch (error) {
       if (generation !== refreshGeneration) return false;
       materials = [];
@@ -269,7 +314,18 @@
       showSourceAvailability([], error.message);
       setSharedHint(`教材清單讀取失敗：${error.message}`, true);
       return false;
+    } finally {
+      if (generation === refreshGeneration) sourceRefreshPromise = null;
     }
+  }
+
+  function scheduleEnhance() {
+    if (enhanceScheduled) return;
+    enhanceScheduled = true;
+    queueMicrotask(() => {
+      enhanceScheduled = false;
+      void enhance();
+    });
   }
 
   function replaceSubtitleLanguageInput() {
@@ -601,7 +657,7 @@
     return true;
   }
 
-  window.AdminWorkspaceShell?.addAfterWorkspace?.(() => setTimeout(() => void enhance(), 0));
+  window.AdminWorkspaceShell?.addAfterWorkspace?.(scheduleEnhance);
 
   document.addEventListener('click', event => {
     const target = event.target?.closest?.(
@@ -631,7 +687,14 @@
     }
   });
 
-  observer = new MutationObserver(() => {
+  observer = new MutationObserver(records => {
+    const relevant = records.some(record => [...record.addedNodes].some(node =>
+      node.nodeType === Node.ELEMENT_NODE && (
+        node.matches?.('#teacher-media-production-1014,#teacher-ai-media-studio-1018,#teacher-media-source-1018,#teacher-ai-video-1015,#teacher-media-powerpoint-entry-1018')
+        || node.querySelector?.('#teacher-media-production-1014,#teacher-ai-media-studio-1018,#teacher-media-source-1018,#teacher-ai-video-1015,#teacher-media-powerpoint-entry-1018')
+      )
+    ));
+    if (!relevant) return;
     installCourseWizardDirectUploadGuard();
     const shared = $('teacher-media-source-1018');
     if (!shared) return;
@@ -639,17 +702,16 @@
     replaceSubtitleLanguageInput();
     improvePowerPointEntry();
     improveVideoHelp();
-    if (shared.dataset.mediaControls1023 !== '1') void enhance();
+    if (shared.dataset.mediaControls1023 !== '1') scheduleEnhance();
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
   installCourseWizardDirectUploadGuard();
-  [0, 400, 1200, 3000, 7000, 12000].forEach(delay => setTimeout(() => void enhance(), delay));
+  scheduleEnhance();
   window.addEventListener('teacher-ai-presentation-rendered-f5', () => {
     presentationCache.loadedAt = 0;
     void refreshVideoPresentations($('teacher-media-source-1018')?.value || '', {force:true});
   });
-
   window.TeacherAIMediaControls1023 = Object.freeze({
     refreshSources,
     refreshVideoPresentations,

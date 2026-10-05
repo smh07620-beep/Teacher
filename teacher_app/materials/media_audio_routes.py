@@ -100,6 +100,22 @@ def register_media_audio_routes(owner):
         if denied:
             return denied
         body = request.get_json(silent=True) or {}
+        cached = media_audio_runtime.cached_voice_preview(body.get("voice"))
+        if cached:
+            audit.record_event(
+                actor=user,
+                action="media.audio.preview",
+                target_type="media_audio_voice",
+                target_id=str(cached.get("voice") or ""),
+                group=str(user.get("preferredGroup") or ""),
+                detail={"preview": True, "replayed": True},
+            )
+            return jsonify({
+                "jobId": "",
+                "status": "completed",
+                "preview": True,
+                "result": cached,
+            })
         try:
             job = media_audio_jobs.enqueue_preview(body, user)
         except media_audio_jobs.MediaAudioLimitError as exc:
