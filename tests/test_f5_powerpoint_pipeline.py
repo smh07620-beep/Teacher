@@ -13,7 +13,7 @@ class F5PowerPointPipelineTests(unittest.TestCase):
         self.assertIn('"artifact": "shared-durable-pptx"',source)
         self.assertIn('_ai_worker_status()',source)
         self.assertIn('"ready": ready',source)
-        self.assertIn('_ai_worker_online_error()',source)
+        self.assertIn('_ai_worker_online_error(required_queue="ai_presentations")',source)
 
     def test_teacher_ui_presents_one_five_step_pipeline(self):
         source=ROOT.joinpath("static","teacher-ai-presentation-1016.js").read_text(encoding="utf-8")
