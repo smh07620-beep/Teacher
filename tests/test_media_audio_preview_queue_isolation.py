@@ -19,6 +19,29 @@ class MediaAudioPreviewQueueIsolationTests(unittest.TestCase):
              patch.object(media_audio_jobs.media_audio_repository,"active_preview_count_for_actor",return_value=3):
             media_audio_jobs._enforce_queue_limits("teacher",preview=False)
 
+    def test_same_voice_preview_reuses_existing_inflight_job(self):
+        existing = {
+            "id": "majob-existing",
+            "actorUsername": "teacher",
+            "request": {"preview": True, "voice": "zf_xiaoxiao"},
+            "status": "queued",
+        }
+        prepared = {
+            "id": "majob-new",
+            "actor_username": "teacher",
+            "request": {"preview": True, "voice": "zf_xiaoxiao"},
+        }
+        with patch.object(media_audio_jobs.media_audio_runtime, "configured", return_value=True), \
+             patch.object(media_audio_jobs, "prepare_preview_request", return_value=prepared), \
+             patch.object(media_audio_jobs.media_audio_repository, "expire_stale_previews", return_value=0) as expire, \
+             patch.object(media_audio_jobs.media_audio_repository, "active_preview_job_for_actor", return_value=existing), \
+             patch.object(media_audio_jobs.media_audio_repository, "create_job") as create:
+            result = media_audio_jobs.enqueue_preview({"voice": "zf_xiaoxiao"}, {"username": "teacher"})
+        self.assertEqual(result["id"], "majob-existing")
+        self.assertTrue(result["_reusedActive"])
+        expire.assert_called_once()
+        create.assert_not_called()
+
     def test_preview_limit_message_is_preview_specific(self):
         with patch.object(media_audio_jobs.media_audio_repository,"active_preview_count_for_actor",return_value=3), \
              patch.object(media_audio_jobs.media_audio_repository,"total_active_preview_count",return_value=3), \
