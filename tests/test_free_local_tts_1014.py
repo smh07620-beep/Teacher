@@ -56,6 +56,8 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
     def test_ai_voice_service_health_is_visible_and_backed_by_worker_heartbeat(self):
         self.assertIn('"workerKind": "ai"', self.worker)
         self.assertIn('AI_WORKER_HEARTBEAT_SECONDS', self.worker)
+        self.assertIn('"misaki": misaki_ready', self.worker)
+        self.assertIn('"whisper": {"available": whisper_ready}', self.worker)
         self.assertIn('readyForPreview', self.routes)
         self.assertIn('kokoroInstalled', self.routes)
         self.assertIn('teacher-audio-health-1014', self.audio_ui)
