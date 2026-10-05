@@ -34,8 +34,8 @@
   function currentScope() {
     const params = new URLSearchParams(window.location.search);
     return {
-      area: params.get('area') || window.currentTrainingArea || 'internal',
-      group: params.get('group') || window.currentGroupKey || 'grpBio',
+      area: params.get('area') || window.currentTrainingArea || String(R.user?.preferredArea || '').trim() || 'internal',
+      group: params.get('group') || window.currentGroupKey || String(R.user?.preferredGroup || '').trim() || 'grpBio',
     };
   }
 
@@ -110,10 +110,13 @@
     try {
       await fetchMaterials();
       const {area, group} = currentScope();
-      const ordered = [...materials].sort((a, b) => {
-        const score = item => (String(item.area || '') === String(area) ? 2 : 0) + (String(item.group || '') === String(group) ? 4 : 0);
-        return score(b) - score(a) || materialLabel(a).localeCompare(materialLabel(b), 'zh-Hant');
-      });
+      // Multi-source generation is deliberately same-scope on the server.
+      // Do the same in the picker so teachers cannot accidentally combine
+      // another group/area and only discover the mismatch as a red API error.
+      const ordered = materials
+        .filter(item => (!group || !item.group || String(item.group) === String(group))
+          && (!area || !item.area || String(item.area) === String(area)))
+        .sort((a, b) => materialLabel(a).localeCompare(materialLabel(b), 'zh-Hant'));
       ordered.forEach(item => {
         const option = document.createElement('option');
         option.value = item.id || '';
