@@ -434,9 +434,11 @@
     }
   }
 
-  function install() {
-    const box = document.getElementById('admin-course-material-hub');
-    if (!box || document.getElementById('teacher-ai-material-1014')) return false;
+  function install(targetBox = null) {
+    const existing = document.getElementById('teacher-ai-material-1014');
+    if (existing) return existing;
+    const box = targetBox || document.getElementById('admin-course-material-hub');
+    if (!box) return false;
     const section = document.createElement('section');
     section.id = 'teacher-ai-material-1014';
     section.className = 'mb-5 rounded-2xl border border-violet-200 bg-white p-5 shadow-sm space-y-5';
@@ -486,7 +488,18 @@
     document.getElementById('teacher-media-script-1014')?.classList.add('hidden');
     void paintMaterialOptions();
     renderAuthoringSources();
-    return true;
+    return section;
+  }
+
+  function ensureMounted(targetBox = null) {
+    const existing = document.getElementById('teacher-ai-material-1014');
+    if (existing) {
+      if (targetBox && existing.parentElement !== targetBox) targetBox.appendChild(existing);
+      existing.classList.remove('hidden');
+      existing.removeAttribute('aria-hidden');
+      return existing;
+    }
+    return install(targetBox);
   }
 
   if (!install()) {
@@ -497,5 +510,5 @@
   }
 
   window.addEventListener('teacher-ai-material-request-publication', () => void publishDraft());
-  window.TeacherAIMaterial1014 = Object.freeze({paintMaterialOptions, loadDrafts, publishCurrentDraft: publishDraft});
+  window.TeacherAIMaterial1014 = Object.freeze({paintMaterialOptions, loadDrafts, publishCurrentDraft: publishDraft, ensureMounted});
 })();
