@@ -195,7 +195,7 @@ class AIMaterialFrontend97Tests(unittest.TestCase):
             "AI 來源內容工作台",
             "authoringSourceIds",
             "referenceMaterialIds: allAuthoringSourceIds()",
-            "或選擇既有教材（可多選）",
+            "補充既有教材（可多選；上方共用來源會自動帶入）",
             "active:false",
         ):
             self.assertIn(marker, self.source)
