@@ -899,7 +899,17 @@
               const heartbeat = Number(worker.heartbeatContract || 0) >= 2
                 ? 'heartbeat v2 ✓'
                 : '舊版 heartbeat';
-              return `<div class="rounded-2xl border ${online ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/60'} p-4 shadow-sm"><div class="flex flex-wrap items-start justify-between gap-2"><div><div class="font-black text-slate-900">${online ? '🟢 AI Worker 在線' : '🟠 AI Worker 離線'}</div><div class="mt-1 text-xs text-slate-600">${escapeHtml(worker.workerMachine || worker.workerId || 'AI Worker')} · 最後回報 ${formatWhen(worker.lastSeen)}</div></div><div class="text-xs font-bold text-slate-700">${kokoro} · ${whisper}</div></div><div class="mt-2 text-[11px] text-slate-600">Queues：${escapeHtml(queues.join('、') || '尚未回報 queue capabilities')}</div><div class="mt-1 text-[10px] text-slate-500">${escapeHtml(heartbeat)}${worker.heartbeatTransport ? ' · ' + escapeHtml(worker.heartbeatTransport) : ''}</div></div>`;
+              const database = worker.databaseReady === false
+                ? '🔴 正式 DB 無法連線'
+                : worker.databaseIdentityMatch === false
+                  ? '🔴 DB 與 Render 不一致'
+                  : worker.databaseIdentityMatch === true ? '🟢 正式 DB 一致' : '🟠 DB 身分待確認';
+              const title = worker.databaseReady === false
+                ? '🔴 AI Worker 執行中但 DB 無法連線'
+                : worker.databaseIdentityMatch === false
+                  ? '🔴 AI Worker 連錯正式資料庫'
+                  : online ? '🟢 AI Worker 在線' : '🟠 AI Worker 離線';
+              return `<div class="rounded-2xl border ${online && worker.databaseReady !== false && worker.databaseIdentityMatch !== false ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/60'} p-4 shadow-sm"><div class="flex flex-wrap items-start justify-between gap-2"><div><div class="font-black text-slate-900">${title}</div><div class="mt-1 text-xs text-slate-600">${escapeHtml(worker.workerMachine || worker.workerId || 'AI Worker')} · 最後回報 ${formatWhen(worker.lastSeen)}</div></div><div class="text-xs font-bold text-slate-700">${kokoro} · ${whisper}</div></div><div class="mt-2 text-[11px] text-slate-600">${database}</div><div class="mt-1 text-[11px] text-slate-600">Queues：${escapeHtml(queues.join('、') || '尚未回報 queue capabilities')}</div><div class="mt-1 text-[10px] text-slate-500">${escapeHtml(heartbeat)}${worker.heartbeatTransport ? ' · ' + escapeHtml(worker.heartbeatTransport) : ''}</div></div>`;
             }).join('')
           : `<div class="rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"><b>🟠 AI Worker 尚未回報</b><div class="mt-1 text-xs leading-5">教材 Worker 正常不代表 AI Worker 已啟動。請確認院內電腦已更新到目前 main，並啟動 <code>run_ai_worker_autostart.ps1</code>／Teacher AI Worker。注意：Task Scheduler 顯示 RUNNING 並不代表 heartbeat 已成功；新版 Worker 會在 heartbeat 無法寫入正式 DB 時直接回報失敗並由 supervisor 重啟。</div></div>`;
       panel.innerHTML = `
