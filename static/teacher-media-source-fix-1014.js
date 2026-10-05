@@ -20,6 +20,10 @@
   let selectObserver = null;
   let repainting = false;
 
+  function canonicalOwner() {
+    return window.TeacherAIMediaControls1023 || null;
+  }
+
   const groupLabel = key => groupCatalog[key]?.label || groupCatalog[key]?.name || key || '未設定組別';
   const areaLabel = area => area === 'pgy' ? 'PGY' : (area === 'internal' ? '院內' : (area || ''));
 
@@ -84,6 +88,10 @@
   }
 
   async function refreshMaterials() {
+    const canonical = canonicalOwner();
+    if (typeof canonical?.refreshSources === 'function') {
+      return canonical.refreshSources({force:true});
+    }
     const select = document.getElementById('teacher-script-material-1014');
     if (!select) return false;
     const previous = select.value;
@@ -93,6 +101,10 @@
       const data = await response.json().catch(() => []);
       if (!response.ok) throw new Error(data.error || '無法讀取教材清單');
       compatibleMaterials = scopedRows(data);
+      const ownerAfterFetch = canonicalOwner();
+      if (typeof ownerAfterFetch?.refreshSources === 'function') {
+        return ownerAfterFetch.refreshSources({force:true});
+      }
       paintFromCache(false);
       if (previous && [...select.options].some(option => option.value === previous)) select.value = previous;
 
@@ -134,18 +146,18 @@
     select.insertAdjacentElement('afterend', help);
 
     selectObserver = new MutationObserver(() => {
+      if (canonicalOwner()) {
+        selectObserver?.disconnect();
+        return;
+      }
       if (repainting || !compatibleMaterials.length) return;
       const expected = compatibleMaterials.length + 1;
       if (select.options.length !== expected) paintFromCache(true);
     });
     selectObserver.observe(select, {childList:true});
 
-    // The original studio also loads this list. Refresh after it finishes so
-    // draft materials are not accidentally removed by the older active-only filter.
-    setTimeout(() => void refreshMaterials(), 50);
-    setTimeout(() => {
-      if (document.getElementById('teacher-script-material-1014')) void refreshMaterials();
-    }, 1200);
+    // Canonical ownership now lives in teacher-ai-media-controls-1023.js.
+    // Avoid duplicate fetch -> event -> install loops that made selection jump.
     return true;
   }
 
