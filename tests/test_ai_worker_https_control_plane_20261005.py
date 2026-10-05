@@ -93,6 +93,12 @@ class AIWorkerHttpsControlPlane20261005Tests(unittest.TestCase):
         self.assertNotIn("send_file(", remote)
         self.assertNotIn("upload_file(", remote)
 
+    def test_csrf_preflight_allows_token_authenticated_ai_worker_control_plane(self):
+        security = ROOT.joinpath("teacher_app", "common", "security.py").read_text(encoding="utf-8")
+        self.assertIn('request.path.startswith("/api/material-worker/")', security)
+        self.assertIn('request.path.startswith("/api/ai-worker/")', security)
+        self.assertIn("and not worker_api", security)
+
     def test_windows_ai_worker_no_longer_requires_database_url_in_https_mode(self):
         run_ps1 = ROOT.joinpath("run_ai_worker_autostart.ps1").read_text(encoding="utf-8")
         setup_ps1 = ROOT.joinpath("setup_teacher_worker.ps1").read_text(encoding="utf-8")
