@@ -5,6 +5,7 @@ import datetime as dt
 
 from flask import g, jsonify, request
 
+from teacher_app import config as teacher_config
 from teacher_app.common import audit, scope_filter
 from teacher_app.materials import media_audio_jobs, media_audio_repository, media_audio_runtime, media_script_repository
 from teacher_app.worker import repository as worker_repository
@@ -64,6 +65,10 @@ def _ai_worker_status() -> dict:
         "queues": [],
         "queueCapabilitiesReported": False,
         "kokoroInstalled": None,
+        "databaseReady": None,
+        "databaseIdentityMatch": None,
+        "heartbeatContract": 0,
+        "heartbeatTransport": "",
         "diagnosticCode": "worker_not_seen",
         "diagnosticMessage": (
             "尚未收到院內 AI Worker heartbeat。Windows 排程顯示 RUNNING 只代表 supervisor 還在，"
@@ -103,10 +108,35 @@ def _ai_worker_status() -> dict:
             if str(item or "").strip()
         }) if isinstance(raw_queues, (list, tuple, set)) else []
         kokoro_installed = _kokoro_capability(capabilities)
+        database_ready = capabilities.get("databaseReady")
+        database_ready = None if database_ready is None else bool(database_ready)
+        worker_database_identity = str(capabilities.get("databaseIdentity") or "").strip()
+        web_database_identity = teacher_config.database_identity()
+        database_identity_match = (
+            None
+            if not worker_database_identity or not web_database_identity
+            else worker_database_identity == web_database_identity
+        )
+        heartbeat_contract = int(capabilities.get("heartbeatContract") or 0)
+        heartbeat_transport = str(capabilities.get("heartbeatTransport") or "")[:32]
 
         diagnostic_code = "worker_ready"
         diagnostic_message = "AI Worker 與 Kokoro 已回報，可建立語音試聽。"
-        if not online:
+        if database_ready is False:
+            online = False
+            diagnostic_code = "worker_database_unavailable"
+            diagnostic_message = (
+                "AI Worker supervisor 有執行，但無法寫入正式 DATABASE_URL；"
+                "請檢查院內 .local-worker.env 的 DATABASE_URL 與 Supabase 連線。"
+            )
+        elif database_identity_match is False:
+            online = False
+            diagnostic_code = "worker_database_mismatch"
+            diagnostic_message = (
+                "AI Worker 已啟動，但它連到的資料庫與 Render Web 不是同一個正式資料庫。"
+                "請讓院內 .local-worker.env 的 DATABASE_URL 指向與 Render 相同的 Supabase 專案。"
+            )
+        elif not online:
             diagnostic_code = "worker_offline"
             diagnostic_message = (
                 f"AI Worker 最後回報已超過 120 秒（約 {heartbeat_age} 秒前）。"
@@ -134,6 +164,10 @@ def _ai_worker_status() -> dict:
             "queues": queues,
             "queueCapabilitiesReported": isinstance(raw_queues, (list, tuple, set)),
             "kokoroInstalled": kokoro_installed,
+            "databaseReady": database_ready,
+            "databaseIdentityMatch": database_identity_match,
+            "heartbeatContract": heartbeat_contract,
+            "heartbeatTransport": heartbeat_transport,
             "diagnosticCode": diagnostic_code,
             "diagnosticMessage": diagnostic_message,
         })
