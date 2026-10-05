@@ -26,9 +26,12 @@ class TeacherAudioPreviewConvergence1024Tests(unittest.TestCase):
         self.assertIn("teacher-media-audio-formal-busy-1014", ASSIGNMENT)
         self.assertIn("正式 AI 語音工作正在排隊或處理中", ASSIGNMENT)
 
-    def test_preview_progress_reports_worker_state_instead_of_only_preparing(self):
-        self.assertIn("progress.detail", ASSIGNMENT)
-        self.assertIn("attempt < 60", ASSIGNMENT)
-        self.assertIn("fetchJsonWithTimeout", ASSIGNMENT)
-        self.assertIn("請確認 Worker 在線後再試", ASSIGNMENT)
+    def test_preview_progress_is_compact_and_transient_timeouts_do_not_fail_immediately(self):
+        self.assertIn("正在準備短版試聽", ASSIGNMENT)
+        self.assertIn("Date.now() + 45000", ASSIGNMENT)
+        self.assertIn("transientTimeouts >= 3", ASSIGNMENT)
+        self.assertIn("試聽會在背景完成", ASSIGNMENT)
+        self.assertIn("aria-busy", ASSIGNMENT)
+        self.assertNotIn("progress.detail", ASSIGNMENT)
+        self.assertNotIn("attempt < 60", ASSIGNMENT)
         self.assertNotIn("目前已有 AI 語音工作排隊或執行中", ASSIGNMENT)
