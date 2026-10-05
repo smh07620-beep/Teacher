@@ -76,7 +76,7 @@
     const button = document.getElementById('teacher-audio-generate-1014');
     const script = document.getElementById('teacher-audio-script-1014');
     const voice = document.getElementById('teacher-audio-voice-1014');
-    if (button) button.disabled = busy || !statusInfo?.enabled;
+    if (button) button.disabled = busy || !statusInfo?.readyForPreview;
     if (script) script.disabled = busy;
     if (voice) voice.disabled = busy;
     if (section) section.dataset.formalJobBusy = busy ? 'true' : 'false';
@@ -238,8 +238,8 @@
       setStatus('請選擇一份已核准講稿。', 'error');
       return;
     }
-    if (!statusInfo?.enabled) {
-      setStatus('AI 語音尚未啟用；請確認本機 Kokoro AI Worker 與 R2 設定。', 'error');
+    if (!statusInfo?.readyForPreview) {
+      setStatus(statusInfo?.diagnostic?.message || 'AI 語音尚未就緒；請確認 AI Worker、Kokoro 與 R2 狀態。', 'error');
       return;
     }
     const script = scripts.find(item => item.id === scriptId);
