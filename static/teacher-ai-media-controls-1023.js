@@ -27,6 +27,7 @@
   let sourceRefreshPromise = null;
   let sourceRefreshAt = 0;
   let enhanceScheduled = false;
+  let lastSourceSelection = null;
   const powerpointOrigin = { parent: null, next: null, panel: null };
 
   async function fetchJson(url, options = {}, timeoutMs = 12000) {
@@ -151,9 +152,9 @@
     });
     if (previous && usable.some(item => String(item.id) === previous)) select.value = previous;
     else if (usable.length === 1) select.value = String(usable[0].id || '');
-    select.disabled = !usable.length;
+    select.disabled = false;
     const status = $('teacher-ai-video-status-1015');
-    if (status && !usable.length) status.textContent = '目前這個組別尚無已核准 PowerPoint；可直接丟 PDF／Word／PPT／Excel／圖片建立。';
+    if (status && !usable.length) status.textContent = '目前尚無可直接製作影片的已核准 PowerPoint；請按「建立／匯入 PowerPoint」加入資料後完成核准。';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   }
@@ -242,10 +243,12 @@
     return task;
   }
 
-  function syncSelectedSource() {
+  function syncSelectedSource(options = {}) {
     const shared = $('teacher-media-source-1018');
     if (!shared) return;
     const materialId = shared.value || '';
+    const changed = lastSourceSelection !== materialId;
+    const force = Boolean(options?.force);
     const legacy = $('teacher-script-material-1014');
     if (legacy) {
       if (![...legacy.options].some(option => option.value === materialId) && materialId) {
@@ -257,10 +260,13 @@
         legacy.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
-    window.TeacherMediaSubtitle1014?.selectMaterial?.(materialId);
-    void window.TeacherMediaAudio1014?.loadApprovedScripts?.();
-    if (!window.TeacherAIMediaStudio1018?.refreshPresentationChoices) {
-      void refreshVideoPresentations(materialId);
+    if (changed || force) {
+      lastSourceSelection = materialId;
+      window.TeacherMediaSubtitle1014?.selectMaterial?.(materialId);
+      window.dispatchEvent(new CustomEvent('teacher-media-source-selected-1027', {detail:{materialId}}));
+      if (!window.TeacherAIMediaStudio1018?.refreshPresentationChoices) {
+        void refreshVideoPresentations(materialId, {force});
+      }
     }
     if (!materialId) {
       setSharedHint(materials.length
@@ -352,13 +358,11 @@
   }
 
   function improvePowerPointEntry() {
-    const entry = $('teacher-media-powerpoint-entry-1018');
-    if (!entry) return;
-    const desired = '不用先建立教材：可直接加入多份 PDF、Word、PPT、Excel、圖片或文字；也可選既有教材當參考。所有入口都會進入同一個 AI PowerPoint 工作台。';
-    const text = entry.querySelector('p');
-    if (text && text.textContent !== desired) text.textContent = desired;
-    const button = $('teacher-media-open-powerpoint-1018');
-    if (button && button.textContent !== '🖥️ 多資料 AI PowerPoint') button.textContent = '🖥️ 多資料 AI PowerPoint';
+    // F6 convergence: the source header owns the single PowerPoint entry.
+    // Remove the older duplicate shortcut card when legacy hydration recreates it.
+    $('teacher-media-powerpoint-entry-1018')?.remove();
+    const direct = $('teacher-media-direct-powerpoint-1026');
+    if (direct && direct.textContent !== '🖥️ AI PowerPoint 製作') direct.textContent = '🖥️ AI PowerPoint 製作';
   }
 
   function improveVideoHelp() {
@@ -390,24 +394,29 @@
         <button id="teacher-media-powerpoint-close-1024" type="button" class="shrink-0 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700">← 回媒體製作</button>
       </div>
       <div id="teacher-media-powerpoint-body-1024"></div>`;
-    const entry = $('teacher-media-powerpoint-entry-1018');
-    if (entry?.parentElement === studio) entry.insertAdjacentElement('afterend', host);
+    const sourceBox = $('teacher-media-source-1018')?.closest('.rounded-2xl');
+    if (sourceBox?.parentElement === studio) sourceBox.insertAdjacentElement('afterend', host);
     else studio.prepend(host);
     return host;
   }
 
   async function openPowerPointWorkspace() {
     closeGeneralMaterialUpload();
+    const host = ensurePowerPointWorkspace();
+    const body = $('teacher-media-powerpoint-body-1024');
+    const studio = $('teacher-ai-media-studio-1018') || $('teacher-media-production-1014');
+    if (!host || !body || !studio) {
+      setSharedHint('AI PowerPoint 工作區尚未建立完成，請重新整理頁面後再試。', true);
+      return false;
+    }
     let panel = $('teacher-ai-material-1014');
+    if (!panel) panel = window.TeacherAIMaterial1014?.ensureMounted?.(body) || null;
     if (!panel && typeof window.renderAdminCourseMaterialHub === 'function') {
       try { await window.renderAdminCourseMaterialHub(true); } catch (_error) {}
       panel = $('teacher-ai-material-1014');
     }
-    const host = ensurePowerPointWorkspace();
-    const body = $('teacher-media-powerpoint-body-1024');
-    const studio = $('teacher-ai-media-studio-1018') || $('teacher-media-production-1014');
-    if (!host || !body || !studio || !panel) {
-      setSharedHint('AI PowerPoint 工作台尚未載入完成，請稍候再試。', true);
+    if (!panel) {
+      setSharedHint('AI PowerPoint 元件載入失敗；請重新整理頁面。', true);
       return false;
     }
 
@@ -715,6 +724,7 @@
   window.TeacherAIMediaControls1023 = Object.freeze({
     refreshSources,
     refreshVideoPresentations,
+    syncSelectedSource,
     openPowerPointWorkspace,
     closePowerPointWorkspace,
     openGeneralMaterialUpload,
