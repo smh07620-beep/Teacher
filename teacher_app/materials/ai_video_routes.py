@@ -12,7 +12,7 @@ from teacher_app.materials import ai_video_jobs, ai_video_quality as quality, ai
 from teacher_app.materials import derivative_repository
 from teacher_app.materials import repository as material_repository
 from teacher_app.materials.ai_video_storage import VideoStorage
-from teacher_app.materials.media_audio_routes import _ai_worker_status
+from teacher_app.materials.media_audio_routes import _ai_worker_online_error, _ai_worker_status
 
 _TEACHER_ROLES = {"clinical_teacher", "group_leader"}
 _OPERATE_ROLES = _TEACHER_ROLES | {"education_admin", "system_admin"}
@@ -145,11 +145,18 @@ def register_ai_video_routes(owner):
             return jsonify({"error": "目前角色不可建立 AI 影片。"}), 403
         storage = VideoStorage().capability()
         worker = _ai_worker_status()
-        ready = bool(storage.get("available") and worker.get("online") and worker.get("kokoroInstalled") is True)
+        ready = bool(
+            storage.get("available")
+            and worker.get("online")
+            and "ai_videos" in set(worker.get("queues") or [])
+            and worker.get("kokoroInstalled") is True
+        )
         if not storage.get("available"):
             diagnostic = "AI 影片共用儲存尚未就緒；請確認 R2／OCI／Google Drive／MEGA 設定。"
         elif not worker.get("online"):
             diagnostic = str(worker.get("diagnosticMessage") or "AI Worker 尚未在線。")
+        elif "ai_videos" not in set(worker.get("queues") or []):
+            diagnostic = "AI Worker 已在線，但尚未回報 ai_videos queue；請更新院內 Worker 後重啟。"
         elif worker.get("kokoroInstalled") is not True:
             diagnostic = str(worker.get("diagnosticMessage") or "Kokoro 尚未就緒。")
         else:
@@ -180,12 +187,9 @@ def register_ai_video_routes(owner):
         if not _video_allowed(user, "video.create"):
             return jsonify({"error": "目前角色不可建立 AI 影片。"}), 403
         worker = _ai_worker_status()
-        if not worker.get("online"):
-            return jsonify({
-                "error": str(worker.get("diagnosticMessage") or "AI Worker 尚未在線，暫不建立影片工作。"),
-                "workerOffline": True,
-                "worker": worker,
-            }), 503
+        readiness_error = _ai_worker_online_error(worker, required_queue="ai_videos")
+        if readiness_error:
+            return readiness_error
         if worker.get("kokoroInstalled") is not True:
             return jsonify({
                 "error": str(worker.get("diagnosticMessage") or "Kokoro 尚未就緒，暫不建立影片工作。"),
