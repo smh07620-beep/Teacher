@@ -97,6 +97,7 @@
       const data = await fetchJson('/api/media-audio/status', {credentials:'same-origin', cache:'no-store'});
       statusInfo = data || {};
       window.TeacherMediaAudioStatus1014 = statusInfo;
+      window.dispatchEvent(new CustomEvent('teacher-media-audio-status-1014', {detail:{status:statusInfo}}));
       const voice = document.getElementById('teacher-audio-voice-1014');
       if (voice) {
         voice.replaceChildren();
@@ -132,8 +133,9 @@
       if (!data.enabled) setStatus('AI 語音尚未啟用；老師錄音／錄影功能仍可正常使用。', 'error');
       return data;
     } catch (error) {
-      statusInfo = {enabled:false};
+      statusInfo = {enabled:false, readyForPreview:false, diagnostic:{message:error.message}};
       window.TeacherMediaAudioStatus1014 = statusInfo;
+      window.dispatchEvent(new CustomEvent('teacher-media-audio-status-1014', {detail:{status:statusInfo}}));
       setBusy(false);
       setStatus(`AI 語音狀態讀取失敗：${error.message}`, 'error');
       return statusInfo;
@@ -328,5 +330,5 @@
     observer.observe(document.body, {childList:true, subtree:true});
   }
 
-  window.TeacherMediaAudio1014 = Object.freeze({loadApprovedScripts, generateAudio});
+  window.TeacherMediaAudio1014 = Object.freeze({loadStatus, loadApprovedScripts, generateAudio});
 })();
