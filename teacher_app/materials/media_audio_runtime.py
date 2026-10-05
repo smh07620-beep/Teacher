@@ -53,6 +53,8 @@ def configured() -> bool:
 def public_status() -> dict[str, Any]:
     return {
         "enabled": configured(),
+        "r2Ready": providers.r2_is_configured(),
+        "providerReady": _provider() == DEFAULT_PROVIDER,
         "provider": "kokoro-local" if configured() else "",
         "model": str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL,
         "defaultVoice": _voice(os.environ.get("KOKORO_VOICE", DEFAULT_VOICE)),
