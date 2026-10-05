@@ -428,3 +428,66 @@ test('AI PowerPoint accepts pasted SOP text as a private authoring source', asyn
   });
   await expect(page.locator('#teacher-ai-material-uploaded-sources-1014')).toContainText('急件 SOP');
 });
+
+
+test('selected AI media source survives forced refresh without duplicate change churn', async ({ page }) => {
+  await page.setContent(`
+    <section id="teacher-media-production-1014">
+      <select id="teacher-media-source-1018"><option value="">來源</option></select>
+      <p id="teacher-media-next-step-1018"></p>
+      <select id="teacher-script-material-1014"><option value="">來源</option></select>
+      <section id="teacher-ai-video-1015">
+        <select id="teacher-ai-video-presentation-1015"><option value="">載入</option></select>
+        <p id="teacher-ai-video-status-1015"></p>
+      </section>
+    </section>
+  `);
+  await installTeacherRBAC(page);
+  await page.evaluate(() => {
+    window.sourceFetches1027 = 0;
+    window.legacyChanges1027 = 0;
+    window.pptChanges1027 = 0;
+    document.getElementById('teacher-script-material-1014').addEventListener('change', () => {
+      window.legacyChanges1027 += 1;
+    });
+    document.getElementById('teacher-ai-video-presentation-1015').addEventListener('change', () => {
+      window.pptChanges1027 += 1;
+    });
+    window.fetch = async url => {
+      const value = String(url);
+      if (value === '/api/slides/admin') {
+        window.sourceFetches1027 += 1;
+        await new Promise(resolve => setTimeout(resolve, 25));
+        return { ok: true, json: async () => [
+          { id: 'doc-1', title: '生化 SOP', group: 'grpBio', area: 'internal', active: true },
+          { id: 'doc-2', title: 'QC SOP', group: 'grpBio', area: 'internal', active: true }
+        ] };
+      }
+      if (value.includes('/api/ai-presentations')) {
+        return { ok: true, json: async () => [
+          { id: 'ppt-1', title: '生化簡報', materialId: 'doc-1', status: 'approved', artifactReady: true }
+        ] };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+  });
+
+  await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  const source = page.locator('#teacher-media-source-1018');
+  await expect(source).toBeEnabled();
+  await source.selectOption('doc-1');
+  await expect(page.locator('#teacher-script-material-1014')).toHaveValue('doc-1');
+  await expect(page.locator('#teacher-ai-video-presentation-1015')).toHaveValue('ppt-1');
+
+  const before = await page.evaluate(() => ({
+    legacy: window.legacyChanges1027,
+    ppt: window.pptChanges1027
+  }));
+  await page.evaluate(() => window.TeacherAIMediaControls1023.refreshSources({ force: true }));
+
+  await expect(source).toHaveValue('doc-1');
+  await expect(page.locator('#teacher-script-material-1014')).toHaveValue('doc-1');
+  await expect.poll(() => page.evaluate(() => window.sourceFetches1027)).toBeGreaterThanOrEqual(2);
+  await expect.poll(() => page.evaluate(() => window.legacyChanges1027)).toBe(before.legacy);
+  await expect.poll(() => page.evaluate(() => window.pptChanges1027)).toBe(before.ppt);
+});
