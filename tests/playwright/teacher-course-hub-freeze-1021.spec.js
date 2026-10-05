@@ -32,7 +32,10 @@ test('large internal course scope stays interactive without summary warnings', a
     window.examDrawLabel = () => '';
     window.fetchAdminMaterials = async () => [];
     window.TeacherRBAC681Ready = Promise.resolve({ hasPermission: name => ['learning.assign', 'material.manage'].includes(name) });
-    window.TeacherWorkspace1014 = { openMedia: () => { window.mediaOpened = true; } };
+    window.TeacherWorkspace1014 = {
+      openPresentation: () => { window.presentationOpened = true; },
+      openMedia: () => { window.mediaOpened = true; }
+    };
     window.fetch = async url => {
       if (String(url).startsWith('/api/courses/admin')) {
         const area = new URL(String(url), 'http://localhost').searchParams.get('area');
@@ -72,6 +75,8 @@ test('large internal course scope stays interactive without summary warnings', a
   });
   const afterRerenderNodeCount = await page.locator('#admin-course-material-hub *').count();
   expect(afterRerenderNodeCount).toBeLessThan(initialNodeCount * 3);
+  await page.getByRole('button', { name: /AI PowerPoint 製作/ }).click();
+  expect(await page.evaluate(() => window.presentationOpened)).toBe(true);
   await page.getByRole('button', { name: /從教材製作媒體/ }).click();
   expect(await page.evaluate(() => window.mediaOpened)).toBe(true);
   await page.getByRole('button', { name: '批次管理課程' }).click();
