@@ -11,7 +11,8 @@ class TeacherMediaDirectPowerPoint1026Tests(unittest.TestCase):
         self.assertIn("teacher-media-direct-powerpoint-1026",source)
         self.assertIn("AI POWERPOINT",source)
         self.assertIn("AI PowerPoint 製作",source)
-        self.assertIn("同一入口",source)
+        self.assertIn("PowerPoint 保留單一入口",source)
+        self.assertIn("PDF／Word／圖片／文字",source)
         self.assertNotIn("teacher-media-open-powerpoint-1018",source)
 
     def test_controls_export_single_powerpoint_list_owner(self):
