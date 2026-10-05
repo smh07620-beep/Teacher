@@ -885,6 +885,7 @@ def status(
             }
         ),
         "workers": workers,
+        "aiWorkers": ai_workers,
         "workerStatusAvailable": worker_status_available,
         "workerStatusError": worker_status_error,
         "staging": staging_capability(),
