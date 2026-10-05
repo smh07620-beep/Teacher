@@ -1,10 +1,13 @@
 """Teacher routes for approved-script AI narration."""
 from __future__ import annotations
 
+import datetime as dt
+
 from flask import g, jsonify, request
 
 from teacher_app.common import audit, scope_filter
 from teacher_app.materials import media_audio_jobs, media_audio_repository, media_audio_runtime, media_script_repository
+from teacher_app.worker import repository as worker_repository
 
 
 def _actor(owner=None):
@@ -18,6 +21,49 @@ def _actor(owner=None):
 def _scope(owner, group: str):
     _user, denied = scope_filter.scoped_groups(owner, "material.manage", {str(group or "").strip()})
     return denied
+
+
+def _ai_worker_status() -> dict:
+    status = {
+        "seen": False,
+        "online": False,
+        "lastSeen": "",
+        "workerId": "",
+        "kokoroInstalled": None,
+    }
+    try:
+        latest = None
+        latest_seen = None
+        for row in worker_repository.list_heartbeats(100):
+            capabilities = row.get("capabilities") or {}
+            if not isinstance(capabilities, dict) or str(capabilities.get("workerKind") or "") != "ai":
+                continue
+            raw_seen = str(row.get("last_seen") or row.get("lastSeen") or "").strip()
+            try:
+                seen = dt.datetime.fromisoformat(raw_seen.replace("Z", "+00:00"))
+                if seen.tzinfo is None:
+                    seen = seen.replace(tzinfo=dt.timezone.utc)
+                seen = seen.astimezone(dt.timezone.utc)
+            except (TypeError, ValueError):
+                continue
+            if latest_seen is None or seen > latest_seen:
+                latest = (row, capabilities)
+                latest_seen = seen
+        if latest is None or latest_seen is None:
+            return status
+        row, capabilities = latest
+        now = dt.datetime.now(dt.timezone.utc)
+        kokoro = capabilities.get("kokoro") if isinstance(capabilities.get("kokoro"), dict) else {}
+        status.update({
+            "seen": True,
+            "online": latest_seen >= now - dt.timedelta(seconds=120),
+            "lastSeen": latest_seen.isoformat(),
+            "workerId": str(row.get("worker_id") or row.get("workerId") or "")[:100],
+            "kokoroInstalled": bool(kokoro.get("available")),
+        })
+    except Exception:
+        status["statusUnavailable"] = True
+    return status
 
 
 def register_media_audio_routes(owner):
@@ -34,6 +80,12 @@ def register_media_audio_routes(owner):
         if denied:
             return denied
         payload = media_audio_runtime.public_status()
+        payload["worker"] = _ai_worker_status()
+        payload["readyForPreview"] = bool(
+            payload.get("enabled")
+            and payload["worker"].get("online")
+            and payload["worker"].get("kokoroInstalled") is True
+        )
         active_job = media_audio_repository.active_formal_job_for_actor(str(user.get("username") or ""))
         if active_job:
             payload["activeJob"] = media_audio_jobs.public_job(active_job)
