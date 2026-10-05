@@ -116,6 +116,17 @@ def register_media_audio_routes(owner):
                 "preview": True,
                 "result": cached,
             })
+        worker = _ai_worker_status()
+        if not worker.get("online"):
+            return jsonify({
+                "error": "本機 AI Worker 尚未在線，無法建立新的語音試聽。請先啟動 Teacher AI Worker；已有快取試聽仍可直接播放。",
+                "workerOffline": True,
+            }), 503
+        if worker.get("kokoroInstalled") is not True:
+            return jsonify({
+                "error": "AI Worker 已連線，但 Kokoro 語音套件尚未就緒。請在院內 Worker 更新 AI dependencies 後重啟。",
+                "kokoroUnavailable": True,
+            }), 503
         try:
             job = media_audio_jobs.enqueue_preview(body, user)
         except media_audio_jobs.MediaAudioLimitError as exc:
