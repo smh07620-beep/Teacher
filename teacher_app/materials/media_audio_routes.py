@@ -61,6 +61,8 @@ def _ai_worker_status() -> dict:
         "lastSeen": "",
         "heartbeatAgeSeconds": None,
         "workerId": "",
+        "queues": [],
+        "queueCapabilitiesReported": False,
         "kokoroInstalled": None,
         "diagnosticCode": "worker_not_seen",
         "diagnosticMessage": (
@@ -93,6 +95,12 @@ def _ai_worker_status() -> dict:
         now = dt.datetime.now(dt.timezone.utc)
         heartbeat_age = max(0, int((now - latest_seen).total_seconds()))
         online = heartbeat_age <= 120
+        raw_queues = capabilities.get("queues")
+        queues = sorted({
+            str(item or "").strip()
+            for item in raw_queues
+            if str(item or "").strip()
+        }) if isinstance(raw_queues, (list, tuple, set)) else []
         kokoro_installed = _kokoro_capability(capabilities)
 
         diagnostic_code = "worker_ready"
@@ -122,6 +130,8 @@ def _ai_worker_status() -> dict:
             "lastSeen": latest_seen.isoformat(),
             "heartbeatAgeSeconds": heartbeat_age,
             "workerId": str(row.get("worker_id") or row.get("workerId") or "")[:100],
+            "queues": queues,
+            "queueCapabilitiesReported": isinstance(raw_queues, (list, tuple, set)),
             "kokoroInstalled": kokoro_installed,
             "diagnosticCode": diagnostic_code,
             "diagnosticMessage": diagnostic_message,
@@ -135,13 +145,24 @@ def _ai_worker_status() -> dict:
     return status
 
 
-def _ai_worker_online_error(worker: dict | None = None):
-    """Fail closed for queues that require the dedicated AI Worker process."""
+def _ai_worker_online_error(worker: dict | None = None, *, required_queue: str = ""):
+    """Fail closed unless the dedicated AI Worker reports the required queue."""
     worker = worker or _ai_worker_status()
     if not worker.get("online"):
         return jsonify({
             "error": str(worker.get("diagnosticMessage") or "本機 AI Worker 尚未在線。"),
             "workerOffline": True,
+            "worker": worker,
+        }), 503
+    queue = str(required_queue or "").strip()
+    if queue and queue not in set(worker.get("queues") or []):
+        return jsonify({
+            "error": (
+                f"AI Worker 已在線，但尚未回報 {queue} 處理能力。"
+                "請更新院內 Teacher AI Worker 至目前 main 並重新啟動。"
+            ),
+            "workerCapabilityMissing": True,
+            "requiredQueue": queue,
             "worker": worker,
         }), 503
     return None
@@ -150,7 +171,7 @@ def _ai_worker_online_error(worker: dict | None = None):
 def _worker_ready_error():
     """Fail closed for narration/video work that additionally requires Kokoro."""
     worker = _ai_worker_status()
-    online_error = _ai_worker_online_error(worker)
+    online_error = _ai_worker_online_error(worker, required_queue="media_audio")
     if online_error:
         return online_error
     if worker.get("kokoroInstalled") is not True:
@@ -180,6 +201,7 @@ def register_media_audio_routes(owner):
         payload["readyForPreview"] = bool(
             payload.get("enabled")
             and payload["worker"].get("online")
+            and "media_audio" in set(payload["worker"].get("queues") or [])
             and payload["worker"].get("kokoroInstalled") is True
         )
         if payload["readyForPreview"]:
@@ -196,6 +218,11 @@ def register_media_audio_routes(owner):
             payload["diagnostic"] = {
                 "code": "r2_not_ready",
                 "message": "Cloudflare R2 尚未完成設定，AI 語音無法保存試聽結果。",
+            }
+        elif payload["worker"].get("online") and "media_audio" not in set(payload["worker"].get("queues") or []):
+            payload["diagnostic"] = {
+                "code": "media_audio_capability_missing",
+                "message": "AI Worker 已在線，但尚未回報 media_audio queue；請更新院內 Worker 至目前 main 後重啟。",
             }
         else:
             payload["diagnostic"] = {
