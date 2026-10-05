@@ -11,6 +11,7 @@ import hashlib
 import io
 import json
 import os
+import threading
 import wave
 from typing import Any
 
@@ -19,7 +20,7 @@ from teacher_app.storage import providers, r2_budget, r2_ledger
 
 
 AI_DISCLOSURE = "本音訊為本機 AI 合成語音，內容來源為授課教師已核准之教學講稿。"
-VOICE_PREVIEW_TEXT = "您好，這是醫學檢驗教學平台的 AI 語音試聽。請確認這個聲音是否適合您的教學內容。"
+VOICE_PREVIEW_TEXT = "您好，這是醫學檢驗教學平台的 AI 語音試聽。"
 DEFAULT_PROVIDER = "kokoro"
 DEFAULT_MODEL = "Kokoro-82M-v1.1-zh"
 DEFAULT_REPO_ID = "hexgrad/Kokoro-82M-v1.1-zh"
@@ -35,6 +36,26 @@ ALLOWED_VOICES = {
     "zm_yunxia",
     "zm_yunyang",
 }
+
+
+_KOKORO_PIPELINE = None
+_KOKORO_PIPELINE_KEY = ""
+_KOKORO_PIPELINE_LOCK = threading.Lock()
+
+
+def _kokoro_pipeline(repo_id: str):
+    """Lazily load Kokoro once per Worker process instead of once per preview/job."""
+    global _KOKORO_PIPELINE, _KOKORO_PIPELINE_KEY
+    key = f"z::{repo_id}"
+    if _KOKORO_PIPELINE is not None and _KOKORO_PIPELINE_KEY == key:
+        return _KOKORO_PIPELINE
+    with _KOKORO_PIPELINE_LOCK:
+        if _KOKORO_PIPELINE is not None and _KOKORO_PIPELINE_KEY == key:
+            return _KOKORO_PIPELINE
+        from kokoro import KPipeline
+        _KOKORO_PIPELINE = KPipeline(lang_code="z", repo_id=repo_id)
+        _KOKORO_PIPELINE_KEY = key
+        return _KOKORO_PIPELINE
 
 
 def _provider() -> str:
@@ -170,7 +191,6 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
     del instructions  # Kokoro currently uses the approved text + configured speed/voice only.
     try:
         import numpy as np
-        from kokoro import KPipeline
     except Exception as exc:
         raise RuntimeError(
             "本機免費語音尚未安裝完成；請在 AI Worker 執行 requirements-ai-worker.txt。"
@@ -190,7 +210,7 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
     speed = max(0.75, min(1.35, speed))
 
     try:
-        pipeline = KPipeline(lang_code="z", repo_id=repo_id)
+        pipeline = _kokoro_pipeline(repo_id)
         chunks = []
         for result in pipeline(text, voice=voice, speed=speed, split_pattern=r"\n+"):
             audio = getattr(result, "audio", None)
