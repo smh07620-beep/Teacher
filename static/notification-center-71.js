@@ -110,11 +110,11 @@
   async function readStates(rows){const keys=rows.map(row=>row.key).filter(Boolean);if(!keys.length)return{};const query=new URLSearchParams();keys.forEach(key=>query.append('key',key));const data=await getJSON(`/api/notification-states?${query.toString()}`);return data?.states||{};}
 
   function announcementRows(data){const rows=Array.isArray(data)?data:(Array.isArray(data?.items)?data.items:[]);return rows.slice(0,5).map(item=>({key:announcementKey(item),persona:'info',kind:'announcement',title:item?.title||'平台公告',detail:item?.body||'平台有新的公告。',badge:'公告',overdue:false,href:'',channels:['in_app'],emailPolicy:'none'}));}
-  function actionLabel(item){if(item.kind==='worker_offline')return'查看 Worker 狀態';if(item.kind==='review')return'前往批改';if(item.kind==='material_failure')return'查看教材工作';if(item.kind==='retraining'||item.kind==='material')return'前往教材';if(item.kind==='course'||item.kind==='due'||item.kind==='draft')return'前往課程';if(item.kind==='exam')return'前往考核';return'前往處理';}
+  function actionLabel(item){if(item.kind==='operational_recovery')return'查看目前狀態';if(item.kind==='worker_offline')return'查看 Worker 狀態';if(item.kind==='review')return'前往批改';if(item.kind==='material_failure')return'查看教材工作';if(item.kind==='retraining'||item.kind==='material')return'前往教材';if(item.kind==='course'||item.kind==='due'||item.kind==='draft')return'前往課程';if(item.kind==='exam')return'前往考核';return'前往處理';}
 
   function render(rows){
     const status=document.getElementById('notification-status-71'),list=document.getElementById('notification-list-71');if(!status||!list)return;
-    const unread=rows.filter(row=>!row.read).length,urgent=rows.filter(row=>row.overdue).length,actionable=rows.filter(row=>row.kind!=='announcement').length,info=rows.filter(row=>row.kind==='announcement').length;
+    const unread=rows.filter(row=>!row.read).length,urgent=rows.filter(row=>row.overdue).length,actionable=rows.filter(row=>!['announcement','operational_recovery'].includes(row.kind)).length,info=rows.filter(row=>row.kind==='announcement').length;
     status.textContent=rows.length?`${unread} 未讀 · ${actionable} 待處理 · ${urgent} 逾期 · ${info} 公告`:'沒有新通知';
     const markAll=document.getElementById('notification-mark-all-read-71');if(markAll)markAll.disabled=!unread;
     if(!rows.length){list.innerHTML='<div class="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-700">✓ 目前沒有需要注意的新事項。</div>';return;}
