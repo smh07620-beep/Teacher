@@ -244,6 +244,19 @@ def get_subtitle(subtitle_id: str) -> dict | None:
     return project_subtitle(row)
 
 
+def get_subtitle_by_source_job_id(source_job_id: str) -> dict | None:
+    value = str(source_job_id or "").strip()
+    if not value:
+        return None
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT * FROM media_subtitles WHERE source_job_id={ph} ORDER BY created_at DESC LIMIT 1",
+            (value,),
+        ).fetchone()
+    return project_subtitle(row)
+
+
 def list_subtitles(material_id: str, limit: int = 30) -> list[dict]:
     safe_limit = max(1, min(100, int(limit)))
     with common_db.read_connection() as (conn, kind):
