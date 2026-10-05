@@ -374,7 +374,6 @@ def offline_worker_alerts(
         "available": True,
         "thresholdSeconds": threshold_seconds,
         "workers": workers,
-        "aiWorkers": ai_workers,
     }
 
 
