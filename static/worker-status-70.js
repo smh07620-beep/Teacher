@@ -861,6 +861,8 @@
       const workers = Array.isArray(data.workers) ? data.workers : [];
       const activeWorkers = workerStatusAvailable ? workers.filter(worker => worker.status === 'online' || worker.status === 'busy') : [];
       const recentOfflineWorkers = workerStatusAvailable ? workers.filter(worker => worker.status === 'offline') : [];
+      const aiWorkers = Array.isArray(data.aiWorkers) ? data.aiWorkers : [];
+      const activeAiWorkers = workerStatusAvailable ? aiWorkers.filter(worker => worker.status === 'online') : [];
       const jobs = Array.isArray(data.jobs) ? data.jobs : [];
       const activeJobCount = Number(data.pendingJobs || 0) + Number(data.processingJobs || 0) + Number(data.retryJobs || 0);
       refreshDelayMs = activeJobCount > 0 ? 10000 : 30000;
@@ -886,6 +888,17 @@
       const workerBody = !workerStatusAvailable
         ? `<div data-worker-status-error class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${escapeHtml(workerStatusError)}<div class="mt-1 text-xs text-rose-600">佇列統計仍可使用；此訊息不代表 Worker 已離線。</div></div>`
         : `${activeWorkers.length ? activeWorkers.map(workerCard).join('') : `<div class="rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-5 text-sm text-amber-800">${emptyWorkerMessage}</div>`}${recentOfflineWorkers.length ? `<details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><summary class="cursor-pointer text-sm font-bold text-slate-700">近期離線 Worker（${recentOfflineWorkers.length}）</summary><div class="mt-3 space-y-3">${recentOfflineWorkers.map(workerCard).join('')}</div></details>` : ''}`;
+      const aiWorkerBody = !workerStatusAvailable
+        ? `<div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">AI Worker heartbeat 同樣無法讀取；先檢查 Web / DB 狀態。</div>`
+        : aiWorkers.length
+          ? aiWorkers.map(worker => {
+              const online = worker.status === 'online';
+              const queues = Array.isArray(worker.queues) ? worker.queues : [];
+              const kokoro = worker.kokoroInstalled === true ? '🟢 Kokoro' : worker.kokoroInstalled === false ? '🔴 Kokoro' : '🟠 Kokoro 待回報';
+              const whisper = worker.whisperInstalled === true ? '🟢 Whisper' : '⚪ Whisper';
+              return `<div class="rounded-2xl border ${online ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/60'} p-4 shadow-sm"><div class="flex flex-wrap items-start justify-between gap-2"><div><div class="font-black text-slate-900">${online ? '🟢 AI Worker 在線' : '🟠 AI Worker 離線'}</div><div class="mt-1 text-xs text-slate-600">${escapeHtml(worker.workerMachine || worker.workerId || 'AI Worker')} · 最後回報 ${formatWhen(worker.lastSeen)}</div></div><div class="text-xs font-bold text-slate-700">${kokoro} · ${whisper}</div></div><div class="mt-2 text-[11px] text-slate-600">Queues：${escapeHtml(queues.join('、') || '尚未回報 queue capabilities')}</div></div>`;
+            }).join('')
+          : `<div class="rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"><b>🟠 AI Worker 尚未回報</b><div class="mt-1 text-xs leading-5">教材 Worker 正常不代表 AI Worker 已啟動。請確認院內電腦的 <code>run_ai_worker_autostart.ps1</code>／Teacher AI Worker 排程仍在執行；一旦 heartbeat 寫入同一資料庫，這裡會直接顯示 Kokoro 與 queue 能力。</div></div>`;
       panel.innerHTML = `
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -915,8 +928,12 @@
         ${renderSloDashboard(sloMetrics)}
         ${renderEmailDeliveryHealth(emailHealth)}
         <section id="worker-runtime-70" class="space-y-3 scroll-mt-4">
-          <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">本機 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
+          <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">教材 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
           ${workerBody}
+        </section>
+        <section id="ai-worker-runtime-70" class="space-y-3 scroll-mt-4">
+          <div class="flex items-center justify-between gap-3"><div><h5 class="font-black text-slate-900">AI Worker</h5><p class="mt-1 text-[11px] text-slate-500">AI 出題、講稿、PowerPoint、Kokoro 配音、字幕與影片共用；與教材轉檔 Worker 分開顯示。</p></div><span class="text-xs text-slate-400">${activeAiWorkers.length ? activeAiWorkers.length + ' 台在線' : '尚無在線回報'}</span></div>
+          ${aiWorkerBody}
         </section>
         <section id="worker-incidents-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4 scroll-mt-4">
           <div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-slate-900">🚨 維運事件</h5><p class="mt-1 text-[11px] text-slate-500">Worker、AI 與 Storage 的持續性問題集中在這裡；單次可恢復 fallback 不會升級成事件。</p></div><div class="flex gap-2 text-[11px]"><span class="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 font-bold text-rose-700">目前問題 ${currentIncidents.length}</span><span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 font-bold text-emerald-700">已恢復 ${resolvedIncidents.length}</span></div></div>
