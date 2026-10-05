@@ -134,7 +134,7 @@
         if (paragraph) paragraph.textContent = `${errorMessage}。可按「重新整理教材」再試一次，或直接在本頁上傳一般教材。`;
       } else {
         if (heading) heading.textContent = '目前沒有可選的已完成教材';
-        if (paragraph) paragraph.textContent = '一般教材可直接在這一頁上傳；需要製作簡報時請回 AI 來源內容工作台，不在媒體區重複顯示入口。';
+        if (paragraph) paragraph.textContent = '一般教材可直接在這一頁上傳；PowerPoint、講稿／配音、老師錄影與影片都在同一製作室完成。';
       }
     }
   }
@@ -268,6 +268,17 @@
         legacy.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
+    const authoring = $('teacher-ai-material-source-1014');
+    if (authoring) {
+      if (![...authoring.options].some(option => option.value === materialId) && materialId) {
+        const item = materials.find(row => String(row.id) === materialId);
+        if (item) authoring.add(new Option(sourceLabel(item), materialId));
+      }
+      if (authoring.value !== materialId) {
+        authoring.value = materialId;
+        authoring.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
     if (changed || force) {
       lastSourceSelection = materialId;
       window.TeacherMediaSubtitle1014?.selectMaterial?.(materialId);
@@ -285,8 +296,8 @@
       item?.mimeType, item?.sourceMimeType, item?.filename, item?.title
     ].filter(Boolean).join(' ')) || String(item?.storageBackend || '').toLowerCase() === 'external';
     setSharedHint(isMedia
-      ? '已選擇影音來源：可直接建立 AI 字幕；若已有核准講稿，也可產生 AI 配音。'
-      : '已選擇教材來源：先建立／核准講稿即可產生 AI 配音；準備好影片畫面版本後即可製作教學影片。');
+      ? '已選擇影音來源：可在教學影片內建立／校正字幕，也可直接進行後續配音或影片處理。'
+      : '已選擇教材來源：可直接切換 AI PowerPoint、講稿與配音或教學影片；老師錄影可不依賴來源。');
   }
 
   async function refreshSources({force = false} = {}) {
@@ -296,6 +307,7 @@
     const selectedBeforeRefresh = String(shared.value || lastSourceSelection || '');
     if (!force && materials.length && Date.now() - sourceRefreshAt < 2000) {
       paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
+      paintSelect($('teacher-ai-material-source-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
       paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳', selectedBeforeRefresh);
       showSourceAvailability(materials);
       sourcesLoadedAt = Date.now();
@@ -313,6 +325,7 @@
       sourceRefreshAt = Date.now();
       sourcesLoadedAt = sourceRefreshAt;
       paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
+      paintSelect($('teacher-ai-material-source-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
       paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳', selectedBeforeRefresh);
       showSourceAvailability(materials);
       broadcastSources(shared);
@@ -412,6 +425,32 @@
   async function openPowerPointWorkspace(options = {}) {
     closeGeneralMaterialUpload();
     const purpose = String(options?.purpose || 'powerpoint');
+    const unified = $('teacher-media-panel-presentation-1018');
+    if (unified && typeof window.TeacherAIMediaStudio1018?.showMode === 'function') {
+      window.TeacherAIMediaStudio1018.showMode('presentation');
+      const panel = window.TeacherAIMaterial1014?.ensureMounted?.(unified) || $('teacher-ai-material-1014');
+      if (!panel) {
+        setSharedHint('AI PowerPoint 元件載入失敗；請重新整理頁面。', true);
+        return false;
+      }
+      panel.classList.remove('hidden');
+      panel.removeAttribute('aria-hidden');
+      const selected = $('teacher-media-source-1018')?.value || '';
+      await window.TeacherAIMaterial1014?.paintMaterialOptions?.(selected);
+      if (selected) {
+        const authoring = $('teacher-ai-material-source-1014');
+        if (authoring && [...authoring.options].some(option => option.value === selected)) {
+          authoring.value = selected;
+          authoring.dispatchEvent(new Event('change', {bubbles:true}));
+        }
+      }
+      if (purpose === 'video') {
+        const type = $('teacher-ai-material-type-1014');
+        if (type && [...type.options].some(option => option.value === 'slides')) type.value = 'slides';
+      }
+      unified.scrollIntoView?.({block:'start', behavior:'smooth'});
+      return true;
+    }
     const host = ensurePowerPointWorkspace();
     const body = $('teacher-media-powerpoint-body-1024');
     const studio = $('teacher-ai-media-studio-1018') || $('teacher-media-production-1014');
