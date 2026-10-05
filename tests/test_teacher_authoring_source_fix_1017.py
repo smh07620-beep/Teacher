@@ -43,6 +43,15 @@ class TeacherAuthoringSourceFix1017Tests(unittest.TestCase):
         self.assertIn('draft.get("draftType") != "slides"', self.presentation_routes)
         self.assertIn('draft.get("status") != "approved"', self.presentation_routes)
 
+    def test_powerpoint_authoring_mount_prefers_stable_media_workspace(self):
+        material = ROOT.joinpath("static", "teacher-ai-material-1014.js").read_text(encoding="utf-8")
+        self.assertIn("teacher-media-panel-presentation-1018", material)
+        self.assertIn("teacher-media-production-1014", material)
+        self.assertLess(
+            material.index("teacher-media-production-1014"),
+            material.index("admin-course-material-hub"),
+        )
+
     def test_powerpoint_multi_source_picker_uses_teacher_scope(self):
         material = ROOT.joinpath("static", "teacher-ai-material-1014.js").read_text(encoding="utf-8")
         self.assertIn("R.user?.preferredGroup", material)
