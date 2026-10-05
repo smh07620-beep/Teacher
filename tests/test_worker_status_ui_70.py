@@ -70,6 +70,10 @@ class WorkerStatusUi70Tests(unittest.TestCase):
             "updateAvailable",
             "ffmpeg",
             "libreOffice",
+            "aiWorkers",
+            "AI Worker",
+            "Kokoro",
+            "run_ai_worker_autostart.ps1",
         ):
             self.assertIn(marker, self.source)
 
