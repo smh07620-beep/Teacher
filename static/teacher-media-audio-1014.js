@@ -29,12 +29,17 @@
     const host = document.getElementById('teacher-audio-health-1014');
     if (!host) return;
     const worker = data?.worker || {};
-    const workerText = worker.online ? '🟢 AI Worker 在線' : worker.seen ? '🔴 AI Worker 離線' : '🟠 AI Worker 尚未回報';
-    const kokoroText = worker.kokoroInstalled === true
-      ? '🟢 Kokoro 已安裝'
-      : worker.kokoroInstalled === false
-        ? '🔴 Kokoro 未安裝'
-        : worker.seen ? '🟠 Kokoro 能力未回報' : '⚪ Kokoro 等待 AI Worker';
+    const statusUnavailable = worker.statusUnavailable === true;
+    const workerText = statusUnavailable
+      ? '🔴 AI Worker 狀態讀取失敗'
+      : worker.online ? '🟢 AI Worker 在線' : worker.seen ? '🔴 AI Worker 離線' : '🟠 AI Worker 尚未回報';
+    const kokoroText = statusUnavailable
+      ? '⚪ Kokoro 無法確認'
+      : worker.kokoroInstalled === true
+        ? '🟢 Kokoro 已安裝'
+        : worker.kokoroInstalled === false
+          ? '🔴 Kokoro 未安裝'
+          : worker.seen ? '🟠 Kokoro 能力未回報' : '⚪ Kokoro 等待 AI Worker';
     const r2Text = data?.r2Ready ? '🟢 R2 正常' : '🔴 R2 未設定';
     const ready = !!data?.readyForPreview;
     host.className = ready
