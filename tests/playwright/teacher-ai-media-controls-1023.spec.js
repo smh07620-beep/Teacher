@@ -308,6 +308,7 @@ test('F5 hydration and observers issue one PowerPoint request per selected sourc
     };
   });
 
+  await page.addScriptTag({ path: asset('teacher-media-source-fix-1014.js') });
   await page.addScriptTag({ path: asset('teacher-ai-media-studio-1018.js') });
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
   const source = page.locator('#teacher-media-source-1018');
@@ -317,7 +318,7 @@ test('F5 hydration and observers issue one PowerPoint request per selected sourc
   await page.locator('main').evaluate(main => {
     for (let index = 0; index < 20; index += 1) main.appendChild(document.createElement('div'));
   });
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(1500);
   await expect.poll(() => page.evaluate(() => window.presentationRequests1025)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.slideRequests1025)).toBe(1);
 });
