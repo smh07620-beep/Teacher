@@ -30,11 +30,12 @@
     if (!host) return;
     const worker = data?.worker || {};
     const statusUnavailable = worker.statusUnavailable === true;
+    const httpsControl = worker.heartbeatTransport === 'https' || worker.controlPlaneReady === true;
     const workerText = statusUnavailable
       ? '🔴 AI Worker 狀態讀取失敗'
-      : worker.databaseReady === false
+      : !httpsControl && worker.databaseReady === false
         ? '🔴 AI Worker DB 無法連線'
-        : worker.databaseIdentityMatch === false
+        : !httpsControl && worker.databaseIdentityMatch === false
           ? '🔴 AI Worker DB 不一致'
           : worker.online ? '🟢 AI Worker 在線' : worker.seen ? '🔴 AI Worker 離線' : '🟠 AI Worker 尚未回報';
     const kokoroText = statusUnavailable
