@@ -44,18 +44,15 @@
 
   async function refresh() {
     if (!audioCard()) return false;
-    paintBadge('真人錄音可用｜檢查免費 AI 語音…', false);
-    try {
-      const response = await fetch('/api/media-audio/status', {credentials:'same-origin', cache:'no-store'});
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'status unavailable');
-      const ready = !!data.readyForPreview;
-      paintBadge(readinessLabel(data), ready);
-      updateSummary(ready);
-    } catch (_) {
-      paintBadge('真人錄音可用｜免費 AI 語音狀態待確認', false);
+    const data = window.TeacherMediaAudioStatus1014 || null;
+    if (!data) {
+      paintBadge('真人錄音可用｜檢查免費 AI 語音…', false);
       updateSummary(false);
+      return true;
     }
+    const ready = !!data.readyForPreview;
+    paintBadge(readinessLabel(data), ready);
+    updateSummary(ready);
     return true;
   }
 
@@ -68,6 +65,14 @@
     });
     observer.observe(document.body, {childList:true, subtree:true});
   }
+
+  window.addEventListener('teacher-media-audio-status-1014', event => {
+    const data = event.detail?.status || null;
+    if (!data || !audioCard()) return;
+    const ready = !!data.readyForPreview;
+    paintBadge(readinessLabel(data), ready);
+    updateSummary(ready);
+  });
 
   window.TeacherMediaStatusFix1014 = Object.freeze({ refresh });
 })();
