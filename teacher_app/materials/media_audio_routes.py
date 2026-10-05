@@ -28,8 +28,14 @@ def _ai_worker_status() -> dict:
         "seen": False,
         "online": False,
         "lastSeen": "",
+        "heartbeatAgeSeconds": None,
         "workerId": "",
         "kokoroInstalled": None,
+        "diagnosticCode": "worker_not_seen",
+        "diagnosticMessage": (
+            "尚未收到院內 AI Worker 回報。請確認 Windows 排程「Teacher AI Worker」已啟動，"
+            "且 .local-worker.env 的 DATABASE_URL 與 AI Worker dependencies 可用。"
+        ),
     }
     try:
         latest = None
@@ -51,18 +57,51 @@ def _ai_worker_status() -> dict:
                 latest_seen = seen
         if latest is None or latest_seen is None:
             return status
+
         row, capabilities = latest
         now = dt.datetime.now(dt.timezone.utc)
+        heartbeat_age = max(0, int((now - latest_seen).total_seconds()))
+        online = heartbeat_age <= 120
         kokoro = capabilities.get("kokoro") if isinstance(capabilities.get("kokoro"), dict) else {}
+        kokoro_installed = bool(kokoro.get("available")) if "available" in kokoro else None
+
+        diagnostic_code = "worker_ready"
+        diagnostic_message = "AI Worker 與 Kokoro 已回報，可建立語音試聽。"
+        if not online:
+            diagnostic_code = "worker_offline"
+            diagnostic_message = (
+                f"AI Worker 最後回報已超過 120 秒（約 {heartbeat_age} 秒前）。"
+                "請檢查 Windows 排程「Teacher AI Worker」是否仍在執行。"
+            )
+        elif kokoro_installed is False:
+            diagnostic_code = "kokoro_unavailable"
+            diagnostic_message = (
+                "AI Worker 已在線，但 Kokoro capability 回報不可用。"
+                "請同步 requirements-ai-worker.txt 後重啟 Teacher AI Worker。"
+            )
+        elif kokoro_installed is None:
+            diagnostic_code = "kokoro_unknown"
+            diagnostic_message = (
+                "AI Worker 已回報，但沒有 Kokoro capability 資訊。"
+                "請更新院內 Worker 程式與 AI dependencies 後重啟。"
+            )
+
         status.update({
             "seen": True,
-            "online": latest_seen >= now - dt.timedelta(seconds=120),
+            "online": online,
             "lastSeen": latest_seen.isoformat(),
+            "heartbeatAgeSeconds": heartbeat_age,
             "workerId": str(row.get("worker_id") or row.get("workerId") or "")[:100],
-            "kokoroInstalled": bool(kokoro.get("available")),
+            "kokoroInstalled": kokoro_installed,
+            "diagnosticCode": diagnostic_code,
+            "diagnosticMessage": diagnostic_message,
         })
     except Exception:
-        status["statusUnavailable"] = True
+        status.update({
+            "statusUnavailable": True,
+            "diagnosticCode": "status_unavailable",
+            "diagnosticMessage": "Web 無法讀取 AI Worker heartbeat 狀態；請檢查資料庫連線與 worker heartbeat table。",
+        })
     return status
 
 
@@ -86,6 +125,26 @@ def register_media_audio_routes(owner):
             and payload["worker"].get("online")
             and payload["worker"].get("kokoroInstalled") is True
         )
+        if payload["readyForPreview"]:
+            payload["diagnostic"] = {
+                "code": "ready",
+                "message": "AI Worker、Kokoro 與 R2 均已就緒，可直接試聽。",
+            }
+        elif not payload.get("providerReady"):
+            payload["diagnostic"] = {
+                "code": "provider_not_ready",
+                "message": "AI_TTS_PROVIDER 尚未設定為 Kokoro。",
+            }
+        elif not payload.get("r2Ready"):
+            payload["diagnostic"] = {
+                "code": "r2_not_ready",
+                "message": "Cloudflare R2 尚未完成設定，AI 語音無法保存試聽結果。",
+            }
+        else:
+            payload["diagnostic"] = {
+                "code": str(payload["worker"].get("diagnosticCode") or "worker_not_ready"),
+                "message": str(payload["worker"].get("diagnosticMessage") or "AI Worker 尚未就緒。"),
+            }
         active_job = media_audio_repository.active_formal_job_for_actor(str(user.get("username") or ""))
         if active_job:
             payload["activeJob"] = media_audio_jobs.public_job(active_job)
