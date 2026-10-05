@@ -13,6 +13,11 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         cls.env = (ROOT / ".local-worker.env.example").read_text(encoding="utf-8")
         cls.worker_requirements = (ROOT / "requirements-ai-worker.txt").read_text(encoding="utf-8")
         cls.ui = (ROOT / "static" / "teacher-media-free-tts-1014.js").read_text(encoding="utf-8")
+        cls.audio_ui = (ROOT / "static" / "teacher-media-audio-1014.js").read_text(encoding="utf-8")
+        cls.video_ui = (ROOT / "static" / "teacher-ai-video-1015.js").read_text(encoding="utf-8")
+        cls.worker = (ROOT / "ai_question_worker.py").read_text(encoding="utf-8")
+        cls.routes = (ROOT / "teacher_app" / "materials" / "media_audio_routes.py").read_text(encoding="utf-8")
+        cls.worker_ops = (ROOT / "teacher_app" / "worker" / "operations.py").read_text(encoding="utf-8")
 
     def test_narration_is_local_kokoro_only(self):
         for marker in (
@@ -46,6 +51,21 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn('本機 Kokoro', self.ui)
         self.assertIn('不呼叫 OpenAI TTS', self.ui)
         self.assertIn('/api/media-audio/status', self.ui)
+
+    def test_ai_voice_service_health_is_visible_and_backed_by_worker_heartbeat(self):
+        self.assertIn('"workerKind": "ai"', self.worker)
+        self.assertIn('AI_WORKER_HEARTBEAT_SECONDS', self.worker)
+        self.assertIn('readyForPreview', self.routes)
+        self.assertIn('kokoroInstalled', self.routes)
+        self.assertIn('teacher-audio-health-1014', self.audio_ui)
+        self.assertIn('AI Worker 在線', self.audio_ui)
+        self.assertIn('Kokoro 已安裝', self.audio_ui)
+        self.assertIn('R2 正常', self.audio_ui)
+        self.assertIn('teacher-ai-video-voice-health-1015', self.video_ui)
+
+    def test_ai_heartbeat_does_not_appear_as_duplicate_material_worker(self):
+        self.assertIn('capabilities.get("workerKind")', self.worker_ops)
+        self.assertIn('== "ai"', self.worker_ops)
 
     def test_enqueue_error_mentions_local_free_runtime(self):
         self.assertIn('免費本機 AI 語音尚未啟用', self.jobs)
