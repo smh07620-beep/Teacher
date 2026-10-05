@@ -171,6 +171,24 @@ def _reserve_on_connection(
     policy: R2BudgetPolicy,
     now: dt.datetime,
 ) -> None:
+    ph = "%s" if kind == "postgres" else "?"
+    existing = conn.execute(
+        f"SELECT object_key,reserved_bytes,status FROM r2_upload_reservations WHERE upload_id={ph}",
+        (str(upload_id),),
+    ).fetchone()
+    if existing:
+        current = dict(existing)
+        same_identity = (
+            str(current.get("object_key") or "") == str(object_key)
+            and int(current.get("reserved_bytes") or 0) == int(source_bytes or 0)
+        )
+        if same_identity and str(current.get("status") or "") == "active":
+            # HTTPS Worker retries can repeat a reservation after the server
+            # committed but the response was lost. Treat that exact replay as
+            # success instead of double-reserving free-tier capacity.
+            return
+        raise ValueError("相同 uploadId 已存在不同或已結束的 R2 reservation。")
+
     staging, reserved = _staging_totals(conn)
     estimate = _estimated_gb_month(conn, now)
     start, end = _month_bounds(now)
