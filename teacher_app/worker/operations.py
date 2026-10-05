@@ -627,10 +627,13 @@ def status(
         ),
         now=now,
     )
+    metrics_window_hours = _int_env("MATERIAL_JOB_METRICS_WINDOW_HOURS", 24, 1, 168)
+    metrics_cutoff = now - dt.timedelta(hours=metrics_window_hours)
     terminal_jobs = [
         item
         for item in recent_jobs
         if str(item.get("status") or "") in {"completed", "failed"}
+        and (_parse_utc(item.get("finishedAt") or item.get("updatedAt")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)) >= metrics_cutoff
     ]
     failure_attention_hours = _int_env("MATERIAL_FAILED_ATTENTION_HOURS", 24, 1, 168)
     failure_attention_cutoff = now - dt.timedelta(hours=failure_attention_hours)
@@ -651,6 +654,8 @@ def status(
     durations: list[float] = []
     for item in recent_jobs:
         if str(item.get("status") or "") != "completed":
+            continue
+        if (_parse_utc(item.get("finishedAt") or item.get("updatedAt")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)) < metrics_cutoff:
             continue
         try:
             started = dt.datetime.fromisoformat(
@@ -783,6 +788,7 @@ def status(
         "oldestPendingAt": oldest,
         "oldestPendingAgeSeconds": oldest_age,
         "recentTerminalJobs": len(terminal_jobs),
+        "metricsWindowHours": metrics_window_hours,
         "recentFailureRate": failure_rate,
         "averageCompletedDurationSeconds": (
             round(sum(durations) / len(durations), 1)
