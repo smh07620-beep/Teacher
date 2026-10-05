@@ -67,13 +67,13 @@ def _ai_worker_status() -> dict:
         "kokoroInstalled": None,
         "databaseReady": None,
         "databaseIdentityMatch": None,
+        "controlPlaneReady": None,
         "heartbeatContract": 0,
         "heartbeatTransport": "",
         "diagnosticCode": "worker_not_seen",
         "diagnosticMessage": (
-            "尚未收到院內 AI Worker heartbeat。Windows 排程顯示 RUNNING 只代表 supervisor 還在，"
-            "不代表 heartbeat 已成功寫入正式資料庫。請確認院內 Worker 已更新到目前 main，"
-            "且 .local-worker.env 的 DATABASE_URL 與 Render 使用同一個正式資料庫。"
+            "尚未收到院內 AI Worker heartbeat。Windows 排程顯示 RUNNING 只代表 supervisor 還在；"
+            "請確認院內 Worker 已更新到目前 main，並可透過 HTTPS 443 連到 Render Web。"
         ),
     }
     try:
@@ -119,17 +119,24 @@ def _ai_worker_status() -> dict:
         )
         heartbeat_contract = int(capabilities.get("heartbeatContract") or 0)
         heartbeat_transport = str(capabilities.get("heartbeatTransport") or "")[:32]
+        control_plane_ready = capabilities.get("controlPlaneReady")
+        control_plane_ready = None if control_plane_ready is None else bool(control_plane_ready)
+        https_control = heartbeat_transport == "https" or control_plane_ready is True
 
         diagnostic_code = "worker_ready"
-        diagnostic_message = "AI Worker 與 Kokoro 已回報，可建立語音試聽。"
-        if database_ready is False:
+        diagnostic_message = (
+            "AI Worker 已透過 HTTPS 443 control plane 回報，Kokoro 可建立語音試聽。"
+            if https_control
+            else "AI Worker 與 Kokoro 已回報，可建立語音試聽。"
+        )
+        if not https_control and database_ready is False:
             online = False
             diagnostic_code = "worker_database_unavailable"
             diagnostic_message = (
                 "AI Worker supervisor 有執行，但無法寫入正式 DATABASE_URL；"
                 "請檢查院內 .local-worker.env 的 DATABASE_URL 與 Supabase 連線。"
             )
-        elif database_identity_match is False:
+        elif not https_control and database_identity_match is False:
             online = False
             diagnostic_code = "worker_database_mismatch"
             diagnostic_message = (
@@ -166,6 +173,7 @@ def _ai_worker_status() -> dict:
             "kokoroInstalled": kokoro_installed,
             "databaseReady": database_ready,
             "databaseIdentityMatch": database_identity_match,
+            "controlPlaneReady": control_plane_ready,
             "heartbeatContract": heartbeat_contract,
             "heartbeatTransport": heartbeat_transport,
             "diagnosticCode": diagnostic_code,
