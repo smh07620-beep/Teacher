@@ -11,6 +11,7 @@ import hmac
 import logging
 import math
 import mimetypes
+import os
 import re
 import threading
 import time
@@ -23,6 +24,7 @@ from teacher_app.common import scope, scope_filter
 from teacher_app.learning.routes import auto_index_material
 from teacher_app.materials import repository as material_repository
 from teacher_app.materials.validation import normalize_material_filename
+from teacher_app.worker import ai_remote
 from teacher_app.worker import protocol as worker_protocol
 from teacher_app.worker import repository as worker_repository
 from teacher_app.worker import operations as worker_operations
@@ -31,6 +33,7 @@ from teacher_app.worker.web_runtime import WorkerWebRuntime, runtime_from_owner
 
 _RATE_LOCK = threading.Lock()
 _RATE: dict[str, list[float]] = {}
+_AI_RATE: dict[str, list[float]] = {}
 PART_HASH_STRATEGY = "sha256-parts-v1"
 SINGLE_HASH_STRATEGY = "sha256-single-v1"
 SINGLE_PUT_MAX_BYTES = 32 * 1024 * 1024
@@ -70,6 +73,24 @@ def _worker_rate_ok() -> bool:
     return True
 
 
+def _ai_worker_rate_ok() -> bool:
+    key = str(request.remote_addr or "unknown")[:80]
+    now = time.monotonic()
+    try:
+        limit = int(os.environ.get("AI_WORKER_HTTP_RATE_LIMIT_PER_MINUTE", "900") or 900)
+    except (TypeError, ValueError):
+        limit = 900
+    limit = max(120, min(3600, limit))
+    with _RATE_LOCK:
+        recent = [stamp for stamp in _AI_RATE.get(key, []) if now - stamp < 60]
+        if len(recent) >= limit:
+            _AI_RATE[key] = recent
+            return False
+        recent.append(now)
+        _AI_RATE[key] = recent
+    return True
+
+
 def _runtime_value(value):
     return value() if callable(value) else value
 
@@ -81,6 +102,20 @@ def _worker_auth(runtime: WorkerWebRuntime):
         return jsonify({"error": "Worker token 無效或尚未設定。"}), 401
     if not _worker_rate_ok():
         return jsonify({"error": "Worker API 請求過於頻繁。"}), 429
+    return None
+
+
+def _ai_worker_auth(runtime: WorkerWebRuntime):
+    token = str(
+        os.environ.get("AI_WORKER_TOKEN")
+        or _runtime_value(runtime.worker_token)
+        or ""
+    ).strip()
+    supplied = str(request.headers.get("Authorization", ""))
+    if not worker_protocol.bearer_token_matches(token, supplied):
+        return jsonify({"error": "AI Worker token 無效或尚未設定。"}), 401
+    if not _ai_worker_rate_ok():
+        return jsonify({"error": "AI Worker HTTPS control plane 請求過於頻繁。"}), 429
     return None
 
 
@@ -374,6 +409,62 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         ):
             return jsonify({"error": "此上傳工作屬於另一個登入工作階段。"}), 403
         return None
+
+    @app.post("/api/ai-worker/heartbeat")
+    def ai_worker_heartbeat():
+        denied = _ai_worker_auth(runtime)
+        if denied:
+            return denied
+        body = request.get_json(silent=True) or {}
+        worker_id = _worker_id(body.get("workerId"))
+        if not worker_id:
+            return jsonify({"error": "workerId 不合法。"}), 400
+        capabilities = body.get("capabilities") if isinstance(body.get("capabilities"), dict) else {}
+        capabilities = dict(capabilities)
+        capabilities["workerKind"] = "ai"
+        capabilities["heartbeatTransport"] = "https"
+        capabilities["controlPlaneReady"] = True
+        capabilities["heartbeatContract"] = max(3, int(capabilities.get("heartbeatContract") or 0))
+        capabilities["databaseReady"] = None
+        capabilities["databaseIdentity"] = ""
+        stamp = _heartbeat(runtime, worker_id, capabilities, metadata=body)
+        return jsonify({"ok": True, "lastSeen": stamp, "transport": "https"})
+
+    @app.post("/api/ai-worker/rpc")
+    def ai_worker_rpc():
+        denied = _ai_worker_auth(runtime)
+        if denied:
+            return denied
+        if int(request.content_length or 0) > int(
+            os.environ.get("AI_WORKER_RPC_MAX_BYTES", str(16 * 1024 * 1024))
+        ):
+            return jsonify({"error": "AI Worker RPC payload 超過允許大小。"}), 413
+        body = request.get_json(silent=True) or {}
+        worker_id = _worker_id(body.get("workerId"))
+        if not worker_id:
+            return jsonify({"error": "workerId 不合法。"}), 400
+        call_id = str(body.get("callId") or "").strip()
+        op = str(body.get("op") or "").strip()
+        args = body.get("args")
+        kwargs = body.get("kwargs")
+        if not isinstance(args, list) or not isinstance(kwargs, dict):
+            return jsonify({"error": "AI Worker RPC 參數格式錯誤。"}), 400
+        try:
+            result, replayed = ai_remote.execute_rpc_call(call_id, op, args, kwargs)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)[:300], "code": "AI_WORKER_RPC_INVALID"}), 400
+        except Exception as exc:
+            LOGGER.warning(
+                "AI worker RPC failed op=%s worker_id=%s error_type=%s",
+                op[:80],
+                worker_id[:80],
+                type(exc).__name__,
+            )
+            return jsonify({
+                "error": "AI Worker control plane 暫時無法完成資料操作。",
+                "code": "AI_WORKER_RPC_UNAVAILABLE",
+            }), 503
+        return jsonify({"ok": True, "result": result, "replayed": bool(replayed)})
 
     def normalize_resume_identity(body, session):
         stored = dict((session.get("payload") or {}).get("uploadIdentity") or {})
