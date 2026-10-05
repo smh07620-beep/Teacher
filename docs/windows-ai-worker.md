@@ -82,10 +82,15 @@ TEACHER_BASE_URL=https://your-teacher.onrender.com
 MATERIAL_WORKER_TOKEN=...
 ```
 
-The AI Worker additionally requires the same production database used by Render Web so it can consume the durable AI queues:
+The AI Worker uses the same outbound HTTPS 443 control plane as the Material Worker. The hospital computer does **not** need direct Supabase PostgreSQL 5432/6543 access:
 
 ```text
-DATABASE_URL=postgresql://...
+TEACHER_BASE_URL=https://your-teacher.onrender.com
+MATERIAL_WORKER_TOKEN=...
+AI_WORKER_TRANSPORT=https
+# Optional: use a separate revocable secret. If blank, the AI Worker reuses
+# MATERIAL_WORKER_TOKEN for backward-compatible migration.
+AI_WORKER_TOKEN=
 FREE_ONLY_MODE=true
 AI_EXTERNAL_PROCESSING_ENABLED=true
 AI_PROVIDER=groq
@@ -93,6 +98,8 @@ AI_FREE_FALLBACK_ENABLED=true
 GROQ_API_KEY=...
 GEMINI_API_KEY=...
 ```
+
+`DATABASE_URL` is now legacy/local-development fallback only. In HTTPS mode all queue claims, progress, completion/failure records, and heartbeat metadata are authenticated JSON control messages to Render. Large source files, PowerPoint artifacts, WAV audio, and MP4 video **do not transit Render**; the Worker continues to transfer those directly through the configured shared storage provider.
 
 Free local narration uses:
 
@@ -170,4 +177,4 @@ Invoke-RestMethod http://127.0.0.1:11434/api/tags
 
 In Event Viewer, inspect **Windows Logs → Application** and filter the `TeacherAIWorker` source. Event 1100 indicates the AI supervisor started. Warnings 2201/2202 mean narration or free-provider configuration is incomplete without exposing secret values. Errors 3101/3103/3104/3105 indicate missing production DB, missing runtime prerequisites, launch failure, or restart exhaustion.
 
-A working AI Worker prints `started queues=ai_questions,media_scripts,media_audio free_fallback=enabled`. The first Kokoro narration, faster-whisper transcription, or local model initialization can be slower because model files may be entering the normal local cache. Web remains responsible only for enqueue/status APIs; long AI execution stays off the Render Web process.
+A working AI Worker prints all six queues plus `control_transport=https`. The first Kokoro narration, faster-whisper transcription, or local model initialization can be slower because model files may be entering the normal local cache. Render carries only small authenticated control JSON (heartbeat, claim, progress, complete/fail and allow-listed repository metadata); long AI execution and large media transfers stay off the Render Web process.
