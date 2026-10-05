@@ -52,7 +52,9 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn('免費 AI 語音', self.ui)
         self.assertIn('本機 Kokoro', self.ui)
         self.assertIn('不呼叫 OpenAI TTS', self.ui)
-        self.assertIn('/api/media-audio/status', self.ui)
+        self.assertNotIn("fetch('/api/media-audio/status'", self.ui)
+        self.assertIn("TeacherMediaAudioStatus1014", self.ui)
+        self.assertIn("teacher-media-audio-status-1014", self.ui)
 
     def test_ai_voice_service_health_is_visible_and_backed_by_worker_heartbeat(self):
         self.assertIn('"workerKind": "ai"', self.worker)
@@ -101,6 +103,15 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
     def test_ai_heartbeat_does_not_appear_as_duplicate_material_worker(self):
         self.assertIn('capabilities.get("workerKind")', self.worker_ops)
         self.assertIn('== "ai"', self.worker_ops)
+        self.assertIn("def _latest_ai_heartbeat_per_machine", self.worker_ops)
+        self.assertIn('"aiWorkers": ai_workers', self.worker_ops)
+
+    def test_one_audio_status_owner_broadcasts_to_all_media_views(self):
+        self.assertIn("teacher-media-audio-status-1014", self.audio_ui)
+        self.assertIn("TeacherMediaAudioStatus1014", self.audio_ui)
+        self.assertNotIn("fetch('/api/media-audio/status'", self.ui)
+        self.assertNotIn("fetch('/api/media-audio/status'", self.status_ui)
+        self.assertIn("teacher-media-audio-status-1014", self.video_ui)
 
     def test_enqueue_error_mentions_local_free_runtime(self):
         self.assertIn('免費本機 AI 語音尚未啟用', self.jobs)
