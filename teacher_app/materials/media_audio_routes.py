@@ -66,8 +66,9 @@ def _ai_worker_status() -> dict:
         "kokoroInstalled": None,
         "diagnosticCode": "worker_not_seen",
         "diagnosticMessage": (
-            "尚未收到院內 AI Worker 回報。請確認 Windows 排程「Teacher AI Worker」已啟動，"
-            "且 .local-worker.env 的 DATABASE_URL 與 AI Worker dependencies 可用。"
+            "尚未收到院內 AI Worker heartbeat。Windows 排程顯示 RUNNING 只代表 supervisor 還在，"
+            "不代表 heartbeat 已成功寫入正式資料庫。請確認院內 Worker 已更新到目前 main，"
+            "且 .local-worker.env 的 DATABASE_URL 與 Render 使用同一個正式資料庫。"
         ),
     }
     try:
