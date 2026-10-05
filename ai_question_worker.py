@@ -8,8 +8,6 @@ import sys
 import threading
 import time
 
-import requests
-
 from teacher_app import config as teacher_config
 from teacher_app.assessments import ai_jobs, free_ai_fallback
 from teacher_app.assessments.question_runtime import build_canonical_question_runtime
@@ -21,6 +19,7 @@ from teacher_app.materials import (
     media_script_jobs,
     media_subtitle_jobs,
 )
+from teacher_app.worker import ai_remote
 from teacher_app.worker import repository as worker_repository
 
 
@@ -49,18 +48,21 @@ def _module_available(name: str) -> bool:
         return False
 
 
-def _ai_worker_capabilities() -> dict:
+def _ai_worker_capabilities(transport: str | None = None) -> dict:
+    transport = transport or ai_remote.transport_mode()
     kokoro_ready = _module_available("kokoro")
     numpy_ready = _module_available("numpy")
     misaki_ready = _module_available("misaki")
     whisper_ready = _module_available("faster_whisper")
-    return {
+    web_mode = transport == ai_remote.TRANSPORT_HTTPS
+    payload = {
         "workerKind": "ai",
         "workerMachine": str(socket.gethostname() or "")[:80],
-        "heartbeatContract": 2,
-        "heartbeatTransport": "database+web",
-        "databaseIdentity": teacher_config.database_identity(),
-        "databaseReady": True,
+        "heartbeatContract": 3 if web_mode else 2,
+        "heartbeatTransport": "https" if web_mode else "database",
+        "controlPlaneReady": web_mode,
+        "databaseReady": None if web_mode else True,
+        "databaseIdentity": "" if web_mode else teacher_config.database_identity(),
         "kokoro": {
             "available": bool(kokoro_ready and numpy_ready and misaki_ready),
             "kokoro": kokoro_ready,
@@ -70,12 +72,21 @@ def _ai_worker_capabilities() -> dict:
         "whisper": {"available": whisper_ready},
         "queues": ["ai_questions", "media_scripts", "ai_presentations", "ai_videos", "media_audio", "media_subtitles"],
     }
+    return payload
 
 
 class _AIHeartbeat:
-    def __init__(self, interval_seconds: int = 30):
+    def __init__(
+        self,
+        interval_seconds: int = 30,
+        *,
+        transport: str | None = None,
+        api: ai_remote.AIWorkerApi | None = None,
+    ):
         self.worker_id = _ai_worker_id()
         self.interval_seconds = max(10, min(90, int(interval_seconds or 30)))
+        self.transport = transport or ai_remote.transport_mode()
+        self.api = api
         self.failure_limit = _env_int("AI_WORKER_HEARTBEAT_FAILURE_LIMIT", 5, 2, 20)
         self.startup_attempts = _env_int("AI_WORKER_HEARTBEAT_STARTUP_ATTEMPTS", 3, 1, 10)
         self._stop = threading.Event()
@@ -83,46 +94,21 @@ class _AIHeartbeat:
         self._thread = None
         self._consecutive_failures = 0
 
-    def _post_web_heartbeat(self, capabilities: dict) -> None:
-        base_url = str(os.environ.get("TEACHER_BASE_URL") or "").strip().rstrip("/")
-        token = str(os.environ.get("MATERIAL_WORKER_TOKEN") or "").strip()
-        if not base_url or not token:
-            return
-        response = requests.post(
-            base_url + "/api/material-worker/heartbeat",
-            json={"workerId": self.worker_id, "capabilities": capabilities},
-            headers={"Authorization": "Bearer " + token},
-            timeout=10,
-        )
-        if response.status_code >= 300:
-            raise RuntimeError(f"AI Worker Web heartbeat rejected with HTTP {response.status_code}")
-
     def pulse(self) -> None:
+        capabilities = _ai_worker_capabilities(self.transport)
+        if self.transport == ai_remote.TRANSPORT_HTTPS:
+            if self.api is None:
+                raise RuntimeError("AI Worker HTTPS client 尚未初始化。")
+            self.api.heartbeat(capabilities)
+            return
+
         stamp = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
-        capabilities = _ai_worker_capabilities()
-        try:
-            worker_repository.upsert_heartbeat(
-                self.worker_id,
-                last_seen=stamp,
-                capabilities=capabilities,
-                current_job_id="",
-            )
-        except Exception:
-            degraded = dict(capabilities)
-            degraded["databaseReady"] = False
-            degraded["heartbeatTransport"] = "web-diagnostic"
-            try:
-                self._post_web_heartbeat(degraded)
-            except Exception:
-                pass
-            raise
-        try:
-            self._post_web_heartbeat(capabilities)
-        except Exception as exc:
-            # Direct DB heartbeat remains authoritative for queue health.  A Web
-            # diagnostic heartbeat failure must not make an otherwise healthy
-            # AI Worker exit.
-            log(f"web heartbeat diagnostic failed type={type(exc).__name__}")
+        worker_repository.upsert_heartbeat(
+            self.worker_id,
+            last_seen=stamp,
+            capabilities=capabilities,
+            current_job_id="",
+        )
 
     def _pulse_once(self) -> bool:
         try:
@@ -131,7 +117,8 @@ class _AIHeartbeat:
             self._consecutive_failures += 1
             log(
                 "heartbeat write failed "
-                f"type={type(exc).__name__} consecutive={self._consecutive_failures}/{self.failure_limit}"
+                f"transport={self.transport} type={type(exc).__name__} "
+                f"consecutive={self._consecutive_failures}/{self.failure_limit}"
             )
             if self._consecutive_failures >= self.failure_limit:
                 self._fatal.set()
@@ -153,6 +140,9 @@ class _AIHeartbeat:
                 "AI Worker heartbeat has repeatedly failed; refusing to remain falsely healthy."
             )
 
+    def is_unhealthy(self) -> bool:
+        return self._fatal.is_set()
+
     def __enter__(self):
         for attempt in range(1, self.startup_attempts + 1):
             if self._pulse_once():
@@ -161,7 +151,7 @@ class _AIHeartbeat:
                 time.sleep(min(5, attempt * 2))
         else:
             raise RuntimeError(
-                "AI Worker startup heartbeat could not be persisted to the production database."
+                f"AI Worker startup heartbeat could not reach the {self.transport} control plane."
             )
         self._thread = threading.Thread(target=self._run, name="teacher-ai-heartbeat", daemon=True)
         self._thread.start()
@@ -184,6 +174,12 @@ def _renderer_status_line() -> str:
 
 
 def main() -> int:
+    transport = ai_remote.transport_mode()
+    api = None
+    if transport == ai_remote.TRANSPORT_HTTPS:
+        api = ai_remote.AIWorkerApi(worker_id=_ai_worker_id())
+        ai_remote.install_remote_repository_proxies(api)
+
     question_runtime = build_canonical_question_runtime()
     free_ai_fallback.install_question_runtime_fallback(question_runtime)
     question_processor = ai_jobs.AiQuestionJobProcessor(question_runtime)
@@ -197,60 +193,67 @@ def main() -> int:
     next_recovery = 0.0
     log(
         "started queues=ai_questions,media_scripts,ai_presentations,ai_videos,media_audio,media_subtitles "
-        "free_fallback=enabled"
+        f"free_fallback=enabled control_transport={transport}"
     )
     log(_renderer_status_line())
     heartbeat_seconds = _env_int("AI_WORKER_HEARTBEAT_SECONDS", 30, 10, 90)
-    with _AIHeartbeat(heartbeat_seconds) as heartbeat:
-        while True:
-            try:
-                heartbeat.raise_if_unhealthy()
-                now = time.monotonic()
-                if now >= next_recovery:
-                    recovered_questions = question_processor.recover_stale()
-                    recovered_scripts = script_processor.recover_stale()
-                    recovered_presentations = presentation_processor.recover_stale()
-                    recovered_videos = video_processor.recover_stale()
-                    recovered_audio = audio_processor.recover_stale()
-                    recovered_subtitles = subtitle_processor.recover_stale()
-                    if (
-                        recovered_questions
-                        or recovered_scripts
-                        or recovered_presentations
-                        or recovered_videos
-                        or recovered_audio
-                        or recovered_subtitles
-                    ):
-                        log(
-                            "requeued stale "
-                            f"question_jobs={recovered_questions} media_script_jobs={recovered_scripts} "
-                            f"ai_presentation_jobs={recovered_presentations} media_audio_jobs={recovered_audio} "
-                            f"ai_video_jobs={recovered_videos} "
-                            f"media_subtitle_jobs={recovered_subtitles}"
-                        )
-                    next_recovery = now + recovery_seconds
+    try:
+        with _AIHeartbeat(heartbeat_seconds, transport=transport, api=api) as heartbeat:
+            while True:
+                try:
+                    heartbeat.raise_if_unhealthy()
+                    now = time.monotonic()
+                    if now >= next_recovery:
+                        recovered_questions = question_processor.recover_stale()
+                        recovered_scripts = script_processor.recover_stale()
+                        recovered_presentations = presentation_processor.recover_stale()
+                        recovered_videos = video_processor.recover_stale()
+                        recovered_audio = audio_processor.recover_stale()
+                        recovered_subtitles = subtitle_processor.recover_stale()
+                        if (
+                            recovered_questions
+                            or recovered_scripts
+                            or recovered_presentations
+                            or recovered_videos
+                            or recovered_audio
+                            or recovered_subtitles
+                        ):
+                            log(
+                                "requeued stale "
+                                f"question_jobs={recovered_questions} media_script_jobs={recovered_scripts} "
+                                f"ai_presentation_jobs={recovered_presentations} media_audio_jobs={recovered_audio} "
+                                f"ai_video_jobs={recovered_videos} "
+                                f"media_subtitle_jobs={recovered_subtitles}"
+                            )
+                        next_recovery = now + recovery_seconds
 
-                # Give every domain queue one chance per loop. A large assessment queue
-                # must not starve teacher script or narration work; PowerPoint and subtitle
-                # queues receive the same one-job-per-loop fairness guarantee.
-                did_work = question_processor.run_next_queued()
-                did_work = script_processor.run_next_queued() or did_work
-                did_work = presentation_processor.run_next_queued() or did_work
-                did_work = video_processor.run_next_queued() or did_work
-                did_work = audio_processor.run_next_queued() or did_work
-                did_work = subtitle_processor.run_next_queued() or did_work
-                if did_work:
-                    continue
-                time.sleep(poll_seconds)
-            except KeyboardInterrupt:
-                log("stopped")
-                return 0
-            except Exception as exc:
-                # Web migrations and DB/network services can come up after the worker.
-                # Keep the worker alive and retry without claiming a job twice. Do not
-                # print raw provider/DB exception text because it may contain secrets.
-                log(f"loop error type={type(exc).__name__}")
-                time.sleep(poll_seconds)
+                    # Give every domain queue one chance per loop.  In HTTPS mode
+                    # these are tiny authenticated JSON RPC calls; large source and
+                    # artifact bytes still move directly through durable storage.
+                    did_work = question_processor.run_next_queued()
+                    did_work = script_processor.run_next_queued() or did_work
+                    did_work = presentation_processor.run_next_queued() or did_work
+                    did_work = video_processor.run_next_queued() or did_work
+                    did_work = audio_processor.run_next_queued() or did_work
+                    did_work = subtitle_processor.run_next_queued() or did_work
+                    if did_work:
+                        continue
+                    time.sleep(poll_seconds)
+                except KeyboardInterrupt:
+                    log("stopped")
+                    return 0
+                except Exception as exc:
+                    # Network/provider services may recover after startup.  Never
+                    # print raw provider/DB exception text because it may contain
+                    # credentials. A dead heartbeat control plane requests a clean
+                    # supervisor restart instead of staying falsely RUNNING.
+                    log(f"loop error type={type(exc).__name__}")
+                    if heartbeat.is_unhealthy():
+                        return 75
+                    time.sleep(poll_seconds)
+    finally:
+        if api is not None:
+            api.close()
 
 
 if __name__ == "__main__":
