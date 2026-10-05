@@ -56,11 +56,46 @@ function Test-Enabled([string]$Value, [bool]$Default = $true) {
 }
 
 function Test-AIWorkerConfiguration {
-  if (-not ([string]$env:DATABASE_URL).Trim()) {
-    Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3101 -Message "Production database configuration is missing; AI Worker cannot consume the shared durable queues."
-    Write-Warning "DATABASE_URL is required for the dedicated AI Worker."
+  $transport = ([string]$env:AI_WORKER_TRANSPORT).Trim().ToLowerInvariant()
+  if (-not $transport) { $transport = "auto" }
+  $baseUrl = ([string]$env:TEACHER_BASE_URL).Trim()
+  $workerToken = ([string]$env:AI_WORKER_TOKEN).Trim()
+  if (-not $workerToken) { $workerToken = ([string]$env:MATERIAL_WORKER_TOKEN).Trim() }
+  $webReady = [bool]$baseUrl -and [bool]$workerToken
+  $databaseReady = [bool]([string]$env:DATABASE_URL).Trim()
+
+  if ($transport -in @("https", "web", "http")) {
+    if (-not $webReady) {
+      Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3101 -Message "HTTPS AI Worker control plane is selected but TEACHER_BASE_URL or Worker token is missing."
+      Write-Warning "AI Worker HTTPS mode requires TEACHER_BASE_URL and AI_WORKER_TOKEN (or MATERIAL_WORKER_TOKEN)."
+      exit 20
+    }
+    $env:AI_WORKER_TRANSPORT = "https"
+  } elseif ($transport -in @("database", "db", "postgres", "postgresql")) {
+    if (-not $databaseReady) {
+      Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3101 -Message "Legacy database AI Worker transport is selected but DATABASE_URL is missing."
+      Write-Warning "AI_WORKER_TRANSPORT=database requires DATABASE_URL."
+      exit 20
+    }
+    $env:AI_WORKER_TRANSPORT = "database"
+  } elseif ($transport -eq "auto") {
+    if ($webReady) {
+      $env:AI_WORKER_TRANSPORT = "https"
+    } elseif ($databaseReady) {
+      $env:AI_WORKER_TRANSPORT = "database"
+      Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2204 -Message "AI Worker fell back to legacy direct database transport because HTTPS control settings are incomplete."
+    } else {
+      Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3101 -Message "No usable AI Worker control transport is configured."
+      Write-Warning "Configure TEACHER_BASE_URL + Worker token for HTTPS mode, or DATABASE_URL for legacy database mode."
+      exit 20
+    }
+  } else {
+    Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3101 -Message "AI_WORKER_TRANSPORT is invalid."
+    Write-Warning "AI_WORKER_TRANSPORT must be auto, https, or database."
     exit 20
   }
+
+  Write-Host "Teacher AI Worker control transport: $env:AI_WORKER_TRANSPORT"
 
   $externalEnabled = Test-Enabled ([string]$env:AI_EXTERNAL_PROCESSING_ENABLED) $true
   $fallbackEnabled = Test-Enabled ([string]$env:AI_FREE_FALLBACK_ENABLED) $true
@@ -114,9 +149,9 @@ function Ensure-AIWorkerEnvironment {
   $hash = (Get-FileHash -LiteralPath $requirements -Algorithm SHA256).Hash
   $recorded = if (Test-Path $stamp) { (Get-Content -LiteralPath $stamp -Raw).Trim() } else { "" }
 
-  # requests + psycopg are the core dependencies required for the durable queue
-  # and heartbeat. Kokoro/Whisper/Gemini are feature capabilities and must not
-  # suppress heartbeat visibility when one optional package is unavailable.
+  # requests owns the HTTPS control plane. psycopg remains installed only for
+  # explicit legacy database transport/development compatibility. Optional
+  # Kokoro/Whisper/Gemini packages must not suppress heartbeat visibility.
   & $python -c "import requests, psycopg" 2>$null
   $coreImportsOk = $LASTEXITCODE -eq 0
   & $python -c "import kokoro, faster_whisper; from google import genai; from misaki import zh; import numpy" 2>$null
@@ -152,8 +187,8 @@ if (-not $env:FREE_ONLY_MODE) { $env:FREE_ONLY_MODE = "true" }
 if (-not $env:AI_FREE_FALLBACK_ENABLED) { $env:AI_FREE_FALLBACK_ENABLED = "true" }
 if (-not $env:AI_TTS_PROVIDER) { $env:AI_TTS_PROVIDER = "kokoro" }
 Test-AIWorkerConfiguration
-Write-TeacherAIWorkerEvent -EntryType "Information" -EventId 1100 -Message "Teacher AI Worker supervisor starting with free provider fallback and local Kokoro narration."
-Write-Host "Teacher AI Worker: ai_questions, media_scripts, media_audio (Groq/Gemini/Ollama fallback; Kokoro local TTS)"
+Write-TeacherAIWorkerEvent -EntryType "Information" -EventId 1100 -Message "Teacher AI Worker supervisor starting with HTTPS-ready control plane, free provider fallback and local Kokoro narration."
+Write-Host "Teacher AI Worker: ai_questions, media_scripts, ai_presentations, ai_videos, media_audio, media_subtitles (HTTPS control; Kokoro local TTS)"
 
 $crashRestarts = 0
 $maxCrashRestarts = 5
