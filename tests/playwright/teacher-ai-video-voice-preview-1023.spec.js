@@ -10,7 +10,8 @@ test('AI teaching video lets the teacher preview the selected narration voice', 
   await page.setContent('<main><section id="teacher-media-production-1014"></section></main>');
   await page.evaluate(() => {
     window.TeacherRBAC681Ready = Promise.resolve({ roles: new Set(['clinical_teacher']) });
-    window.HTMLMediaElement.prototype.play = () => Promise.resolve();
+    window.playCalls = 0;
+    window.HTMLMediaElement.prototype.play = () => { window.playCalls += 1; return Promise.resolve(); };
     window.calls = [];
     window.fetch = async (url, options = {}) => {
       window.calls.push({ url: String(url), method: options.method || 'GET' });
@@ -27,5 +28,9 @@ test('AI teaching video lets the teacher preview the selected narration voice', 
   await page.getByRole('button', { name: '▶ 試聽聲音' }).click();
   await expect(page.locator('#teacher-ai-video-voice-player-1015')).toHaveAttribute('src', '/preview/voice.wav');
   await expect(page.locator('#teacher-ai-video-voice-player-1015')).toBeVisible();
+  await expect(page.getByRole('button', { name: '▶ 播放試聽' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.playCalls)).toBe(0);
+  await page.getByRole('button', { name: '▶ 播放試聽' }).click();
+  await expect.poll(() => page.evaluate(() => window.playCalls)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.calls)).toContainEqual({ url: '/api/media-audio/preview', method: 'POST' });
 });
