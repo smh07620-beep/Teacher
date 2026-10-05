@@ -67,7 +67,7 @@ def register_media_subtitle_routes(owner):
         denied = _scope(owner, str(material.get("group") or ""))
         if denied:
             return denied
-        readiness_error = _ai_worker_online_error()
+        readiness_error = _ai_worker_online_error(required_queue="media_subtitles")
         if readiness_error:
             return readiness_error
         try:
