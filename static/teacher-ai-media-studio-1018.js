@@ -75,19 +75,26 @@
       legacy.dispatchEvent(new Event('change', { bubbles: true }));
     }
     window.TeacherMediaSubtitle1014?.selectMaterial?.(shared.value || '');
-    void refreshPresentationChoices(shared.value || '');
+    if (!window.TeacherAIMediaControls1023?.refreshVideoPresentations) {
+      void refreshPresentationChoices(shared.value || '');
+    }
     updateRecommendation();
   }
 
-  async function refreshPresentationChoices(materialId) {
+  async function refreshPresentationChoices(materialId = '') {
+    const owner = window.TeacherAIMediaControls1023?.refreshVideoPresentations;
+    if (typeof owner === 'function') return owner(materialId);
     const select = $('teacher-ai-video-presentation-1015');
-    if (!select || select.tagName !== 'SELECT') return;
+    if (!select || select.tagName !== 'SELECT') return false;
     const prior = select.value;
-    select.replaceChildren(new Option(materialId ? '讀取可用 PowerPoint…' : '請先選擇來源教材', ''));
-    select.disabled = !materialId;
-    if (!materialId) return;
+    const group = new URLSearchParams(window.location.search).get('group')
+      || window.currentGroupKey
+      || String(R.user?.preferredGroup || '');
+    select.replaceChildren(new Option('讀取所有已核准 PowerPoint…', ''));
+    select.disabled = true;
     try {
-      const response = await fetch(`/api/ai-presentations?materialId=${encodeURIComponent(materialId)}`, {
+      const query = group ? `?group=${encodeURIComponent(group)}` : '';
+      const response = await fetch(`/api/ai-presentations${query}`, {
         credentials: 'same-origin', cache: 'no-store'
       });
       const rows = await response.json().catch(() => []);
@@ -104,11 +111,13 @@
       if (usable.some(item => String(item.id) === prior)) select.value = prior;
       else if (usable.length === 1) select.value = String(usable[0].id || '');
       select.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
     } catch (error) {
       select.replaceChildren(new Option('PowerPoint 版本讀取失敗', ''));
       select.disabled = true;
       const status = $('teacher-ai-video-status-1015');
       if (status) status.textContent = error.message;
+      return false;
     } finally {
       updateRecommendation();
     }
@@ -208,7 +217,7 @@
     select.id = input.id;
     select.className = input.className;
     select.disabled = true;
-    select.appendChild(new Option('請先選擇來源教材', ''));
+    select.appendChild(new Option('讀取所有已核准 PowerPoint…', ''));
     input.replaceWith(select);
     if (label?.firstChild?.nodeType === Node.TEXT_NODE) label.firstChild.textContent = '已核准 PowerPoint';
     select.addEventListener('change', updateRecommendation);
@@ -350,7 +359,7 @@
       studio.className = 'space-y-4';
       const sourceBox = document.createElement('div');
       sourceBox.className = 'rounded-2xl border border-cyan-100 bg-cyan-50/50 p-4';
-      sourceBox.innerHTML = '<label class="block text-sm font-black text-slate-800">來源教材／來源內容<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
+      sourceBox.innerHTML = '<div class="grid lg:grid-cols-[1fr_auto] gap-3 lg:items-end"><label class="block text-sm font-black text-slate-800">來源教材／來源內容（AI 配音、字幕可用）<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><div class="rounded-xl border border-violet-200 bg-white p-3"><div class="text-[10px] font-black text-violet-700">POWERPOINT 不必先建教材</div><button id="teacher-media-direct-powerpoint-1026" type="button" class="mt-1 rounded-lg bg-violet-700 px-3 py-2 text-xs font-black text-white">📎 直接丟資料做 PowerPoint</button><div class="mt-1 text-[10px] text-slate-500">PDF／Word／PPT／Excel／圖片／文字，可多選或拖曳</div></div></div><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
       studio.appendChild(sourceBox);
       installTabs(studio);
       installPowerPointShortcut(studio);

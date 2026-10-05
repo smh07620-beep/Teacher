@@ -92,17 +92,31 @@ def prepare_preview_request(data: Mapping[str, Any], actor: Mapping[str, Any] | 
 
 
 def _enforce_queue_limits(username: str, *, preview: bool = False) -> None:
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)).isoformat()
+    if preview:
+        max_actor = _env_int("MEDIA_AUDIO_PREVIEW_MAX_ACTIVE_PER_USER", 3, 1, 10)
+        max_total = _env_int("MEDIA_AUDIO_PREVIEW_MAX_ACTIVE_TOTAL", 10, 1, 50)
+        max_per_minute = _env_int("MEDIA_AUDIO_PREVIEW_MAX_PER_MINUTE", 10, 1, 30)
+        actor_active = media_audio_repository.active_preview_count_for_actor(username)
+        total_active = media_audio_repository.total_active_preview_count()
+        recent_count = media_audio_repository.recent_preview_count_for_actor(username, since)
+        if actor_active >= max_actor:
+            raise MediaAudioLimitError("目前已有語音試聽排隊或執行中，請稍候完成後再試")
+        if total_active >= max_total:
+            raise MediaAudioLimitError("語音試聽佇列目前已滿，請稍後再試")
+        if recent_count >= max_per_minute:
+            raise MediaAudioLimitError("語音試聽送出過於頻繁，請稍後再試")
+        return
+
     max_actor = _env_int("MEDIA_AUDIO_JOB_MAX_ACTIVE_PER_USER", 1, 1, 5)
     max_total = _env_int("MEDIA_AUDIO_JOB_MAX_ACTIVE_TOTAL", 5, 1, 50)
-    per_minute_name = "MEDIA_AUDIO_PREVIEW_MAX_PER_MINUTE" if preview else "MEDIA_AUDIO_JOB_MAX_PER_MINUTE"
-    max_per_minute = _env_int(per_minute_name, 10 if preview else 2, 1, 20)
-    if media_audio_repository.active_count_for_actor(username) >= max_actor:
-        raise MediaAudioLimitError("目前已有 AI 語音工作排隊或執行中，請完成後再送出")
-    if media_audio_repository.total_active_count() >= max_total:
-        raise MediaAudioLimitError("AI 語音佇列目前已滿，請稍後再試")
-    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)).isoformat()
-    if media_audio_repository.recent_count_for_actor(username, since) >= max_per_minute:
-        raise MediaAudioLimitError("AI 語音送出過於頻繁，請稍後再試")
+    max_per_minute = _env_int("MEDIA_AUDIO_JOB_MAX_PER_MINUTE", 2, 1, 20)
+    if media_audio_repository.active_formal_count_for_actor(username) >= max_actor:
+        raise MediaAudioLimitError("目前已有正式 AI 語音工作排隊或執行中，請完成後再送出")
+    if media_audio_repository.total_active_formal_count() >= max_total:
+        raise MediaAudioLimitError("正式 AI 語音佇列目前已滿，請稍後再試")
+    if media_audio_repository.recent_formal_count_for_actor(username, since) >= max_per_minute:
+        raise MediaAudioLimitError("正式 AI 語音送出過於頻繁，請稍後再試")
 
 
 def enqueue(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:

@@ -77,7 +77,7 @@ test('shared AI media source loads directly and drives narration subtitle and vi
   await expect(page.locator('#teacher-subtitle-language-1014')).toHaveJSProperty('tagName', 'SELECT');
   await expect(page.locator('#teacher-subtitle-language-1014')).toHaveValue('zh-TW');
   await expect(page.locator('#teacher-media-open-powerpoint-1018')).toHaveText('🖥️ 多資料 AI PowerPoint');
-  await expect(page.locator('#teacher-media-powerpoint-entry-1018')).toContainText('本頁唯一的 AI PowerPoint 入口');
+  await expect(page.locator('#teacher-media-powerpoint-entry-1018')).toContainText('不用先建立教材');
 
   await source.selectOption('doc-1');
   await expect.poll(() => page.evaluate(() => window.subtitleMaterial1023)).toBe('doc-1');
@@ -85,6 +85,46 @@ test('shared AI media source loads directly and drives narration subtitle and vi
   await expect(page.locator('#teacher-script-material-1014')).toHaveValue('doc-1');
   await expect(page.locator('#teacher-ai-video-presentation-1015')).toBeEnabled();
   await expect(page.locator('#teacher-ai-video-presentation-1015')).toHaveValue('ppt-1');
+});
+
+test('approved PowerPoint list loads independently of material selection and coalesces duplicate refreshes', async ({ page }) => {
+  await page.setContent(`
+    <section id="teacher-media-production-1014">
+      <select id="teacher-media-source-1018"><option value="">不選教材</option></select>
+      <p id="teacher-media-next-step-1018"></p>
+      <section id="teacher-ai-video-1015">
+        <h4>教學影片</h4><p>說明</p>
+        <select id="teacher-ai-video-presentation-1015"><option value="">初始</option></select>
+        <p id="teacher-ai-video-status-1015"></p>
+      </section>
+      <section id="teacher-media-powerpoint-entry-1018"><div><b>PowerPoint</b><p>舊說明</p></div><button id="teacher-media-open-powerpoint-1018">AI PowerPoint 製作</button></section>
+    </section>
+  `);
+  await installTeacherRBAC(page);
+  await page.evaluate(() => {
+    window.pptFetchCount1026 = 0;
+    window.fetch = async url => {
+      const text=String(url);
+      if(text.includes('/api/slides/admin')) return {ok:true,json:async()=>[]};
+      if(text.includes('/api/ai-presentations')){
+        window.pptFetchCount1026 += 1;
+        await new Promise(resolve=>setTimeout(resolve,30));
+        return {ok:true,json:async()=>[
+          {id:'ppt-a',title:'任意來源簡報',materialId:'draft-source',revisionNumber:3,status:'approved',artifactReady:true}
+        ]};
+      }
+      return {ok:true,json:async()=>({})};
+    };
+  });
+  await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  await expect.poll(() => page.evaluate(() => Boolean(window.TeacherAIMediaControls1023))).toBe(true);
+  await Promise.all([
+    page.evaluate(() => window.TeacherAIMediaControls1023.refreshVideoPresentations('')),
+    page.evaluate(() => window.TeacherAIMediaControls1023.refreshVideoPresentations('')),
+  ]);
+  await expect(page.locator('#teacher-ai-video-presentation-1015')).toBeEnabled();
+  await expect(page.locator('#teacher-ai-video-presentation-1015')).toHaveValue('ppt-a');
+  await expect.poll(() => page.evaluate(() => window.pptFetchCount1026)).toBeLessThanOrEqual(2);
 });
 
 test('empty media source has one PowerPoint entry and an inline ordinary material upload action', async ({ page }) => {

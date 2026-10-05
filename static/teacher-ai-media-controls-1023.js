@@ -18,6 +18,12 @@
   let refreshGeneration = 0;
   let observer = null;
   let uploadRefreshTimer = null;
+  let sourcesLoadedAt = 0;
+  let presentationRefreshGeneration = 0;
+  let presentationRefreshController = null;
+  let presentationRefreshPromise = null;
+  let presentationRefreshKey = '';
+  let presentationCache = { group: '', loadedAt: 0, rows: [] };
   const powerpointOrigin = { parent: null, next: null, panel: null };
 
   function currentScope() {
@@ -105,40 +111,102 @@
     }
   }
 
-  async function refreshVideoPresentations(materialId) {
+  function paintVideoPresentations(rows, preferredMaterialId = '') {
     const select = $('teacher-ai-video-presentation-1015');
-    if (!select || select.tagName !== 'SELECT') return;
+    if (!select || select.tagName !== 'SELECT') return false;
     const previous = select.value;
-    select.replaceChildren(new Option(materialId ? '讀取可用 PowerPoint…' : '請先選擇來源教材', ''));
-    select.disabled = !materialId;
-    if (!materialId) return;
-    try {
-      const response = await fetch(`/api/ai-presentations?materialId=${encodeURIComponent(materialId)}`, {
-        credentials: 'same-origin', cache: 'no-store'
+    const usable = (Array.isArray(rows) ? rows : [])
+      .filter(item => item?.artifactReady && ['approved', 'published'].includes(String(item.status || '')))
+      .sort((a, b) => {
+        const aPreferred = preferredMaterialId && String(a.materialId || '') === String(preferredMaterialId) ? 1 : 0;
+        const bPreferred = preferredMaterialId && String(b.materialId || '') === String(preferredMaterialId) ? 1 : 0;
+        return bPreferred - aPreferred
+          || String(a.title || '').localeCompare(String(b.title || ''), 'zh-Hant')
+          || Number(b.revisionNumber || 0) - Number(a.revisionNumber || 0);
       });
-      const body = await response.json().catch(() => []);
-      if (!response.ok) throw new Error(body?.error || '無法讀取 PowerPoint 版本');
-      const usable = (Array.isArray(body) ? body : []).filter(item =>
-        item?.artifactReady && ['approved', 'published'].includes(String(item.status || ''))
-      );
-      select.replaceChildren(new Option(usable.length ? '選擇已核准 PowerPoint…' : '尚無已核准 PowerPoint', ''));
-      usable.forEach(item => {
-        const label = `${item.title || '教學 PowerPoint'}｜版本 ${Number(item.revisionNumber || 1)}${item.status === 'published' ? '｜已發布' : '｜已核准'}`;
-        select.add(new Option(label, String(item.id || '')));
-      });
-      if (previous && usable.some(item => String(item.id) === previous)) select.value = previous;
-      else if (usable.length === 1) select.value = String(usable[0].id || '');
-      select.disabled = !usable.length;
-      const status = $('teacher-ai-video-status-1015');
-      const noPpt = '這份教材尚無已核准 PowerPoint。可先使用「多資料 AI PowerPoint」建立並核准。';
-      if (status && !usable.length && status.textContent !== noPpt) status.textContent = noPpt;
-    } catch (error) {
-      select.replaceChildren(new Option('PowerPoint 版本讀取失敗', ''));
-      select.disabled = true;
-      const status = $('teacher-ai-video-status-1015');
-      const message = `PowerPoint 讀取失敗：${error.message}`;
-      if (status && status.textContent !== message) status.textContent = message;
+    select.replaceChildren(new Option(usable.length ? '選擇已核准 PowerPoint…' : '尚無已核准 PowerPoint', ''));
+    usable.forEach(item => {
+      const preferred = preferredMaterialId && String(item.materialId || '') === String(preferredMaterialId) ? '｜目前來源' : '';
+      const label = `${item.title || '教學 PowerPoint'}｜版本 ${Number(item.revisionNumber || 1)}${item.status === 'published' ? '｜已發布' : '｜已核准'}${preferred}`;
+      select.add(new Option(label, String(item.id || '')));
+    });
+    if (previous && usable.some(item => String(item.id) === previous)) select.value = previous;
+    else if (usable.length === 1) select.value = String(usable[0].id || '');
+    select.disabled = !usable.length;
+    const status = $('teacher-ai-video-status-1015');
+    if (status && !usable.length) status.textContent = '目前這個組別尚無已核准 PowerPoint；可直接丟 PDF／Word／PPT／Excel／圖片建立。';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+
+  async function refreshVideoPresentations(materialId = '', options = {}) {
+    const select = $('teacher-ai-video-presentation-1015');
+    if (!select || select.tagName !== 'SELECT') return false;
+    const force = Boolean(options?.force);
+    const { group } = currentScope();
+    const groupKey = String(group || '');
+    const now = Date.now();
+
+    if (!force && presentationCache.group === groupKey && presentationCache.rows.length
+        && now - Number(presentationCache.loadedAt || 0) < 15000) {
+      return paintVideoPresentations(presentationCache.rows, materialId);
     }
+
+    const requestKey = groupKey || '__preferred_group__';
+    if (!force && presentationRefreshPromise && presentationRefreshKey === requestKey) {
+      return presentationRefreshPromise;
+    }
+
+    presentationRefreshController?.abort?.();
+    const controller = new AbortController();
+    presentationRefreshController = controller;
+    presentationRefreshKey = requestKey;
+    const generation = ++presentationRefreshGeneration;
+    select.replaceChildren(new Option('讀取所有已核准 PowerPoint…', ''));
+    select.disabled = true;
+
+    const task = (async () => {
+      let timeoutId = 0;
+      let timedOut = false;
+      try {
+        timeoutId = window.setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, 12000);
+        const query = groupKey ? `?group=${encodeURIComponent(groupKey)}` : '';
+        const response = await fetch(`/api/ai-presentations${query}`, {
+          credentials: 'same-origin',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        const body = await response.json().catch(() => []);
+        if (!response.ok) throw new Error(body?.error || '無法讀取 PowerPoint 版本');
+        if (generation !== presentationRefreshGeneration) return false;
+        presentationCache = {
+          group: groupKey,
+          loadedAt: Date.now(),
+          rows: Array.isArray(body) ? body : [],
+        };
+        return paintVideoPresentations(presentationCache.rows, materialId);
+      } catch (error) {
+        if (generation !== presentationRefreshGeneration) return false;
+        if (error?.name === 'AbortError' && !timedOut) return false;
+        select.replaceChildren(new Option(timedOut ? 'PowerPoint 讀取逾時｜請重試' : 'PowerPoint 版本讀取失敗', ''));
+        select.disabled = true;
+        const status = $('teacher-ai-video-status-1015');
+        const message = timedOut ? 'PowerPoint 清單讀取逾時，請按重新整理或稍後再試。' : `PowerPoint 讀取失敗：${error.message}`;
+        if (status && status.textContent !== message) status.textContent = message;
+        return false;
+      } finally {
+        if (timeoutId) window.clearTimeout(timeoutId);
+        if (generation === presentationRefreshGeneration) {
+          presentationRefreshPromise = null;
+          presentationRefreshController = null;
+        }
+      }
+    })();
+    presentationRefreshPromise = task;
+    return task;
   }
 
   function syncSelectedSource() {
@@ -151,8 +219,10 @@
         const item = materials.find(row => String(row.id) === materialId);
         if (item) legacy.add(new Option(sourceLabel(item), materialId));
       }
-      legacy.value = materialId;
-      legacy.dispatchEvent(new Event('change', { bubbles: true }));
+      if (legacy.value !== materialId) {
+        legacy.value = materialId;
+        legacy.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     }
     window.TeacherMediaSubtitle1014?.selectMaterial?.(materialId);
     void window.TeacherMediaAudio1014?.loadApprovedScripts?.();
@@ -187,6 +257,7 @@
       paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材');
       paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳');
       showSourceAvailability(materials);
+      sourcesLoadedAt = Date.now();
       syncSelectedSource();
       return true;
     } catch (error) {
@@ -226,7 +297,7 @@
   function improvePowerPointEntry() {
     const entry = $('teacher-media-powerpoint-entry-1018');
     if (!entry) return;
-    const desired = '一次加入多份 PDF、Word、PPT、Excel、圖片或文字；AI Worker 會統整／RAG 產生大綱，教師核准後再建立 .pptx。這裡是本頁唯一的 AI PowerPoint 入口。';
+    const desired = '不用先建立教材：可直接加入多份 PDF、Word、PPT、Excel、圖片或文字；也可選既有教材當參考。所有入口都會進入同一個 AI PowerPoint 工作台。';
     const text = entry.querySelector('p');
     if (text && text.textContent !== desired) text.textContent = desired;
     const button = $('teacher-media-open-powerpoint-1018');
@@ -239,7 +310,7 @@
     const note = document.createElement('p');
     note.id = 'teacher-ai-video-source-help-1023';
     note.className = 'rounded-xl border border-violet-100 bg-violet-50 p-3 text-xs leading-5 text-violet-900';
-    note.textContent = '教學影片需要「來源教材 + 已核准 PowerPoint + 旁白」。若 PowerPoint 清單為空，先使用本頁「多資料 AI PowerPoint」建立並核准簡報。';
+    note.textContent = '教學影片只需要「已核准 PowerPoint + 旁白」；來源教材不是必選。PowerPoint 也可以直接丟 PDF、Word、PPT、Excel、圖片或文字建立。';
     panel.insertBefore(note, panel.children[1] || null);
   }
 
@@ -508,7 +579,7 @@
     client.enqueue = wrapped;
   }
 
-  async function enhance() {
+  async function enhance(options = {}) {
     const shared = $('teacher-media-source-1018');
     installCourseWizardDirectUploadGuard();
     if (!shared) return false;
@@ -520,7 +591,12 @@
     replaceSubtitleLanguageInput();
     improvePowerPointEntry();
     improveVideoHelp();
-    await refreshSources();
+    const force = Boolean(options?.force);
+    if (force || !sourcesLoadedAt || Date.now() - sourcesLoadedAt > 30000) {
+      await refreshSources();
+    } else {
+      syncSelectedSource();
+    }
     return true;
   }
 
@@ -528,14 +604,14 @@
 
   document.addEventListener('click', event => {
     const target = event.target?.closest?.(
-      '#teacher-media-open-powerpoint-1018,#teacher-media-powerpoint-close-1024,#teacher-media-empty-upload-1024,#teacher-media-source-refresh-1024,#teacher-media-general-upload-close-1025,#teacher-media-general-upload-start-1025'
+      '#teacher-media-open-powerpoint-1018,#teacher-media-direct-powerpoint-1026,#teacher-media-powerpoint-close-1024,#teacher-media-empty-upload-1024,#teacher-media-source-refresh-1024,#teacher-media-general-upload-close-1025,#teacher-media-general-upload-start-1025'
     );
     if (target) {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (target.id === 'teacher-media-powerpoint-close-1024') closePowerPointWorkspace();
       else if (target.id === 'teacher-media-empty-upload-1024') openGeneralMaterialUpload();
-      else if (target.id === 'teacher-media-source-refresh-1024') void refreshSources();
+      else if (target.id === 'teacher-media-source-refresh-1024') void enhance({force:true});
       else if (target.id === 'teacher-media-general-upload-close-1025') closeGeneralMaterialUpload();
       else if (target.id === 'teacher-media-general-upload-start-1025') void uploadGeneralMaterials();
       else void openPowerPointWorkspace();
@@ -568,8 +644,14 @@
 
   installCourseWizardDirectUploadGuard();
   [0, 400, 1200, 3000, 7000, 12000].forEach(delay => setTimeout(() => void enhance(), delay));
+  window.addEventListener('teacher-ai-presentation-rendered-f5', () => {
+    presentationCache.loadedAt = 0;
+    void refreshVideoPresentations($('teacher-media-source-1018')?.value || '', {force:true});
+  });
+
   window.TeacherAIMediaControls1023 = Object.freeze({
     refreshSources,
+    refreshVideoPresentations,
     openPowerPointWorkspace,
     closePowerPointWorkspace,
     openGeneralMaterialUpload,

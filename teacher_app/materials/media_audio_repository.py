@@ -88,6 +88,72 @@ def active_count_for_actor(username: str) -> int:
     return int(dict(row).get("n", 0) or 0)
 
 
+def active_preview_count_for_actor(username: str) -> int:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT COUNT(*) AS n FROM media_audio_jobs "
+            f"WHERE actor_username={ph} AND status IN ({ph},{ph}) AND script_id={ph}",
+            (username, *ACTIVE_STATUSES, ""),
+        ).fetchone()
+    return int(dict(row).get("n", 0) or 0)
+
+
+def active_formal_count_for_actor(username: str) -> int:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT COUNT(*) AS n FROM media_audio_jobs "
+            f"WHERE actor_username={ph} AND status IN ({ph},{ph}) AND script_id<>{ph}",
+            (username, *ACTIVE_STATUSES, ""),
+        ).fetchone()
+    return int(dict(row).get("n", 0) or 0)
+
+
+def total_active_preview_count() -> int:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT COUNT(*) AS n FROM media_audio_jobs "
+            f"WHERE status IN ({ph},{ph}) AND script_id={ph}",
+            (*ACTIVE_STATUSES, ""),
+        ).fetchone()
+    return int(dict(row).get("n", 0) or 0)
+
+
+def total_active_formal_count() -> int:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT COUNT(*) AS n FROM media_audio_jobs "
+            f"WHERE status IN ({ph},{ph}) AND script_id<>{ph}",
+            (*ACTIVE_STATUSES, ""),
+        ).fetchone()
+    return int(dict(row).get("n", 0) or 0)
+
+
+def recent_preview_count_for_actor(username: str, since: str) -> int:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT COUNT(*) AS n FROM media_audio_jobs "
+            f"WHERE actor_username={ph} AND created_at>={ph} AND script_id={ph}",
+            (username, since, ""),
+        ).fetchone()
+    return int(dict(row).get("n", 0) or 0)
+
+
+def recent_formal_count_for_actor(username: str, since: str) -> int:
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT COUNT(*) AS n FROM media_audio_jobs "
+            f"WHERE actor_username={ph} AND created_at>={ph} AND script_id<>{ph}",
+            (username, since, ""),
+        ).fetchone()
+    return int(dict(row).get("n", 0) or 0)
+
+
 def active_formal_job_for_actor(username: str) -> dict | None:
     """Return the caller's in-flight narration, never a preview job."""
     with common_db.read_connection() as (conn, kind):
