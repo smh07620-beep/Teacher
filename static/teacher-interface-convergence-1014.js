@@ -117,37 +117,18 @@
     const actions = document.createElement('div');
     actions.className = 'shrink-0 flex flex-wrap gap-2';
 
-    const presentationButton = document.createElement('button');
-    presentationButton.type = 'button';
-    presentationButton.className = 'rounded-xl bg-violet-700 px-4 py-2 text-xs font-black text-white hover:bg-violet-800';
-    presentationButton.textContent = '🖥️ AI PowerPoint 製作';
-    presentationButton.addEventListener('click', async event => {
-      event.preventDefault();
-      const openPresentation = window.TeacherWorkspace1014?.openPresentation;
-      if (typeof openPresentation === 'function') {
-        await openPresentation();
-      } else {
-        await window.TeacherWorkspace1014?.openCourse?.();
-        const target = document.getElementById('teacher-ai-presentation-1016')
-          || document.getElementById('teacher-ai-material-presentation-stage-1014')
-          || document.getElementById('teacher-ai-material-1014');
-        target?.scrollIntoView?.({block: 'start', behavior: 'smooth'});
-      }
-      convergeTeacherNavigation();
-    });
-
-    const mediaButton = document.createElement('button');
-    mediaButton.type = 'button';
-    mediaButton.className = 'rounded-xl border border-cyan-200 bg-white px-4 py-2 text-xs font-black text-cyan-800 hover:bg-cyan-50';
-    mediaButton.textContent = '🎙️ 從教材製作媒體';
-    mediaButton.addEventListener('click', async event => {
+    const studioButton = document.createElement('button');
+    studioButton.type = 'button';
+    studioButton.className = 'rounded-xl bg-violet-700 px-4 py-2 text-xs font-black text-white hover:bg-violet-800';
+    studioButton.textContent = '🧰 開啟教材媒體製作室';
+    studioButton.addEventListener('click', async event => {
       event.preventDefault();
       await window.TeacherWorkspace1014?.openMedia?.();
       convergeTeacherNavigation();
       installVoicePrivacy();
     });
 
-    actions.append(presentationButton, mediaButton);
+    actions.append(studioButton);
     entry.appendChild(actions);
     box.insertBefore(entry, dashboard);
   }
