@@ -56,7 +56,7 @@ Publishing is a separate operational action after teacher approval. The linked f
 1. Deploy the Web and AI Worker code from the same revision.
 2. Apply schema migrations including 0099 and 0100.
 3. Install `requirements.txt` on Web and `requirements-ai-worker.txt` on the dedicated AI Worker; the latter installs `python-pptx`.
-4. Configure the same `DATABASE_URL` and presentation storage provider on Web and AI Worker.
+4. Configure the AI Worker to use the Render HTTPS 443 control plane (`TEACHER_BASE_URL` + Worker token) and keep the presentation storage provider on the Worker for direct artifact transfer. `DATABASE_URL` is legacy fallback only.
 5. Re-upload any 0099 local-only PPT templates to shared storage.
 6. Restart `ai_question_worker.py`; its queue loop consumes AI PowerPoint jobs alongside the existing AI/media queues.
 7. Verify `/api/ai-presentations/status` reports a shared provider before enabling the UI.
