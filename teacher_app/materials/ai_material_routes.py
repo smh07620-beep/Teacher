@@ -11,6 +11,7 @@ from flask import g, jsonify, request
 from teacher_app.common import audit, scope_filter
 from teacher_app.materials import media_script_jobs, media_script_repository, media_script_runtime
 from teacher_app.materials import repository as material_repository
+from teacher_app.materials.media_audio_routes import _ai_worker_online_error
 
 
 def _actor(owner=None):
@@ -83,6 +84,9 @@ def register_ai_material_routes(owner):
         if len(reference_ids) > 9:
             return jsonify({"error": "一次最多可使用 10 份原始資料。"}), 400
         body["referenceMaterialIds"] = reference_ids
+        readiness_error = _ai_worker_online_error()
+        if readiness_error:
+            return readiness_error
         try:
             output_type = media_script_runtime.normalize_output_type(body.get("outputType") or "summary")
             body["outputType"] = output_type
