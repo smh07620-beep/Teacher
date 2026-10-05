@@ -273,7 +273,7 @@
     const icon = document.getElementById('admin-workspace-icon');
     if (icon) icon.textContent = '🎙️';
     if (title) title.textContent = '教材媒體製作 Workspace';
-    if (summary) summary.textContent = '從既有教材建立講稿、錄音、AI 語音與教學影片；正式發布仍使用原教材權限與範圍。';
+    if (summary) summary.textContent = '同一製作室完成 AI PowerPoint、講稿與配音、老師錄影與 AI 教學影片；正式發布仍使用原教材權限與範圍。';
   }
 
   function setTeacherModeParam(mode) {
@@ -297,12 +297,12 @@
   }
 
   async function openPresentation() {
-    await openCourse();
-    const hub = document.getElementById('admin-course-material-hub');
-    window.TeacherAIMaterial1014?.ensureMounted?.(hub || null);
-    const target = document.getElementById('teacher-ai-presentation-1016')
-      || document.getElementById('teacher-ai-material-presentation-stage-1014')
-      || document.getElementById('teacher-ai-material-1014');
+    await openMedia();
+    window.TeacherAIMediaStudio1018?.showMode?.('presentation');
+    const host = document.getElementById('teacher-media-panel-presentation-1018');
+    const target = document.getElementById('teacher-ai-material-1014')
+      || document.getElementById('teacher-ai-presentation-1016')
+      || host;
     if (target) {
       target.classList.remove('hidden');
       target.removeAttribute('aria-hidden');
