@@ -31,6 +31,17 @@
       : '教材轉講稿、教師核准、老師錄音、攝影機錄影與螢幕＋麥克風錄製已接入現有教材流程。免費 AI 語音需本機 Kokoro Worker 與 Cloudflare R2 就緒後才會啟用。';
   }
 
+  function readinessLabel(data) {
+    if (data?.readyForPreview) return '可使用｜真人錄音＋免費 AI 語音';
+    if (!data?.r2Ready) return '真人錄音可用｜R2 未設定';
+    const worker = data?.worker || {};
+    if (!worker.seen) return '真人錄音可用｜AI Worker 尚未回報';
+    if (!worker.online) return '真人錄音可用｜AI Worker 離線';
+    if (worker.kokoroInstalled === false) return '真人錄音可用｜Kokoro 未安裝';
+    if (worker.kokoroInstalled == null) return '真人錄音可用｜Kokoro 能力未回報';
+    return '真人錄音可用｜免費 AI 語音待設定';
+  }
+
   async function refresh() {
     if (!audioCard()) return false;
     paintBadge('真人錄音可用｜檢查免費 AI 語音…', false);
@@ -38,9 +49,9 @@
       const response = await fetch('/api/media-audio/status', {credentials:'same-origin', cache:'no-store'});
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'status unavailable');
-      const enabled = !!data.enabled;
-      paintBadge(enabled ? '可使用｜真人錄音＋免費 AI 語音' : '真人錄音可用｜免費 AI 語音待設定', enabled);
-      updateSummary(enabled);
+      const ready = !!data.readyForPreview;
+      paintBadge(readinessLabel(data), ready);
+      updateSummary(ready);
     } catch (_) {
       paintBadge('真人錄音可用｜免費 AI 語音狀態待確認', false);
       updateSummary(false);
