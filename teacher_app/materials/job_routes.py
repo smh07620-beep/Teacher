@@ -127,6 +127,13 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             ),
             now=now,
         )
+        failed_attention_hours = int(ops.get("failedAttentionHours") or 24)
+        failed_cutoff = now - dt.timedelta(hours=failed_attention_hours)
+        problem_jobs = [
+            item for item in problem_jobs
+            if str(item.get("status") or "") != "failed"
+            or (worker_operations._parse_utc(item.get("updatedAt") or item.get("finishedAt")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)) >= failed_cutoff
+        ]
         return jsonify({
             "jobs": jobs,
             "problemJobs": problem_jobs,
@@ -141,6 +148,8 @@ def register_material_job_routes(owner, *, runtime: MaterialJobRuntime | None = 
             "processingJobs": ops.get("processingJobs", 0),
             "retryJobs": ops.get("retryJobs", 0),
             "failedJobs": ops.get("failedJobs", 0),
+            "failedJobsTotal": ops.get("failedJobsTotal", ops.get("failedJobs", 0)),
+            "failedAttentionHours": failed_attention_hours,
             "oldestPendingAt": ops.get("oldestPendingAt", ""),
             "oldestPendingAgeSeconds": ops.get("oldestPendingAgeSeconds", 0),
             "recentTerminalJobs": ops.get("recentTerminalJobs", 0),
