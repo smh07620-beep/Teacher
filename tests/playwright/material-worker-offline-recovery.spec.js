@@ -55,6 +55,8 @@ test('GP-06 same queued job completes after the real Worker returns', async ({ p
   await page.evaluate(async () => {
     if (typeof window.renderAdminCourseMaterialHub === 'function') {
       await window.renderAdminCourseMaterialHub(true);
+      const hub = document.getElementById('admin-course-material-hub');
+      if (hub?._adminCourseMaterialRefresh) await hub._adminCourseMaterialRefresh;
     }
   });
   await expect(page.locator('body')).toContainText('GP06 Worker 離線恢復教材', { timeout: 15000 });
