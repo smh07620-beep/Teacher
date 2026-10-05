@@ -192,7 +192,7 @@ class AIMaterialFrontend97Tests(unittest.TestCase):
     def test_powerpoint_authoring_prefers_multi_file_draft_sources_over_existing_material(self):
         for marker in (
             "multiple class=\"mt-1 block w-full text-sm\"",
-            "AI PowerPoint 原始資料工作台",
+            "AI 來源內容工作台",
             "authoringSourceIds",
             "referenceMaterialIds: allAuthoringSourceIds()",
             "既有教材（可選參考來源）",
