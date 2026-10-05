@@ -84,6 +84,7 @@
   panel.dataset.productSection = 'needs-action';
 
   let refreshTimer = null;
+  let refreshDelayMs = 30000;
   let loading = false;
   let incidentResponders = [];
   let respondersLoaded = false;
@@ -155,8 +156,9 @@
   function scheduleRefresh() {
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = null;
+    if (document.hidden) return;
     if (!panel.classList.contains('hidden') && !modal.classList.contains('hidden')) {
-      refreshTimer = setTimeout(() => renderWorkerStatus(false), 8000);
+      refreshTimer = setTimeout(() => renderWorkerStatus(false), refreshDelayMs);
     }
   }
 
@@ -838,7 +840,9 @@
   async function renderWorkerStatus(force = false) {
     if (loading && !force) return;
     loading = true;
-    panel.innerHTML = `<section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div class="animate-pulse text-sm text-slate-400">讀取 Worker 與佇列狀態中…</div></section>${firstRunGuide()}`;
+    if (force || panel.dataset.workerLoaded !== 'true') {
+      panel.innerHTML = `<section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div class="animate-pulse text-sm text-slate-400">讀取 Worker 與佇列狀態中…</div></section>${firstRunGuide()}`;
+    }
     try {
       const response = await fetch(`/api/material-jobs?limit=30${force ? '&refresh=1' : ''}`, {
         credentials: 'same-origin', cache: 'no-store'
@@ -858,6 +862,8 @@
       const activeWorkers = workerStatusAvailable ? workers.filter(worker => worker.status === 'online' || worker.status === 'busy') : [];
       const recentOfflineWorkers = workerStatusAvailable ? workers.filter(worker => worker.status === 'offline') : [];
       const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+      const activeJobCount = Number(data.pendingJobs || 0) + Number(data.processingJobs || 0) + Number(data.retryJobs || 0);
+      refreshDelayMs = activeJobCount > 0 ? 10000 : 30000;
       const rawProblemJobs = Array.isArray(data.problemJobs) ? data.problemJobs : jobs.filter(job => ['failed','retry_wait'].includes(job.status));
       const problemMap = new Map(rawProblemJobs.map(job => [String(job.id||''), job]));
       jobs.filter(job => ['heartbeat_delayed','stalled'].includes(job.observabilityState)).forEach(job => problemMap.set(String(job.id||''), job));
@@ -926,6 +932,7 @@
           <div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs"><thead class="bg-slate-50"><tr><th class="p-3">Job ID</th><th class="p-3">教材</th><th class="p-3">狀態</th><th class="p-3">階段／原因</th><th class="p-3">耗時</th><th class="p-3">更新時間</th></tr></thead><tbody class="divide-y divide-slate-100">${jobRows(jobs)}</tbody></table></div>
         </section>
         ${firstRunGuide()}`;
+      panel.dataset.workerLoaded = 'true';
       document.getElementById('worker-refresh-70').onclick = () => renderWorkerStatus(true);
       bindIncidentControls();
       bindSloControls();
@@ -958,6 +965,17 @@
   adminShell?.addAfterModal(({show}) => {
     if (show) ensureNavigation();
     else if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = null;
+      return;
+    }
+    if (!panel.classList.contains('hidden') && !modal.classList.contains('hidden')) {
+      void renderWorkerStatus(false);
+    }
   });
 
   ensureNavigation();
