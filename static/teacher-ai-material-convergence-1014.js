@@ -6,6 +6,12 @@
     const assistant = document.getElementById('teacher-ai-material-1014');
     const legacy = document.getElementById('teacher-media-script-1014');
     if (!assistant || !legacy) return false;
+    const narrationFlow = legacy.closest('#teacher-media-panel-narration-1018');
+    if (narrationFlow) {
+      legacy.classList.remove('hidden');
+      legacy.removeAttribute('aria-hidden');
+      return true;
+    }
     if (!legacy.classList.contains('hidden')) legacy.classList.add('hidden');
     if (legacy.getAttribute('aria-hidden') !== 'true') legacy.setAttribute('aria-hidden', 'true');
     return true;
