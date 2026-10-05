@@ -419,7 +419,7 @@
       setSharedHint('AI PowerPoint 工作區尚未建立完成，請重新整理頁面後再試。', true);
       return false;
     }
-    const eyebrow = host?.querySelector('p.text-\[11px\]');
+    const eyebrow = host?.querySelector('p');
     const heading = host?.querySelector('h4');
     const lead = host?.querySelector('h4 + p');
     if (purpose === 'video') {
