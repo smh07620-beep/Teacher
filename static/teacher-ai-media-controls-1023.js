@@ -147,7 +147,8 @@
     const groupKey = String(group || '');
     const now = Date.now();
 
-    if (!force && presentationCache.group === groupKey && presentationCache.rows.length
+    if (!force && presentationCache.group === groupKey
+        && Number(presentationCache.loadedAt || 0) > 0
         && now - Number(presentationCache.loadedAt || 0) < 15000) {
       return paintVideoPresentations(presentationCache.rows, materialId);
     }
