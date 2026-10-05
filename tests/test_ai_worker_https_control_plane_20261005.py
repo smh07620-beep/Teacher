@@ -21,6 +21,15 @@ class AIWorkerHttpsControlPlane20261005Tests(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             self.assertEqual(ai_remote.transport_mode(), ai_remote.TRANSPORT_HTTPS)
 
+    def test_auto_never_silently_falls_back_to_blocked_postgresql(self):
+        env = {
+            "AI_WORKER_TRANSPORT": "auto",
+            "DATABASE_URL": "postgresql://blocked.example.invalid/postgres",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "HTTPS 443"):
+                ai_remote.transport_mode()
+
     def test_explicit_database_transport_remains_legacy_fallback(self):
         with patch.dict(os.environ, {"AI_WORKER_TRANSPORT": "database"}, clear=True):
             self.assertEqual(ai_remote.transport_mode(), ai_remote.TRANSPORT_DATABASE)
@@ -77,7 +86,7 @@ class AIWorkerHttpsControlPlane20261005Tests(unittest.TestCase):
         self.assertIn("/api/ai-worker/rpc", routes)
         self.assertIn("AI_WORKER_RPC_MAX_BYTES", routes)
         self.assertIn("control_transport={transport}", worker)
-        self.assertIn("AI_WORKER_TRANSPORT=auto", env_example)
+        self.assertIn("AI_WORKER_TRANSPORT=https", env_example)
         self.assertIn("AI_WORKER_TOKEN=", env_example)
         self.assertIn("AI_WORKER_TOKEN", render)
         self.assertIn("outbound HTTPS 443", run_ps1)
@@ -89,6 +98,8 @@ class AIWorkerHttpsControlPlane20261005Tests(unittest.TestCase):
         setup_ps1 = ROOT.joinpath("setup_teacher_worker.ps1").read_text(encoding="utf-8")
         docs = ROOT.joinpath("docs", "windows-ai-worker.md").read_text(encoding="utf-8")
         self.assertIn('AI_WORKER_TRANSPORT = "https"', run_ps1)
+        self.assertIn("direct database fallback is disabled", run_ps1)
+        self.assertIn('if (-not $aiTransport) { $aiTransport = "https" }', setup_ps1)
         self.assertIn("direct PostgreSQL is not required", setup_ps1)
         self.assertIn("does **not** need direct Supabase PostgreSQL 5432/6543 access", docs)
 
