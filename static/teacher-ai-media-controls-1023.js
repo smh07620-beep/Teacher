@@ -380,7 +380,7 @@
     const note = document.createElement('p');
     note.id = 'teacher-ai-video-source-help-1023';
     note.className = 'rounded-xl border border-violet-100 bg-violet-50 p-3 text-xs leading-5 text-violet-900';
-    note.textContent = '教學影片只需要「已核准 PowerPoint + 旁白」；來源教材不是必選。PowerPoint 也可以直接丟 PDF、Word、PPT、Excel、圖片或文字建立。';
+    note.textContent = '教學影片來源不只 PowerPoint：可直接從 PDF、Word、PPTX、圖片、貼入文字或私人 authoring source 開始，也可沿用既有教材。來源不必先發布成正式教材；系統會在需要時先準備可渲染畫面。';
     panel.insertBefore(note, panel.children[1] || null);
   }
 
@@ -409,8 +409,9 @@
     return host;
   }
 
-  async function openPowerPointWorkspace() {
+  async function openPowerPointWorkspace(options = {}) {
     closeGeneralMaterialUpload();
+    const purpose = String(options?.purpose || 'powerpoint');
     const host = ensurePowerPointWorkspace();
     const body = $('teacher-media-powerpoint-body-1024');
     const studio = $('teacher-ai-media-studio-1018') || $('teacher-media-production-1014');
@@ -418,6 +419,19 @@
       setSharedHint('AI PowerPoint 工作區尚未建立完成，請重新整理頁面後再試。', true);
       return false;
     }
+    const eyebrow = host?.querySelector('p.text-\[11px\]');
+    const heading = host?.querySelector('h4');
+    const lead = host?.querySelector('h4 + p');
+    if (purpose === 'video') {
+      if (eyebrow) eyebrow.textContent = 'VIDEO SOURCE AUTHORING';
+      if (heading) heading.textContent = '🎬 加入影片來源內容';
+      if (lead) lead.textContent = '可加入 PDF、Word、PPTX、Excel、圖片或貼入文字；這些資料先保持為私人製作來源，不會自動發布成正式教材。完成內容整理與教師核准後即可接回影片製作。';
+    } else {
+      if (eyebrow) eyebrow.textContent = 'AI POWERPOINT AUTHORING';
+      if (heading) heading.textContent = '🖥️ 多資料 AI PowerPoint';
+      if (lead) lead.textContent = '一次加入多份原始資料 → AI 統整／RAG → 教師修改與核准 → 建立正式 .pptx。';
+    }
+
     let panel = $('teacher-ai-material-1014');
     if (!panel) panel = window.TeacherAIMaterial1014?.ensureMounted?.(body) || null;
     if (!panel && typeof window.renderAdminCourseMaterialHub === 'function') {
@@ -730,11 +744,24 @@
     presentationCache.loadedAt = 0;
     void refreshVideoPresentations($('teacher-media-source-1018')?.value || '', {force:true});
   });
+  async function openVideoSourceWorkspace() {
+    const opened = await openPowerPointWorkspace({purpose:'video'});
+    if (!opened) return false;
+    const type = $('teacher-ai-material-type-1014');
+    if (type && [...type.options].some(option => option.value === 'slides')) type.value = 'slides';
+    const file = $('teacher-ai-material-file-1014');
+    const paste = $('teacher-ai-material-paste-1014');
+    if (file) file.accept = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.odt,.ods,.txt,.csv,.png,.jpg,.jpeg,.webp';
+    setTimeout(() => (file || paste)?.focus?.(), 60);
+    return true;
+  }
+
   window.TeacherAIMediaControls1023 = Object.freeze({
     refreshSources,
     refreshVideoPresentations,
     syncSelectedSource,
     openPowerPointWorkspace,
+    openVideoSourceWorkspace,
     closePowerPointWorkspace,
     openGeneralMaterialUpload,
   });
