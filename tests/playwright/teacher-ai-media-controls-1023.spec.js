@@ -31,7 +31,7 @@ test('shared AI media source loads directly and drives narration subtitle and vi
           <select id="teacher-ai-video-presentation-1015"><option value="">請先選擇來源教材</option></select>
           <p id="teacher-ai-video-status-1015"></p>
         </section>
-        <section id="teacher-media-powerpoint-entry-1018"><div><b>PowerPoint</b><p>舊說明</p></div><button id="teacher-media-open-powerpoint-1018">AI PowerPoint 製作</button></section>
+        <button id="teacher-media-direct-powerpoint-1026" type="button">AI PowerPoint 製作</button>
       </section>
     </main>
   `);
@@ -40,9 +40,8 @@ test('shared AI media source loads directly and drives narration subtitle and vi
     window.TeacherMediaSubtitle1014 = {
       selectMaterial: value => { window.subtitleMaterial1023 = value; }
     };
-    window.TeacherMediaAudio1014 = {
-      loadApprovedScripts: async () => { window.audioReloaded1023 = true; }
-    };
+    window.audioReloaded1023 = '';
+    window.addEventListener('teacher-media-source-selected-1027', event => { window.audioReloaded1023 = event.detail?.materialId || ''; });
     window.fetch = async url => {
       const text = String(url);
       if (text.includes('/api/slides/admin')) {
@@ -76,12 +75,12 @@ test('shared AI media source loads directly and drives narration subtitle and vi
 
   await expect(page.locator('#teacher-subtitle-language-1014')).toHaveJSProperty('tagName', 'SELECT');
   await expect(page.locator('#teacher-subtitle-language-1014')).toHaveValue('zh-TW');
-  await expect(page.locator('#teacher-media-open-powerpoint-1018')).toHaveText('🖥️ 多資料 AI PowerPoint');
-  await expect(page.locator('#teacher-media-powerpoint-entry-1018')).toContainText('不用先建立教材');
+  await expect(page.locator('#teacher-media-direct-powerpoint-1026')).toHaveText('🖥️ AI PowerPoint 製作');
+  await expect(page.locator('#teacher-media-powerpoint-entry-1018')).toHaveCount(0);
 
   await source.selectOption('doc-1');
   await expect.poll(() => page.evaluate(() => window.subtitleMaterial1023)).toBe('doc-1');
-  await expect.poll(() => page.evaluate(() => window.audioReloaded1023)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.audioReloaded1023)).toBe('doc-1');
   await expect(page.locator('#teacher-script-material-1014')).toHaveValue('doc-1');
   await expect(page.locator('#teacher-ai-video-presentation-1015')).toBeEnabled();
   await expect(page.locator('#teacher-ai-video-presentation-1015')).toHaveValue('ppt-1');
@@ -97,7 +96,7 @@ test('approved PowerPoint list loads independently of material selection and coa
         <select id="teacher-ai-video-presentation-1015"><option value="">初始</option></select>
         <p id="teacher-ai-video-status-1015"></p>
       </section>
-      <section id="teacher-media-powerpoint-entry-1018"><div><b>PowerPoint</b><p>舊說明</p></div><button id="teacher-media-open-powerpoint-1018">AI PowerPoint 製作</button></section>
+      <button id="teacher-media-direct-powerpoint-1026" type="button">AI PowerPoint 製作</button>
     </section>
   `);
   await installTeacherRBAC(page);
@@ -132,7 +131,7 @@ test('empty media source has one PowerPoint entry and an inline ordinary materia
     <section id="teacher-media-production-1014">
       <label>來源教材／來源內容<select id="teacher-media-source-1018" disabled><option>正在載入可用教材…</option></select></label>
       <p id="teacher-media-next-step-1018"></p>
-      <section id="teacher-media-powerpoint-entry-1018"><div><b>PowerPoint</b><p>舊說明</p></div><button id="teacher-media-open-powerpoint-1018">AI PowerPoint 製作</button></section>
+      <button id="teacher-media-direct-powerpoint-1026" type="button">AI PowerPoint 製作</button>
     </section>
   `);
   await installTeacherRBAC(page);
@@ -148,7 +147,8 @@ test('empty media source has one PowerPoint entry and an inline ordinary materia
   await expect(page.locator('#teacher-media-empty-powerpoint-1024')).toHaveCount(0);
   await expect(page.locator('#teacher-media-empty-upload-1024')).toHaveText('📚 上傳一般教材');
   await expect(page.locator('#teacher-media-source-refresh-1024')).toBeVisible();
-  await expect(page.locator('#teacher-media-open-powerpoint-1018')).toHaveCount(1);
+  await expect(page.locator('#teacher-media-powerpoint-entry-1018')).toHaveCount(0);
+  await expect(page.locator('#teacher-media-direct-powerpoint-1026')).toHaveCount(1);
   await expect(page.locator('#teacher-media-next-step-1018')).toContainText('本頁上傳一般教材');
 });
 
@@ -220,10 +220,7 @@ test('multi-source PowerPoint opens inline and does not run the old jump-back ha
         <section id="teacher-ai-media-studio-1018">
           <label>來源教材／來源內容<select id="teacher-media-source-1018"><option value="">來源</option></select></label>
           <p id="teacher-media-next-step-1018"></p>
-          <section id="teacher-media-powerpoint-entry-1018">
-            <div><b>PowerPoint</b><p>舊說明</p></div>
-            <button id="teacher-media-open-powerpoint-1018" type="button">AI PowerPoint 製作</button>
-          </section>
+          <button id="teacher-media-direct-powerpoint-1026" type="button">AI PowerPoint 製作</button>
           <div id="teacher-media-tabs-placeholder">媒體頁籤</div>
         </section>
       </section>
@@ -232,16 +229,13 @@ test('multi-source PowerPoint opens inline and does not run the old jump-back ha
   await installTeacherRBAC(page);
   await page.evaluate(() => {
     window.oldJumpCalls = 0;
-    document.getElementById('teacher-media-open-powerpoint-1018').addEventListener('click', () => {
-      window.oldJumpCalls += 1;
-    });
     window.fetch = async () => ({ ok: true, json: async () => [] });
     window.TeacherAIMaterial1014 = { paintMaterialOptions: async () => {} };
   });
 
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
   await expect.poll(() => page.evaluate(() => Boolean(window.TeacherAIMediaControls1023))).toBe(true);
-  await page.locator('#teacher-media-open-powerpoint-1018').click();
+  await page.locator('#teacher-media-direct-powerpoint-1026').click();
 
   await expect.poll(() => page.evaluate(() => window.oldJumpCalls)).toBe(0);
   await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toBeVisible();
