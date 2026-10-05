@@ -798,6 +798,8 @@ def status(
                     "queues": queue_names,
                     "kokoroInstalled": bool(kokoro.get("available")) if "available" in kokoro else None,
                     "whisperInstalled": bool((capabilities.get("whisper") or {}).get("available")),
+                    "heartbeatContract": int(capabilities.get("heartbeatContract") or 0),
+                    "heartbeatTransport": str(capabilities.get("heartbeatTransport") or "")[:32],
                 }
             )
     except Exception:
