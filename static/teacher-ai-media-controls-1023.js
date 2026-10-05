@@ -48,9 +48,11 @@
 
   function currentScope() {
     const params = new URLSearchParams(window.location.search);
+    const explicitGroup = params.get('group') || window.currentGroupKey || '';
+    const group = explicitGroup || (R.crossGroup ? '' : String(R.user?.preferredGroup || '') || 'grpBio');
     return {
       area: params.get('area') || window.currentTrainingArea || 'internal',
-      group: params.get('group') || window.currentGroupKey || String(R.user?.preferredGroup || '') || 'grpBio',
+      group,
     };
   }
 
