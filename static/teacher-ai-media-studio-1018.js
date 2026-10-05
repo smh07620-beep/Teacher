@@ -10,7 +10,7 @@
 
   const $ = id => document.getElementById(id);
   let sourceMaterials = [];
-  let activeMode = 'narration';
+  let activeMode = 'presentation';
   let retryGeneration = 0;
   let presentationMaterialId = null;
   let presentationRequest = null;
