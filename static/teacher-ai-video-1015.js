@@ -65,9 +65,10 @@
 
   async function loadStatus() {
     try {
+      const cachedAudioStatus = window.TeacherMediaAudioStatus1014 || null;
       const results = await Promise.all([
         api('/api/ai-videos/status'),
-        api('/api/media-audio/status').catch(() => ({}))
+        cachedAudioStatus ? Promise.resolve(cachedAudioStatus) : api('/api/media-audio/status').catch(() => ({}))
       ]);
       status = results[0] || {};
       audioStatus = results[1] || {};
@@ -294,6 +295,10 @@
     });
     $('teacher-ai-video-voice-preview-1015').addEventListener('click', () => void previewNarrationVoice());
     $('teacher-ai-video-voice-player-1015').addEventListener('error', () => note('語音檔無法播放；請確認 R2 音訊回應為 audio/wav，且瀏覽器 CSP 允許該 HTTPS 網址。', true));
+    window.addEventListener('teacher-media-audio-status-1014', event => {
+      audioStatus = event.detail?.status || {};
+      renderVoiceHealth(audioStatus);
+    });
     void loadStatus();
     return true;
   }
