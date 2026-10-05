@@ -39,13 +39,28 @@ def _ai_worker_id() -> str:
     return f"{safe}-ai"[:100]
 
 
+def _module_available(name: str) -> bool:
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
 def _ai_worker_capabilities() -> dict:
-    kokoro_ready = importlib.util.find_spec("kokoro") is not None
-    numpy_ready = importlib.util.find_spec("numpy") is not None
+    kokoro_ready = _module_available("kokoro")
+    numpy_ready = _module_available("numpy")
+    misaki_ready = _module_available("misaki")
+    whisper_ready = _module_available("faster_whisper")
     return {
         "workerKind": "ai",
         "workerMachine": str(socket.gethostname() or "")[:80],
-        "kokoro": {"available": bool(kokoro_ready and numpy_ready)},
+        "kokoro": {
+            "available": bool(kokoro_ready and numpy_ready and misaki_ready),
+            "kokoro": kokoro_ready,
+            "numpy": numpy_ready,
+            "misaki": misaki_ready,
+        },
+        "whisper": {"available": whisper_ready},
         "queues": ["ai_questions", "media_scripts", "ai_presentations", "ai_videos", "media_audio", "media_subtitles"],
     }
 
