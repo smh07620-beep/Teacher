@@ -26,8 +26,15 @@ def test_media_studio_keeps_one_source_and_accessible_single_mode_tabs():
         "ArrowRight",
         "panel.hidden = !selected",
         "TeacherMediaSubtitle1014?.selectMaterial",
+        "teacher-media-tab-presentation-1018",
+        "teacher-media-tab-recording-1018",
+        "teacher-media-video-captions-1018",
+        "TeacherAIMaterial1014?.ensureMounted",
+        "teacher-recorder-1014",
     ):
         assert token in source
+    assert "['presentation', 'narration', 'recording', 'video']" in source
+    assert "teacher-media-tab-subtitle-1018" not in source
 
 
 def test_media_shell_has_no_duplicate_source_placeholder_and_keeps_a_small_return_action():
