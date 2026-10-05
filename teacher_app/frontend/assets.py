@@ -8,6 +8,13 @@ from pathlib import Path
 
 LOGGER = logging.getLogger(__name__)
 
+# Compatibility-only static paths are deliberately served but never injected
+# into current pages. They keep already-open/stale browser tabs from turning a
+# removed asset request into a 404 during a rolling deployment.
+LEGACY_COMPAT_ASSETS = (
+    "/admin-entrypoint-69.js",
+)
+
 ASSET_MANIFEST = {
     "portal": {
         "body": (
