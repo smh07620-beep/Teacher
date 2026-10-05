@@ -18,6 +18,7 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         cls.status_ui = (ROOT / "static" / "teacher-media-status-fix-1014.js").read_text(encoding="utf-8")
         cls.worker = (ROOT / "ai_question_worker.py").read_text(encoding="utf-8")
         cls.routes = (ROOT / "teacher_app" / "materials" / "media_audio_routes.py").read_text(encoding="utf-8")
+        cls.video_routes = (ROOT / "teacher_app" / "materials" / "ai_video_routes.py").read_text(encoding="utf-8")
         cls.worker_ops = (ROOT / "teacher_app" / "worker" / "operations.py").read_text(encoding="utf-8")
 
     def test_narration_is_local_kokoro_only(self):
@@ -74,6 +75,25 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn("readyForPreview", self.status_ui)
         self.assertIn("Kokoro 能力未回報", self.audio_ui)
         self.assertIn("Kokoro 能力未回報", self.video_ui)
+
+    def test_worker_readiness_accepts_compatible_ai_heartbeat_shapes(self):
+        self.assertIn("_is_ai_worker_heartbeat", self.routes)
+        self.assertIn('worker_id.endswith("-ai")', self.routes)
+        self.assertIn('queue_names.intersection(_AI_QUEUE_NAMES)', self.routes)
+        self.assertIn("_kokoro_capability", self.routes)
+        self.assertIn('"kokoroInstalled"', self.routes)
+
+    def test_audio_and_video_generation_fail_closed_when_worker_is_not_ready(self):
+        self.assertIn("_worker_ready_error", self.routes)
+        self.assertIn("readiness_error = _worker_ready_error()", self.routes)
+        self.assertIn("workerOffline", self.routes)
+        self.assertIn("kokoroUnavailable", self.routes)
+        self.assertIn('"ready": ready', self.video_routes)
+        self.assertIn("worker = _ai_worker_status()", self.video_routes)
+        self.assertIn("workerOffline", self.video_routes)
+        self.assertIn("kokoroUnavailable", self.video_routes)
+        self.assertIn("!statusInfo?.readyForPreview", self.audio_ui)
+        self.assertIn("!status?.ready", self.video_ui)
 
     def test_ai_heartbeat_does_not_appear_as_duplicate_material_worker(self):
         self.assertIn('capabilities.get("workerKind")', self.worker_ops)
