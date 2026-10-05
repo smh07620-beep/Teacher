@@ -322,6 +322,73 @@ test('F5 hydration and observers issue one PowerPoint request per selected sourc
   await expect.poll(() => page.evaluate(() => window.slideRequests1025)).toBe(1);
 });
 
+test('cross-group teaching loads approved PowerPoints across groups', async ({ page }) => {
+  await page.setContent(`
+    <section id="teacher-media-production-1014">
+      <section id="teacher-ai-media-studio-1018">
+        <div class="rounded-2xl"><select id="teacher-media-source-1018"><option value="">來源</option></select></div>
+        <p id="teacher-media-next-step-1018"></p>
+        <section id="teacher-ai-video-1015">
+          <select id="teacher-ai-video-presentation-1015"><option value="">載入</option></select>
+          <p id="teacher-ai-video-status-1015"></p>
+        </section>
+      </section>
+    </section>
+  `);
+  await page.evaluate(() => {
+    window.TeacherRBAC681Ready = Promise.resolve({
+      roles: new Set(['education_admin']),
+      crossGroup: true,
+      user: { preferredGroup: 'grpBio' },
+      hasPermission: permission => permission === 'material.manage'
+    });
+    window.fetch = async url => {
+      const value = String(url);
+      if (value === '/api/slides/admin') return { ok: true, json: async () => [
+        { id: 'heme-doc', title: '血液教材', group: 'grpHema', area: 'internal' }
+      ] };
+      if (value.startsWith('/api/ai-presentations')) return { ok: true, json: async () => [
+        { id: 'ppt-heme', title: '血液簡報', group: 'grpHema', materialId: 'heme-doc', revisionNumber: 2, status: 'approved', artifactReady: true }
+      ] };
+      return { ok: true, json: async () => ({}) };
+    };
+  });
+  await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  await expect.poll(() => page.evaluate(() => Boolean(window.TeacherAIMediaControls1023))).toBe(true);
+  await expect(page.locator('#teacher-media-source-1018')).toContainText('血液教材');
+  await expect(page.locator('#teacher-ai-video-presentation-1015')).toBeEnabled();
+  await expect(page.locator('#teacher-ai-video-presentation-1015')).toHaveValue('ppt-heme');
+  await expect.poll(() => page.evaluate(() => performance.getEntriesByType ? true : true)).toBe(true);
+});
+
+test('PowerPoint authoring mounts inline even when course hub was never opened', async ({ page }) => {
+  await page.setContent(`
+    <main>
+      <section id="teacher-media-production-1014">
+        <section id="teacher-ai-media-studio-1018">
+          <div class="rounded-2xl"><select id="teacher-media-source-1018"><option value="">來源</option></select></div>
+          <p id="teacher-media-next-step-1018"></p>
+          <button id="teacher-media-direct-powerpoint-1026" type="button">🖥️ AI PowerPoint 製作</button>
+        </section>
+      </section>
+    </main>
+  `);
+  await installTeacherRBAC(page);
+  await page.evaluate(() => {
+    window.fetch = async url => {
+      if (String(url) === '/api/slides/admin') return { ok: true, json: async () => [] };
+      return { ok: true, json: async () => [] };
+    };
+  });
+  await page.addScriptTag({ path: asset('teacher-ai-material-1014.js') });
+  await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  await expect(page.locator('#teacher-ai-material-1014')).toHaveCount(0);
+  await page.locator('#teacher-media-direct-powerpoint-1026').click();
+  await expect(page.locator('#teacher-media-powerpoint-workspace-1024')).toBeVisible();
+  await expect(page.locator('#teacher-media-powerpoint-body-1024 > #teacher-ai-material-1014')).toBeVisible();
+  await expect(page.locator('#teacher-media-next-step-1018')).not.toContainText('尚未載入完成');
+});
+
 test('AI PowerPoint accepts pasted SOP text as a private authoring source', async ({ page }) => {
   await page.setContent('<main><section id="admin-course-material-hub"><div class="admin-course-dashboard"></div><section id="teacher-media-script-1014"></section></section></main>');
   await installTeacherRBAC(page);
