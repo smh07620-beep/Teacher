@@ -316,12 +316,26 @@ function Test-SharedStorageConfiguration {
 function Test-WorkerConfiguration {
   Import-WorkerEnvironment
   $missing = New-Object System.Collections.Generic.List[string]
-  foreach ($name in @("TEACHER_BASE_URL", "MATERIAL_WORKER_TOKEN", "DATABASE_URL")) {
+  foreach ($name in @("TEACHER_BASE_URL", "MATERIAL_WORKER_TOKEN")) {
     if (-not (Test-ConfiguredValue $name)) { $missing.Add($name) }
   }
   if ($missing.Count -gt 0) {
     Add-Warning ("Required Worker settings need local configuration: " + ($missing -join ", "))
   }
+
+  $aiTransport = ([string]$env:AI_WORKER_TRANSPORT).Trim().ToLowerInvariant()
+  if (-not $aiTransport) { $aiTransport = "auto" }
+  $aiTokenReady = (Test-ConfiguredValue "AI_WORKER_TOKEN") -or (Test-ConfiguredValue "MATERIAL_WORKER_TOKEN")
+  if ($aiTransport -in @("database", "db", "postgres", "postgresql")) {
+    if (-not (Test-ConfiguredValue "DATABASE_URL")) {
+      Add-Warning "AI_WORKER_TRANSPORT=database requires DATABASE_URL."
+    }
+  } elseif (-not ((Test-ConfiguredValue "TEACHER_BASE_URL") -and $aiTokenReady)) {
+    Add-Warning "AI Worker HTTPS control plane requires TEACHER_BASE_URL and AI_WORKER_TOKEN (or MATERIAL_WORKER_TOKEN)."
+  } else {
+    Write-Step "AI Worker control plane will use outbound HTTPS 443; direct PostgreSQL is not required."
+  }
+
   if (-not (Test-ConfiguredValue "MATERIAL_WORKER_ID")) {
     Add-Warning "MATERIAL_WORKER_ID is not set. Configure a stable host ID so heartbeat/observability survives process restarts."
   }
