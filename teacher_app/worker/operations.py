@@ -618,7 +618,7 @@ def status(
         for state in ("queued", "retry_wait")
     )
     processing = int((aggregates.get("processing") or {}).get("count") or 0)
-    failed = int((aggregates.get("failed") or {}).get("count") or 0)
+    failed_total = int((aggregates.get("failed") or {}).get("count") or 0)
     now = dt.datetime.now(dt.timezone.utc)
     recent_jobs = material_jobs_observability(
         repository.list_material_jobs(
@@ -631,6 +631,13 @@ def status(
         item
         for item in recent_jobs
         if str(item.get("status") or "") in {"completed", "failed"}
+    ]
+    failure_attention_hours = _int_env("MATERIAL_FAILED_ATTENTION_HOURS", 24, 1, 168)
+    failure_attention_cutoff = now - dt.timedelta(hours=failure_attention_hours)
+    failed_attention_jobs = [
+        item for item in recent_jobs
+        if str(item.get("status") or "") == "failed"
+        and (_parse_utc(item.get("updatedAt") or item.get("finishedAt")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)) >= failure_attention_cutoff
     ]
     recent_failed = sum(
         str(item.get("status") or "") == "failed"
@@ -770,7 +777,9 @@ def status(
         "pendingJobs": pending,
         "processingJobs": processing,
         "retryJobs": int((aggregates.get("retry_wait") or {}).get("count") or 0),
-        "failedJobs": failed,
+        "failedJobs": len(failed_attention_jobs),
+        "failedJobsTotal": failed_total,
+        "failedAttentionHours": failure_attention_hours,
         "oldestPendingAt": oldest,
         "oldestPendingAgeSeconds": oldest_age,
         "recentTerminalJobs": len(terminal_jobs),
