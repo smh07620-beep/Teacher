@@ -11,6 +11,8 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.worker = ROOT.joinpath("ai_question_worker.py").read_text(encoding="utf-8")
+        cls.remote = ROOT.joinpath("teacher_app", "worker", "ai_remote.py").read_text(encoding="utf-8")
+        cls.worker_routes = ROOT.joinpath("teacher_app", "worker", "routes.py").read_text(encoding="utf-8")
         cls.routes = ROOT.joinpath("teacher_app", "materials", "media_audio_routes.py").read_text(encoding="utf-8")
         cls.operations = ROOT.joinpath("teacher_app", "worker", "operations.py").read_text(encoding="utf-8")
         cls.worker_ui = ROOT.joinpath("static", "worker-status-70.js").read_text(encoding="utf-8")
@@ -36,23 +38,38 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
         self.assertEqual(len(direct), 16)
         self.assertNotIn("secret", direct)
 
-    def test_ai_worker_cannot_remain_falsely_healthy_without_heartbeat(self):
+    def test_ai_worker_uses_https_control_plane_without_hospital_postgres(self):
         for marker in (
-            "AI_WORKER_HEARTBEAT_FAILURE_LIMIT",
-            "AI_WORKER_HEARTBEAT_STARTUP_ATTEMPTS",
-            "raise_if_unhealthy",
-            "databaseIdentity",
-            "databaseReady",
+            "AI_WORKER_TRANSPORT",
+            "AIWorkerApi",
+            "install_remote_repository_proxies",
+            "control_transport=",
             "heartbeatContract",
-            "_post_web_heartbeat",
-            "/api/material-worker/heartbeat",
+            "heartbeatTransport",
         ):
             self.assertIn(marker, self.worker)
-        self.assertIn("worker_database_unavailable", self.routes)
-        self.assertIn("worker_database_mismatch", self.routes)
-        self.assertIn("databaseIdentityMatch", self.routes)
-        self.assertIn("databaseIdentityMatch", self.operations)
-        self.assertIn("DB 與 Render 不一致", self.worker_ui)
+        for marker in (
+            "/api/ai-worker/heartbeat",
+            "/api/ai-worker/rpc",
+            "AI_WORKER_TOKEN",
+            "AI_WORKER_HTTP_RATE_LIMIT_PER_MINUTE",
+        ):
+            self.assertIn(marker, self.worker_routes)
+        for marker in (
+            "TRANSPORT_HTTPS",
+            "queue.touch",
+            "r2.record_object",
+            "presentation.create_presentation",
+            "video.create_video",
+            "subtitle.create_subtitle",
+        ):
+            self.assertIn(marker, self.remote)
+        self.assertIn("controlPlaneReady", self.routes)
+        self.assertIn("HTTPS 443 control plane", self.routes)
+        self.assertIn("controlPlaneReady", self.operations)
+        self.assertIn("HTTPS 443 控制通道", self.worker_ui)
+        self.assertNotIn('"/api/material-worker/heartbeat"', self.worker)
+
 
     def test_script_and_narration_are_one_guided_flow(self):
         self.assertIn("🎙️ 講稿與配音", self.studio)
