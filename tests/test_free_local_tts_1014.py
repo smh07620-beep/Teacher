@@ -82,6 +82,9 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn('queue_names.intersection(_AI_QUEUE_NAMES)', self.routes)
         self.assertIn("_kokoro_capability", self.routes)
         self.assertIn('"kokoroInstalled"', self.routes)
+        self.assertIn('"queues": queues', self.routes)
+        self.assertIn("required_queue", self.routes)
+        self.assertIn("workerCapabilityMissing", self.routes)
 
     def test_audio_and_video_generation_fail_closed_when_worker_is_not_ready(self):
         self.assertIn("_worker_ready_error", self.routes)
@@ -90,7 +93,7 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn("kokoroUnavailable", self.routes)
         self.assertIn('"ready": ready', self.video_routes)
         self.assertIn("worker = _ai_worker_status()", self.video_routes)
-        self.assertIn("workerOffline", self.video_routes)
+        self.assertIn('_ai_worker_online_error(worker, required_queue="ai_videos")', self.video_routes)
         self.assertIn("kokoroUnavailable", self.video_routes)
         self.assertIn("!statusInfo?.readyForPreview", self.audio_ui)
         self.assertIn("!status?.ready", self.video_ui)
