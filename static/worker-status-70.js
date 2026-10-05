@@ -901,8 +901,8 @@
           </div>
           <div class="grid sm:grid-cols-3 gap-2 text-xs">
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">最舊待處理等待：</span><b>${formatDuration(data.oldestPendingAgeSeconds)}</b>${data.oldestPendingAt ? ` · ${formatWhen(data.oldestPendingAt)}` : ''}</div>
-            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">最近失敗率：</span><b>${Math.round(Number(data.recentFailureRate || 0) * 100)}%</b> · ${Number(data.recentTerminalJobs || 0)} 筆 terminal job</div>
-            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">平均完成時間：</span><b>${formatDuration(data.averageCompletedDurationSeconds)}</b></div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">近${Number(data.metricsWindowHours||24)}小時失敗率：</span><b>${Number(data.recentTerminalJobs||0) ? Math.round(Number(data.recentFailureRate || 0) * 100) + '%' : '—'}</b> · ${Number(data.recentTerminalJobs || 0)} 筆完成/失敗</div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">近${Number(data.metricsWindowHours||24)}小時平均完成：</span><b>${Number(data.recentTerminalJobs||0) ? formatDuration(data.averageCompletedDurationSeconds) : '—'}</b></div>
           </div>
           <div class="grid sm:grid-cols-3 gap-2 text-xs">
             <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2"><span class="text-emerald-700">🟢 處理中 heartbeat 正常：</span><b>${Number(data.healthyProcessingJobs||0)}</b><div class="mt-1 text-[10px]">在線 Worker ${activeWorkers.length} 台</div></div>
