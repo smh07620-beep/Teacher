@@ -80,6 +80,44 @@ test('large internal course scope stays interactive without summary warnings', a
   expect(warnings).toEqual([]);
 });
 
+test('course hub reconciles a fresh material fetch that loses render ownership', async ({ page }) => {
+  await page.setContent(`
+    <select id="wizard-area"><option value="internal" selected>院內</option></select>
+    <select id="wizard-group"><option value="grpBio" selected>生化</option></select>
+    <div id="admin-course-material-hub"></div>
+  `);
+  await page.evaluate(() => {
+    window.currentTrainingArea = 'internal';
+    window.currentGroupKey = 'grpBio';
+    window.GROUPS = { grpBio: { label: '生化' } };
+    window.adminCoursesCache = new Map([['internal:grpBio', { data: [{ id: 'course-1', title: '課程 1', active: true }], at: Date.now() }]]);
+    window.adminMaterialsCache = { data: [], at: Date.now() };
+    window.ADMIN_COURSE_CACHE_MS = 60000;
+    window.ADMIN_CACHE_MS = 60000;
+    window.adminScopeKey = (area, group) => `${area}:${group}`;
+    window.escapeHtml = value => String(value ?? '');
+    window.teachingOrderedMaterials = (_course, materials) => materials;
+    window.examBankCount = () => 0;
+    window.examAudienceLabel = () => '';
+    window.examDrawLabel = () => '';
+    window.TeacherRBAC681Ready = Promise.resolve({ hasPermission: name => name === 'material.manage' });
+    window.fetchAdminMaterials = async force => {
+      if (!force) return window.adminMaterialsCache.data;
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const rows = [{ id: 'mat-new', title: '剛完成的 Worker 教材', area: 'internal', group: 'grpBio', courseId: 'course-1', active: true }];
+      window.adminMaterialsCache = { data: rows, at: Date.now() };
+      return rows;
+    };
+    window.fetch = async () => ({ ok: true, json: async () => [] });
+  });
+  await page.addScriptTag({ path: asset('admin-course-material.js') });
+  await page.evaluate(() => {
+    window.renderAdminCourseMaterialHub(true);
+    window.renderAdminCourseMaterialHub(false);
+  });
+  await expect(page.locator('#admin-course-material-hub')).toContainText('剛完成的 Worker 教材', { timeout: 3000 });
+});
+
 test('AI media studio keeps one source and one accessible active mode', async ({ page }) => {
   await page.setContent('<main><section id="teacher-media-production-1014"><section id="teacher-media-studio-shell-1018"></section><section id="teacher-media-audio-1014"><h4>語音</h4><p class="mt-1">語音說明</p></section><section id="teacher-media-subtitle-1014"><h4>字幕</h4></section><section id="teacher-ai-video-1015"><h4>影片</h4><p class="mt-1">影片說明</p><label>PowerPoint<input id="teacher-ai-video-presentation-1015"></label><span id="teacher-ai-video-provider-1015"></span><span id="teacher-ai-video-renderer-1015"></span></section><section id="teacher-media-script-1014"><label>來源教材<select id="teacher-script-material-1014"><option value="doc-1">教材文件</option><option value="movie-1">教學影片.mp4</option></select></label></section></section></main>');
   await page.evaluate(() => {
