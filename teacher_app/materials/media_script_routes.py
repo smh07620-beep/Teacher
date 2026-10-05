@@ -6,6 +6,7 @@ from flask import g, jsonify, request
 from teacher_app.common import audit, scope_filter
 from teacher_app.materials import media_script_jobs, media_script_repository
 from teacher_app.materials import repository as material_repository
+from teacher_app.materials.media_audio_routes import _ai_worker_online_error
 
 
 def _actor(owner=None):
@@ -54,6 +55,9 @@ def register_media_script_routes(owner):
         denied = _scope(owner, str(material.get("group") or ""))
         if denied:
             return denied
+        readiness_error = _ai_worker_online_error()
+        if readiness_error:
+            return readiness_error
         try:
             job = media_script_jobs.enqueue(body, user)
         except media_script_jobs.MediaScriptLimitError as exc:
