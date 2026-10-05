@@ -324,7 +324,7 @@ function Test-WorkerConfiguration {
   }
 
   $aiTransport = ([string]$env:AI_WORKER_TRANSPORT).Trim().ToLowerInvariant()
-  if (-not $aiTransport) { $aiTransport = "auto" }
+  if (-not $aiTransport) { $aiTransport = "https" }
   $aiTokenReady = (Test-ConfiguredValue "AI_WORKER_TOKEN") -or (Test-ConfiguredValue "MATERIAL_WORKER_TOKEN")
   if ($aiTransport -in @("database", "db", "postgres", "postgresql")) {
     if (-not (Test-ConfiguredValue "DATABASE_URL")) {
