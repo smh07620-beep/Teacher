@@ -36,8 +36,9 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
         self.assertIn("document.getElementById('teacher-nav-media-1014')?.remove()", UI)
         self.assertIn("AI PowerPoint 或教材草稿", UI)
         self.assertIn("製作語音、字幕與影片", UI)
-        self.assertIn("TeacherWorkspace1014?.openPresentation", UI)
+        self.assertIn("🧰 開啟教材媒體製作室", UI)
         self.assertIn("TeacherWorkspace1014?.openMedia", UI)
+        self.assertNotIn("TeacherWorkspace1014?.openPresentation", UI)
 
     def test_course_card_has_single_management_entry(self):
         self.assertIn("data-teacher-manage-course-1014", UI)
