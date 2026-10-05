@@ -222,6 +222,11 @@ def _latest_heartbeat_per_machine(rows) -> list[tuple[dict, dict, dt.datetime]]:
             capabilities = json.loads(raw) if isinstance(raw, str) else dict(raw)
         except (TypeError, ValueError):
             capabilities = {}
+        # AI Worker heartbeats share the durable heartbeat table for service
+        # readiness, but must never appear as duplicate material Workers or
+        # influence material offline/recovery decisions.
+        if str(capabilities.get("workerKind") or "material").strip().lower() == "ai":
+            continue
         key = _worker_machine_key(worker_id, capabilities) or worker_id.lower()
         current = latest.get(key)
         if current is None or seen > current[2]:
