@@ -114,7 +114,7 @@ foreach ($forbidden in @('git pull', 'git reset', 'git clean', 'git stash')) {
 }
 
 foreach ($marker in @(
-  'AI_WORKER_TRANSPORT=auto',
+  'AI_WORKER_TRANSPORT=https',
   'AI_WORKER_TOKEN=',
   'DATABASE_URL=',
   'FREE_ONLY_MODE=true',
