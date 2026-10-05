@@ -6,6 +6,7 @@
   const MATERIAL_INDEX_CONCURRENCY = 2;
   const MATERIAL_INDEX_TIMEOUT_MS = 3500;
   let materialIndexHydrationGeneration = 0;
+  let adminMaterialsRequestGeneration = 0;
 
   window.invalidateAdminMaterialsCache = function(){
     adminMaterialsCache = { data: null, at: 0 };
@@ -16,10 +17,11 @@
     if (!force && Array.isArray(adminMaterialsCache.data) && (now - adminMaterialsCache.at) < ADMIN_CACHE_MS) {
       return adminMaterialsCache.data;
     }
+    const generation = ++adminMaterialsRequestGeneration;
     const res = await fetch('/api/slides/admin', {credentials:'same-origin', cache:'no-store'});
     const data = await res.json().catch(() => []);
     if (res.status === 401) {
-      window.invalidateAdminMaterialsCache();
+      if (generation === adminMaterialsRequestGeneration) window.invalidateAdminMaterialsCache();
       const next = encodeURIComponent(location.pathname + location.search);
       location.href = `/login?next=${next}`;
       throw new Error('登入已逾時，請重新登入。');
@@ -27,8 +29,14 @@
     if (res.status === 403) throw new Error((data && data.error) || '沒有教材管理權限。');
     if (!res.ok) throw new Error((data && data.error) || '無法取得教材清單');
     const list = Array.isArray(data) ? data : [];
-    adminMaterialsCache = { data: list, at: Date.now() };
-    return list;
+    if (generation === adminMaterialsRequestGeneration) {
+      adminMaterialsCache = { data: list, at: Date.now() };
+      return list;
+    }
+    // An older response must never replace a newer completed material list.
+    // This matters when upload completion, course hub hydration and media source
+    // hydration all refresh /api/slides/admin at nearly the same time.
+    return Array.isArray(adminMaterialsCache.data) ? adminMaterialsCache.data : list;
   };
 
   function paintAdminMaterials(materials, box){
