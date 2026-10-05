@@ -103,7 +103,58 @@
   // Final convergence: canonical owner migrated from system-admin.js.
   function systemStatusCard(icon,title,state,detail,tone='slate'){const classes={emerald:'is-good',amber:'is-warning',rose:'is-error',slate:'is-neutral'};return `<div class="admin-system-status-card ${classes[tone]||classes.slate}"><div class="admin-system-status-icon">${icon}</div><div class="min-w-0"><div class="text-xs font-black text-slate-600">${escapeHtml(title)}</div><div class="text-base font-black text-slate-950 mt-1">${escapeHtml(state)}</div><div class="text-[11px] text-slate-500 mt-1 break-all">${escapeHtml(detail||'')}</div></div></div>`;}
 
-  async function renderAdminSystemStatus(force=false){const cards=document.getElementById('admin-system-health'),storage=document.getElementById('admin-system-storage');if(!cards||!storage)return;cards.innerHTML='<div class="col-span-full text-xs text-slate-400">檢查服務中…</div>';storage.textContent='讀取儲存狀態中…';try{const [hr,sr,ar]=await Promise.all([fetch('/health'),fetch(`/api/storage-status${force?'?refresh=1':''}`,{}),fetch('/api/ai-questions/status',{})]);const h=await hr.json().catch(()=>({})),s=await sr.json().catch(()=>({})),a=await ar.json().catch(()=>({}));const dbOk=!!h.ok;cards.innerHTML=systemStatusCard('🖥️','Render / Web',dbOk?'正常':'異常',h.service||'',dbOk?'emerald':'rose')+systemStatusCard('🗄️','Supabase / Database',dbOk?'可連線':'待確認','健康檢查已通過即表示 Flask 與初始化流程正常',dbOk?'emerald':'amber')+systemStatusCard('🟣','MEGA',s.megaConfigured?(s.megaError?'已設定但檢查失敗':'已設定'):'未設定',s.megaSpace?`${s.megaSpace.usedGb??'?'} / ${s.megaSpace.totalGb??'?'} GB；網站上限 ${s.megaFreeLimitGb||18} GB`:(s.megaError||''),s.megaConfigured&&!s.megaError?'emerald':(s.megaConfigured?'amber':'rose'))+systemStatusCard('🤖','Groq AI',a.configured?'已設定':'未設定',`${a.provider||''} ${a.model||''}`,a.configured?'emerald':'amber');const g=s.gdriveConfigured?(s.gdriveConnected?'✅ Google Drive 備援已連線':((s.activeBackend||s.configuredMode)==='gdrive'?'⚠️ Google Drive 目前使用中，但連線尚未驗證':'ℹ️ Google Drive 備援已設定，尚未執行連線測試（不影響目前主要儲存）')):'○ Google Drive 備援未設定';storage.innerHTML=`<div class="font-black text-slate-900">教材儲存策略</div><div class="mt-2">主要：<b>${escapeHtml(s.activeBackend||s.configuredMode||'')}</b>　｜　備援：<b>${escapeHtml(s.fallbackBackend||'')}</b>　｜　免費模式：<b>${s.megaFreeOnly?'是':'否'}</b></div><div class="mt-2">${g}</div><div class="mt-2 text-xs text-slate-500">MEGA ${s.materials?.mega||0} 份、Google Drive ${s.materials?.gdrive||0} 份、R2 ${s.materials?.r2||0} 份、本機 ${s.materials?.local||0} 份</div>${s.error?`<div class="mt-2 text-rose-600">${escapeHtml(s.error)}</div>`:''}`;}catch(e){cards.innerHTML=systemStatusCard('⚠️','系統狀態','檢查失敗',e.message,'rose');storage.textContent='無法讀取儲存狀態';}}
+  async function renderAdminSystemStatus(force=false){
+    const cards=document.getElementById('admin-system-health'),storage=document.getElementById('admin-system-storage');
+    if(!cards||!storage)return;
+    cards.innerHTML='<div class="col-span-full text-xs text-slate-400">檢查服務中…</div>';
+    storage.textContent='讀取儲存狀態中…';
+    try{
+      const [hr,sr,ar]=await Promise.all([
+        fetch('/health',{credentials:'same-origin',cache:'no-store'}),
+        fetch(`/api/storage-status${force?'?refresh=1':''}`,{credentials:'same-origin',cache:'no-store'}),
+        fetch('/api/ai-questions/status',{credentials:'same-origin',cache:'no-store'})
+      ]);
+      const h=await hr.json().catch(()=>({})),s=await sr.json().catch(()=>({})),a=await ar.json().catch(()=>({}));
+      if(!hr.ok)throw new Error(h.error||`核心健康檢查失敗（HTTP ${hr.status}）`);
+      const dbOk=Boolean(h.database?.ok ?? h.ok);
+      const diagnosticsOk=Boolean(h.configuration?.ok && h.migrations?.ok);
+      const deploy=h.deployment||{};
+      const deploymentDetail=[
+        deploy.provider||'',
+        deploy.branch||'',
+        deploy.commit||''
+      ].filter(Boolean).join(' · ') || `版本 ${h.version||'未知'}`;
+      const storageOk=sr.ok;
+      const aiOk=ar.ok;
+      cards.innerHTML=
+        systemStatusCard('🖥️','Render / Web',h.ok?'正常':'異常',deploymentDetail,h.ok?'emerald':'rose')+
+        systemStatusCard('🩺','系統診斷',diagnosticsOk?'正常':'待確認',
+          diagnosticsOk
+            ? `設定與資料庫 migration 均正常 · v${h.version||'—'}`
+            : `設定：${h.configuration?.ok?'正常':'待確認'} · migrations：${h.migrations?.ok?'正常':'待確認'}`,
+          diagnosticsOk?'emerald':'amber')+
+        systemStatusCard('🗄️','Supabase / Database',dbOk?'可連線':'待確認',
+          dbOk?`${h.database?.kind||'database'} · required migrations ${(h.migrations?.required||[]).length}`:'資料庫健康檢查未通過',
+          dbOk?'emerald':'amber')+
+        systemStatusCard('🟣','MEGA',
+          storageOk?(s.megaConfigured?(s.megaError?'已設定但檢查失敗':'已設定'):'未設定'):`HTTP ${sr.status}`,
+          storageOk?(s.megaSpace?`${s.megaSpace.usedGb??'?'} / ${s.megaSpace.totalGb??'?'} GB；網站上限 ${s.megaFreeLimitGb||18} GB`:(s.megaError||'')):(s.error||'儲存狀態端點不可用'),
+          storageOk&&s.megaConfigured&&!s.megaError?'emerald':(storageOk&&s.megaConfigured?'amber':'rose'))+
+        systemStatusCard('🤖','Groq AI',
+          aiOk?(a.configured?'已設定':'未設定'):`HTTP ${ar.status}`,
+          aiOk?`${a.provider||''} ${a.model||''}`:(a.error||'AI 狀態端點不可用'),
+          aiOk&&a.configured?'emerald':'amber');
+      if(!storageOk){
+        storage.innerHTML=`<div class="font-black text-rose-700">教材儲存狀態讀取失敗</div><div class="mt-2 text-xs text-slate-500">HTTP ${sr.status} · ${escapeHtml(s.error||'請重新檢查')}</div>`;
+        return;
+      }
+      const g=s.gdriveConfigured?(s.gdriveConnected?'✅ Google Drive 備援已連線':((s.activeBackend||s.configuredMode)==='gdrive'?'⚠️ Google Drive 目前使用中，但連線尚未驗證':'ℹ️ Google Drive 備援已設定，尚未執行連線測試（不影響目前主要儲存）')):'○ Google Drive 備援未設定';
+      storage.innerHTML=`<div class="font-black text-slate-900">教材儲存策略</div><div class="mt-2">主要：<b>${escapeHtml(s.activeBackend||s.configuredMode||'')}</b>　｜　備援：<b>${escapeHtml(s.fallbackBackend||'')}</b>　｜　免費模式：<b>${s.megaFreeOnly?'是':'否'}</b></div><div class="mt-2">${g}</div><div class="mt-2 text-xs text-slate-500">MEGA ${s.materials?.mega||0} 份、Google Drive ${s.materials?.gdrive||0} 份、R2 ${s.materials?.r2||0} 份、本機 ${s.materials?.local||0} 份</div>${s.error?`<div class="mt-2 text-rose-600">${escapeHtml(s.error)}</div>`:''}`;
+    }catch(e){
+      cards.innerHTML=systemStatusCard('⚠️','系統狀態','檢查失敗',e.message,'rose');
+      storage.textContent='無法讀取儲存狀態';
+    }
+  }
 
   window.systemStatusCard=systemStatusCard;
   window.renderAdminSystemStatus=renderAdminSystemStatus;
