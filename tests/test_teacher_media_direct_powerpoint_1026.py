@@ -6,13 +6,13 @@ ROOT=Path(__file__).parents[1]
 
 
 class TeacherMediaDirectPowerPoint1026Tests(unittest.TestCase):
-    def test_media_studio_has_first_class_direct_file_powerpoint_entry(self):
+    def test_media_studio_does_not_duplicate_powerpoint_authoring_entry(self):
         source=ROOT.joinpath("static","teacher-ai-media-studio-1018.js").read_text(encoding="utf-8")
-        self.assertIn("teacher-media-direct-powerpoint-1026",source)
-        self.assertIn("AI POWERPOINT",source)
-        self.assertIn("AI PowerPoint 製作",source)
-        self.assertIn("PowerPoint 保留單一入口",source)
-        self.assertIn("PDF／Word／圖片／文字",source)
+        video=ROOT.joinpath("static","teacher-ai-video-1015.js").read_text(encoding="utf-8")
+        self.assertNotIn('id="teacher-media-direct-powerpoint-1026"',source)
+        self.assertNotIn('id="teacher-ai-video-powerpoint-author-1027"',video)
+        self.assertIn("來源教材／來源內容",source)
+        self.assertIn("加入 PDF／Word／圖片／文字",video)
         self.assertNotIn("teacher-media-open-powerpoint-1018",source)
 
     def test_controls_export_single_powerpoint_list_owner(self):
