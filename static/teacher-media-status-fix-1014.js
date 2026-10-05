@@ -35,6 +35,7 @@
     if (data?.readyForPreview) return '可使用｜真人錄音＋免費 AI 語音';
     if (!data?.r2Ready) return '真人錄音可用｜R2 未設定';
     const worker = data?.worker || {};
+    if (worker.statusUnavailable === true) return '真人錄音可用｜AI Worker 狀態讀取失敗';
     if (!worker.seen) return '真人錄音可用｜AI Worker 尚未回報';
     if (!worker.online) return '真人錄音可用｜AI Worker 離線';
     if (worker.kokoroInstalled === false) return '真人錄音可用｜Kokoro 未安裝';
