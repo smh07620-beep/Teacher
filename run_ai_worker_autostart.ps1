@@ -113,20 +113,35 @@ function Ensure-AIWorkerEnvironment {
 
   $hash = (Get-FileHash -LiteralPath $requirements -Algorithm SHA256).Hash
   $recorded = if (Test-Path $stamp) { (Get-Content -LiteralPath $stamp -Raw).Trim() } else { "" }
-  & $python -c "import requests, psycopg, kokoro, faster_whisper; from google import genai; from misaki import zh; import numpy" 2>$null
-  $importsOk = $LASTEXITCODE -eq 0
-  if ($hash -ne $recorded -or -not $importsOk) {
+
+  # requests + psycopg are the core dependencies required for the durable queue
+  # and heartbeat. Kokoro/Whisper/Gemini are feature capabilities and must not
+  # suppress heartbeat visibility when one optional package is unavailable.
+  & $python -c "import requests, psycopg" 2>$null
+  $coreImportsOk = $LASTEXITCODE -eq 0
+  & $python -c "import kokoro, faster_whisper; from google import genai; from misaki import zh; import numpy" 2>$null
+  $featureImportsOk = $LASTEXITCODE -eq 0
+
+  if ($hash -ne $recorded -or -not $coreImportsOk -or -not $featureImportsOk) {
     Write-Host "Synchronizing AI Worker Python requirements (Kokoro, Gemini fallback, local Whisper)..."
     & $python -m pip install -r $requirements
     $installExit = $LASTEXITCODE
-    & $python -c "import requests, psycopg, kokoro, faster_whisper; from google import genai; from misaki import zh; import numpy" 2>$null
-    $importsOk = $LASTEXITCODE -eq 0
-    if ($installExit -eq 0 -and $importsOk) {
+
+    & $python -c "import requests, psycopg" 2>$null
+    $coreImportsOk = $LASTEXITCODE -eq 0
+    if (-not $coreImportsOk) {
+      throw "AI Worker core dependencies (requests/psycopg) are unavailable after synchronization."
+    }
+
+    & $python -c "import kokoro, faster_whisper; from google import genai; from misaki import zh; import numpy" 2>$null
+    $featureImportsOk = $LASTEXITCODE -eq 0
+    if ($installExit -eq 0 -and $featureImportsOk) {
       Set-Content -LiteralPath $stamp -Value $hash -NoNewline -Encoding UTF8
-    } elseif (-not $importsOk) {
-      throw "AI Worker requirements are unavailable after synchronization."
+    } elseif (-not $featureImportsOk) {
+      Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2203 -Message "AI Worker is starting with one or more optional AI feature dependencies unavailable; heartbeat will expose feature capability state."
+      Write-Warning "Optional AI dependencies are not fully available; starting core Worker so Web can report the missing capability."
     } else {
-      Write-Warning "AI Worker dependency synchronization failed; existing importable environment will be used."
+      Write-Warning "AI Worker dependency synchronization failed; existing core environment will be used."
     }
   }
   return @($python, $entry)
