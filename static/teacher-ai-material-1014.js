@@ -440,7 +440,10 @@
   function install(targetBox = null) {
     const existing = document.getElementById('teacher-ai-material-1014');
     if (existing) return existing;
-    const box = targetBox || document.getElementById('admin-course-material-hub');
+    const box = targetBox
+      || document.getElementById('teacher-media-panel-presentation-1018')
+      || document.getElementById('teacher-media-production-1014')
+      || document.getElementById('admin-course-material-hub');
     if (!box) return false;
     const section = document.createElement('section');
     section.id = 'teacher-ai-material-1014';
