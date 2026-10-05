@@ -399,8 +399,16 @@
 
       if(state.loading.courses){
           jobs.push(fetch(`/api/courses/admin?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`,{})
-              .then(async res=>{const data=await res.json().catch(()=>[]);if(!res.ok)throw new Error(data.error||'讀取課程失敗');state.courses=Array.isArray(data)?data:[];adminCoursesCache.set(key,{data:state.courses,at:Date.now()});})
-              .catch(error=>{state.errors.courses=error.message||'讀取失敗';})
+              .then(async res=>{
+                  const data=await res.json().catch(()=>[]);
+                  if(!res.ok)throw new Error(data.error||'讀取課程失敗');
+                  // A slower render must never overwrite the shared cache after
+                  // a newer render has taken ownership of this scope.
+                  if(box.dataset.courseRenderGeneration!==generation||box.dataset.courseScope!==key)return;
+                  state.courses=Array.isArray(data)?data:[];
+                  adminCoursesCache.set(key,{data:state.courses,at:Date.now()});
+              })
+              .catch(error=>{if(box.dataset.courseRenderGeneration===generation&&box.dataset.courseScope===key)state.errors.courses=error.message||'讀取失敗';})
               .finally(()=>{state.loading.courses=false;paintCurrent();}));
       }
 
