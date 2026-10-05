@@ -32,7 +32,11 @@
     const statusUnavailable = worker.statusUnavailable === true;
     const workerText = statusUnavailable
       ? '🔴 AI Worker 狀態讀取失敗'
-      : worker.online ? '🟢 AI Worker 在線' : worker.seen ? '🔴 AI Worker 離線' : '🟠 AI Worker 尚未回報';
+      : worker.databaseReady === false
+        ? '🔴 AI Worker DB 無法連線'
+        : worker.databaseIdentityMatch === false
+          ? '🔴 AI Worker DB 不一致'
+          : worker.online ? '🟢 AI Worker 在線' : worker.seen ? '🔴 AI Worker 離線' : '🟠 AI Worker 尚未回報';
     const kokoroText = statusUnavailable
       ? '⚪ Kokoro 無法確認'
       : worker.kokoroInstalled === true
