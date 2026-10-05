@@ -137,6 +137,7 @@ class AIMaterialRoute97Tests(unittest.TestCase):
         }
         with app.test_client() as client, \
              patch("teacher_app.materials.ai_material_routes.material_repository.get_material", return_value=material), \
+             patch("teacher_app.materials.ai_material_routes._ai_worker_online_error", return_value=None), \
              patch("teacher_app.materials.ai_material_routes.media_script_jobs.enqueue", return_value=queued) as enqueue, \
              patch("teacher_app.materials.ai_material_routes.audit.record_event"):
             response = client.post(
