@@ -9,8 +9,10 @@ class TeacherMediaDirectPowerPoint1026Tests(unittest.TestCase):
     def test_media_studio_has_first_class_direct_file_powerpoint_entry(self):
         source=ROOT.joinpath("static","teacher-ai-media-studio-1018.js").read_text(encoding="utf-8")
         self.assertIn("teacher-media-direct-powerpoint-1026",source)
-        self.assertIn("POWERPOINT 不必先建教材",source)
-        self.assertIn("直接丟資料做 PowerPoint",source)
+        self.assertIn("AI POWERPOINT",source)
+        self.assertIn("AI PowerPoint 製作",source)
+        self.assertIn("同一入口",source)
+        self.assertNotIn("teacher-media-open-powerpoint-1018",source)
 
     def test_controls_export_single_powerpoint_list_owner(self):
         source=ROOT.joinpath("static","teacher-ai-media-controls-1023.js").read_text(encoding="utf-8")
