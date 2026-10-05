@@ -329,7 +329,7 @@ def register_ai_presentation_routes(owner):
             if not template or not template.get("active"): return jsonify({"error":"PowerPoint 範本不存在或已停用。"}), 404
             if template.get("group") != draft.get("group") or template.get("area") != draft.get("area"):
                 return jsonify({"error":"只能使用同組、同訓練範圍的 PowerPoint 範本。"}), 403
-        readiness_error = _ai_worker_online_error()
+        readiness_error = _ai_worker_online_error(required_queue="ai_presentations")
         if readiness_error:
             return readiness_error
         try:
