@@ -55,6 +55,13 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
         self.assertNotIn("/api/media-generation", self.source)
         self.assertNotIn("X-Admin-Key", self.source)
 
+    def test_powerpoint_has_discoverable_shortcut_without_duplicate_editor(self):
+        self.assertIn("teacher-media-open-presentation-1014", self.source)
+        self.assertIn("🖥️ AI PowerPoint", self.source)
+        self.assertIn("async function openPresentation()", self.source)
+        self.assertIn("teacher-ai-presentation-1016", self.source)
+        self.assertIn("TeacherAIMaterial1014?.ensureMounted", self.source)
+
     def test_paper_documents_reuse_existing_teacher_export_flow(self):
         self.assertIn("await window.switchAdminWorkspace?.('teacher', true)", self.source)
         self.assertIn("await window.switchTeacherMode?.('documents')", self.source)
