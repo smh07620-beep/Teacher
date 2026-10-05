@@ -235,6 +235,49 @@ def _latest_heartbeat_per_machine(rows) -> list[tuple[dict, dict, dt.datetime]]:
 
 
 
+def _latest_ai_heartbeat_per_machine(rows) -> list[tuple[dict, dict, dt.datetime]]:
+    """Keep AI Worker heartbeats separate from material Worker cards."""
+    latest: dict[str, tuple[dict, dict, dt.datetime]] = {}
+    ai_queues = {
+        "ai_questions",
+        "media_scripts",
+        "ai_presentations",
+        "ai_videos",
+        "media_audio",
+        "media_subtitles",
+    }
+    for item in rows:
+        worker_id = str(item.get("worker_id") or item.get("workerId") or "").strip()
+        last_seen = str(item.get("last_seen") or item.get("lastSeen") or "").strip()
+        if not worker_id or not last_seen:
+            continue
+        try:
+            seen = dt.datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=dt.timezone.utc)
+            seen = seen.astimezone(dt.timezone.utc)
+        except (TypeError, ValueError):
+            continue
+        raw = item.get("capabilities") or {}
+        try:
+            capabilities = json.loads(raw) if isinstance(raw, str) else dict(raw)
+        except (TypeError, ValueError):
+            capabilities = {}
+        queues = capabilities.get("queues")
+        queue_names = {
+            str(value or "").strip()
+            for value in queues
+        } if isinstance(queues, (list, tuple, set)) else set()
+        kind = str(capabilities.get("workerKind") or "").strip().lower()
+        if not (kind == "ai" or worker_id.lower().endswith("-ai") or queue_names.intersection(ai_queues)):
+            continue
+        key = _worker_machine_key(worker_id, capabilities) or worker_id.lower()
+        current = latest.get(key)
+        if current is None or seen > current[2]:
+            latest[key] = (dict(item), capabilities, seen)
+    return list(latest.values())
+
+
 def online_worker_recovery_keys(
     *,
     now: dt.datetime | None = None,
@@ -330,6 +373,7 @@ def offline_worker_alerts(
         "available": True,
         "thresholdSeconds": threshold_seconds,
         "workers": workers,
+        "aiWorkers": ai_workers,
     }
 
 
@@ -695,6 +739,7 @@ def status(
             pass
 
     workers = []
+    ai_workers = []
     worker_status_available = True
     worker_status_error = ""
     try:
@@ -734,10 +779,32 @@ def status(
                     )[:64],
                 }
             )
+        for item, capabilities, seen in _latest_ai_heartbeat_per_machine(heartbeats):
+            if seen < history_cutoff:
+                continue
+            queues = capabilities.get("queues")
+            queue_names = [
+                str(value or "").strip()
+                for value in queues
+                if str(value or "").strip()
+            ] if isinstance(queues, (list, tuple, set)) else []
+            kokoro = capabilities.get("kokoro") or {}
+            ai_workers.append(
+                {
+                    "workerId": str(item.get("worker_id") or item.get("workerId") or ""),
+                    "workerMachine": str(capabilities.get("workerMachine") or "")[:80],
+                    "lastSeen": seen.isoformat(),
+                    "status": "online" if seen >= cutoff else "offline",
+                    "queues": queue_names,
+                    "kokoroInstalled": bool(kokoro.get("available")) if "available" in kokoro else None,
+                    "whisperInstalled": bool((capabilities.get("whisper") or {}).get("available")),
+                }
+            )
     except Exception:
         worker_status_available = False
         worker_status_error = WORKER_STATUS_ERROR
         workers = []
+        ai_workers = []
         LOGGER.exception("Worker heartbeat status lookup failed")
 
     active_worker_count = sum(
