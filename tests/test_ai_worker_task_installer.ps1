@@ -114,7 +114,9 @@ foreach ($forbidden in @('git pull', 'git reset', 'git clean', 'git stash')) {
 }
 
 foreach ($marker in @(
-  'DATABASE_URL=REPLACE_WITH_PRODUCTION_DATABASE_URL',
+  'AI_WORKER_TRANSPORT=auto',
+  'AI_WORKER_TOKEN=',
+  'DATABASE_URL=',
   'FREE_ONLY_MODE=true',
   'AI_EXTERNAL_PROCESSING_ENABLED=true',
   'GROQ_API_KEY=REPLACE_WITH_GROQ_API_KEY',
