@@ -151,6 +151,12 @@ services:
         sync: false
       - key: MATERIAL_WORKER_TOKEN
         sync: false
+      - key: AI_WORKER_TOKEN
+        sync: false
+      - key: AI_WORKER_HTTP_RATE_LIMIT_PER_MINUTE
+        value: "900"
+      - key: AI_WORKER_RPC_MAX_BYTES
+        value: "16777216"
       - key: MATERIAL_JOB_MAX_ATTEMPTS
         value: "3"
       - key: MATERIAL_JOB_STALE_SECONDS
