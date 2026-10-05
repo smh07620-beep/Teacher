@@ -194,7 +194,7 @@
     tabs.className = 'teacher-media-tabs-1018 flex gap-2 overflow-x-auto';
     tabs.setAttribute('role', 'tablist');
     tabs.setAttribute('aria-label', 'AI 媒體製作模式');
-    [['narration', '🎙️ AI 配音'], ['subtitle', '💬 AI 字幕'], ['video', '🎬 教學影片']].forEach(([mode, label]) => {
+    [['narration', '🎙️ 講稿與配音'], ['subtitle', '💬 AI 字幕'], ['video', '🎬 教學影片']].forEach(([mode, label]) => {
       const tab = document.createElement('button');
       tab.id = `teacher-media-tab-${mode}-1018`;
       tab.type = 'button';
@@ -247,10 +247,10 @@
     if (renderer && !renderer.textContent.trim()) renderer.textContent = '品質檢查與教師核准後才能發布';
     const audio = $('teacher-media-audio-1014');
     const video = $('teacher-ai-video-1015');
-    audio?.querySelector('h4') && (audio.querySelector('h4').textContent = '🎙️ 已核准講稿 → AI 配音');
-    video?.querySelector('h4') && (video.querySelector('h4').textContent = '🎬 PowerPoint + 旁白 → 教學影片');
-    audio?.querySelector('p.mt-1') && (audio.querySelector('p.mt-1').textContent = '只使用教師已核准的講稿；完成後仍進入既有審查與發布流程。');
-    video?.querySelector('p.mt-1') && (video.querySelector('p.mt-1').textContent = '選擇已核准 PowerPoint 與旁白後建立影片；品質、預覽、核准與發布流程維持不變。');
+    audio?.querySelector('h4') && (audio.querySelector('h4').textContent = '🎙️ 講稿核准後直接 AI 配音');
+    video?.querySelector('h4') && (video.querySelector('h4').textContent = '🎬 教學影片製作');
+    audio?.querySelector('p.mt-1') && (audio.querySelector('p.mt-1').textContent = '講稿與配音在同一流程完成：建立／修改講稿 → 教師核准 → 選聲音與試聽 → 產生 AI 配音。');
+    video?.querySelector('p.mt-1') && (video.querySelector('p.mt-1').textContent = '影片可從現有教材、私人製作來源、PDF、Word、PPTX、圖片、文字或已完成簡報開始；系統需要時會先準備可渲染畫面，不要求先發布成正式教材。');
   }
 
   function replaceVideoIdInput() {
@@ -298,27 +298,32 @@
     humanizeExistingPanels();
     replaceVideoIdInput();
 
+    let narrationFlow = $('teacher-media-narration-flow-1028');
+    if (!narrationFlow) {
+      narrationFlow = document.createElement('div');
+      narrationFlow.id = 'teacher-media-narration-flow-1028';
+      narrationFlow.className = 'rounded-2xl border border-indigo-100 bg-indigo-50/50 px-4 py-3 text-xs leading-5 text-indigo-950';
+      narrationFlow.innerHTML = '<b>講稿與配音是一條流程：</b> ① 選來源／建立講稿 → ② 教師核准 → ③ 選 AI 聲音與試聽 → ④ 產生配音。核准講稿會自動帶到下一步，不需要在兩個區塊來回切換。';
+      narration.prepend(narrationFlow);
+    }
+
+    const scriptPanel = $('teacher-media-script-1014');
+    if (scriptPanel) {
+      $('teacher-media-script-history-1018')?.remove();
+      scriptPanel.classList.remove('hidden');
+      scriptPanel.removeAttribute('aria-hidden');
+      const scriptSource = $('teacher-script-material-1014')?.closest('label');
+      scriptSource?.classList.add('teacher-media-legacy-source-1018');
+      $('teacher-script-refresh-materials-1014')?.parentElement?.classList.add('teacher-media-legacy-source-1018');
+      if (scriptPanel.parentElement !== narration) narration.appendChild(scriptPanel);
+    }
+
     const audioPanel = $('teacher-media-audio-1014');
     if (audioPanel) {
       $('teacher-media-waiting-audio-1018')?.remove();
       if (audioPanel.parentElement !== narration) narration.appendChild(audioPanel);
     } else {
       waiting(narration, 'teacher-media-waiting-audio-1018', 'AI 配音功能載入中…');
-    }
-
-    const scriptPanel = $('teacher-media-script-1014');
-    if (scriptPanel) {
-      let scriptDetails = $('teacher-media-script-history-1018');
-      if (!scriptDetails) {
-        scriptDetails = makeDetails('講稿草稿與版本', 'teacher-media-script-history-1018');
-        narration.appendChild(scriptDetails);
-      }
-      scriptPanel.classList.remove('hidden');
-      scriptPanel.removeAttribute('aria-hidden');
-      const scriptSource = $('teacher-script-material-1014')?.closest('label');
-      scriptSource?.classList.add('teacher-media-legacy-source-1018');
-      $('teacher-script-refresh-materials-1014')?.parentElement?.classList.add('teacher-media-legacy-source-1018');
-      if (scriptPanel.parentElement !== scriptDetails) scriptDetails.appendChild(scriptPanel);
     }
 
     const subtitlePanel = $('teacher-media-subtitle-1014');
