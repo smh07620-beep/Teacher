@@ -34,7 +34,9 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
 
     def test_media_is_nested_under_course_workspace(self):
         self.assertIn("document.getElementById('teacher-nav-media-1014')?.remove()", UI)
-        self.assertIn("製作語音或錄影", UI)
+        self.assertIn("AI PowerPoint 或教材草稿", UI)
+        self.assertIn("製作語音、字幕與影片", UI)
+        self.assertIn("TeacherWorkspace1014?.openPresentation", UI)
         self.assertIn("TeacherWorkspace1014?.openMedia", UI)
 
     def test_course_card_has_single_management_entry(self):
