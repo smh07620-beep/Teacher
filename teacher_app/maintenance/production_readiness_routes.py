@@ -4,7 +4,7 @@ from __future__ import annotations
 from flask import jsonify
 
 from teacher_app.common import scope_filter
-from teacher_app.maintenance import production_readiness
+from teacher_app.maintenance import production_readiness as production_readiness_service
 
 
 def register_production_readiness_routes(app, *, material_runtime, connection_factory=None):
@@ -17,7 +17,7 @@ def register_production_readiness_routes(app, *, material_runtime, connection_fa
         if denied:
             return denied
         return jsonify(
-            production_readiness.build_acceptance(
+            production_readiness_service.build_acceptance(
                 material_runtime=material_runtime,
                 connection_factory=connection_factory,
             )
