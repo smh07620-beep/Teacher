@@ -151,7 +151,7 @@
       select.disabled = !usable.length;
       if (usable.some(item => String(item.id) === prior)) select.value = prior;
       else if (usable.length === 1) select.value = String(usable[0].id || '');
-      select.dispatchEvent(new Event('change', { bubbles: true }));
+      if (select.value !== prior) select.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     })();
     try {
@@ -241,12 +241,10 @@
   }
 
   function humanizeExistingPanels() {
-    const audioProvider = $('teacher-audio-provider-1014');
-    if (audioProvider) audioProvider.textContent = '本機 AI｜隱私模式';
-    const videoProvider = $('teacher-ai-video-provider-1015');
-    if (videoProvider) videoProvider.textContent = '本機 AI｜隱私模式';
+    // Provider/renderer readiness text is owned by the audio/video modules.
+    // Do not overwrite live Worker/Kokoro diagnostics during studio hydration.
     const renderer = $('teacher-ai-video-renderer-1015');
-    if (renderer) renderer.textContent = '品質檢查與教師核准後才能發布';
+    if (renderer && !renderer.textContent.trim()) renderer.textContent = '品質檢查與教師核准後才能發布';
     const audio = $('teacher-media-audio-1014');
     const video = $('teacher-ai-video-1015');
     audio?.querySelector('h4') && (audio.querySelector('h4').textContent = '🎙️ 已核准講稿 → AI 配音');
@@ -409,8 +407,18 @@
   function handleSourceOptions(event) {
     sourceMaterials = Array.isArray(event.detail?.materials) ? event.detail.materials : [];
     install();
-    syncSourceOptions();
     const shared = $('teacher-media-source-1018');
+    if (event.detail?.canonical) {
+      // Canonical controls already painted both source selects. Re-copying the
+      // legacy select here can reset an in-flight teacher selection and create
+      // a fetch/change loop.
+      if (event.detail?.selectedId && shared && [...shared.options].some(option => option.value === event.detail.selectedId)) {
+        shared.value = event.detail.selectedId;
+      }
+      updateRecommendation();
+      return;
+    }
+    syncSourceOptions();
     if (event.detail?.selectedId && shared) shared.value = event.detail.selectedId;
     syncSharedSource();
   }
