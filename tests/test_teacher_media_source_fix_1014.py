@@ -45,6 +45,8 @@ class TeacherMediaSourceFix1014Tests(unittest.TestCase):
         self.assertNotIn("TeacherMediaSourceFix1014?.refreshMaterials?.()", self.studio)
         self.assertIn("teacher-media-source-options-1014", self.controls)
         self.assertIn("teacher-media-source-options-1014", self.script)
+        self.assertIn("if (!window.TeacherAIMediaControls1023) syncSourceOptions()", self.studio)
+        self.assertIn("if (window.TeacherAIMediaControls1023)", self.studio)
         self.assertNotIn("item.active !== false", self.script)
 
     def test_draft_material_is_valid_media_authoring_source(self):
