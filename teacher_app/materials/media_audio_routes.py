@@ -135,9 +135,9 @@ def _ai_worker_status() -> dict:
     return status
 
 
-def _ai_worker_online_error():
+def _ai_worker_online_error(worker: dict | None = None):
     """Fail closed for queues that require the dedicated AI Worker process."""
-    worker = _ai_worker_status()
+    worker = worker or _ai_worker_status()
     if not worker.get("online"):
         return jsonify({
             "error": str(worker.get("diagnosticMessage") or "本機 AI Worker 尚未在線。"),
@@ -149,10 +149,10 @@ def _ai_worker_online_error():
 
 def _worker_ready_error():
     """Fail closed for narration/video work that additionally requires Kokoro."""
-    online_error = _ai_worker_online_error()
+    worker = _ai_worker_status()
+    online_error = _ai_worker_online_error(worker)
     if online_error:
         return online_error
-    worker = _ai_worker_status()
     if worker.get("kokoroInstalled") is not True:
         return jsonify({
             "error": str(worker.get("diagnosticMessage") or "Kokoro 語音能力尚未就緒。"),
