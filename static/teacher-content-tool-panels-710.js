@@ -86,11 +86,10 @@
     mountState.catId=String(catId);
     mountState.kind=kind;
 
-    host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-4 flex items-start justify-between gap-3 flex-wrap"><div><button type="button" data-tool-return class="text-sm font-bold text-slate-500">← 返回考卷</button><h4 class="mt-2 text-xl font-black text-slate-950">${esc(title)}</h4><p class="mt-1 text-xs text-slate-500">${esc(desc)}</p></div><span data-tool-sync class="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">背景同步中…</span></div><div data-tool-host></div><div class="sticky bottom-0 z-20 mt-4 flex justify-end border-t border-slate-200 bg-slate-50/95 py-3 backdrop-blur"><button type="button" data-tool-done class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white">完成，返回考卷</button></div></div>`;
+    host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-3 flex items-center justify-between gap-3 border-b border-slate-200 pb-3"><div class="min-w-0"><button type="button" data-tool-return class="text-xs font-black text-indigo-700">← ${esc(title.includes('AI')?'考卷總覽':'考卷總覽')}</button><h4 class="mt-1 text-lg font-black text-slate-950">${esc(title)}</h4><p class="mt-1 text-xs text-slate-500">${esc(desc)}</p></div><span data-tool-sync class="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">同步中…</span></div><div data-tool-host></div></div>`;
     host.querySelector('[data-tool-host]')?.appendChild(node);
     node.classList.remove('hidden');
     host.querySelector('[data-tool-return]')?.addEventListener('click',()=>returnToExam(catId));
-    host.querySelector('[data-tool-done]')?.addEventListener('click',()=>returnToExam(catId));
     return host.querySelector('[data-tool-sync]');
   }
 
