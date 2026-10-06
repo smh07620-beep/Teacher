@@ -36,6 +36,16 @@ ALLOWED_VOICES = {
     "zm_011",
     "zm_012",
 }
+VOICE_LABELS = {
+    "zf_001": "中文女聲 A",
+    "zf_002": "中文女聲 B",
+    "zf_003": "中文女聲 C",
+    "zf_004": "中文女聲 D",
+    "zm_009": "中文男聲 A",
+    "zm_010": "中文男聲 B",
+    "zm_011": "中文男聲 C",
+    "zm_012": "中文男聲 D",
+}
 LEGACY_VOICE_ALIASES = {
     "zf_xiaoxiao": "zf_001",
     "zf_xiaobei": "zf_002",
@@ -90,6 +100,10 @@ def public_status() -> dict[str, Any]:
         "model": str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL,
         "defaultVoice": _voice(os.environ.get("KOKORO_VOICE", DEFAULT_VOICE)),
         "voices": sorted(ALLOWED_VOICES),
+        "voiceOptions": [
+            {"id": voice, "label": VOICE_LABELS.get(voice, voice)}
+            for voice in sorted(ALLOWED_VOICES)
+        ],
         "previewSupported": True,
         "requiresApprovedScript": True,
         "storesToR2": True,
@@ -200,6 +214,9 @@ def _tensor_to_numpy(audio):
 
 def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str]:
     del instructions  # Kokoro currently uses the approved text + configured speed/voice only.
+    # Normalize again at the lowest boundary so stale jobs/env cannot reach
+    # KPipeline with a removed v1.0 voice name.
+    voice = _voice(voice)
     try:
         import numpy as np
     except Exception as exc:
@@ -213,7 +230,11 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
             f"已核准講稿共 {len(text)} 字，超過目前本機語音單次上限 {max_chars} 字；請先縮短或拆成兩份講稿。"
         )
     repo_id = str(os.environ.get("KOKORO_REPO_ID") or DEFAULT_REPO_ID).strip() or DEFAULT_REPO_ID
+    if repo_id == "hexgrad/Kokoro-82M":
+        repo_id = DEFAULT_REPO_ID
     model_label = str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    if model_label == "Kokoro-82M":
+        model_label = DEFAULT_MODEL
     try:
         speed = float(os.environ.get("KOKORO_TTS_SPEED", "1.0") or 1.0)
     except (TypeError, ValueError):
@@ -239,8 +260,10 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
         message = str(exc)
         if "Entry Not Found" in message or "404 Client Error" in message or "/voices/" in message:
             raise RuntimeError(
-                "Kokoro 音色檔不存在；目前使用 v1.1-zh 編號式中文音色。"
-                "請重新載入頁面；若院內 Worker 尚未更新，請更新 main 後重新啟動。"
+                f"Kokoro 音色檔不存在（repo={repo_id}, voice={voice}）；"
+                "目前只使用 v1.1-zh 編號式中文音色。"
+                "若錯誤仍顯示 zf_xiaoni/zf_xiaoxiao，代表院內 AI Worker 仍在執行舊版程式；"
+                "請更新 main 後重新啟動 Teacher AI Worker。"
             ) from exc
         if isinstance(exc, RuntimeError):
             raise

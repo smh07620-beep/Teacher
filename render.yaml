@@ -194,7 +194,7 @@ services:
       - key: KOKORO_MODEL
         value: Kokoro-82M-v1.1-zh
       - key: KOKORO_VOICE
-        value: zf_xiaoxiao
+        value: zf_001
       - key: AI_SOURCE_MAX_CHARS
         value: "50000"
       - key: AI_MAX_QUESTIONS

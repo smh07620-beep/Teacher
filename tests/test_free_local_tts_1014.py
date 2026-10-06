@@ -26,7 +26,7 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
             'from kokoro import KPipeline',
             'lang_code="z"',
             'hexgrad/Kokoro-82M-v1.1-zh',
-            'zf_xiaoxiao',
+            'DEFAULT_VOICE = "zf_001"',
             'ttsProvider": "kokoro-local"',
             'ContentType="audio/wav"',
         ):
@@ -38,6 +38,8 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn("_KOKORO_PIPELINE", self.runtime)
         self.assertIn("def _kokoro_pipeline", self.runtime)
         self.assertIn("pipeline = _kokoro_pipeline(repo_id)", self.runtime)
+        self.assertIn("voice = _voice(voice)", self.runtime)
+        self.assertIn("voiceOptions", self.runtime)
         self.assertIn('VOICE_PREVIEW_TEXT = "您好，這是醫學檢驗教學平台的 AI 語音試聽。"', self.runtime)
 
     def test_render_and_local_env_do_not_require_openai(self):
@@ -47,7 +49,7 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertNotIn('OPENAI_TTS_MODEL', self.render)
         self.assertNotIn('OPENAI_API_KEY', self.env)
         self.assertIn('AI_TTS_PROVIDER=kokoro', self.env)
-        self.assertIn('KOKORO_VOICE=zf_xiaoxiao', self.env)
+        self.assertIn('KOKORO_VOICE=zf_001', self.env)
 
     def test_ai_worker_has_separate_local_tts_dependencies(self):
         for marker in ('kokoro>=', 'misaki[zh]', 'numpy>='):

@@ -107,7 +107,7 @@ Free local narration uses:
 AI_TTS_PROVIDER=kokoro
 KOKORO_MODEL=Kokoro-82M-v1.1-zh
 KOKORO_REPO_ID=hexgrad/Kokoro-82M-v1.1-zh
-KOKORO_VOICE=zf_xiaoxiao
+KOKORO_VOICE=zf_001
 KOKORO_TTS_SPEED=1.0
 ```
 
