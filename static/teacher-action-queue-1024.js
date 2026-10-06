@@ -71,14 +71,12 @@
           <h3 class="mt-1 text-xl font-black text-slate-950">今天的教學工作</h3>
           <p class="mt-1 text-sm text-slate-600">先完成待處理事項，再進入主要工作。系統管理與學員功能維持獨立，不混在教師日常流程。</p>
         </div>
-        <div class="teacher-home-jobs-1024 mt-4 grid gap-2 sm:grid-cols-3">
-          <button type="button" data-teacher-home-job="course" class="teacher-home-job-1024"><b>📚 教材與課程</b><span>課程、教材、版本與媒體工具</span></button>
-          <button type="button" data-teacher-home-job="assessment" class="teacher-home-job-1024"><b>📝 評量與出題</b><span>題庫、考卷、待批改與紀錄</span></button>
-          <button type="button" data-teacher-home-job="documents" class="teacher-home-job-1024"><b>📄 紙本文件</b><span>正式紀錄、Word 匯出與留存</span></button>
+        <div class="teacher-home-jobs-1024 mt-4 grid gap-2 sm:grid-cols-2">
+          <button type="button" data-teacher-home-job="course" class="teacher-home-job-1024"><b>📚 教材與課程</b><span>教材、課程、版本與需要時的 AI 製作</span></button>
+          <button type="button" data-teacher-home-job="assessment" class="teacher-home-job-1024"><b>📝 評量與追蹤</b><span>出題、發布、待批改、學員與教學追蹤</span></button>
         </div>`;
       intro.querySelector('[data-teacher-home-job="course"]')?.addEventListener('click', () => window.TeacherWorkspace1014?.openCourse?.());
       intro.querySelector('[data-teacher-home-job="assessment"]')?.addEventListener('click', () => window.TeacherWorkspace1014?.openAssessment?.());
-      intro.querySelector('[data-teacher-home-job="documents"]')?.addEventListener('click', () => window.TeacherWorkspace1014?.openDocuments?.());
     }
     if (intro.parentElement !== panel) {
       const anchor = section?.parentElement === panel ? section : panel.firstChild;
