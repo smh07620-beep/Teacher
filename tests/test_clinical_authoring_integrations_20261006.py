@@ -20,8 +20,9 @@ class ClinicalAuthoringIntegration20261006Tests(unittest.TestCase):
         cls.script_runtime = ROOT.joinpath("teacher_app", "materials", "media_script_runtime.py").read_text(encoding="utf-8")
 
     def test_docx_picker_accepts_array_shaped_admin_material_response(self):
-        self.assertIn("const list=Array.isArray(d)?d:(d.slides||d.materials||[])", self.atlas_js)
-        self.assertIn("x.filename||x.storageFilename", self.atlas_js)
+        self.assertIn("const list=Array.isArray(data)?data:(data.slides||data.materials||[])", self.atlas_js)
+        self.assertIn("item.filename||item.storageFilename", self.atlas_js)
+        self.assertIn("box.querySelector('#atlas-docx-source')", self.atlas_js)
 
     def test_word_atlas_import_lives_in_teacher_workspace_not_learner_header(self):
         self.assertIn("openTeacherAtlasDocxWorkspace", self.teacher)
