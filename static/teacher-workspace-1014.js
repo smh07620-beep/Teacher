@@ -567,7 +567,8 @@
   window.TeacherWorkspace1014 = Object.freeze({
     canLearn, canTeach, canSystem,
     openCourse, openPresentation, openMedia, openAssessment, openReview, openLearnerTracking, openDocuments, openAnnouncements,
-    showTeacherGuide, learningUrl, ensurePersonaSwitcher
+    showTeacherGuide, learningUrl, ensurePersonaSwitcher,
+    ensureMediaWorkspace, restoreCourseWorkspace
   });
 
   // Reconcile once more after the teacher workspace has finished mounting.
