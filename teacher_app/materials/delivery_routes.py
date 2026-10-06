@@ -18,6 +18,11 @@ from teacher_app.config import teaching_usage_notice
 from teacher_app.materials import catalog, repository
 from teacher_app.storage.web_runtime import WebStorageRuntime, mega_web_status
 
+try:
+    import pymupdf
+except ImportError:  # pragma: no cover - deployment dependency is optional at import time
+    pymupdf = None
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -151,6 +156,74 @@ def register_material_delivery_routes(owner, *, paths, storage_runtime=None, mat
         except Exception as exc:
             return jsonify({"error": f"教材預覽讀取失敗：{exc}", "retryable": True}), mega_web_status(exc)
 
+    def material_preview_page(material_id, page_no):
+        """Render one legacy single-PDF presentation page as an image.
+
+        PowerPoint-like readers use this instead of Chrome's native PDF iframe,
+        eliminating the page-1 flash/reload cycle while preserving the existing
+        cached preview PDF as the source of truth.
+        """
+        denied = _login_required()
+        if denied:
+            return denied
+        entry = get_material(material_id)
+        if not entry or not entry.get("active"):
+            abort(404)
+        meta = entry.get("storageMeta") or {}
+        if meta.get("previewMode") != "single_pdf":
+            abort(404)
+        total = max(0, int(entry.get("pageCount", 0) or meta.get("pageCount", 0) or 0))
+        page_no = int(page_no or 0)
+        if page_no < 1 or (total and page_no > total):
+            abort(404)
+        if entry.get("storageBackend") != "mega":
+            return jsonify({"error": "此教材的單頁預覽目前僅支援 MEGA 儲存模式。"}), 409
+        if pymupdf is None:
+            return jsonify({"error": "伺服器缺少 PDF 單頁預覽元件。"}), 503
+        try:
+            pdf_path = Path(runtime.mega_cached_preview(entry))
+            stat = pdf_path.stat()
+            safe_id = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in str(material_id))[:120] or "material"
+            cache_dir = Path(paths.preview_cache_dir) / "presentation-pages" / safe_id
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            stamp = f"{stat.st_size}-{stat.st_mtime_ns}"
+            target = cache_dir / f"page-{page_no:04d}-{stamp}.png"
+            if not target.exists() or target.stat().st_size <= 0:
+                document = pymupdf.open(str(pdf_path))
+                try:
+                    if page_no > int(document.page_count or 0):
+                        abort(404)
+                    page = document.load_page(page_no - 1)
+                    width = max(1.0, float(page.rect.width))
+                    scale = max(1.5, min(3.0, 1600.0 / width))
+                    pixmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
+                    pixmap.save(str(target))
+                finally:
+                    document.close()
+                for stale in cache_dir.glob(f"page-{page_no:04d}-*.png"):
+                    if stale != target:
+                        try:
+                            stale.unlink()
+                        except OSError:
+                            pass
+            response = send_file(
+                target,
+                mimetype="image/png",
+                as_attachment=False,
+                conditional=True,
+                max_age=300,
+            )
+            response.headers["Cache-Control"] = "private, max-age=300"
+            response.headers["X-Preview-Mode"] = "presentation-page-image"
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+            response.headers["X-Teaching-Use-Notice"] = quote(teaching_usage_notice(), safe="")
+            return response
+        except Exception as exc:
+            if getattr(exc, "code", None) == 404:
+                raise
+            return jsonify({"error": f"教材單頁預覽讀取失敗：{exc}", "retryable": True}), mega_web_status(exc)
+
     def view_material(material_id):
         denied = _login_required()
         if denied:
@@ -211,6 +284,7 @@ def register_material_delivery_routes(owner, *, paths, storage_runtime=None, mat
         ("/uploaded-slides/<folder>/<path:filename>", "uploaded_slide_image", uploaded_slide_image),
         ("/download/<slide_id>", "download_slide", download_slide),
         ("/material-preview/<material_id>", "material_preview", material_preview),
+        ("/material-preview/<material_id>/page/<int:page_no>.png", "material_preview_page", material_preview_page),
         ("/view/<material_id>", "view_material", view_material),
         ("/question-images/<path:name>", "question_image", question_image),
     ):
