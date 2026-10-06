@@ -564,7 +564,13 @@ def _image_resolver(storage: PresentationStorage, root: Path):
             return None
         counter += 1
         suffix = ".png" if str(asset.get("mimeType") or "") == "image/png" else ".jpg"
-        return storage.download(asset, root / f"image-{counter}{suffix}")
+        try:
+            return storage.download(asset, root / f"image-{counter}{suffix}")
+        except Exception:
+            # A stale legacy provider reference must not make the whole
+            # PowerPoint job fail. The slide renderer already has a visual
+            # fallback for a missing optional image.
+            return None
     return resolve
 
 
@@ -592,9 +598,20 @@ def generate_presentation(*, job: dict, progress_callback=None, storage: Present
     started = time.perf_counter(); quality_report: dict[str, Any] = {}
     with tempfile.TemporaryDirectory(prefix="teacher-ppt-") as temp:
         root = Path(temp); template_path = None
+        template_fallback_reason = ""
         if template:
             if progress_callback: progress_callback(30, "下載簡報範本", "從共享 provider 下載組別範本")
-            template_path = storage.download(_template_location(template), root / "template.pptx")
+            try:
+                template_path = storage.download(_template_location(template), root / "template.pptx")
+            except Exception as exc:
+                # Old group templates may still point at MEGA even after the
+                # production artifact store moved to R2. Keep generation
+                # available by using the built-in safe layout rather than
+                # failing the entire job on a legacy template login.
+                template_path = None
+                template_fallback_reason = str(exc)[:240]
+                if progress_callback:
+                    progress_callback(35, "範本改用安全預設版型", "舊範本目前無法讀取；PowerPoint 仍會繼續產生。")
         output = root / "presentation.pptx"
         if progress_callback: progress_callback(55, "建立 PowerPoint", "自動拆頁、圖片適配並寫入 speaker notes / provenance")
         render_pptx(title=str(draft.get("title") or source.get("title") or "AI 教學投影片"), slides=slides,
@@ -604,6 +621,10 @@ def generate_presentation(*, job: dict, progress_callback=None, storage: Present
                                                group=str(draft.get("group") or ""), area=str(draft.get("area") or ""),
                                                teacher=str(draft.get("approvedBy") or ""), revision=1),
                     quality_report=quality_report)
+        if template_fallback_reason:
+            warnings=list(quality_report.get("warnings") or [])
+            warnings.append({"code":"TEMPLATE_PROVIDER_FALLBACK","message":"組別範本無法從舊儲存讀取，已改用安全預設版型。"})
+            quality_report["warnings"]=warnings
         if progress_callback: progress_callback(80, "保存 PowerPoint", "將產出檔保存至共享 provider")
         artifact = storage.store(output, namespace="artifacts", object_id=str(job.get("id") or ""), filename=f"{str(draft.get('title') or 'AI教學投影片')[:60]}.pptx")
     provenance = repository.sanitize_provenance(_source_context(draft, source, template_id=template_id))
@@ -659,8 +680,15 @@ def generate_revision(*, job: dict, progress_callback=None, storage: Presentatio
     if progress_callback: progress_callback(25, "準備 PowerPoint revision", "套用 Phase 4 智慧版型與品質規則")
     with tempfile.TemporaryDirectory(prefix="teacher-ppt-revision-") as temp:
         root = Path(temp); template_path = None
+        template_fallback_reason = ""
         if template:
-            template_path = storage.download(_template_location(template), root / "template.pptx")
+            try:
+                template_path = storage.download(_template_location(template), root / "template.pptx")
+            except Exception as exc:
+                template_path = None
+                template_fallback_reason = str(exc)[:240]
+                if progress_callback:
+                    progress_callback(35, "範本改用安全預設版型", "舊範本目前無法讀取；revision 仍會繼續產生。")
         output = root / "presentation.pptx"
         if progress_callback: progress_callback(55, "建立 PowerPoint revision", "自動拆頁、圖片適配並寫入安全 provenance")
         render_pptx(title=str(current.get("title") or "AI 教學投影片"), slides=slides, output_path=output,
@@ -670,6 +698,10 @@ def generate_revision(*, job: dict, progress_callback=None, storage: Presentatio
                                                area=str(current.get("area") or ""), teacher=str(draft.get("approvedBy") or current.get("updatedBy") or ""),
                                                revision=int(current.get("revisionNumber") or 1)),
                     quality_report=quality_report)
+        if template_fallback_reason:
+            warnings=list(quality_report.get("warnings") or [])
+            warnings.append({"code":"TEMPLATE_PROVIDER_FALLBACK","message":"組別範本無法從舊儲存讀取，已改用安全預設版型。"})
+            quality_report["warnings"]=warnings
         if progress_callback: progress_callback(80, "保存 PowerPoint revision", "將新 revision artifact 保存至共享 provider")
         artifact = storage.store(output, namespace="artifacts", object_id=presentation_id,
                                  filename=f"{str(current.get('title') or 'AI教學投影片')[:60]}-r{int(current.get('revisionNumber') or 1)}.pptx")
