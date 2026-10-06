@@ -632,7 +632,7 @@ async function retryFailedUploads(){
 
 async function create(){
   if(state.busy)return;
-  if(state.created)return retryFailedUploads();
+  if(state.created){if(state.failedUploads.length)await retryFailedUploads();return state.created;}
   syncInputs();
   const {area,group}=scope(),title=String(el('wizard-course-title')?.value||'').trim(),desc=String(el('wizard-course-desc')?.value||'').trim(),files=state.files;
   if(!title)return false;
@@ -682,6 +682,142 @@ async function create(){
     return false;
   }finally{setBusy(false);}
 }
+
+
+async function ensureCourseDraft(){
+  if(state.step===2&&!state.created){
+    state.files=[...(el('cw681-files')?.files||state.files)];
+    state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);
+  }
+  if(!state.created){
+    const ok=await create();
+    if(!ok||!state.created)return false;
+  }
+  if(!canLeaveCourse()){
+    alert(state.failedUploads.length
+      ? '仍有教材上傳失敗，請先重試未完成教材。'
+      : '教材正在 R2／Worker 背景處理。完成後即可進入 AI 或考卷工作區。');
+    return false;
+  }
+  return true;
+}
+
+async function linkedCourseMaterialIds(){
+  const courseId=String(state.course?.id||'');
+  if(!courseId)return [];
+  const rows=await api('/api/slides/admin');
+  return (Array.isArray(rows)?rows:[])
+    .filter(item=>String(item.courseId||'')===courseId&&item.active!==false)
+    .map(item=>String(item.id||'')).filter(Boolean);
+}
+
+async function ensureAssessmentDraft(){
+  syncExamInput();
+  if(state.examMode==='later')return true;
+  const title=String(el('wizard-exam-title')?.value||'').trim();
+  if(!title){alert('請輸入考卷名稱，或改選「稍後建立」。');return false;}
+  if(!await ensureCourseDraft())return false;
+  if(!state.categoryId){
+    const {area,group}=scope();
+    try{
+      const category=await api('/api/quiz-categories',{
+        method:'POST',
+        body:JSON.stringify({area,group,courseId:state.course.id,title,desc:`${state.course?.title||''} 課後評量`,passingScore:80,drawCount:0})
+      });
+      state.categoryId=String(category?.id||'');
+      if(!state.categoryId)throw new Error('考卷草稿建立結果不完整。');
+    }catch(error){
+      alert('考卷草稿建立失敗：'+error.message);
+      return false;
+    }
+  }
+  try{
+    const materialIds=await linkedCourseMaterialIds();
+    if(materialIds.length){
+      await api('/api/quiz-categories/'+encodeURIComponent(state.categoryId)+'/materials',{
+        method:'PUT',body:JSON.stringify({materialIds})
+      });
+    }
+  }catch(error){
+    console.warn('Assessment material link refresh skipped',error);
+  }
+  await refreshWorkspaceData();
+  if(state.step===3)render();
+  return true;
+}
+
+async function attachAiProducts(){
+  if(!state.course?.id)return false;
+  const pending=(state.aiProducts||[]).filter(item=>item.materialId&&!item.linked);
+  if(!pending.length)return true;
+  try{
+    for(const item of pending){
+      await api('/api/slides/'+encodeURIComponent(item.materialId),{
+        method:'PATCH',
+        body:JSON.stringify({courseId:state.course.id,active:true})
+      });
+      item.linked=true;
+      state.expectedMaterialIds=[...new Set([...state.expectedMaterialIds,String(item.materialId)])];
+    }
+    state.linksVerified=false;
+    await verifyCreatedCourseMaterials();
+    await refreshWorkspaceData();
+    await loadMaterials();
+    if(state.categoryId){
+      const materialIds=await linkedCourseMaterialIds();
+      await api('/api/quiz-categories/'+encodeURIComponent(state.categoryId)+'/materials',{
+        method:'PUT',body:JSON.stringify({materialIds})
+      }).catch(()=>{});
+    }
+    if(state.step===2)render();
+    return true;
+  }catch(error){
+    alert('AI 產物加入課程失敗：'+error.message);
+    return false;
+  }
+}
+
+async function openAiAuthoring(){
+  if(state.aiPlan==='none')return;
+  if(!await ensureCourseDraft())return;
+  await attachAiProducts();
+  const mode={presentation:'presentation',narration:'narration',video:'video'}[state.aiPlan]||'presentation';
+  if(typeof window.openTeacherCourseMediaAuthoring==='function'){
+    await window.openTeacherCourseMediaAuthoring(mode);
+    return;
+  }
+  await window.TeacherWorkspace1014?.openMedia?.();
+  window.TeacherAIMediaStudio1018?.showMode?.(mode);
+}
+
+async function openAssessmentAuthoring(){
+  if(state.examMode==='later')return;
+  if(!await ensureAssessmentDraft())return;
+  if(typeof window.openTeacherCourseAssessmentAuthoring==='function'){
+    await window.openTeacherCourseAssessmentAuthoring(state.categoryId,state.examMode);
+    return;
+  }
+  await window.openTeacherContentExam?.(state.categoryId);
+  if(state.examMode==='ai')window.teacherContentStudioExamAction?.('ai',state.categoryId);
+}
+
+async function createAndPublish(){
+  const ready=await ensureCourseDraft();
+  if(!ready)return;
+  await publishAndOpenCourseWorkspace();
+}
+
+function recordAiProduct(detail={}){
+  const materialId=String(detail.materialId||'').trim();
+  if(!materialId)return;
+  const existing=(state.aiProducts||[]).find(item=>String(item.materialId)===materialId);
+  const product={materialId,title:String(detail.title||'AI PowerPoint'),kind:'AI PowerPoint',presentationId:String(detail.presentationId||''),linked:Boolean(existing?.linked)};
+  if(existing)Object.assign(existing,product);
+  else state.aiProducts.push(product);
+  if(state.step===2)render();
+}
+
+window.addEventListener('teacher-ai-presentation-published',event=>recordAiProduct(event.detail||{}));
 
 async function continueToAssessment(){
   if(!canLeaveCourse())return alert('新教材尚未全部完成處理。請等到所有教材顯示「已完成」後再前往下一步。');
@@ -784,13 +920,8 @@ async function publishAndOpenCourseWorkspace(){
     }
     const assignmentNote=assignmentResult.created?'；學習指派已建立':assignmentResult.reused?'；既有學習指派已沿用':'';
     if(publicationBox)publicationBox.innerHTML=`<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-2 font-bold text-emerald-800">✅ 課程已正式發布${assignmentNote}。</div>`;
-    const nextAiPlan=state.aiPlan;
     await refreshWorkspaceData();
     await openCourseWorkspace();
-    if(nextAiPlan!=='none'){
-      await window.TeacherWorkspace1014?.openMedia?.();
-      window.TeacherAIMediaStudio1018?.showMode?.({presentation:'presentation',narration:'narration',video:'video'}[nextAiPlan]||'presentation');
-    }
   }catch(error){
     if(publicationBox)publicationBox.innerHTML=`<div class="rounded-lg border border-rose-200 bg-rose-50 p-2 font-bold text-rose-700">❌ ${esc(error.message||'課程發布失敗')}</div>`;
     alert(error.message||'課程發布失敗');
