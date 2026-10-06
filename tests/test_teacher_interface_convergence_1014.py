@@ -46,13 +46,14 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
             ):
                 self.assertNotIn(legacy_id, source)
 
-    def test_media_is_nested_under_course_workspace(self):
-        self.assertIn("document.getElementById('teacher-nav-media-1014')?.remove()", UI)
-        self.assertIn("需要時進製作室做 PowerPoint／講稿／影音", UI)
-        self.assertIn("AI 製作是選配", UI)
-        self.assertIn("建立或更新課程並發布／指派", UI)
-        self.assertIn("🧰 開啟教材媒體製作室", UI)
+    def test_media_is_contextual_to_each_course_not_a_top_level_tool_strip(self):
+        self.assertIn("document.getElementById(\'teacher-nav-media-1014\')?.remove()", UI)
+        self.assertIn("box?.querySelector(\'#teacher-course-media-entry-1014\')?.remove()", UI)
+        self.assertIn("data-teacher-course-media-1014", UI)
+        self.assertIn("✨ AI／影音製作", UI)
         self.assertIn("TeacherWorkspace1014?.openMedia", UI)
+        self.assertNotIn("🧰 開啟教材媒體製作室", UI)
+        self.assertNotIn("Word → 圖譜", UI)
         self.assertNotIn("TeacherWorkspace1014?.openPresentation", UI)
 
     def test_course_card_has_single_management_entry(self):
@@ -60,6 +61,7 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
         self.assertIn("管理課程", UI)
         self.assertIn("內容編排", UI)
         self.assertIn("學習指派", UI)
+        self.assertIn("AI／影音製作", UI)
         self.assertIn("刪除課程", UI)
         self.assertIn("button.classList.add('hidden')", UI)
         self.assertIn("setAttribute('data-teacher-manage-course-1014', '1')", UI)
