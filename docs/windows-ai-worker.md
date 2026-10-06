@@ -109,7 +109,14 @@ KOKORO_MODEL=Kokoro-82M-v1.1-zh
 KOKORO_REPO_ID=hexgrad/Kokoro-82M-v1.1-zh
 KOKORO_VOICE=zf_001
 KOKORO_TTS_SPEED=1.0
+HF_HOME=C:\TeacherWorkerCache\huggingface
 ```
+
+The AI Worker now preloads Kokoro before it begins polling queues. Startup warmup
+also loads the selectable Chinese voice assets when supported, so the first
+teacher preview does not pay model/G2P/voice download cost. If `HF_HOME` is
+omitted, Windows defaults to `LOCALAPPDATA\Teacher\huggingface`; keep that
+directory persistent across Worker restarts.
 
 and the existing R2 configuration:
 
