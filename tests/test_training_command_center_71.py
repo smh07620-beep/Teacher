@@ -90,6 +90,28 @@ class TrainingCommandCenterServiceTests(unittest.TestCase):
         remediation = next(item for item in learner if item["resourceId"] == "q2")
         self.assertEqual(remediation["statusLabel"], "補強再測")
 
+    def test_learner_persona_projects_learning_todo_even_for_teacher_account(self):
+        user = {
+            "username": "teacher-learner",
+            "role": "clinical_teacher",
+            "roles": ["clinical_teacher", "student"],
+            "preferredGroup": "grpBio",
+            "pgyLearner": False,
+        }
+        dashboard = {
+            "pendingCourses": [],
+            "pendingMaterials": [{"id": "m-pending", "title": "未完成教材", "area": "internal", "group": "grpBio", "courseId": "", "retrainingRequired": False}],
+            "pendingExams": [],
+        }
+        with patch.object(service.audience, "current_profile", return_value={"audience": "online", "pgyLearner": False}), \
+             patch.object(service.dashboard_service, "dashboard_summary", return_value=dashboard), \
+             patch.object(service, "_teacher_action_items", return_value=[{"id": "teacher-task", "persona": "teacher"}]):
+            data = service.build_summary(user, now=NOW, persona="learner")
+        self.assertEqual([item["resourceId"] for item in data["items"]], ["m-pending"])
+        self.assertEqual(data["counts"]["learner"], 1)
+        self.assertEqual(data["counts"]["teacher"], 0)
+
+
     def test_pgy_professional_roles_keep_existing_stage_mapping(self):
         cases = (
             ("clinical_teacher", "submitted", "teacher_sign"),
@@ -147,6 +169,15 @@ class TrainingCommandCenterRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), expected)
         self.assertEqual(client.post("/api/training-command-center").status_code, 405)
+
+    def test_route_passes_requested_persona(self):
+        expected = {"items": [], "counts": {}}
+        client = self.make_client({"username": "teacher", "role": "clinical_teacher"})
+        with patch("teacher_app.command_center.routes.service.build_summary", return_value=expected) as build:
+            response = client.get("/api/training-command-center?persona=learner")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(build.call_args.kwargs["persona"], "learner")
+
 
     def test_route_requires_login(self):
         client = self.make_client(None)
