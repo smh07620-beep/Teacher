@@ -1,0 +1,44 @@
+name: AI F-G Golden Path checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ai-fg-full-stack:
+    name: GP-12 subtitles + timed questions + total Teacher-to-Student path
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install runtime, media and browser dependencies
+        run: |
+          python -m pip install -r requirements.txt 'moto[server]>=5.1,<6.0' python-pptx python-docx
+          sudo apt-get update
+          sudo apt-get install -y libreoffice ffmpeg fonts-noto-cjk
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+      - name: F/G real routes → jobs → Workers → R2 fixture → learner → teacher record
+        run: |
+          python tests/run_ai_fg_fullstack.py             tests/playwright/ai-subtitle-timed-question-fullstack.spec.js             tests/playwright/ai-total-golden-path.spec.js
+      - name: Show F/G diagnostics on failure
+        if: failure()
+        run: |
+          echo "=== Web ==="
+          cat ai-fg-web.log || true
+          echo "=== AI Worker ==="
+          cat ai-fg-worker.log || true
+          echo "=== Material Worker ==="
+          cat ai-fg-material-worker.log || true
+          echo "=== R2-compatible fixture ==="
+          cat ai-fg-s3.log || true
