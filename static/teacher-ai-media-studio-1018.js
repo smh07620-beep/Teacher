@@ -1,4 +1,4 @@
-/* Teacher AI media studio: one source, one active mode, existing media APIs. */
+/* Teacher AI media studio: mode-local sources, one active mode, existing media APIs. */
 (async function () {
   'use strict';
 
@@ -196,7 +196,9 @@
       const authoring = window.TeacherAIMaterial1014?.ensureMounted?.(host || null);
       authoring?.classList.remove('hidden');
       authoring?.removeAttribute('aria-hidden');
-      window.TeacherAIMaterial1014?.paintMaterialOptions?.($('teacher-media-source-1018')?.value || '');
+      // PowerPoint owns its source selection. Do not preselect from the
+      // narration compatibility bridge.
+      window.TeacherAIMaterial1014?.paintMaterialOptions?.('');
     }
     if (focus) $(`teacher-media-tab-${next}-1018`)?.focus();
   }
@@ -442,10 +444,17 @@
       studio.id = 'teacher-ai-media-studio-1018';
       studio.dataset.teacherMediaStudioPrimary = '1';
       studio.className = 'space-y-4';
-      const sourceBox = document.createElement('div');
-      sourceBox.className = 'rounded-2xl border border-cyan-100 bg-cyan-50/50 p-4';
-      sourceBox.innerHTML = '<label class="block text-sm font-black text-slate-800">來源教材／來源內容（PowerPoint、講稿／配音、影片共用；直接錄影可不選）<select id="teacher-media-source-1018" class="learning-input mt-2" disabled><option value="">正在載入可用教材…</option></select></label><p id="teacher-media-next-step-1018" class="mt-2 text-xs font-bold text-cyan-900" aria-live="polite"></p>';
-      studio.appendChild(sourceBox);
+      const sourceBridge = document.createElement('div');
+      sourceBridge.id = 'teacher-media-source-bridge-1018';
+      sourceBridge.hidden = true;
+      sourceBridge.setAttribute('aria-hidden', 'true');
+      sourceBridge.innerHTML = '<select id="teacher-media-source-1018" disabled tabindex="-1"><option value="">正在載入可用教材…</option></select><p id="teacher-media-next-step-1018" aria-live="polite"></p>';
+      studio.appendChild(sourceBridge);
+      const sourcePolicy = document.createElement('p');
+      sourcePolicy.id = 'teacher-media-source-policy-1029';
+      sourcePolicy.className = 'text-xs font-bold text-slate-500';
+      sourcePolicy.textContent = '先選擇要製作的內容；來源資料改在各功能內選擇，不需要先做全域教材選取。';
+      studio.appendChild(sourcePolicy);
       installTabs(studio);
       installPowerPointShortcut();
       shell.insertAdjacentElement('afterend', studio);

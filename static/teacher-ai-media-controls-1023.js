@@ -304,7 +304,12 @@
     const shared = $('teacher-media-source-1018');
     if (!shared) return false;
     if (sourceRefreshPromise) return sourceRefreshPromise;
-    const selectedBeforeRefresh = String(shared.value || lastSourceSelection || '');
+    const selectedBeforeRefresh = String(
+      $('teacher-script-material-1014')?.value
+      || shared.value
+      || lastSourceSelection
+      || ''
+    );
     if (!force && materials.length && Date.now() - sourceRefreshAt < 2000) {
       paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
       paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳', selectedBeforeRefresh);

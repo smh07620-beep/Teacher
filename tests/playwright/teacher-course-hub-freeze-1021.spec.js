@@ -120,7 +120,7 @@ test('course hub reconciles a fresh material fetch that loses render ownership',
   await expect(page.locator('#admin-course-material-hub')).toContainText('剛完成的 Worker 教材', { timeout: 3000 });
 });
 
-test('AI media studio keeps one source and one accessible active mode', async ({ page }) => {
+test('AI media studio hides the global source picker and keeps one accessible active mode', async ({ page }) => {
   await page.setContent('<main><section id="teacher-media-production-1014"><section id="teacher-media-studio-shell-1018"></section><section id="teacher-media-audio-1014"><h4>語音</h4><p class="mt-1">語音說明</p></section><section id="teacher-media-subtitle-1014"><h4>字幕</h4></section><section id="teacher-ai-video-1015"><h4>影片</h4><p class="mt-1">影片說明</p><label>PowerPoint<input id="teacher-ai-video-presentation-1015"></label><span id="teacher-ai-video-provider-1015"></span><span id="teacher-ai-video-renderer-1015"></span></section><section id="teacher-media-script-1014"><label>來源教材<select id="teacher-script-material-1014"><option value="doc-1">教材文件</option><option value="movie-1">教學影片.mp4</option></select></label></section></section></main>');
   await page.evaluate(() => {
     window.TeacherRBAC681Ready = Promise.resolve({
@@ -140,8 +140,9 @@ test('AI media studio keeps one source and one accessible active mode', async ({
   await tabs.nth(0).press('ArrowRight');
   await expect(page.locator('#teacher-media-tab-narration-1018')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#teacher-media-panel-presentation-1018')).toHaveAttribute('hidden', '');
-  await page.locator('#teacher-media-source-1018').selectOption('movie-1');
-  await expect.poll(() => page.evaluate(() => window.subtitleSource)).toBe('movie-1');
+  await expect(page.locator('#teacher-media-source-bridge-1018')).toBeHidden();
+  await expect(page.locator('#teacher-media-source-policy-1029')).toContainText('各功能內選擇');
+  await expect(page.locator('#teacher-media-panel-narration-1018 #teacher-script-material-1014')).toBeVisible();
   await expect(page.locator('[role="tab"][aria-controls]')).toHaveCount(4);
   await page.locator('#teacher-media-tab-video-1018').click();
   await expect(page.locator('#teacher-media-video-captions-1018 #teacher-media-subtitle-1014')).toHaveCount(1);

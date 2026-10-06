@@ -13,11 +13,14 @@ def test_media_studio_is_loaded_after_the_existing_media_controls():
     assert body.index("/teacher-authoring-source-fix-1017.js") < body.index("/teacher-ai-media-studio-1018.js")
 
 
-def test_media_studio_keeps_one_source_and_accessible_single_mode_tabs():
+def test_media_studio_uses_hidden_compatibility_source_and_accessible_mode_tabs():
     source = ROOT.joinpath("static", "teacher-ai-media-studio-1018.js").read_text(encoding="utf-8")
     for token in (
         "teacher-ai-media-studio-1018",
         "teacher-media-source-1018",
+        "teacher-media-source-bridge-1018",
+        "teacher-media-source-policy-1029",
+        "來源資料改在各功能內選擇",
         "teacher-media-next-step-1018",
         "role', 'tablist",
         "aria-selected",

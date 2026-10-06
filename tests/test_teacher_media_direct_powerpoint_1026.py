@@ -11,7 +11,9 @@ class TeacherMediaDirectPowerPoint1026Tests(unittest.TestCase):
         video=ROOT.joinpath("static","teacher-ai-video-1015.js").read_text(encoding="utf-8")
         self.assertNotIn('id="teacher-media-direct-powerpoint-1026"',source)
         self.assertNotIn('id="teacher-ai-video-powerpoint-author-1027"',video)
-        self.assertIn("來源教材／來源內容",source)
+        self.assertIn("teacher-media-source-bridge-1018",source)
+        self.assertIn("來源資料改在各功能內選擇",source)
+        self.assertNotIn("PowerPoint、講稿／配音、影片共用",source)
         self.assertIn("加入 PDF／Word／圖片／文字",video)
         self.assertNotIn("teacher-media-open-powerpoint-1018",source)
 
