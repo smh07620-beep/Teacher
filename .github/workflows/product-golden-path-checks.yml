@@ -236,7 +236,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_f5_*.py' -v
 
   ai-question-full-stack-browser:
-    name: GP-11 AI question Browser → route → DB job → real Worker → question bank
+    name: GP-11 AI question + PowerPoint + script canonical full-stack Browser paths
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -250,9 +250,9 @@ jobs:
           sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg fonts-noto-cjk
           npm install --no-save @playwright/test@1.55.0
           npx playwright install --with-deps chromium
-      - name: Teacher → persistent AI job → canonical Worker → published exam → learner answer → saved score
+      - name: Canonical AI jobs → inspected PPTX artifacts → persisted scripts → learner saved answers
         shell: bash
-        run: python tests/run_ai_fullstack.py tests/playwright/ai-question-fullstack-golden-path.spec.js tests/playwright/ai-powerpoint-fullstack.spec.js
+        run: python tests/run_ai_fullstack.py tests/playwright/ai-question-fullstack-golden-path.spec.js tests/playwright/ai-powerpoint-fullstack.spec.js tests/playwright/ai-script-fullstack.spec.js
       - name: Show AI full-stack diagnostics on failure
         if: failure()
         shell: bash

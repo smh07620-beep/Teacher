@@ -290,7 +290,9 @@
       $('teacher-media-script-history-1018')?.remove();
       scriptPanel.classList.remove('hidden');
       scriptPanel.removeAttribute('aria-hidden');
-      $('teacher-script-material-1014')?.closest('label')?.classList.add('teacher-media-legacy-source-1018');
+      // Narration owns its source picker. The global bridge is intentionally
+      // hidden; hiding this picker too prevented choosing existing materials.
+      $('teacher-script-material-1014')?.closest('label')?.classList.remove('teacher-media-legacy-source-1018');
       $('teacher-script-refresh-materials-1014')?.parentElement?.classList.add('teacher-media-legacy-source-1018');
       if (scriptPanel.parentElement !== narration) narration.appendChild(scriptPanel);
     } else {

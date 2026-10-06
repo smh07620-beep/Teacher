@@ -1,6 +1,6 @@
 const { expect } = require('@playwright/test');
 const baseURL = 'http://127.0.0.1:4176';
-async function login(page, username='e2eteacher', next='/system?area=internal&group=grpBio&persona=teacher') {
+async function login(page, username='e2eteacher', next='/system?area=internal&group=grpBio&admin=1&workspace=course-materials&persona=teacher') {
   await page.goto(`${baseURL}/login?next=${encodeURIComponent(next)}`);
   await page.locator('#login-username').fill(username);
   await page.locator('#login-password').fill(process.env.TEACHER_CI_BROWSER_PASSWORD);

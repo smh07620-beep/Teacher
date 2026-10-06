@@ -300,6 +300,8 @@
     } catch (error) {
       if (button) button.disabled = false;
       status(`儲存失敗：${error.message}`, 'error');
+    } finally {
+      if (button) button.disabled = false;
     }
   }
 
@@ -428,7 +430,14 @@
       activeScriptId = '';
       activeJobId = '';
       pollToken += 1;
+      const shared = document.getElementById('teacher-media-source-1018');
+      const selected = document.getElementById('teacher-script-material-1014')?.value || '';
+      if (shared && shared.value !== selected) {
+        shared.value = selected;
+        shared.dispatchEvent(new Event('change', {bubbles:true}));
+      }
       void loadSavedScripts();
+      void syncNarrationOptions();
     });
     renderAuthoringReferences();
     return true;

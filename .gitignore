@@ -26,3 +26,6 @@ static/slides/
 Teacher-6.7-WIP.bundle
 Teacher-6.7-WIP.patch
 Teacher-6.7-WIP-tests.txt
+node_modules/
+test-results/
+ai-media-*.log
