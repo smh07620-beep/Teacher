@@ -278,6 +278,13 @@ jobs:
           until curl --fail --silent http://127.0.0.1:4176/ready >/dev/null; do sleep 1; done
           python ai_question_worker.py > ai-media-worker.log 2>&1 & echo $! > ai-media-worker.pid
           TEACHER_AI_MEDIA_FULLSTACK_BASE_URL=http://127.0.0.1:4176 npx playwright test tests/playwright/ai-question-fullstack-golden-path.spec.js --reporter=line --workers=1
+      - name: Show AI full-stack diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          cat ai-media-web.log || true
+          cat ai-media-worker.log || true
+          cat ai-media-s3.log || true
       - if: always()
         shell: bash
         run: |
