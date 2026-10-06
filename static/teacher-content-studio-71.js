@@ -60,7 +60,7 @@
       if(event.target.closest('[data-exam-create-submit]')){ createExamFromStudio(); return; }
       const examAction = event.target.closest('[data-exam-action]');
       if(examAction){ dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId); return; }
-      if(event.target.closest('[data-course-studio-back]')){ restoreCourseWizard(); closeStudio(); return; }
+      if(event.target.closest('[data-course-studio-back]')){ closeStudio(); return; }
       const back = event.target.closest('[data-studio-back]');
       if(back) closeStudio();
       const confirmQuestion = event.target.closest('[data-studio-question-confirm]');
@@ -321,7 +321,7 @@
       if(group)group.value=selectedScope.group;
       const placeholder=document.createElement('div');placeholder.hidden=true;placeholder.dataset.teacher77CoursePlaceholder='1';root.before(placeholder);
       courseMount.root=root;courseMount.placeholder=placeholder;
-      host.innerHTML='<div class="mx-auto max-w-4xl"><div class="mb-4"><button type="button" data-course-studio-back class="text-sm font-bold text-slate-500">← 返回教材與課程</button><h4 class="mt-2 text-xl font-black text-slate-950">🪄 建立課程</h4><p class="mt-1 text-xs text-slate-500">課程、教材與考卷都在這個全頁工作畫面完成，不會跳出另一層大型視窗。</p></div><div data-course-wizard-host-77></div></div>';
+      host.innerHTML='<div class="mx-auto max-w-4xl"><div class="mb-4"><button type="button" data-course-studio-back class="text-sm font-bold text-slate-500">✕ 離開建立課程</button><h4 class="mt-2 text-xl font-black text-slate-950">🪄 建立課程</h4><p class="mt-1 text-xs text-slate-500">課程、教材與考卷都在這個全頁工作畫面完成，不會跳出另一層大型視窗。</p></div><div data-course-wizard-host-77></div></div>';
       host.querySelector('[data-course-wizard-host-77]')?.appendChild(root);
       requestAnimationFrame(()=>root.scrollIntoView({behavior:'smooth',block:'start'}));
     }catch(error){restoreCourseWizard();host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3 flex gap-2"><button type="button" data-studio-action="course" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 重新嘗試</button><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;}

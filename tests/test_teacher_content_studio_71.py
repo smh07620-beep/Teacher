@@ -168,6 +168,17 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertNotIn('onclick="event.stopPropagation();window.teacherContentStudioExamAction', self.source)
         for action in ("question", "image", "video", "ai", "questions", "settings"):
             self.assertIn(f'data-exam-action="{action}"', self.source)
+    def test_course_create_exit_is_distinct_from_wizard_previous_step(self):
+        self.assertIn('✕ 離開建立課程', self.source)
+        self.assertIn(
+            "if(event.target.closest('[data-course-studio-back]')){ closeStudio(); return; }",
+            self.source,
+        )
+        self.assertNotIn(
+            "if(event.target.closest('[data-course-studio-back]')){ restoreCourseWizard(); closeStudio(); return; }",
+            self.source,
+        )
+
     def test_browser_javascript_syntax(self):
         for asset in ('teacher-content-studio-71.js', 'teacher-content-composer-72.js', 'teacher-ux-convergence-72.js'):
             completed = subprocess.run(

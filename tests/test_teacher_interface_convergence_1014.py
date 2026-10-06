@@ -66,6 +66,14 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
         self.assertIn("button.classList.add('hidden')", UI)
         self.assertIn("setAttribute('data-teacher-manage-course-1014', '1')", UI)
 
+    def test_course_manage_button_resolves_the_current_panel_after_rerender(self):
+        self.assertIn(
+            "const currentPanel = details.querySelector(':scope > div.grid.border-t > [data-teacher-course-tools-1014]')",
+            UI,
+        )
+        self.assertIn("currentPanel.classList.toggle('hidden')", UI)
+        self.assertNotIn("panel.classList.toggle('hidden');", UI)
+
     def test_course_card_reconciliation_is_not_deferred_to_animation_frame(self):
         observer = UI[UI.index("state.courseObserver = new MutationObserver"):UI.index("    // MutationObserver callbacks run")]
         self.assertIn("convergeCourseSurface();", observer)

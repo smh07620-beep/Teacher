@@ -200,9 +200,17 @@
         event.preventDefault();
         event.stopPropagation();
         details.open = true;
-        panel.classList.toggle('hidden');
-        manage.setAttribute('aria-expanded', panel.classList.contains('hidden') ? 'false' : 'true');
-        if (!panel.classList.contains('hidden')) panel.scrollIntoView?.({block: 'nearest', behavior: 'smooth'});
+        // The course renderer can replace only the card body while keeping this
+        // management button alive. Resolve the panel from the current DOM on
+        // every click instead of closing over the panel created earlier.
+        const currentPanel = details.querySelector(':scope > div.grid.border-t > [data-teacher-course-tools-1014]');
+        if (!currentPanel) {
+          convergeCourseCard(details);
+          return;
+        }
+        currentPanel.classList.toggle('hidden');
+        manage.setAttribute('aria-expanded', currentPanel.classList.contains('hidden') ? 'false' : 'true');
+        if (!currentPanel.classList.contains('hidden')) currentPanel.scrollIntoView?.({block: 'nearest', behavior: 'smooth'});
       });
       manage.setAttribute('aria-expanded', 'false');
       actionHost.appendChild(manage);
