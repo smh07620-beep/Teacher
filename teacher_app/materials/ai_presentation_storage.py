@@ -66,6 +66,11 @@ class PresentationStorage:
             "mega": self.storage.mega_is_configured,
         }
         if requested in checks:
+            # Production migrated from MEGA to R2.  Keep a stale legacy
+            # AI_PRESENTATION_STORAGE_BACKEND=mega from breaking authoring when
+            # both Web and AI Worker already have the canonical R2 provider.
+            if requested == "mega" and _env_true("AI_PRESENTATION_FALLBACK_TO_R2", True) and checks["r2"]():
+                return "r2"
             if not checks[requested]():
                 raise RuntimeError(f"AI PowerPoint 儲存設為 {requested}，但 provider 尚未完成設定。")
             return requested
@@ -81,11 +86,27 @@ class PresentationStorage:
         raise RuntimeError("AI PowerPoint 需要 Web 與 AI Worker 共用的 R2、OCI、Google Drive 或 MEGA。")
 
     def capability(self) -> dict[str, Any]:
+        requested = self.requested_backend()
         try:
             backend = self.backend()
-            return {"available": True, "backend": backend, "shared": backend != "local", "localDevelopmentOnly": backend == "local"}
+            return {
+                "available": True,
+                "backend": backend,
+                "requestedBackend": requested,
+                "fallbackUsed": requested not in {"auto", backend},
+                "shared": backend != "local",
+                "localDevelopmentOnly": backend == "local",
+            }
         except Exception as exc:
-            return {"available": False, "backend": "", "shared": False, "localDevelopmentOnly": False, "reason": str(exc)[:220]}
+            return {
+                "available": False,
+                "backend": "",
+                "requestedBackend": requested,
+                "fallbackUsed": False,
+                "shared": False,
+                "localDevelopmentOnly": False,
+                "reason": str(exc)[:220],
+            }
 
     def _local_root(self) -> Path:
         root = Path(self.paths_provider().tmp_dir) / "ai-presentations"
