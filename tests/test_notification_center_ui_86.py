@@ -62,6 +62,13 @@ class NotificationCenterUi86Tests(unittest.TestCase):
             self.assertIn(token, self.js)
         self.assertIn("isSystemContext()?Promise.resolve([])", self.js)
 
+
+    def test_learner_notification_surface_requests_learner_persona_and_hides_incidents(self):
+        self.assertIn("function isLearnerContext()", self.js)
+        self.assertIn("/api/training-command-center/notifications?persona=learner", self.js)
+        self.assertIn('persona_mode != "learner"', self.events)
+        self.assertIn('incident_events = [] if persona_mode == "learner"', self.events)
+
     def test_system_notification_center_escapes_workspace_clipping_when_expanded(self):
         admin_css = ROOT.joinpath("static", "admin.css").read_text(encoding="utf-8")
         for token in (
