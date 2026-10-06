@@ -26,16 +26,18 @@ class MaterialWorkerPerformance20261002Tests(unittest.TestCase):
             fake.active_backend.return_value = "mega"
             fake.prepare_office_pdf.return_value = prepared
 
-            def build_preview(_source, output, *, prepared_pdf=None):
-                self.assertEqual(Path(prepared_pdf), prepared)
-                Path(output).write_bytes(b"%PDF-preview")
+            def convert_preview(pdf_path, _slides, *, progress_callback=None):
+                self.assertEqual(Path(pdf_path), prepared)
+                if progress_callback:
+                    progress_callback(1, 2)
+                    progress_callback(2, 2)
                 return 2
 
-            fake.build_single_preview_pdf.side_effect = build_preview
-            fake.upload_material_preview_to_mega.return_value = (
+            fake.convert_pdf_to_images.side_effect = convert_preview
+            fake.upload_material_tree_to_mega.return_value = (
                 "/root/material/source.ppt",
-                "/root/material",
-                {"adapter": "megacmd"},
+                "/root/material/slides",
+                {"adapter": "megacmd", "slideFormat": "webp"},
             )
             timings = {}
             with patch.object(material_worker, "STORAGE", fake), \
@@ -51,6 +53,8 @@ class MaterialWorkerPerformance20261002Tests(unittest.TestCase):
                 )
 
             fake.prepare_office_pdf.assert_called_once()
+            fake.convert_pdf_to_images.assert_called_once()
+            fake.build_single_preview_pdf.assert_not_called()
             self.assertEqual(result["pageCount"], 2)
             self.assertIn("officeToPdfMs", timings)
             self.assertIn("textIndexMs", timings)
