@@ -74,6 +74,7 @@
           ${m.isBuiltin ? '<span class="text-xs text-slate-400">內建教材不可修改</span>' : `
             <div class="flex flex-wrap gap-2 shrink-0">
               <button data-csp-click="editAdminMaterial('${m.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg">✏️ 編輯</button><button data-csp-click="rebuildMaterialIndex('${m.id}')" class="text-xs border border-teal-200 text-teal-800 px-3 py-1.5 rounded-lg">🔄 重建索引</button>
+              ${/\.docx$/i.test(String(m.filename||m.storageFilename||''))?`<button data-csp-click="openAdminMaterialAtlasImport('${m.id}')" class="text-xs border border-teal-300 bg-teal-50 font-bold text-teal-800 px-3 py-1.5 rounded-lg">🔬 擷取 Word 圖片 → Atlas</button>`:''}
               <button data-csp-click="toggleAdminMaterial('${m.id}', ${m.active ? 'false' : 'true'})" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg">${m.active ? '⏸️ 停用' : '▶️ 啟用'}</button>
               <button data-csp-click="deleteAdminMaterial('${m.id}')" class="text-xs border border-rose-300 bg-rose-50 hover:bg-rose-100 font-bold text-rose-700 px-3 py-1.5 rounded-lg">🗑️ 刪除教材</button>
               <details class="relative"><summary class="list-none cursor-pointer text-[11px] bg-white border border-slate-200 text-slate-500 px-2.5 py-1.5 rounded-lg">更多</summary><div class="absolute right-0 z-20 mt-1 w-52 rounded-xl border border-slate-200 bg-white shadow-lg p-2 space-y-1.5"><button data-csp-click="publishMaterialVersion('${m.id}')" class="w-full text-xs bg-sky-50 border border-sky-200 hover:bg-sky-100 text-sky-800 px-3 py-1.5 rounded-lg">📌 發布新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="w-full text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg">🕘 版本紀錄</button></div></details>
@@ -136,6 +137,27 @@
       }
     }
     await Promise.all(Array.from({length:Math.min(MATERIAL_INDEX_CONCURRENCY, queue.length)}, ()=>worker()));
+  };
+
+  window.openAdminMaterialAtlasImport = async function(id){
+    const materialId=String(id||'').trim();
+    if(!materialId)return;
+    if(typeof window.openAtlasDocxWizard!=='function'){
+      alert('DOCX → Atlas 工具尚未載入，請重新整理頁面後再試。');
+      return;
+    }
+    const list=document.getElementById('admin-materials-list');
+    if(!list)return;
+    let host=document.getElementById('admin-material-atlas-import');
+    if(!host){
+      host=document.createElement('div');
+      host.id='admin-material-atlas-import';
+      host.className='mb-4';
+      list.parentElement?.insertBefore(host,list);
+    }
+    host.classList.remove('hidden');
+    await window.openAtlasDocxWizard('admin-material-atlas-import',materialId);
+    host.scrollIntoView({behavior:'smooth',block:'start'});
   };
 
   window.rebuildMaterialIndex = async function(id){
