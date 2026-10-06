@@ -91,7 +91,7 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
         for name in ('renderAdminAnnouncements','createAdminAnnouncement','toggleAdminAnnouncement','deleteAdminAnnouncement'):
             self.assertIn(f'window.{name}', source)
         self.assertIn('/api/announcements/admin', source)
-        self.assertIn("method:'POST'", source)
+        self.assertIn("method:editId?'PATCH':'POST'", source)
         self.assertIn("method:'PATCH'", source)
         self.assertIn("method:'DELETE'", source)
         self.assertNotIn('X-Admin-Key', source)
