@@ -24,16 +24,15 @@ class ProductConvergence101Tests(unittest.TestCase):
         self.assertIn("teacher-nav-assessment-1014", self.persona)
         self.assertEqual(self.persona.count("['teacher-nav-"), 2)
         self.assertIn("📚 教材與課程", self.persona)
-        self.assertIn("📝 評量與出題", self.persona)
+        self.assertIn("📝 評量與追蹤", self.persona)
         self.assertIn("teacherButtons.length !== 2", self.persona)
 
-    def test_media_and_paper_export_remain_contextual_not_removed(self):
-        self.assertIn("teacher-context-tools-101", self.shell)
-        self.assertIn("🎙️ AI 媒體製作", self.shell)
-        self.assertIn("📄 紙本文件與匯出", self.shell)
-        self.assertIn("api.openMedia?.()", self.shell)
-        self.assertIn("api.openDocuments?.()", self.shell)
-        self.assertIn("不再各自佔一個主導覽", self.shell)
+    def test_duplicate_extension_card_is_removed_after_contextual_routes_moved(self):
+        self.assertIn("document.getElementById('teacher-context-tools-101')?.remove()", self.shell)
+        self.assertNotIn("teacher-context-media-101", self.shell)
+        self.assertNotIn("teacher-context-documents-101", self.shell)
+        self.assertIn("AI 製作從教材流程內開啟", self.shell)
+        self.assertIn("公告、文件與使用導覽在右上工具", self.shell)
 
     def test_teacher_and_convergence_layers_do_not_compete_for_navigation(self):
         self.assertIn("final teacher persona navigation is owned by teacher-persona-isolation", self.shell)
