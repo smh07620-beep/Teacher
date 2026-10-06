@@ -58,8 +58,10 @@ class Teacher1014UiHotfixTests(unittest.TestCase):
     def test_ai_voice_readiness_uses_canonical_service_status(self):
         self.assertIn('TeacherMediaAudioStatus1014', self.media)
         self.assertIn('teacher-media-audio-status-1014', self.media)
-        self.assertIn('免費 AI 語音', self.media)
-        self.assertIn('本機 Kokoro', self.media)
+        self.assertIn('AI 語音', self.media)
+        self.assertNotIn('本機 Kokoro', self.media)
+        self.assertNotIn('AI Worker', self.media)
+        self.assertNotIn('R2 未設定', self.media)
         self.assertNotIn("fetch('/api/media-audio/status'", self.media)
         self.assertNotIn('OPENAI_API_KEY', self.media)
         self.assertNotIn('X-Admin-Key', self.media)
