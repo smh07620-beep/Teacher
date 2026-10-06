@@ -56,6 +56,12 @@ foreach ($marker in @(
 if ($launcherSource.Contains('update_material_worker.ps1') -or $launcherSource.Contains('git fetch')) {
   throw "AI Worker must not run a second repository updater; Material Worker remains the single update owner."
 }
+if (-not $launcherSource.Contains('importlib.util') -or -not $launcherSource.Contains("'misaki.en'")) {
+  throw "AI Worker supervisor must use the lightweight feature-module probe, including English G2P."
+}
+if ($launcherSource.Contains('import kokoro, faster_whisper')) {
+  throw "AI Worker supervisor must not eagerly import Kokoro/torch before the real Worker warmup."
+}
 
 foreach ($marker in @(
   'Teacher AI Worker',
@@ -134,7 +140,7 @@ foreach ($marker in @(
   }
 }
 
-foreach ($marker in @('kokoro>=', 'misaki[zh]', 'numpy>=', 'python-pptx>=')) {
+foreach ($marker in @('kokoro>=', 'misaki[zh,en]', 'numpy>=', 'python-pptx>=')) {
   if (-not $requirementsSource.Contains($marker)) {
     throw "requirements-ai-worker.txt is missing AI Worker dependency marker: $marker"
   }
