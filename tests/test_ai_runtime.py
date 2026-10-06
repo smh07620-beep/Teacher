@@ -562,6 +562,9 @@ class AIRuntimeGenerationTests(unittest.TestCase):
         self.assertEqual(post.call_args.kwargs["timeout"], 120)
         self.assertEqual(post.call_args.kwargs["json"]["model"], "openai-model")
         self.assertEqual(post.call_args.kwargs["json"]["reasoning"], {"effort": "low"})
+        schema = post.call_args.kwargs["json"]["text"]["format"]["schema"]
+        enum = schema["properties"]["questions"]["items"]["properties"]["questionType"]["enum"]
+        self.assertEqual(enum, ["choice", "multi", "true_false", "fill", "essay"])
         outbound = post.call_args.kwargs["json"]["input"][1]["content"]
         self.assertNotIn("A123456789", outbound)
         self.assertNotIn("0912345678", outbound)
@@ -582,6 +585,38 @@ class AIRuntimeGenerationTests(unittest.TestCase):
                     source_title="教材",
                     settings=_settings(provider="openai"),
                 )
+
+    def test_true_false_is_preserved_by_canonical_ai_normalization(self):
+        questions = ai_runtime.normalize_ai_questions(
+            {
+                "questions": [{
+                    "questionType": "true_false",
+                    "question": "此敘述是否正確？",
+                    "options": ["錯誤值", "也不應沿用"],
+                    "correct": 1,
+                    "answerConfig": {},
+                    "tag": "AI",
+                    "explanation": "依教材判斷。",
+                }]
+            },
+            1,
+        )
+        self.assertEqual(questions[0]["questionType"], "true_false")
+        self.assertEqual(questions[0]["options"], ["是", "否"])
+        self.assertEqual(questions[0]["correct"], 1)
+
+    def test_prompt_contract_includes_true_false_in_mixed_all(self):
+        _count, _system, prompt = ai_runtime.question_prompt_parts(
+            count=5,
+            qtype="mixed_all",
+            difficulty="standard",
+            focus="",
+            source_title="教材",
+            source_text="內容",
+            settings=_settings(provider="groq"),
+        )
+        self.assertIn("單選、多選、是非、填空、問答五種題型", prompt)
+        self.assertIn("choice|multi|true_false|fill|essay", prompt)
 
     def test_gemini_text_generation_uses_optional_client_and_deletes_upload_only_when_used(self):
         fake_client = Mock()
