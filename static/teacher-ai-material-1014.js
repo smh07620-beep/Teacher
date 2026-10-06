@@ -63,6 +63,11 @@
     if (note) note.textContent = presentation
       ? '這裡不建立講稿或考題。大綱核准後繼續產生 PowerPoint；其他工作請使用對應入口。'
       : '測驗題草稿若要進正式題庫，仍請到「評量與追蹤」完成審核與建立。';
+    const generate = document.getElementById('teacher-ai-material-generate-1014');
+    if (generate) generate.textContent = presentation ? '2｜產生 PowerPoint 大綱' : '2｜產生 AI 草稿';
+    const upload = document.getElementById('teacher-ai-material-upload-1014');
+    if (upload) upload.textContent = '＋ 加入來源';
+
     const savedHeading = document.getElementById('teacher-ai-material-saved-heading-1014');
     if (savedHeading) savedHeading.textContent = presentation ? '已儲存 PowerPoint 大綱' : '已儲存 AI 草稿';
     if (presentation && activeDraft && activeDraft.draftType !== 'slides') {
@@ -77,6 +82,58 @@
       status(presentation
         ? '先加入來源並設定重點，再產生 PowerPoint 大綱。'
         : '選好來源後，設定產出類型與重點，再產生 AI 草稿。');
+    }
+  }
+
+  function ensureCompactAuthoringLayout(section) {
+    if (!section || section.dataset.compactAuthoring1014 === '1') return;
+    section.dataset.compactAuthoring1014 = '1';
+
+    const intro = document.getElementById('teacher-ai-material-intro-1014');
+    if (intro) {
+      const flow = document.createElement('div');
+      flow.id = 'teacher-ai-material-flow-1014';
+      flow.className = 'mt-3 grid grid-cols-2 gap-2 text-center text-[11px] font-black text-slate-600 sm:grid-cols-4';
+      flow.innerHTML = '<span class="rounded-lg bg-violet-50 px-2 py-2">1 加入來源</span><span class="rounded-lg bg-violet-50 px-2 py-2">2 產生草稿</span><span class="rounded-lg bg-violet-50 px-2 py-2">3 教師修正</span><span class="rounded-lg bg-violet-50 px-2 py-2">4 產生／發布</span>';
+      intro.insertAdjacentElement('afterend', flow);
+    }
+
+    const paste = document.getElementById('teacher-ai-material-paste-1014');
+    const pasteBlock = paste?.closest('.rounded-xl');
+    if (pasteBlock && !document.getElementById('teacher-ai-material-paste-details-1014')) {
+      const details = document.createElement('details');
+      details.id = 'teacher-ai-material-paste-details-1014';
+      details.className = 'rounded-xl border border-violet-100 bg-white/70 px-3 py-2';
+      const summary = document.createElement('summary');
+      summary.className = 'cursor-pointer text-xs font-black text-violet-700';
+      summary.textContent = '或直接貼入文字';
+      pasteBlock.before(details);
+      details.append(summary, pasteBlock);
+    }
+
+    const existing = document.getElementById('teacher-ai-material-source-1014')?.closest('label');
+    if (existing && !document.getElementById('teacher-ai-material-existing-details-1014')) {
+      const details = document.createElement('details');
+      details.id = 'teacher-ai-material-existing-details-1014';
+      details.className = 'rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2';
+      const summary = document.createElement('summary');
+      summary.className = 'cursor-pointer text-xs font-black text-slate-700';
+      summary.textContent = '或選擇既有教材';
+      existing.before(details);
+      details.append(summary, existing);
+    }
+
+    const saved = document.getElementById('teacher-ai-material-saved-1014');
+    const savedBlock = saved?.parentElement;
+    if (savedBlock && !document.getElementById('teacher-ai-material-history-details-1014')) {
+      const details = document.createElement('details');
+      details.id = 'teacher-ai-material-history-details-1014';
+      details.className = 'border-t border-slate-100 pt-3';
+      const summary = document.createElement('summary');
+      summary.className = 'cursor-pointer text-xs font-black text-slate-600';
+      summary.textContent = '歷史草稿／版本';
+      savedBlock.before(details);
+      details.append(summary, savedBlock);
     }
   }
 
@@ -553,10 +610,10 @@
     if (!box) return false;
     const section = document.createElement('section');
     section.id = 'teacher-ai-material-1014';
-    section.className = 'mb-5 rounded-2xl border border-violet-200 bg-white p-5 shadow-sm space-y-5';
+    section.className = 'mb-4 rounded-2xl border border-violet-200 bg-white p-4 shadow-sm space-y-3';
     section.innerHTML = `
       <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-violet-700">AI SOURCE AUTHORING</p><h4 id="teacher-ai-material-heading-1014" class="text-xl font-black text-slate-950">✨ AI 來源內容工作台</h4><p id="teacher-ai-material-intro-1014" class="mt-1 text-sm text-slate-600">可直接上傳文件、圖片或貼入文字，作為不同 AI 教學內容的來源；既有教材只是可選來源，不強制綁定。</p></div><details class="text-sm text-slate-600"><summary class="cursor-pointer font-bold text-violet-700">使用說明</summary><p class="mt-2 max-w-xl leading-6">PDF、Word、PPTX、SOP、Excel、圖片與貼入文字都可作為私人 authoring source。預設保持草稿，不會自動對學員發布；之後可選擇製作 PowerPoint／影片，或由教師明確發布成正式教材。</p></details></div>
-      <div class="rounded-2xl border border-violet-200 bg-violet-50/40 p-4 space-y-4"><div class="flex flex-col lg:flex-row lg:items-end gap-3"><label class="flex-1 text-sm font-bold text-slate-700">Step 1｜加入來源資料（可多選或拖曳）<input id="teacher-ai-material-file-1014" type="file" multiple class="mt-1 block w-full text-sm" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.odt,.ods,.txt,.csv,.png,.jpg,.jpeg,.webp"></label><button id="teacher-ai-material-upload-1014" type="button" class="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-black text-white">⬆️ 加入原始資料</button></div><div class="rounded-xl border border-violet-100 bg-white/80 p-3"><div class="grid gap-3 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] lg:items-end"><label class="text-sm font-bold text-slate-700">文字標題（貼入文字時使用）<input id="teacher-ai-material-paste-title-1014" maxlength="120" class="learning-input mt-1" placeholder="例如：生化檢驗 SOP"></label><label class="text-sm font-bold text-slate-700">直接貼入文字<textarea id="teacher-ai-material-paste-1014" rows="5" maxlength="60000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-6" placeholder="貼上 SOP、課程重點、會議紀錄或其他要製作成講稿、投影片或影片的內容"></textarea></label><button id="teacher-ai-material-paste-add-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-black text-violet-700">＋ 加入貼入文字</button></div></div><p class="text-xs text-slate-600">這些資料是共用 AI 製作來源：可接講稿／配音／PowerPoint／影片；預設保持私人草稿，只有教師明確發布時才成為正式教材。</p><div id="teacher-ai-material-uploaded-sources-1014" class="flex flex-wrap gap-2"></div></div>
+      <div class="rounded-xl border border-violet-200 bg-violet-50/40 p-3 space-y-3"><div class="flex flex-col lg:flex-row lg:items-end gap-3"><label class="flex-1 text-sm font-bold text-slate-700">Step 1｜加入來源資料（可多選或拖曳）<input id="teacher-ai-material-file-1014" type="file" multiple class="mt-1 block w-full text-sm" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.odt,.ods,.txt,.csv,.png,.jpg,.jpeg,.webp"></label><button id="teacher-ai-material-upload-1014" type="button" class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">＋ 加入來源</button></div><div class="rounded-xl border border-violet-100 bg-white/80 p-3"><div class="grid gap-3 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] lg:items-end"><label class="text-sm font-bold text-slate-700">文字標題（貼入文字時使用）<input id="teacher-ai-material-paste-title-1014" maxlength="120" class="learning-input mt-1" placeholder="例如：生化檢驗 SOP"></label><label class="text-sm font-bold text-slate-700">直接貼入文字<textarea id="teacher-ai-material-paste-1014" rows="5" maxlength="60000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-6" placeholder="貼上 SOP、課程重點、會議紀錄或其他要製作成講稿、投影片或影片的內容"></textarea></label><button id="teacher-ai-material-paste-add-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-black text-violet-700">＋ 加入貼入文字</button></div></div><p class="text-xs text-slate-600">這些資料是共用 AI 製作來源：可接講稿／配音／PowerPoint／影片；預設保持私人草稿，只有教師明確發布時才成為正式教材。</p><div id="teacher-ai-material-uploaded-sources-1014" class="flex flex-wrap gap-2"></div></div>
       <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-sm font-bold text-slate-700 xl:col-span-2">補充既有教材（可多選；上方共用來源會自動帶入）<select id="teacher-ai-material-source-1014" multiple size="4" class="learning-input mt-1"><option value="">讀取教材中…</option></select></label><label id="teacher-ai-material-type-label-1014" class="text-sm font-bold text-slate-700">產出類型<select id="teacher-ai-material-type-1014" class="learning-input mt-1"><option value="slides" selected>投影片大綱</option><option value="handout">教學講義</option><option value="summary">重點摘要</option><option value="script">教學講稿</option><option value="quiz">測驗題草稿</option><option value="objectives">課程學習目標</option></select></label><label class="text-sm font-bold text-slate-700">文字風格<select id="teacher-ai-material-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
       <div class="grid md:grid-cols-[1fr_auto] gap-3"><div class="grid sm:grid-cols-[1fr_160px] gap-3"><input id="teacher-ai-material-focus-1014" class="learning-input" maxlength="500" placeholder="Step 2｜設定：特別聚焦的重點（選填）"><select id="teacher-ai-material-depth-1014" class="learning-input" title="教學講稿目標長度；其他產出類型會作為篇幅參考"><option value="3">精簡</option><option value="5" selected>標準</option><option value="10">較完整</option><option value="15">深入</option></select></div><button id="teacher-ai-material-generate-1014" type="button" class="rounded-xl bg-violet-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40">Step 3｜產生 AI 草稿</button></div>
       <div id="teacher-ai-material-status-1014" class="text-sm text-slate-600">選好來源後，設定產出類型與重點，再產生 AI 草稿。</div>
@@ -601,6 +658,7 @@
     void paintMaterialOptions();
     renderAuthoringSources();
     configureContext(box.id === 'teacher-media-panel-presentation-1018' ? 'presentation' : 'generic');
+    ensureCompactAuthoringLayout(section);
     return section;
   }
 
@@ -611,6 +669,7 @@
       existing.classList.remove('hidden');
       existing.removeAttribute('aria-hidden');
       configureContext(targetBox?.id === 'teacher-media-panel-presentation-1018' ? 'presentation' : 'generic');
+      ensureCompactAuthoringLayout(existing);
       return existing;
     }
     return install(targetBox);
