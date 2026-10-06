@@ -70,6 +70,7 @@
             </div>
             <div class="text-xs text-slate-500 mt-1">${escapeHtml(m.categoryLabel || '未分類')} · ${m.pageCount || 0} 頁 · ${escapeHtml(m.dateAdded || '')}</div><div id="material-index-${m.id}" class="text-[11px] text-slate-400 mt-1">全文搜尋：背景檢查中…</div>
             ${!m.isBuiltin && m.storageMeta ? `<div class="text-[11px] text-slate-400 mt-1">☁ ${m.storageMeta.previewMode==='single_pdf'?'單一預覽檔':'閱讀版'} ${escapeHtml((m.slideFormat||m.storageMeta.slideFormat||'png').toUpperCase())}${m.storageMeta.slideBytes?` · ${window.formatFileBytes(m.storageMeta.slideBytes)}`:''}${m.storageMeta.sourceBytes?` ｜ 原始檔 ${window.formatFileBytes(m.storageMeta.sourceBytes)}`:''}${m.storageMeta.cloudObjectCount?` ｜ 雲端檔案 ${m.storageMeta.cloudObjectCount} 個`:''}</div>` : ''}
+            ${!m.isBuiltin && m.storageMeta?.materialClassification ? `<div class="text-[11px] text-emerald-700 mt-1">🤖 ${m.storageMeta.materialClassification.requested==='auto'?'自動分類':'教師指定'}：${escapeHtml(m.materialType||m.storageMeta.materialClassification.resolved||'standard')}${m.storageMeta.materialClassification.reason?` ｜ ${escapeHtml(m.storageMeta.materialClassification.reason)}`:''}</div>` : ''}
           </div>
           ${m.isBuiltin ? '<span class="text-xs text-slate-400">內建教材不可修改</span>' : `
             <div class="flex flex-wrap gap-2 shrink-0">
