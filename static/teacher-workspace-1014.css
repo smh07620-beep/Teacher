@@ -19,6 +19,19 @@
   white-space: nowrap;
 }
 
+#teacher-utility-actions-1014 {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .25rem;
+}
+
+#teacher-utility-actions-1014 > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .teacher-media-tabs-1018::-webkit-scrollbar {
   display: none;
 }
@@ -120,6 +133,14 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
     width: 100%;
     min-width: 0;
     margin-left: 0 !important;
+    flex-wrap: wrap;
+  }
+
+  body.admin-page-mode #teacher-utility-actions-1014 {
+    width: 100%;
+    justify-content: flex-end;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
   body.admin-page-mode #teacher-persona-switch-1014 {
