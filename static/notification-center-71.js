@@ -109,7 +109,7 @@
   async function patchStates(keys,read){const data=await patchJSON('/api/notification-states',{keys,read});return data?.states||{};}
   async function readStates(rows){const keys=rows.map(row=>row.key).filter(Boolean);if(!keys.length)return{};const query=new URLSearchParams();keys.forEach(key=>query.append('key',key));const data=await getJSON(`/api/notification-states?${query.toString()}`);return data?.states||{};}
 
-  function announcementRows(data){const rows=Array.isArray(data)?data:(Array.isArray(data?.items)?data.items:[]);return rows.slice(0,5).map(item=>({key:announcementKey(item),persona:'info',kind:'announcement',title:item?.title||'平台公告',detail:item?.body||'平台有新的公告。',badge:'公告',overdue:false,href:'',channels:['in_app'],emailPolicy:'none'}));}
+  function announcementRows(data){const rows=Array.isArray(data)?data:(Array.isArray(data?.items)?data.items:[]);return rows.slice(0,5).map(item=>({key:announcementKey(item),persona:'info',kind:'announcement',title:item?.title||'平台公告',detail:item?.body||'平台有新的公告。',badge:item?.requireRead?'公告・需已讀':'公告',overdue:false,href:'',channels:['in_app'],emailPolicy:'none'}));}
   function actionLabel(item){if(item.kind==='operational_recovery')return'查看目前狀態';if(item.kind==='worker_offline')return'查看 Worker 狀態';if(item.kind==='review')return'前往批改';if(item.kind==='material_failure')return'查看教材工作';if(item.kind==='retraining'||item.kind==='material')return'前往教材';if(item.kind==='course'||item.kind==='due'||item.kind==='draft')return'前往課程';if(item.kind==='exam')return'前往考核';return'前往處理';}
 
   function render(rows){
