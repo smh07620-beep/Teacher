@@ -10,6 +10,16 @@ import sys
 import threading
 import time
 
+# Resolve a stable Hugging Face cache before importing Worker modules that may
+# transitively import huggingface_hub. An explicit .local-worker.env value wins.
+_hf_home = str(os.environ.get("HF_HOME") or "").strip()
+if _hf_home:
+    os.environ["HF_HOME"] = str(Path(os.path.expandvars(_hf_home)).expanduser())
+else:
+    _hf_base = str(os.environ.get("LOCALAPPDATA") or os.environ.get("PROGRAMDATA") or "").strip()
+    _hf_path = (Path(_hf_base) / "Teacher" / "huggingface") if _hf_base else (Path.home() / ".cache" / "Teacher" / "huggingface")
+    os.environ["HF_HOME"] = str(_hf_path)
+
 from teacher_app import config as teacher_config
 from teacher_app.assessments import ai_jobs, free_ai_fallback
 from teacher_app.assessments.question_runtime import build_canonical_question_runtime
