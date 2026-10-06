@@ -30,8 +30,8 @@
     },
     assessment: {
       icon: '📝',
-      title: '評量與出題 Workspace',
-      summary: '管理考卷、題庫、AI 輔助出題、審核與發布。',
+      title: '評量與追蹤 Workspace',
+      summary: '管理考卷、題庫、AI 輔助出題、審核發布、待批改與學員追蹤。',
     },
     teacher: {icon:'👩‍🏫', title:'教師評核 Workspace', summary:'集中處理人工閱卷、問答評分與 PGY 教師評核。'},
     results: {icon:'📊', title:'成績管理 Workspace', summary:'查閱歷次成績、通過狀態、批改結果與考核分析。'},
