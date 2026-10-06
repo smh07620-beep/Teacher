@@ -34,6 +34,8 @@ class Phase3AdminMaterialsTests(unittest.TestCase):
         self.assertIn("openAdminMaterialAtlasImport", source)
         self.assertIn("擷取 Word 圖片 → Atlas", source)
         self.assertIn("openAtlasDocxWizard('admin-material-atlas-import',materialId)", source)
+        self.assertIn("materialClassification", source)
+        self.assertIn("自動分類", source)
         self.assertIn("'openAdminMaterialAtlasImport'", csp)
 
     def test_material_list_ignores_stale_concurrent_responses(self):
