@@ -9,7 +9,7 @@ const MODE_META={
   blueprint:{label:'Blueprint',next:'建立考卷後直接前往「題庫與考卷」設定 Blueprint 與題型配額。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,resultHtml:'',watchToken:0};
+const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -108,6 +108,7 @@ function mount(){
   window.courseWizard681SetFileMeta=(index,field,value)=>{if(!state.created)state.fileMeta[index]={...(state.fileMeta[index]||{}),[field]:value};};
   window.courseWizard681Continue=continueToAssessment;
   window.courseWizard681OpenCourse=openCourseWorkspace;
+  window.courseWizard681OpenAtlasImport=openCourseAtlasImport;
   window.courseWizard681Reset=reset;
   render();loadMaterials();
 }
@@ -296,6 +297,81 @@ async function verifyCreatedCourseMaterials(){
   return true;
 }
 
+const MATERIAL_TYPE_LABELS={
+  standard:'一般教材',
+  atlas:'Atlas 圖譜教材',
+  infographic:'資訊圖表／流程圖',
+  video:'影音教材',
+  troubleshooting:'Troubleshooting',
+  case:'案例分析',
+  sop:'SOP'
+};
+
+function materialFileName(item){
+  return String(item?.filename||item?.storageFilename||'');
+}
+
+function renderCompletedMaterialInsights(){
+  const host=el('cw681-material-insights');
+  if(!host)return;
+  const materials=Array.isArray(state.completedMaterials)?state.completedMaterials:[];
+  const atlasEntries=Object.entries(state.atlasCandidates||{});
+  if(!materials.length&&!atlasEntries.length){
+    host.innerHTML='';
+    return;
+  }
+  const classificationRows=materials.map(item=>{
+    const type=String(item.materialType||'standard');
+    const meta=item.storageMeta?.materialClassification||{};
+    const method=String(meta.method||'');
+    const reason=String(meta.reason||'');
+    return `<div class="rounded-lg border border-emerald-100 bg-white p-2"><div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(item.title||item.filename||item.id)}</b><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700">${esc(MATERIAL_TYPE_LABELS[type]||type)}</span></div><p class="mt-1 text-[11px] text-slate-500">${method?`自動判定：${esc(method)}${reason?'｜'+esc(reason):''}`:'使用教師指定類型'}</p></div>`;
+  }).join('');
+  const atlasRows=atlasEntries.map(([materialId,info])=>`<div class="rounded-lg border border-teal-200 bg-teal-50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><div><b class="text-teal-950">🔬 Word 內偵測到 ${Number(info.count||0)} 張可獨立整理的圖片</b><p class="mt-1 text-[11px] text-teal-800">${esc(info.title||materialId)}｜原 Word 會保留；只會把你勾選的圖片另外建立 Atlas 草稿。</p></div><button type="button" data-csp-click="courseWizard681OpenAtlasImport('${esc(materialId)}')" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">檢視並建立 Atlas 草稿</button></div></div>`).join('');
+  host.innerHTML=`<div class="mt-3 space-y-2"><div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><b class="text-emerald-900">✅ 教材自動歸類結果</b><div class="mt-2 grid gap-2 md:grid-cols-2">${classificationRows}</div></div>${atlasRows}</div>`;
+}
+
+async function hydrateCompletedMaterialInsights(materialIds){
+  const ids=new Set((materialIds||[]).map(String).filter(Boolean));
+  if(!ids.size)return;
+  try{
+    const list=await api('/api/slides/admin');
+    const rows=(Array.isArray(list)?list:[]).filter(item=>ids.has(String(item.id||'')));
+    state.completedMaterials=rows;
+    const nextCandidates={};
+    for(const item of rows.filter(row=>/\.docx$/i.test(materialFileName(row)))){
+      try{
+        const preview=await api('/api/atlas/import-docx/'+encodeURIComponent(item.id)+'/preview',{method:'POST'});
+        const images=Array.isArray(preview?.preview?.images)?preview.preview.images:[];
+        if(images.length){
+          nextCandidates[String(item.id)]={
+            count:images.length,
+            title:item.title||item.filename||item.id,
+            warnings:preview?.preview?.warnings||[]
+          };
+        }
+      }catch(error){
+        console.warn('DOCX Atlas candidate scan skipped',item.id,error);
+      }
+    }
+    state.atlasCandidates=nextCandidates;
+    renderCompletedMaterialInsights();
+  }catch(error){
+    console.warn('Course material classification summary unavailable',error);
+  }
+}
+
+async function openCourseAtlasImport(materialId){
+  const id=String(materialId||'').trim();
+  if(!id)return;
+  const host=el('cw681-atlas-import');
+  if(!host)return alert('Atlas 匯入區尚未載入，請重新整理後再試。');
+  if(typeof window.openAtlasDocxWizard!=='function')return alert('DOCX → Atlas 工具尚未載入，請重新整理後再試。');
+  host.classList.remove('hidden');
+  await window.openAtlasDocxWizard('cw681-atlas-import',id);
+  host.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 async function watchQueuedJobs(jobIds){
   const unique=[...new Set((jobIds||[]).filter(Boolean).map(String))];
   if(!unique.length){state.jobRows=[];syncCompletionControls();return;}
@@ -319,6 +395,7 @@ async function watchQueuedJobs(jobIds){
       try{
         await verifyCreatedCourseMaterials();
         await refreshWorkspaceData();
+        await hydrateCompletedMaterialInsights(completedMaterialIds);
       }catch(error){
         state.linksVerified=false;
         const host=el('cw681-background-jobs');
@@ -449,7 +526,7 @@ async function create(){
     const summaryClass=failed?'font-bold text-amber-700':upload.uploaded?'font-bold text-sky-700':'font-bold text-emerald-700';
     const summaryIcon=failed?'⚠️':upload.uploaded?'⏳':'✅';
     const uploadSummary=failed?`已排入背景佇列 ${upload.uploaded} 份新教材；${failed} 份上傳失敗`:upload.uploaded?`R2 上傳已完成／排入背景佇列 ${upload.uploaded} 份，現在等待 Worker 正式處理`:'沒有新教材需要背景處理';
-    state.resultHtml=`<div class="space-y-2"><div><span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程草稿${failed?'已建立，但教材上傳未完整完成':upload.uploaded?'已建立，教材仍在背景處理':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。</div>${uploadErrors}<div class="rounded-lg border border-sky-200 bg-sky-50 p-2 font-bold text-sky-900">新教材必須全部顯示「已完成」後才可離開；課程目前仍是草稿，需在教材與課程工作區完成發布檢查後才會讓學員看見。</div><div class="flex flex-wrap gap-2">${nextButton}<button id="cw681-reset-next" type="button" ${ready?'':'disabled'} data-csp-click="courseWizard681Reset()" class="text-slate-500 underline disabled:cursor-not-allowed disabled:opacity-40">建立下一門課</button></div><div id="cw681-background-jobs"></div></div>`;
+    state.resultHtml=`<div class="space-y-2"><div><span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程草稿${failed?'已建立，但教材上傳未完整完成':upload.uploaded?'已建立，教材仍在背景處理':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。</div>${uploadErrors}<div class="rounded-lg border border-sky-200 bg-sky-50 p-2 font-bold text-sky-900">新教材必須全部顯示「已完成」後才可離開；課程目前仍是草稿，需在教材與課程工作區完成發布檢查後才會讓學員看見。</div><div id="cw681-material-insights"></div><div id="cw681-atlas-import" class="hidden"></div><div class="flex flex-wrap gap-2">${nextButton}<button id="cw681-reset-next" type="button" ${ready?'':'disabled'} data-csp-click="courseWizard681Reset()" class="text-slate-500 underline disabled:cursor-not-allowed disabled:opacity-40">建立下一門課</button></div><div id="cw681-background-jobs"></div></div>`;
     render();
     watchQueuedJobs(state.queuedJobs);
   }catch(error){
@@ -483,7 +560,7 @@ async function openCourseWorkspace(){
   state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
-  state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.resultHtml='';
+  state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.resultHtml='';
   clearWorkflowId();
   render();
   loadMaterials();
@@ -492,7 +569,7 @@ async function openCourseWorkspace(){
 function reset(){
   if(state.created&&!canLeaveCourse())return alert('目前教材尚未全部完成，請先等待或處理失敗工作。');
   state.watchToken++;
-  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.resultHtml='';clearWorkflowId();
+  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
