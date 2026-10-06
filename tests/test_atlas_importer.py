@@ -74,6 +74,9 @@ class AtlasImporterTests(unittest.TestCase):
         self.assertEqual([item["mediaPath"] for item in payload["preview"]["images"]], ["word/media/image1.png", "word/media/image2.png"])
         self.assertEqual(payload["preview"]["images"][0]["suggestedCategory"], "blood_cell")
         self.assertEqual(payload["preview"]["images"][1]["suggestedCategory"], "urine_sediment")
+        self.assertEqual(payload["preview"]["images"][0]["suggestedTitle"], "血球 morphology")
+        self.assertIn("血球 morphology", payload["preview"]["images"][0]["suggestedDescription"])
+        self.assertIn("urine sediment", payload["preview"]["images"][0]["suggestedDescription"])
         self.assertIn(importer.PREVIEW_WARNING, payload["preview"]["warnings"])
 
     def test_confirm_merges_common_metadata_and_per_image_override(self):
@@ -117,6 +120,51 @@ class AtlasImporterTests(unittest.TestCase):
         self.assertTrue(all(item["source"] == "docx" and not item["published"] for item in created_payloads))
         self.assertTrue(all(item["sourceMaterialId"] == self.material_id for item in created_payloads))
         self.assertTrue(all(str(item["imageUrl"]).startswith("/api/atlas/images/") for item in created_payloads))
+
+    def test_confirm_uses_word_text_suggestions_and_keeps_teacher_overrides(self):
+        self.write_docx()
+        body = {
+            "metadata": {
+                "group": "grpHema",
+                "category": "microscope",
+                "tags": [],
+                "difficulty": "general",
+                "sortOrder": 0,
+            },
+            "items": [
+                {"index": 1},
+                {
+                    "index": 2,
+                    "title": "教師改名",
+                    "description": "教師改寫說明",
+                    "differentialPoints": "教師鑑別重點",
+                    "teachingNotes": "教師教學提示",
+                },
+            ],
+        }
+        created_payloads = []
+
+        def create_item(_user, values):
+            created_payloads.append(values)
+            return f"atlas-{len(created_payloads)}"
+
+        with patch.object(importer.material_repository, "get_material", return_value=self.material), \
+             patch.object(importer.service, "can_manage", return_value=True), \
+             patch.object(importer.service, "create_item", side_effect=create_item):
+            importer.confirm_import(
+                self.user,
+                self.material_id,
+                body,
+                uploaded_slides_dir=self.slides,
+                material_storage=self.storage,
+            )
+
+        self.assertEqual(created_payloads[0]["title"], "血球 morphology")
+        self.assertIn("血球 morphology", created_payloads[0]["description"])
+        self.assertEqual(created_payloads[1]["title"], "教師改名")
+        self.assertEqual(created_payloads[1]["description"], "教師改寫說明")
+        self.assertEqual(created_payloads[1]["differentialPoints"], "教師鑑別重點")
+        self.assertEqual(created_payloads[1]["teachingNotes"], "教師教學提示")
 
     def test_canonical_material_lookup_precedes_legacy_fallback(self):
         self.write_docx()
