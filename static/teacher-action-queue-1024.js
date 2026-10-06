@@ -279,25 +279,30 @@
     });
     latestItems = teacherItems.slice(0, 12);
     const counts = data.counts || {};
+    const countPills = [
+      ['待批改', Number(counts.review || 0), 'bg-indigo-50'],
+      ['教材', Number(counts.materialFailure || 0), 'bg-rose-50'],
+      ['介入', Number(counts.intervention || 0), 'bg-violet-50'],
+      ['截止', Number(counts.due || 0), 'bg-amber-50'],
+      ['草稿', Number(counts.draft || 0), 'bg-slate-100'],
+    ].filter(([, count]) => count > 0);
+    if (!teacherItems.length) {
+      section.className = 'rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm';
+      section.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-2"><h4 class="text-base font-black text-slate-950">需要我處理</h4><span class="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white">0</span></div><div class="text-sm font-bold text-emerald-700">✓ 目前沒有需要你處理的項目。</div></div>`;
+      return;
+    }
+
+    section.className = 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm';
+    const primary = latestItems[0];
+    const remaining = latestItems.slice(1);
     section.innerHTML = `
-      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div>
-          <div class="flex items-center gap-2"><h4 class="text-base font-black text-slate-950">需要我處理</h4><span class="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white">${teacherItems.length}</span></div>
-          <p class="mt-1 text-xs text-slate-500">今天先處理第一順位，再處理其餘工作；待批改、教材異常、介入追蹤、截止提醒與未發布草稿都來自同一個 canonical queue。</p>
-        </div>
-        <div class="flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-600">
-          <span class="rounded-full bg-indigo-50 px-2 py-1">待批改 ${Number(counts.review || 0)}</span>
-          <span class="rounded-full bg-rose-50 px-2 py-1">教材 ${Number(counts.materialFailure || 0)}</span>
-          <span class="rounded-full bg-violet-50 px-2 py-1">介入 ${Number(counts.intervention || 0)}</span>
-          <span class="rounded-full bg-amber-50 px-2 py-1">截止 ${Number(counts.due || 0)}</span>
-          <span class="rounded-full bg-slate-100 px-2 py-1">草稿 ${Number(counts.draft || 0)}</span>
-        </div>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2"><h4 class="text-base font-black text-slate-950">需要我處理</h4><span class="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white">${teacherItems.length}</span></div>
+        <div class="flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-600">${countPills.map(([label,count,cls]) => `<span class="rounded-full ${cls} px-2 py-1">${label} ${count}</span>`).join('')}</div>
       </div>
-      ${canonicalNext ? `<div class="mt-3 rounded-xl border-2 border-teal-200 bg-teal-50 p-3"><div class="text-[10px] font-black tracking-wide text-teal-700">今天先處理</div><div class="mt-1 text-sm font-black text-slate-900">${escapeHtml(canonicalNext.title||'待處理工作')}</div><div class="mt-1 text-xs text-slate-600">${escapeHtml(canonicalNext.detail||canonicalNext.statusLabel||'')}</div></div>` : ''}
-      <div class="mt-3 space-y-2" data-teacher-action-items>
-        ${teacherItems.length ? latestItems.map(itemCard).join('') : '<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-4 text-sm font-bold text-emerald-800">✓ 目前沒有需要你處理的項目。</div>'}
-      </div>
-      ${teacherItems.length > 12 ? `<div class="mt-2 text-[11px] text-slate-500">另有 ${teacherItems.length - 12} 筆項目；完成目前工作後清單會自動收斂。</div>` : ''}`;
+      <div class="mt-3" data-teacher-action-items>${primary ? itemCard(primary, 0) : ''}</div>
+      ${remaining.length ? `<details class="mt-2 rounded-xl border border-slate-100 bg-slate-50/50"><summary class="cursor-pointer list-none px-3 py-2 text-xs font-black text-slate-600">查看其餘 ${remaining.length} 項待辦</summary><div class="space-y-2 border-t border-slate-100 p-2">${remaining.map((item,index)=>itemCard(item,index+1)).join('')}</div></details>` : ''}
+      ${teacherItems.length > 12 ? `<div class="mt-2 text-[11px] text-slate-500">另有 ${teacherItems.length - 12} 筆項目；完成目前工作後清單會自動更新。</div>` : ''}`;
     bindActions(section);
   }
 
