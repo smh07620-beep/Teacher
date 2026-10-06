@@ -37,6 +37,15 @@ from teacher_app.worker import ai_remote
 from teacher_app.worker import repository as worker_repository
 
 
+if os.environ.get("TEACHER_E2E_DETERMINISTIC_STUBS") == "1":
+    # This is deliberately loaded by the Worker, not Web: routes still create
+    # real durable jobs and production processes cannot enter this path without
+    # the second test-only opt-in enforced by the helper.
+    from teacher_app.testing import deterministic_ai_provider
+
+    deterministic_ai_provider.install()
+
+
 _KOKORO_STARTUP_STATE: dict = {}
 
 
