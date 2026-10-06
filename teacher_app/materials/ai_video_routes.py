@@ -152,7 +152,7 @@ def register_ai_video_routes(owner):
             and worker.get("kokoroInstalled") is True
         )
         if not storage.get("available"):
-            diagnostic = "AI 影片共用儲存尚未就緒；請確認 R2／OCI／Google Drive／MEGA 設定。"
+            diagnostic = str(storage.get("reason") or "AI 影片共用儲存尚未就緒；請確認 R2／OCI／Google Drive／MEGA 設定。")
         elif not worker.get("online"):
             diagnostic = str(worker.get("diagnosticMessage") or "AI Worker 尚未在線。")
         elif "ai_videos" not in set(worker.get("queues") or []):
