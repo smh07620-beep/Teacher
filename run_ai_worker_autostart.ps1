@@ -151,7 +151,10 @@ function Ensure-AIWorkerEnvironment {
   # Kokoro/Whisper/Gemini packages must not suppress heartbeat visibility.
   & $python -c "import requests, psycopg" 2>$null
   $coreImportsOk = $LASTEXITCODE -eq 0
-  & $python -c "import kokoro, faster_whisper; from google import genai; from misaki import zh; import numpy" 2>$null
+  # Keep the supervisor probe lightweight: importing Kokoro also imports torch
+  # and loads Windows DLLs, which can add ~20s before the real Worker starts.
+  # The real AI Worker owns heavy imports/model warmup via preload_kokoro().
+  & $python -c "import importlib.util as u, sys; mods=('kokoro','faster_whisper','google.genai','misaki.zh','misaki.en','numpy'); missing=[m for m in mods if u.find_spec(m) is None]; sys.exit(1 if missing else 0)" 2>$null
   $featureImportsOk = $LASTEXITCODE -eq 0
 
   if ($hash -ne $recorded -or -not $coreImportsOk -or -not $featureImportsOk) {
@@ -165,7 +168,7 @@ function Ensure-AIWorkerEnvironment {
       throw "AI Worker core dependencies (requests/psycopg) are unavailable after synchronization."
     }
 
-    & $python -c "import kokoro, faster_whisper; from google import genai; from misaki import zh; import numpy" 2>$null
+    & $python -c "import importlib.util as u, sys; mods=('kokoro','faster_whisper','google.genai','misaki.zh','misaki.en','numpy'); missing=[m for m in mods if u.find_spec(m) is None]; sys.exit(1 if missing else 0)" 2>$null
     $featureImportsOk = $LASTEXITCODE -eq 0
     if ($installExit -eq 0 -and $featureImportsOk) {
       Set-Content -LiteralPath $stamp -Value $hash -NoNewline -Encoding UTF8
