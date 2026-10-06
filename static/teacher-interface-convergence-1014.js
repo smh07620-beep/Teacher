@@ -93,7 +93,7 @@
 
     const summary = document.getElementById('admin-workspace-summary');
     if (summary && summary.textContent?.includes('教材與課程、媒體製作')) {
-      summary.textContent = '教材與課程（含媒體製作）、評量與出題、紙本文件集中在同一教師工作台。';
+      summary.textContent = '日常工作只分「教材與課程」與「評量與追蹤」；媒體製作收在教材流程，公告與文件放在右上工具。';
     }
   }
 
@@ -105,7 +105,7 @@
     const entry = document.createElement('section');
     entry.id = 'teacher-course-media-entry-1014';
     entry.className = 'mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-cyan-100 bg-cyan-50/50 px-4 py-3';
-    entry.innerHTML = '<div><b class="text-sm text-slate-900">教材工作流程</b><p class="mt-0.5 text-[11px] text-slate-600">① 選擇／加入教材來源　→　② AI PowerPoint 或教材草稿　→　③ 教師核准　→　④ 需要時製作語音、字幕與影片。新版教材請沿用原教材版本，不必重複建立教材卡。</p></div>';
+    entry.innerHTML = '<div><b class="text-sm text-slate-900">教材工作流程</b><p class="mt-0.5 text-[11px] text-slate-600">① 上傳或選擇教材　→　② 需要時進製作室做 PowerPoint／講稿／影音　→　③ 建立或更新課程並發布／指派。AI 製作是選配，不必為每份教材都走完整流程；新版教材請沿用原教材版本，不要重複建立教材卡。</p></div>';
 
     const actions = document.createElement('div');
     actions.className = 'shrink-0 flex flex-wrap gap-2';
