@@ -75,7 +75,10 @@ test('large internal course scope stays interactive without summary warnings', a
   const afterRerenderNodeCount = await page.locator('#admin-course-material-hub *').count();
   expect(afterRerenderNodeCount).toBeLessThan(initialNodeCount * 3);
   const firstCourse = page.locator('.admin-course-list > details').first();
+  if (!(await firstCourse.getAttribute('open'))) await firstCourse.locator('summary').click();
+  await expect(firstCourse).toHaveAttribute('open', '');
   await firstCourse.locator('[data-teacher-manage-course-1014]').click();
+  await expect(firstCourse.locator('[data-teacher-course-tools-1014]')).toBeVisible();
   await firstCourse.locator('[data-teacher-course-media-1014]').click();
   expect(await page.evaluate(() => window.mediaOpened)).toBe(true);
   await page.getByRole('button', { name: '批次指派' }).click();
