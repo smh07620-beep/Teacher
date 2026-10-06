@@ -206,6 +206,25 @@
     return details;
   }
 
+  function ensureModeGuide(panel, mode) {
+    if (!panel) return;
+    const id = `teacher-media-mode-guide-${mode}-1018`;
+    let guide = document.getElementById(id);
+    const steps = {
+      presentation: ['加入來源','產生大綱','教師修正','產生／發布'],
+      narration: ['選擇來源','建立講稿','核准／試聽','產生配音'],
+      recording: ['選擇錄製方式','錄製','預覽修正','加入教材'],
+      video: ['選擇來源','產生影片','校正字幕','預覽／發布'],
+    }[mode] || [];
+    if (!guide) {
+      guide = document.createElement('div');
+      guide.id = id;
+      guide.className = 'grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-2 text-center text-[11px] font-black text-slate-600 sm:grid-cols-4';
+      panel.prepend(guide);
+    }
+    guide.innerHTML = steps.map((step,index)=>`<span class="rounded-lg bg-white px-2 py-2">${index+1} ${step}</span>`).join('');
+  }
+
   function humanizeExistingPanels() {
     // Provider/renderer readiness text is owned by the audio/video modules.
     // Do not overwrite live Worker/Kokoro diagnostics during studio hydration.
@@ -341,6 +360,11 @@
       waiting(captions, 'teacher-media-waiting-subtitle-1018', 'AI 字幕功能載入中…');
     }
 
+    ensureModeGuide(presentation, 'presentation');
+    ensureModeGuide(narration, 'narration');
+    ensureModeGuide(recording, 'recording');
+    ensureModeGuide(video, 'video');
+
     let advanced = $('teacher-media-advanced-1018');
     if (!advanced) {
       advanced = makeDetails('版本、品質與進階資訊', 'teacher-media-advanced-1018');
@@ -399,7 +423,7 @@
       studio.appendChild(sourceBridge);
       const sourcePolicy = document.createElement('p');
       sourcePolicy.id = 'teacher-media-source-policy-1029';
-      sourcePolicy.className = 'text-xs font-bold text-slate-500';
+      sourcePolicy.className = 'hidden text-xs font-bold text-slate-500';
       sourcePolicy.textContent = '先選擇要製作的內容；來源資料改在各功能內選擇，不需要先做全域教材選取。';
       studio.appendChild(sourcePolicy);
       installTabs(studio);
