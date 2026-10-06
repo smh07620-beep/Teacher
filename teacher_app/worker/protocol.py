@@ -93,7 +93,18 @@ def heartbeat_capabilities(
     metadata: Any = None,
 ) -> dict[str, Any]:
     payload = dict(capabilities) if isinstance(capabilities, Mapping) else {}
-    payload.update(sanitize_metadata(metadata))
+    sanitized = sanitize_metadata(metadata)
+
+    # AI Worker build identity is carried inside capabilities. The HTTPS
+    # heartbeat wrapper also passes the top-level request body as metadata,
+    # which does not contain these fields. Do not let sanitized empty values
+    # erase a valid identity already reported by the Worker. Material Worker
+    # metadata still wins whenever it supplies a valid non-empty value.
+    for key in ("workerVersion", "workerSha", "workerBranch"):
+        if not sanitized.get(key) and payload.get(key):
+            sanitized.pop(key, None)
+
+    payload.update(sanitized)
     return payload
 
 

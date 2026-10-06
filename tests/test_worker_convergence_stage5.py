@@ -127,6 +127,47 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
         for forbidden in ("from flask", "import requests", "import subprocess", "r2_client"):
             self.assertNotIn(forbidden, combined)
 
+    def test_ai_heartbeat_keeps_build_identity_when_top_level_metadata_is_empty(self):
+        capabilities = {
+            "workerVersion": "6.8.1",
+            "workerSha": "dc33a43efc63",
+            "workerBranch": "main",
+            "tts": {
+                "repoId": "hexgrad/Kokoro-82M-v1.1-zh",
+                "defaultVoice": "zf_001",
+            },
+        }
+        payload = protocol.heartbeat_capabilities(
+            capabilities,
+            {
+                "workerId": "TeacherWorker-ai",
+                "capabilities": capabilities,
+            },
+        )
+        self.assertEqual(payload["workerVersion"], "6.8.1")
+        self.assertEqual(payload["workerSha"], "dc33a43efc63")
+        self.assertEqual(payload["workerBranch"], "main")
+        self.assertEqual(payload["tts"]["defaultVoice"], "zf_001")
+
+    def test_valid_top_level_metadata_still_overrides_capability_build_identity(self):
+        payload = protocol.heartbeat_capabilities(
+            {
+                "workerVersion": "6.8.1",
+                "workerSha": "dc33a43efc63",
+                "workerBranch": "main",
+            },
+            {
+                "workerVersion": "6.8.2!",
+                "workerSha": "ABCDEF1",
+                "workerBranch": "release/test branch",
+                "updateAvailable": True,
+            },
+        )
+        self.assertEqual(payload["workerVersion"], "6.8.2")
+        self.assertEqual(payload["workerSha"], "abcdef1")
+        self.assertEqual(payload["workerBranch"], "release/testbranch")
+        self.assertTrue(payload["updateAvailable"])
+
     def test_protocol_preserves_metadata_and_job_touch_contract(self):
         touched = []
         with patch.object(protocol.repository, "upsert_heartbeat") as upsert:
