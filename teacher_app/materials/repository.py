@@ -19,6 +19,7 @@ VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 PRESENTATION_EXTENSIONS = {".ppt", ".pptx", ".pps", ".ppsx", ".odp"}
+PAGED_DOCUMENT_EXTENSIONS = {".doc", ".docx", ".odt"}
 
 
 def material_row_to_dict(row_or_legacy_base, legacy_row=None) -> dict:
@@ -68,6 +69,8 @@ def material_row_to_dict(row_or_legacy_base, legacy_row=None) -> dict:
         if r["materialType"] == "sop"
         else "presentation"
         if ext in PRESENTATION_EXTENSIONS
+        else "paged_document"
+        if ext in PAGED_DOCUMENT_EXTENSIONS
         else "document"
     )
     if ext in VIDEO_EXTENSIONS:
