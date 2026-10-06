@@ -348,6 +348,9 @@
     if (!voice || !generate) return;
 
     const voiceBlock = voice.parentElement;
+    const sourceLabel = $('teacher-ai-video-presentation-1015')?.closest('label');
+    sourceLabel?.classList.remove('md:col-span-2');
+    sourceLabel?.classList.add('md:col-span-3');
     const details = document.createElement('details');
     details.id = 'teacher-ai-video-requirements-1032';
     details.className = 'rounded-xl border border-indigo-100 bg-indigo-50/30 px-3 py-2';
