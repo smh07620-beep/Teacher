@@ -17,11 +17,28 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         studio = ROOT.joinpath('static/teacher-content-studio-71.js').read_text(encoding='utf-8')
         for label in ('新人基礎考核','PGY 核心能力','案例判讀','品質管理／異常處理','進階組內訓練','圖片判讀','影片互動','自訂混搭'):
             self.assertIn(label, studio)
-        for token in ('mixed_all','mixed_choice_multi','video_mixed','[自訂題型配置]','data-mix-type=\"${t}\"',"['choice','單選',4]","['essay','問答',2]"):
+        for token in (
+            'mixed_all', 'mixed_choice_multi', 'video_mixed', '[自訂題型配置]',
+            'data-mix-type="${t}"', "['choice','單選',3]", "['true_false','是非',2]", "['essay','問答',2]",
+        ):
             self.assertIn(token, studio)
         self.assertNotIn("fetch('/api/ai-questions/generate'", studio)
         ai = ROOT.joinpath('static/admin-ai-questions.js').read_text(encoding='utf-8')
         self.assertIn("fetch('/api/ai-questions/generate'", ai)
+
+    def test_ai_candidates_support_same_core_question_types_as_manual_authoring(self):
+        bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
+        ai = ROOT.joinpath('static/admin-ai-questions.js').read_text(encoding='utf-8')
+        runtime = ROOT.joinpath('teacher_app/assessments/ai_runtime.py').read_text(encoding='utf-8')
+        for token in ('choice', 'multi', 'true_false', 'fill', 'essay'):
+            self.assertIn(token, bank)
+            self.assertIn(token, ai)
+            self.assertIn(token, runtime)
+        self.assertIn('只出是非題', bank)
+        self.assertIn("options:['是','否']", ai)
+        self.assertIn('"true_false": "全部產生是非題', runtime)
+        self.assertIn('"choice|multi|true_false|fill|essay"', runtime)
+
 
     def test_mobile_question_actions_are_collapsed(self):
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
