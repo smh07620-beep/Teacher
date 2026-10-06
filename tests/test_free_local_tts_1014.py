@@ -59,7 +59,7 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn('HF_HOME=', self.env)
 
     def test_ai_worker_has_separate_local_tts_dependencies(self):
-        for marker in ('kokoro>=', 'misaki[zh]', 'numpy>='):
+        for marker in ('kokoro>=', 'misaki[zh,en]', 'numpy>='):
             self.assertIn(marker, self.worker_requirements)
         self.assertNotIn('openai', self.worker_requirements.lower())
 
