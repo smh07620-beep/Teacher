@@ -6,8 +6,10 @@ root compatibility adapter; image bytes are delegated to ``image_store``.
 """
 from __future__ import annotations
 
+import posixpath
 import re
 import shutil
+import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -93,29 +95,132 @@ def materialize_docx_source(
         ) from exc
 
 
-def preview_docx_atlas(path: Path) -> dict:
-    """Preserve the established DOCX Atlas preview projection."""
+_DOCX_NS = {
+    "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    "v": "urn:schemas-microsoft-com:vml",
+}
+_DOCX_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+_DOCX_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def _atlas_category_hint(text: str) -> str:
+    normalized = str(text or "").casefold()
+    if any(token in normalized for token in ("血球", "紅血球", "白血球", "血液", "blood cell", "rbc", "wbc")):
+        return "blood_cell"
+    if any(token in normalized for token in ("尿沉渣", "尿液沉渣", "結晶", "cast", "urine")):
+        return "urine_sediment"
+    if any(token in normalized for token in ("菌落", "colony", "培養皿", "培養基")):
+        return "colony"
+    return "microscope"
+
+
+def _docx_relationship_media(archive: zipfile.ZipFile) -> dict[str, str]:
+    try:
+        rel_root = ET.fromstring(archive.read("word/_rels/document.xml.rels"))
+    except (KeyError, ET.ParseError):
+        return {}
+    names = set(archive.namelist())
+    resolved: dict[str, str] = {}
+    for relation in rel_root.findall(f"{{{_DOCX_REL_NS}}}Relationship"):
+        relation_id = str(relation.attrib.get("Id") or "").strip()
+        target = str(relation.attrib.get("Target") or "").strip().replace("\\", "/")
+        if not relation_id or not target or relation.attrib.get("TargetMode") == "External":
+            continue
+        candidate = posixpath.normpath(posixpath.join("word", target)).lstrip("/")
+        if not candidate.startswith("word/media/"):
+            continue
+        if Path(candidate).suffix.lower() not in _DOCX_IMAGE_EXTENSIONS:
+            continue
+        if candidate in names:
+            resolved[relation_id] = candidate
+    return resolved
+
+
+def _docx_inline_images(path: Path) -> list[dict]:
+    """Return verified inline/table DOCX images in document order.
+
+    The relationship id is resolved against document.xml.rels so confirm_import
+    never guesses that word/media lexical order matches the visual document
+    order.  This is important for clinical Atlas imports where a wrong image /
+    caption pairing is unacceptable.
+    """
     with zipfile.ZipFile(path) as archive:
-        document_xml = archive.read("word/document.xml").decode("utf-8", "ignore")
-    text = " ".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", document_xml))
-    images = []
-    for index, relation_number in enumerate(
-        re.findall(r'(?:embed|link)="rId(\d+)"', document_xml),
-        1,
-    ):
-        images.append({
-            "index": index,
-            "relationshipId": "rId" + relation_number,
-            "section": text[:180],
-            "caption": "",
-            "region": {"x": 0, "y": 0, "width": 1, "height": 1},
-        })
-    return {
-        "images": images,
-        "warnings": [
-            "DOCX 預覽僅處理 inline/table 圖片；浮動圖、群組、SmartArt、圖表與 OLE 保留原文件，需人工處理。"
-        ] if not images else [],
-    }
+        root = ET.fromstring(archive.read("word/document.xml"))
+        relationships = _docx_relationship_media(archive)
+
+    paragraphs: list[tuple[str, list[str]]] = []
+    relationship_attribute = f"{{{_DOCX_NS['r']}}}embed"
+    link_attribute = f"{{{_DOCX_NS['r']}}}link"
+    legacy_id_attribute = f"{{{_DOCX_NS['r']}}}id"
+    for paragraph in root.findall(".//w:p", _DOCX_NS):
+        parts = [
+            node.text
+            for node in paragraph.findall(".//w:t", _DOCX_NS)
+            if node.text
+        ]
+        paragraph_text = re.sub(r"\s+", " ", "".join(parts)).strip()
+        relation_ids: list[str] = []
+        for image in paragraph.findall(".//a:blip", _DOCX_NS):
+            relation_id = str(
+                image.attrib.get(relationship_attribute)
+                or image.attrib.get(link_attribute)
+                or ""
+            ).strip()
+            if relation_id and relation_id in relationships:
+                relation_ids.append(relation_id)
+        for image in paragraph.findall(".//v:imagedata", _DOCX_NS):
+            relation_id = str(image.attrib.get(legacy_id_attribute) or "").strip()
+            if relation_id and relation_id in relationships:
+                relation_ids.append(relation_id)
+        paragraphs.append((paragraph_text, relation_ids))
+
+    images: list[dict] = []
+    seen_media: set[str] = set()
+    for paragraph_index, (paragraph_text, relation_ids) in enumerate(paragraphs):
+        nearby = " ".join(
+            value
+            for value, _refs in paragraphs[
+                max(0, paragraph_index - 1): min(len(paragraphs), paragraph_index + 2)
+            ]
+            if value
+        )
+        section = re.sub(r"\s+", " ", nearby or paragraph_text).strip()[:300]
+        for relation_id in relation_ids:
+            media_path = relationships.get(relation_id, "")
+            if not media_path or media_path in seen_media:
+                continue
+            seen_media.add(media_path)
+            images.append({
+                "index": len(images) + 1,
+                "relationshipId": relation_id,
+                "mediaPath": media_path,
+                "fileName": Path(media_path).name,
+                "section": section,
+                "caption": paragraph_text[:180],
+                "suggestedCategory": _atlas_category_hint(section),
+                "region": {"x": 0, "y": 0, "width": 1, "height": 1},
+            })
+    return images
+
+
+def preview_docx_atlas(path: Path) -> dict:
+    """Preview verified embedded images that can become independent Atlas drafts."""
+    try:
+        images = _docx_inline_images(path)
+    except (KeyError, ET.ParseError, zipfile.BadZipFile) as exc:
+        raise ApiError(
+            "ATLAS_DOCX_INVALID",
+            f"DOCX 結構無法解析：{type(exc).__name__}",
+            status=409,
+        ) from exc
+    warnings = []
+    if not images:
+        warnings.append(
+            "沒有找到可安全抽出的 inline/table JPG、PNG 或 WEBP；浮動圖、SmartArt、圖表、群組物件與 OLE 不會自動建立圖譜。"
+        )
+    return {"images": images, "warnings": warnings}
 
 
 def preview_import(
@@ -197,25 +302,37 @@ def confirm_import(
         raise ApiError("ATLAS_DOCX_METADATA_INVALID", "共用 metadata 格式不正確。", status=400)
 
     created: list[str] = []
+    candidates = _docx_inline_images(path)
+    by_index = {int(item["index"]): item for item in candidates}
+    by_relationship = {
+        str(item.get("relationshipId") or ""): item
+        for item in candidates
+        if item.get("relationshipId")
+    }
     with zipfile.ZipFile(path) as archive:
-        media = [name for name in archive.namelist() if name.startswith("word/media/")]
         for picked in selected[:30]:
             if not isinstance(picked, dict):
                 continue
             values = {**common, **picked}
-            try:
-                index = int(values.get("index", 0)) - 1
-            except (TypeError, ValueError):
+            relation_id = str(values.get("relationshipId") or "").strip()
+            candidate = by_relationship.get(relation_id) if relation_id else None
+            if candidate is None:
+                try:
+                    candidate = by_index.get(int(values.get("index", 0)))
+                except (TypeError, ValueError):
+                    candidate = None
+            if not candidate:
                 continue
-            if index < 0 or index >= len(media):
+            media_path = str(candidate.get("mediaPath") or "")
+            if not media_path:
                 continue
 
-            raw = archive.read(media[index])
+            raw = archive.read(media_path)
             try:
                 stored = image_store.store_image_bytes(
                     material_storage,
                     raw,
-                    Path(media[index]).suffix,
+                    Path(media_path).suffix,
                     max_bytes=None,
                 )
             except image_store.AtlasImageError:
@@ -224,16 +341,20 @@ def confirm_import(
             group = str(values.get("group") or source_group).strip()
             if not group or not service.can_manage(user, group):
                 continue
-            category = str(values.get("category") or "microscope")
+            category = str(values.get("category") or candidate.get("suggestedCategory") or "microscope")
             if category not in service.ATLAS_CATEGORIES:
                 category = "microscope"
-            title = str(values.get("title") or Path(media[index]).stem)[:255]
+            title = str(
+                values.get("title")
+                or candidate.get("caption")
+                or Path(media_path).stem
+            )[:255]
             item_id = service.create_item(user, {
                 "group": group,
                 "category": category,
                 "title": title,
                 "imageUrl": stored["imageUrl"],
-                "description": str(values.get("description") or "")[:6000],
+                "description": str(values.get("description") or candidate.get("section") or "")[:6000],
                 "tags": values.get("tags"),
                 "differentialPoints": str(values.get("differentialPoints") or "")[:6000],
                 "teachingNotes": str(values.get("teachingNotes") or "")[:6000],
