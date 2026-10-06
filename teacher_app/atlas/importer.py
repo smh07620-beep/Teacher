@@ -198,6 +198,8 @@ def _docx_inline_images(path: Path) -> list[dict]:
                 "fileName": Path(media_path).name,
                 "section": section,
                 "caption": paragraph_text[:180],
+                "suggestedTitle": paragraph_text[:180],
+                "suggestedDescription": section,
                 "suggestedCategory": _atlas_category_hint(category_context),
                 "region": {"x": 0, "y": 0, "width": 1, "height": 1},
             })
@@ -345,6 +347,7 @@ def confirm_import(
                 category = "microscope"
             title = str(
                 values.get("title")
+                or candidate.get("suggestedTitle")
                 or candidate.get("caption")
                 or Path(media_path).stem
             )[:255]
@@ -353,7 +356,12 @@ def confirm_import(
                 "category": category,
                 "title": title,
                 "imageUrl": stored["imageUrl"],
-                "description": str(values.get("description") or candidate.get("section") or "")[:6000],
+                "description": str(
+                    values.get("description")
+                    or candidate.get("suggestedDescription")
+                    or candidate.get("section")
+                    or ""
+                )[:6000],
                 "tags": values.get("tags"),
                 "differentialPoints": str(values.get("differentialPoints") or "")[:6000],
                 "teachingNotes": str(values.get("teachingNotes") or "")[:6000],
