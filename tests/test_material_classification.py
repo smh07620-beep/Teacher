@@ -183,7 +183,7 @@ class MaterialClassificationTests(unittest.TestCase):
             result = classification.groq_classify_material("一般教材內容" * 20, "case.pdf", "案例", "說明")
         self.assertEqual(result, ("case", "案例脈絡明確"))
         self.assertEqual(post.call_args.kwargs["timeout"], 12)
-        self.assertEqual(post.call_args.kwargs["json"]["model"], "qwen/qwen3.6-27b")
+        self.assertEqual(post.call_args.kwargs["json"]["model"], "qwen/qwen3.8-27b")
         self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0.0)
         self.assertEqual(post.call_args.kwargs["json"]["max_completion_tokens"], 250)
         self.assertEqual(post.call_args.kwargs["json"]["response_format"], {"type": "json_object"})
