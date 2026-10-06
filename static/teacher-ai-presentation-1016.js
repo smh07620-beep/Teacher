@@ -161,6 +161,7 @@
       const published = await api(`/api/ai-presentations/${encodeURIComponent(id)}/publish-link`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({publicationMaterialId, acknowledgeWarnings})});
       const materialVersion=Number(published.materialDerivative?.materialVersion||0);
       note(`✅ 已正式發布目前 PowerPoint V${Number(currentPresentation?.revisionNumber || 1)}${materialVersion?'，並記錄在教材 V'+materialVersion+' 的衍生內容歷程。':'。'}`);
+      window.dispatchEvent(new CustomEvent('teacher-ai-presentation-published',{detail:{presentationId:id,materialId:publicationMaterialId,title:currentPresentation?.title||'AI 教學投影片'}}));
       await loadPresentations();
     } catch (e) { note(e.message, true); }
   }
