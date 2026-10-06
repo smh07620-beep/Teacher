@@ -25,6 +25,8 @@ class MaterialReaderModes20261006Tests(unittest.TestCase):
         self.assertIn("window.goToSlidePage = goToSlidePage", self.learner)
         self.assertIn("window.slideViewerPrev = slideViewerPrev", self.learner)
         self.assertIn("window.slideViewerNext = slideViewerNext", self.learner)
+        self.assertIn("window.slideViewerState = slideViewerState", self.learner)
+        self.assertIn("window.cachedSlidesList = cachedSlidesList", self.learner)
 
     def test_presentation_pdf_is_page_fit_and_wheel_cannot_scroll_native_pdf(self):
         block = self.learner[
@@ -32,6 +34,7 @@ class MaterialReaderModes20261006Tests(unittest.TestCase):
             self.learner.index("function updateSlideViewerImage()")
         ]
         self.assertIn("reader_page=${page}", block)
+        self.assertIn("swapPresentationPdfFrame(wanted,page)", block)
         self.assertIn("scrollbar=0&view=Fit", block)
         self.assertIn("scrollbar=1&view=FitH", block)
         self.assertIn("initPdfPresentationWheel()", self.learner)
@@ -40,6 +43,10 @@ class MaterialReaderModes20261006Tests(unittest.TestCase):
         self.assertIn("pointer-events:none", self.css)
         paging = self.learner[self.learner.index("function goToSlidePage"):self.learner.index("function closeSlideViewer")]
         self.assertIn("renderSlideThumbs();", paging)
+        swap = self.learner[self.learner.index("function swapPresentationPdfFrame"):self.learner.index("function updateSlideViewerPdf")]
+        self.assertIn("incoming.style.opacity='0'", swap)
+        self.assertIn("window.setTimeout", swap)
+        self.assertIn("incoming.id='slide-viewer-pdf'", swap)
 
     def test_document_pdf_keeps_continuous_scroll_mode(self):
         self.assertIn("document-preview-mode", self.learner)
