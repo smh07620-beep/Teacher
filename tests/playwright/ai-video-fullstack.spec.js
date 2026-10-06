@@ -35,6 +35,8 @@ test('Video: approved PPT → real Worker/FFmpeg → MP4/captions → browser re
   await page.locator('#teacher-media-tab-video-1018').click();
   await expect(page.locator('#teacher-ai-video-presentation-1015')).toContainText(ppt.title);
   await page.locator('#teacher-ai-video-presentation-1015').selectOption(ppt.id);
+  const requirements=page.locator('#teacher-ai-video-requirements-1032');
+  if (await requirements.count()) await requirements.locator('summary').click();
   await page.locator('#teacher-ai-video-voice-1015').selectOption('zf_002');
   const createdResponse=page.waitForResponse(r=>r.url().endsWith('/api/ai-videos/generate')&&r.request().method()==='POST');
   await page.locator('#teacher-ai-video-generate-1015').click();
