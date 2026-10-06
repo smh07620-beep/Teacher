@@ -12,6 +12,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
     def setUpClass(cls):
         cls.source = ROOT.joinpath('static/teacher-content-studio-71.js').read_text(encoding='utf-8')
         cls.composer = ROOT.joinpath('static/teacher-content-composer-72.js').read_text(encoding='utf-8')
+        cls.tools = ROOT.joinpath('static/teacher-content-tool-panels-710.js').read_text(encoding='utf-8')
         cls.convergence = ROOT.joinpath('static/teacher-ux-convergence-72.js').read_text(encoding='utf-8')
         cls.external = ROOT.joinpath('static/external-material-681.js').read_text(encoding='utf-8')
         cls.frontend = ROOT.joinpath('pgy_frontend.py').read_text(encoding='utf-8')
