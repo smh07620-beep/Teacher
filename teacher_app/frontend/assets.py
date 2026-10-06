@@ -29,6 +29,10 @@ ASSET_MANIFEST = {
             (
                 "/shared-core.js",
                 (
+                    # RBAC publishes the readiness promise consumed by every
+                    # teacher workspace. Load it before the large deferred
+                    # admin bundle so first navigation cannot race it in CI.
+                    "/rbac-ui-681.js",
                     "/api-client.js",
                 ),
             ),

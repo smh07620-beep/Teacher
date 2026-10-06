@@ -21,6 +21,13 @@ class FrontendConvergence75Tests(unittest.TestCase):
         self.assertLess(html.index('src="/admin-results-data.js"'), html.index('src="/admin-results-workspace.js"'))
         self.assertNotIn('src="/admin-compat-facade.js"', html)
 
+    def test_rbac_readiness_bootstrap_precedes_large_admin_runtime(self):
+        source = '<html><head></head><body><script defer src="/shared-core.js"></script><script defer src="/system-admin.js"></script></body></html>'
+        html = _apply_asset_manifest(source, "system")
+        self.assertEqual(html.count('src="/rbac-ui-681.js"'), 1)
+        self.assertLess(html.index('src="/shared-core.js"'), html.index('src="/rbac-ui-681.js"'))
+        self.assertLess(html.index('src="/rbac-ui-681.js"'), html.index('src="/system-admin.js"'))
+
     def test_runtime_build_hash_replaces_all_local_asset_versions(self):
         with patch.dict(os.environ, {"ASSET_VERSION": "build-abc123"}, clear=False):
             html = _rewrite_local_asset_versions('<script src="/a.js?v=old"></script><link href="/b.css">')
