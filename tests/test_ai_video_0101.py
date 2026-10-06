@@ -51,6 +51,7 @@ class AiVideoStorageTests(unittest.TestCase):
                 "AI_VIDEO_STORAGE_BACKEND": "",
                 "AI_PRESENTATION_STORAGE_BACKEND": "mega",
                 "AI_PRESENTATION_FALLBACK_TO_R2": "true",
+                "AI_VIDEO_FALLBACK_TO_R2": "true",
             }, clear=False),
             patch.object(ai_video_storage.providers, "r2_is_configured", return_value=True),
             patch.object(ai_video_storage.providers, "oci_is_configured", return_value=False),
