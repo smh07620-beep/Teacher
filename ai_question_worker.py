@@ -26,6 +26,9 @@ from teacher_app.worker import ai_remote
 from teacher_app.worker import repository as worker_repository
 
 
+_KOKORO_STARTUP_STATE: dict = {}
+
+
 def _env_int(name: str, default: int, lower: int, upper: int) -> int:
     try:
         value = int(os.environ.get(name, str(default)) or default)
@@ -113,6 +116,9 @@ def _ai_worker_capabilities(transport: str | None = None) -> dict:
             "defaultVoice": media_audio_runtime._voice(
                 os.environ.get("KOKORO_VOICE") or media_audio_runtime.DEFAULT_VOICE
             ),
+            "warmup": bool(_KOKORO_STARTUP_STATE.get("warmed")),
+            "device": str(_KOKORO_STARTUP_STATE.get("device") or "")[:40],
+            "cudaAvailable": _KOKORO_STARTUP_STATE.get("cudaAvailable"),
         },
         "whisper": {"available": whisper_ready},
         "queues": ["ai_questions", "media_scripts", "ai_presentations", "ai_videos", "media_audio", "media_subtitles"],
@@ -209,6 +215,33 @@ class _AIHeartbeat:
         return False
 
 
+def _warm_kokoro_on_startup() -> dict:
+    """Warm Kokoro before queue polling without making Worker startup brittle."""
+    global _KOKORO_STARTUP_STATE
+    try:
+        state = media_audio_runtime.preload_kokoro()
+    except Exception as exc:
+        state = {
+            "warmed": False,
+            "device": "",
+            "cudaAvailable": None,
+            "errorType": type(exc).__name__,
+        }
+        _KOKORO_STARTUP_STATE = state
+        log(f"kokoro preload failed type={type(exc).__name__}; lazy retry enabled")
+        return state
+
+    _KOKORO_STARTUP_STATE = dict(state)
+    loaded = len(state.get("loadedVoices") or [])
+    log(
+        "kokoro preload ready "
+        f"device={state.get('device') or 'unknown'} "
+        f"cuda_available={bool(state.get('cudaAvailable'))} "
+        f"voices_cached={loaded} hf_cache=persistent"
+    )
+    return state
+
+
 def _renderer_status_line() -> str:
     summary = ai_video_renderer.capability_summary()
     states = ",".join(
@@ -244,6 +277,7 @@ def main() -> int:
     heartbeat_seconds = _env_int("AI_WORKER_HEARTBEAT_SECONDS", 30, 10, 90)
     try:
         with _AIHeartbeat(heartbeat_seconds, transport=transport, api=api) as heartbeat:
+            _warm_kokoro_on_startup()
             while True:
                 try:
                     heartbeat.raise_if_unhealthy()
