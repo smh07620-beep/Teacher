@@ -38,6 +38,11 @@ def _permission_denied():
     return jsonify({"error": "權限不足：此功能限教學管理者使用。"}), 403
 
 
+def _require_admin(owner=None):
+    """Compatibility guard for retained system-admin boundary tests/callers."""
+    return _require_kind(_current_user(owner), "system")
+
+
 def _kind_for(user, payload) -> str:
     requested = str((payload or {}).get("kind") or "").strip().lower()
     if requested:
