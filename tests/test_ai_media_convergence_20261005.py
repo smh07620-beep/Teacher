@@ -97,7 +97,8 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
             "teacher-ai-video-dropzone-1031",
             "teacher-ai-video-files-1031",
             "openVideoSourceAuthoring",
-            "PDF／Word／圖片／文字",
+            "PDF／Word／PPTX／Excel／圖片",
+            "貼入文字",
             "不必先發布成正式教材",
         ):
             self.assertIn(marker, self.video)
