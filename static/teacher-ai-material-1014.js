@@ -63,6 +63,16 @@
     if (note) note.textContent = presentation
       ? '這裡不建立講稿或考題。大綱核准後繼續產生 PowerPoint；其他工作請使用對應入口。'
       : '測驗題草稿若要進正式題庫，仍請到「評量與追蹤」完成審核與建立。';
+    const savedHeading = document.getElementById('teacher-ai-material-saved-heading-1014');
+    if (savedHeading) savedHeading.textContent = presentation ? '已儲存 PowerPoint 大綱' : '已儲存 AI 草稿';
+    if (presentation && activeDraft && activeDraft.draftType !== 'slides') {
+      activeDraft = null;
+      activeJobId = '';
+      pollToken += 1;
+      document.getElementById('teacher-ai-material-editor-1014')?.classList.add('hidden');
+      syncEditorButtons();
+      void loadDrafts();
+    }
     if (!activeJobId && !activeDraft) {
       status(presentation
         ? '先加入來源並設定重點，再產生 PowerPoint 大綱。'
@@ -507,11 +517,14 @@
     }
     try {
       const response = await fetch(`/api/ai-material-drafts?materialId=${encodeURIComponent(materialId)}`, {credentials:'same-origin', cache:'no-store'});
-      const list = await response.json().catch(() => []);
-      if (!response.ok) throw new Error(list.error || '無法讀取 AI 草稿');
-      host.innerHTML = Array.isArray(list) && list.length
+      const responseList = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(responseList.error || '無法讀取 AI 草稿');
+      const list = Array.isArray(responseList)
+        ? responseList.filter(draft => authoringContext !== 'presentation' || draft.draftType === 'slides')
+        : [];
+      host.innerHTML = list.length
         ? list.map(draft => `<button type="button" data-ai-draft-id="${escapeHtml(draft.id)}" class="w-full text-left rounded-xl border ${draft.status==='approved'?'border-emerald-200 bg-emerald-50/60':'border-slate-200 bg-white'} p-3"><div class="flex flex-wrap items-center justify-between gap-2"><b class="text-sm text-slate-900">${escapeHtml(draft.title)}</b><span class="text-xs font-bold ${draft.status==='approved'?'text-emerald-700':'text-amber-700'}">${escapeHtml(TYPE_LABELS[draft.draftType] || draft.draftType || '草稿')}｜${draft.status==='approved'?'已核准':'草稿'}${draft.publicationMaterialId?'｜已發布':''}</span></div><p class="mt-1 text-sm text-slate-500">更新：${escapeHtml(draft.updatedAt || '')}</p></button>`).join('')
-        : '<p class="text-sm text-slate-500">這份來源教材目前沒有已儲存 AI 草稿。</p>';
+        : `<p class="text-sm text-slate-500">${authoringContext === 'presentation' ? '這份來源目前沒有已儲存的 PowerPoint 大綱。' : '這份來源教材目前沒有已儲存 AI 草稿。'}</p>`;
       host.querySelectorAll('[data-ai-draft-id]').forEach(button => button.addEventListener('click', () => {
         const draft = list.find(item => item.id === button.dataset.aiDraftId);
         if (!draft) return;
@@ -549,7 +562,7 @@
       <div id="teacher-ai-material-status-1014" class="text-sm text-slate-600">選好來源後，設定產出類型與重點，再產生 AI 草稿。</div>
       <div id="teacher-ai-material-source-info-1014" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-slate-700"></div>
       <div id="teacher-ai-material-editor-1014" class="hidden space-y-3"><h5 class="text-base font-black text-slate-900">Step 3｜投影片大綱</h5><label class="block text-sm font-bold text-slate-700">標題<input id="teacher-ai-material-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-sm font-bold text-slate-700">內容<textarea id="teacher-ai-material-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-base leading-7" placeholder="AI 草稿會出現在這裡；請由教師逐段確認與修改。"></textarea></label><div class="flex flex-wrap gap-2"><button id="teacher-ai-material-save-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-black text-violet-700">💾 儲存草稿</button><button id="teacher-ai-material-approve-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-40">✅ 教師核准</button><button id="teacher-ai-material-publish-1014" type="button" disabled class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-40">📚 選擇發布成正式教材</button></div><p id="teacher-ai-material-editor-note-1014" class="text-sm text-slate-500">測驗題草稿若要進正式題庫，仍請到「評量與追蹤」完成審核與建立。</p></div>
-      <div class="border-t border-slate-100 pt-4"><h5 class="text-base font-black text-slate-900">已儲存 AI 草稿</h5><div id="teacher-ai-material-saved-1014" class="mt-2 grid gap-2"><p class="text-sm text-slate-500">選擇來源教材後會顯示已儲存草稿。</p></div></div>
+      <div class="border-t border-slate-100 pt-4"><h5 id="teacher-ai-material-saved-heading-1014" class="text-base font-black text-slate-900">已儲存 AI 草稿</h5><div id="teacher-ai-material-saved-1014" class="mt-2 grid gap-2"><p class="text-sm text-slate-500">選擇來源教材後會顯示已儲存草稿。</p></div></div>
       <div id="teacher-ai-material-presentation-stage-1014" class="border-t border-slate-100 pt-5"></div>`;
     const dashboard = box.querySelector('.admin-course-dashboard');
     box.insertBefore(section, dashboard || box.firstChild);
