@@ -98,43 +98,9 @@
   }
 
   function ensureCourseMediaEntry(box) {
-    if (!box || box.querySelector('#teacher-course-media-entry-1014')) return;
-    const dashboard = box.querySelector('.admin-course-dashboard');
-    if (!dashboard) return;
-
-    const entry = document.createElement('section');
-    entry.id = 'teacher-course-media-entry-1014';
-    entry.className = 'mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-cyan-100 bg-cyan-50/50 px-4 py-3';
-    entry.innerHTML = '<div><b class="text-sm text-slate-900">教材工作流程</b><p class="mt-0.5 text-[11px] text-slate-600">① 上傳或選擇教材　→　② 需要時進製作室做 PowerPoint／講稿／影音　→　③ 建立或更新課程並發布／指派。AI 製作是選配，不必為每份教材都走完整流程；新版教材請沿用原教材版本，不要重複建立教材卡。</p></div>';
-
-    const actions = document.createElement('div');
-    actions.className = 'shrink-0 flex flex-wrap gap-2';
-
-    const studioButton = document.createElement('button');
-    studioButton.type = 'button';
-    studioButton.className = 'rounded-xl bg-violet-700 px-4 py-2 text-xs font-black text-white hover:bg-violet-800';
-    studioButton.textContent = '🧰 開啟教材媒體製作室';
-    studioButton.addEventListener('click', async event => {
-      event.preventDefault();
-      await window.TeacherWorkspace1014?.openMedia?.();
-      convergeTeacherNavigation();
-      installVoicePrivacy();
-    });
-
-    actions.append(studioButton);
-
-    const atlasDocxButton = document.createElement('button');
-    atlasDocxButton.type = 'button';
-    atlasDocxButton.className = 'rounded-xl border border-teal-300 bg-white px-4 py-2 text-xs font-black text-teal-800 hover:bg-teal-50';
-    atlasDocxButton.textContent = '🔬 Word → 圖譜';
-    atlasDocxButton.addEventListener('click', async event => {
-      event.preventDefault();
-      await window.openTeacherAtlasDocxWorkspace?.();
-    });
-    actions.append(atlasDocxButton);
-
-    entry.appendChild(actions);
-    box.insertBefore(entry, dashboard);
+    // Media/Atlas are contextual course or material actions now. Remove the
+    // historical full-width tool strip so it cannot compete with course work.
+    box?.querySelector('#teacher-course-media-entry-1014')?.remove();
   }
 
   function invokeOriginal(button) {
@@ -189,6 +155,18 @@
         button.addEventListener('click', event => { event.preventDefault(); invokeOriginal(assignment); });
         actions.appendChild(button);
       }
+      const mediaButton = document.createElement('button');
+      mediaButton.type = 'button';
+      mediaButton.setAttribute('data-teacher-course-media-1014', '1');
+      mediaButton.className = 'rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-black text-violet-700';
+      mediaButton.textContent = '✨ AI／影音製作';
+      mediaButton.addEventListener('click', async event => {
+        event.preventDefault();
+        await window.TeacherWorkspace1014?.openMedia?.();
+        convergeTeacherNavigation();
+        installVoicePrivacy();
+      });
+      actions.appendChild(mediaButton);
       if (remove) {
         const button = document.createElement('button');
         button.type = 'button';
