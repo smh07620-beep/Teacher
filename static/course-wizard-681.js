@@ -15,7 +15,7 @@ const AI_PLAN_META={
   video:{label:'AI 教學影片',detail:'發布後直接進入影片流程；可使用來源內容或已核准 PowerPoint。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},resultHtml:'',watchToken:0};
+const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -41,7 +41,21 @@ function scope(){
 
 function mode(){return MODE_META[state.examMode]||MODE_META.later;}
 function aiPlan(){return AI_PLAN_META[state.aiPlan]||AI_PLAN_META.none;}
-function canAssignLearning(){return typeof window.TeacherRBAC681?.hasPermission==='function'&&window.TeacherRBAC681.hasPermission('learning.assign');}
+function canAssignLearning(){return state.assignPermission===true;}
+async function resolveAssignmentPermission(){
+  try{
+    const current=window.TeacherRBAC681;
+    if(typeof current?.hasPermission==='function'){
+      state.assignPermission=Boolean(current.hasPermission('learning.assign'));
+    }else{
+      const ready=await (window.TeacherRBAC681Ready||Promise.resolve(null));
+      state.assignPermission=Boolean(typeof ready?.hasPermission==='function'&&ready.hasPermission('learning.assign'));
+    }
+  }catch(_error){
+    state.assignPermission=false;
+  }
+  if(state.step===1&&!state.busy)render();
+}
 function queuedIds(){return [...new Set((state.queuedJobs||[]).filter(Boolean).map(String))];}
 function canLeaveCourse(){
   if(!state.created||state.failedUploads.length)return false;
@@ -124,7 +138,7 @@ function mount(){
   window.courseWizard681PublishAndOpen=publishAndOpenCourseWorkspace;
   window.courseWizard681OpenAtlasImport=openCourseAtlasImport;
   window.courseWizard681Reset=reset;
-  render();loadMaterials();
+  render();void resolveAssignmentPermission();loadMaterials();
 }
 
 function actionFooter(){
@@ -152,8 +166,8 @@ function render(){
 }
 
 function stepOne(){
-  const s=scope(),options=[...document.querySelectorAll('#wizard-group option')],canAssign=canAssignLearning();
-  const assignmentPanel=canAssign?`<section class="md:col-span-2 rounded-xl border border-teal-100 bg-teal-50/50 p-3">
+  const s=scope(),options=[...document.querySelectorAll('#wizard-group option')],permissionPending=state.assignPermission===null,canAssign=canAssignLearning();
+  const assignmentPanel=permissionPending?`<section class="md:col-span-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800"><b>學習對象與期限</b><p class="mt-1">正在確認你的學習指派權限…</p></section>`:canAssign?`<section class="md:col-span-2 rounded-xl border border-teal-100 bg-teal-50/50 p-3">
     <label class="flex items-center gap-2 text-xs font-black text-teal-950"><input id="cw681-assignment-enabled" type="checkbox" ${state.assignmentEnabled?'checked':''}> 發布後立即建立學習指派</label>
     <p class="mt-1 text-[11px] text-teal-800">課程可見範圍仍由上方訓練區／組別控制；這裡設定誰需要完成、必修／選修與期限。</p>
     <div class="mt-3 grid gap-3 md:grid-cols-4">
