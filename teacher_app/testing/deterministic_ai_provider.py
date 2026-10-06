@@ -38,6 +38,15 @@ def _wav(*_args, **_kwargs):
     return output.getvalue(), "deterministic-kokoro-stub"
 
 
+def tts_capabilities(payload: dict) -> dict:
+    """Advertise the installed inference seam only with BOTH isolated flags."""
+    if not enabled():
+        return payload
+    return {**payload, "kokoro": {**payload.get("kokoro", {}), "available": True,
+            "deterministicInference": True},
+            "tts": {**payload.get("tts", {}), "inferenceMode": "deterministic-e2e"}}
+
+
 def install() -> None:
     """Install only inference seams; all durable contracts remain canonical."""
     if not enabled():

@@ -252,7 +252,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Canonical AI jobs → inspected PPTX artifacts → persisted scripts → learner saved answers
         shell: bash
-        run: python tests/run_ai_fullstack.py tests/playwright/ai-question-fullstack-golden-path.spec.js tests/playwright/ai-powerpoint-fullstack.spec.js tests/playwright/ai-script-fullstack.spec.js
+        run: python tests/run_ai_fullstack.py tests/playwright/ai-question-fullstack-golden-path.spec.js tests/playwright/ai-powerpoint-fullstack.spec.js tests/playwright/ai-script-fullstack.spec.js tests/playwright/ai-audio-fullstack.spec.js
       - name: Show AI full-stack diagnostics on failure
         if: failure()
         shell: bash

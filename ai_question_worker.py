@@ -143,6 +143,8 @@ def _ai_worker_capabilities(transport: str | None = None) -> dict:
         "whisper": {"available": whisper_ready},
         "queues": ["ai_questions", "media_scripts", "ai_presentations", "ai_videos", "media_audio", "media_subtitles"],
     }
+    if os.environ.get("TEACHER_E2E_DETERMINISTIC_STUBS") == "1":
+        payload = deterministic_ai_provider.tts_capabilities(payload)
     return payload
 
 
