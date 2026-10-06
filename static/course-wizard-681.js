@@ -325,7 +325,11 @@ function renderCompletedMaterialInsights(){
     const meta=item.storageMeta?.materialClassification||{};
     const method=String(meta.method||'');
     const reason=String(meta.reason||'');
-    return `<div class="rounded-lg border border-emerald-100 bg-white p-2"><div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(item.title||item.filename||item.id)}</b><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700">${esc(MATERIAL_TYPE_LABELS[type]||type)}</span></div><p class="mt-1 text-[11px] text-slate-500">${method?`自動判定：${esc(method)}${reason?'｜'+esc(reason):''}`:'使用教師指定類型'}</p></div>`;
+    const requested=String(meta.requested||'');
+    const decision=requested==='auto'
+      ? `自動判定：${esc(method||'規則分類')}${reason?'｜'+esc(reason):''}`
+      : `教師指定：${esc(MATERIAL_TYPE_LABELS[type]||type)}`;
+    return `<div class="rounded-lg border border-emerald-100 bg-white p-2"><div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(item.title||item.filename||item.id)}</b><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700">${esc(MATERIAL_TYPE_LABELS[type]||type)}</span></div><p class="mt-1 text-[11px] text-slate-500">${decision}</p></div>`;
   }).join('');
   const atlasRows=atlasEntries.map(([materialId,info])=>`<div class="rounded-lg border border-teal-200 bg-teal-50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><div><b class="text-teal-950">🔬 Word 內偵測到 ${Number(info.count||0)} 張可獨立整理的圖片</b><p class="mt-1 text-[11px] text-teal-800">${esc(info.title||materialId)}｜原 Word 會保留；只會把你勾選的圖片另外建立 Atlas 草稿。</p></div><button type="button" data-csp-click="courseWizard681OpenAtlasImport('${esc(materialId)}')" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">檢視並建立 Atlas 草稿</button></div></div>`).join('');
   host.innerHTML=`<div class="mt-3 space-y-2"><div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><b class="text-emerald-900">✅ 教材自動歸類結果</b><div class="mt-2 grid gap-2 md:grid-cols-2">${classificationRows}</div></div>${atlasRows}</div>`;
