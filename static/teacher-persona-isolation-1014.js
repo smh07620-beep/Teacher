@@ -44,7 +44,8 @@
     const mode = now.get('teacherMode') || '';
     if (mode === 'media') return 'course';
     if (mode === 'documents' || mode === 'announcements') return 'utility';
-    return now.get('workspace') === 'assessment' ? 'assessment' : 'course';
+    const workspace = now.get('workspace') || '';
+    return ['assessment','teacher','results','compliance','pgy'].includes(workspace) ? 'assessment' : 'course';
   }
 
   function makeButton(id, label, handler, active) {
