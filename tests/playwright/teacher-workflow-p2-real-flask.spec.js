@@ -26,7 +26,7 @@ test('teacher workflow crosses primary jobs, persists clinical assessment, then 
   await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe('course-materials');
   await expect(page.locator('#admin-section-content')).toBeVisible();
 
-  await teacherNav.getByRole('button', { name: '評量與出題' }).click();
+  await teacherNav.getByRole('button', { name: '評量與追蹤' }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe('assessment');
   await expect(page.locator('#admin-section-quiz')).toBeVisible({ timeout: 15000 });
 
