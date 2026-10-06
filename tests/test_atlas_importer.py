@@ -34,15 +34,32 @@ class AtlasImporterTests(unittest.TestCase):
         self.user = {"username": "teacher"}
 
     def write_docx(self, *, include_document=True, image_count=2):
+        image_runs = "".join(
+            f'<w:p><w:r><w:t>{"血球 morphology" if index == 1 else "urine sediment"}</w:t></w:r>'
+            f'<w:r><w:drawing><a:blip r:embed="rId{index}"/></w:drawing></w:r></w:p>'
+            for index in range(1, image_count + 1)
+        )
         document = (
-            '<w:document xmlns:w="w" xmlns:r="r"><w:body>'
-            '<w:p><w:r><w:t>morphology context</w:t></w:r></w:p>'
-            '<a:blip r:embed="rId1"/><a:blip r:embed="rId2"/>'
-            '</w:body></w:document>'
+            '<w:document '
+            'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+            'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+            f'<w:body>{image_runs}</w:body></w:document>'
+        )
+        relationships = (
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            + "".join(
+                f'<Relationship Id="rId{index}" '
+                f'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+                f'Target="media/image{index}.png"/>'
+                for index in range(1, image_count + 1)
+            )
+            + '</Relationships>'
         )
         with zipfile.ZipFile(self.docx, "w") as archive:
             if include_document:
                 archive.writestr("word/document.xml", document)
+                archive.writestr("word/_rels/document.xml.rels", relationships)
             for index in range(1, image_count + 1):
                 archive.writestr(f"word/media/image{index}.png", self.png)
 
@@ -54,6 +71,9 @@ class AtlasImporterTests(unittest.TestCase):
         self.assertEqual(payload["defaultGroup"], "grpHema")
         self.assertEqual(payload["initialStatus"], "draft")
         self.assertEqual([item["relationshipId"] for item in payload["preview"]["images"]], ["rId1", "rId2"])
+        self.assertEqual([item["mediaPath"] for item in payload["preview"]["images"]], ["word/media/image1.png", "word/media/image2.png"])
+        self.assertEqual(payload["preview"]["images"][0]["suggestedCategory"], "blood_cell")
+        self.assertEqual(payload["preview"]["images"][1]["suggestedCategory"], "urine_sediment")
         self.assertIn(importer.PREVIEW_WARNING, payload["preview"]["warnings"])
 
     def test_confirm_merges_common_metadata_and_per_image_override(self):
