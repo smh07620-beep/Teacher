@@ -441,6 +441,13 @@ body{
 .presentation-preview-mode #slide-viewer-pdf{
   pointer-events:none!important;
 }
+.paged-document-preview-mode #slide-viewer-stage{
+  overflow:hidden!important;
+  overscroll-behavior:none;
+}
+.paged-document-preview-mode #slide-viewer-pdf{
+  pointer-events:none!important;
+}
 .document-preview-mode #slide-viewer-stage{
   overflow:hidden!important;
 }
