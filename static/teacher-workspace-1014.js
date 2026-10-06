@@ -145,9 +145,10 @@
       course: 'teacher-nav-course-1014',
       media: 'teacher-nav-media-1014',
       assessment: 'teacher-nav-assessment-1014',
-      documents: 'teacher-nav-documents-1014'
+      documents: 'teacher-nav-documents-1014',
+      announcements: 'teacher-nav-announcements-1014'
     };
-    document.querySelectorAll('#teacher-nav-course-1014,#teacher-nav-media-1014,#teacher-nav-assessment-1014,#teacher-nav-documents-1014').forEach(button => {
+    document.querySelectorAll('#teacher-nav-course-1014,#teacher-nav-media-1014,#teacher-nav-assessment-1014,#teacher-nav-documents-1014,#teacher-nav-announcements-1014').forEach(button => {
       const active = button.id === map[mode];
       button.classList.toggle('bg-teal-700', active);
       button.classList.toggle('text-white', active);
@@ -158,6 +159,7 @@
   }
 
   function restoreCourseWorkspace() {
+    window.closeTeacherAnnouncementWorkspace?.();
     document.querySelectorAll('[data-teacher1014-hidden-by-media="1"]').forEach(node => {
       node.classList.remove('hidden');
       delete node.dataset.teacher1014HiddenByMedia;
@@ -325,6 +327,25 @@
     markTeacherNav('documents');
   }
 
+  async function waitForAnnouncementWorkspace() {
+    for (let attempt=0; attempt<80; attempt+=1) {
+      if (typeof window.openTeacherAnnouncementWorkspace === 'function') return true;
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    return false;
+  }
+
+  async function openAnnouncements() {
+    state.mode = 'announcements';
+    restoreCourseWorkspace();
+    setTeacherModeParam('announcements');
+    await window.switchAdminWorkspace?.('course-materials', true);
+    if (await waitForAnnouncementWorkspace()) {
+      await window.openTeacherAnnouncementWorkspace();
+    }
+    markTeacherNav('announcements');
+  }
+
   function ensureAssessmentWorkflow() {
     const panel = document.getElementById('admin-section-quiz');
     if (!panel) return;
@@ -373,10 +394,11 @@
     const buttons = [
       makeNavButton('teacher-nav-course-1014', '📚 教材與課程', openCourse),
       makeNavButton('teacher-nav-assessment-1014', '📝 評量與出題', openAssessment),
+      makeNavButton('teacher-nav-announcements-1014', '📣 公告與通知', openAnnouncements),
       makeNavButton('teacher-nav-documents-1014', '📄 紙本文件與匯出', openDocuments)
     ];
     navHost.replaceChildren(navGroup('教師工作台', buttons));
-    markTeacherNav(state.mode === 'documents' ? 'documents' : (state.mode === 'media' ? 'media' : (params.get('workspace') === 'assessment' ? 'assessment' : 'course')));
+    markTeacherNav(state.mode === 'announcements' ? 'announcements' : (state.mode === 'documents' ? 'documents' : (state.mode === 'media' ? 'media' : (params.get('workspace') === 'assessment' ? 'assessment' : 'course'))));
     ensureAssessmentWorkflow();
     ensureAssessmentReviewShortcut();
   }
@@ -410,6 +432,11 @@
       markTeacherNav('media');
       return;
     }
+    if (state.mode === 'announcements' && workspace === 'course-materials') {
+      void waitForAnnouncementWorkspace().then(ready => ready && window.openTeacherAnnouncementWorkspace?.());
+      markTeacherNav('announcements');
+      return;
+    }
     if (workspace !== 'course-materials') restoreCourseWorkspace();
     if (workspace === 'assessment') markTeacherNav('assessment');
     else if (workspace === 'teacher') markTeacherNav(state.mode === 'documents' ? 'documents' : 'assessment');
@@ -420,11 +447,13 @@
     await openMedia();
   } else if (state.mode === 'documents') {
     await openDocuments();
+  } else if (state.mode === 'announcements') {
+    await openAnnouncements();
   }
 
   window.TeacherWorkspace1014 = Object.freeze({
     canLearn, canTeach, canSystem,
-    openCourse, openPresentation, openMedia, openAssessment, openDocuments,
+    openCourse, openPresentation, openMedia, openAssessment, openDocuments, openAnnouncements,
     learningUrl, ensurePersonaSwitcher
   });
 
