@@ -272,18 +272,38 @@ def generate_script(entry: dict, *, reference_entries: list[dict] | None = None,
     entries = [entry, *(reference_entries or [])]
     source_chars = 0
     chunks = []
+    source_warnings = []
+    readable_sources = []
     focus = ai_privacy.deidentify_external_text(focus).strip()[:500]
     for source in entries:
-        text, chars = ai_runtime.extract_material_text_for_ai(source, settings=settings)
-        source_chars += int(chars or len(text))
-        # Bound each attachment so one large source cannot crowd out the rest.
-        chunks.extend(_bounded_source_chunks(source, text, focus)[:12])
+        try:
+            text, chars = ai_runtime.extract_material_text_for_ai(source, settings=settings)
+            selected = _bounded_source_chunks(source, text, focus)[:12]
+            if not selected:
+                raise RuntimeError("可擷取文字不足")
+            source_chars += int(chars or len(text))
+            chunks.extend(selected)
+            readable_sources.append(source)
+        except Exception as exc:
+            source_warnings.append({
+                "materialId": str(source.get("id") or ""),
+                "title": str(source.get("title") or source.get("filename") or source.get("id") or "教材")[:240],
+                "storageBackend": str(source.get("storageBackend") or ""),
+                "reason": str(exc)[:300],
+            })
     chunks = chunks[:36]
     if not chunks:
-        raise RuntimeError(f"教材沒有足夠的可用文字，無法產生{label}。")
+        detail = "；".join(
+            f"{item['title']}：{item['reason']}" for item in source_warnings[:3]
+        )
+        raise RuntimeError(
+            f"所選教材都沒有可用的文字來源，無法產生{label}。"
+            + (f" {detail}" if detail else "")
+        )
     context = ai_runtime.format_retrieval_context(chunks)
+    title_source = readable_sources[0] if readable_sources else entry
     title = ai_privacy.deidentify_external_text(
-        entry.get("title") or entry.get("filename") or "教材"
+        title_source.get("title") or title_source.get("filename") or "教材"
     ).strip()[:300]
     prompt = _prompt(
         source_title=title,
@@ -322,10 +342,12 @@ def generate_script(entry: dict, *, reference_entries: list[dict] | None = None,
         "body": body[:40000],
         "outputType": output_type,
         "outputLabel": label,
-        "sourceMaterialId": str(entry.get("id") or ""),
+        "sourceMaterialId": str(title_source.get("id") or entry.get("id") or ""),
         "sourceTitle": title,
         "sourceChars": int(source_chars),
         "sourceChunks": source_chunks,
+        "sourceWarnings": source_warnings,
+        "sourceMaterialCount": len(readable_sources),
         "provider": provider_meta["provider"],
         "model": provider_meta["model"],
         "fallbackUsed": bool(provider_meta.get("fallbackUsed")),
