@@ -12,7 +12,7 @@ from teacher_app.materials.validation import (
     normalize_material_filename,
     validate_zip_source,
 )
-from teacher_app.materials import classification
+from teacher_app.materials import ai_video_renderer, classification
 from teacher_app.storage.worker_runtime import OFFICE_EXT, WorkerMaterialStorageAdapter
 from teacher_app.worker import protocol as worker_protocol
 
@@ -576,9 +576,38 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
     ); timings["mediaNormalizeMs"]=_elapsed_ms(started)
     backend=STORAGE.active_backend(); slides=Path(temp)/"slides"; slides.mkdir(exist_ok=True); preview=Path(temp)/"preview.pdf"; ext=source.suffix.lower(); pages=0
     publish_key=worker_protocol.material_publish_key(job.get("id"),material_id,source_sha256,backend)
-    single=bool(backend=="mega" and STORAGE.single_preview and (ext==".pdf" or ext in OFFICE_EXT))
+    presentation_ext={".ppt",".pptx",".odp"}
+    # Slide decks are published as real page images instead of a native PDF
+    # iframe. This removes Chrome PDF page-1 flashes and gives deterministic
+    # one-slide-at-a-time navigation.
+    single=bool(backend=="mega" and STORAGE.single_preview and (ext==".pdf" or ext in OFFICE_EXT) and ext not in presentation_ext)
     prepared_pdf=None
-    if ext in OFFICE_EXT:
+    powerpoint_exact=False
+    if ext in {".ppt",".pptx"} and _env_true("MATERIAL_POWERPOINT_COM_PREVIEW_ENABLED",True):
+        report("轉檔處理","正在嘗試使用 Microsoft PowerPoint 原生引擎建立高相容預覽。",68)
+        try:
+            com_timeout=max(15,min(240,int(os.environ.get("MATERIAL_POWERPOINT_COM_TIMEOUT_SECONDS","60") or 60)))
+        except (TypeError,ValueError):
+            com_timeout=60
+        started=time.monotonic()
+        prepared_pdf,com_detail=ai_video_renderer.export_powerpoint_pdf(
+            source,
+            Path(temp)/"powerpoint-pdf"/"preview.pdf",
+            timeout=com_timeout,
+        )
+        timings["powerPointToPdfMs"]=_elapsed_ms(started)
+        if prepared_pdf is not None:
+            powerpoint_exact=True
+            media_meta={
+                **media_meta,
+                "officeConversionMode":"powerpoint-com",
+                "presentationRenderer":"powerpoint-com",
+                "presentationFidelity":"exact",
+            }
+            report("轉檔處理","Microsoft PowerPoint 原生轉檔完成；將使用逐頁預覽避免字型與版面重排。",72)
+        else:
+            report("轉檔處理",f"PowerPoint 原生轉檔不可用（{com_detail}），改用 LibreOffice 相容轉檔。",69)
+    if ext in OFFICE_EXT and prepared_pdf is None:
         report("轉檔處理","LibreOffice 已開始建立可預覽 PDF；此步驟以實際完成事件更新，不使用假倒數。",68)
         started=time.monotonic(); prepared_pdf=STORAGE.prepare_office_pdf(source,Path(temp)/"office-pdf",timeout=240); timings["officeToPdfMs"]=_elapsed_ms(started)
         report("轉檔處理","LibreOffice 轉檔已完成，準備建立預覽。",72)
@@ -588,6 +617,8 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
                 **media_meta,
                 "officeConversionMode":str(office_status.get("mode") or ""),
                 "libreOfficeWarmRunning":bool(office_status.get("running")),
+                "presentationRenderer":"libreoffice-headless" if ext in presentation_ext else str(media_meta.get("presentationRenderer") or ""),
+                "presentationFidelity":"compatible" if ext in presentation_ext else str(media_meta.get("presentationFidelity") or ""),
             }
         except Exception:
             pass
