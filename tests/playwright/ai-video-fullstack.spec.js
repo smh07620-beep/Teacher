@@ -1,7 +1,26 @@
 const {test,expect}=require('@playwright/test');
 const {login,api,job,outline,presentation}=require('./ai-fullstack-helpers');
 const {spawnSync}=require('node:child_process');
+
+// E validates the production H.264/AAC MP4 in a real browser. Playwright's
+// bundled open-source Chromium can lack proprietary media codecs, so Linux CI
+// deliberately uses branded Chrome instead of weakening or skipping playback.
+test.use(process.env.CI && process.platform==='linux' ? {channel:'chrome'} : {});
+
 test.skip(process.env.TEACHER_AI_FULLSTACK_RUN!=='1','Requires isolated canonical runner');
+
+async function browserVideoState(player) {
+  return player.evaluate(v=>({
+    duration:Number.isFinite(v.duration)?v.duration:null,
+    readyState:v.readyState,
+    networkState:v.networkState,
+    paused:v.paused,
+    currentTime:v.currentTime,
+    codecSupport:v.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'),
+    error:v.error?{code:v.error.code,message:v.error.message}:null,
+  }));
+}
+
 test('Video: approved PPT → real Worker/FFmpeg → MP4/captions → browser review → publication ledger',async({page})=>{
   test.setTimeout(240000);page.setDefaultTimeout(20000);page.on('dialog',d=>d.accept());
   await login(page);
@@ -41,7 +60,9 @@ test('Video: approved PPT → real Worker/FFmpeg → MP4/captions → browser re
   await expect(card.locator(`a[href="${video.srtUrl}"]`)).toContainText('SRT');
   const captions=await page.evaluate(async v=>({vtt:await(await fetch(v.vttUrl)).text(),srt:await(await fetch(v.srtUrl)).text()}),video);
   expect(captions.vtt).toContain('WEBVTT');expect(captions.vtt).toContain('-->');expect(captions.srt).toContain('-->');
-  const preview=await page.request.get(new URL(video.previewUrl,page.url()).href);
+
+  const previewHref=new URL(video.previewUrl,page.url()).href;
+  const preview=await page.request.get(previewHref);
   expect(preview.headers()['content-type']).toContain('video/mp4');
   const bytes=await preview.body();expect(bytes.length).toBe(video.artifactBytes);
   expect(require('node:crypto').createHash('sha256').update(bytes).digest('hex')).toBe(video.artifactSha256);
@@ -50,32 +71,45 @@ test('Video: approved PPT → real Worker/FFmpeg → MP4/captions → browser re
   expect(inspected.status,inspected.stderr).toBe(0);
   const artifact=JSON.parse(inspected.stdout);expect(artifact).toMatchObject({mime:'video/mp4',sha256:video.artifactSha256,decoded:true});
   expect(artifact.duration).toBeCloseTo(video.durationSeconds,1);
+
+  // Native media elements depend on byte ranges for metadata/seek behavior.
+  // Exercise the real authenticated preview route and signed R2 redirect.
+  const ranged=await page.request.get(previewHref,{headers:{Range:'bytes=0-1023'}});
+  expect(ranged.status()).toBe(206);
+  expect(ranged.headers()['content-range']).toMatch(/^bytes 0-\d+\/\d+$/);
+  expect((await ranged.body()).length).toBeGreaterThan(0);
+
   // Follow the real UI preview link, not a synthetic response or fake player.
   const popupPromise=page.waitForEvent('popup');await card.locator(`a[href="${video.previewUrl}"]`).click();
-  const popup=await popupPromise;await popup.waitForLoadState();
-  await expect(popup.locator('video')).toBeVisible();
+  const popup=await popupPromise;await popup.waitForLoadState('domcontentloaded');
+  const player=popup.locator('video');
+  await expect(player).toBeVisible();
   expect(new URL(popup.url()).pathname).toContain('/ai-videos/artifacts/');
-  // Browser media-codec support and byte-range behavior vary in bundled
-  // Playwright Chromium and Moto S3. The downloaded artifact has already been
-  // hash-checked and decoded by real FFmpeg above. Exercise native playback
-  // only when this browser actually reaches loaded metadata; production Opera
-  // remains a separate acceptance check.
-  const mediaState=await popup.locator('video').evaluate(async v=>{
-    if(Number.isFinite(v.duration)&&v.duration>0)return {ready:true,duration:v.duration,error:0};
-    return await new Promise(resolve=>{
-      const finish=()=>resolve({ready:Number.isFinite(v.duration)&&v.duration>0,duration:v.duration,error:v.error?.code||0});
-      v.addEventListener('loadedmetadata',finish,{once:true});
-      v.addEventListener('error',finish,{once:true});
-      setTimeout(finish,5000);
-    });
-  });
-  if(mediaState.ready) {
+
+  // Windows local Chromium can still lack the OS H264 decoder, but Linux CI
+  // explicitly runs this file in branded Chrome and must prove real playback.
+  if(process.platform!=='win32') {
+    const codecSupport=await player.evaluate(v=>v.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'));
+    expect(codecSupport,'CI browser must advertise H.264/AAC MP4 support').not.toBe('');
+    await player.evaluate(v=>v.load());
+    try {
+      await expect.poll(async()=>{
+        const state=await browserVideoState(player);
+        return !state.error && state.readyState>=1 && Number(state.duration)>0;
+      },{timeout:30000,message:'Browser must load MP4 metadata and expose a positive duration'}).toBe(true);
+    } catch(error) {
+      const state=await browserVideoState(player);
+      throw new Error(`Browser MP4 metadata failed: ${JSON.stringify(state)}\n${error.message}`);
+    }
+    const mediaState=await browserVideoState(player);
     expect(mediaState.duration).toBeCloseTo(video.durationSeconds,1);
-    await popup.locator('video').evaluate(v=>{v.muted=true;return v.play();});
-    await expect.poll(()=>popup.locator('video').evaluate(v=>v.currentTime)).toBeGreaterThan(0);
-  } else {
-    expect(artifact.decoded).toBe(true);
-    expect(artifact.duration).toBeCloseTo(video.durationSeconds,1);
+    await player.evaluate(v=>{v.muted=true;return v.play();});
+    try {
+      await expect.poll(async()=>Number((await browserVideoState(player)).currentTime),{timeout:15000,message:'Browser must advance real MP4 playback'}).toBeGreaterThan(0);
+    } catch(error) {
+      const failedState=await browserVideoState(player);
+      throw new Error(`Browser MP4 playback failed: ${JSON.stringify(failedState)}\n${error.message}`);
+    }
   }
   await popup.close();
   const approveResponse=page.waitForResponse(r=>r.url().endsWith(`/api/ai-videos/${video.id}/approve`));
