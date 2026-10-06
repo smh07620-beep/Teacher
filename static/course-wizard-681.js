@@ -154,11 +154,11 @@ function actionFooter(){
 
 function render(){
   const root=el('course-wizard-681');if(!root)return;
-  const steps=['課程設定','教材','評量與 AI','確認發布'];
+  const steps=['課程設定','教材＋AI','評量／考卷','確認發布'];
   root.innerHTML=`<div class="flex flex-wrap gap-2">${steps.map((name,i)=>`<span class="rounded-full px-3 py-1 text-xs font-bold ${state.step===i+1?'bg-violet-700 text-white':state.step>i+1?'bg-violet-100 text-violet-800':'bg-slate-100 text-slate-500'}">${i+1} ${name}</span>`).join('')}</div><div class="rounded-xl border border-violet-200 bg-violet-50/30 p-4"><div id="cw681-step"></div><div class="mt-4 flex justify-between gap-2"><button ${state.step===1||state.busy||state.created?'disabled':''} data-csp-click="courseWizard681Back()" class="rounded border px-4 py-2 text-sm disabled:opacity-40">上一步</button>${actionFooter()}</div><div id="cw681-status" class="mt-3 text-xs text-violet-900"></div></div>`;
   const box=el('cw681-step');
   if(state.step===1){box.innerHTML=stepOne();bindStepOneControls();}
-  if(state.step===2){box.innerHTML=stepTwo();paintMaterials();renderFileSummary();}
+  if(state.step===2){box.innerHTML=stepTwo();paintMaterials();renderFileSummary();bindStepTwoControls();}
   if(state.step===3){box.innerHTML=stepThree();bindStepThreeControls();}
   if(state.step===4)box.innerHTML=stepFour();
   const status=el('cw681-status');if(status&&state.resultHtml)status.innerHTML=state.resultHtml;
@@ -240,22 +240,28 @@ function bindStepOneControls(){
 }
 
 function stepTwo(){
-  return `<h5 class="font-black">2. 教材</h5><p class="mt-1 text-xs text-slate-500">可同時上傳新教材並掛入既有教材；檔案會在最後確認後才送出。</p><div class="mt-3 grid gap-4 lg:grid-cols-2"><div><label class="block text-xs font-bold">上傳新教材<input id="cw681-files" type="file" multiple class="mt-1 w-full text-sm" data-csp-change="courseWizard681FilesChanged(this)"></label><div id="cw681-file-summary" class="mt-2 text-xs text-slate-500"></div></div><div><div class="flex justify-between"><b class="text-xs">既有教材</b><button type="button" data-csp-click="courseWizard681RefreshMaterials()" class="text-xs text-violet-700">更新</button></div><div id="cw681-materials" class="mt-2 max-h-48 overflow-auto rounded border bg-white p-2 text-xs">讀取中…</div></div></div><p class="mt-3 text-xs text-violet-800">外部連結請先用「＋新增單一教材 → 外部連結」建立，之後可在這裡直接掛入課程。</p>`;
+  const products=(state.aiProducts||[]).map(item=>`<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"><div><b class="text-emerald-950">✅ ${esc(item.title||'AI 製作產物')}</b><div class="mt-0.5 text-[11px] text-emerald-700">${esc(item.kind||'AI')}｜${item.linked?'已加入本課程':'等待加入本課程'}</div></div><button type="button" data-csp-click="courseWizard681AttachAiProducts()" class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800">${item.linked?'已加入':'加入本課程教材'}</button></div>`).join('');
+  return `<h5 class="font-black">2. 教材與 AI 製作</h5><p class="mt-1 text-xs text-slate-500">先匯入／選擇教材並確認系統判定；需要 AI 時，再從本步驟進入對應製作區，完成後回到這裡。</p>
+  <div class="mt-3 grid gap-4 lg:grid-cols-2"><div><label class="block text-xs font-bold">上傳新教材<input id="cw681-files" type="file" multiple class="mt-1 w-full text-sm" data-csp-change="courseWizard681FilesChanged(this)"></label><div id="cw681-file-summary" class="mt-2 text-xs text-slate-500"></div></div><div><div class="flex justify-between"><b class="text-xs">既有教材</b><button type="button" data-csp-click="courseWizard681RefreshMaterials()" class="text-xs text-violet-700">更新</button></div><div id="cw681-materials" class="mt-2 max-h-48 overflow-auto rounded border bg-white p-2 text-xs">讀取中…</div></div></div>
+  <p class="mt-3 text-xs text-violet-800">外部連結請先用「＋新增單一教材 → 外部連結」建立，之後可在這裡直接掛入課程。</p>
+  <section class="mt-5 border-t border-violet-100 pt-4"><div><b class="text-sm text-slate-900">需要 AI 協助製作嗎？</b><p class="mt-1 text-xs text-slate-500">AI 是教材製作工具，不是發布條件；選「不需要」即可直接下一步。</p></div><div class="mt-3 grid gap-2 md:grid-cols-2">${Object.entries(AI_PLAN_META).map(([id,meta])=>`<button type="button" data-cw-ai-plan="${id}" class="rounded-xl border p-3 text-left text-sm ${state.aiPlan===id?'border-teal-500 bg-teal-50':'bg-white'}"><b>${esc(meta.label)}</b><span class="mt-1 block text-xs text-slate-500">${esc(meta.detail)}</span></button>`).join('')}</div>${state.aiPlan!=='none'?`<div class="mt-3 flex items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 p-3"><p class="text-xs text-teal-900">選擇「${esc(aiPlan().label)}」後，可先建立安全草稿 checkpoint，再在同一個全頁 Studio 開啟製作區。</p><button type="button" data-csp-click="courseWizard681OpenAiAuthoring()" class="shrink-0 rounded-xl bg-teal-700 px-4 py-2 text-xs font-black text-white">開啟 ${esc(aiPlan().label)} →</button></div>`:''}${products?`<div class="mt-3 space-y-2"><b class="text-xs text-slate-700">本次 AI 製作產物</b>${products}</div>`:''}</section>`;
 }
 
-function stepThree(){
-  return `<h5 class="font-black">3. 評量與 AI（皆可稍後再做）</h5><p class="mt-1 text-xs text-slate-500">考卷與 AI 製作都是課程的一部分，但都不是建立課程的必要條件；先選你這次要接著做什麼。</p>
-  <div class="mt-4 text-xs font-black text-slate-700">課後評量</div><div class="mt-2 grid gap-2 md:grid-cols-2">${Object.entries(MODE_META).map(([id,meta])=>`<button type="button" data-csp-click="courseWizard681SetMode('${id}')" class="rounded border p-3 text-left text-sm ${state.examMode===id?'border-violet-500 bg-violet-100':'bg-white'}"><b>${esc(meta.label)}</b><span class="block mt-1 text-xs text-slate-500">${esc(meta.next)}</span></button>`).join('')}</div><label class="mt-3 block text-xs font-bold">考卷名稱${state.examMode==='later'?'（可留白）':'（必填）'}<input id="cw681-exam" value="${esc(el('wizard-exam-title')?.value||'')}" class="mt-1 w-full rounded border p-2" placeholder="例如：課後評量"></label>
-  <div class="mt-5 border-t border-violet-100 pt-4 text-xs font-black text-slate-700">發布後要不要接著製作教學內容？</div><div class="mt-2 grid gap-2 md:grid-cols-2">${Object.entries(AI_PLAN_META).map(([id,meta])=>`<button type="button" data-cw-ai-plan="${id}" class="rounded border p-3 text-left text-sm ${state.aiPlan===id?'border-teal-500 bg-teal-50':'bg-white'}"><b>${esc(meta.label)}</b><span class="block mt-1 text-xs text-slate-500">${esc(meta.detail)}</span></button>`).join('')}</div>`;
-}
-
-function bindStepThreeControls(){
+function bindStepTwoControls(){
   document.querySelectorAll('[data-cw-ai-plan]').forEach(button=>button.addEventListener('click',()=>{
-    syncExamInput();state.aiPlan=button.dataset.cwAiPlan||'none';render();
+    state.aiPlan=button.dataset.cwAiPlan||'none';render();loadMaterials();
   }));
 }
 
-function assignmentSummary(){
+function stepThree(){
+  const primary=['later','bank','ai'];
+  return `<h5 class="font-black">3. 評量／考卷</h5><p class="mt-1 text-xs text-slate-500">這一步只處理考卷。可以稍後建立、自己出題，或讓 AI 協助產生候選題；Blueprint 收在進階設定。</p>
+  <div class="mt-3 grid gap-2 md:grid-cols-3">${primary.map(id=>{const meta=MODE_META[id];return `<button type="button" data-csp-click="courseWizard681SetMode('${id}')" class="rounded-xl border p-3 text-left text-sm ${state.examMode===id?'border-violet-500 bg-violet-100':'bg-white'}"><b>${esc(meta.label)}</b><span class="mt-1 block text-xs text-slate-500">${esc(meta.next)}</span></button>`;}).join('')}</div>
+  ${state.examMode==='later'?'':`<label class="mt-3 block text-xs font-bold">考卷名稱（必填）<input id="cw681-exam" value="${esc(el('wizard-exam-title')?.value||'')}" class="mt-1 w-full rounded border p-2" placeholder="例如：課後評量"></label><div class="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 flex flex-wrap items-center justify-between gap-3"><p class="text-xs text-indigo-900">${state.categoryId?'✅ 考卷草稿已建立，可繼續編輯。':'系統會先建立這門課的考卷草稿，再開啟完整出題工作區。'}</p><button type="button" data-csp-click="courseWizard681OpenAssessmentAuthoring()" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-black text-white">${state.examMode==='ai'?'✨ 開啟 AI 出題':'✍️ 開啟自己出題'} →</button></div>`}
+  <details class="mt-4 rounded-xl border border-slate-200 bg-white p-3"><summary class="cursor-pointer text-xs font-bold text-slate-600">進階：Blueprint／題型配額</summary><p class="mt-2 text-xs text-slate-500">Blueprint 不列在主要流程；需要抽題規則與題型配額時，可在考卷工作區的進階設定中使用。</p></details>`;
+}
+
+function bindStepThreeControls(){}function assignmentSummary(){
   if(!canAssignLearning()||!state.assignmentEnabled)return '不建立額外學習指派';
   const type={group:'目前組別',user:'指定人員',all:'全體人員'}[state.assigneeType]||state.assigneeType;
   return `${type}${state.assigneeKey?' · '+state.assigneeKey:''} · ${state.assignmentRequired?'必修':'選修'}${state.dueAt?' · '+state.dueAt+' 前完成':' · 無期限'}`;
