@@ -7,6 +7,7 @@ from teacher_app.worker import protocol
 
 
 ROOT = Path(__file__).parents[1]
+RELEASE_VERSION = ROOT.joinpath("VERSION").read_text(encoding="utf-8").strip()
 
 
 class WorkerConvergenceStage5Tests(unittest.TestCase):
@@ -129,7 +130,7 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
 
     def test_ai_heartbeat_keeps_build_identity_when_top_level_metadata_is_empty(self):
         capabilities = {
-            "workerVersion": "6.8.1",
+            "workerVersion": RELEASE_VERSION,
             "workerSha": "dc33a43efc63",
             "workerBranch": "main",
             "tts": {
@@ -144,7 +145,7 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
                 "capabilities": capabilities,
             },
         )
-        self.assertEqual(payload["workerVersion"], "6.8.1")
+        self.assertEqual(payload["workerVersion"], RELEASE_VERSION)
         self.assertEqual(payload["workerSha"], "dc33a43efc63")
         self.assertEqual(payload["workerBranch"], "main")
         self.assertEqual(payload["tts"]["defaultVoice"], "zf_001")
@@ -152,7 +153,7 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
     def test_valid_top_level_metadata_still_overrides_capability_build_identity(self):
         payload = protocol.heartbeat_capabilities(
             {
-                "workerVersion": "6.8.1",
+                "workerVersion": RELEASE_VERSION,
                 "workerSha": "dc33a43efc63",
                 "workerBranch": "main",
             },
@@ -176,7 +177,7 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
                 capabilities={"ffmpeg": {"available": True}},
                 current_job_id="job-1",
                 metadata={
-                    "workerVersion": "6.8.1!",
+                    "workerVersion": f"{RELEASE_VERSION}!",
                     "workerSha": "ABCDEF1",
                     "workerBranch": "feature/test branch",
                     "updateAvailable": True,
@@ -188,7 +189,7 @@ class WorkerConvergenceStage5Tests(unittest.TestCase):
             )
         self.assertEqual(stamp, "2026-09-18T11:00:00+00:00")
         payload = upsert.call_args.kwargs["capabilities"]
-        self.assertEqual(payload["workerVersion"], "6.8.1")
+        self.assertEqual(payload["workerVersion"], RELEASE_VERSION)
         self.assertEqual(payload["workerSha"], "abcdef1")
         self.assertEqual(payload["workerBranch"], "feature/testbranch")
         self.assertTrue(payload["updateAvailable"])

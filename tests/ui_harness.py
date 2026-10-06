@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "static"
 PORT = int(os.environ.get("TEACHER_UI_HARNESS_PORT", "4173"))
+RELEASE_VERSION = ROOT.joinpath("VERSION").read_text(encoding="utf-8").strip()
 
 
 def _load_asset_manifest():
@@ -134,7 +135,7 @@ class Handler(BaseHTTPRequestHandler):
                     "currentJobId": "",
                     "ffmpeg": True,
                     "libreOffice": True,
-                    "workerVersion": "6.8.1",
+                    "workerVersion": RELEASE_VERSION,
                     "workerSha": "16f9064",
                     "workerBranch": "main",
                     "updateAvailable": False,

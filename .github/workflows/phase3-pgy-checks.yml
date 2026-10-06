@@ -107,7 +107,6 @@ jobs:
           assert '0072-course-bundle-idempotency' in migrations
           assert '0073-course-bundle-followups' in migrations
           assert version_file_value() == RELEASE_VERSION
-          assert RELEASE_VERSION == '6.8.1'
           assert INTERNAL_GENERATION == '7.9 / RC79'
           assert ENTRYPOINT in Path('run_web.sh').read_text(encoding='utf-8')
 

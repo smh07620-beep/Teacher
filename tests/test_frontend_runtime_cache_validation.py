@@ -1,8 +1,12 @@
 import os
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
 import pgy_frontend
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class FrontendRuntimeCacheValidationTests(unittest.TestCase):
@@ -30,7 +34,8 @@ class FrontendRuntimeCacheValidationTests(unittest.TestCase):
 
     def test_local_fallback_is_stable_and_nonempty(self):
         with patch.dict(os.environ, {}, clear=True):
-            self.assertTrue(pgy_frontend._runtime_asset_version())
+            expected = ROOT.joinpath("VERSION").read_text(encoding="utf-8").strip()
+            self.assertEqual(pgy_frontend._runtime_asset_version(), expected)
 
 
 if __name__ == "__main__":

@@ -13,10 +13,9 @@ class FinalWholeRequestAuditTests(unittest.TestCase):
         version = ROOT.joinpath("VERSION").read_text(encoding="utf-8").strip()
         architecture = ROOT.joinpath("ARCHITECTURE.md").read_text(encoding="utf-8")
         workflow = ROOT.joinpath(".github", "workflows", "phase3-pgy-checks.yml").read_text(encoding="utf-8")
-        self.assertEqual(version, "6.8.1")
         self.assertEqual(release_contract.RELEASE_VERSION, version)
         self.assertEqual(release_contract.INTERNAL_GENERATION, "7.9 / RC79")
-        self.assertIn("Formal release SemVer is `6.8.1`", architecture)
+        self.assertIn(f"Formal release SemVer is `{version}`", architecture)
         self.assertIn("7.9 / RC79", architecture)
         push = workflow.split("pull_request:", 1)[0]
         self.assertRegex(push, r"(?m)^\s+- main\s*$")

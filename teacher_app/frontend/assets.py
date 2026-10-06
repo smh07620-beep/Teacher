@@ -186,7 +186,7 @@ def _runtime_asset_version() -> str:
     if raw:
         return re.sub(r"[^A-Za-z0-9._-]", "", raw)[:12] or "runtime"
     try:
-        value = Path(__file__).with_name("VERSION").read_text(encoding="utf-8").strip()
+        value = Path(__file__).resolve().parents[2].joinpath("VERSION").read_text(encoding="utf-8").strip()
         return re.sub(r"[^A-Za-z0-9._-]", "", value) or "runtime"
     except Exception:
         return "runtime"

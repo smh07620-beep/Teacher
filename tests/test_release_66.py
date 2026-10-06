@@ -63,14 +63,14 @@ class ReleaseContractTests(unittest.TestCase):
             self.assertIn(version, registered)
 
     def test_formal_release_and_internal_generation_are_deliberately_distinct(self):
-        self.assertEqual(release_contract.RELEASE_VERSION, "6.8.1")
+        self.assertEqual(release_contract.RELEASE_VERSION, release_contract.version_file_value())
         self.assertEqual(release_contract.INTERNAL_GENERATION, "7.9 / RC79")
         readme = ROOT.joinpath("README.md").read_text(encoding="utf-8")
         architecture = ROOT.joinpath("ARCHITECTURE.md").read_text(encoding="utf-8")
         for document in (readme, architecture):
-            self.assertIn("6.8.1", document)
+            self.assertIn(release_contract.RELEASE_VERSION, document)
             self.assertIn("7.9 / RC79", document)
-        self.assertIn("Formal release SemVer remains `6.8.1`", ROOT.joinpath("RUNTIME_OWNERSHIP_MAP_STAGE5.md").read_text(encoding="utf-8"))
+        self.assertIn(f"Formal release SemVer remains `{release_contract.RELEASE_VERSION}`", ROOT.joinpath("RUNTIME_OWNERSHIP_MAP_STAGE5.md").read_text(encoding="utf-8"))
 
     def test_release_document_records_security_and_operational_invariants(self):
         document = ROOT.joinpath("docs", "archive", "ARCHITECTURE_HISTORY.md").read_text(encoding="utf-8")
