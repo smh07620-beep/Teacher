@@ -61,6 +61,56 @@ class MaterialWorkerPerformance20261002Tests(unittest.TestCase):
             self.assertIn("renderAndProviderMs", timings)
             self.assertEqual(result["storageMeta"]["workerTimingsMs"], timings)
 
+    def test_auto_material_type_is_classified_on_worker_before_commit(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.pdf"
+            source.write_bytes(b"%PDF-auto")
+            index = temp / "index.txt"
+            index.write_text("SOP 標準作業程序與檢驗流程" * 20, encoding="utf-8")
+
+            fake = Mock()
+            fake.single_preview = False
+            fake.active_backend.return_value = "r2"
+            fake.convert_pdf_to_images.return_value = 1
+            fake.upload_material_tree_to_r2.return_value = (
+                "materials/mat-auto/source.pdf",
+                "materials/mat-auto/slides",
+                {},
+            )
+
+            with patch.object(material_worker, "STORAGE", fake), \
+                 patch.object(material_worker, "_transcode_if_needed", return_value=(source, "source.pdf", {}, {})), \
+                 patch.object(material_worker, "_build_text_index", return_value=(index, {"textIndexAvailable": True})), \
+                 patch.object(
+                     material_worker.classification,
+                     "classify_uploaded_material",
+                     return_value=("sop", "內容規則判斷", "SOP 關鍵字明確"),
+                 ) as classify:
+                result = material_worker.publish_to_storage(
+                    source,
+                    "source.pdf",
+                    {
+                        "id": "job-auto",
+                        "materialId": "mat-auto",
+                        "payload": {
+                            "materialType": "auto",
+                            "title": "生化 SOP",
+                            "desc": "標準作業程序",
+                        },
+                    },
+                    temp,
+                    "c" * 64,
+                )
+
+            self.assertEqual(result["materialType"], "sop")
+            self.assertEqual(result["classificationMethod"], "內容規則判斷")
+            self.assertEqual(result["storageMeta"]["materialClassification"]["resolved"], "sop")
+            self.assertEqual(
+                classify.call_args.kwargs["text_override"],
+                index.read_text(encoding="utf-8"),
+            )
+
     def test_powerpoint_direct_frames_skip_pdf_conversion(self):
         with tempfile.TemporaryDirectory() as temp_name:
             temp = Path(temp_name)
