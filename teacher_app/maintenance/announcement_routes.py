@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from flask import g, jsonify, request
 
-from teacher_app.common.auth import has_permission, has_role
+from teacher_app.common.auth import has_permission
 from teacher_app.common import scope_filter
 from teacher_app.courses import repository as course_repository
 from teacher_app.maintenance import announcement_service
