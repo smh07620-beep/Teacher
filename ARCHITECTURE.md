@@ -73,7 +73,8 @@ Explicit admin deletion is strict: provider cleanup failures must surface throug
 | AI-assisted question generation | `static/admin-ai-questions.js` |
 | Exam settings/review/publish | `static/admin-exam-settings.js` |
 | Assessment blueprint snapshots / item analytics | `static/assessment-advanced-74.js` |
-| People / system status | `static/admin-people.js`, `static/admin-system.js` |\n| Teaching announcements / system notices | `static/admin-announcements.js`, `static/teacher-workspace-1014.js`; scoped persistence in `teacher_app.maintenance.announcement_*` |
+| People / system status | `static/admin-people.js`, `static/admin-system.js` |
+| Teaching announcements / system notices | `static/admin-announcements.js`, `static/teacher-workspace-1014.js`; scoped persistence in `teacher_app.maintenance.announcement_*` |
 | PGY clinical assessment form / submission / learner history | `static/system-assessment.js` |
 | PGY assessment administration / templates / admin record list | `static/admin-pgy-assessments.js` |
 | Document templates | `static/admin-doc-templates.js` |
