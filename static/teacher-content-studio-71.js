@@ -16,9 +16,10 @@
   const studioId = 'teacher-content-studio-71';
   const aiMount = {section:null, placeholder:null, catId:''};
   const courseMount = {root:null, placeholder:null};
+  const mediaMount = {root:null, placeholder:null};
   const materialHubMount = {root:null, placeholder:null};
   const EXAM_PARAM='exam';
-  const studioState = {returnWorkspace:'assessment',openExamId:'',deepLinkHookBound:false};
+  const studioState = {returnWorkspace:'assessment',openExamId:'',deepLinkHookBound:false,courseAuthoringStep:0};
 
   function scope(){
     return {
@@ -61,6 +62,8 @@
       const examAction = event.target.closest('[data-exam-action]');
       if(examAction){ dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId); return; }
       if(event.target.closest('[data-course-studio-back]')){ closeStudio(); return; }
+      const courseReturn=event.target.closest('[data-course-authoring-return]');
+      if(courseReturn){ void returnToCourseAuthoring(Number(courseReturn.dataset.courseAuthoringReturn||2)); return; }
       const back = event.target.closest('[data-studio-back]');
       if(back) closeStudio();
       const confirmQuestion = event.target.closest('[data-studio-question-confirm]');
@@ -106,6 +109,7 @@
       return false;
     }
     restoreAiPanel();
+    restoreMediaMount();
     restoreCourseWizard();
     restoreMaterialHub();
     document.getElementById(studioId)?.classList.add('hidden');
@@ -289,6 +293,66 @@
       const refreshStatus=host.querySelector('[data-material-refresh-status-79]');
       timeout77(window.renderAdminCourseMaterialHub?.(false),8000,'更新課程與教材').then(()=>refreshStatus?.remove()).catch(error=>{if(refreshStatus){refreshStatus.className='mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700';refreshStatus.textContent=`⚠️ ${error.message}；目前畫面仍可使用，可稍後按更新重試。`;}});
     }catch(error){restoreMaterialHub();host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3 flex gap-2"><button type="button" data-studio-action="materials-manager" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">↻ 重新嘗試</button><button type="button" data-studio-back class="rounded-lg border border-rose-200 bg-white px-3 py-2 font-bold">返回</button></div></div>`;}
+  }
+
+  function restoreMediaMount(){
+    if(!mediaMount.root)return;
+    if(mediaMount.placeholder?.isConnected)mediaMount.placeholder.replaceWith(mediaMount.root);
+    else mediaMount.root.remove();
+    mediaMount.root.classList.add('hidden');
+    mediaMount.root=null;
+    mediaMount.placeholder=null;
+  }
+
+  async function returnToCourseAuthoring(step=2){
+    window.TeacherContentToolPanels710?.restore?.();
+    restoreAiPanel();
+    restoreMediaMount();
+    studioState.courseAuthoringStep=0;
+    window.TeacherCourseAuthoringContext={active:false};
+    if(typeof window.switchAdminWorkspace==='function')await window.switchAdminWorkspace('course-materials',false);
+    window.courseWizard681ResumeStep?.(step);
+    openStudio('course-materials','教材與課程｜建立課程','課程設定 → 教材與 AI → 評量／考卷 → 確認發布；子工作完成後會回到原步驟。');
+    await mountCourseWizardInStudio();
+    window.courseWizard681ResumeStep?.(step);
+  }
+
+  async function openCourseMediaAuthoring(mode='presentation'){
+    if(!canMaterial())return false;
+    const host=document.getElementById('teacher-content-studio-body-71');if(!host)return false;
+    restoreAiPanel();restoreMediaMount();restoreCourseWizard();restoreMaterialHub();
+    const media=window.TeacherWorkspace1014?.ensureMediaWorkspace?.()||document.getElementById('teacher-media-production-1014');
+    if(!media)throw new Error('教材媒體製作室尚未載入，請重新整理後再試。');
+    const placeholder=document.createElement('div');placeholder.hidden=true;placeholder.dataset.teacherCourseMediaPlaceholder='1';media.before(placeholder);
+    mediaMount.root=media;mediaMount.placeholder=placeholder;
+    studioState.courseAuthoringStep=2;
+    window.TeacherCourseAuthoringContext={active:true,kind:'media',returnStep:2};
+    setStudioChrome('course-materials','建立課程｜2 教材與 AI','AI 製作是本課程的子工作；完成後回到教材步驟加入產物，不會提前發布課程。');
+    host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-4 flex flex-wrap items-start justify-between gap-3"><div><button type="button" data-course-authoring-return="2" class="text-sm font-bold text-teal-700">← 回到建立課程｜教材</button><h4 class="mt-2 text-xl font-black text-slate-950">✨ ${esc(({presentation:'AI PowerPoint',narration:'講稿與配音',video:'AI 教學影片'}[mode]||'AI 教材製作'))}</h4><p class="mt-1 text-xs text-slate-500">製作、修改、核准都留在這個子工作畫面；完成正式產物後再回課程精靈確認加入。</p></div><span class="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700">草稿已自動儲存</span></div><div data-course-media-host></div></div>`;
+    host.querySelector('[data-course-media-host]')?.appendChild(media);
+    media.classList.remove('hidden');
+    window.TeacherAIMediaStudio1018?.showMode?.(mode);
+    media.scrollIntoView?.({block:'start'});
+    return true;
+  }
+
+  async function openCourseAssessmentAuthoring(catId,mode='bank'){
+    if(!canQuestion()||!catId)return false;
+    studioState.courseAuthoringStep=3;
+    window.TeacherCourseAuthoringContext={active:true,kind:'assessment',returnStep:3,categoryId:String(catId)};
+    setStudioChrome('course-materials','建立課程｜3 評量／考卷','目前只編輯這門課的考卷；完成出題後直接回到建立課程第 3 步。');
+    if(mode==='ai'&&window.TeacherContentToolPanels710?.openAi){
+      await window.TeacherContentToolPanels710.openAi(catId);
+      return true;
+    }
+    if(window.TeacherContentToolPanels710?.openManual){
+      await window.TeacherContentToolPanels710.openManual(catId,'choice');
+      return true;
+    }
+    await renderExamContainer(catId);
+    const host=document.getElementById('teacher-content-studio-body-71');
+    host?.querySelector('.mx-auto')?.insertAdjacentHTML('afterbegin','<button type="button" data-course-authoring-return="3" class="mb-3 text-sm font-bold text-indigo-700">← 完成並回到建立課程｜評量</button>');
+    return true;
   }
 
   function restoreCourseWizard(){
@@ -574,6 +638,9 @@
   window.openTeacherAssessmentWorkspace=openAssessmentManagerWorkspace;
   window.openTeacherAssessmentCreateWorkspace=openAssessmentCreateWorkspace;
   window.openTeacherCourseCreateWorkspace=openCourseCreateWorkspace;
+  window.openTeacherCourseMediaAuthoring=openCourseMediaAuthoring;
+  window.openTeacherCourseAssessmentAuthoring=openCourseAssessmentAuthoring;
+  window.returnTeacherCourseAuthoringStep=returnToCourseAuthoring;
   window.openTeacherMaterialCreateWorkspace=openMaterialCreateWorkspace;
   window.openTeacherAtlasDocxWorkspace=openTeacherAtlasDocxWorkspace;
 
