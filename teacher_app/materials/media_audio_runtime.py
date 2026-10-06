@@ -11,6 +11,7 @@ import hashlib
 import io
 import json
 import os
+from pathlib import Path
 import threading
 import wave
 from typing import Any
@@ -61,6 +62,99 @@ LEGACY_VOICE_ALIASES = {
 _KOKORO_PIPELINE = None
 _KOKORO_PIPELINE_KEY = ""
 _KOKORO_PIPELINE_LOCK = threading.Lock()
+
+
+def _repo_id() -> str:
+    repo_id = str(os.environ.get("KOKORO_REPO_ID") or DEFAULT_REPO_ID).strip() or DEFAULT_REPO_ID
+    return DEFAULT_REPO_ID if repo_id == "hexgrad/Kokoro-82M" else repo_id
+
+
+def _tts_speed() -> float:
+    try:
+        speed = float(os.environ.get("KOKORO_TTS_SPEED", "1.0") or 1.0)
+    except (TypeError, ValueError):
+        speed = 1.0
+    return max(0.75, min(1.35, speed))
+
+
+def _ensure_hf_home() -> str:
+    """Keep Hugging Face model/voice downloads in a persistent Worker cache."""
+    configured = str(os.environ.get("HF_HOME") or "").strip()
+    if configured:
+        cache_path = Path(os.path.expandvars(configured)).expanduser()
+    else:
+        base = str(os.environ.get("LOCALAPPDATA") or os.environ.get("PROGRAMDATA") or "").strip()
+        cache_path = (Path(base) / "Teacher" / "huggingface") if base else (Path.home() / ".cache" / "Teacher" / "huggingface")
+    try:
+        cache_path.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # Kokoro/Hugging Face will surface a concrete cache error later.  Do not
+        # make Worker startup fail only because this proactive mkdir failed.
+        pass
+    resolved = str(cache_path)
+    os.environ["HF_HOME"] = resolved
+    return resolved
+
+
+def _pipeline_device(pipeline) -> str:
+    model = getattr(pipeline, "model", None)
+    if model is not None:
+        try:
+            return str(next(model.parameters()).device)
+        except (AttributeError, StopIteration, TypeError):
+            device = getattr(model, "device", None)
+            if device is not None:
+                return str(device)
+    return "unknown"
+
+
+def preload_kokoro() -> dict[str, Any]:
+    """Download/cache Kokoro assets and warm the default Chinese voice once."""
+    hf_home = _ensure_hf_home()
+    repo_id = _repo_id()
+    voice = _voice(os.environ.get("KOKORO_VOICE") or DEFAULT_VOICE)
+    speed = _tts_speed()
+    try:
+        import torch
+        cuda_available = bool(torch.cuda.is_available())
+    except Exception:
+        cuda_available = False
+
+    pipeline = _kokoro_pipeline(repo_id)
+
+    # Prime every selectable voice file into the same persistent HF cache when
+    # the installed Kokoro exposes load_voice().  One missing optional voice
+    # should not prevent the default voice warmup below.
+    loaded_voices = []
+    load_voice = getattr(pipeline, "load_voice", None)
+    if callable(load_voice):
+        for candidate in sorted(ALLOWED_VOICES):
+            try:
+                load_voice(candidate)
+                loaded_voices.append(candidate)
+            except Exception:
+                continue
+
+    produced_audio = False
+    for result in pipeline("你好", voice=voice, speed=speed, split_pattern=r"\n+"):
+        audio = getattr(result, "audio", None)
+        if audio is None and isinstance(result, (tuple, list)) and len(result) >= 3:
+            audio = result[2]
+        if audio is not None:
+            produced_audio = True
+    if not produced_audio:
+        raise RuntimeError("Kokoro 暖機沒有產生有效音訊。")
+
+    return {
+        "warmed": True,
+        "repoId": repo_id,
+        "voice": voice,
+        "speed": speed,
+        "cudaAvailable": cuda_available,
+        "device": _pipeline_device(pipeline),
+        "hfHome": hf_home,
+        "loadedVoices": loaded_voices,
+    }
 
 
 def _kokoro_pipeline(repo_id: str):
@@ -122,8 +216,17 @@ def _voice(value: str | None) -> str:
 def _preview_identity(voice: str | None) -> tuple[str, str, str]:
     normalized_voice = _voice(voice)
     model = str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    model_key = hashlib.sha256(model.encode("utf-8")).hexdigest()[:10]
-    return normalized_voice, model, f"system/voice-previews/kokoro/{model_key}/{normalized_voice}.wav"
+    identity = {
+        "repoId": _repo_id(),
+        "model": model,
+        "voice": normalized_voice,
+        "text": VOICE_PREVIEW_TEXT,
+        "speed": f"{_tts_speed():.3f}",
+    }
+    digest = hashlib.sha256(
+        json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:24]
+    return normalized_voice, model, f"system/voice-previews/kokoro/{digest}/{normalized_voice}.wav"
 
 
 def _material_id(job_id: str) -> str:
@@ -229,17 +332,11 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
         raise RuntimeError(
             f"已核准講稿共 {len(text)} 字，超過目前本機語音單次上限 {max_chars} 字；請先縮短或拆成兩份講稿。"
         )
-    repo_id = str(os.environ.get("KOKORO_REPO_ID") or DEFAULT_REPO_ID).strip() or DEFAULT_REPO_ID
-    if repo_id == "hexgrad/Kokoro-82M":
-        repo_id = DEFAULT_REPO_ID
+    repo_id = _repo_id()
     model_label = str(os.environ.get("KOKORO_MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
     if model_label == "Kokoro-82M":
         model_label = DEFAULT_MODEL
-    try:
-        speed = float(os.environ.get("KOKORO_TTS_SPEED", "1.0") or 1.0)
-    except (TypeError, ValueError):
-        speed = 1.0
-    speed = max(0.75, min(1.35, speed))
+    speed = _tts_speed()
 
     try:
         pipeline = _kokoro_pipeline(repo_id)
@@ -476,5 +573,6 @@ __all__ = [
     "generate_voice_preview",
     "cached_voice_preview",
     "preview_url",
+    "preload_kokoro",
     "public_status",
 ]
