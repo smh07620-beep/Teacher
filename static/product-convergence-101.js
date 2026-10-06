@@ -28,36 +28,16 @@
 
   function ensureTeacherContextTools() {
     if (!isTeacherPersona()) return false;
-    const panel = document.getElementById('admin-section-content');
-    if (!panel) return false;
 
-    let tools = document.getElementById('teacher-context-tools-101');
-    if (!tools) {
-      tools = document.createElement('section');
-      tools.id = 'teacher-context-tools-101';
-      tools.className = 'rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3';
-      tools.innerHTML = `
-        <div>
-          <b class="text-sm text-slate-900">延伸教學工具</b>
-          <p class="mt-0.5 text-[11px] text-slate-500">媒體製作與紙本匯出屬於教材流程，不再各自佔一個主導覽。</p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <button id="teacher-context-media-101" type="button" class="rounded-xl border border-cyan-200 bg-white px-3 py-2 text-xs font-black text-cyan-800">🎙️ AI 媒體製作</button>
-          <button id="teacher-context-documents-101" type="button" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700">📄 紙本文件與匯出</button>
-        </div>`;
-      panel.insertBefore(tools, panel.firstChild);
-    }
-
-    const api = window.TeacherWorkspace1014 || {};
-    const media = tools.querySelector('#teacher-context-media-101');
-    const documents = tools.querySelector('#teacher-context-documents-101');
-    if (media) media.onclick = () => api.openMedia?.();
-    if (documents) documents.onclick = () => api.openDocuments?.();
+    // The course workspace now owns the single media-production entry and the
+    // teacher header owns announcements/documents/help. Remove the older
+    // duplicate extension card instead of offering the same actions twice.
+    document.getElementById('teacher-context-tools-101')?.remove();
 
     const summary = document.getElementById('admin-workspace-summary');
     const now = new URLSearchParams(window.location.search);
     if (summary && now.get('workspace') === 'course-materials' && !now.get('teacherMode')) {
-      summary.textContent = '主要工作只保留「教材與課程」與「評量與出題」；媒體、紙本等延伸能力從流程內開啟。';
+      summary.textContent = '主要工作只保留「教材與課程」與「評量與追蹤」；AI 製作從教材流程內開啟，公告、文件與使用導覽在右上工具。';
     }
     return true;
   }
