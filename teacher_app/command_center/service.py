@@ -592,6 +592,7 @@ def build_summary(
     user: Optional[Mapping[str, Any]],
     *,
     now: Optional[dt.datetime] = None,
+    persona: str = "",
 ) -> dict[str, Any]:
     """Return one authenticated user's read-only command-center projection."""
     if not user:
@@ -609,9 +610,12 @@ def build_summary(
         current = current.replace(tzinfo=dt.timezone.utc)
     current = current.astimezone(dt.timezone.utc)
 
-    learner_items = _learner_action_items(user, current) if _has_learner_persona(user, role) else []
+    persona_mode = str(persona or "").strip().lower()
+    learner_mode = persona_mode == "learner"
+    learner_items = _learner_action_items(user, current) if (learner_mode or _has_learner_persona(user, role)) else []
 
-    actionable = ACTIONABLE_PGY.get(role, {}) if profile["pgyLearner"] else {}
+    effective_pgy_role = "student" if learner_mode else role
+    actionable = ACTIONABLE_PGY.get(effective_pgy_role, {}) if profile["pgyLearner"] else {}
     assignments = pgy_service.list_assignments(user) if actionable else []
     pgy_items: list[dict[str, Any]] = []
 
@@ -626,7 +630,7 @@ def build_summary(
             {
                 "id": str(assignment.get("id") or ""),
                 "resourceId": str(assignment.get("id") or ""),
-                "persona": "learner" if role == "student" else "teacher",
+                "persona": "learner" if learner_mode or effective_pgy_role == "student" else "teacher",
                 "domain": "pgy",
                 "kind": "assignment",
                 "title": str(assignment.get("title") or "PGY 訓練指派"),
@@ -642,7 +646,7 @@ def build_summary(
             }
         )
 
-    teacher_items = _teacher_action_items(user, current)
+    teacher_items = [] if learner_mode else _teacher_action_items(user, current)
     items = [*learner_items, *pgy_items, *teacher_items]
     items.sort(key=_task_sort_key)
     overdue = sum(1 for item in items if item.get("overdue"))
