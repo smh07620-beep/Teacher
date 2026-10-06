@@ -6,7 +6,7 @@
   const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));
   const roles = R.roles instanceof Set ? R.roles : new Set();
   const has = permission => typeof R.hasPermission === 'function' && R.hasPermission(permission);
-  const teacherRole = ['clinical_teacher','group_leader','education_admin'].some(role => roles.has(role));
+  const teacherRole = ['clinical_teacher','group_leader','education_admin','system_admin'].some(role => roles.has(role));
   if (!teacherRole || !has('material.manage')) return;
 
   const TYPE_LABELS = Object.freeze({
