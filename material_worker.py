@@ -640,7 +640,43 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
     report("建立預覽","正在建立教材預覽與可搜尋內容。",76)
     started=time.monotonic(); text_index,index_meta=_build_text_index(source,temp,prepared_pdf=prepared_pdf); timings["textIndexMs"]=_elapsed_ms(started)
     if text_index is not None:derivatives["index.txt"]=text_index
-    media_meta={**media_meta,**index_meta}
+
+    payload=dict(job.get("payload") or {})
+    requested_material_type=str(payload.get("materialType") or "standard").strip().lower()
+    if requested_material_type not in classification.MATERIAL_TYPE_VALUES|{"auto"}:
+        requested_material_type="standard"
+    resolved_material_type=requested_material_type
+    classification_method="人工指定"
+    classification_reason=""
+    if requested_material_type=="auto":
+        text_override=None
+        if text_index is not None:
+            try:text_override=Path(text_index).read_text(encoding="utf-8")
+            except OSError:text_override=None
+        started=time.monotonic()
+        try:
+            resolved_material_type,classification_method,classification_reason=classification.classify_uploaded_material(
+                source,
+                original,
+                str(payload.get("title") or ""),
+                str(payload.get("desc") or ""),
+                text_override=text_override,
+            )
+        except Exception as exc:
+            resolved_material_type="standard"
+            classification_method="預設分類"
+            classification_reason=f"背景分類失敗：{type(exc).__name__}"
+        timings["classificationMs"]=_elapsed_ms(started)
+        report("建立預覽",f"教材自動分類完成：{resolved_material_type}（{classification_method}）。",78)
+    if resolved_material_type not in classification.MATERIAL_TYPE_VALUES:
+        resolved_material_type="standard"
+    classification_meta={
+        "requested":requested_material_type,
+        "resolved":resolved_material_type,
+        "method":classification_method,
+        "reason":str(classification_reason or "")[:240],
+    }
+    media_meta={**media_meta,**index_meta,"materialClassification":classification_meta}
     render_publish_started=time.monotonic()
     if direct_presentation_frames:
         if pages<=0: raise RuntimeError("PowerPoint 原生逐頁預覽頁數為零，不能完成工作。")
@@ -695,7 +731,7 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
     timings["renderAndProviderMs"]=_elapsed_ms(render_publish_started)
     report("正式發布",f"{backend.upper()} 正式教材寫入完成，準備發布確認。",92)
     meta={**(meta or {}),"workerTimingsMs":dict(timings)}
-    return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta,"publishKey":publish_key,"publishSourceSha256":source_sha256}
+    return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta,"materialType":resolved_material_type,"classificationMethod":classification_method,"classificationReason":str(classification_reason or "")[:240],"publishKey":publish_key,"publishSourceSha256":source_sha256}
 
 def process_one(api,job,capabilities=None):
     job_id=job["id"]; timings={}; job_started=time.monotonic()
