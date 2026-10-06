@@ -51,7 +51,7 @@ def groq_api_key() -> str:
 
 
 def groq_model() -> str:
-    return os.environ.get("GROQ_MODEL", "qwen/qwen3.6-27b").strip() or "qwen/qwen3.6-27b"
+    return os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b").strip() or "qwen/qwen3.8-27b"
 
 
 def classify_timeout_seconds() -> int:
