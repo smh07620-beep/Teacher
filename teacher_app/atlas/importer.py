@@ -7,11 +7,13 @@ root compatibility adapter; image bytes are delegated to ``image_store``.
 from __future__ import annotations
 
 import re
+import shutil
 import zipfile
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from teacher_app.atlas import image_store, service
+from teacher_app.assessments import ai_runtime
 from teacher_app.common.errors import ApiError
 from teacher_app.materials import repository as material_repository
 
@@ -45,6 +47,52 @@ def docx_source(
     return material, path
 
 
+
+def materialize_docx_source(
+    material_id: str,
+    uploaded_slides_dir,
+    *,
+    paths_provider=None,
+    legacy_material_getter: Callable[[str], Mapping[str, Any] | None] | None = None,
+) -> tuple[dict | None, Path | None, Path | None]:
+    """Resolve a DOCX source from either legacy local slides or shared storage.
+
+    Modern materials normally live on R2/MEGA/GDrive rather than Render's local
+    filesystem. Atlas import must therefore use the same canonical material
+    source resolver as AI authoring instead of treating every remote DOCX as
+    unavailable.
+    """
+    material, local = docx_source(
+        material_id,
+        uploaded_slides_dir,
+        legacy_material_getter=legacy_material_getter,
+    )
+    if local:
+        return material, local, None
+    if not material or paths_provider is None:
+        return material, None, None
+    if Path(str(material.get("filename") or material.get("storageFilename") or "")).suffix.lower() != ".docx":
+        return material, None, None
+    temp_root = None
+    try:
+        temp_root, source = ai_runtime.material_source_to_temp(
+            material,
+            paths_provider=paths_provider,
+        )
+        if source.suffix.lower() != ".docx" or not source.is_file():
+            shutil.rmtree(temp_root, ignore_errors=True)
+            return material, None, None
+        return material, source, temp_root
+    except Exception as exc:
+        if temp_root:
+            shutil.rmtree(temp_root, ignore_errors=True)
+        raise ApiError(
+            "ATLAS_DOCX_SOURCE_FETCH_FAILED",
+            f"DOCX 原始檔目前無法從共用儲存讀取：{exc}",
+            status=409,
+        ) from exc
+
+
 def preview_docx_atlas(path: Path) -> dict:
     """Preserve the established DOCX Atlas preview projection."""
     with zipfile.ZipFile(path) as archive:
@@ -75,30 +123,36 @@ def preview_import(
     material_id: str,
     uploaded_slides_dir,
     *,
+    paths_provider=None,
     legacy_material_getter: Callable[[str], Mapping[str, Any] | None] | None = None,
 ) -> dict:
-    material, path = docx_source(
+    material, path, cleanup_root = materialize_docx_source(
         material_id,
         uploaded_slides_dir,
+        paths_provider=paths_provider,
         legacy_material_getter=legacy_material_getter,
     )
-    if not material or not path:
-        raise ApiError(
-            "ATLAS_DOCX_SOURCE_UNAVAILABLE",
-            "需要可安全存取的 DOCX 原始檔。",
-            status=409,
-        )
-    group = str(material.get("group") or material.get("groupKey") or "")
-    if not service.can_manage(user, group):
-        raise ApiError("ATLAS_DOCX_FORBIDDEN", "無權管理此教材。", status=403)
-    preview = preview_docx_atlas(path)
-    preview["warnings"] = list(preview.get("warnings") or []) + [PREVIEW_WARNING]
-    return {
-        "materialId": material_id,
-        "preview": preview,
-        "defaultGroup": group,
-        "initialStatus": "draft",
-    }
+    try:
+        if not material or not path:
+            raise ApiError(
+                "ATLAS_DOCX_SOURCE_UNAVAILABLE",
+                "需要可安全存取的 DOCX 原始檔。",
+                status=409,
+            )
+        group = str(material.get("group") or material.get("groupKey") or "")
+        if not service.can_manage(user, group):
+            raise ApiError("ATLAS_DOCX_FORBIDDEN", "無權管理此教材。", status=403)
+        preview = preview_docx_atlas(path)
+        preview["warnings"] = list(preview.get("warnings") or []) + [PREVIEW_WARNING]
+        return {
+            "materialId": material_id,
+            "preview": preview,
+            "defaultGroup": group,
+            "initialStatus": "draft",
+        }
+    finally:
+        if cleanup_root:
+            shutil.rmtree(cleanup_root, ignore_errors=True)
 
 
 def confirm_import(
@@ -108,14 +162,18 @@ def confirm_import(
     *,
     uploaded_slides_dir,
     material_storage,
+    paths_provider=None,
     legacy_material_getter: Callable[[str], Mapping[str, Any] | None] | None = None,
 ) -> dict:
-    material, path = docx_source(
+    material, path, cleanup_root = materialize_docx_source(
         material_id,
         uploaded_slides_dir,
+        paths_provider=paths_provider,
         legacy_material_getter=legacy_material_getter,
     )
     if not material or not path:
+        if cleanup_root:
+            shutil.rmtree(cleanup_root, ignore_errors=True)
         raise ApiError(
             "ATLAS_DOCX_SOURCE_UNAVAILABLE",
             "需要可安全存取的 DOCX 原始檔。",
@@ -123,13 +181,19 @@ def confirm_import(
         )
     source_group = str(material.get("group") or material.get("groupKey") or "")
     if not service.can_manage(user, source_group):
+        if cleanup_root:
+            shutil.rmtree(cleanup_root, ignore_errors=True)
         raise ApiError("ATLAS_DOCX_FORBIDDEN", "無權管理此教材。", status=403)
 
     selected = body.get("items")
     if not isinstance(selected, list) or not selected:
+        if cleanup_root:
+            shutil.rmtree(cleanup_root, ignore_errors=True)
         raise ApiError("ATLAS_DOCX_ITEMS_REQUIRED", "請至少選擇一張圖片。", status=400)
     common = body.get("metadata") or body.get("commonMetadata") or {}
     if not isinstance(common, dict):
+        if cleanup_root:
+            shutil.rmtree(cleanup_root, ignore_errors=True)
         raise ApiError("ATLAS_DOCX_METADATA_INVALID", "共用 metadata 格式不正確。", status=400)
 
     created: list[str] = []
@@ -184,10 +248,14 @@ def confirm_import(
             created.append(item_id)
 
     if not created:
+        if cleanup_root:
+            shutil.rmtree(cleanup_root, ignore_errors=True)
         raise ApiError(
             "ATLAS_DOCX_NO_SAFE_IMAGES",
             "沒有可安全匯入的內嵌圖片。",
             status=409,
             extra={"warnings": [EMPTY_IMPORT_WARNING]},
         )
+    if cleanup_root:
+        shutil.rmtree(cleanup_root, ignore_errors=True)
     return {"ok": True, "created": created, "status": "draft"}
