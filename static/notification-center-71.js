@@ -19,6 +19,13 @@
       || (params.get('admin')==='1'&&['people','system','worker','maintenance','audit'].includes(workspace));
   }
 
+  function isLearnerContext(){
+    const params=new URLSearchParams(window.location.search);
+    return !isSystemContext()
+      && params.get('persona')!=='teacher'
+      && params.get('admin')!=='1';
+  }
+
   function preferredHost(){
     if(isSystemContext()){
       return document.getElementById('admin-workspace-content')
@@ -133,7 +140,9 @@
   async function load(force=false){
     const section=mount();if(!section)return;const status=document.getElementById('notification-status-71');if(status)status.textContent=force?'更新中…':'讀取中…';
     try{
-      const announcementsRequest=isSystemContext()?Promise.resolve([]):getJSON('/api/announcements?limit=5').catch(()=>[]);const [events,announcements]=await Promise.all([getJSON('/api/training-command-center/notifications'),announcementsRequest]);
+      const announcementsRequest=isSystemContext()?Promise.resolve([]):getJSON('/api/announcements?limit=5').catch(()=>[]);
+      const notificationUrl=isLearnerContext()?'/api/training-command-center/notifications?persona=learner':'/api/training-command-center/notifications';
+      const [events,announcements]=await Promise.all([getJSON(notificationUrl),announcementsRequest]);
       const rows=[...(Array.isArray(events?.items)?events.items:[]),...announcementRows(announcements)];
       const states=await readStates(rows);currentRows=rows.map(row=>({...row,read:Boolean(states[row.key]?.read)}));render(currentRows);document.documentElement.dataset.notificationSource='training-command-center';
     }catch(error){if(error?.status===401||error?.status===403){section.classList.add('hidden');return;}if(status)status.textContent=`❌ ${error.message||'通知讀取失敗'}`;}
