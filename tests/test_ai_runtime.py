@@ -46,7 +46,7 @@ class AIRuntimeProviderTests(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             settings = ai_runtime.ai_settings()
         self.assertEqual(settings.provider, "groq")
-        self.assertEqual(settings.groq_model, "qwen/qwen3.6-27b")
+        self.assertEqual(settings.groq_model, "qwen/qwen3.8-27b")
         self.assertEqual(settings.groq_transcribe_model, "whisper-large-v3-turbo")
         self.assertEqual(settings.gemini_model, "gemini-3.8-flash")
         self.assertEqual(settings.openai_model, "gpt-5.6-luna")
