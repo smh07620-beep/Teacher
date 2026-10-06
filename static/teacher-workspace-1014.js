@@ -24,6 +24,7 @@
     (!requestedPersona && teacherOwnedWorkspaces.has(requestedWorkspace))
   );
   const state = { mode: params.get('teacherMode') || 'course' };
+  const GUIDE_MEMORY_KEY = 'teacher:workspace-guide:20261006';
 
   function learningUrl() {
     const url = new URL(window.location.href);
@@ -140,15 +141,102 @@
     return section;
   }
 
+  function utilityButton(id, label, handler) {
+    const button = document.createElement('button');
+    button.id = id;
+    button.type = 'button';
+    button.className = 'rounded-lg border border-slate-700 bg-slate-800/70 px-2.5 py-1.5 text-[11px] font-bold text-slate-100 hover:bg-slate-700';
+    button.textContent = label;
+    button.addEventListener('click', handler);
+    return button;
+  }
+
+  function guideDismissed() {
+    try { return window.localStorage?.getItem(GUIDE_MEMORY_KEY) === '1'; }
+    catch (_) { return false; }
+  }
+
+  function rememberGuideDismissed() {
+    try { window.localStorage?.setItem(GUIDE_MEMORY_KEY, '1'); }
+    catch (_) { /* Browser privacy mode may disable localStorage. */ }
+  }
+
+  function ensureTeacherUtilities() {
+    if (!teacherPersonaActive) return;
+    const actions = personaMountTarget().actions;
+    if (!actions) return;
+    let host = document.getElementById('teacher-utility-actions-1014');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'teacher-utility-actions-1014';
+      host.className = 'flex items-center gap-1';
+      actions.appendChild(host);
+    }
+    host.replaceChildren(
+      utilityButton('teacher-guide-open-1014', '❓ 使用導覽', () => showTeacherGuide()),
+      utilityButton('teacher-announcements-open-1014', '📣 公告', () => void openAnnouncements()),
+      utilityButton('teacher-documents-open-1014', '📄 文件', () => void openDocuments())
+    );
+  }
+
+  function guideCard(number, title, description, actions) {
+    return `<article class="rounded-xl border border-slate-200 bg-white p-3">
+      <div class="flex items-start gap-2"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-[11px] font-black text-teal-700">${number}</span><div class="min-w-0"><b class="text-sm text-slate-900">${title}</b><p class="mt-1 text-xs leading-5 text-slate-500">${description}</p></div></div>
+      <div class="mt-3 flex flex-wrap gap-2">${actions}</div>
+    </article>`;
+  }
+
+  function ensureTeacherGuide() {
+    if (!teacherPersonaActive) return null;
+    const workspace = document.getElementById('admin-workspace-content');
+    if (!workspace) return null;
+    let panel = document.getElementById('teacher-usage-guide-1014');
+    if (!panel) {
+      panel = document.createElement('section');
+      panel.id = 'teacher-usage-guide-1014';
+      panel.className = 'mb-4 rounded-2xl border border-teal-200 bg-teal-50/50 p-4 shadow-sm';
+      panel.innerHTML = `
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div><p class="admin-page-eyebrow text-teal-700">TEACHER QUICK START</p><h4 class="text-base font-black text-slate-950">第一次使用？照這四件事走就好</h4><p class="mt-1 text-xs leading-5 text-slate-600">不需要先理解系統名詞。先準備教材，需要時再製作內容；接著建立評量，最後處理批改與學員追蹤。</p></div>
+          <button id="teacher-guide-close-1014" type="button" class="shrink-0 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-bold text-teal-800">關閉導覽</button>
+        </div>
+        <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          ${guideCard('1','準備教材與課程','上傳或整理教材、建立課程，再設定要讓哪些學員學習。','<button type="button" data-teacher-guide-action="course" class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-black text-white">前往教材與課程</button>')}
+          ${guideCard('2','製作教學內容','需要時才做 AI PowerPoint、講稿與配音、老師錄影或 AI 教學影片；不是每堂課都必須製作。','<button type="button" data-teacher-guide-action="media" class="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-black text-white">開啟製作室</button>')}
+          ${guideCard('3','建立考題與發布','從教材出題或手動建立，教師檢查內容後設定對象、期限，再發布給學員。','<button type="button" data-teacher-guide-action="assessment" class="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-black text-white">前往評量與追蹤</button>')}
+          ${guideCard('4','批改與追蹤','處理待批改，再看我的學員、臨床技能評核、能力追蹤與教學分析。','<button type="button" data-teacher-guide-action="review" class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white">待批改</button><button type="button" data-teacher-guide-action="learners" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-black text-slate-700">學員追蹤</button>')}
+        </div>`;
+      workspace.insertBefore(panel, workspace.firstChild);
+      panel.querySelector('#teacher-guide-close-1014')?.addEventListener('click', () => {
+        panel.classList.add('hidden');
+        rememberGuideDismissed();
+      });
+      panel.addEventListener('click', event => {
+        const action = event.target.closest?.('[data-teacher-guide-action]')?.dataset.teacherGuideAction;
+        if (action === 'course') void openCourse();
+        else if (action === 'media') void openMedia();
+        else if (action === 'assessment') void openAssessment();
+        else if (action === 'review') void openReview();
+        else if (action === 'learners') void openLearnerTracking();
+      });
+    }
+    panel.classList.toggle('hidden', guideDismissed());
+    return panel;
+  }
+
+  function showTeacherGuide() {
+    const panel = ensureTeacherGuide();
+    panel?.classList.remove('hidden');
+    panel?.scrollIntoView?.({block:'start', behavior:'smooth'});
+  }
+
   function markTeacherNav(mode) {
     const map = {
       course: 'teacher-nav-course-1014',
-      media: 'teacher-nav-media-1014',
-      assessment: 'teacher-nav-assessment-1014',
-      documents: 'teacher-nav-documents-1014',
-      announcements: 'teacher-nav-announcements-1014'
+      media: 'teacher-nav-course-1014',
+      assessment: 'teacher-nav-assessment-1014'
     };
-    document.querySelectorAll('#teacher-nav-course-1014,#teacher-nav-media-1014,#teacher-nav-assessment-1014,#teacher-nav-documents-1014,#teacher-nav-announcements-1014').forEach(button => {
+    document.querySelectorAll('#teacher-nav-course-1014,#teacher-nav-assessment-1014').forEach(button => {
       const active = button.id === map[mode];
       button.classList.toggle('bg-teal-700', active);
       button.classList.toggle('text-white', active);
@@ -310,6 +398,29 @@
     markTeacherNav('assessment');
   }
 
+  async function openReview() {
+    state.mode = 'assessment';
+    restoreCourseWorkspace();
+    setTeacherModeParam('assessment');
+    await window.switchAdminWorkspace?.('teacher', true);
+    await window.switchTeacherMode?.('scoring');
+    markTeacherNav('assessment');
+  }
+
+  async function openLearnerTracking() {
+    await openAssessment();
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const target = document.getElementById('teacher-learners-p2')
+        || document.getElementById('teacher-review-shortcut-1014')
+        || document.getElementById('teacher-assessment-flow-1014');
+      if (target) {
+        target.scrollIntoView?.({block:'start', behavior:'smooth'});
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
+
   async function openMedia() {
     state.mode = 'media';
     setTeacherModeParam('media');
@@ -393,9 +504,7 @@
     if (!navHost) return;
     const buttons = [
       makeNavButton('teacher-nav-course-1014', '📚 教材與課程', openCourse),
-      makeNavButton('teacher-nav-assessment-1014', '📝 評量與出題', openAssessment),
-      makeNavButton('teacher-nav-announcements-1014', '📣 公告與通知', openAnnouncements),
-      makeNavButton('teacher-nav-documents-1014', '📄 紙本文件與匯出', openDocuments)
+      makeNavButton('teacher-nav-assessment-1014', '📝 評量與追蹤', openAssessment)
     ];
     navHost.replaceChildren(navGroup('教師工作台', buttons));
     markTeacherNav(state.mode === 'announcements' ? 'announcements' : (state.mode === 'documents' ? 'documents' : (state.mode === 'media' ? 'media' : (params.get('workspace') === 'assessment' ? 'assessment' : 'course'))));
@@ -410,13 +519,15 @@
     const title = document.getElementById('admin-workspace-title');
     const summary = document.getElementById('admin-workspace-summary');
     if (title && !state.mode.startsWith('media')) title.textContent = '教師工作區';
-    if (summary && state.mode === 'course') summary.textContent = '先處理今天需要完成的工作，再進入教材與課程、評量與出題或紙本文件；媒體製作收在教材工具內。';
+    if (summary && state.mode === 'course') summary.textContent = '日常工作只分兩區：教材與課程、評量與追蹤。AI 製作從教材內進入；公告、紙本文件與使用導覽放在右上工具。';
   }
 
   ensurePersonaSwitcher();
   if (!teacherPersonaActive) return;
 
   buildTeacherNavigation();
+  ensureTeacherUtilities();
+  ensureTeacherGuide();
   ensureMediaWorkspace();
   ensureAssessmentWorkflow();
   ensureAssessmentReviewShortcut();
@@ -425,6 +536,8 @@
   window.AdminWorkspaceShell?.addAfterWorkspace?.(({workspace}) => {
     ensurePersonaSwitcher();
     buildTeacherNavigation();
+    ensureTeacherUtilities();
+    ensureTeacherGuide();
     ensureAssessmentWorkflow();
     ensureAssessmentReviewShortcut();
     if (state.mode === 'media' && workspace === 'course-materials') {
@@ -453,8 +566,8 @@
 
   window.TeacherWorkspace1014 = Object.freeze({
     canLearn, canTeach, canSystem,
-    openCourse, openPresentation, openMedia, openAssessment, openDocuments, openAnnouncements,
-    learningUrl, ensurePersonaSwitcher
+    openCourse, openPresentation, openMedia, openAssessment, openReview, openLearnerTracking, openDocuments, openAnnouncements,
+    showTeacherGuide, learningUrl, ensurePersonaSwitcher
   });
 
   // Reconcile once more after the teacher workspace has finished mounting.
