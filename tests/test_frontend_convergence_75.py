@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from pgy_frontend import ASSET_MANIFEST, _apply_asset_manifest, _rewrite_local_asset_versions
+from pgy_frontend import (\n    ASSET_MANIFEST,\n    _apply_asset_manifest,\n    _ensure_ordered_scripts_after,\n    _rewrite_local_asset_versions,\n)
 
 
 ROOT = Path(__file__).parents[1]
@@ -27,6 +27,20 @@ class FrontendConvergence75Tests(unittest.TestCase):
         self.assertEqual(html.count('src="/rbac-ui-681.js"'), 1)
         self.assertLess(html.index('src="/shared-core.js"'), html.index('src="/rbac-ui-681.js"'))
         self.assertLess(html.index('src="/rbac-ui-681.js"'), html.index('src="/system-admin.js"'))
+
+    def test_missing_order_anchor_never_removes_existing_scripts(self):
+        source = (
+            '<html><body>'
+            '<script defer src="/rbac-ui-681.js?v=old"></script>'
+            '<script defer src="/api-client.js?v=old"></script>'
+            '</body></html>'
+        )
+        html = _ensure_ordered_scripts_after(
+            source,
+            "/shared-core.js",
+            ("/rbac-ui-681.js", "/api-client.js"),
+        )
+        self.assertEqual(html, source)
 
     def test_runtime_build_hash_replaces_all_local_asset_versions(self):
         with patch.dict(os.environ, {"ASSET_VERSION": "build-abc123"}, clear=False):
