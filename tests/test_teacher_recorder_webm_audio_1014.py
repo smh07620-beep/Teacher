@@ -249,6 +249,33 @@ class TeacherRecorderWebmAudio1014Tests(unittest.TestCase):
         inserted = insert.call_args.args[0]
         self.assertEqual(inserted["filename"], "老師錄音.m4a")
 
+    def test_private_ai_authoring_upload_stays_inactive_after_worker_commit(self):
+        job = {
+            "materialId": "mat-ai-private",
+            "payload": {
+                "originalName": "source.txt",
+                "title": "私人 AI 來源",
+                "group": "grpBio",
+                "area": "internal",
+                "courseId": "",
+                "materialType": "standard",
+                "authoringOnly": True,
+            },
+        }
+        result = {
+            "storageBackend": "r2",
+            "storageKey": "materials/mat-ai-private/source.txt",
+            "storageFilename": "source.txt",
+            "pageCount": 0,
+            "storageMeta": {},
+        }
+        with patch.object(job_commit.material_repository, "get_material", return_value=None), \
+             patch.object(job_commit.material_repository, "insert_material") as insert:
+            entry = job_commit.commit(job, result)
+        inserted = insert.call_args.args[0]
+        self.assertFalse(inserted["active"])
+        self.assertFalse(entry["active"])
+
     def test_windows_supervisor_uses_packaged_media_safe_entrypoint(self):
         source = ROOT.joinpath("run_material_worker_autostart.ps1").read_text(encoding="utf-8")
         entry = ROOT.joinpath("teacher_app", "worker", "material_worker_entry.py").read_text(encoding="utf-8")
