@@ -246,12 +246,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
       - run: |
-          python -m pip install -r requirements.txt 'moto[server]>=5.1,<6.0'
+          python -m pip install -r requirements.txt 'moto[server]>=5.1,<6.0' python-pptx python-docx
+          sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg fonts-noto-cjk
           npm install --no-save @playwright/test@1.55.0
           npx playwright install --with-deps chromium
       - name: Teacher → persistent AI job → canonical Worker → published exam → learner answer → saved score
         shell: bash
-        run: python tests/run_ai_fullstack.py tests/playwright/ai-question-fullstack-golden-path.spec.js
+        run: python tests/run_ai_fullstack.py tests/playwright/ai-question-fullstack-golden-path.spec.js tests/playwright/ai-powerpoint-fullstack.spec.js
       - name: Show AI full-stack diagnostics on failure
         if: failure()
         shell: bash

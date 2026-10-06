@@ -276,8 +276,9 @@ class WebStorageRuntime:
         params = {"Bucket": bucket, "Key": key}
         if filename:
             safe = str(filename).replace('"', "'").replace("\r", "").replace("\n", "")
+            ascii_name = safe.encode("ascii", "ignore").decode("ascii") or "download"
             params["ResponseContentDisposition"] = (
-                f'{"inline" if inline else "attachment"}; filename="{safe}"'
+                f'{"inline" if inline else "attachment"}; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(safe)}'
             )
         return client.generate_presigned_url("get_object", Params=params, ExpiresIn=expires)
 

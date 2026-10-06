@@ -5,11 +5,13 @@ import secrets
 import subprocess
 import sys
 import time
+import tempfile
 
 import boto3
 import requests
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 
 def main():
@@ -24,6 +26,13 @@ def main():
         "TEACHER_E2E_TEST_MODE": "1", "TEACHER_E2E_DETERMINISTIC_STUBS": "1",
         "AI_EXTERNAL_PROCESSING_ENABLED": "true",
         "TEACHER_CI_BROWSER_PASSWORD": secrets.token_urlsafe(24),
+        "E2E_PYTHON": sys.executable,
+        "MATERIAL_WORKER_TOKEN": secrets.token_urlsafe(32),
+        "MATERIAL_WORKER_ALLOW_INSECURE_LOCALHOST": "true",
+        "MATERIAL_STORAGE_BACKEND": "r2", "MATERIAL_SHARED_STAGING_BACKEND": "r2",
+        "MATERIAL_WORKER_ENABLED": "true", "MATERIAL_DIRECT_UPLOAD_ENABLED": "true",
+        "MATERIAL_BACKGROUND_JOBS": "false",
+        "MATERIAL_WORKER_HEARTBEAT_SECONDS": "5",
     })
     processes, logs = [], []
 
@@ -45,12 +54,21 @@ def main():
     try:
         start("s3", [sys.executable, "-m", "moto.server", "-H", "127.0.0.1", "-p", "9001"])
         ready("http://127.0.0.1:9001/")
-        boto3.client("s3", endpoint_url=os.environ["R2_ENDPOINT_URL"],
+        client = boto3.client("s3", endpoint_url=os.environ["R2_ENDPOINT_URL"],
                      aws_access_key_id="ci", aws_secret_access_key="ci-secret",
-                     region_name="us-east-1").create_bucket(Bucket=os.environ["R2_BUCKET_NAME"])
+                     region_name="us-east-1")
+        client.create_bucket(Bucket=os.environ["R2_BUCKET_NAME"])
+        client.put_bucket_cors(Bucket=os.environ["R2_BUCKET_NAME"], CORSConfiguration={"CORSRules":[{
+            "AllowedOrigins":["http://127.0.0.1:4176"], "AllowedMethods":["GET","PUT","POST","HEAD"],
+            "AllowedHeaders":["*"], "ExposeHeaders":["ETag"]}]})
+        fixture_dir = Path(tempfile.mkdtemp(prefix="ai-source-formats-"))
+        os.environ["E2E_SOURCE_DIR"] = str(fixture_dir)
+        from tests.ai_source_fixtures import build
+        build(fixture_dir)
         start("web", [sys.executable, "tests/ai_media_fullstack_server.py"])
         ready("http://127.0.0.1:4176/ready")
         start("worker", [sys.executable, "ai_question_worker.py"])
+        start("material-worker", [sys.executable, "material_worker.py"])
         node = os.environ.get("E2E_NODE", "node")
         return subprocess.call([node, "node_modules/@playwright/test/cli.js", "test",
                                 *sys.argv[1:], "--reporter=line", "--workers=1"])

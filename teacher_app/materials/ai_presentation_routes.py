@@ -10,7 +10,7 @@ import uuid
 import zipfile
 from pathlib import Path
 
-from flask import g, jsonify, request, send_file
+from flask import g, jsonify, redirect, request, send_file
 
 from teacher_app.common import audit, scope, scope_filter
 from teacher_app.common.auth import has_role
@@ -418,6 +418,8 @@ def register_ai_presentation_routes(owner):
             response = PresentationStorage().browser_response(_artifact(item), download_name=download_name)
         except RuntimeError as exc:
             return jsonify({"error":str(exc)}), 503
+        if isinstance(response, str):
+            return redirect(response, code=302)
         return send_file(response, as_attachment=True, download_name=download_name, mimetype=PPTX_MIME) if isinstance(response, Path) else response
 
     @app.get("/api/ai-presentations/<presentation_id>/provenance")
@@ -508,6 +510,8 @@ def register_ai_presentation_routes(owner):
             response = PresentationStorage().browser_response(_artifact(item), download_name=download_name)
         except RuntimeError as exc:
             return jsonify({"error":str(exc)}), 503
+        if isinstance(response, str):
+            return redirect(response, code=302)
         return send_file(response, as_attachment=True, download_name=download_name, mimetype=PPTX_MIME) if isinstance(response, Path) else response
 
     @app.patch("/api/ai-presentations/<presentation_id>")

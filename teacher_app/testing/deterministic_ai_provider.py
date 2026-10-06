@@ -79,6 +79,14 @@ def install() -> None:
     ai_runtime.ai_model_name = lambda _settings=None: "deterministic-e2e-v1"
     ai_runtime.generate_groq_multisource_candidates = questions
 
+    def image_description(source, **_kwargs):
+        from PIL import Image
+        with Image.open(source) as picture:
+            picture.verify()
+        return "E2E 圖片教材：檢體收件、病人識別與採檢時間核對。" * 6
+
+    ai_runtime.describe_image_for_ai = image_description
+
     def text_provider(_settings, _provider, _prompt, progress_callback=None):
         if progress_callback:
             progress_callback(70, "deterministic provider", "isolated CI provider completed")

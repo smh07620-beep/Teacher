@@ -318,6 +318,24 @@ def material_derivatives_to_temp(
         raise
 
 
+def describe_image_for_ai(source: Path, *, settings: AISettings) -> str:
+    """Vision inference seam; source download and privacy stay canonical."""
+    if not ai_privacy.external_enabled() or not settings.groq_api_key:
+        raise RuntimeError("圖片來源需要已啟用的多模態 AI provider。")
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+        json={"model": os.environ.get("AI_IMAGE_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct"),
+              "messages": [{"role": "user", "content": [
+                  {"type": "text", "text": "請忠實擷取圖片中可見的教學文字並描述教學重點，不要推測個人身分或未顯示的內容。"},
+                  {"type": "image_url", "image_url": {"url": _data_url(source)}}]}],
+              "temperature": 0, "max_tokens": 2000},
+        timeout=90,
+    )
+    response.raise_for_status()
+    return str(response.json()["choices"][0]["message"]["content"] or "")
+
+
 def extract_material_text_for_ai(
     entry: dict,
     *,
@@ -363,6 +381,8 @@ def extract_material_text_for_ai(
             text = classification.extract_docx_text(source)
         elif extension in {".txt", ".csv", ".srt", ".vtt"}:
             text = classification.extract_plain_text(source)
+        elif extension in {".png", ".jpg", ".jpeg", ".webp"}:
+            text = describe_image_for_ai(source, settings=settings)
         elif extension in classification.OFFICE_EXT:
             text = classification.extract_pdf_text(
                 classification.convert_office_to_pdf_for_text(source, temp_root)

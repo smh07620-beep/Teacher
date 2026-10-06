@@ -413,6 +413,8 @@ class AiPresentationProvenanceRouteTests(unittest.TestCase):
             },
         }
         with patch.object(ai_presentation_routes.repository, "get_presentation", return_value=revision), \
+             patch.object(ai_presentation_routes.material_repository, "get_material", return_value={"id":"mat-1","currentVersion":1}), \
+             patch.object(ai_presentation_routes.media_script_repository, "get_script", return_value={"id":"draft-1"}), \
              patch.object(ai_presentation_routes, "_scope", return_value=None):
             response = app.test_client().get("/api/ai-presentations/ppt-r2/provenance")
         self.assertEqual(response.status_code, 200)
