@@ -20,10 +20,28 @@ class CourseWizardFlow69Tests(unittest.TestCase):
         self.assertNotIn('X-Admin-Key', self.source)
 
     def test_wizard_preserves_four_clear_steps(self):
-        for marker in ('基本資料', '教材', '題目與考卷', '確認建立'):
+        for marker in ('課程設定', '教材', '評量與 AI', '確認發布'):
             self.assertIn(marker, self.source)
         self.assertIn("state.files", self.source)
         self.assertIn("state.existing", self.source)
+        self.assertIn(">上一步</button>", self.source)
+
+    def test_course_setup_can_plan_assignment_due_date_and_optional_ai_before_publish(self):
+        for marker in (
+            "/api/learning-assignments/audience-options",
+            "發布後立即建立學習指派",
+            "課程性質",
+            "完成期限",
+            "createWizardAssignment",
+            "/api/learning-assignments",
+            "AI_PLAN_META",
+            "不需要 AI 製作",
+            "AI PowerPoint",
+            "講稿與配音",
+            "AI 教學影片",
+            "TeacherAIMediaStudio1018?.showMode",
+        ):
+            self.assertIn(marker, self.source)
 
     def test_exam_modes_have_explicit_next_action(self):
         for marker in ("later:{label:'稍後建立'", "bank:{label:'從題庫選'", "ai:{label:'AI 草稿'", "blueprint:{label:'Blueprint'"):
