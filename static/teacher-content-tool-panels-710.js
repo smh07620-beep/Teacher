@@ -86,7 +86,8 @@
     mountState.catId=String(catId);
     mountState.kind=kind;
 
-    host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-3 flex items-center justify-between gap-3 border-b border-slate-200 pb-3"><div class="min-w-0"><button type="button" data-tool-return class="text-xs font-black text-indigo-700">← 考卷總覽</button><h4 class="mt-1 text-lg font-black text-slate-950">${esc(title)}</h4><p class="mt-1 text-xs text-slate-500">${esc(desc)}</p></div><span data-tool-sync class="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">同步中…</span></div><div data-tool-host></div></div>`;
+    const returnLabel=window.TeacherCourseAuthoringContext?.active?'← 完成並回到建立課程｜評量':'← 考卷總覽';
+    host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-3 flex items-center justify-between gap-3 border-b border-slate-200 pb-3"><div class="min-w-0"><button type="button" data-tool-return class="text-xs font-black text-indigo-700">${returnLabel}</button><h4 class="mt-1 text-lg font-black text-slate-950">${esc(title)}</h4><p class="mt-1 text-xs text-slate-500">${esc(desc)}</p></div><span data-tool-sync class="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">同步中…</span></div><div data-tool-host></div></div>`;
     host.querySelector('[data-tool-host]')?.appendChild(node);
     node.classList.remove('hidden');
     host.querySelector('[data-tool-return]')?.addEventListener('click',()=>returnToExam(catId));
@@ -95,6 +96,10 @@
 
   async function returnToExam(catId){
     restoreMountedTool();
+    if(window.TeacherCourseAuthoringContext?.active&&typeof window.returnTeacherCourseAuthoringStep==='function'){
+      await window.returnTeacherCourseAuthoringStep(3);
+      return;
+    }
     if(typeof window.openTeacherContentExam==='function'){
       await window.openTeacherContentExam(catId);
       return;
@@ -118,6 +123,29 @@
     }catch(error){
       restoreMountedTool();
       showError(catId,'questions',error);
+    }
+  }
+
+  async function openManualTool(catId,preset='choice'){
+    if(!catId)return;
+    restoreMountedTool();
+    try{
+      const panel=await prepareCanonicalPanel(catId);
+      const question=document.getElementById(`qform-${catId}-question`);
+      const details=question?.closest('details');
+      if(!details)throw new Error('手動出題編輯器尚未載入。');
+      details.open=true;
+      const sync=mountDedicatedNode(catId,'manual',details,'✍️ 自己出題','可逐題建立單選、多選、是非、填空、問答、圖片判讀與影片互動題；右側仍保留題庫批次匯入。');
+      const type=document.getElementById(`qform-${catId}-type`);
+      const wanted=preset==='image'?'image':preset==='video'?'video_choice':'choice';
+      if(type&&[...type.options].some(option=>option.value===wanted))type.value=wanted;
+      window.updateManualQuestionType?.(catId);
+      panel.classList.add('hidden');
+      if(sync?.isConnected){sync.className='rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700';sync.textContent='✓ 可開始出題';}
+      setTimeout(()=>question?.focus?.(),80);
+    }catch(error){
+      restoreMountedTool();
+      showError(catId,'manual',error);
     }
   }
 
@@ -159,12 +187,14 @@
   }
   removeLegacyCloseControls();
 
+  window.TeacherContentStudio71?.registerExamActions?.(['question','image','video'],(action,catId)=>openManualTool(catId,action));
   window.TeacherContentStudio71?.registerExamActions?.(['ai'],(_action,catId)=>openAiTool(catId));
   window.TeacherContentStudio71?.registerExamActions?.(['questions'],(_action,catId)=>openQuestionManager(catId));
 
   window.TeacherContentToolPanels710={
     restore:restoreMountedTool,
     openAi:openAiTool,
+    openManual:openManualTool,
     openQuestions:openQuestionManager
   };
 
