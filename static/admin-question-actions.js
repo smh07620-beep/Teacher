@@ -146,6 +146,42 @@
     finally{ actionBusy.delete(qId); window.setQuestionRowBusy(qId,false); }
   };
 
+  window.adminSaveExpandedQuestionEdits = async function(catId){
+    const ids=window.adminSelectedQuestionIds(catId)
+      .filter(id=>document.getElementById(`qedit-${id}`));
+    if(!ids.length){alert('請先勾選要儲存的題目。');return;}
+    if(bulkBusy)return;
+    let items;
+    try{
+      items=ids.map(id=>({id,data:window.adminBuildQuestionPayload(id)}));
+    }catch(e){
+      alert(e.message||'題目內容檢查失敗');
+      return;
+    }
+    window.setQuestionBulkBusy(catId,true,`儲存 ${items.length} 題中…`);
+    const progress=document.getElementById(`qbulk-progress-${catId}`);
+    if(progress)progress.textContent=`⏳ 儲存 ${items.length} 題中…`;
+    try{
+      const r=await fetch('/api/quiz-questions/batch',{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({items})
+      });
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.error||'批次儲存失敗');
+      const updated=Array.isArray(d.updated)&&d.updated.length
+        ? d.updated
+        : items.map(item=>({id:item.id,...item.data}));
+      window.updateQuestionCacheAndPaint(catId,updated);
+      if(progress)progress.textContent=`✅ 已儲存 ${items.length} 題`;
+    }catch(e){
+      if(progress)progress.textContent=`❌ ${e.message||'批次儲存失敗'}`;
+      alert(e.message||'批次儲存失敗');
+    }finally{
+      window.setQuestionBulkBusy(catId,false);
+    }
+  };
+
   window.adminBulkSetQuestionActive = async function(catId,active){
     const ids=window.adminSelectedQuestionIds(catId);
     if(!ids.length){alert('請先勾選題目');return;}
