@@ -122,6 +122,17 @@
     });
 
     actions.append(studioButton);
+
+    const atlasDocxButton = document.createElement('button');
+    atlasDocxButton.type = 'button';
+    atlasDocxButton.className = 'rounded-xl border border-teal-300 bg-white px-4 py-2 text-xs font-black text-teal-800 hover:bg-teal-50';
+    atlasDocxButton.textContent = '🔬 Word → 圖譜';
+    atlasDocxButton.addEventListener('click', async event => {
+      event.preventDefault();
+      await window.openTeacherAtlasDocxWorkspace?.();
+    });
+    actions.append(atlasDocxButton);
+
     entry.appendChild(actions);
     box.insertBefore(entry, dashboard);
   }
