@@ -16,3 +16,25 @@ The worker advertises deterministic TTS readiness only with BOTH
 Neither switch alone changes production capabilities. No Kokoro model is
 downloaded in CI; production acceptance must still verify actual Kokoro.
 Browser fetch, routes, DB, queues, Worker transport and storage are not mocked.
+
+## E: video contract
+
+`tests/playwright/ai-video-fullstack.spec.js` obtains and approves a real Worker
+generated PowerPoint, selects it in the video UI, clicks the formal generation
+button, polls the real job, and inspects actual MP4 bytes from both preview and
+S3. FFmpeg must successfully decode the output and report a positive duration
+matching the persisted timeline. Hash, MIME, model/voice, renderer and segment
+metrics are verified. Both captions are read from their formal routes.
+The real UI MP4 link opens the stored video; Linux CI additionally requires
+browser playback and positive playback time. Bundled Windows Chromium may lack
+the OS H264 decoder; local runs still require real FFmpeg decoding.
+Teacher approve/publish buttons create a receipt and a canonical material
+derivative, whose persisted version ledger is read again through the real API.
+
+The isolated runner deliberately requests legacy `mega` video storage while
+using the existing R2 fallback. It disables PowerPoint COM, isolates caches and
+lets the unchanged renderer chain choose LibreOffice or safe text rendering.
+CI already installs actual FFmpeg/LibreOffice; no video pipeline is replaced.
+The full-stack test exposed and fixed two production issues: preview must
+redirect signed provider URLs, and `.tmp` segment outputs require the explicit
+FFmpeg MP4 muxer. Formal Kokoro/R2/account acceptance is still separate.

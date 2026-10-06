@@ -91,7 +91,7 @@ def _segment_command(image: Path, audio: Path, target: Path, *, encoder: str = "
     return command + [
         "-vf", f"scale={VIDEO_ENCODING['size']}:force_original_aspect_ratio=decrease,pad={VIDEO_ENCODING['size']}:(ow-iw)/2:(oh-ih)/2",
         "-c:a", VIDEO_ENCODING["audio_codec"], "-b:a", VIDEO_ENCODING["audio_bitrate"], "-ar", str(VIDEO_ENCODING["audio_rate"]),
-        "-pix_fmt", VIDEO_ENCODING["pix_fmt"], "-shortest", "-movflags", "+faststart", str(target),
+        "-pix_fmt", VIDEO_ENCODING["pix_fmt"], "-shortest", "-movflags", "+faststart", "-f", "mp4", str(target),
     ]
 
 

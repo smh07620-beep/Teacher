@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from flask import Response, abort, g, jsonify, request, send_file
+from flask import Response, abort, g, jsonify, redirect, request, send_file
 
 from teacher_app.common import audit, scope_filter
 from teacher_app.common.auth import has_role
@@ -322,6 +322,8 @@ def register_ai_video_routes(owner):
             )
         except RuntimeError as exc:
             return jsonify({"error": str(exc)}), 503
+        if isinstance(response, str):
+            return redirect(response, code=302)
         return (
             send_file(response, mimetype=repository.MP4_MIME, as_attachment=False, download_name=response.name)
             if hasattr(response, "name")

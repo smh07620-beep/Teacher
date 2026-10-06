@@ -36,6 +36,9 @@ def main():
         "MATERIAL_WORKER_HEARTBEAT_SECONDS": "5",
         "MATERIAL_WORKER_HTTP_RATE_LIMIT_PER_MINUTE": "1800",
         "MEDIA_SCRIPT_JOB_MAX_PER_MINUTE": "30",
+        "AI_VIDEO_STORAGE_BACKEND": "mega",
+        "AI_VIDEO_FALLBACK_TO_R2": "true",
+        "AI_VIDEO_POWERPOINT_COM_ENABLED": "false",
     })
     processes, logs = [], []
 
@@ -65,6 +68,7 @@ def main():
             "AllowedOrigins":["http://127.0.0.1:4176"], "AllowedMethods":["GET","PUT","POST","HEAD"],
             "AllowedHeaders":["*"], "ExposeHeaders":["ETag"]}]})
         fixture_dir = Path(tempfile.mkdtemp(prefix="ai-source-formats-"))
+        os.environ["AI_VIDEO_CACHE_DIR"] = str(fixture_dir / "video-cache")
         os.environ["E2E_SOURCE_DIR"] = str(fixture_dir)
         from tests.ai_source_fixtures import build
         build(fixture_dir)

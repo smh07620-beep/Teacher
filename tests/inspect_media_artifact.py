@@ -3,6 +3,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -33,6 +34,12 @@ elif kind == "mp4":
         target.write_bytes(data)
         probe = subprocess.run([os.environ.get("FFMPEG_PATH", "ffmpeg"), "-i", str(target), "-f", "null", "-"], capture_output=True)
         assert probe.returncode == 0, probe.stderr.decode(errors="replace")
+        diagnostic = probe.stderr.decode(errors="replace")
+        duration = re.search(r"Duration: (\d+):(\d+):([\d.]+)", diagnostic)
+        assert duration, "FFmpeg could not read MP4 duration"
+        hours, minutes, seconds = map(float, duration.groups())
+        result["duration"] = hours * 3600 + minutes * 60 + seconds
+        assert result["duration"] > 0
         result["decoded"] = True
 else:
     raise ValueError(kind)

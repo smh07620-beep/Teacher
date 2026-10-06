@@ -60,6 +60,11 @@ class VideoEncodingTests(unittest.TestCase):
         self.assertEqual(concat[concat.index("-c") + 1], "copy")
         self.assertIn("+faststart", concat)
 
+    def test_atomic_tmp_segment_explicitly_selects_mp4_muxer(self):
+        command = ai_video_runtime._segment_command(Path("slide.png"), Path("voice.wav"), Path("part.mp4.123.tmp"))
+        self.assertEqual(command[command.index("-f") + 1], "mp4")
+        self.assertEqual(command[-1], "part.mp4.123.tmp")
+
     def test_segment_cache_hit_skips_encoding_and_reports_page_progress(self):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {"AI_VIDEO_CACHE_DIR": temp}, clear=False):
             root = Path(temp) / "job"; root.mkdir()
