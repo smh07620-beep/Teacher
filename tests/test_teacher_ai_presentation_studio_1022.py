@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class TeacherAiPresentationStudio1022Tests(unittest.TestCase):
     def test_authoring_sources_use_direct_upload_and_remain_private_by_default(self):
         source = (ROOT / "static" / "teacher-ai-material-1014.js").read_text(encoding="utf-8")
-        for marker in ("MaterialUploadClient.enqueue", "multiple", ".xlsx", ".pdf", ".docx", ".pptx", "teacher-ai-material-paste-1014", "addPastedSource", "active:false", "data-remove-authoring-source", "teacher-ai-material-request-publication"):
+        for marker in ("MaterialUploadClient.enqueue", "multiple", ".xlsx", ".pdf", ".docx", ".pptx", "teacher-ai-material-paste-1014", "addPastedSource", "authoringOnly", "data-remove-authoring-source", "teacher-ai-material-request-publication"):
             self.assertIn(marker, source)
 
 
