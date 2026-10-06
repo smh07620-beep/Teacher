@@ -49,6 +49,7 @@ class TeacherAssignmentExperience1014Tests(unittest.TestCase):
         self.assertIn('generate_voice_preview', AUDIO_RUNTIME)
         self.assertIn('system/voice-previews/kokoro/', AUDIO_RUNTIME)
         self.assertIn('VOICE_PREVIEW_TEXT', AUDIO_RUNTIME)
+        self.assertIn('setTimeout(resolve, 700)', UI)
         preview_body = AUDIO_RUNTIME.split('def generate_voice_preview', 1)[1].split('def preview_url', 1)[0]
         self.assertNotIn('_insert_material_if_missing', preview_body)
         self.assertIn('短版試聽已可播放', AUDIO_REPO)
