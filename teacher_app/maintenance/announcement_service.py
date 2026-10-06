@@ -181,10 +181,10 @@ def _visible_to_user(
     if str(item.get("kind") or "system") == "system":
         return True
     scope_type = str(item.get("scopeType") or "all")
-    if scope_type == "all":
-        return True
     if not user:
         return False
+    if scope_type == "all":
+        return True
     if learning_access.has_global_learning_access(user):
         return True
 
