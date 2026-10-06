@@ -242,6 +242,8 @@ class AIMaterialFrontend97Tests(unittest.TestCase):
             "type.value = 'slides'",
             "type.disabled = presentation",
             "typeLabel?.classList.toggle('hidden', presentation)",
+            "draft.draftType === 'slides'",
+            "已儲存 PowerPoint 大綱",
             "這個頁籤只負責 PowerPoint",
             "講稿與配音",
             "評量與追蹤",
