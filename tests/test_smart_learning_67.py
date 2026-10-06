@@ -87,6 +87,9 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('/confirm', wizard)
         self.assertIn('preferredMaterialId', wizard)
         self.assertIn('relationshipId', wizard)
+        self.assertIn('suggestedTitle', wizard)
+        self.assertIn('suggestedDescription', wizard)
+        self.assertIn('前後附近文字帶入描述', wizard)
         self.assertIn('原 Word 教材仍會保留', wizard)
         self.assertIn('去識別化', wizard)
 
