@@ -268,7 +268,9 @@ function stepThree(){
   <details class="mt-4 rounded-xl border border-slate-200 bg-white p-3"><summary class="cursor-pointer text-xs font-bold text-slate-600">進階：Blueprint／題型配額</summary><p class="mt-2 text-xs text-slate-500">Blueprint 不列在主要流程；需要抽題規則與題型配額時，可在考卷工作區的進階設定中使用。</p></details>`;
 }
 
-function bindStepThreeControls(){}function assignmentSummary(){
+function bindStepThreeControls(){}
+
+function assignmentSummary(){
   if(!canAssignLearning()||!state.assignmentEnabled)return '不建立額外學習指派';
   const type={group:'目前組別',user:'指定人員',all:'全體人員'}[state.assigneeType]||state.assigneeType;
   return `${type}${state.assigneeKey?' · '+state.assigneeKey:''} · ${state.assignmentRequired?'必修':'選修'}${state.dueAt?' · '+state.dueAt+' 前完成':' · 無期限'}`;
@@ -666,17 +668,17 @@ async function create(){
     state.linksVerified=false;
     state.expectedJobs=upload.uploaded;
     state.jobRows=[];
-    status.textContent='⏳ 同步課程、教材與考卷清單…';await refreshWorkspaceData();
+    status.textContent='⏳ 同步課程與教材清單…';await refreshWorkspaceData();
     state.created=true;
     if(state.expectedJobs<=0)await verifyCreatedCourseMaterials();
     const ready=canLeaveCourse();
-    const retryNote=bundle.reused?'（本次安全沿用既有建立結果，未重複建立課程／考卷）':'';
+    const retryNote=bundle.reused?'（本次安全沿用既有課程草稿，未重複建立）':'';
     const uploadErrors=state.failedUploads.length?`<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-amber-900"><b>⚠️ 以下教材尚未進入 Worker：</b><ul class="mt-1 list-disc pl-5">${state.failedUploads.map(item=>`<li><b>${esc(item.fileName)}</b>：${esc(item.reason)}</li>`).join('')}</ul><p class="mt-2">請使用下方「重試未完成教材」。課程本身已鎖定完成，不會重複建立。</p></div>`:'';
     const failed=state.failedUploads.length;
     const summaryClass=failed?'font-bold text-amber-700':upload.uploaded?'font-bold text-sky-700':'font-bold text-emerald-700';
     const summaryIcon=failed?'⚠️':upload.uploaded?'⏳':'✅';
     const uploadSummary=failed?`已排入背景佇列 ${upload.uploaded} 份新教材；${failed} 份上傳失敗`:upload.uploaded?`R2 上傳已完成／排入背景佇列 ${upload.uploaded} 份，現在等待 Worker 正式處理`:'沒有新教材需要背景處理';
-    state.resultHtml=`<div class="space-y-2"><div><span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程草稿${failed?'已建立，但教材上傳未完整完成':upload.uploaded?'已建立，教材仍在背景處理':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}。</div>${uploadErrors}<div class="rounded-lg border border-sky-200 bg-sky-50 p-2 font-bold text-sky-900">新教材必須全部顯示「已完成」後才可離開；課程目前仍是草稿；教材完成後可直接按「發布課程並返回」。系統會先執行發布檢查，只有通過才會讓學員看見。</div><div id="cw681-material-insights"></div><div id="cw681-atlas-import" class="hidden"></div><div class="text-xs font-bold text-emerald-800">${ready?'✓ 草稿 checkpoint 已可繼續下一步。':'教材完成後即可繼續。'}</div><div id="cw681-background-jobs"></div></div>`;
+    state.resultHtml=`<div class="space-y-2"><div><span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程草稿${failed?'已建立，但教材上傳未完整完成':upload.uploaded?'已建立，教材仍在背景處理':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}。</div>${uploadErrors}<div class="rounded-lg border border-sky-200 bg-sky-50 p-2 font-bold text-sky-900">新教材必須全部顯示「已完成」後才可離開；課程目前仍是草稿；教材完成後即可繼續第 3、4 步；只有第 4 步發布檢查通過後才會讓學員看見。</div><div id="cw681-material-insights"></div><div id="cw681-atlas-import" class="hidden"></div><div class="text-xs font-bold text-emerald-800">${ready?'✓ 草稿 checkpoint 已可繼續下一步。':'教材完成後即可繼續。'}</div><div id="cw681-background-jobs"></div></div>`;
     render();
     watchQueuedJobs(state.queuedJobs);
     return true;
