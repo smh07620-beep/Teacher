@@ -265,7 +265,7 @@
         if (progress.status === 'failed') throw new Error(progress.error || '語音試聽失敗');
         const detail = progress.progress || {};
         note(`${detail.stage || 'AI 語音試聽處理中…'}｜${Math.round(Number(detail.percent || 0))}%${detail.detail ? `｜${detail.detail}` : ''}`);
-        await new Promise(resolve => setTimeout(resolve, 1200));
+        await new Promise(resolve => setTimeout(resolve, 700));
       }
       throw new Error('本機 AI Worker 尚未完成試聽；已停止持續讀取，請確認 Worker 在線後再試。');
     } catch (error) {
