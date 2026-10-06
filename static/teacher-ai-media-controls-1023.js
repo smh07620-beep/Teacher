@@ -789,13 +789,47 @@
     void refreshVideoPresentations($('teacher-media-source-1018')?.value || '', {force:true});
   });
   async function openVideoSourceWorkspace() {
-    const opened = await openPowerPointWorkspace({purpose:'video'});
-    if (!opened) return false;
+    closePowerPointWorkspace();
+    closeGeneralMaterialUpload();
+    window.TeacherAIMediaStudio1018?.showMode?.('video');
+    const videoPanel = $('teacher-media-panel-video-1018');
+    if (!videoPanel) {
+      setSharedHint('教學影片來源區尚未載入完成，請稍後再試。', true);
+      return false;
+    }
+    let host = $('teacher-ai-video-source-workspace-1028');
+    if (!host) {
+      host = document.createElement('section');
+      host.id = 'teacher-ai-video-source-workspace-1028';
+      host.className = 'rounded-2xl border border-indigo-200 bg-indigo-50/30 p-4 space-y-3';
+      host.innerHTML = `
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div><p class="text-[11px] font-black tracking-[0.14em] text-indigo-700">VIDEO SOURCE</p><h5 class="mt-1 text-base font-black text-slate-950">＋ 加入影片來源資料</h5><p class="mt-1 text-xs leading-5 text-slate-600">在教學影片頁直接加入 PDF、Word、PPTX、Excel、圖片或貼入文字。來源保持私人草稿，完成 AI 統整與教師核准後才會成為可用影片畫面。</p></div>
+          <button id="teacher-ai-video-source-close-1028" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600">收起來源區</button>
+        </div>
+        <div id="teacher-ai-video-source-body-1028"></div>`;
+      const video = $('teacher-ai-video-1015');
+      if (video?.parentElement === videoPanel) videoPanel.insertBefore(host, video);
+      else videoPanel.prepend(host);
+      $('teacher-ai-video-source-close-1028')?.addEventListener('click', () => { host.hidden = true; });
+    }
+    host.hidden = false;
+    const body = $('teacher-ai-video-source-body-1028');
+    const authoring = window.TeacherAIMaterial1014?.ensureMounted?.(body) || $('teacher-ai-material-1014');
+    if (!authoring) {
+      setSharedHint('AI 來源資料元件載入失敗；請重新整理頁面。', true);
+      return false;
+    }
+    if (authoring.parentElement !== body && body) body.appendChild(authoring);
+    authoring.classList.remove('hidden');
+    authoring.removeAttribute('aria-hidden');
+    await window.TeacherAIMaterial1014?.paintMaterialOptions?.('');
     const type = $('teacher-ai-material-type-1014');
     if (type && [...type.options].some(option => option.value === 'slides')) type.value = 'slides';
     const file = $('teacher-ai-material-file-1014');
     const paste = $('teacher-ai-material-paste-1014');
     if (file) file.accept = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.odt,.ods,.txt,.csv,.png,.jpg,.jpeg,.webp';
+    host.scrollIntoView?.({block:'nearest', behavior:'smooth'});
     setTimeout(() => (file || paste)?.focus?.(), 60);
     return true;
   }
