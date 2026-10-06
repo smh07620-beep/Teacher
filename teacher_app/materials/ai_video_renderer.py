@@ -88,6 +88,53 @@ def _run(command: list[str], *, timeout: int) -> tuple[bool, str]:
     return True, "ok"
 
 
+def export_powerpoint_pdf(presentation_path: Path, output_pdf: Path, *, timeout: int = 60) -> tuple[Path | None, str]:
+    """Export a PPT/PPTX through desktop PowerPoint for layout-faithful PDF."""
+    powershell = _powershell()
+    if not powershell:
+        return None, "not-candidate"
+    output_pdf = Path(output_pdf)
+    output_pdf.parent.mkdir(parents=True, exist_ok=True)
+    script = output_pdf.parent / "export-presentation-pdf.ps1"
+    script.write_text(
+        "param([string]$PresentationPath,[string]$OutputPath)\n"
+        "$ErrorActionPreference='Stop'\n$ppt=$null\n$deck=$null\n"
+        "try {\n"
+        "  $ppt=New-Object -ComObject PowerPoint.Application\n"
+        "  try { $ppt.DisplayAlerts=1 } catch {}\n"
+        "  $deck=$ppt.Presentations.Open($PresentationPath,-1,0,0)\n"
+        "  $parent=Split-Path -Parent $OutputPath\n"
+        "  New-Item -ItemType Directory -Force -Path $parent | Out-Null\n"
+        "  $deck.ExportAsFixedFormat($OutputPath,2)\n"
+        "} finally {\n"
+        "  if($deck){$deck.Close()}\n  if($ppt){$ppt.Quit()}\n"
+        "  [GC]::Collect(); [GC]::WaitForPendingFinalizers()\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    ok, detail = _run(
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            "-PresentationPath",
+            str(presentation_path),
+            "-OutputPath",
+            str(output_pdf),
+        ],
+        timeout=max(15, min(240, int(timeout or 60))),
+    )
+    if not ok:
+        return None, detail
+    if not output_pdf.is_file() or output_pdf.stat().st_size <= 0:
+        return None, "pdf-missing"
+    return output_pdf, "ok"
+
+
 def export_powerpoint_frames(pptx_path: Path, output_dir: Path) -> tuple[list[Path], str]:
     powershell = _powershell()
     if not powershell:
@@ -238,5 +285,6 @@ __all__ = [
     "capability_summary",
     "export_libreoffice_frames",
     "export_powerpoint_frames",
+    "export_powerpoint_pdf",
     "render_exact_frames",
 ]
