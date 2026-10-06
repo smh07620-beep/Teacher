@@ -26,6 +26,7 @@
   // become a formal teaching material only through the explicit publish flow.
   let authoringSourceIds = [];
   let materialOptionsGeneration = 0;
+  let authoringContext = 'generic';
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
@@ -38,6 +39,35 @@
       area: params.get('area') || window.currentTrainingArea || String(R.user?.preferredArea || '').trim() || 'internal',
       group: params.get('group') || window.currentGroupKey || String(R.user?.preferredGroup || '').trim() || 'grpBio',
     };
+  }
+
+  function configureContext(mode = 'generic') {
+    authoringContext = mode === 'presentation' ? 'presentation' : 'generic';
+    const presentation = authoringContext === 'presentation';
+    const heading = document.getElementById('teacher-ai-material-heading-1014');
+    const intro = document.getElementById('teacher-ai-material-intro-1014');
+    const typeLabel = document.getElementById('teacher-ai-material-type-label-1014');
+    const type = document.getElementById('teacher-ai-material-type-1014');
+    const depth = document.getElementById('teacher-ai-material-depth-1014');
+    const note = document.getElementById('teacher-ai-material-editor-note-1014');
+    if (heading) heading.textContent = presentation ? '🖥️ AI PowerPoint｜來源與大綱' : '✨ AI 來源內容工作台';
+    if (intro) intro.textContent = presentation
+      ? '這個頁籤只負責 PowerPoint：加入任意來源 → 產生投影片大綱 → 教師修改／核准 → 產生簡報。講稿與配音請切到上方「講稿與配音」，考題請到「評量與追蹤」。'
+      : '可直接上傳文件、圖片或貼入文字，作為不同 AI 教學內容的來源；既有教材只是可選來源，不強制綁定。';
+    if (type) {
+      if (presentation) type.value = 'slides';
+      type.disabled = presentation;
+    }
+    typeLabel?.classList.toggle('hidden', presentation);
+    if (depth) depth.title = presentation ? 'PowerPoint 內容篇幅' : '教學講稿目標長度；其他產出類型會作為篇幅參考';
+    if (note) note.textContent = presentation
+      ? '這裡不建立講稿或考題。大綱核准後繼續產生 PowerPoint；其他工作請使用對應入口。'
+      : '測驗題草稿若要進正式題庫，仍請到「評量與追蹤」完成審核與建立。';
+    if (!activeJobId && !activeDraft) {
+      status(presentation
+        ? '先加入來源並設定重點，再產生 PowerPoint 大綱。'
+        : '選好來源後，設定產出類型與重點，再產生 AI 草稿。');
+    }
   }
 
   function status(message, tone = 'normal') {
@@ -328,7 +358,7 @@
       materialId,
       referenceMaterialIds: allAuthoringSourceIds().filter(id => id !== materialId),
       outputType,
-      targetMinutes: Number(document.getElementById('teacher-ai-material-minutes-1014')?.value || 5),
+      targetMinutes: Number(document.getElementById('teacher-ai-material-depth-1014')?.value || 5),
       tone: document.getElementById('teacher-ai-material-tone-1014')?.value || 'clinical',
       focus: document.getElementById('teacher-ai-material-focus-1014')?.value || '',
     };
@@ -512,13 +542,13 @@
     section.id = 'teacher-ai-material-1014';
     section.className = 'mb-5 rounded-2xl border border-violet-200 bg-white p-5 shadow-sm space-y-5';
     section.innerHTML = `
-      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-violet-700">AI SOURCE AUTHORING</p><h4 class="text-xl font-black text-slate-950">✨ AI 來源內容工作台</h4><p class="mt-1 text-sm text-slate-600">可直接上傳文件、圖片或貼入文字，作為講稿、配音、PowerPoint 或教學影片的共同來源；既有教材只是可選來源，不強制綁定。</p></div><details class="text-sm text-slate-600"><summary class="cursor-pointer font-bold text-violet-700">使用說明</summary><p class="mt-2 max-w-xl leading-6">PDF、Word、PPTX、SOP、Excel、圖片與貼入文字都可作為私人 authoring source。預設保持草稿，不會自動對學員發布；之後可選擇製作 PowerPoint／影片，或由教師明確發布成正式教材。</p></details></div>
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-violet-700">AI SOURCE AUTHORING</p><h4 id="teacher-ai-material-heading-1014" class="text-xl font-black text-slate-950">✨ AI 來源內容工作台</h4><p id="teacher-ai-material-intro-1014" class="mt-1 text-sm text-slate-600">可直接上傳文件、圖片或貼入文字，作為不同 AI 教學內容的來源；既有教材只是可選來源，不強制綁定。</p></div><details class="text-sm text-slate-600"><summary class="cursor-pointer font-bold text-violet-700">使用說明</summary><p class="mt-2 max-w-xl leading-6">PDF、Word、PPTX、SOP、Excel、圖片與貼入文字都可作為私人 authoring source。預設保持草稿，不會自動對學員發布；之後可選擇製作 PowerPoint／影片，或由教師明確發布成正式教材。</p></details></div>
       <div class="rounded-2xl border border-violet-200 bg-violet-50/40 p-4 space-y-4"><div class="flex flex-col lg:flex-row lg:items-end gap-3"><label class="flex-1 text-sm font-bold text-slate-700">Step 1｜加入來源資料（可多選或拖曳）<input id="teacher-ai-material-file-1014" type="file" multiple class="mt-1 block w-full text-sm" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.odt,.ods,.txt,.csv,.png,.jpg,.jpeg,.webp"></label><button id="teacher-ai-material-upload-1014" type="button" class="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-black text-white">⬆️ 加入原始資料</button></div><div class="rounded-xl border border-violet-100 bg-white/80 p-3"><div class="grid gap-3 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] lg:items-end"><label class="text-sm font-bold text-slate-700">文字標題（貼入文字時使用）<input id="teacher-ai-material-paste-title-1014" maxlength="120" class="learning-input mt-1" placeholder="例如：生化檢驗 SOP"></label><label class="text-sm font-bold text-slate-700">直接貼入文字<textarea id="teacher-ai-material-paste-1014" rows="5" maxlength="60000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-6" placeholder="貼上 SOP、課程重點、會議紀錄或其他要製作成講稿、投影片或影片的內容"></textarea></label><button id="teacher-ai-material-paste-add-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-black text-violet-700">＋ 加入貼入文字</button></div></div><p class="text-xs text-slate-600">這些資料是共用 AI 製作來源：可接講稿／配音／PowerPoint／影片；預設保持私人草稿，只有教師明確發布時才成為正式教材。</p><div id="teacher-ai-material-uploaded-sources-1014" class="flex flex-wrap gap-2"></div></div>
-      <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-sm font-bold text-slate-700 xl:col-span-2">補充既有教材（可多選；上方共用來源會自動帶入）<select id="teacher-ai-material-source-1014" multiple size="4" class="learning-input mt-1"><option value="">讀取教材中…</option></select></label><label class="text-sm font-bold text-slate-700">產出類型<select id="teacher-ai-material-type-1014" class="learning-input mt-1"><option value="slides" selected>投影片大綱</option><option value="handout">教學講義</option><option value="summary">重點摘要</option><option value="script">教學講稿</option><option value="quiz">測驗題草稿</option><option value="objectives">課程學習目標</option></select></label><label class="text-sm font-bold text-slate-700">文字風格<select id="teacher-ai-material-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
-      <div class="grid md:grid-cols-[1fr_auto] gap-3"><div class="grid sm:grid-cols-[1fr_160px] gap-3"><input id="teacher-ai-material-focus-1014" class="learning-input" maxlength="500" placeholder="Step 2｜設定：特別聚焦的重點（選填）"><select id="teacher-ai-material-minutes-1014" class="learning-input" title="教學講稿目標長度；其他產出類型會作為篇幅參考"><option value="3">精簡</option><option value="5" selected>標準</option><option value="10">較完整</option><option value="15">深入</option></select></div><button id="teacher-ai-material-generate-1014" type="button" class="rounded-xl bg-violet-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40">Step 3｜產生 AI 草稿</button></div>
+      <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-sm font-bold text-slate-700 xl:col-span-2">補充既有教材（可多選；上方共用來源會自動帶入）<select id="teacher-ai-material-source-1014" multiple size="4" class="learning-input mt-1"><option value="">讀取教材中…</option></select></label><label id="teacher-ai-material-type-label-1014" class="text-sm font-bold text-slate-700">產出類型<select id="teacher-ai-material-type-1014" class="learning-input mt-1"><option value="slides" selected>投影片大綱</option><option value="handout">教學講義</option><option value="summary">重點摘要</option><option value="script">教學講稿</option><option value="quiz">測驗題草稿</option><option value="objectives">課程學習目標</option></select></label><label class="text-sm font-bold text-slate-700">文字風格<select id="teacher-ai-material-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
+      <div class="grid md:grid-cols-[1fr_auto] gap-3"><div class="grid sm:grid-cols-[1fr_160px] gap-3"><input id="teacher-ai-material-focus-1014" class="learning-input" maxlength="500" placeholder="Step 2｜設定：特別聚焦的重點（選填）"><select id="teacher-ai-material-depth-1014" class="learning-input" title="教學講稿目標長度；其他產出類型會作為篇幅參考"><option value="3">精簡</option><option value="5" selected>標準</option><option value="10">較完整</option><option value="15">深入</option></select></div><button id="teacher-ai-material-generate-1014" type="button" class="rounded-xl bg-violet-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40">Step 3｜產生 AI 草稿</button></div>
       <div id="teacher-ai-material-status-1014" class="text-sm text-slate-600">選好來源後，設定產出類型與重點，再產生 AI 草稿。</div>
       <div id="teacher-ai-material-source-info-1014" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-slate-700"></div>
-      <div id="teacher-ai-material-editor-1014" class="hidden space-y-3"><h5 class="text-base font-black text-slate-900">Step 3｜投影片大綱</h5><label class="block text-sm font-bold text-slate-700">標題<input id="teacher-ai-material-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-sm font-bold text-slate-700">內容<textarea id="teacher-ai-material-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-base leading-7" placeholder="AI 草稿會出現在這裡；請由教師逐段確認與修改。"></textarea></label><div class="flex flex-wrap gap-2"><button id="teacher-ai-material-save-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-black text-violet-700">💾 儲存草稿</button><button id="teacher-ai-material-approve-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-40">✅ 教師核准</button><button id="teacher-ai-material-publish-1014" type="button" disabled class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-40">📚 選擇發布成正式教材</button></div><p class="text-sm text-slate-500">測驗題草稿若要進正式題庫，仍請到「評量與出題」完成審核與建立。</p></div>
+      <div id="teacher-ai-material-editor-1014" class="hidden space-y-3"><h5 class="text-base font-black text-slate-900">Step 3｜投影片大綱</h5><label class="block text-sm font-bold text-slate-700">標題<input id="teacher-ai-material-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-sm font-bold text-slate-700">內容<textarea id="teacher-ai-material-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-base leading-7" placeholder="AI 草稿會出現在這裡；請由教師逐段確認與修改。"></textarea></label><div class="flex flex-wrap gap-2"><button id="teacher-ai-material-save-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-black text-violet-700">💾 儲存草稿</button><button id="teacher-ai-material-approve-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-40">✅ 教師核准</button><button id="teacher-ai-material-publish-1014" type="button" disabled class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-40">📚 選擇發布成正式教材</button></div><p id="teacher-ai-material-editor-note-1014" class="text-sm text-slate-500">測驗題草稿若要進正式題庫，仍請到「評量與追蹤」完成審核與建立。</p></div>
       <div class="border-t border-slate-100 pt-4"><h5 class="text-base font-black text-slate-900">已儲存 AI 草稿</h5><div id="teacher-ai-material-saved-1014" class="mt-2 grid gap-2"><p class="text-sm text-slate-500">選擇來源教材後會顯示已儲存草稿。</p></div></div>
       <div id="teacher-ai-material-presentation-stage-1014" class="border-t border-slate-100 pt-5"></div>`;
     const dashboard = box.querySelector('.admin-course-dashboard');
@@ -557,6 +587,7 @@
     document.getElementById('teacher-media-script-1014')?.classList.add('hidden');
     void paintMaterialOptions();
     renderAuthoringSources();
+    configureContext(box.id === 'teacher-media-panel-presentation-1018' ? 'presentation' : 'generic');
     return section;
   }
 
@@ -566,6 +597,7 @@
       if (targetBox && existing.parentElement !== targetBox) targetBox.appendChild(existing);
       existing.classList.remove('hidden');
       existing.removeAttribute('aria-hidden');
+      configureContext(targetBox?.id === 'teacher-media-panel-presentation-1018' ? 'presentation' : 'generic');
       return existing;
     }
     return install(targetBox);
@@ -579,5 +611,5 @@
   }
 
   window.addEventListener('teacher-ai-material-request-publication', () => void publishDraft());
-  window.TeacherAIMaterial1014 = Object.freeze({paintMaterialOptions, loadDrafts, publishCurrentDraft: publishDraft, ensureMounted});
+  window.TeacherAIMaterial1014 = Object.freeze({paintMaterialOptions, loadDrafts, publishCurrentDraft: publishDraft, ensureMounted, configureContext});
 })();
