@@ -111,11 +111,14 @@
     });
     const byLogicalSource = new Map();
     [...byId.values()].forEach(item => {
-      const name = String(item.filename || item.title || item.id || '').trim().toLocaleLowerCase('zh-Hant');
+      const name = String(item.title || item.filename || item.id || '')
+        .normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase('zh-Hant');
+      // The picker label does not expose courseId/filename differences. Deduplicate
+      // by the visible logical source so teachers never see two indistinguishable
+      // rows that point at different legacy/version records.
       const key = [
         String(item.area || '').trim(),
         String(item.group || '').trim(),
-        String(item.courseId || '').trim(),
         item.active === false ? 'draft' : 'active',
         name,
       ].join('::');
@@ -155,6 +158,9 @@
         select.appendChild(option);
       });
       if ([...select.options].some(option => option.value === previous)) select.value = previous;
+      window.dispatchEvent(new CustomEvent('teacher-ai-material-options-rendered-1014', {
+        detail: { ids: ordered.map(item => String(item.id || '')) }
+      }));
     } catch (error) {
       status(`教材清單讀取失敗：${error.message}`, 'error');
     }

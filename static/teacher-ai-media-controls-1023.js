@@ -269,13 +269,13 @@
       }
     }
     const authoring = $('teacher-ai-material-source-1014');
-    if (authoring) {
-      if (![...authoring.options].some(option => option.value === materialId) && materialId) {
-        const item = materials.find(row => String(row.id) === materialId);
-        if (item) authoring.add(new Option(sourceLabel(item), materialId));
-      }
-      if (authoring.value !== materialId) {
-        authoring.value = materialId;
+    // teacher-ai-material-1014.js is the sole owner of this multi-select's
+    // option list.  The media workspace only carries the current shared source
+    // into an option that the canonical owner has already rendered.
+    if (authoring && materialId) {
+      const option = [...authoring.options].find(row => row.value === materialId);
+      if (option && !option.selected) {
+        option.selected = true;
         authoring.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
@@ -307,7 +307,6 @@
     const selectedBeforeRefresh = String(shared.value || lastSourceSelection || '');
     if (!force && materials.length && Date.now() - sourceRefreshAt < 2000) {
       paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
-      paintSelect($('teacher-ai-material-source-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
       paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳', selectedBeforeRefresh);
       showSourceAvailability(materials);
       sourcesLoadedAt = Date.now();
@@ -325,7 +324,6 @@
       sourceRefreshAt = Date.now();
       sourcesLoadedAt = sourceRefreshAt;
       paintSelect($('teacher-script-material-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
-      paintSelect($('teacher-ai-material-source-1014'), materials, '目前沒有可用教材', selectedBeforeRefresh);
       paintSelect(shared, materials, '目前沒有可用教材；可直接在本頁上傳', selectedBeforeRefresh);
       showSourceAvailability(materials);
       broadcastSources(shared);
@@ -779,6 +777,7 @@
 
   installCourseWizardDirectUploadGuard();
   scheduleEnhance();
+  window.addEventListener('teacher-ai-material-options-rendered-1014', () => syncSelectedSource());
   window.addEventListener('teacher-ai-presentation-rendered-f5', () => {
     presentationCache.loadedAt = 0;
     void refreshVideoPresentations($('teacher-media-source-1018')?.value || '', {force:true});

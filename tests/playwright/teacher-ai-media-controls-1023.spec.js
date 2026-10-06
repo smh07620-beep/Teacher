@@ -85,6 +85,41 @@ test('shared AI media source loads directly and drives narration subtitle and vi
   await expect(page.locator('#teacher-ai-video-presentation-1015')).toHaveValue('ppt-1');
 });
 
+test('shared media source never repaints or duplicates the AI PowerPoint supplemental-material picker', async ({ page }) => {
+  await page.setContent(`
+    <section id="teacher-media-production-1014">
+      <select id="teacher-media-source-1018"><option value="">來源</option></select>
+      <p id="teacher-media-next-step-1018"></p>
+      <select id="teacher-script-material-1014"><option value="">來源</option></select>
+      <select id="teacher-ai-material-source-1014" multiple>
+        <option value="">選擇既有教材…</option>
+        <option value="doc-1">grpBio｜C503 操作與維護</option>
+        <option value="doc-2">grpBio｜Cobas b 211 儀器教育訓練</option>
+      </select>
+    </section>
+  `);
+  await installTeacherRBAC(page);
+  await page.evaluate(() => {
+    window.fetch = async url => {
+      if (String(url) === '/api/slides/admin') return { ok:true, json:async()=>[
+        {id:'doc-1',title:'C503 操作與維護',filename:'c503-a.pdf',group:'grpBio',area:'internal',active:true},
+        {id:'legacy-duplicate',title:'C503 操作與維護',filename:'c503-b.pdf',group:'grpBio',area:'internal',active:true},
+        {id:'doc-2',title:'Cobas b 211 儀器教育訓練',group:'grpBio',area:'internal',active:true},
+      ]};
+      return {ok:true,json:async()=>[]};
+    };
+  });
+  await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
+  await expect.poll(() => page.evaluate(() => Boolean(window.TeacherAIMediaControls1023))).toBe(true);
+  const authoring = page.locator('#teacher-ai-material-source-1014');
+  await expect(authoring.locator('option')).toHaveCount(3);
+  await page.locator('#teacher-media-source-1018').selectOption('doc-1');
+  await expect(authoring.locator('option')).toHaveCount(3);
+  await expect.poll(() => page.evaluate(() =>
+    [...document.querySelector('#teacher-ai-material-source-1014').selectedOptions].map(option => option.value)
+  )).toContain('doc-1');
+});
+
 test('approved PowerPoint list loads independently of material selection and coalesces duplicate refreshes', async ({ page }) => {
   await page.setContent(`
     <section id="teacher-media-production-1014">
