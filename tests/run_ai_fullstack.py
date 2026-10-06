@@ -34,6 +34,7 @@ def main():
         "MATERIAL_WORKER_ENABLED": "true", "MATERIAL_DIRECT_UPLOAD_ENABLED": "true",
         "MATERIAL_BACKGROUND_JOBS": "false",
         "MATERIAL_WORKER_HEARTBEAT_SECONDS": "5",
+        "MEDIA_SCRIPT_JOB_MAX_PER_MINUTE": "30",
     })
     processes, logs = [], []
 
@@ -69,7 +70,7 @@ def main():
         start("web", [sys.executable, "tests/ai_media_fullstack_server.py"])
         ready("http://127.0.0.1:4176/ready")
         start("worker", [sys.executable, "ai_question_worker.py"])
-        start("material-worker", [sys.executable, "material_worker.py"])
+        start("material-worker", [sys.executable, "-m", "teacher_app.worker.material_worker_entry"])
         node = os.environ.get("E2E_NODE", "node")
         return subprocess.call([node, "node_modules/@playwright/test/cli.js", "test",
                                 *sys.argv[1:], "--reporter=line", "--workers=1"])

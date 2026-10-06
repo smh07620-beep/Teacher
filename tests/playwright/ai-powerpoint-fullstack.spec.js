@@ -23,7 +23,8 @@ test('PowerPoint accepts uploaded PDF, DOCX, PPTX, image, pasted text and mixed 
   test.setTimeout(600000);page.setDefaultTimeout(20000);
   await login(page);
   const ids=[];
-  for(const name of ['source.pdf','source.docx','source.pptx','source.png','pasted.txt']) {
+  const formats=(process.env.E2E_SOURCE_FORMATS||'source.pdf,source.docx,source.pptx,source.png,pasted.txt').split(',');
+  for(const name of formats) {
     const id=await upload(page,name);ids.push(id);
     const draft=await outline(page,id);
     expect(draft.sourceChunks.map(c=>c.materialId)).toContain(id);

@@ -1022,6 +1022,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
             return jsonify({
                 "accepted": True,
                 "jobId": session["job_id"],
+                "materialId": session["material_id"],
                 "status": str(job.get("status") or "queued"),
                 "replayed": True,
             }), 200
@@ -1125,7 +1126,7 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
         except Exception as exc:
             _fail_upload(runtime, session, "validation_failed", delete_object=True)
             return jsonify({"error": f"直傳完成驗證失敗：{str(exc)[:300]}"}), 400
-        return jsonify({"accepted": True, "jobId": session["job_id"], "status": "queued"}), 202
+        return jsonify({"accepted": True, "jobId": session["job_id"], "materialId": session["material_id"], "status": "queued"}), 202
 
     @app.post("/api/material-upload/<upload_id>/abort")
     def material_upload_abort(upload_id):

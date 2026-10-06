@@ -26,6 +26,7 @@ from teacher_app.materials import repository as materials  # noqa: E402
 from teacher_app.storage import providers  # noqa: E402
 
 app = create_app()
+print(f"Isolated full-stack database: {STATE / 'teacher.db'}", flush=True)
 password = os.environ["TEACHER_CI_BROWSER_PASSWORD"]
 if not auth_repository.find_user("e2eteacher"):
     accounts.create_account({"username": "e2eteacher", "password": password, "name": "E2E 臨床教師", "empId": "E2ET01", "role": "clinical_teacher", "roles": ["clinical_teacher", "group_leader"], "preferredArea": "internal", "preferredGroup": "grpBio"})

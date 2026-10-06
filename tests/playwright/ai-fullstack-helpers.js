@@ -48,6 +48,9 @@ async function upload(page,name) {
     return window.MaterialUploadClient.directUpload(form,{fileName:name});
   },{name,bytes});
   await job(page,'/api/material-jobs',queued.jobId);
-  return queued.materialId;
+  const persisted=await api(page,`/api/material-jobs/${queued.jobId}`,null,'GET');
+  expect(persisted.materialId).toBeTruthy();
+  expect(queued.materialId).toBe(persisted.materialId);
+  return persisted.materialId;
 }
 module.exports={baseURL,login,api,job,outline,presentation,upload};

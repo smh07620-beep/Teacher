@@ -259,6 +259,7 @@ jobs:
         run: |
           cat ai-media-web.log || true
           cat ai-media-worker.log || true
+          cat ai-media-material-worker.log || true
           cat ai-media-s3.log || true
 
 
