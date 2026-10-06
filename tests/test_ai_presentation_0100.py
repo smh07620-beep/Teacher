@@ -177,8 +177,16 @@ class AiPresentationRuntimeTests(unittest.TestCase):
             from pptx import Presentation
 
             rendered = Presentation(str(output))
+            self.assertLessEqual(len(rendered.core_properties.comments), 255)
             self.assertIn("mat-1", rendered.core_properties.comments)
             self.assertNotIn("token=", rendered.core_properties.comments.lower())
+            notes = "\n".join(
+                slide.notes_slide.notes_text_frame.text
+                for slide in rendered.slides
+                if slide.has_notes_slide
+            )
+            self.assertIn('"sourceChunkIds":["chunk-1"]', notes)
+            self.assertIn('"teacherApprovedBy":"teacher-a"', notes)
 
     @unittest.skipIf(ai_presentation_runtime.Presentation is None, "python-pptx is installed only on the AI Worker")
     def test_renderer_handles_quality_blocks_and_missing_image_as_fallback(self):
