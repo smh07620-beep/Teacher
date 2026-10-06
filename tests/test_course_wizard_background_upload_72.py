@@ -64,6 +64,18 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertIn("clearWorkflowId();", source)
         self.assertIn("window.switchAdminWorkspace('course-materials',true)", source)
 
+    def test_completed_course_materials_show_resolved_type_and_docx_atlas_offer(self):
+        source = ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8')
+        for marker in (
+            'hydrateCompletedMaterialInsights',
+            'materialClassification',
+            '教材自動歸類結果',
+            '/api/atlas/import-docx/',
+            '檢視並建立 Atlas 草稿',
+            "openAtlasDocxWizard('cw681-atlas-import',id)",
+        ):
+            self.assertIn(marker, source)
+
     def test_admin_upload_delegates_to_shared_transport(self):
         source = ROOT.joinpath('static', 'admin-material-upload.js').read_text(encoding='utf-8')
         self.assertIn('MaterialUploadClient.enqueue', source)
