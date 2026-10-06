@@ -40,7 +40,7 @@ class SystemWorkspaceSimplification75Tests(unittest.TestCase):
         self.assertIn("if(!isSystemAdmin)return", shell)
         self.assertNotIn("admin-material-jobs-panel", shell)
         self.assertNotIn("data-system75-jobs", shell)
-        self.assertIn("migrateMaterialsToMega", shell)
+        self.assertNotIn("migrateMaterialsToMega", shell)
         self.assertIn("migrateLocalMaterialsToR2", shell)
 
     def test_session_rbac_copy_replaces_admin_key_guidance(self):
