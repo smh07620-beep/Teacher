@@ -250,6 +250,22 @@ class AIMaterialFrontend97Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
+    def test_authoring_surface_keeps_optional_inputs_and_history_collapsed(self):
+        for marker in (
+            "teacher-ai-material-flow-1014",
+            "1 加入來源",
+            "2 產生草稿",
+            "3 教師修正",
+            "4 產生／發布",
+            "teacher-ai-material-paste-details-1014",
+            "或直接貼入文字",
+            "teacher-ai-material-existing-details-1014",
+            "或選擇既有教材",
+            "teacher-ai-material-history-details-1014",
+            "歷史草稿／版本",
+        ):
+            self.assertIn(marker, self.source)
+
     def test_factory_registers_migration_and_routes_before_runtime_use(self):
         self.assertIn("ai_material_migration", self.factory)
         self.assertIn("register_ai_material_routes", self.factory)
