@@ -84,7 +84,7 @@ def _scope_payload(user, payload, *, existing=None):
 
     own_group = scope_filter.preferred_group(user)
     if not own_group:
-        return None, jsonify({"error": "此帳號尚未設定可管理的組別範圍。"}), 403
+        return None, (jsonify({"error": "此帳號尚未設定可管理的組別範圍。"}), 403)
 
     scope_type = str(
         data.get("scopeType")
@@ -93,15 +93,15 @@ def _scope_payload(user, payload, *, existing=None):
     ).strip().lower()
 
     if scope_type == "all":
-        return None, jsonify({"error": "此帳號只能發布自己組別或組內課程公告。"}), 403
+        return None, (jsonify({"error": "此帳號只能發布自己組別或組內課程公告。"}), 403)
 
     if scope_type == "course":
         course_id = str(data.get("courseId") or existing.get("courseId") or "").strip()
         course = course_repository.get_course(course_id) if course_id else None
         if not course:
-            return None, jsonify({"error": "找不到公告指定的課程。"}), 400
+            return None, (jsonify({"error": "找不到公告指定的課程。"}), 400)
         if str(course.get("group") or "") != own_group:
-            return None, jsonify({"error": "此課程不在你的授權範圍。"}), 403
+            return None, (jsonify({"error": "此課程不在你的授權範圍。"}), 403)
         data["courseId"] = course_id
         data["group"] = own_group
         data["area"] = str(course.get("area") or _preferred_area(user))
@@ -110,7 +110,7 @@ def _scope_payload(user, payload, *, existing=None):
 
     requested_group = str(data.get("group") or existing.get("group") or own_group).strip()
     if requested_group != own_group:
-        return None, jsonify({"error": "此組別不在你的授權範圍。"}), 403
+        return None, (jsonify({"error": "此組別不在你的授權範圍。"}), 403)
     data["scopeType"] = "group"
     data["group"] = own_group
     data["area"] = str(data.get("area") or existing.get("area") or _preferred_area(user)).strip()
