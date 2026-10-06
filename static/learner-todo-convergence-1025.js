@@ -60,7 +60,7 @@
       const authResponse=await fetch('/api/auth/me',{credentials:'same-origin',cache:'no-store'});
       const auth=await authResponse.json().catch(()=>({}));
       if(!authResponse.ok||!auth?.authenticated)return;
-      const response=await fetch('/api/training-command-center',{credentials:'same-origin',cache:'no-store'});
+      const response=await fetch('/api/training-command-center?persona=learner',{credentials:'same-origin',cache:'no-store'});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data?.error||'無法讀取我的待辦');
       render(data);
