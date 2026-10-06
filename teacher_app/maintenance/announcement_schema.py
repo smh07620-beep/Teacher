@@ -7,6 +7,7 @@ from typing import Any
 def init_schema(conn: Any, kind: str) -> None:
     boolean = "BOOLEAN" if kind == "postgres" else "INTEGER"
     default_true = "TRUE" if kind == "postgres" else "1"
+    default_false = "FALSE" if kind == "postgres" else "0"
     conn.execute(
         f"""
         CREATE TABLE IF NOT EXISTS announcements (
@@ -23,9 +24,9 @@ def init_schema(conn: Any, kind: str) -> None:
             course_id TEXT NOT NULL DEFAULT '',
             starts_at TEXT NOT NULL DEFAULT '',
             ends_at TEXT NOT NULL DEFAULT '',
-            pinned {boolean} NOT NULL DEFAULT 0,
-            email_enabled {boolean} NOT NULL DEFAULT 0,
-            require_read {boolean} NOT NULL DEFAULT 0,
+            pinned {boolean} NOT NULL DEFAULT {default_false},
+            email_enabled {boolean} NOT NULL DEFAULT {default_false},
+            require_read {boolean} NOT NULL DEFAULT {default_false},
             created_by TEXT NOT NULL DEFAULT ''
         )
         """
