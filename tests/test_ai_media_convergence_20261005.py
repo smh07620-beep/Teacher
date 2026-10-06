@@ -93,7 +93,7 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
         self.assertIn("purpose:'video'", self.controls)
         self.assertIn("VIDEO SOURCE AUTHORING", self.controls)
         self.assertIn("私人製作來源", self.controls)
-        self.assertIn("PowerPoint、講稿／配音、影片共用", self.studio)
+        self.assertIn("PowerPoint、講稿／配音、老師錄影與 AI 教學影片共用同一個製作室", self.studio)
         self.assertIn("📹 老師自己錄影", self.studio)
         self.assertIn("teacher-media-video-captions-1018", self.studio)
         self.assertNotIn("teacher-media-tab-subtitle-1018", self.studio)
