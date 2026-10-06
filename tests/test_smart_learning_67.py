@@ -85,6 +85,9 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('openAtlasDocxWizard', wizard)
         self.assertIn('/preview', wizard)
         self.assertIn('/confirm', wizard)
+        self.assertIn('preferredMaterialId', wizard)
+        self.assertIn('relationshipId', wizard)
+        self.assertIn('原 Word 教材仍會保留', wizard)
         self.assertIn('去識別化', wizard)
 
 if __name__=='__main__': unittest.main()
