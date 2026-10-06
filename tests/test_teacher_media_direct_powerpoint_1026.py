@@ -19,12 +19,16 @@ class TeacherMediaDirectPowerPoint1026Tests(unittest.TestCase):
 
     def test_controls_export_single_powerpoint_list_owner(self):
         source=ROOT.joinpath("static","teacher-ai-media-controls-1023.js").read_text(encoding="utf-8")
+        studio=ROOT.joinpath("static","teacher-ai-media-studio-1018.js").read_text(encoding="utf-8")
         self.assertIn("refreshVideoPresentations",source)
         self.assertIn("presentationRefreshPromise",source)
         self.assertIn("presentationRefreshController",source)
         self.assertIn("讀取已準備影片畫面",source)
         self.assertIn("尚無已準備影片畫面",source)
         self.assertIn("/api/ai-presentations",source)
+        self.assertEqual(source.count("TeacherPresentationChoicesCache1026 ="),1)
+        self.assertNotIn("TeacherPresentationChoicesCache1026 =",studio)
+        self.assertIn("TeacherAIMediaControls1023?.refreshVideoPresentations",studio)
 
     def test_authoring_workspace_still_accepts_multiple_arbitrary_files(self):
         source=ROOT.joinpath("static","teacher-ai-material-1014.js").read_text(encoding="utf-8")

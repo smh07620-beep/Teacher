@@ -228,6 +228,7 @@
           loadedAt: Date.now(),
           rows: Array.isArray(body) ? body : [],
         };
+        // Canonical owner: no other module writes this shared presentation-choice cache.
         window.TeacherPresentationChoicesCache1026 = {...presentationCache};
         return paintVideoPresentations(presentationCache.rows, materialId);
       } catch (error) {

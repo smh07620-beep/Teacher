@@ -13,8 +13,6 @@
   let activeMode = 'presentation';
   let retryGeneration = 0;
   let presentationMaterialId = null;
-  let presentationRequest = null;
-  let presentationRequestGeneration = 0;
 
   async function fetchJson(url, options = {}, timeoutMs = 12000) {
     const controller = new AbortController();
@@ -110,63 +108,10 @@
 
   async function refreshPresentationChoices(materialId = '', {force = false} = {}) {
     const normalizedMaterialId = String(materialId || '');
-    const owner = window.TeacherAIMediaControls1023?.refreshVideoPresentations;
-    if (typeof owner === 'function') {
-      presentationMaterialId = normalizedMaterialId;
-      return owner(normalizedMaterialId, {force});
-    }
-    const select = $('teacher-ai-video-presentation-1015');
-    if (!select || select.tagName !== 'SELECT') return false;
-    if (!force && normalizedMaterialId === presentationMaterialId && presentationRequest) {
-      return presentationRequest;
-    }
-    if (!force && normalizedMaterialId === presentationMaterialId && !presentationRequest) return false;
     presentationMaterialId = normalizedMaterialId;
-    const generation = ++presentationRequestGeneration;
-    const prior = select.value;
-    const explicitGroup = new URLSearchParams(window.location.search).get('group') || window.currentGroupKey || '';
-    const group = explicitGroup || (R.crossGroup ? '' : String(R.user?.preferredGroup || ''));
-    select.replaceChildren(new Option('讀取已準備影片畫面…', ''));
-    select.disabled = true;
-    presentationRequest = (async () => {
-      const query = group ? `?group=${encodeURIComponent(group)}` : '';
-      const rows = await fetchJson(`/api/ai-presentations${query}`, {
-        credentials: 'same-origin', cache: 'no-store'
-      });
-      if (generation !== presentationRequestGeneration || normalizedMaterialId !== presentationMaterialId) return false;
-      window.TeacherPresentationChoicesCache1026 = {
-        group: String(group || ''),
-        loadedAt: Date.now(),
-        rows: Array.isArray(rows) ? rows : [],
-      };
-      const usable = (Array.isArray(rows) ? rows : []).filter(item =>
-        item?.artifactReady && ['approved', 'published'].includes(String(item.status || ''))
-      );
-      select.replaceChildren(new Option(usable.length ? '選擇已準備影片畫面…' : '尚無已準備影片畫面', ''));
-      usable.forEach(item => {
-        const preferred = normalizedMaterialId && String(item.materialId || '') === normalizedMaterialId ? '｜目前來源' : '';
-        const label = `${item.title || '教學畫面'}｜版本 ${Number(item.revisionNumber || 1)}${item.status === 'published' ? '｜已發布' : '｜已核准'}${preferred}`;
-        select.appendChild(new Option(label, String(item.id || '')));
-      });
-      select.disabled = !usable.length;
-      if (usable.some(item => String(item.id) === prior)) select.value = prior;
-      else if (usable.length === 1) select.value = String(usable[0].id || '');
-      if (select.value !== prior) select.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    })();
-    try {
-      return await presentationRequest;
-    } catch (error) {
-      if (generation !== presentationRequestGeneration) return;
-      select.replaceChildren(new Option('影片畫面版本讀取失敗', ''));
-      select.disabled = true;
-      const status = $('teacher-ai-video-status-1015');
-      if (status) status.textContent = `影片畫面讀取失敗：${error.message}`;
-      return false;
-    } finally {
-      if (generation === presentationRequestGeneration) presentationRequest = null;
-      updateRecommendation();
-    }
+    const owner = window.TeacherAIMediaControls1023?.refreshVideoPresentations;
+    if (typeof owner !== 'function') return false;
+    return owner(normalizedMaterialId, {force});
   }
 
   function showMode(next, focus = false) {
