@@ -148,6 +148,37 @@
     }
   }
 
+  async function resetAdminUserPassword(username){
+    const password=prompt(`輸入 ${username} 的新密碼（至少 4 碼）：`);
+    if(password===null)return;
+    if(String(password).length<4){alert('新密碼至少 4 碼。');return;}
+    const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({password:String(password)})
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){alert(d.error||'密碼重設失敗');return;}
+    alert('✅ 密碼已重設；既有登入工作階段已失效。');
+  }
+
+  async function toggleAdminUserAccount(username,active){
+    const enable=Boolean(active);
+    const verb=enable?'啟用':'停用';
+    const detail=enable?'':'\n\n停用後該帳號既有登入工作階段會失效。';
+    if(!confirm(`確定要${verb}帳號 ${username}？${detail}`))return;
+    const r=await fetch(`/api/users/${encodeURIComponent(username)}`,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({active:enable})
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){alert(d.error||`${verb}失敗`);return;}
+    await renderAdminUserAccounts();
+  }
+
+  window.resetAdminUserPassword=resetAdminUserPassword;
+  window.toggleAdminUserAccount=toggleAdminUserAccount;
   window.adminProfileTags=adminProfileTags;
   window.adminUserRoleSummary=adminUserRoleSummary;
   window.ensureAdminUserEditor=ensureAdminUserEditor;
