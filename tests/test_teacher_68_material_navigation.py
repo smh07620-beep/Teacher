@@ -225,7 +225,25 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         # A minimal valid PNG embedded twice is enough for the importer contract.
         from PIL import Image
         output = BytesIO(); Image.new("RGB", (1, 1), "white").save(output, format="PNG"); png = output.getvalue()
+        document = (
+            '<w:document '
+            'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+            'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+            '<w:body>'
+            '<w:p><w:r><w:t>blood cell morphology</w:t></w:r><w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r></w:p>'
+            '<w:p><w:r><w:t>urine sediment</w:t></w:r><w:r><w:drawing><a:blip r:embed="rId2"/></w:drawing></w:r></w:p>'
+            '</w:body></w:document>'
+        )
+        relationships = (
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>'
+            '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image2.png"/>'
+            '</Relationships>'
+        )
         with zipfile.ZipFile(docx, "w") as archive:
+            archive.writestr("word/document.xml", document)
+            archive.writestr("word/_rels/document.xml.rels", relationships)
             archive.writestr("word/media/image1.png", png); archive.writestr("word/media/image2.png", png)
         material = {"id":"docx-1","group":"grpHema","folder":"docx-1","storageFilename":"atlas.docx","filename":"atlas.docx"}
         old_paths = pgy_app.app.config["STORAGE_PATHS"]
