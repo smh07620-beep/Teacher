@@ -3,7 +3,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from pgy_frontend import (\n    ASSET_MANIFEST,\n    _apply_asset_manifest,\n    _ensure_ordered_scripts_after,\n    _rewrite_local_asset_versions,\n)
+from pgy_frontend import (
+    ASSET_MANIFEST,
+    _apply_asset_manifest,
+    _ensure_ordered_scripts_after,
+    _rewrite_local_asset_versions,
+)
 
 
 ROOT = Path(__file__).parents[1]
