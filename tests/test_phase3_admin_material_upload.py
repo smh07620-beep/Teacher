@@ -23,6 +23,7 @@ class Phase3AdminMaterialUploadTests(unittest.TestCase):
             'sha256File',
             'directR2MaterialUpload',
             'adminUploadMaterials',
+            'prepareMaterialVersionUpload',
             'waitForAdminMaterialJobs',
             'editAdminMaterial',
             'toggleAdminMaterial',
