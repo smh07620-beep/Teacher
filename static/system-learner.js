@@ -283,7 +283,9 @@ function inferPdfReaderMode(entry = {}) {
     ].map(value => String(value || '').trim().toLowerCase()).filter(Boolean);
 
     if (String(entry.materialType || '').toLowerCase() === 'sop') return 'document';
-    if (explicitHints.some(value => ['document', 'continuous', 'pdf', 'sop'].includes(value))) return 'document';
+
+    // A converted PPT/PPTX may carry generic PDF preview metadata. Preserve the
+    // original teaching format: presentation evidence must win over "pdf".
     if (explicitHints.some(value => ['presentation', 'slides', 'powerpoint', 'ai_presentation', 'ai-powerpoint'].includes(value))) return 'presentation';
     if (entry.sourcePresentationId || entry.presentationId || meta.sourcePresentationId || meta.presentationId) return 'presentation';
 
@@ -293,6 +295,7 @@ function inferPdfReaderMode(entry = {}) {
     const title = String(entry.title || '').toLowerCase();
     if (/(powerpoint|ai\s*powerpoint|投影片|簡報)/.test(title)) return 'presentation';
 
+    if (explicitHints.some(value => ['document', 'continuous', 'pdf', 'sop'].includes(value))) return 'document';
     return 'document';
 }
 
@@ -596,8 +599,13 @@ function updateSlideViewerPdf(){
     const base=slideViewerState.previewUrl;
     const presentationMode=slideViewerState.readerMode==='presentation';
 
+    // Chrome PDF Viewer can ignore a fragment-only navigation on an existing
+    // iframe. A page-specific query forces a real navigation while retaining
+    // browser cache for the underlying PDF response.
+    const separator=base.includes('?')?'&':'?';
+    const presentationBase=presentationMode?`${base}${separator}reader_page=${page}`:base;
     const wanted=presentationMode
-        ? `${base}#page=${page}&toolbar=0&navpanes=0&scrollbar=0&view=Fit`
+        ? `${presentationBase}#page=${page}&toolbar=0&navpanes=0&scrollbar=0&view=Fit`
         : `${base}#page=${page}&toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
 
     frame.dataset.readerMode=presentationMode?'presentation':'document';
@@ -671,11 +679,25 @@ function renderSlideThumbs() {
 
 
 
-function goToSlidePage(i) { const total=slideViewerState.mode==='pdf'?Number(slideViewerState.pageCount||0):slideViewerState.images.length; if (i < 0 || i >= total) return; slideViewerState.index = i; slideViewerState.zoom = 1; if(slideViewerState.mode==='pdf')updateSlideViewerPdf();else updateSlideViewerImage(); }
+function goToSlidePage(i) {
+    const total=slideViewerState.mode==='pdf'?Number(slideViewerState.pageCount||0):slideViewerState.images.length;
+    const next=Number(i);
+    if (!Number.isInteger(next) || next < 0 || next >= total) return;
+    slideViewerState.index = next;
+    slideViewerState.zoom = 1;
+    renderSlideThumbs();
+    if(slideViewerState.mode==='pdf')updateSlideViewerPdf();else updateSlideViewerImage();
+}
 
 function slideViewerPrev() { goToSlidePage(slideViewerState.index - 1); }
 
 function slideViewerNext() { goToSlidePage(slideViewerState.index + 1); }
+
+// data-csp-click resolves actions through window; make the visible reader
+// navigation contract explicit instead of relying on classic-script globals.
+window.goToSlidePage = goToSlidePage;
+window.slideViewerPrev = slideViewerPrev;
+window.slideViewerNext = slideViewerNext;
 
 function closeSlideViewer() { const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); }
 
