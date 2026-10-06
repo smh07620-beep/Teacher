@@ -36,7 +36,7 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
 
     def test_course_material_module_preserves_course_global_contracts(self):
         source = ROOT.joinpath('static/admin-course-material.js').read_text(encoding='utf-8')
-        for name in ('adminCourseRowHTML','paintAdminCourses','optimisticInsertAdminCourse','renderAdminCourses','refreshAdminMaterialCourses','adminDeleteCourse'):
+        for name in ('adminCourseRowHTML','paintAdminCourses','optimisticInsertAdminCourse','renderAdminCourses','refreshAdminMaterialCourses','adminDeleteCourse','jumpToAdminQuiz'):
             self.assertIn(f'window.{name}', source)
         self.assertIn('/api/courses/admin?area=', source)
         self.assertIn("method:'DELETE'", source)
@@ -59,7 +59,7 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
 
     def test_people_module_preserves_profile_editor_contracts(self):
         source = ROOT.joinpath('static/admin-people.js').read_text(encoding='utf-8')
-        for name in ('adminProfileTags','adminUserRoleSummary','ensureAdminUserEditor','adminSyncProfileTagChecks','adminSetProfileTag','openAdminUserEditor','closeAdminUserEditor','saveAdminUserEditor'):
+        for name in ('adminProfileTags','adminUserRoleSummary','ensureAdminUserEditor','adminSyncProfileTagChecks','adminSetProfileTag','openAdminUserEditor','closeAdminUserEditor','saveAdminUserEditor','resetAdminUserPassword','toggleAdminUserAccount'):
             self.assertIn(f'window.{name}', source)
         self.assertIn('/api/users/${encodeURIComponent(username)}', source)
         self.assertIn('/training-audience', source)
@@ -67,6 +67,8 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
         self.assertIn('professionalTitle', source)
         self.assertIn('responsibilityTags', source)
         self.assertIn('pgyLearner', source)
+        self.assertIn("body:JSON.stringify({password:String(password)})", source)
+        self.assertIn("body:JSON.stringify({active:enable})", source)
 
     def test_people_profile_metadata_never_becomes_rbac_input(self):
         source = ROOT.joinpath('static/admin-people.js').read_text(encoding='utf-8')
