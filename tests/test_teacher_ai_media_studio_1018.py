@@ -38,6 +38,11 @@ def test_media_studio_uses_hidden_compatibility_source_and_accessible_mode_tabs(
         assert token in source
     assert "['presentation', 'narration', 'recording', 'video']" in source
     assert "teacher-media-tab-subtitle-1018" not in source
+    for marker in (
+        "ensureModeGuide", "加入來源", "產生大綱", "教師修正", "建立講稿",
+        "核准／試聽", "選擇錄製方式", "校正字幕", "預覽／發布",
+    ):
+        assert marker in source
 
 
 def test_media_shell_has_no_duplicate_source_placeholder_and_keeps_a_small_return_action():
