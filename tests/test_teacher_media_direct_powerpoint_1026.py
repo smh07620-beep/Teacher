@@ -14,7 +14,7 @@ class TeacherMediaDirectPowerPoint1026Tests(unittest.TestCase):
         self.assertIn("teacher-media-source-bridge-1018",source)
         self.assertIn("來源資料改在各功能內選擇",source)
         self.assertNotIn("PowerPoint、講稿／配音、影片共用",source)
-        self.assertIn("加入 PDF／Word／圖片／文字",video)
+        self.assertIn("直接加入 PDF、Word、PPTX、圖片或貼入文字",video)
         self.assertNotIn("teacher-media-open-powerpoint-1018",source)
 
     def test_controls_export_single_powerpoint_list_owner(self):
