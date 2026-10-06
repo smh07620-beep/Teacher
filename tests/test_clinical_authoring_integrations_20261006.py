@@ -27,7 +27,9 @@ class ClinicalAuthoringIntegration20261006Tests(unittest.TestCase):
     def test_word_atlas_import_lives_in_teacher_workspace_not_learner_header(self):
         self.assertIn("openTeacherAtlasDocxWorkspace", self.teacher)
         self.assertIn("teacher-atlas-docx-manager-1014", self.teacher)
-        self.assertIn("Word → 圖譜", self.interface)
+        self.assertIn("Word → 圖譜", self.teacher)
+        self.assertNotIn("Word → 圖譜", self.interface)
+        self.assertNotIn('id="atlas-create-action"', self.system_html)
         self.assertNotIn('id="atlas-import-action"', self.system_html)
 
     def test_atlas_docx_can_materialize_remote_r2_or_mega_source(self):
