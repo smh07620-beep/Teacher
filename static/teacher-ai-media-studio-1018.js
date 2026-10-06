@@ -277,7 +277,7 @@
 
 
   function setSimpleFlowStatus(mode, message, bad = false) {
-    const node = $(\`teacher-media-simple-status-\${mode}-1032\`);
+    const node = $(`teacher-media-simple-status-${mode}-1032`);
     if (!node) return;
     node.textContent = message;
     node.className = bad
@@ -288,7 +288,7 @@
   function mergeRevisionRequirement(current, request) {
     const base = String(current || '').trim();
     const revision = String(request || '').trim();
-    const combined = [base, revision ? \`教師下一輪修正：\${revision}\` : ''].filter(Boolean).join('；');
+    const combined = [base, revision ? `教師下一輪修正：${revision}` : ''].filter(Boolean).join('；');
     return combined.slice(0, 500);
   }
 
@@ -346,7 +346,7 @@
   }
 
   async function reviseSimpleFlow(mode) {
-    const input = $(\`teacher-media-simple-revision-\${mode}-1032\`);
+    const input = $(`teacher-media-simple-revision-${mode}-1032`);
     const request = String(input?.value || '').trim();
     if (!request) {
       setSimpleFlowStatus(mode, '請先寫一句希望 AI 怎麼修改，例如「更精簡、加強 QC 異常處理」。', true);
@@ -422,23 +422,23 @@
 
   function ensureSimpleFlow(panel, mode) {
     if (!panel || !['presentation', 'narration', 'video'].includes(mode)) return null;
-    const oldGuide = $(\`teacher-media-mode-guide-\${mode}-1018\`);
+    const oldGuide = $(`teacher-media-mode-guide-${mode}-1018`);
     oldGuide?.classList.add('hidden');
     if (mode === 'presentation') $('teacher-ai-material-flow-1014')?.classList.add('hidden');
     if (mode === 'narration') $('teacher-media-narration-flow-1028')?.classList.add('hidden');
 
-    let flow = $(\`teacher-media-simple-flow-\${mode}-1032\`);
+    let flow = $(`teacher-media-simple-flow-${mode}-1032`);
     if (!flow) {
       const modeLabel = mode === 'presentation' ? 'PowerPoint' : mode === 'narration' ? '講稿／配音' : '教學影片';
       const modeNote = mode === 'video'
         ? '影片的內容語氣／篇幅在來源整理階段調整；最終片長依核准投影片與旁白而定。'
         : '語氣、篇幅與特別重點全部都是選填；留空就使用系統預設。';
       flow = document.createElement('section');
-      flow.id = \`teacher-media-simple-flow-\${mode}-1032\`;
+      flow.id = `teacher-media-simple-flow-${mode}-1032`;
       flow.className = 'rounded-2xl border border-cyan-200 bg-cyan-50/40 p-3 sm:p-4';
-      flow.innerHTML = \`
+      flow.innerHTML = `
         <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div><b class="text-sm text-slate-950">\${modeLabel}｜簡易製作</b><p class="mt-1 text-xs leading-5 text-slate-600">丟入資料就能先試做，不必先填完所有設定。 \${modeNote}</p></div>
+          <div><b class="text-sm text-slate-950">${modeLabel}｜簡易製作</b><p class="mt-1 text-xs leading-5 text-slate-600">丟入資料就能先試做，不必先填完所有設定。 ${modeNote}</p></div>
           <div class="grid grid-cols-2 gap-1.5 text-center text-[11px] font-black text-slate-600 sm:grid-cols-4">
             <span class="rounded-lg bg-white px-2 py-2">1 丟入資料</span>
             <span class="rounded-lg bg-white px-2 py-2">2 需求（選填）</span>
@@ -447,15 +447,15 @@
           </div>
         </div>
         <div class="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
-          <input id="teacher-media-simple-revision-\${mode}-1032" class="learning-input" maxlength="400" placeholder="不滿意？直接告訴 AI 怎麼修，例如：更精簡、加強 QC 異常處理">
-          <button id="teacher-media-simple-revise-\${mode}-1032" type="button" class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-xs font-black text-cyan-800">↻ 請 AI 再修一次</button>
-          <button id="teacher-media-simple-finish-\${mode}-1032" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white">✅ 製作完成，帶回教材</button>
+          <input id="teacher-media-simple-revision-${mode}-1032" class="learning-input" maxlength="400" placeholder="不滿意？直接告訴 AI 怎麼修，例如：更精簡、加強 QC 異常處理">
+          <button id="teacher-media-simple-revise-${mode}-1032" type="button" class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-xs font-black text-cyan-800">↻ 請 AI 再修一次</button>
+          <button id="teacher-media-simple-finish-${mode}-1032" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white">✅ 製作完成，帶回教材</button>
         </div>
-        <p id="teacher-media-simple-status-\${mode}-1032" class="mt-2 text-xs font-bold text-slate-600">先從下方加入／選擇來源，直接按「試產出」即可。</p>\`;
+        <p id="teacher-media-simple-status-${mode}-1032" class="mt-2 text-xs font-bold text-slate-600">先從下方加入／選擇來源，直接按「試產出」即可。</p>`;
       panel.prepend(flow);
-      $(\`teacher-media-simple-revise-\${mode}-1032\`)?.addEventListener('click', () => void reviseSimpleFlow(mode));
-      $(\`teacher-media-simple-finish-\${mode}-1032\`)?.addEventListener('click', () => void finishSimpleFlow(mode));
-      $(\`teacher-media-simple-revision-\${mode}-1032\`)?.addEventListener('keydown', event => {
+      $(`teacher-media-simple-revise-${mode}-1032`)?.addEventListener('click', () => void reviseSimpleFlow(mode));
+      $(`teacher-media-simple-finish-${mode}-1032`)?.addEventListener('click', () => void finishSimpleFlow(mode));
+      $(`teacher-media-simple-revision-${mode}-1032`)?.addEventListener('keydown', event => {
         if (event.key !== 'Enter' || event.shiftKey) return;
         event.preventDefault();
         void reviseSimpleFlow(mode);
