@@ -21,6 +21,7 @@ class Phase3UAdminQuestionActionsTests(unittest.TestCase):
             "updateQuestionCacheAndPaint",
             "loadQuizQuestionsIntoPanel",
             "adminSaveOneInlineQuestion",
+            "adminSaveExpandedQuestionEdits",
             "adminToggleQuizQuestion",
             "adminDeleteQuizQuestion",
             "adminBulkSetQuestionActive",
