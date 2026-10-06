@@ -356,8 +356,8 @@
     const button = document.createElement('button');
     button.id = 'teacher-batch-manage-1014';
     button.type = 'button';
-    button.className = 'shrink-0 rounded-xl bg-teal-700 px-4 py-2 text-xs font-black text-white hover:bg-teal-800';
-    button.textContent = '☑ 批次管理課程';
+    button.className = 'shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50';
+    button.textContent = '批次指派';
     button.addEventListener('click', event => { event.preventDefault(); void openBatchDialog(); });
     if (entry) {
       let actions = entry.querySelector('[data-teacher-course-actions-1014]');
@@ -374,7 +374,7 @@
       const dashboard = box.querySelector('.admin-course-dashboard');
       if (!dashboard) return;
       const row = document.createElement('div');
-      row.className = 'mb-4 flex justify-end';
+      row.className = 'mb-2 flex justify-end';
       row.appendChild(button);
       box.insertBefore(row, dashboard);
     }
