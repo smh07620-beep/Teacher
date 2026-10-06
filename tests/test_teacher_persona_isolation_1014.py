@@ -38,6 +38,10 @@ class TeacherPersonaIsolation1014Tests(unittest.TestCase):
         self.assertIn("openMedia", self.teacher_workspace)
         self.assertIn("openDocuments", self.teacher_workspace)
 
+    def test_review_results_and_tracking_keep_assessment_primary_nav_active(self):
+        self.assertIn("['assessment','teacher','results','compliance','pgy'].includes(workspace)", self.source)
+        self.assertIn("mode === 'documents' || mode === 'announcements'", self.source)
+
     def test_legacy_persona_is_canonicalized_before_product_and_p1_layers(self):
         self.assertIn("url.searchParams.set('persona', 'teacher')", self.source)
         for asset in ("/product-convergence-101.js", "/teacher-action-queue-1024.js"):
