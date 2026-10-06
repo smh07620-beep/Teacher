@@ -34,7 +34,7 @@ ROLE_PERMISSIONS = {
         "material.read", "course.view", "course.manage", "material.manage",
         "question.manage", "exam.manage", "result.group.read", "document.export",
         "evaluation.submit", "evaluation.review", "evaluation.sign",
-        "teacher.assessment.sign", "student.view_assigned",
+        "teacher.assessment.sign", "student.view_assigned", "announcement.manage",
     },
     "group_leader": {
         # Group leaders retain group-scoped management while also participating
@@ -47,7 +47,7 @@ ROLE_PERMISSIONS = {
         "group.result.read", "document.export", "evaluation.submit", "evaluation.review",
         "teacher.assessment.sign", "evaluation.countersign", "student.view_assigned", "student.view_group",
         "learning.assign",
-        "training.compliance.read",
+        "training.compliance.read", "announcement.manage",
     },
     "education_admin": {
         # Education administrators keep organization-wide management while also
@@ -58,7 +58,7 @@ ROLE_PERMISSIONS = {
         "question.manage", "question.review", "exam.manage", "result.group.read",
         "document.export", "education.cross_group.manage", "evaluation.finalize", "student.view_all",
         "learning.assign",
-        "training.compliance.read",
+        "training.compliance.read", "announcement.manage",
     },
     "system_admin": {
         "material.read", "course.view", "course.manage", "course.edit", "material.manage",
@@ -67,7 +67,7 @@ ROLE_PERMISSIONS = {
         "group.result.read", "user.manage", "role.manage", "audit.read", "audit.view", "system.manage",
         "storage.manage", "backup.manage", "template.manage",
         "learning.assign",
-        "training.compliance.read",
+        "training.compliance.read", "announcement.manage",
     },
     "auditor": {"audit.read", "audit.view"},
 }
