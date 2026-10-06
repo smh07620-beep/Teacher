@@ -89,7 +89,7 @@ test('mobile learner Golden Path stays aligned from todo to course, exam and com
   await page.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(learnerAuth()) }));
   await page.route('**/api/auth/profile', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(learnerAuth()) }));
   await page.route('**/api/training-command-center/progress', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(progress()) }));
-  await page.route('**/api/training-command-center', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(command()) }));
+  await page.route('**/api/training-command-center?persona=learner', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(command()) }));
   await page.route('**/api/dashboard/me?**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -143,7 +143,7 @@ test('mobile 430 task cards and bottom navigation never escape the viewport', as
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ audience: 'online', pgyLearner: false, online: { percent: 40, materialsCompleted: 2, materialsTotal: 5, examsPassed: 0, examsTotal: 1, activeCourses: 2 }, pgy: null }),
   }));
-  await page.route('**/api/training-command-center', route => route.fulfill({
+  await page.route('**/api/training-command-center?persona=learner', route => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ counts: { learner: 2, total: 2 }, items: [
       { id: 'long-course', resourceId: 'long-course', courseId: 'long-course', persona: 'learner', kind: 'course', title: '這是一門用來驗證手機版不應該水平溢出的很長很長課程名稱', area: 'internal', group: 'grpBio', detail: '課程內容與截止資訊必須在手機卡片內正常換行', target: 'materials' },
