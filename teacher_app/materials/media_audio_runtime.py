@@ -24,17 +24,27 @@ VOICE_PREVIEW_TEXT = "您好，這是醫學檢驗教學平台的 AI 語音試聽
 DEFAULT_PROVIDER = "kokoro"
 DEFAULT_MODEL = "Kokoro-82M-v1.1-zh"
 DEFAULT_REPO_ID = "hexgrad/Kokoro-82M-v1.1-zh"
-DEFAULT_VOICE = "zf_xiaoxiao"
+DEFAULT_VOICE = "zf_001"
 DEFAULT_SAMPLE_RATE = 24000
 ALLOWED_VOICES = {
-    "zf_xiaobei",
-    "zf_xiaoni",
-    "zf_xiaoxiao",
-    "zf_xiaoyi",
-    "zm_yunjian",
-    "zm_yunxi",
-    "zm_yunxia",
-    "zm_yunyang",
+    "zf_001",
+    "zf_002",
+    "zf_003",
+    "zf_004",
+    "zm_009",
+    "zm_010",
+    "zm_011",
+    "zm_012",
+}
+LEGACY_VOICE_ALIASES = {
+    "zf_xiaoxiao": "zf_001",
+    "zf_xiaobei": "zf_002",
+    "zf_xiaoni": "zf_003",
+    "zf_xiaoyi": "zf_004",
+    "zm_yunxi": "zm_009",
+    "zm_yunjian": "zm_010",
+    "zm_yunxia": "zm_011",
+    "zm_yunyang": "zm_012",
 }
 
 
@@ -91,6 +101,7 @@ def public_status() -> dict[str, Any]:
 
 def _voice(value: str | None) -> str:
     voice = str(value or DEFAULT_VOICE).strip().lower()
+    voice = LEGACY_VOICE_ALIASES.get(voice, voice)
     return voice if voice in ALLOWED_VOICES else DEFAULT_VOICE
 
 
@@ -224,10 +235,16 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
         if not chunks:
             raise RuntimeError("Kokoro 沒有產生有效音訊。")
         waveform = np.concatenate(chunks)
-    except RuntimeError:
-        raise
     except Exception as exc:
-        raise RuntimeError(f"本機 Kokoro 語音產生失敗：{str(exc)[:300]}") from exc
+        message = str(exc)
+        if "Entry Not Found" in message or "404 Client Error" in message or "/voices/" in message:
+            raise RuntimeError(
+                "Kokoro 音色檔不存在；目前使用 v1.1-zh 編號式中文音色。"
+                "請重新載入頁面；若院內 Worker 尚未更新，請更新 main 後重新啟動。"
+            ) from exc
+        if isinstance(exc, RuntimeError):
+            raise
+        raise RuntimeError("本機 Kokoro 語音產生失敗；詳細錯誤已寫入 AI Worker log。") from exc
 
     pcm = (np.clip(waveform, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
     buffer = io.BytesIO()

@@ -31,14 +31,43 @@
     return data;
   }
 
+  function materialStamp(item) {
+    const value = item?.updatedAt || item?.dateAdded || item?.createdAt || '';
+    const stamp = Date.parse(String(value || ''));
+    return Number.isFinite(stamp) ? stamp : 0;
+  }
+
+  function dedupeMaterialRows(rows) {
+    const byId = new Map();
+    (Array.isArray(rows) ? rows : []).forEach(item => {
+      if (!item || !item.id || item.isBuiltin) return;
+      const id = String(item.id).trim();
+      const previous = byId.get(id);
+      if (!previous || materialStamp(item) >= materialStamp(previous)) byId.set(id, item);
+    });
+    const byLogicalSource = new Map();
+    [...byId.values()].forEach(item => {
+      const name = String(item.filename || item.title || item.id || '').trim().toLocaleLowerCase('zh-Hant');
+      const key = [
+        String(item.area || '').trim(),
+        String(item.group || '').trim(),
+        String(item.courseId || '').trim(),
+        item.active === false ? 'draft' : 'active',
+        name,
+      ].join('::');
+      const previous = byLogicalSource.get(key);
+      if (!previous || materialStamp(item) >= materialStamp(previous)) byLogicalSource.set(key, item);
+    });
+    return [...byLogicalSource.values()];
+  }
+
   async function loadMaterials(force = false) {
     if (!force && Array.isArray(materials)) return materials;
     if (!force && materialsPromise) return materialsPromise;
     materialsPromise = (async () => {
       const data = await json('/api/slides/admin');
       const current = currentScope();
-      materials = (Array.isArray(data) ? data : [])
-        .filter(item => item && item.id && !item.isBuiltin)
+      materials = dedupeMaterialRows(data)
         .filter(item => !current.group || String(item.group || '') === current.group)
         .filter(item => !current.area || String(item.area || '') === current.area)
         .sort((a, b) => String(a.title || a.filename || a.id).localeCompare(String(b.title || b.filename || b.id), 'zh-Hant'));

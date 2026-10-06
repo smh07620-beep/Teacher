@@ -16,9 +16,11 @@
   let approvedScriptsMaterialId = '';
 
   const voiceLabel = value => ({
-    zf_xiaoxiao: '曉曉｜女聲', zf_xiaobei: '小北｜女聲', zf_xiaoni: '小妮｜女聲',
-    zf_xiaoyi: '小藝｜女聲', zm_yunxi: '雲希｜男聲', zm_yunjian: '雲健｜男聲',
-    zm_yunxia: '雲夏｜男聲', zm_yunyang: '雲揚｜男聲'
+    zf_001: '中文女聲 A', zf_002: '中文女聲 B', zf_003: '中文女聲 C', zf_004: '中文女聲 D',
+    zm_009: '中文男聲 A', zm_010: '中文男聲 B', zm_011: '中文男聲 C', zm_012: '中文男聲 D',
+    zf_xiaoxiao: '中文女聲 A', zf_xiaobei: '中文女聲 B', zf_xiaoni: '中文女聲 C',
+    zf_xiaoyi: '中文女聲 D', zm_yunxi: '中文男聲 A', zm_yunjian: '中文男聲 B',
+    zm_yunxia: '中文男聲 C', zm_yunyang: '中文男聲 D'
   }[String(value || '')] || '中文教學聲音');
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({

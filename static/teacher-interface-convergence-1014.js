@@ -8,12 +8,20 @@
   'use strict';
 
   const VOICE_LABELS = Object.freeze({
-    zf_xiaobei: '中文女聲 A',
-    zf_xiaoni: '中文女聲 B',
-    zf_xiaoxiao: '中文女聲 C',
+    zf_001: '中文女聲 A',
+    zf_002: '中文女聲 B',
+    zf_003: '中文女聲 C',
+    zf_004: '中文女聲 D',
+    zm_009: '中文男聲 A',
+    zm_010: '中文男聲 B',
+    zm_011: '中文男聲 C',
+    zm_012: '中文男聲 D',
+    zf_xiaoxiao: '中文女聲 A',
+    zf_xiaobei: '中文女聲 B',
+    zf_xiaoni: '中文女聲 C',
     zf_xiaoyi: '中文女聲 D',
-    zm_yunjian: '中文男聲 A',
-    zm_yunxi: '中文男聲 B',
+    zm_yunxi: '中文男聲 A',
+    zm_yunjian: '中文男聲 B',
     zm_yunxia: '中文男聲 C',
     zm_yunyang: '中文男聲 D',
   });

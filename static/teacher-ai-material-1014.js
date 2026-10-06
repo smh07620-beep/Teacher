@@ -94,11 +94,42 @@
     return `${scope ? `${scope}｜` : ''}${item.title || item.filename || item.id}${state}`;
   }
 
+  function materialStamp(item) {
+    const value = item?.updatedAt || item?.dateAdded || item?.createdAt || '';
+    const stamp = Date.parse(String(value || ''));
+    return Number.isFinite(stamp) ? stamp : 0;
+  }
+
+  function dedupeMaterialRows(rows) {
+    const byId = new Map();
+    (Array.isArray(rows) ? rows : []).forEach(item => {
+      if (!item || item.isBuiltin) return;
+      const id = String(item.id || '').trim();
+      const idKey = id || `anon:${materialLabel(item)}`;
+      const previous = byId.get(idKey);
+      if (!previous || materialStamp(item) >= materialStamp(previous)) byId.set(idKey, item);
+    });
+    const byLogicalSource = new Map();
+    [...byId.values()].forEach(item => {
+      const name = String(item.filename || item.title || item.id || '').trim().toLocaleLowerCase('zh-Hant');
+      const key = [
+        String(item.area || '').trim(),
+        String(item.group || '').trim(),
+        String(item.courseId || '').trim(),
+        item.active === false ? 'draft' : 'active',
+        name,
+      ].join('::');
+      const previous = byLogicalSource.get(key);
+      if (!previous || materialStamp(item) >= materialStamp(previous)) byLogicalSource.set(key, item);
+    });
+    return [...byLogicalSource.values()];
+  }
+
   async function fetchMaterials() {
     const response = await fetch('/api/slides/admin', {credentials:'same-origin', cache:'no-store'});
     const data = await response.json().catch(() => []);
     if (!response.ok) throw new Error(data.error || '無法讀取教材清單');
-    materials = (Array.isArray(data) ? data : []).filter(item => !item.isBuiltin);
+    materials = dedupeMaterialRows(data);
     return materials;
   }
 

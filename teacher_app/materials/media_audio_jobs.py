@@ -34,7 +34,7 @@ def _username(actor: Mapping[str, Any] | None) -> str:
 def _voice(value: Any) -> str:
     voice = str(value or "").strip().lower()
     if voice not in media_audio_runtime.ALLOWED_VOICES:
-        voice = media_audio_runtime.public_status().get("defaultVoice") or "zf_xiaoxiao"
+        voice = media_audio_runtime._voice(voice)
     return voice
 
 
@@ -217,7 +217,7 @@ class MediaAudioJobProcessor:
                 )
             media_audio_repository.complete(job_id, token, result)
         except Exception as exc:
-            LOGGER.warning(
+            LOGGER.exception(
                 "AI media audio job failed job_id=%s error_type=%s",
                 str(job_id or "")[:120],
                 type(exc).__name__,
