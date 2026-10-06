@@ -112,7 +112,10 @@ def commit(job: dict, result: dict) -> dict:
             result.get("atlasMeta") if isinstance(result.get("atlasMeta"), dict) else {},
             ensure_ascii=False,
         ),
-        "active": True,
+        # Private AI authoring inputs must never become learner-visible merely
+        # because the Worker finished converting them.  The Web enqueue path
+        # captures this flag; publication is a separate explicit teacher action.
+        "active": not bool(payload.get("authoringOnly", False)),
     }
     if target_material_id:
         target = material_repository.get_material(target_material_id)
