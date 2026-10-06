@@ -23,7 +23,7 @@ class TeacherPersonaIsolation1014Tests(unittest.TestCase):
             "#admin-nav-worker,#admin-nav-people,#admin-nav-system,#admin-nav-maintenance,#admin-nav-audit",
             "教師工作區",
             "📚 教材與課程",
-            "📝 評量與出題",
+            "📝 評量與追蹤",
             "admin-section-worker",
         ):
             self.assertIn(marker, self.source)
@@ -31,11 +31,12 @@ class TeacherPersonaIsolation1014Tests(unittest.TestCase):
         self.assertNotIn("['teacher-nav-media-1014'", self.source)
         self.assertNotIn("['teacher-nav-documents-1014'", self.source)
 
-    def test_media_and_documents_move_to_contextual_tools(self):
-        self.assertIn("🎙️ AI 媒體製作", self.product_convergence)
-        self.assertIn("📄 紙本文件與匯出", self.product_convergence)
-        self.assertIn("api.openMedia?.()", self.product_convergence)
-        self.assertIn("api.openDocuments?.()", self.product_convergence)
+    def test_media_documents_and_help_do_not_duplicate_primary_navigation(self):
+        self.assertIn("document.getElementById('teacher-context-tools-101')?.remove()", self.product_convergence)
+        for utility in ("teacher-guide-open-1014", "teacher-announcements-open-1014", "teacher-documents-open-1014"):
+            self.assertIn(utility, self.teacher_workspace)
+        self.assertIn("openMedia", self.teacher_workspace)
+        self.assertIn("openDocuments", self.teacher_workspace)
 
     def test_legacy_persona_is_canonicalized_before_product_and_p1_layers(self):
         self.assertIn("url.searchParams.set('persona', 'teacher')", self.source)
