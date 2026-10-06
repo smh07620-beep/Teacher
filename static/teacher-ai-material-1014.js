@@ -65,7 +65,16 @@
   }
 
   function primarySourceId() {
-    return authoringSourceIds[0] || selectedReferenceIds()[0] || '';
+    if (authoringSourceIds[0]) return authoringSourceIds[0];
+    const selected = selectedReferenceIds();
+    const backendRank = {r2:0,oci:1,gdrive:2,mega:3,local:4};
+    selected.sort((a,b)=>{
+      const left=materials.find(item=>String(item.id||'')===String(a))||{};
+      const right=materials.find(item=>String(item.id||'')===String(b))||{};
+      return (backendRank[String(left.storageBackend||'').toLowerCase()]??9)
+        -(backendRank[String(right.storageBackend||'').toLowerCase()]??9);
+    });
+    return selected[0] || '';
   }
 
   function allAuthoringSourceIds() {
@@ -260,11 +269,14 @@
     const host = document.getElementById('teacher-ai-material-source-info-1014');
     if (!host) return;
     const chunks = Array.isArray(result?.sourceChunks) ? result.sourceChunks : [];
+    const warnings = Array.isArray(result?.sourceWarnings) ? result.sourceWarnings : [];
     const fallback = result?.fallbackUsed ? '｜已使用免費備援' : '';
     host.innerHTML = `
       <div><b>來源教材：</b>${escapeHtml(result?.sourceTitle || '')}</div>
+      <div><b>成功讀取：</b>${Number(result?.sourceMaterialCount || (chunks.length ? 1 : 0))} 份來源</div>
       <div><b>產出：</b>${escapeHtml(result?.outputLabel || TYPE_LABELS[result?.outputType] || '')}</div>
       <div><b>AI：</b>${escapeHtml(result?.provider || '')} / ${escapeHtml(result?.model || '')}${escapeHtml(fallback)}</div>
+      ${warnings.length ? `<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-800"><b>部分來源未能讀取：</b>${warnings.map(item=>`<div class="mt-1">• ${escapeHtml(item.title||item.materialId||'教材')}｜${escapeHtml(item.reason||'無法讀取')}</div>`).join('')}</div>` : ''}
       <details class="mt-2"><summary class="cursor-pointer font-bold">？查看來源段落</summary><div class="mt-1">${chunks.length ? chunks.map(chunk => escapeHtml(chunk.chunkId || chunk.section || '')).join('、') : '—'}</div></details>
       <div class="mt-2 font-bold text-amber-800">⚠️ AI 只產生草稿；必須由教師確認後才能核准或發布。</div>`;
     host.classList.remove('hidden');
@@ -325,7 +337,8 @@
     activeJobId = '';
     document.getElementById('teacher-ai-material-editor-1014')?.classList.add('hidden');
     try {
-      status(`正在建立「${TYPE_LABELS[outputType] || 'AI 教材'}」工作…`);
+      const selectedCount=allAuthoringSourceIds().length;
+      status(`正在統整 ${selectedCount} 份來源並建立「${TYPE_LABELS[outputType] || 'AI 教材'}」工作…`);
       const response = await fetch('/api/ai-material-drafts/generate', {
         method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload),
       });
