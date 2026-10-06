@@ -94,6 +94,9 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
         for marker in (
             "來源內容 + 旁白 → 教學影片",
             "teacher-ai-video-source-author-1028",
+            "teacher-ai-video-dropzone-1031",
+            "teacher-ai-video-files-1031",
+            "openVideoSourceAuthoring",
             "PDF／Word／圖片／文字",
             "不必先發布成正式教材",
         ):
@@ -102,6 +105,8 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
         self.assertIn("['clinical_teacher','group_leader','education_admin','system_admin']", self.material)
         self.assertIn("addEventListener('drop'", self.material)
         self.assertIn("authoringOnly", self.material)
+        self.assertIn("upload.click()", self.video)
+        self.assertNotIn("else status('影片來源工具尚未載入完成", self.video)
         self.assertIn("teacher-ai-video-source-workspace-1028", self.controls)
         self.assertIn("showMode?.('video')", self.controls)
         self.assertNotIn("const opened = await openPowerPointWorkspace({purpose:'video'});", self.controls)
