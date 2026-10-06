@@ -30,26 +30,6 @@
     }
   };
 
-  window.migrateMaterialsToMega = async function(){
-    if (!confirm('要將目前仍可讀取的既有教材搬移到 MEGA 嗎？\n\n新檔成功存入 MEGA 後才會更新資料庫；免費模式會在接近網站設定容量上限時停止上傳。')) return;
-    const btn=document.getElementById('migrate-mega-btn');
-    try {
-      if(btn){btn.disabled=true;btn.textContent='⏳ 搬移到 MEGA 中…';}
-      const res=await fetch('/api/storage/migrate-to-mega',{method:'POST',});
-      const d=await res.json().catch(()=>({}));
-      if(!res.ok) throw new Error(d.error||'搬移失敗');
-      alert(`MEGA 搬移完成：成功 ${d.migrated||0} 份、略過 ${(d.skipped||[]).length} 份、失敗 ${(d.failed||[]).length} 份。`);
-      await window.renderStorageStatus(true);
-      invalidateAdminMaterialsCache();
-      await renderAdminMaterials(true);
-      await renderAdminCourseMaterialHub(true);
-      await renderSlidesGrid();
-    } catch(e){
-      alert('搬移失敗：'+e.message);
-    } finally {
-      if(btn){btn.disabled=false;btn.textContent='☁️ 搬移既有教材到 MEGA';}
-    }
-  };
 
   window.migrateMaterialsToGoogleDrive = async function(){
     if (!confirm('要將目前尚未存於 Google Drive 的教材搬移到 Google Drive 嗎？\n\n可搬移仍存在 Render 本機的教材；若教材目前在 R2 且 R2 金鑰仍有效，也會先讀出再搬到 Google Drive。搬移成功後舊雲端/本機副本會移除，資料庫與課程/成績資料不會刪除。')) return;
