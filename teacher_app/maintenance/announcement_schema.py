@@ -15,7 +15,18 @@ def init_schema(conn: Any, kind: str) -> None:
             body TEXT NOT NULL DEFAULT '',
             active {boolean} NOT NULL DEFAULT {default_true},
             created_at TEXT NOT NULL,
-            published_at TEXT NOT NULL DEFAULT ''
+            published_at TEXT NOT NULL DEFAULT '',
+            kind TEXT NOT NULL DEFAULT 'system',
+            scope_type TEXT NOT NULL DEFAULT 'all',
+            training_area TEXT NOT NULL DEFAULT '',
+            group_key TEXT NOT NULL DEFAULT '',
+            course_id TEXT NOT NULL DEFAULT '',
+            starts_at TEXT NOT NULL DEFAULT '',
+            ends_at TEXT NOT NULL DEFAULT '',
+            pinned {boolean} NOT NULL DEFAULT 0,
+            email_enabled {boolean} NOT NULL DEFAULT 0,
+            require_read {boolean} NOT NULL DEFAULT 0,
+            created_by TEXT NOT NULL DEFAULT ''
         )
         """
     )
