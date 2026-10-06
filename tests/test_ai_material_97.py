@@ -235,6 +235,19 @@ class AIMaterialFrontend97Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
+    def test_powerpoint_context_hides_cross_domain_output_choices_without_removing_capabilities(self):
+        for marker in (
+            "configureContext(mode = 'generic')",
+            "authoringContext === 'presentation'",
+            "type.value = 'slides'",
+            "type.disabled = presentation",
+            "typeLabel?.classList.toggle('hidden', presentation)",
+            "這個頁籤只負責 PowerPoint",
+            "講稿與配音",
+            "評量與追蹤",
+        ):
+            self.assertIn(marker, self.source)
+
     def test_factory_registers_migration_and_routes_before_runtime_use(self):
         self.assertIn("ai_material_migration", self.factory)
         self.assertIn("register_ai_material_routes", self.factory)
