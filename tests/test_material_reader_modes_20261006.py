@@ -10,6 +10,7 @@ class MaterialReaderModes20261006Tests(unittest.TestCase):
     def setUpClass(cls):
         cls.learner = ROOT.joinpath("static", "system-learner.js").read_text(encoding="utf-8")
         cls.css = ROOT.joinpath("static", "learner.css").read_text(encoding="utf-8")
+        cls.delivery = ROOT.joinpath("teacher_app", "materials", "delivery_routes.py").read_text(encoding="utf-8")
 
     def test_powerpoint_preview_is_detected_as_presentation_reader(self):
         self.assertIn("function inferPdfReaderMode(entry = {})", self.learner)
@@ -28,25 +29,28 @@ class MaterialReaderModes20261006Tests(unittest.TestCase):
         self.assertIn("window.slideViewerState = slideViewerState", self.learner)
         self.assertIn("window.cachedSlidesList = cachedSlidesList", self.learner)
 
-    def test_presentation_pdf_is_page_fit_and_wheel_cannot_scroll_native_pdf(self):
+    def test_presentation_pdf_uses_stable_page_images_not_native_pdf_reload(self):
         block = self.learner[
             self.learner.index("function updateSlideViewerPdf()"):
             self.learner.index("function updateSlideViewerImage()")
         ]
-        self.assertIn("reader_page=${page}", block)
-        self.assertIn("swapPresentationPdfFrame(wanted,page)", block)
-        self.assertIn("scrollbar=0&view=Fit", block)
+        self.assertIn("updateSlideViewerPresentationPage(page,total)", block)
+        self.assertNotIn("reader_page=", block)
+        self.assertNotIn("swapPresentationPdfFrame", self.learner)
+        self.assertIn("/material-preview/${id}/page/${page}.png", self.learner)
+        self.assertIn("prefetchPresentationPage(page+1)", self.learner)
+        self.assertIn("prefetchPresentationPage(page-1)", self.learner)
+        self.assertIn("frame.removeAttribute('src')", block)
         self.assertIn("scrollbar=1&view=FitH", block)
-        self.assertIn("initPdfPresentationWheel()", self.learner)
-        self.assertIn("presentation-preview-mode", self.learner)
-        self.assertIn(".presentation-preview-mode #slide-viewer-pdf", self.css)
-        self.assertIn("pointer-events:none", self.css)
         paging = self.learner[self.learner.index("function goToSlidePage"):self.learner.index("function closeSlideViewer")]
         self.assertIn("renderSlideThumbs();", paging)
-        swap = self.learner[self.learner.index("function swapPresentationPdfFrame"):self.learner.index("function updateSlideViewerPdf")]
-        self.assertIn("incoming.style.opacity='0'", swap)
-        self.assertIn("window.setTimeout", swap)
-        self.assertIn("incoming.id='slide-viewer-pdf'", swap)
+
+    def test_legacy_single_pdf_presentation_has_cached_page_image_endpoint(self):
+        self.assertIn('/material-preview/<material_id>/page/<int:page_no>.png', self.delivery)
+        self.assertIn("def material_preview_page(material_id, page_no):", self.delivery)
+        self.assertIn("pymupdf.open(str(pdf_path))", self.delivery)
+        self.assertIn("page.get_pixmap", self.delivery)
+        self.assertIn('"presentation-page-image"', self.delivery)
 
     def test_document_pdf_keeps_continuous_scroll_mode(self):
         self.assertIn("document-preview-mode", self.learner)
