@@ -102,10 +102,10 @@ class Phase3AdminModuleSplitTests(unittest.TestCase):
 
     def test_system_module_preserves_storage_global_contracts(self):
         source = ROOT.joinpath('static/admin-system.js').read_text(encoding='utf-8')
-        for name in ('renderStorageStatus','migrateMaterialsToMega','migrateMaterialsToGoogleDrive','migrateLocalMaterialsToR2'):
+        for name in ('renderStorageStatus','migrateMaterialsToGoogleDrive','migrateLocalMaterialsToR2'):
             self.assertIn(f'window.{name}', source)
         self.assertIn('/api/storage-status', source)
-        self.assertIn('/api/storage/migrate-to-mega', source)
+        self.assertNotIn('/api/storage/migrate-to-mega', source)
         self.assertIn('/api/storage/migrate-to-gdrive', source)
         self.assertIn('/api/storage/migrate-to-r2', source)
         self.assertNotIn('X-Admin-Key', source)
