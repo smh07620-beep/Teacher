@@ -38,7 +38,7 @@
     compliance: {icon:'✅', title:'訓練合規 Workspace', summary:'依指派查看人員完訓、逾期、重訓、補強、考核與完訓證明狀態。'},
     word: {icon:'📝', title:'Word 範本 Workspace', summary:'維護各組正式考核表範本與套版輸出。'},
     people: {icon:'👥', title:'人員管理 Workspace', summary:'管理帳號、角色、範圍與教學存取權限。'},
-    system: {icon:'⚙️', title:'系統設定 Workspace', summary:'檢查系統服務、儲存、安全設定與公告。'},
+    system: {icon:'⚙️', title:'系統設定 Workspace', summary:'檢查系統服務、儲存、安全設定與維運型系統公告。'},
     maintenance: {icon:'🛡️', title:'備份維護 Workspace', summary:'執行授權範圍內的備份、還原與維護工作。'},
     audit: {icon:'🔎', title:'稽核紀錄 Workspace', summary:'唯讀檢視授權範圍內的系統與教學稽核紀錄。'},
     worker: {icon:'⚙️', title:'Worker Workspace', summary:'檢查教材背景處理與工作執行狀態。'},
@@ -237,9 +237,10 @@
     }
     if (name === 'system') {
       await switchSection('system', true);
+      window.mountSystemAnnouncementCard?.();
       await Promise.all([
         Promise.resolve(window.renderAdminSystemStatus?.(force)),
-        Promise.resolve(window.renderAdminAnnouncements?.())
+        Promise.resolve(window.renderAdminAnnouncements?.('system'))
       ]);
     }
   }
