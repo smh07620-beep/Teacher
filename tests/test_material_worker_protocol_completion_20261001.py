@@ -202,8 +202,8 @@ class MaterialWorkerProtocolCompletionTests(unittest.TestCase):
         worker = ROOT.joinpath("material_worker.py").read_text(encoding="utf-8")
 
         for marker in (
-            "教材已完成，返回教材與課程",
-            "等待教材正式完成後才能返回",
+            "儲存草稿並離開",
+            "等待教材正式完成後才能離開",
             "beforeunload",
             "averageCompletedDurationSeconds",
             "R2 原始檔仍保留",
