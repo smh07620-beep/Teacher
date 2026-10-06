@@ -64,7 +64,7 @@
       ? '這裡不建立講稿或考題。大綱核准後繼續產生 PowerPoint；其他工作請使用對應入口。'
       : '測驗題草稿若要進正式題庫，仍請到「評量與追蹤」完成審核與建立。';
     const generate = document.getElementById('teacher-ai-material-generate-1014');
-    if (generate) generate.textContent = presentation ? '2｜產生 PowerPoint 大綱' : '2｜產生 AI 草稿';
+    if (generate) generate.textContent = presentation ? '✨ 試產出 PowerPoint 大綱' : '✨ 試產出';
     const upload = document.getElementById('teacher-ai-material-upload-1014');
     if (upload) upload.textContent = '＋ 加入來源';
 
@@ -121,6 +121,51 @@
       summary.textContent = '或選擇既有教材';
       existing.before(details);
       details.append(summary, existing);
+    }
+
+
+    const tone = document.getElementById('teacher-ai-material-tone-1014');
+    const depth = document.getElementById('teacher-ai-material-depth-1014');
+    const focus = document.getElementById('teacher-ai-material-focus-1014');
+    const generate = document.getElementById('teacher-ai-material-generate-1014');
+    if (tone && depth && focus && generate && !document.getElementById('teacher-ai-material-requirements-1032')) {
+      const details = document.createElement('details');
+      details.id = 'teacher-ai-material-requirements-1032';
+      details.className = 'rounded-xl border border-violet-100 bg-violet-50/30 px-3 py-2';
+      const summary = document.createElement('summary');
+      summary.className = 'cursor-pointer text-sm font-black text-violet-800';
+      summary.textContent = '需求（選填）｜語氣、篇幅、特別重點';
+      const helper = document.createElement('p');
+      helper.className = 'mt-2 text-xs leading-5 text-slate-500';
+      helper.textContent = '全部可留空／維持預設；需要時再指定語氣、內容篇幅或特別想加強的重點。';
+      const body = document.createElement('div');
+      body.className = 'mt-3 grid gap-3 md:grid-cols-3';
+
+      const toneLabel = tone.closest('label');
+      if (toneLabel) body.appendChild(toneLabel);
+
+      const depthLabel = document.createElement('label');
+      depthLabel.className = 'text-sm font-bold text-slate-700';
+      depthLabel.append('製作篇幅');
+      depth.classList.add('mt-1');
+      depthLabel.appendChild(depth);
+      body.appendChild(depthLabel);
+
+      const focusLabel = document.createElement('label');
+      focusLabel.className = 'text-sm font-bold text-slate-700 md:col-span-3';
+      focusLabel.append('特別要求');
+      focus.placeholder = '例如：加強 QC 異常處理、少一點背景說明（選填）';
+      focus.classList.add('mt-1');
+      focusLabel.appendChild(focus);
+      body.appendChild(focusLabel);
+
+      details.append(summary, helper, body);
+      const generateRow = generate.parentElement;
+      generateRow?.before(details);
+      const emptySettingsRow = generateRow?.querySelector('div');
+      if (emptySettingsRow && !emptySettingsRow.children.length) emptySettingsRow.remove();
+      if (generateRow) generateRow.className = 'flex justify-end';
+      generate.textContent = authoringContext === 'presentation' ? '✨ 試產出 PowerPoint 大綱' : '✨ 試產出';
     }
 
     const saved = document.getElementById('teacher-ai-material-saved-1014');
