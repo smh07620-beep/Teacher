@@ -627,7 +627,7 @@ def question_prompt_parts(
     source_text = ai_privacy.deidentify_external_text(source_text)
     count = max(1, min(settings.max_questions, int(count or 5)))
     allowed = {
-        "choice", "multi", "fill", "essay", "mixed", "mixed_choice_multi", "mixed_all",
+        "choice", "multi", "true_false", "fill", "essay", "mixed", "mixed_choice_multi", "mixed_all",
         "video_choice", "video_multi", "video_fill", "video_essay", "video_mixed",
     }
     qtype = qtype if qtype in allowed else "mixed_all"
@@ -637,12 +637,13 @@ def question_prompt_parts(
     type_rule = {
         "choice": "全部產生單選題。每題 4 個不同且合理的選項，只有 1 個正確答案。",
         "multi": "全部產生多選題。每題 4 個選項，至少 2 個正確答案；answerConfig.correctIndices 必須列出所有正確選項索引。",
+        "true_false": "全部產生是非題。options 必須固定為 [\"是\",\"否\"]；correct=0 代表是，correct=1 代表否。",
         "fill": "全部產生填空題。options 必須是空陣列；answerConfig.acceptedAnswers 提供 1~5 個教材支持的可接受答案。",
         "essay": "全部產生問答題。options 必須是空陣列；explanation 提供人工批改用評分參考重點。",
         "mixed": "混合產生單選題與問答題；若題數允許至少各 1 題。",
         "mixed_choice_multi": "只混合產生單選題與多選題；若題數允許至少各 1 題，不要產生填空或問答題。",
-        "mixed_all": "混合產生單選、多選、填空、問答四種題型；題數允許時盡量平均分配。",
-    }.get(base, "混合產生單選、多選、填空、問答四種題型。")
+        "mixed_all": "混合產生單選、多選、是非、填空、問答五種題型；題數允許時盡量平均分配。",
+    }.get(base, "混合產生單選、多選、是非、填空、問答五種題型。")
     if video_mode:
         if base == "mixed":
             type_rule = "全部以影片互動題形式產生，混合單選、多選、填空、問答。"
@@ -664,7 +665,7 @@ def question_prompt_parts(
     prompt = (
         f"教材名稱：{source_title}\n需要題數：{count}\n{type_rule}\n{diff_rule}\n{focus_rule}\n\n"
         "請只輸出 JSON，不要 Markdown。每題格式："
-        '{"questionType":"choice|multi|fill|essay","question":"題幹","options":["A","B","C","D"],"correct":0,'
+        '{"questionType":"choice|multi|true_false|fill|essay","question":"題幹","options":["A","B","C","D"],"correct":0,'
         '"answerConfig":{"correctIndices":[0,2],"acceptedAnswers":["答案"],"pauseAt":75},"tag":"分類",'
         '"explanation":"詳解或評分重點","sourceMaterialId":"來源教材ID","chunkId":"RAG chunk ID",'
         '"sourceHint":"頁碼/投影片/MM:SS/畫面線索","sourceEvidence":"答案依據摘要"}。'
@@ -685,7 +686,7 @@ def normalize_ai_questions(
     result: list[dict] = []
     for question in _coerce_ai_question_list(parsed)[:count]:
         qtype = str(question.get("questionType") or "choice").lower()
-        if qtype not in {"choice", "multi", "fill", "essay"}:
+        if qtype not in {"choice", "multi", "true_false", "fill", "essay"}:
             qtype = "choice"
         text = str(question.get("question", "")).strip()
         if not text:
@@ -698,6 +699,12 @@ def normalize_ai_questions(
                 continue
             try:
                 correct = max(0, min(3, int(question.get("correct", 0) or 0)))
+            except Exception:
+                correct = 0
+        elif qtype == "true_false":
+            options = ["是", "否"]
+            try:
+                correct = max(0, min(1, int(question.get("correct", 0) or 0)))
             except Exception:
                 correct = 0
         else:
@@ -892,14 +899,17 @@ def generate_openai_question_candidates(
     settings: AISettings | None = None,
 ) -> list[dict]:
     settings = settings or ai_settings()
-    source_text = ai_privacy.deidentify_external_text(source_text)
-    focus = ai_privacy.deidentify_external_text(focus)
-    source_title = ai_privacy.deidentify_external_text(source_title)
     if not settings.openai_api_key:
         raise RuntimeError("OpenAI 智慧出題尚未設定。請在 Render Environment 新增 OPENAI_API_KEY。")
-    count = max(1, min(settings.max_questions, int(count or 5)))
-    qtype = qtype if qtype in {"choice", "essay", "mixed"} else "mixed"
-    difficulty = difficulty if difficulty in {"basic", "standard", "advanced"} else "standard"
+    count, system_prompt, user_prompt = question_prompt_parts(
+        count=count,
+        qtype=qtype,
+        difficulty=difficulty,
+        focus=focus,
+        source_title=source_title,
+        source_text=source_text,
+        settings=settings,
+    )
     schema = {
         "type": "object",
         "properties": {
@@ -910,15 +920,48 @@ def generate_openai_question_candidates(
                 "items": {
                     "type": "object",
                     "properties": {
-                        "questionType": {"type": "string", "enum": ["choice", "essay"]},
+                        "questionType": {
+                            "type": "string",
+                            "enum": ["choice", "multi", "true_false", "fill", "essay"],
+                        },
                         "question": {"type": "string"},
-                        "options": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+                        "options": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "maxItems": 4,
+                        },
                         "correct": {"type": "integer", "minimum": 0, "maximum": 3},
+                        "answerConfig": {
+                            "type": "object",
+                            "properties": {
+                                "correctIndices": {
+                                    "type": "array",
+                                    "items": {"type": "integer", "minimum": 0, "maximum": 3},
+                                    "maxItems": 4,
+                                },
+                                "acceptedAnswers": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "maxItems": 10,
+                                },
+                            },
+                            "required": ["correctIndices", "acceptedAnswers"],
+                            "additionalProperties": False,
+                        },
                         "tag": {"type": "string"},
                         "explanation": {"type": "string"},
                         "sourceHint": {"type": "string"},
                     },
-                    "required": ["questionType", "question", "options", "correct", "tag", "explanation", "sourceHint"],
+                    "required": [
+                        "questionType",
+                        "question",
+                        "options",
+                        "correct",
+                        "answerConfig",
+                        "tag",
+                        "explanation",
+                        "sourceHint",
+                    ],
                     "additionalProperties": False,
                 },
             }
@@ -926,24 +969,6 @@ def generate_openai_question_candidates(
         "required": ["questions"],
         "additionalProperties": False,
     }
-    type_rule = {
-        "choice": "全部產生選擇題。每題必須有 4 個不同且合理的選項，且只有 1 個正確答案。",
-        "essay": "全部產生問答題。options 必須是空陣列，correct 固定為 0；explanation 請提供評分參考重點。",
-        "mixed": "混合產生選擇題與問答題；若題數允許，至少各有 1 題。選擇題 4 選 1；問答題 options 為空陣列。",
-    }[qtype]
-    diff_rule = {
-        "basic": "難度：基礎。以關鍵規範、名詞、步驟辨識為主。",
-        "standard": "難度：標準。以流程順序、操作判斷、異常處置、QC/通報重點與應用為主。",
-        "advanced": "難度：進階。以情境判斷、步驟錯誤辨識、故障排除與跨段落整合為主，但答案仍必須能由教材直接支持。",
-    }[difficulty]
-    focus_rule = f"額外出題重點：{focus}" if focus else "請平均涵蓋教材中的重要段落，避免所有題目集中在同一小節。"
-    system_prompt = (
-        "你是醫院檢驗科教育訓練的考題草擬助手。只能依照使用者提供的教材文字出題，不得使用教材外的醫學常識補充答案，"
-        "不得自行更正教材、推測未寫明的數值或流程。若教材沒有明確支持某個答案，就不要出那一題。"
-        "題目要適合院內教育訓練與能力考核，避免模稜兩可、雙重否定、只有語意陷阱的題目。"
-        "詳解要指出教材中支持答案的重點；sourceHint 請填最接近的頁碼/投影片標記或教材段落線索。"
-    )
-    user_prompt = f"教材名稱：{source_title}\n需要題數：{count}\n{type_rule}\n{diff_rule}\n{focus_rule}\n\n【教材文字開始】\n{source_text}\n【教材文字結束】"
     payload = {
         "model": settings.openai_model,
         "input": [
@@ -951,13 +976,23 @@ def generate_openai_question_candidates(
             {"role": "user", "content": user_prompt},
         ],
         "reasoning": {"effort": "low"},
-        "text": {"format": {"type": "json_schema", "name": "question_candidates", "strict": True, "schema": schema}},
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "question_candidates",
+                "strict": True,
+                "schema": schema,
+            }
+        },
         "max_output_tokens": 12000,
     }
     try:
         response = requests.post(
             "https://api.openai.com/v1/responses",
-            headers={"Authorization": f"Bearer {settings.openai_api_key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {settings.openai_api_key}",
+                "Content-Type": "application/json",
+            },
             json=payload,
             timeout=120,
         )
@@ -968,7 +1003,10 @@ def generate_openai_question_candidates(
             error = response.json().get("error", {}).get("message", "")
         except Exception:
             error = response.text[:600]
-        raise RuntimeError(f"AI 服務回傳 HTTP {response.status_code}：{error or '請檢查 API Key / 額度 / 模型設定'}")
+        raise RuntimeError(
+            f"AI 服務回傳 HTTP {response.status_code}："
+            f"{error or '請檢查 API Key / 額度 / 模型設定'}"
+        )
     raw = _response_output_text(response.json())
     if not raw:
         raise RuntimeError("AI 沒有回傳可解析的題目內容。")
@@ -976,34 +1014,7 @@ def generate_openai_question_candidates(
         parsed = json.loads(raw)
     except Exception as exc:
         raise RuntimeError(f"AI 題目 JSON 解析失敗：{exc}") from exc
-    result = []
-    for question in _coerce_ai_question_list(parsed)[:count]:
-        question_type = question.get("questionType") if question.get("questionType") in {"choice", "essay"} else "choice"
-        text = str(question.get("question", "")).strip()
-        if not text:
-            continue
-        options = [str(value).strip() for value in (question.get("options") or []) if str(value).strip()][:4]
-        if question_type == "choice":
-            if len(options) != 4:
-                continue
-            correct = max(0, min(3, int(question.get("correct", 0) or 0)))
-        else:
-            options = []
-            correct = 0
-        result.append({
-            "questionType": question_type,
-            "question": text[:2000],
-            "options": options,
-            "correct": correct,
-            "tag": str(question.get("tag", "AI教材題"))[:100],
-            "explanation": str(question.get("explanation", ""))[:4000],
-            "sourceHint": str(question.get("sourceHint", ""))[:300],
-            "sourceEvidence": str(question.get("sourceEvidence", ""))[:600],
-        })
-    if not result:
-        raise RuntimeError("AI 回傳的題目未通過格式檢查，請重新產生。")
-    return result
-
+    return normalize_ai_questions(parsed, count)
 
 def generate_gemini_question_candidates(
     *,
