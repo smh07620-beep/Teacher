@@ -15,8 +15,25 @@ from teacher_app.storage.web_runtime import WebStorageRuntime
 from teacher_app.materials.ai_video_repository import MP4_MIME
 
 
+def _env_true(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return bool(default)
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _local_allowed() -> bool:
-    return str(os.environ.get("AI_VIDEO_ALLOW_LOCAL_STORAGE", "false")).lower() in {"1", "true", "yes", "on"}
+    return _env_true("AI_VIDEO_ALLOW_LOCAL_STORAGE")
+
+
+def _fallback_to_r2() -> bool:
+    # AI Video inherits the presentation storage setting when its own backend is
+    # unset.  Production migrated from MEGA to R2, so a stale legacy
+    # AI_PRESENTATION_STORAGE_BACKEND=mega must not disable video authoring when
+    # both Web and Worker already have the canonical R2 credentials.
+    if "AI_VIDEO_FALLBACK_TO_R2" in os.environ:
+        return _env_true("AI_VIDEO_FALLBACK_TO_R2")
+    return _env_true("AI_PRESENTATION_FALLBACK_TO_R2", True)
 
 
 def sha256_file(path: Path) -> str:
@@ -33,10 +50,22 @@ class VideoStorage:
         self.paths_provider = paths_provider
         self.storage = storage_adapter or WorkerMaterialStorageAdapter()
 
+    def requested_backend(self) -> str:
+        requested = str(
+            os.environ.get("AI_VIDEO_STORAGE_BACKEND")
+            or os.environ.get("AI_PRESENTATION_STORAGE_BACKEND")
+            or "auto"
+        ).strip().lower()
+        if requested not in {"auto", "r2", "oci", "gdrive", "mega", "local"}:
+            raise RuntimeError("AI_VIDEO_STORAGE_BACKEND 必須是 auto、r2、oci、gdrive、mega 或 local。")
+        return requested
+
     def backend(self) -> str:
-        requested = str(os.environ.get("AI_VIDEO_STORAGE_BACKEND") or os.environ.get("AI_PRESENTATION_STORAGE_BACKEND") or "auto").strip().lower()
+        requested = self.requested_backend()
         checks = {"r2": providers.r2_is_configured, "oci": providers.oci_is_configured, "gdrive": providers.gdrive_is_configured, "mega": self.storage.mega_is_configured}
         if requested in checks:
+            if requested == "mega" and _fallback_to_r2() and checks["r2"]():
+                return "r2"
             if not checks[requested](): raise RuntimeError(f"AI 影片儲存設為 {requested}，但 provider 尚未完成設定。")
             return requested
         if requested == "local":
@@ -50,9 +79,28 @@ class VideoStorage:
 
     def capability(self) -> dict[str, Any]:
         try:
-            backend = self.backend(); return {"available": True, "backend": backend, "shared": backend != "local"}
+            requested = self.requested_backend()
+            backend = self.backend()
+            return {
+                "available": True,
+                "backend": backend,
+                "requestedBackend": requested,
+                "fallbackUsed": requested not in {"auto", backend},
+                "shared": backend != "local",
+            }
         except Exception as exc:
-            return {"available": False, "backend": "", "shared": False, "reason": str(exc)[:220]}
+            return {
+                "available": False,
+                "backend": "",
+                "requestedBackend": str(
+                    os.environ.get("AI_VIDEO_STORAGE_BACKEND")
+                    or os.environ.get("AI_PRESENTATION_STORAGE_BACKEND")
+                    or "auto"
+                ).strip().lower(),
+                "fallbackUsed": False,
+                "shared": False,
+                "reason": str(exc)[:220],
+            }
 
     def _local_root(self) -> Path:
         path = Path(self.paths_provider().tmp_dir) / "ai-videos"; path.mkdir(parents=True, exist_ok=True); return path
