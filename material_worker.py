@@ -582,32 +582,47 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
     # one-slide-at-a-time navigation.
     single=bool(backend=="mega" and STORAGE.single_preview and (ext==".pdf" or ext in OFFICE_EXT) and ext not in presentation_ext)
     prepared_pdf=None
-    powerpoint_exact=False
+    direct_presentation_frames=False
     if ext in {".ppt",".pptx"} and _env_true("MATERIAL_POWERPOINT_COM_PREVIEW_ENABLED",True):
-        report("轉檔處理","正在嘗試使用 Microsoft PowerPoint 原生引擎建立高相容預覽。",68)
+        report("轉檔處理","正在使用 Microsoft PowerPoint 原生引擎直接輸出逐頁預覽。",68)
         try:
             com_timeout=max(15,min(240,int(os.environ.get("MATERIAL_POWERPOINT_COM_TIMEOUT_SECONDS","60") or 60)))
         except (TypeError,ValueError):
             com_timeout=60
+        try:
+            preview_long_edge=max(960,min(3840,int(os.environ.get("MATERIAL_POWERPOINT_PREVIEW_LONG_EDGE","1920") or 1920)))
+        except (TypeError,ValueError):
+            preview_long_edge=1920
         started=time.monotonic()
-        prepared_pdf,com_detail=ai_video_renderer.export_powerpoint_pdf(
+        frames,com_detail=ai_video_renderer.export_powerpoint_preview_frames(
             source,
-            Path(temp)/"powerpoint-pdf"/"preview.pdf",
+            slides,
+            long_edge=preview_long_edge,
             timeout=com_timeout,
         )
-        timings["powerPointToPdfMs"]=_elapsed_ms(started)
-        if prepared_pdf is not None:
-            powerpoint_exact=True
+        timings["powerPointSlideExportMs"]=_elapsed_ms(started)
+        if frames:
+            pages=len(frames)
+            direct_presentation_frames=True
+            preview_width=0; preview_height=0
+            try:
+                with Image.open(frames[0]) as preview_image:
+                    preview_width,preview_height=map(int,preview_image.size)
+            except Exception:
+                pass
             media_meta={
                 **media_meta,
-                "officeConversionMode":"powerpoint-com",
+                "officeConversionMode":"powerpoint-com-direct",
                 "presentationRenderer":"powerpoint-com",
                 "presentationFidelity":"exact",
+                "presentationPreviewLongEdge":preview_long_edge,
+                "presentationPreviewWidth":preview_width,
+                "presentationPreviewHeight":preview_height,
             }
-            report("轉檔處理","Microsoft PowerPoint 原生轉檔完成；將使用逐頁預覽避免字型與版面重排。",72)
+            report("轉檔處理",f"PowerPoint 原生逐頁輸出完成，共 {pages} 頁；不經 PDF/LibreOffice 重排。",72)
         else:
-            report("轉檔處理",f"PowerPoint 原生轉檔不可用（{com_detail}），改用 LibreOffice 相容轉檔。",69)
-    if ext in OFFICE_EXT and prepared_pdf is None:
+            report("轉檔處理",f"PowerPoint 原生逐頁輸出不可用（{com_detail}），改用 LibreOffice 相容轉檔。",69)
+    if ext in OFFICE_EXT and prepared_pdf is None and not direct_presentation_frames:
         report("轉檔處理","LibreOffice 已開始建立可預覽 PDF；此步驟以實際完成事件更新，不使用假倒數。",68)
         started=time.monotonic(); prepared_pdf=STORAGE.prepare_office_pdf(source,Path(temp)/"office-pdf",timeout=240); timings["officeToPdfMs"]=_elapsed_ms(started)
         report("轉檔處理","LibreOffice 轉檔已完成，準備建立預覽。",72)
@@ -627,7 +642,16 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
     if text_index is not None:derivatives["index.txt"]=text_index
     media_meta={**media_meta,**index_meta}
     render_publish_started=time.monotonic()
-    if single:
+    if direct_presentation_frames:
+        if pages<=0: raise RuntimeError("PowerPoint 原生逐頁預覽頁數為零，不能完成工作。")
+        report("建立預覽",f"PowerPoint 原生逐頁預覽已建立完成，共 {pages} 頁。",84)
+        report("正式發布",f"正在將教材與 {pages} 頁原生預覽正式寫入 {backend.upper()}。",86)
+        if backend=="mega":key,prefix,remote=STORAGE.upload_material_tree_to_mega(material_id,source,slides,pages,derivatives)
+        elif backend=="gdrive":key,prefix,remote=STORAGE.upload_material_tree_to_gdrive(material_id,source,slides,pages,original_name=stored_name,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256)
+        elif backend=="r2":key,prefix,remote=STORAGE.upload_material_tree_to_r2(material_id,source,slides,pages,derivatives=derivatives,publish_key=publish_key,source_sha256=source_sha256,progress_callback=upload_progress)
+        else:raise RuntimeError("Local Worker 正式教材儲存需設定 MEGA、Google Drive 或 R2。")
+        meta={"slideFormat":STORAGE.slide_format(slides,pages),**(remote or {}),**media_meta}
+    elif single:
         pages=STORAGE.build_single_preview_pdf(source,preview,prepared_pdf=prepared_pdf)
         if pages<=0 or not preview.is_file() or preview.stat().st_size<=0: raise RuntimeError("Office/PDF preview 產生失敗，不能完成工作。")
         report("建立預覽",f"單一 PDF 預覽已建立完成，共 {pages} 頁。",84)

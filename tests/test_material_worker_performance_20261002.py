@@ -61,6 +61,55 @@ class MaterialWorkerPerformance20261002Tests(unittest.TestCase):
             self.assertIn("renderAndProviderMs", timings)
             self.assertEqual(result["storageMeta"]["workerTimingsMs"], timings)
 
+    def test_powerpoint_direct_frames_skip_pdf_conversion(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            source = temp / "source.pptx"
+            source.write_bytes(b"pptx")
+            slides = temp / "slides"
+            fake = Mock()
+            fake.single_preview = True
+            fake.active_backend.return_value = "mega"
+            fake.slide_format.return_value = "png"
+            fake.upload_material_tree_to_mega.return_value = (
+                "/root/material/source.pptx",
+                "/root/material/slides",
+                {"adapter": "megacmd", "slideFormat": "png"},
+            )
+
+            def export_frames(_source, output_dir, *, long_edge=1920, timeout=60):
+                self.assertEqual(long_edge, 1920)
+                output_dir = Path(output_dir)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                first = output_dir / "slide-01.png"
+                second = output_dir / "slide-02.png"
+                from PIL import Image
+                Image.new("RGB", (1920, 1080), "white").save(first)
+                Image.new("RGB", (1920, 1080), "white").save(second)
+                return [first, second], "ok"
+
+            with patch.object(material_worker, "STORAGE", fake), \
+                 patch.object(material_worker, "_transcode_if_needed", return_value=(source, "source.pptx", {}, {})), \
+                 patch.object(material_worker, "_build_text_index", return_value=(None, {"textIndexAvailable": False})), \
+                 patch.object(material_worker.ai_video_renderer, "export_powerpoint_preview_frames", side_effect=export_frames):
+                result = material_worker.publish_to_storage(
+                    source,
+                    "source.pptx",
+                    {"id": "job-pptx", "materialId": "mat-pptx"},
+                    temp,
+                    "b" * 64,
+                )
+
+            fake.prepare_office_pdf.assert_not_called()
+            fake.convert_pdf_to_images.assert_not_called()
+            fake.build_single_preview_pdf.assert_not_called()
+            fake.upload_material_tree_to_mega.assert_called_once()
+            self.assertEqual(result["pageCount"], 2)
+            self.assertEqual(result["storageMeta"]["presentationRenderer"], "powerpoint-com")
+            self.assertEqual(result["storageMeta"]["presentationFidelity"], "exact")
+            self.assertEqual(result["storageMeta"]["presentationPreviewWidth"], 1920)
+            self.assertEqual(result["storageMeta"]["presentationPreviewHeight"], 1080)
+
     def test_publish_maps_real_page_and_r2_byte_progress(self):
         with tempfile.TemporaryDirectory() as temp_name:
             temp = Path(temp_name)

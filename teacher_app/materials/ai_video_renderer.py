@@ -24,10 +24,16 @@ def _enabled(name: str, default: bool = True) -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
-def _powershell() -> str:
-    if os.name != "nt" or not _enabled("AI_VIDEO_POWERPOINT_COM_ENABLED", True):
+def _windows_powershell() -> str:
+    if os.name != "nt":
         return ""
     return shutil.which("powershell.exe") or shutil.which("pwsh.exe") or ""
+
+
+def _powershell() -> str:
+    if not _enabled("AI_VIDEO_POWERPOINT_COM_ENABLED", True):
+        return ""
+    return _windows_powershell()
 
 
 def _libreoffice() -> str:
@@ -86,6 +92,85 @@ def _run(command: list[str], *, timeout: int) -> tuple[bool, str]:
     if completed.returncode != 0:
         return False, f"exit-{completed.returncode}"
     return True, "ok"
+
+
+def export_powerpoint_preview_frames(
+    presentation_path: Path,
+    output_dir: Path,
+    *,
+    long_edge: int = 1920,
+    timeout: int = 60,
+) -> tuple[list[Path], str]:
+    """Render PPT/PPTX slides directly through desktop PowerPoint.
+
+    This is the material-reader fidelity path. It avoids the intermediate PDF
+    layout engine entirely, keeps the presentation's native aspect ratio, and
+    produces deterministic slide-XX.png files consumed by the normal image
+    reader. LibreOffice remains the caller's fallback when COM is unavailable.
+    """
+    powershell = _windows_powershell()
+    if not powershell:
+        return [], "not-candidate"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    long_edge = max(960, min(3840, int(long_edge or 1920)))
+    script = output_dir.parent / "export-material-preview-frames.ps1"
+    script.write_text(
+        "param([string]$PresentationPath,[string]$OutputDirectory,[int]$LongEdge)\n"
+        "$ErrorActionPreference='Stop'\n$ppt=$null\n$deck=$null\n"
+        "try {\n"
+        "  $ppt=New-Object -ComObject PowerPoint.Application\n"
+        "  try { $ppt.DisplayAlerts=1 } catch {}\n"
+        "  $deck=$ppt.Presentations.Open($PresentationPath,-1,0,0)\n"
+        "  New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null\n"
+        "  $slideWidth=[double]$deck.PageSetup.SlideWidth\n"
+        "  $slideHeight=[double]$deck.PageSetup.SlideHeight\n"
+        "  if($slideWidth -le 0 -or $slideHeight -le 0){ throw 'invalid-slide-size' }\n"
+        "  if($slideWidth -ge $slideHeight){\n"
+        "    $outW=$LongEdge\n"
+        "    $outH=[int][Math]::Round($LongEdge*$slideHeight/$slideWidth)\n"
+        "  } else {\n"
+        "    $outH=$LongEdge\n"
+        "    $outW=[int][Math]::Round($LongEdge*$slideWidth/$slideHeight)\n"
+        "  }\n"
+        "  $outW=[Math]::Max(1,$outW); $outH=[Math]::Max(1,$outH)\n"
+        "  for($i=1;$i -le $deck.Slides.Count;$i++){\n"
+        "    $target=Join-Path $OutputDirectory ('slide-{0:D2}.png' -f $i)\n"
+        "    $deck.Slides.Item($i).Export($target,'PNG',$outW,$outH)\n"
+        "  }\n"
+        "} finally {\n"
+        "  if($deck){$deck.Close()}\n  if($ppt){$ppt.Quit()}\n"
+        "  [GC]::Collect(); [GC]::WaitForPendingFinalizers()\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    ok, detail = _run(
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            "-PresentationPath",
+            str(presentation_path),
+            "-OutputDirectory",
+            str(output_dir),
+            "-LongEdge",
+            str(long_edge),
+        ],
+        timeout=max(15, min(240, int(timeout or 60))),
+    )
+    if not ok:
+        return [], detail
+    frames = [
+        path
+        for path in output_dir.glob("slide-*.png")
+        if path.is_file() and path.stat().st_size > 0
+    ]
+    frames.sort(key=lambda path: int(path.stem.rsplit("-", 1)[-1]))
+    return frames, "ok" if frames else "no-frames"
 
 
 def export_powerpoint_pdf(presentation_path: Path, output_pdf: Path, *, timeout: int = 60) -> tuple[Path | None, str]:
@@ -286,5 +371,6 @@ __all__ = [
     "export_libreoffice_frames",
     "export_powerpoint_frames",
     "export_powerpoint_pdf",
+    "export_powerpoint_preview_frames",
     "render_exact_frames",
 ]
