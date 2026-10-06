@@ -17,7 +17,7 @@
   function esc(value){return typeof window.escapeHtml==='function'?window.escapeHtml(String(value??'')):String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
   function prefix(kind){return kind==='system'?'system-announcement':'teacher-announcement';}
   function byId(kind,suffix){return document.getElementById(`${prefix(kind)}-${suffix}`);}
-  function groupCatalog(){return window.GROUPS||{};}
+  function groupCatalog(){return window.AppCore?.groups||(typeof GROUPS!=='undefined'?GROUPS:(window.GROUPS||{}));}
   function groupLabel(key){const item=groupCatalog()[key]||{};return item.name||item.label||key||'全體';}
   function toLocalInput(value){
     if(!value)return '';
@@ -201,7 +201,7 @@
     check('pinned',item?.pinned);
     check('requireRead',item?.requireRead);
     if(kind==='teaching'){
-      const defaultScope=canCrossGroup()?'all':'group';
+      const defaultScope='group';
       set('scopeType',item?.scopeType||defaultScope);
       set('group',item?.group||ownGroup());
       void syncScopeEditor(kind,item?.courseId||'');
@@ -384,4 +384,5 @@
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});
   else mount();
+  Promise.resolve(window.TeacherRBAC681Ready).then(mount).catch(()=>{});
 })();
