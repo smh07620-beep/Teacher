@@ -434,7 +434,7 @@
       const deadline = Date.now() + 45000;
       let transientTimeouts = 0;
       while (!completed && Date.now() < deadline) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 700));
         try {
           const data = await fetchJsonWithTimeout(
             `/api/media-audio/jobs/${encodeURIComponent(jobId)}`,
