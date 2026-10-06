@@ -1,6 +1,7 @@
 """AI PowerPoint renderer and worker-side generation orchestration."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import tempfile
@@ -58,6 +59,23 @@ def _sensitive_provenance_value(value: Any) -> bool:
 
 def _provenance(payload: dict[str, Any]) -> str:
     return json.dumps(repository.sanitize_provenance(payload), ensure_ascii=False, separators=(",", ":"))
+
+
+def _core_provenance_comment(payload: dict[str, Any]) -> str:
+    """Return a python-pptx-safe locator while the full provenance stays in notes/DB."""
+    full = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    if len(full) <= 255:
+        return full
+    compact = {
+        "sourceMaterialId": _clean(payload.get("sourceMaterialId"), 40),
+        "sourceDraftId": _clean(payload.get("sourceDraftId"), 40),
+        "sourceJobId": _clean(payload.get("sourceJobId"), 40),
+        "revisionNumber": payload.get("revisionNumber") or 1,
+        "provenanceSha256": hashlib.sha256(full.encode("utf-8")).hexdigest()[:16],
+    }
+    # With bounded identifiers this remains below the OOXML/core-properties
+    # 255-character limit enforced by python-pptx 1.x.
+    return json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
 
 
 def _slide_header(line: str):
@@ -466,7 +484,8 @@ def render_pptx(*, title: str, slides: list[dict], output_path: Path,
     core.title = _clean(title, 255)
     core.subject = "Teacher AI reviewed teaching presentation"
     core.keywords = f"Teacher,AI,medical-laboratory,review-required,{quality.RULESET_VERSION}"
-    core.comments = json.dumps(safe_provenance, ensure_ascii=False, separators=(",", ":"))
+    provenance_json = json.dumps(safe_provenance, ensure_ascii=False, separators=(",", ":"))
+    core.comments = _core_provenance_comment(safe_provenance)
     for item in prepared:
         slide = prs.slides.add_slide(_layout_for(prs, item.get("layout") or "content", layout_profile,
                                                  quality_report=manifest, slide_id=item.get("id") or ""))
@@ -482,7 +501,7 @@ def render_pptx(*, title: str, slides: list[dict], output_path: Path,
         _set_body_font(frame, item["bullets"])
         _render_blocks(slide, item.get("blocks") or [], image_resolver=image_resolver, profile=layout_profile)
         _branding_footer(slide, branding)
-        notes = "\n\n".join(filter(None, [_clean(item.get("speakerNotes"), 4000), "PROVENANCE " + core.comments]))
+        notes = "\n\n".join(filter(None, [_clean(item.get("speakerNotes"), 4000), "PROVENANCE " + provenance_json]))
         _write_notes(slide, notes)
     manifest["slideCount"] = len(prepared)
     manifest = quality.sanitize_quality_manifest(manifest)
