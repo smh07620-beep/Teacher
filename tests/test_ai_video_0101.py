@@ -8,7 +8,7 @@ import wave
 from pathlib import Path
 from unittest.mock import patch
 
-from teacher_app.materials import ai_video_jobs, ai_video_runtime
+from teacher_app.materials import ai_video_jobs, ai_video_runtime, ai_video_storage
 from teacher_app.materials.ai_video_routes import _artifact_ready, _video_allowed
 
 
@@ -37,6 +37,46 @@ class AiVideoRbacTests(unittest.TestCase):
     def test_teacher_and_group_leader_can_approve(self):
         for role in ("clinical_teacher", "group_leader"):
             self.assertTrue(_video_allowed({"role": role}, "video.approve"))
+
+
+class AiVideoStorageTests(unittest.TestCase):
+    class _Storage:
+        @staticmethod
+        def mega_is_configured():
+            return False
+
+    def test_legacy_mega_setting_falls_back_to_r2(self):
+        with (
+            patch.dict(ai_video_storage.os.environ, {
+                "AI_VIDEO_STORAGE_BACKEND": "",
+                "AI_PRESENTATION_STORAGE_BACKEND": "mega",
+                "AI_PRESENTATION_FALLBACK_TO_R2": "true",
+            }, clear=False),
+            patch.object(ai_video_storage.providers, "r2_is_configured", return_value=True),
+            patch.object(ai_video_storage.providers, "oci_is_configured", return_value=False),
+            patch.object(ai_video_storage.providers, "gdrive_is_configured", return_value=False),
+        ):
+            storage = ai_video_storage.VideoStorage(storage_adapter=self._Storage())
+            self.assertEqual(storage.backend(), "r2")
+            capability = storage.capability()
+        self.assertTrue(capability["available"])
+        self.assertEqual(capability["requestedBackend"], "mega")
+        self.assertEqual(capability["backend"], "r2")
+        self.assertTrue(capability["fallbackUsed"])
+
+    def test_explicit_fallback_disable_preserves_mega_failure(self):
+        with (
+            patch.dict(ai_video_storage.os.environ, {
+                "AI_VIDEO_STORAGE_BACKEND": "mega",
+                "AI_VIDEO_FALLBACK_TO_R2": "false",
+            }, clear=False),
+            patch.object(ai_video_storage.providers, "r2_is_configured", return_value=True),
+            patch.object(ai_video_storage.providers, "oci_is_configured", return_value=False),
+            patch.object(ai_video_storage.providers, "gdrive_is_configured", return_value=False),
+        ):
+            storage = ai_video_storage.VideoStorage(storage_adapter=self._Storage())
+            with self.assertRaisesRegex(RuntimeError, "provider 尚未完成設定"):
+                storage.backend()
 
 
 class AiVideoRuntimeTests(unittest.TestCase):
