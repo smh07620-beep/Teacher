@@ -229,10 +229,10 @@ class MaterialReadAccess68Tests(unittest.TestCase):
             '<w:document '
             'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
             'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
-            'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+            'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">'
             '<w:body>'
-            '<w:p><w:r><w:t>blood cell morphology</w:t></w:r><w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r></w:p>'
-            '<w:p><w:r><w:t>urine sediment</w:t></w:r><w:r><w:drawing><a:blip r:embed="rId2"/></w:drawing></w:r></w:p>'
+            '<w:p><w:r><w:t>blood cell morphology</w:t></w:r><w:r><w:drawing><wp:inline><a:blip r:embed="rId1"/></wp:inline></w:drawing></w:r></w:p>'
+            '<w:p><w:r><w:t>urine sediment</w:t></w:r><w:r><w:drawing><wp:inline><a:blip r:embed="rId2"/></wp:inline></w:drawing></w:r></w:p>'
             '</w:body></w:document>'
         )
         relationships = (
