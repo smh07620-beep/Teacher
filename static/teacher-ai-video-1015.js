@@ -329,7 +329,7 @@
     $('teacher-ai-video-source-author-1028')?.addEventListener('click', () => {
       const opener = window.TeacherAIMediaControls1023?.openVideoSourceWorkspace;
       if (typeof opener === 'function') void opener();
-      else window.TeacherAIMediaControls1023?.openPowerPointWorkspace?.();
+      else status('影片來源工具尚未載入完成，請稍候再試。', 'error');
     });
     $('teacher-ai-video-voice-preview-1015').addEventListener('click', () => void previewNarrationVoice());
     $('teacher-ai-video-voice-1015')?.addEventListener('change', () => {
