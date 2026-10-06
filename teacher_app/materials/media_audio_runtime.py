@@ -357,12 +357,6 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
     # Normalize again at the lowest boundary so stale jobs/env cannot reach
     # KPipeline with a removed v1.0 voice name.
     voice = _voice(voice)
-    try:
-        import numpy as np
-    except Exception as exc:
-        raise RuntimeError(
-            "本機免費語音尚未安裝完成；請在 AI Worker 執行 requirements-ai-worker.txt。"
-        ) from exc
 
     max_chars = max(1000, min(50000, int(os.environ.get("KOKORO_TTS_MAX_CHARS", "12000") or 12000)))
     if len(text) > max_chars:
@@ -383,6 +377,16 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
             return cache_path.read_bytes(), model_label
     except OSError:
         pass
+
+    # Cache hits must not require NumPy/Kokoro to be imported. This keeps
+    # previews and unchanged slide narration lightweight and lets generic Web
+    # regression environments exercise the cache path without AI dependencies.
+    try:
+        import numpy as np
+    except Exception as exc:
+        raise RuntimeError(
+            "本機免費語音尚未安裝完成；請在 AI Worker 執行 requirements-ai-worker.txt。"
+        ) from exc
 
     try:
         pipeline = _kokoro_pipeline(repo_id)

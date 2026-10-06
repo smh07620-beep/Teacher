@@ -7,6 +7,7 @@
   const MATERIAL_INDEX_TIMEOUT_MS = 3500;
   let materialIndexHydrationGeneration = 0;
   let adminMaterialsRequestGeneration = 0;
+  let adminMaterialsRequestPromise = null;
 
   window.invalidateAdminMaterialsCache = function(){
     adminMaterialsCache = { data: null, at: 0 };
@@ -17,30 +18,36 @@
     if (!force && Array.isArray(adminMaterialsCache.data) && (now - adminMaterialsCache.at) < ADMIN_CACHE_MS) {
       return adminMaterialsCache.data;
     }
+    // Course hub, media authoring and upload completion can all ask for the
+    // same no-store list in the same render turn. Share that network request
+    // instead of creating a request storm that keeps the UI in "同步中".
+    if (adminMaterialsRequestPromise) return adminMaterialsRequestPromise;
+
     const generation = ++adminMaterialsRequestGeneration;
-    const res = await fetch('/api/slides/admin', {credentials:'same-origin', cache:'no-store'});
-    const data = await res.json().catch(() => []);
-    if (res.status === 401) {
-      if (generation === adminMaterialsRequestGeneration) window.invalidateAdminMaterialsCache();
-      const next = encodeURIComponent(location.pathname + location.search);
-      location.href = `/login?next=${next}`;
-      throw new Error('登入已逾時，請重新登入。');
-    }
-    if (res.status === 403) throw new Error((data && data.error) || '沒有教材管理權限。');
-    if (!res.ok) throw new Error((data && data.error) || '無法取得教材清單');
-    const list = Array.isArray(data) ? data : [];
-    if (generation === adminMaterialsRequestGeneration) {
-      adminMaterialsCache = { data: list, at: Date.now() };
+    const request = (async () => {
+      const res = await fetch('/api/slides/admin', {credentials:'same-origin', cache:'no-store'});
+      const data = await res.json().catch(() => []);
+      if (res.status === 401) {
+        if (generation === adminMaterialsRequestGeneration) window.invalidateAdminMaterialsCache();
+        const next = encodeURIComponent(location.pathname + location.search);
+        location.href = `/login?next=${next}`;
+        throw new Error('登入已逾時，請重新登入。');
+      }
+      if (res.status === 403) throw new Error((data && data.error) || '沒有教材管理權限。');
+      if (!res.ok) throw new Error((data && data.error) || '無法取得教材清單');
+      const list = Array.isArray(data) ? data : [];
+      if (generation === adminMaterialsRequestGeneration) {
+        adminMaterialsCache = { data: list, at: Date.now() };
+      }
       return list;
+    })();
+
+    adminMaterialsRequestPromise = request;
+    try {
+      return await request;
+    } finally {
+      if (adminMaterialsRequestPromise === request) adminMaterialsRequestPromise = null;
     }
-    // An older response must never replace a newer completed material list.
-    // This matters when upload completion, course hub hydration and media source
-    // hydration all refresh /api/slides/admin at nearly the same time.
-    // The older caller still gets the response it explicitly requested. Returning
-    // the shared cache here can hand that caller a pre-upload snapshot while a
-    // newer request is merely in flight, leaving the course card at 教材 0 even
-    // though the Worker has already published the material.
-    return list;
   };
 
   function paintAdminMaterials(materials, box){

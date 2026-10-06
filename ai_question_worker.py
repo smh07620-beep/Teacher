@@ -285,18 +285,11 @@ def main() -> int:
         f"free_fallback=enabled control_transport={transport}"
     )
     log(_renderer_status_line())
-    # This intentionally happens in the dedicated AI Worker, not in the
-    # supervisor import probe.  A failed warm-up is observable but leaves all
-    # other Worker queues available.
-    if str(os.environ.get("AI_TTS_PROVIDER", "kokoro") or "kokoro").strip().lower() == "kokoro":
-        try:
-            model = media_audio_runtime.preload_kokoro()
-            log(f"kokoro warmed model={model}")
-        except Exception as exc:
-            log(f"kokoro warmup error type={type(exc).__name__}")
     heartbeat_seconds = _env_int("AI_WORKER_HEARTBEAT_SECONDS", 30, 10, 90)
     try:
         with _AIHeartbeat(heartbeat_seconds, transport=transport, api=api) as heartbeat:
+            # Publish heartbeat first, then pay the one-time Kokoro/Torch load
+            # cost. The warmup helper is the only startup owner of preload_kokoro().
             _warm_kokoro_on_startup()
             while True:
                 try:

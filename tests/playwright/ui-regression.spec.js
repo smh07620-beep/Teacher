@@ -19,7 +19,7 @@ async function assertNoHorizontalOverflow(page) {
 }
 
 async function open(page, path) {
-  await page.goto(`${baseURL}${path}`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${baseURL}${path}`, { waitUntil: 'commit', timeout: 15000 });
   await page.waitForTimeout(250);
 }
 

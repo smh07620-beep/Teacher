@@ -372,7 +372,21 @@
           box.dataset.courseScope=key;
           box.dataset.courseVisibleLimit='30';
       }
+      if(box.dataset.courseRefreshActive==='1'&&box.dataset.courseRefreshScope===key&&box._adminCourseMaterialRefresh){
+          const activeWasForced=box.dataset.courseRefreshForce==='1';
+          if(force&&!activeWasForced){
+              // A forced refresh arriving behind a cached/background refresh
+              // waits for that owner, then becomes the single fresh owner.
+              try{await box._adminCourseMaterialRefresh;}catch(_error){}
+              if(box.dataset.courseScope===key)return renderAdminCourseMaterialHub(true);
+          }
+          return box._adminCourseMaterialState||null;
+      }
       const generation=String((Number(box.dataset.courseRenderGeneration)||0)+1);
+      box.dataset.courseRefreshActive='1';
+      box.dataset.courseRefreshScope=key;
+      box.dataset.courseRefreshForce=force?'1':'0';
+      box.dataset.courseRefreshOwnerGeneration=generation;
       box.dataset.courseRenderGeneration=generation;
       const paintCurrent=()=>{
           if(box.dataset.courseRenderGeneration===generation && box.dataset.courseScope===key) paintAdminCourseMaterialHub(box,state);
@@ -394,6 +408,7 @@
           },
           errors:{courses:'',materials:'',cats:'',assignments:''}
       };
+      box._adminCourseMaterialState=state;
       paintCurrent();
       const jobs=[];
 
@@ -453,6 +468,12 @@
               }
           }
           return results;
+      }).finally(()=>{
+          if(box.dataset.courseRefreshOwnerGeneration===generation){
+              delete box.dataset.courseRefreshActive;
+              delete box.dataset.courseRefreshForce;
+              delete box.dataset.courseRefreshOwnerGeneration;
+          }
       });
       box._adminCourseMaterialRefresh=refreshPromise;
       return state;

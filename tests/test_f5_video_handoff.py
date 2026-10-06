@@ -25,7 +25,10 @@ class F5VideoHandoffTests(unittest.TestCase):
         self.assertIn("_synthesize(narration",source)
         self.assertIn("segments_to_vtt",source)
         self.assertIn("segments_to_srt",source)
-        self.assertIn("FFmpeg 合成 MP4",source)
+        self.assertIn('"fps": 5',source)
+        self.assertIn('"tune": "stillimage"',source)
+        self.assertIn('"無重編碼合併 MP4"',source)
+        self.assertIn('"-c", "copy"',source)
         self.assertIn("storage.store(",source)
 
 
