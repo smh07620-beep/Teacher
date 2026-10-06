@@ -168,6 +168,20 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         self.assertNotIn('onclick="event.stopPropagation();window.teacherContentStudioExamAction', self.source)
         for action in ("question", "image", "video", "ai", "questions", "settings"):
             self.assertIn(f'data-exam-action="{action}"', self.source)
+    def test_course_ai_and_exam_tools_return_to_same_authoring_studio(self):
+        for token in (
+            'openTeacherCourseMediaAuthoring',
+            'openTeacherCourseAssessmentAuthoring',
+            'returnTeacherCourseAuthoringStep',
+            'data-course-authoring-return="2"',
+            'data-course-authoring-return="3"',
+            "window.TeacherCourseAuthoringContext={active:true",
+        ):
+            self.assertIn(token, self.source)
+        self.assertIn('openManual:openManualTool', self.tools)
+        self.assertIn('← 完成並回到建立課程｜評量', self.tools)
+        self.assertIn("window.returnTeacherCourseAuthoringStep(3)", self.tools)
+
     def test_course_create_exit_is_distinct_from_wizard_previous_step(self):
         self.assertIn('✕ 離開建立課程', self.source)
         self.assertIn(
@@ -180,7 +194,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         )
 
     def test_browser_javascript_syntax(self):
-        for asset in ('teacher-content-studio-71.js', 'teacher-content-composer-72.js', 'teacher-ux-convergence-72.js'):
+        for asset in ('teacher-content-studio-71.js', 'teacher-content-tool-panels-710.js', 'course-wizard-681.js', 'teacher-content-composer-72.js', 'teacher-ux-convergence-72.js'):
             completed = subprocess.run(
                 ['node', '--check', str(ROOT / 'static' / asset)],
                 check=False, capture_output=True, text=True,
