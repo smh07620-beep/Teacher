@@ -374,13 +374,19 @@
       }
       if(box.dataset.courseRefreshActive==='1'&&box.dataset.courseRefreshScope===key&&box._adminCourseMaterialRefresh){
           const activeWasForced=box.dataset.courseRefreshForce==='1';
-          if(force&&!activeWasForced){
+          if(!force&&activeWasForced){
+              // Let one cached/background render take ownership while the
+              // forced request is still fetching. Its cached course list keeps
+              // the surface stable; the forced material result reconciles in
+              // after the current owner settles.
+          }else if(force&&!activeWasForced){
               // A forced refresh arriving behind a cached/background refresh
               // waits for that owner, then becomes the single fresh owner.
               try{await box._adminCourseMaterialRefresh;}catch(_error){}
               if(box.dataset.courseScope===key)return renderAdminCourseMaterialHub(true);
+          }else{
+              return box._adminCourseMaterialState||null;
           }
-          return box._adminCourseMaterialState||null;
       }
       const generation=String((Number(box.dataset.courseRenderGeneration)||0)+1);
       box.dataset.courseRefreshActive='1';
@@ -461,7 +467,8 @@
           if(box.dataset.courseScope===key && box.dataset.courseRenderGeneration!==generation){
               if(box.dataset.courseReconcileScheduled!=='1'){
                   box.dataset.courseReconcileScheduled='1';
-                  queueMicrotask(()=>{
+                  const currentOwner=box._adminCourseMaterialRefresh;
+                  Promise.resolve(currentOwner).catch(()=>{}).finally(()=>{
                       delete box.dataset.courseReconcileScheduled;
                       if(box.dataset.courseScope===key) void renderAdminCourseMaterialHub(false);
                   });

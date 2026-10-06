@@ -39,6 +39,9 @@
       if (generation === adminMaterialsRequestGeneration) {
         adminMaterialsCache = { data: list, at: Date.now() };
       }
+      // An older response must never replace a newer completed material list.
+      // Even when request coalescing prevents most overlap, return this caller's
+      // own result rather than substituting an unrelated shared-cache snapshot.
       return list;
     })();
 
