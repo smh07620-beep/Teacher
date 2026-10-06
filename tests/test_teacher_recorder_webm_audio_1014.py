@@ -249,6 +249,37 @@ class TeacherRecorderWebmAudio1014Tests(unittest.TestCase):
         inserted = insert.call_args.args[0]
         self.assertEqual(inserted["filename"], "老師錄音.m4a")
 
+    def test_worker_resolved_auto_classification_is_persisted(self):
+        job = {
+            "materialId": "mat-auto-sop",
+            "payload": {
+                "originalName": "SOP.docx",
+                "title": "生化 SOP",
+                "group": "grpBio",
+                "area": "internal",
+                "courseId": "course-1",
+                "materialType": "auto",
+            },
+        }
+        result = {
+            "storageBackend": "r2",
+            "storageKey": "materials/mat-auto-sop/source.docx",
+            "storageFilename": "source.docx",
+            "pageCount": 3,
+            "storageMeta": {},
+            "materialType": "sop",
+            "classificationMethod": "內容規則判斷",
+            "classificationReason": "SOP 關鍵字明確",
+        }
+        with patch.object(job_commit.material_repository, "get_material", return_value=None), \
+             patch.object(job_commit.material_repository, "insert_material") as insert:
+            entry = job_commit.commit(job, result)
+        inserted = insert.call_args.args[0]
+        self.assertEqual(entry["material_type"], "sop")
+        self.assertEqual(inserted["material_type"], "sop")
+        self.assertIn('"resolved": "sop"', inserted["storage_meta"])
+        self.assertNotEqual(inserted["material_type"], "auto")
+
     def test_private_ai_authoring_upload_stays_inactive_after_worker_commit(self):
         job = {
             "materialId": "mat-ai-private",
