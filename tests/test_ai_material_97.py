@@ -184,7 +184,7 @@ class AIMaterialFrontend97Tests(unittest.TestCase):
             "課程學習目標",
             "✅ 教師核准",
             "📚 發布成教材",
-            "active:false",
+            "authoringOnly",
         ):
             self.assertIn(marker, self.source)
         self.assertNotIn("/api/ai-material-drafts/auto-publish", self.source)
@@ -196,7 +196,7 @@ class AIMaterialFrontend97Tests(unittest.TestCase):
             "authoringSourceIds",
             "referenceMaterialIds: allAuthoringSourceIds()",
             "補充既有教材（可多選；上方共用來源會自動帶入）",
-            "active:false",
+            "authoringOnly",
         ):
             self.assertIn(marker, self.source)
 
