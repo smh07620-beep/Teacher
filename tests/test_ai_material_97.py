@@ -148,6 +148,41 @@ class AIMaterialRoute97Tests(unittest.TestCase):
         enqueue.assert_called_once()
         self.assertEqual(response.get_json()["jobId"], "msjob-97")
 
+    def test_generate_accepts_existing_material_with_private_extra_sources(self):
+        app = self._app("grpBio")
+        materials = {
+            "mat-existing": {"id": "mat-existing", "group": "grpBio", "area": "internal", "active": True},
+            "mat-private": {"id": "mat-private", "group": "grpBio", "area": "internal", "active": False},
+        }
+        queued = {
+            "id": "msjob-mixed", "materialId": "mat-existing", "group": "grpBio", "area": "internal",
+            "status": "queued", "request": {"outputType": "slides", "referenceMaterialIds": ["mat-private"]},
+            "progressPercent": 0, "progressStage": "等待 AI 教材草稿", "progressDetail": "",
+            "createdAt": "", "updatedAt": "", "startedAt": "", "completedAt": "",
+        }
+        captured = {}
+
+        def enqueue(body, _user):
+            captured.update(body)
+            return queued
+
+        with app.test_client() as client, \
+             patch("teacher_app.materials.ai_material_routes.material_repository.get_material", side_effect=lambda material_id: materials.get(material_id)), \
+             patch("teacher_app.materials.ai_material_routes._ai_worker_online_error", return_value=None), \
+             patch("teacher_app.materials.ai_material_routes.media_script_jobs.enqueue", side_effect=enqueue), \
+             patch("teacher_app.materials.ai_material_routes.audit.record_event"):
+            response = client.post(
+                "/api/ai-material-drafts/generate",
+                json={
+                    "materialId": "mat-existing",
+                    "referenceMaterialIds": ["mat-private", "mat-private"],
+                    "outputType": "slides",
+                },
+            )
+        self.assertEqual(response.status_code, 202, response.get_data(as_text=True))
+        self.assertEqual(captured["materialId"], "mat-existing")
+        self.assertEqual(captured["referenceMaterialIds"], ["mat-private"])
+
     def test_generate_denies_teacher_outside_group_scope(self):
         app = self._app("grpBio")
         material = {"id": "mat-2", "group": "grpBB", "area": "internal", "active": False}
