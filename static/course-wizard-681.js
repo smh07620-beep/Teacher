@@ -9,7 +9,7 @@ const MODE_META={
   blueprint:{label:'Blueprint',next:'建立考卷後直接前往「題庫與考卷」設定 Blueprint 與題型配額。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,resultHtml:'',watchToken:0};
+const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',course:null,categoryId:'',materials:[],busy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -37,6 +37,7 @@ function mode(){return MODE_META[state.examMode]||MODE_META.later;}
 function queuedIds(){return [...new Set((state.queuedJobs||[]).filter(Boolean).map(String))];}
 function canLeaveCourse(){
   if(!state.created||state.failedUploads.length)return false;
+  if(state.expectedMaterialIds.length&&!state.linksVerified)return false;
   if(state.expectedJobs<=0)return true;
   const ids=queuedIds();
   if(ids.length<state.expectedJobs)return false;
@@ -268,6 +269,33 @@ function backgroundJobsHtml(rows,metrics={}){
   return `<div class="mt-3 rounded-xl border ${hasProblem&&!allDone?'border-amber-200 bg-amber-50':'border-sky-200 bg-sky-50'} p-3 text-left text-sky-950"><div class="flex flex-wrap items-center justify-between gap-2"><b>${heading}</b><span class="text-[11px] text-sky-700">${leaveHint}</span></div>${protocolWarning}<div class="mt-2 space-y-2">${rows.map(row=>{const failed=row.status==='failed';const done=row.status==='completed';const projection=progressProjection(row,metrics.averageCompletedDurationSeconds);const label=done?'✅ 已完成':failed?'❌ 失敗':row.status==='retry_wait'?'🔁 等待重試':row.status==='processing'?`⚙️ ${row.stage||'Worker 處理中'}`:row.status==='cancelled'?'⛔ 已取消':'⏳ R2 已接收／等待 Worker';const detail=(failed||row.status==='retry_wait')?(row.error||row.detail||'未提供失敗原因'):(row.detail||row.stage||'');const retained=row.stagingBackend==='r2'&&['retry_wait','failed'].includes(row.status)?'<div class="mt-1 font-bold text-violet-700">☁ R2 原始檔仍保留，可直接重新處理，不必重新上傳；成功後才會清除 staging。</div>':'';const retry=failed&&Number(row.attempts||0)>=Number(row.maxAttempts||0)?`<button type="button" data-csp-click="retryMaterialJob('${esc(row.id)}')" class="mt-2 rounded border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-800">直接重新處理</button>`:'';const barClass=failed?'bg-rose-500':row.status==='retry_wait'?'bg-amber-500':done?'bg-emerald-500':'bg-sky-600';return `<div class="rounded-lg border ${failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white'} p-2"><div class="flex flex-wrap justify-between gap-2"><span><b>${esc(row.title||row.originalName||row.id)}</b> · ${label}</span><span class="text-[11px] text-slate-500">${esc(projection.timing)}</span></div><div class="mt-1 text-[11px] ${failed?'text-rose-700':'text-slate-600'}">${esc(row.stage||'')} ${detail?`｜${esc(detail)}`:''}</div>${courseUploadTimeline(row)}${retained}<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 ${projection.pct}%</span><span>依 Worker 真實回報階段顯示；頁數／R2 上傳量會即時持久化，剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full ${barClass} transition-all" style="width:${projection.pct}%"></div></div>${retry}</div>`;}).join('')}</div></div>`;
 }
 
+async function verifyCreatedCourseMaterials(){
+  const courseId=String(state.course?.id||'');
+  const expected=[...new Set((state.expectedMaterialIds||[]).filter(Boolean).map(String))];
+  if(!courseId||!expected.length){state.linksVerified=true;return true;}
+  let list=await api('/api/slides/admin');
+  list=Array.isArray(list)?list:[];
+  for(const id of expected){
+    const material=list.find(item=>String(item.id||'')===id);
+    if(!material)throw new Error('教材已完成處理，但教材清單找不到 '+id+'；請在 Worker / Job 狀態確認發布結果。');
+    if(String(material.courseId||'')!==courseId||material.active===false){
+      await api('/api/slides/'+encodeURIComponent(id),{
+        method:'PATCH',
+        body:JSON.stringify({courseId,active:true})
+      });
+    }
+  }
+  list=await api('/api/slides/admin');
+  list=Array.isArray(list)?list:[];
+  const unresolved=expected.filter(id=>{
+    const material=list.find(item=>String(item.id||'')===id);
+    return !material||String(material.courseId||'')!==courseId||material.active===false;
+  });
+  if(unresolved.length)throw new Error('教材已上傳，但尚未正確掛入課程；已停止離開流程以避免學員看到 0 份教材。');
+  state.linksVerified=true;
+  return true;
+}
+
 async function watchQueuedJobs(jobIds){
   const unique=[...new Set((jobIds||[]).filter(Boolean).map(String))];
   if(!unique.length){state.jobRows=[];syncCompletionControls();return;}
@@ -286,7 +314,16 @@ async function watchQueuedJobs(jobIds){
     if(host)host.innerHTML=backgroundJobsHtml(rows,metrics);
     syncCompletionControls();
     if(rows.length===unique.length&&rows.every(row=>row.status==='completed')){
-      await refreshWorkspaceData();
+      const completedMaterialIds=rows.map(row=>String(row.materialId||'')).filter(Boolean);
+      state.expectedMaterialIds=[...new Set([...state.expectedMaterialIds,...completedMaterialIds])];
+      try{
+        await verifyCreatedCourseMaterials();
+        await refreshWorkspaceData();
+      }catch(error){
+        state.linksVerified=false;
+        const host=el('cw681-background-jobs');
+        if(host)host.insertAdjacentHTML('beforeend',`<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs font-bold text-rose-700">❌ ${esc(error.message)}</div>`);
+      }
       syncCompletionControls();
       break;
     }
@@ -312,11 +349,11 @@ function buildUploadForm(file,index,meta,{area,group,desc,courseId,categoryId,wo
 }
 
 async function uploadEntries(entries,context,status){
-  if(!entries.length)return {uploaded:0,errors:[],jobs:[]};
+  if(!entries.length)return {uploaded:0,errors:[],jobs:[],materials:[]};
   if(!window.MaterialUploadClient?.enqueue)throw new Error('教材背景上傳元件尚未載入，請重新整理後再試。');
   const loaded=new Map();
   const totalBytes=Math.max(1,entries.reduce((sum,item)=>sum+Number(item.file.size||0),0));
-  const errors=[],jobs=[];
+  const errors=[],jobs=[],materials=[];
   let uploaded=0;
   for(let order=0;order<entries.length;order++){
     const item=entries[order],file=item.file,meta=fileMeta(item.index,file);
@@ -336,13 +373,14 @@ async function uploadEntries(entries,context,status){
       loaded.set(item.index,Number(file.size||0));
       uploaded++;
       if(result?.jobId)jobs.push(String(result.jobId));
+      if(result?.materialId)materials.push(String(result.materialId));
     }catch(error){
       const reason=String(error?.message||'未知上傳錯誤');
       errors.push({index:item.index,fileName:file.name,reason});
       console.warn('Course wizard material upload failed',file.name,error);
     }
   }
-  return {uploaded,errors,jobs};
+  return {uploaded,errors,jobs,materials};
 }
 
 async function retryFailedUploads(){
@@ -355,6 +393,9 @@ async function retryFailedUploads(){
     state.failedUploads=result.errors;
     state.expectedJobs+=result.uploaded;
     state.queuedJobs.push(...result.jobs);
+    state.queuedMaterialIds.push(...(result.materials||[]));
+    state.expectedMaterialIds=[...new Set([...state.expectedMaterialIds,...(result.materials||[])])];
+    state.linksVerified=false;
     const retryText=state.failedUploads.length?`仍有 ${state.failedUploads.length} 份教材上傳失敗。`:'未完成教材已重新送入背景佇列；請等到 Worker 正式完成。';
     state.resultHtml=`<span class="font-bold ${state.failedUploads.length?'text-amber-700':'text-sky-700'}">${state.failedUploads.length?'⚠️':'⏳'} ${esc(retryText)}</span><div id="cw681-background-jobs"></div><button id="cw681-reset-next" type="button" disabled data-csp-click="courseWizard681Reset()" class="mt-2 text-slate-500 underline disabled:cursor-not-allowed disabled:opacity-40">建立下一門課</button>`;
     render();
@@ -384,16 +425,22 @@ async function create(){
     for(const id of state.existing){
       const material=state.materials.find(m=>String(m.id)===String(id));if(!material)continue;
       status.textContent=`⏳ 關聯既有教材 ${linked+1}/${state.existing.length}…`;
-      await api('/api/slides/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({title:material.title||material.filename||'',desc:material.desc||'',courseId:course.id,category:state.categoryId||material.category||'',active:material.active!==false,group,area,materialType:material.materialType||'standard',atlasMeta:material.atlasMeta||{},bundleWorkflowId:bundlePayload.workflowId,bundleLinkKey:String(id)})});linked++;
+      const linkedMaterial=await api('/api/slides/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({title:material.title||material.filename||'',desc:material.desc||'',courseId:course.id,category:state.categoryId||material.category||'',active:true,group,area,materialType:material.materialType||'standard',atlasMeta:material.atlasMeta||{},bundleWorkflowId:bundlePayload.workflowId,bundleLinkKey:String(id)})});
+      if(linkedMaterial?.ok===false)throw new Error('既有教材關聯失敗：'+String(material.title||material.filename||id));
+      linked++;
     }
     const entries=files.map((file,index)=>({file,index}));
     const upload=await uploadEntries(entries,{area,group,desc,courseId:course.id,categoryId:state.categoryId,workflowId:bundlePayload.workflowId},status);
     state.failedUploads=upload.errors;
     state.queuedJobs=upload.jobs;
+    state.queuedMaterialIds=upload.materials||[];
+    state.expectedMaterialIds=[...new Set([...state.existing,...state.queuedMaterialIds].map(String).filter(Boolean))];
+    state.linksVerified=false;
     state.expectedJobs=upload.uploaded;
     state.jobRows=[];
     status.textContent='⏳ 同步課程、教材與考卷清單…';await refreshWorkspaceData();
     state.created=true;
+    if(state.expectedJobs<=0)await verifyCreatedCourseMaterials();
     const ready=canLeaveCourse();
     const nextButton=state.categoryId?`<button id="cw681-next-destination" type="button" ${ready?'':'disabled'} data-csp-click="courseWizard681Continue()" class="rounded-lg bg-violet-700 px-3 py-1.5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">前往題庫與考卷 →</button>`:`<button id="cw681-next-destination" type="button" ${ready?'':'disabled'} data-csp-click="courseWizard681OpenCourse()" class="rounded-lg bg-teal-700 px-3 py-1.5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">查看課程總覽 →</button>`;
     const retryNote=bundle.reused?'（本次安全沿用既有建立結果，未重複建立課程／考卷）':'';
@@ -435,7 +482,7 @@ async function openCourseWorkspace(){
   // Do not leak a completed course into the next create-course flow.
   state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.created=false;
-  state.failedUploads=[];state.queuedJobs=[];state.expectedJobs=0;state.jobRows=[];
+  state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.resultHtml='';
   clearWorkflowId();
   render();
@@ -445,7 +492,7 @@ async function openCourseWorkspace(){
 function reset(){
   if(state.created&&!canLeaveCourse())return alert('目前教材尚未全部完成，請先等待或處理失敗工作。');
   state.watchToken++;
-  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.resultHtml='';clearWorkflowId();
+  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
