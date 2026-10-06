@@ -114,6 +114,8 @@
     restoreMaterialHub();
     document.getElementById(studioId)?.classList.add('hidden');
     delete document.body.dataset.teacherContentStudioOpen;
+    studioState.courseAuthoringStep=0;
+    window.TeacherCourseAuthoringContext={active:false};
     if(studioState.returnWorkspace==='assessment'){
       studioState.openExamId='';
       syncExamDeepLink('');
@@ -296,6 +298,12 @@
   }
 
   function restoreMediaMount(){
+    const legacyBack=document.getElementById('teacher-media-back-1014');
+    if(legacyBack?.dataset.courseAuthoringHidden==='1'){
+      delete legacyBack.dataset.courseAuthoringHidden;
+      legacyBack.classList.remove('hidden');
+      legacyBack.removeAttribute('aria-hidden');
+    }
     if(!mediaMount.root)return;
     if(mediaMount.placeholder?.isConnected)mediaMount.placeholder.replaceWith(mediaMount.root);
     else mediaMount.root.remove();
@@ -325,6 +333,12 @@
     if(!media)throw new Error('教材媒體製作室尚未載入，請重新整理後再試。');
     const placeholder=document.createElement('div');placeholder.hidden=true;placeholder.dataset.teacherCourseMediaPlaceholder='1';media.before(placeholder);
     mediaMount.root=media;mediaMount.placeholder=placeholder;
+    const legacyBack=document.getElementById('teacher-media-back-1014');
+    if(legacyBack){
+      legacyBack.dataset.courseAuthoringHidden='1';
+      legacyBack.classList.add('hidden');
+      legacyBack.setAttribute('aria-hidden','true');
+    }
     studioState.courseAuthoringStep=2;
     window.TeacherCourseAuthoringContext={active:true,kind:'media',returnStep:2};
     setStudioChrome('course-materials','建立課程｜2 教材與 AI','AI 製作是本課程的子工作；完成後回到教材步驟加入產物，不會提前發布課程。');
