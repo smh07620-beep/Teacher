@@ -66,7 +66,9 @@ def install() -> None:
         return result, str(source.get("title") or "E2E 教材"), ["text" for _ in materials]
 
     ai_runtime.ai_question_is_configured = lambda _settings=None: True
-    ai_runtime.active_ai_provider = lambda _settings=None: "deterministic-e2e"
+    # Keep the canonical provider key so the production fallback dispatcher
+    # still invokes the real runtime contract; only inference is replaced.
+    ai_runtime.active_ai_provider = lambda _settings=None: "groq"
     ai_runtime.ai_model_name = lambda _settings=None: "deterministic-e2e-v1"
     ai_runtime.generate_ai_questions_from_materials = questions
 
