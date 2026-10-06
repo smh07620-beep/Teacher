@@ -33,6 +33,9 @@ class Phase3AdminMaterialsTests(unittest.TestCase):
         self.assertIn('adminMaterialsRequestGeneration', materials)
         self.assertIn('generation === adminMaterialsRequestGeneration', materials)
         self.assertIn('An older response must never replace a newer completed material list', materials)
+        stale_branch = materials[materials.index('An older response must never replace a newer completed material list'):]
+        self.assertIn('return list;', stale_branch[:900])
+        self.assertNotIn('return Array.isArray(adminMaterialsCache.data) ? adminMaterialsCache.data : list;', stale_branch[:900])
 
     def test_materials_fetch_has_one_canonical_owner(self):
         materials = ROOT.joinpath('static/admin-materials.js').read_text(encoding='utf-8')

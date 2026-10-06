@@ -36,7 +36,11 @@
     // An older response must never replace a newer completed material list.
     // This matters when upload completion, course hub hydration and media source
     // hydration all refresh /api/slides/admin at nearly the same time.
-    return Array.isArray(adminMaterialsCache.data) ? adminMaterialsCache.data : list;
+    // The older caller still gets the response it explicitly requested. Returning
+    // the shared cache here can hand that caller a pre-upload snapshot while a
+    // newer request is merely in flight, leaving the course card at 教材 0 even
+    // though the Worker has already published the material.
+    return list;
   };
 
   function paintAdminMaterials(materials, box){
