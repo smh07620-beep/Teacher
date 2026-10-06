@@ -11,6 +11,10 @@
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
   const rendererLabel = value => ({'powerpoint-com':'Microsoft PowerPoint','libreoffice-headless':'LibreOffice','text-fallback':'安全文字備援'}[String(value || '')] || String(value || '尚未記錄'));
   const qualityLabel = value => ({ok:'品質通過',warning:'品質警告',error:'品質阻擋'}[String(value || '')] || '待檢查');
+  const voiceLabels = {
+    zf_001:'中文女聲 A', zf_002:'中文女聲 B', zf_003:'中文女聲 C', zf_004:'中文女聲 D',
+    zm_009:'中文男聲 A', zm_010:'中文男聲 B', zm_011:'中文男聲 C', zm_012:'中文男聲 D'
+  };
   const note = (text, error) => {
     const node = $('teacher-ai-video-status-1015');
     if (node) {
@@ -45,6 +49,22 @@
     const order = status?.rendererPolicy?.order || ['powerpoint-com','libreoffice-headless','text-fallback'];
     return order.map(rendererLabel).join(' → ');
   }
+  function syncVoiceOptions(data) {
+    const select = $('teacher-ai-video-voice-1015');
+    if (!select) return;
+    const source = Array.isArray(data?.voiceOptions) && data.voiceOptions.length
+      ? data.voiceOptions
+      : (Array.isArray(data?.voices) ? data.voices.map(id => ({id, label:voiceLabels[id] || id})) : []);
+    const voices = source
+      .map(item => typeof item === 'string' ? {id:item, label:voiceLabels[item] || item} : item)
+      .filter(item => item && item.id);
+    if (!voices.length) return;
+    const current = select.value;
+    select.innerHTML = voices.map(item => '<option value="' + escape(item.id) + '">' + escape(item.label || voiceLabels[item.id] || item.id) + '</option>').join('');
+    if (voices.some(item => item.id === current)) select.value = current;
+    else if (voices.some(item => item.id === data?.defaultVoice)) select.value = data.defaultVoice;
+  }
+
   function renderVoiceHealth(data) {
     const host = $('teacher-ai-video-voice-health-1015');
     if (!host) return;
@@ -77,6 +97,7 @@
       ]);
       status = results[0] || {};
       audioStatus = results[1] || {};
+      syncVoiceOptions(audioStatus);
       renderVoiceHealth(audioStatus);
       const provider = $('teacher-ai-video-provider-1015');
       if (provider) {
@@ -146,13 +167,15 @@
         return;
       }
       if (data.status === 'failed') {
-        if (confirm(`AI 影片工作失敗：${data.error || '未知錯誤'}\n\n是否使用同一個工作進行安全重試？`)) {
+        const failure = String(data.error || '未知錯誤');
+        const deterministic = /Entry Not Found|\/voices\/|Kokoro 音色|voice.*(?:not found|404)|404.*voice/i.test(failure);
+        if (!deterministic && confirm('AI 影片工作失敗：' + failure + '\n\n是否使用同一個工作進行安全重試？')) {
           const retried = await api(`/api/ai-videos/jobs/${encodeURIComponent(jobId)}/retry`, {method:'POST'});
           note(`已重新排入 AI Worker｜attempts ${Number(retried.attempts || 0)}`);
           await new Promise(resolve => setTimeout(resolve, 1500));
           continue;
         }
-        throw new Error(data.error || 'AI 影片產生失敗');
+        throw new Error(failure || 'AI 影片產生失敗');
       }
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
@@ -210,7 +233,7 @@
       let progress = job;
       if (job.status !== 'completed' && !job.jobId) throw new Error('伺服器未回傳語音試聽工作 ID');
       if (job.reusedActive) note('前一次相同聲音的試聽仍在處理，已接續等待，不會重複建立工作。');
-      for (let attempt = 0; attempt < 60; attempt += 1) {
+      for (let attempt = 0; attempt < 120; attempt += 1) {
         if (progress.status !== 'completed') {
           progress = await api(`/api/media-audio/jobs/${encodeURIComponent(job.jobId)}`);
         }
@@ -316,7 +339,27 @@
       else window.TeacherAIMediaControls1023?.openPowerPointWorkspace?.();
     });
     $('teacher-ai-video-voice-preview-1015').addEventListener('click', () => void previewNarrationVoice());
-    $('teacher-ai-video-voice-player-1015').addEventListener('error', () => note('語音檔無法播放；請確認 R2 音訊回應為 audio/wav，且瀏覽器 CSP 允許該 HTTPS 網址。', true));
+    $('teacher-ai-video-voice-1015')?.addEventListener('change', () => {
+      const player = $('teacher-ai-video-voice-player-1015');
+      const button = $('teacher-ai-video-voice-preview-1015');
+      player?.pause?.();
+      if (player) {
+        player.removeAttribute('src');
+        player.hidden = true;
+        delete player.dataset.previewUrl;
+        delete player.dataset.previewVoice;
+        player.load?.();
+      }
+      if (button) button.textContent = '▶ 試聽聲音';
+    });
+    $('teacher-ai-video-voice-player-1015').addEventListener('error', () => {
+      const player = $('teacher-ai-video-voice-player-1015');
+      if (player) {
+        delete player.dataset.previewUrl;
+        delete player.dataset.previewVoice;
+      }
+      note('語音檔無法播放，請再按一次「試聽聲音」重新產生。若持續發生，請確認 R2 回應為 audio/wav 且 CSP 允許該網址。', true);
+    });
     window.addEventListener('teacher-media-audio-status-1014', event => {
       audioStatus = event.detail?.status || {};
       renderVoiceHealth(audioStatus);

@@ -76,6 +76,10 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn('Kokoro 已安裝', self.audio_ui)
         self.assertIn('R2 正常', self.audio_ui)
         self.assertIn('teacher-ai-video-voice-health-1015', self.video_ui)
+        self.assertIn('voiceOptions', self.video_ui)
+        self.assertIn('attempt < 120', self.video_ui)
+        self.assertIn('delete player.dataset.previewUrl', self.video_ui)
+        self.assertIn('deterministic = /Entry Not Found', self.video_ui)
 
     def test_voice_readiness_reports_actionable_worker_diagnostics(self):
         self.assertIn("heartbeatAgeSeconds", self.routes)
