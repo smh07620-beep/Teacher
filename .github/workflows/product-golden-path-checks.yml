@@ -250,6 +250,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg fonts-noto-cjk
           npm install --no-save @playwright/test@1.55.0
           npx playwright install --with-deps chromium
+          npx playwright install chrome
       - name: Audio / video canonical regression
         run: python -m unittest tests.test_deterministic_tts_capability tests.test_teacher_media_audio_1014 tests.test_media_audio_preview_queue_isolation tests.test_media_audio_preview_resilience_20261005 tests.test_ai_video_0101 tests.test_ai_video_phase5_0105 tests.test_ai_video_phase6_renderer tests.test_ai_video_performance_optimization -v
       - name: Canonical AI jobs → inspected PPTX/WAV/MP4 → teacher publication → learner saved answers
