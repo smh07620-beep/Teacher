@@ -274,6 +274,7 @@ async function renderSlidesGrid() {
 let slideViewerState = { images: [], previewUrl: '', pageCount: 0, mode: 'images', readerMode: 'presentation', index: 0, title: '', zoom: 1, materialId: '' };
 window.slideViewerState = slideViewerState;
 let slidePdfSwapSerial = 0;
+let slidePresentationImageSerial = 0;
 
 function inferPdfReaderMode(entry = {}) {
     const meta = entry.storageMeta || {};
@@ -440,11 +441,21 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
     shell?.classList.toggle('presentation-preview-mode', presentationPdf);
     shell?.classList.toggle('document-preview-mode', documentPdf);
 
-    canvas?.classList.toggle('hidden', mode==='pdf');
+    // Presentation PDFs are rendered as one cached page image at a time.
+    // Only true document PDFs stay inside the native PDF iframe.
+    canvas?.classList.toggle('hidden', documentPdf);
 
-    pdf?.classList.toggle('hidden', mode!=='pdf');
+    pdf?.classList.toggle('hidden', !documentPdf);
 
-    document.querySelectorAll('[data-slide-image-tool]').forEach(el=>el.classList.toggle('hidden',mode==='pdf'));
+    const viewerImage=document.getElementById('slide-viewer-image');
+    if(presentationPdf){
+        viewerImage?.removeAttribute('src');
+        if(viewerImage) viewerImage.style.visibility='hidden';
+    }else if(viewerImage){
+        viewerImage.style.visibility='';
+    }
+
+    document.querySelectorAll('[data-slide-image-tool]').forEach(el=>el.classList.toggle('hidden',documentPdf));
 
     if(subtitle) subtitle.textContent = presentationPdf
         ? '教學專用・不得轉發、轉載、販售｜投影片模式・請用左右箭頭或鍵盤 ← → 翻頁'
@@ -468,7 +479,7 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
 
 function applySlideZoom() {
 
-    if(slideViewerState.mode==='pdf') return;
+    if(slideViewerState.mode==='pdf'&&slideViewerState.readerMode==='document') return;
 
     const img = document.getElementById('slide-viewer-image');
 
@@ -496,9 +507,9 @@ function applySlideZoom() {
 
 
 
-function slideViewerZoom(delta) { if(slideViewerState.mode==='pdf')return; slideViewerState.zoom = (slideViewerState.zoom || 1) + delta; applySlideZoom(); updateSlidePanState(); }
+function slideViewerZoom(delta) { if(slideViewerState.mode==='pdf'&&slideViewerState.readerMode==='document')return; slideViewerState.zoom = (slideViewerState.zoom || 1) + delta; applySlideZoom(); updateSlidePanState(); }
 
-function slideViewerResetZoom() { if(slideViewerState.mode==='pdf')return; slideViewerState.zoom = 1; applySlideZoom(); updateSlidePanState(); document.getElementById('slide-viewer-stage').scrollTo({top:0,left:0,behavior:'smooth'}); }
+function slideViewerResetZoom() { if(slideViewerState.mode==='pdf'&&slideViewerState.readerMode==='document')return; slideViewerState.zoom = 1; applySlideZoom(); updateSlidePanState(); document.getElementById('slide-viewer-stage').scrollTo({top:0,left:0,behavior:'smooth'}); }
 
 
 
@@ -508,7 +519,7 @@ function updateSlidePanState(){
 
     const stage=document.getElementById('slide-viewer-stage'), hint=document.getElementById('slide-pan-hint');
 
-    const enabled=slideViewerState.mode!=='pdf'&&(slideViewerState.zoom||1)>1.01; stage?.classList.toggle('slide-pan-enabled',enabled); hint?.classList.toggle('hidden',!enabled);
+    const enabled=!(slideViewerState.mode==='pdf'&&slideViewerState.readerMode==='document')&&(slideViewerState.zoom||1)>1.01; stage?.classList.toggle('slide-pan-enabled',enabled); hint?.classList.toggle('hidden',!enabled);
 
     if(!enabled){slidePanState.active=false;stage?.classList.remove('is-panning');}
 
@@ -520,7 +531,7 @@ function initSlidePan(){
 
     stage.addEventListener('pointerdown',e=>{
 
-        if(slideViewerState.mode==='pdf'||(slideViewerState.zoom||1)<=1.01||e.pointerType==='touch'||e.button!==0||e.target.closest('button'))return;
+        if((slideViewerState.mode==='pdf'&&slideViewerState.readerMode==='document')||(slideViewerState.zoom||1)<=1.01||e.pointerType==='touch'||e.button!==0||e.target.closest('button'))return;
 
         slidePanState.active=true;slidePanState.pointerId=e.pointerId;slidePanState.startX=e.clientX;slidePanState.startY=e.clientY;slidePanState.scrollLeft=stage.scrollLeft;slidePanState.scrollTop=stage.scrollTop;
 
@@ -591,63 +602,56 @@ function updateViewerNav(total){
 
 
 
-function swapPresentationPdfFrame(wanted,page){
+function presentationPreviewPageUrl(page){
+    const id=encodeURIComponent(String(slideViewerState.materialId||''));
+    return `/material-preview/${id}/page/${page}.png`;
+}
 
-    const current=document.getElementById('slide-viewer-pdf');
-    const stage=document.getElementById('slide-viewer-stage');
-    if(!current||!stage)return;
+function prefetchPresentationPage(page){
+    const total=Math.max(1,Number(slideViewerState.pageCount||1));
+    if(page<1||page>total)return;
+    const loader=new Image();
+    loader.decoding='async';
+    loader.src=presentationPreviewPageUrl(page);
+}
 
-    const existingPending=document.getElementById('slide-viewer-pdf-pending');
-    if(current.dataset.src===wanted&&!existingPending)return;
-    existingPending?.remove();
-
-    const serial=++slidePdfSwapSerial;
-    const incoming=current.cloneNode(false);
-    incoming.removeAttribute('src');
-    incoming.id='slide-viewer-pdf-pending';
-    incoming.classList.remove('hidden');
-    incoming.dataset.src=wanted;
-    incoming.dataset.readerMode='presentation';
-    incoming.setAttribute('scrolling','no');
-    incoming.tabIndex=-1;
-    incoming.title=`投影片第 ${page} 頁`;
-    incoming.style.opacity='0';
-    incoming.style.pointerEvents='none';
-    incoming.style.zIndex='2';
-    incoming.style.transition='none';
-    current.style.zIndex='1';
-    current.dataset.pendingSrc=wanted;
-    stage.appendChild(incoming);
-
-    let committed=false;
-    const commitSwap=()=>{
-        if(committed)return;
-        committed=true;
-        window.setTimeout(()=>{
-            if(serial!==slidePdfSwapSerial||!incoming.isConnected){incoming.remove();return;}
-            const active=document.getElementById('slide-viewer-pdf');
-            if(!active){incoming.remove();return;}
-            active.removeAttribute('id');
-            active.remove();
-            incoming.id='slide-viewer-pdf';
-            incoming.style.transition='opacity 80ms linear';
-            incoming.style.opacity='1';
-            incoming.style.zIndex='';
-            incoming.dataset.src=wanted;
-            incoming.dataset.pendingSrc='';
-        },320);
-    };
-    incoming.addEventListener('load',commitSwap,{once:true});
-    incoming.addEventListener('error',()=>{
-        if(serial===slidePdfSwapSerial){
-            incoming.remove();
-            current.dataset.pendingSrc='';
-            const hint=document.getElementById('reader-learning-context');
-            if(hint)hint.textContent='投影片頁面載入失敗，仍保留目前頁面，可再試一次。';
+function updateSlideViewerPresentationPage(page,total){
+    const img=document.getElementById('slide-viewer-image');
+    if(!img)return;
+    const serial=++slidePresentationImageSerial;
+    const wanted=presentationPreviewPageUrl(page);
+    const loader=new Image();
+    loader.decoding='async';
+    loader.onload=()=>{
+        const commit=()=>{
+            if(serial!==slidePresentationImageSerial)return;
+            img.onerror=()=>{
+                const hint=document.getElementById('reader-learning-context');
+                if(hint)hint.textContent='投影片頁面載入失敗，請再試一次。';
+            };
+            img.onload=()=>{
+                if(serial!==slidePresentationImageSerial)return;
+                img.style.visibility='visible';
+                applySlideZoom();
+            };
+            img.src=wanted;
+            img.alt=`投影片第 ${page} 頁`;
+            prefetchPresentationPage(page+1);
+            prefetchPresentationPage(page-1);
+        };
+        if(typeof loader.decode==='function'){
+            loader.decode().catch(()=>{}).then(commit);
+        }else{
+            commit();
         }
-    },{once:true});
-    window.setTimeout(commitSwap,1200);
-    incoming.src=wanted;
+    };
+    loader.onerror=()=>{
+        if(serial!==slidePresentationImageSerial)return;
+        const hint=document.getElementById('reader-learning-context');
+        if(hint)hint.textContent='投影片頁面載入失敗，仍保留目前頁面，可再試一次。';
+    };
+    loader.src=wanted;
+    updateViewerNav(total);
 }
 
 function updateSlideViewerPdf(){
@@ -663,20 +667,22 @@ function updateSlideViewerPdf(){
     const base=slideViewerState.previewUrl;
     const presentationMode=slideViewerState.readerMode==='presentation';
 
-    // Chrome PDF Viewer briefly paints page 1 while it initializes. For slide
-    // decks, keep the current page visible and preload the requested page in a
-    // transparent sibling iframe; swap only after the new viewer has settled.
-    const separator=base.includes('?')?'&':'?';
-    const presentationBase=presentationMode?`${base}${separator}reader_page=${page}`:base;
-    const wanted=presentationMode
-        ? `${presentationBase}#page=${page}&toolbar=0&navpanes=0&scrollbar=0&view=Fit`
-        : `${base}#page=${page}&toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
-
     if(presentationMode){
-        swapPresentationPdfFrame(wanted,page);
-    }else{
+        // Never reload Chrome's native PDF viewer for slide decks. It paints
+        // page 1 during every initialization, causing the visible flash/refresh
+        // loop reported by learners. Use a server-rendered cached page image.
         ++slidePdfSwapSerial;
         document.getElementById('slide-viewer-pdf-pending')?.remove();
+        if(frame){
+            frame.classList.add('hidden');
+            frame.removeAttribute('src');
+            frame.dataset.src='';
+        }
+        updateSlideViewerPresentationPage(page,total);
+    }else{
+        ++slidePresentationImageSerial;
+        const wanted=`${base}#page=${page}&toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
+        frame.classList.remove('hidden');
         frame.dataset.readerMode='document';
         frame.setAttribute('scrolling','yes');
         frame.tabIndex=0;
@@ -684,9 +690,8 @@ function updateSlideViewerPdf(){
         frame.style.opacity='1';
         frame.style.pointerEvents='';
         if(frame.dataset.src!==wanted){frame.dataset.src=wanted;frame.src=wanted;}
+        updateViewerNav(total);
     }
-
-    updateViewerNav(total);
 
     const hint=document.getElementById('reader-learning-context');
 
@@ -771,7 +776,7 @@ window.goToSlidePage = goToSlidePage;
 window.slideViewerPrev = slideViewerPrev;
 window.slideViewerNext = slideViewerNext;
 
-function closeSlideViewer() { ++slidePdfSwapSerial; document.getElementById('slide-viewer-pdf-pending')?.remove(); const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';pdf.dataset.pendingSrc='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); }
+function closeSlideViewer() { ++slidePdfSwapSerial; ++slidePresentationImageSerial; document.getElementById('slide-viewer-pdf-pending')?.remove(); const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';pdf.dataset.pendingSrc='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); }
 
 
 
