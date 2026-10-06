@@ -80,6 +80,14 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
         self.assertIn("teacher-media-script-approved-1027", self.audio)
         self.assertIn("preferredScriptId", self.audio)
         self.assertIn("legacy.closest('#teacher-media-panel-narration-1018')", self.convergence)
+        for marker in (
+            "teacher-script-source-file-1030",
+            "teacher-script-paste-1030",
+            "authoringOnly",
+            "referenceMaterialIds",
+            "＋ 加入講稿來源",
+        ):
+            self.assertIn(marker, self.script)
 
     def test_video_can_start_from_private_non_ppt_sources(self):
         for marker in (
@@ -90,8 +98,9 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.video)
         self.assertIn("openVideoSourceWorkspace", self.controls)
-        self.assertIn("purpose:'video'", self.controls)
-        self.assertIn("VIDEO SOURCE AUTHORING", self.controls)
+        self.assertIn("teacher-ai-video-source-workspace-1028", self.controls)
+        self.assertIn("showMode?.('video')", self.controls)
+        self.assertNotIn("const opened = await openPowerPointWorkspace({purpose:'video'});", self.controls)
         self.assertIn("私人製作來源", self.controls)
         self.assertIn("PowerPoint、講稿／配音、老師錄影與 AI 教學影片共用同一個製作室", self.studio)
         self.assertIn("📹 老師自己錄影", self.studio)
