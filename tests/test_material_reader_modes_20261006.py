@@ -52,6 +52,16 @@ class MaterialReaderModes20261006Tests(unittest.TestCase):
         self.assertIn("page.get_pixmap", self.delivery)
         self.assertIn('"presentation-page-image"', self.delivery)
 
+    def test_word_documents_use_paged_reader_independent_of_preview_shape(self):
+        self.assertIn("/\\.(doc|docx|odt)$/", self.learner)
+        self.assertIn("return 'paged_document'", self.learner)
+        self.assertIn("readerMode: inferPdfReaderMode(entry)", self.learner)
+        self.assertIn("paged-document-preview-mode", self.learner)
+        self.assertIn("Word 文件分頁模式・可用上一頁／下一頁或頁碼跳轉", self.learner)
+        self.assertIn("pageByPageMode=presentationMode||pagedDocumentMode", self.learner)
+        self.assertIn(".paged-document-preview-mode #slide-viewer-stage", self.css)
+        self.assertIn("overscroll-behavior:none", self.css)
+
     def test_document_pdf_keeps_continuous_scroll_mode(self):
         self.assertIn("document-preview-mode", self.learner)
         self.assertIn("文件模式・可上下捲動閱讀", self.learner)
