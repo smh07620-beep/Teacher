@@ -207,7 +207,7 @@
         const title = file.name.replace(/\.[^.]+$/, '') || file.name;
         const fd = new FormData();
         fd.append('file', file); fd.append('title', title);
-        fd.append('desc', 'AI PowerPoint authoring source；教師確認前不提供學員使用。');
+        fd.append('desc', 'AI authoring source；可供講稿、PowerPoint 與教學影片使用；教師確認前不提供學員使用。');
         fd.append('group', group); fd.append('area', area); fd.append('courseId', ''); fd.append('category', ''); fd.append('materialType', 'standard'); fd.append('authoringOnly', '1');
         status(`正在上傳原始資料 ${index + 1}/${normalizedFiles.length}｜${file.name}`);
         const queued = await window.MaterialUploadClient.enqueue(fd, {
