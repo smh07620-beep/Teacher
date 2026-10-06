@@ -41,6 +41,11 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn("voice = _voice(voice)", self.runtime)
         self.assertIn("voiceOptions", self.runtime)
         self.assertIn('VOICE_PREVIEW_TEXT = "您好，這是醫學檢驗教學平台的 AI 語音試聽。"', self.runtime)
+        self.assertIn("def preload_kokoro()", self.runtime)
+        self.assertIn('os.environ["HF_HOME"]', self.runtime)
+        self.assertIn('"text": VOICE_PREVIEW_TEXT', self.runtime)
+        self.assertIn('"speed": f"{_tts_speed():.3f}"', self.runtime)
+        self.assertIn('"repoId": _repo_id()', self.runtime)
 
     def test_render_and_local_env_do_not_require_openai(self):
         self.assertIn('AI_TTS_PROVIDER\n        value: kokoro', self.render)
@@ -50,6 +55,7 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertNotIn('OPENAI_API_KEY', self.env)
         self.assertIn('AI_TTS_PROVIDER=kokoro', self.env)
         self.assertIn('KOKORO_VOICE=zf_001', self.env)
+        self.assertIn('HF_HOME=', self.env)
 
     def test_ai_worker_has_separate_local_tts_dependencies(self):
         for marker in ('kokoro>=', 'misaki[zh]', 'numpy>='):
@@ -80,6 +86,7 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn('attempt < 120', self.video_ui)
         self.assertIn('delete player.dataset.previewUrl', self.video_ui)
         self.assertIn('deterministic = /Entry Not Found', self.video_ui)
+        self.assertIn('setTimeout(resolve, 700)', self.video_ui)
 
     def test_voice_readiness_reports_actionable_worker_diagnostics(self):
         self.assertIn("heartbeatAgeSeconds", self.routes)
@@ -91,6 +98,9 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         self.assertIn('"heartbeatContract": 4 if web_mode else 2', self.worker)
         self.assertIn("workerSha", self.worker)
         self.assertIn('"repoId":', self.worker)
+        self.assertIn("_warm_kokoro_on_startup()", self.worker)
+        self.assertIn("lazy retry enabled", self.worker)
+        self.assertIn('"cudaAvailable":', self.worker)
         self.assertIn("kokoro_unavailable", self.routes)
         self.assertIn("readyForPreview", self.status_ui)
         self.assertIn("statusUnavailable", self.audio_ui)
