@@ -90,6 +90,7 @@ test('existing material alone can create an AI slide draft end to end in the aut
   });
 
   await page.addScriptTag({ path: asset('teacher-ai-material-1014.js') });
+  await page.locator('#teacher-ai-material-existing-details-1014 > summary').click();
   const source = page.locator('#teacher-ai-material-source-1014');
   await expect(source).toBeVisible();
   await expect(source).toContainText('C503 操作與維護');
@@ -222,7 +223,9 @@ test('new private uploads and an existing material are combined into one determi
     }
   ]);
 
+  await page.locator('#teacher-ai-material-existing-details-1014 > summary').click();
   const source = page.locator('#teacher-ai-material-source-1014');
+  await expect(source).toBeVisible();
   await expect(source).toContainText('既有生化 SOP');
   await source.selectOption(['mat-existing']);
   await page.locator('#teacher-ai-material-generate-1014').click();
