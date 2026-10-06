@@ -395,6 +395,50 @@
     }
   }
 
+
+  function ensureCompactScriptLayout(section) {
+    if (!section || section.dataset.simpleFlow1032 === '1') return;
+    section.dataset.simpleFlow1032 = '1';
+    const minutes = document.getElementById('teacher-script-minutes-1014');
+    const tone = document.getElementById('teacher-script-tone-1014');
+    const focus = document.getElementById('teacher-script-focus-1014');
+    const generate = document.getElementById('teacher-script-generate-1014');
+    if (!minutes || !tone || !focus || !generate) return;
+
+    const details = document.createElement('details');
+    details.id = 'teacher-script-requirements-1032';
+    details.className = 'rounded-xl border border-indigo-100 bg-indigo-50/30 px-3 py-2';
+    const summary = document.createElement('summary');
+    summary.className = 'cursor-pointer text-xs font-black text-indigo-800';
+    summary.textContent = '需求（選填）｜語氣、篇幅、特別重點';
+    const helper = document.createElement('p');
+    helper.className = 'mt-2 text-xs leading-5 text-slate-500';
+    helper.textContent = '不設定也可以直接試產出；需要時再指定講課語氣、預估篇幅或特別想強調的內容。';
+    const body = document.createElement('div');
+    body.className = 'mt-3 grid gap-3 md:grid-cols-3';
+
+    const minutesLabel = minutes.closest('label');
+    const toneLabel = tone.closest('label');
+    if (minutesLabel) body.appendChild(minutesLabel);
+    if (toneLabel) body.appendChild(toneLabel);
+
+    const focusLabel = document.createElement('label');
+    focusLabel.className = 'text-xs font-bold text-slate-600 md:col-span-3';
+    focusLabel.append('特別要求');
+    focus.placeholder = '例如：加強判讀步驟、語句更精簡（選填）';
+    focus.classList.add('mt-1');
+    focusLabel.appendChild(focus);
+    body.appendChild(focusLabel);
+    details.append(summary, helper, body);
+
+    const generateRow = generate.parentElement;
+    generateRow?.before(details);
+    if (generateRow) {
+      generateRow.className = 'flex justify-end';
+      generate.textContent = '✨ 試產出講稿';
+    }
+  }
+
   function install() {
     const media = document.getElementById('teacher-media-production-1014');
     if (!media || document.getElementById('teacher-media-script-1014')) return false;
@@ -411,6 +455,7 @@
       <div id="teacher-script-editor-1014" class="hidden space-y-3"><label class="block text-xs font-bold text-slate-600">講稿標題<input id="teacher-script-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-xs font-bold text-slate-600">講稿內容<textarea id="teacher-script-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-7" placeholder="AI 草稿會出現在這裡；請由老師逐段確認與修改。"></textarea></label><div class="flex flex-wrap items-center gap-2"><button id="teacher-script-save-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">💾 儲存草稿</button><button id="teacher-script-approve-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">✅ 教師核准講稿</button><span class="text-[11px] text-slate-500">核准後才可作為下一階段 AI 語音／影片的正式來源。</span></div></div>
       <div class="border-t border-slate-100 pt-4"><div class="flex items-center justify-between gap-2"><h5 class="text-sm font-black text-slate-900">已儲存講稿</h5><span class="text-[11px] text-slate-400">草稿／已核准</span></div><div id="teacher-script-saved-1014" class="mt-2 grid gap-2"><p class="text-xs text-slate-400">選擇教材後會顯示已儲存講稿。</p></div></div>`;
     media.prepend(section);
+    ensureCompactScriptLayout(section);
     document.getElementById('teacher-script-generate-1014')?.addEventListener('click', generateScript);
     document.getElementById('teacher-script-save-1014')?.addEventListener('click', saveEdits);
     document.getElementById('teacher-script-approve-1014')?.addEventListener('click', approveScript);
