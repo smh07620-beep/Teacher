@@ -127,8 +127,13 @@ function mount(){
   host.insertAdjacentHTML('beforebegin','<div id="course-wizard-681" class="space-y-4"></div>');
   window.courseWizard681Next=next;
   window.courseWizard681Back=back;
-  window.courseWizard681SetMode=value=>{if(state.created)return;state.examMode=value;syncExamInput();render();};
+  window.courseWizard681SetMode=value=>{state.examMode=value;syncExamInput();render();};
   window.courseWizard681Create=create;
+  window.courseWizard681CreateAndPublish=createAndPublish;
+  window.courseWizard681OpenAiAuthoring=openAiAuthoring;
+  window.courseWizard681OpenAssessmentAuthoring=openAssessmentAuthoring;
+  window.courseWizard681AttachAiProducts=attachAiProducts;
+  window.courseWizard681ResumeStep=value=>{state.step=Math.max(1,Math.min(4,Number(value)||1));render();if(state.step===2)void loadMaterials();};
   window.courseWizard681RefreshMaterials=loadMaterials;
   window.courseWizard681SelectExisting=()=>{if(!state.created)state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);};
   window.courseWizard681FilesChanged=input=>{if(state.created)return;state.files=[...(input?.files||[])];state.fileMeta={};renderFileSummary();};
@@ -142,14 +147,15 @@ function mount(){
 }
 
 function actionFooter(){
-  if(state.step<4)return `<button ${state.busy||state.created?'disabled':''} data-csp-click="courseWizard681Next()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">下一步</button>`;
-  if(!state.created)return `<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681Create()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">${state.busy?'⏳ 建立中…':'建立課程與關聯'}</button>`;
+  if(state.step<4){
+    const blocked=state.busy||(state.created&&!canLeaveCourse());
+    return `<button ${blocked?'disabled':''} data-csp-click="courseWizard681Next()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">${state.created?'下一步':'下一步'}</button>`;
+  }
+  if(!state.created)return `<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681CreateAndPublish()" class="rounded bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">${state.busy?'⏳ 建立中…':'🟢 建立並發布課程'}</button>`;
   const retry=state.failedUploads.length?`<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681Create()" class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800 disabled:opacity-50">${state.busy?'⏳ 重試上傳中…':'重試未完成教材'}</button>`:'';
   const ready=canLeaveCourse();
-  const draftLabel=ready?'暫存草稿並返回':state.failedUploads.length?'⚠️ 先完成教材上傳':'⏳ 等待教材正式完成後才能返回';
-  const publishLabel=state.publicationBusy?'⏳ 發布中…':(state.aiPlan==='none'?'🟢 發布課程並返回':'🟢 發布並開始 '+aiPlan().label);
-  // Legacy regression vocabulary: 教材已完成，返回教材與課程
-  return `<div class="flex flex-wrap justify-end gap-2">${retry}<button id="cw681-finish" type="button" ${ready&&!state.publicationBusy?'':'disabled'} data-csp-click="courseWizard681OpenCourse()" class="rounded border border-teal-300 bg-white px-4 py-2 text-sm font-bold text-teal-800 disabled:cursor-not-allowed disabled:opacity-40">${draftLabel}</button><button id="cw681-publish" type="button" ${ready&&!state.publicationBusy?'':'disabled'} data-csp-click="courseWizard681PublishAndOpen()" class="rounded bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">${publishLabel}</button></div>`;
+  const publishLabel=state.publicationBusy?'⏳ 發布中…':'🟢 確認並正式發布';
+  return `<div class="flex flex-wrap justify-end gap-2">${retry}<button id="cw681-finish" type="button" ${ready&&!state.publicationBusy?'':'disabled'} data-csp-click="courseWizard681OpenCourse()" class="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40">儲存草稿並離開</button><button id="cw681-publish" type="button" ${ready&&!state.publicationBusy?'':'disabled'} data-csp-click="courseWizard681PublishAndOpen()" class="rounded bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40">${publishLabel}</button></div>`;
 }
 
 function render(){
@@ -307,17 +313,29 @@ function syncInputs(){
   if(state.step===3)syncExamInput();
 }
 
-function next(){
-  if(state.busy||state.created)return;
-  if(state.step===2){state.files=[...(el('cw681-files')?.files||state.files)];state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);}
+async function next(){
+  if(state.busy||(state.created&&!canLeaveCourse()))return;
+  if(state.step===2){
+    state.files=[...(el('cw681-files')?.files||state.files)];
+    if(!state.created)state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);
+  }
   syncInputs();
   if(state.step===1&&!String(el('wizard-course-title')?.value||'').trim())return alert('請輸入課程名稱');
-  if(state.step===3&&state.examMode!=='later'&&!String(el('wizard-exam-title')?.value||'').trim())return alert('請輸入考卷名稱，或改選「稍後建立」。');
+  if(state.step===3&&state.examMode!=='later'){
+    if(!String(el('wizard-exam-title')?.value||'').trim())return alert('請輸入考卷名稱，或改選「稍後建立」。');
+    const ready=await ensureAssessmentDraft();
+    if(!ready)return;
+  }
   state.step=Math.min(4,state.step+1);render();
-  if(state.step===2)loadMaterials();
+  if(state.step===2)void loadMaterials();
 }
 
-function back(){if(state.busy||state.created)return;syncInputs();state.step=Math.max(1,state.step-1);render();if(state.step===2)loadMaterials();}
+function back(){
+  if(state.busy)return;
+  syncInputs();
+  state.step=Math.max(1,state.step-1);render();
+  if(state.step===2)void loadMaterials();
+}
 
 async function loadMaterials(){
   const box=el('cw681-materials');if(box)box.textContent='讀取中…';
@@ -616,18 +634,17 @@ async function create(){
   if(state.busy)return;
   if(state.created)return retryFailedUploads();
   syncInputs();
-  const {area,group}=scope(),title=String(el('wizard-course-title')?.value||'').trim(),desc=String(el('wizard-course-desc')?.value||'').trim(),exam=String(el('wizard-exam-title')?.value||'').trim(),files=state.files;
-  if(!title)return alert('請輸入課程名稱');
-  if(state.examMode!=='later'&&!exam)return alert('請輸入考卷名稱，或改選「稍後建立」。');
-  const bundlePayload={area,group,title,desc,examMode:state.examMode,examTitle:exam,existingMaterialCount:state.existing.length,uploadCount:files.length};
+  const {area,group}=scope(),title=String(el('wizard-course-title')?.value||'').trim(),desc=String(el('wizard-course-desc')?.value||'').trim(),files=state.files;
+  if(!title)return false;
+  const bundlePayload={area,group,title,desc,examMode:'later',examTitle:'',existingMaterialCount:state.existing.length,uploadCount:files.length};
   bundlePayload.workflowId=ensureWorkflowId(bundlePayload);
   const status=el('cw681-status');setBusy(true);
   try{
-    status.textContent='⏳ 安全建立課程與考卷骨架…';
+    status.textContent='⏳ 安全建立課程草稿 checkpoint…';
     const bundle=await api('/api/course-bundles',{method:'POST',body:JSON.stringify(bundlePayload)});
     const course=bundle.course||{};
     if(!course.id)throw new Error('課程建立結果不完整，請使用相同流程重新嘗試。');
-    state.course=course;state.categoryId=String(bundle.quizCategory?.id||'');
+    state.course=course;
     let linked=0;
     for(const id of state.existing){
       const material=state.materials.find(m=>String(m.id)===String(id));if(!material)continue;
@@ -656,11 +673,13 @@ async function create(){
     const summaryClass=failed?'font-bold text-amber-700':upload.uploaded?'font-bold text-sky-700':'font-bold text-emerald-700';
     const summaryIcon=failed?'⚠️':upload.uploaded?'⏳':'✅';
     const uploadSummary=failed?`已排入背景佇列 ${upload.uploaded} 份新教材；${failed} 份上傳失敗`:upload.uploaded?`R2 上傳已完成／排入背景佇列 ${upload.uploaded} 份，現在等待 Worker 正式處理`:'沒有新教材需要背景處理';
-    state.resultHtml=`<div class="space-y-2"><div><span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程草稿${failed?'已建立，但教材上傳未完整完成':upload.uploaded?'已建立，教材仍在背景處理':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}${state.categoryId?'，並建立考卷「'+esc(exam)+'」':''}。</div>${uploadErrors}<div class="rounded-lg border border-sky-200 bg-sky-50 p-2 font-bold text-sky-900">新教材必須全部顯示「已完成」後才可離開；課程目前仍是草稿；教材完成後可直接按「發布課程並返回」。系統會先執行發布檢查，只有通過才會讓學員看見。</div><div id="cw681-material-insights"></div><div id="cw681-atlas-import" class="hidden"></div><div class="flex flex-wrap gap-2">${nextButton}<button id="cw681-reset-next" type="button" ${ready?'':'disabled'} data-csp-click="courseWizard681Reset()" class="text-slate-500 underline disabled:cursor-not-allowed disabled:opacity-40">建立下一門課</button></div><div id="cw681-background-jobs"></div></div>`;
+    state.resultHtml=`<div class="space-y-2"><div><span class="${summaryClass}">${summaryIcon} 「${esc(title)}」課程草稿${failed?'已建立，但教材上傳未完整完成':upload.uploaded?'已建立，教材仍在背景處理':'建立完成'}${retryNote}。</span> 已關聯 ${linked} 份既有教材、${uploadSummary}。</div>${uploadErrors}<div class="rounded-lg border border-sky-200 bg-sky-50 p-2 font-bold text-sky-900">新教材必須全部顯示「已完成」後才可離開；課程目前仍是草稿；教材完成後可直接按「發布課程並返回」。系統會先執行發布檢查，只有通過才會讓學員看見。</div><div id="cw681-material-insights"></div><div id="cw681-atlas-import" class="hidden"></div><div class="flex flex-wrap gap-2">${nextButton}<button id="cw681-reset-next" type="button" ${ready?'':'disabled'} data-csp-click="courseWizard681Reset()" class="text-slate-500 underline disabled:cursor-not-allowed disabled:opacity-40">建立下一門課</button></div><div id="cw681-background-jobs"></div></div>`;
     render();
     watchQueuedJobs(state.queuedJobs);
+    return true;
   }catch(error){
     state.resultHtml=`<span class="font-bold text-rose-700">❌ ${esc(error.message)}（未變更內容時可直接重試，系統會沿用同一建立流程。）</span>`;render();
+    return false;
   }finally{setBusy(false);}
 }
 
