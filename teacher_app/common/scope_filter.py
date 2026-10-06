@@ -103,6 +103,21 @@ def preferred_group(user) -> str:
     ).strip()
 
 
+def is_group_scoped_actor(user) -> bool:
+    """Return True only when the actor must remain inside one teaching group.
+
+    Multi-role users with education/system-wide authority must not be narrowed
+    merely because they also carry clinical_teacher or group_leader.
+    """
+    if not user:
+        return False
+    if is_system_admin(user) or has_role(user, "education_admin"):
+        return False
+    if has_permission(user, "education.cross_group.manage"):
+        return False
+    return any(has_role(user, role) for role in GROUP_SCOPED_ROLES)
+
+
 def row_group(value) -> str:
     if not isinstance(value, dict):
         return ""
@@ -537,6 +552,7 @@ __all__ = [
     "category_group",
     "denied",
     "filter_scoped_response",
+    "is_group_scoped_actor",
     "preferred_group",
     "question_group",
     "register_scope_filter",
