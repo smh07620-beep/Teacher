@@ -89,7 +89,7 @@ jobs:
         run: npx playwright test tests/playwright/accessibility-regression.spec.js --reporter=line --workers=1
 
       - name: Run large teacher course workspace regressions
-        run: npx playwright test tests/playwright/teacher-course-hub-freeze-1021.spec.js tests/playwright/teacher-ai-media-studio-lifecycle-1022.spec.js tests/playwright/teacher-ai-media-controls-1023.spec.js tests/playwright/teacher-ai-multisource-e2e-1030.spec.js tests/playwright/teacher-ai-workspace-ia-1019.spec.js tests/playwright/material-upload-fallback-1024.spec.js --reporter=line --workers=1
+        run: npx playwright test tests/playwright/course-authoring-guided-flow-1031.spec.js tests/playwright/teacher-course-hub-freeze-1021.spec.js tests/playwright/teacher-ai-media-studio-lifecycle-1022.spec.js tests/playwright/teacher-ai-media-controls-1023.spec.js tests/playwright/teacher-ai-multisource-e2e-1030.spec.js tests/playwright/teacher-ai-workspace-ia-1019.spec.js tests/playwright/material-upload-fallback-1024.spec.js --reporter=line --workers=1
 
       - name: Run real Flask browser smoke regressions
         env:
