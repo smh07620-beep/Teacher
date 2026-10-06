@@ -1,4 +1,5 @@
 const {test,expect}=require('@playwright/test');
+test.skip(process.env.TEACHER_AI_FULLSTACK_RUN !== '1', 'Requires the isolated canonical Web/Worker/S3 runner');
 const {spawnSync}=require('node:child_process');
 const {login,api,outline,presentation,upload}=require('./ai-fullstack-helpers');
 test('PowerPoint: real draft job, teacher approval, Worker, R2 artifact, notes and download',async({page},testInfo)=>{

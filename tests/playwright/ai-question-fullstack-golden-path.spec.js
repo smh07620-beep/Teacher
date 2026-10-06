@@ -1,8 +1,9 @@
 const { test, expect } = require('@playwright/test');
+test.skip(process.env.TEACHER_AI_FULLSTACK_RUN !== '1', 'Requires the isolated canonical Web/Worker/S3 runner');
 const baseURL = process.env.TEACHER_AI_MEDIA_FULLSTACK_BASE_URL || 'http://127.0.0.1:4176';
 const password = process.env.TEACHER_CI_BROWSER_PASSWORD || '';
 async function api(page, path, body, method = 'POST') { return page.evaluate(async ({path, body, method}) => { const r = await fetch(path, {method, credentials:'same-origin', headers:body?{'Content-Type':'application/json'}:{}, body:body?JSON.stringify(body):undefined}); return {status:r.status, body:await r.json()}; }, {path,body,method}); }
-test('AI questions use real route, durable job, Worker and question-bank import', async ({ page }) => {
+test('AI questions use real route, durable job, Worker and question-bank import', async ({ page, browser }) => {
   test.setTimeout(120000);
   page.setDefaultTimeout(15000);
   page.on('dialog', async dialog => { throw new Error(`Unexpected learner dialog: ${dialog.message()}`); });
@@ -18,23 +19,21 @@ test('AI questions use real route, durable job, Worker and question-bank import'
   expect((await api(page, `/api/exam-windows/${category.body.id}`, {opensAt:new Date(Date.now()-3600000).toISOString(),closesAt:new Date(Date.now()+86400000).toISOString()}, 'PUT')).body.ok).toBeTruthy();
   expect((await api(page, `/api/quiz-categories/${category.body.id}/review`, {})).body.ok).toBeTruthy();
   expect((await api(page, `/api/quiz-categories/${category.body.id}/publish`, {})).body.active).toBeTruthy();
-  await api(page, '/api/auth/logout', {});
-  await page.goto(`${baseURL}/login?next=${encodeURIComponent(`/system?area=internal&group=grpBio&examId=${category.body.id}`)}`);
-  await page.locator('#login-username').fill('e2estudent'); await page.locator('#login-password').fill(password);
-  await page.locator('#login-form button[type="submit"]').click(); await page.waitForURL(url => !url.pathname.endsWith('/login'));
-  await page.evaluate(() => switchLearningModule('exam'));
-  await expect(page.locator('#question-card-0')).toContainText('E2E deterministic question');
-  await page.locator('#question-card-0 input[type=radio]').first().check();
-  await expect(page.locator('#answer-status-0')).toContainText('已作答');
-  const submitted = page.waitForResponse(r=>r.url().includes('/submit') && r.request().method()==='POST');
-  await page.locator('#submit-btn').click();
+  const learnerContext=await browser.newContext();
+  const learner=await learnerContext.newPage();learner.setDefaultTimeout(15000);
+  await learner.goto(`${baseURL}/login?next=${encodeURIComponent(`/system?area=internal&group=grpBio&examId=${category.body.id}`)}`);
+  await learner.locator('#login-username').fill('e2estudent'); await learner.locator('#login-password').fill(password);
+  await learner.locator('#login-form button[type="submit"]').click(); await learner.waitForURL(url => !url.pathname.endsWith('/login'));
+  await learner.evaluate(() => switchLearningModule('exam'));
+  await expect(learner.locator('#question-card-0')).toContainText('E2E deterministic question');
+  await learner.locator('#question-card-0 input[type=radio]').first().check();
+  await expect(learner.locator('#answer-status-0')).toContainText('已作答');
+  const submitted = learner.waitForResponse(r=>r.url().includes('/submit') && r.request().method()==='POST');
+  await learner.locator('#submit-btn').click();
   const result = await (await submitted).json(); expect(result.score).toBe(100); expect(result.recordId).toBeTruthy();
-  await expect(page.locator('#final-score-text')).toHaveText('100');
-  await page.reload();
-  await api(page, '/api/auth/logout', {});
-  await page.goto(`${baseURL}/login`);
-  await page.locator('#login-username').fill('e2eteacher'); await page.locator('#login-password').fill(password);
-  await page.locator('#login-form button[type="submit"]').click(); await page.waitForURL(url => !url.pathname.endsWith('/login'));
+  await expect(learner.locator('#final-score-text')).toHaveText('100');
+  await learner.reload();
   const records = await api(page, '/api/records', null, 'GET');
   expect(records.body.find(r=>r.id===result.recordId)).toMatchObject({score:100,empId:'E2ES01'});
+  await learnerContext.close();
 });

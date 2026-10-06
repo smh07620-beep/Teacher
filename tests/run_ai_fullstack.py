@@ -24,6 +24,7 @@ def main():
         "AI_WORKER_ALLOW_INSECURE_LOCAL_HTTP": "true",
         "TEACHER_BASE_URL": "http://127.0.0.1:4176",
         "TEACHER_E2E_TEST_MODE": "1", "TEACHER_E2E_DETERMINISTIC_STUBS": "1",
+        "TEACHER_AI_FULLSTACK_RUN": "1",
         "AI_EXTERNAL_PROCESSING_ENABLED": "true",
         "TEACHER_CI_BROWSER_PASSWORD": secrets.token_urlsafe(24),
         "E2E_PYTHON": sys.executable,
