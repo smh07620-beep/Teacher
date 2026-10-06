@@ -62,7 +62,22 @@ def install() -> None:
         source = materials[0] if materials else {}
         chunks = []
         for material in materials:
-            text, _ = ai_runtime.extract_material_text_for_ai(material)
+            material_type = str(material.get("materialType") or material.get("material_type") or "").lower()
+            filename = str(material.get("filename") or material.get("storageFilename") or "").lower()
+            media_source = material_type in {"video", "audio"} or filename.endswith((
+                ".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi", ".mp3", ".m4a", ".wav", ".aac", ".ogg"
+            ))
+            if media_source:
+                # Isolated E2E models a multimodal provider without sending the
+                # fixture outside CI. Keep real routes/jobs/privacy checks and
+                # provenance, but replace only inference input with deterministic
+                # de-identified teaching content.
+                text = (
+                    "E2E 影音教材：先核對病人識別與檢體品質。"
+                    "播放到指定學習節點後完成時間點考題。"
+                )
+            else:
+                text, _ = ai_runtime.extract_material_text_for_ai(material)
             chunks.extend(ai_runtime.build_retrieval_chunks(material, text))
         media_url = f"/view/{source.get('id', '')}" if str(qtype).startswith("video_") else ""
         question_type = "video" if media_url else "choice"
