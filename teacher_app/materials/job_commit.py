@@ -88,6 +88,22 @@ def commit(job: dict, result: dict) -> dict:
         payload.get("area"),
         default=scope.DEFAULT_TRAINING_AREA,
     )
+    resolved_material_type=str(result.get("materialType") or payload.get("materialType") or "standard").strip().lower()
+    if resolved_material_type not in material_repository.MATERIAL_TYPES:
+        resolved_material_type="standard"
+    classification_method=str(result.get("classificationMethod") or "").strip()[:120]
+    classification_reason=str(result.get("classificationReason") or "").strip()[:240]
+    if classification_method or classification_reason:
+        storage_meta={
+            **storage_meta,
+            "materialClassification":{
+                "requested":str(payload.get("materialType") or "standard").strip().lower(),
+                "resolved":resolved_material_type,
+                "method":classification_method,
+                "reason":classification_reason,
+            },
+        }
+
     entry = {
         "id": material_id,
         "filename": display_filename,
@@ -107,7 +123,7 @@ def commit(job: dict, result: dict) -> dict:
         "storage_key": storage_key,
         "slides_prefix": str(result.get("slidesPrefix") or "")[:1000],
         "storage_meta": json.dumps(storage_meta, ensure_ascii=False),
-        "material_type": str(payload.get("materialType") or "standard")[:40],
+        "material_type": resolved_material_type,
         "atlas_meta": json.dumps(
             result.get("atlasMeta") if isinstance(result.get("atlasMeta"), dict) else {},
             ensure_ascii=False,
