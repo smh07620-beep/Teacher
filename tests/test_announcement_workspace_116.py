@@ -109,6 +109,27 @@ class AnnouncementWorkspace116Tests(unittest.TestCase):
         )
         self.assertEqual(system_notice.status_code, 403)
 
+    def test_multi_role_teacher_with_education_admin_keeps_cross_group_scope(self):
+        self.owner.user = {
+            "username": "dual-admin",
+            "role": "clinical_teacher",
+            "roles": ["clinical_teacher", "education_admin"],
+            "preferredArea": "internal",
+            "preferredGroup": "grpBio",
+        }
+        response = self.client.post(
+            "/api/announcements",
+            json={
+                "kind": "teaching",
+                "scopeType": "group",
+                "area": "internal",
+                "group": "grpHema",
+                "title": "跨組教學公告",
+            },
+        )
+        self.assertEqual(response.status_code, 201, response.get_json())
+        self.assertEqual(response.get_json()["group"], "grpHema")
+
     def test_education_admin_can_publish_cross_group_teaching_notice(self):
         self.owner.user = {
             "username": "edu",
