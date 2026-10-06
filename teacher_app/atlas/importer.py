@@ -98,8 +98,8 @@ def materialize_docx_source(
 _DOCX_NS = {
     "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
     "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
-    "v": "urn:schemas-microsoft-com:vml",
 }
 _DOCX_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 _DOCX_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -153,7 +153,6 @@ def _docx_inline_images(path: Path) -> list[dict]:
     paragraphs: list[tuple[str, list[str]]] = []
     relationship_attribute = f"{{{_DOCX_NS['r']}}}embed"
     link_attribute = f"{{{_DOCX_NS['r']}}}link"
-    legacy_id_attribute = f"{{{_DOCX_NS['r']}}}id"
     for paragraph in root.findall(".//w:p", _DOCX_NS):
         parts = [
             node.text
@@ -162,16 +161,15 @@ def _docx_inline_images(path: Path) -> list[dict]:
         ]
         paragraph_text = re.sub(r"\s+", " ", "".join(parts)).strip()
         relation_ids: list[str] = []
-        for image in paragraph.findall(".//a:blip", _DOCX_NS):
+        # Deliberately accept only wp:inline drawings. Floating wp:anchor
+        # objects can have different visual/caption relationships and must not
+        # silently become clinical Atlas records.
+        for image in paragraph.findall(".//wp:inline//a:blip", _DOCX_NS):
             relation_id = str(
                 image.attrib.get(relationship_attribute)
                 or image.attrib.get(link_attribute)
                 or ""
             ).strip()
-            if relation_id and relation_id in relationships:
-                relation_ids.append(relation_id)
-        for image in paragraph.findall(".//v:imagedata", _DOCX_NS):
-            relation_id = str(image.attrib.get(legacy_id_attribute) or "").strip()
             if relation_id and relation_id in relationships:
                 relation_ids.append(relation_id)
         paragraphs.append((paragraph_text, relation_ids))
