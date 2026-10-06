@@ -406,9 +406,9 @@
   }
 
   const AI_PRESETS_76 = {
-    auto: {label:'自動均衡', type:'mixed_all', count:5, difficulty:'standard', strategy:'auto', focus:'依教材重點自動配置單選、多選、填空與問答題。'},
+    auto: {label:'自動均衡', type:'mixed_all', count:5, difficulty:'standard', strategy:'auto', focus:'依教材重點自動配置單選、多選、是非、填空與問答題。'},
     newcomer: {label:'新人基礎考核', type:'mixed_choice_multi', count:10, difficulty:'basic', strategy:'balanced', focus:'以基礎概念、流程與常見注意事項為主；單選題為主，多選題少量，避免過度刁鑽。'},
-    pgy: {label:'PGY 核心能力', type:'mixed_all', count:10, difficulty:'standard', strategy:'balanced', focus:'涵蓋核心知識、操作判斷、臨床情境與反思；混合單選、多選、填空與問答。'},
+    pgy: {label:'PGY 核心能力', type:'mixed_all', count:10, difficulty:'standard', strategy:'balanced', focus:'涵蓋核心知識、操作判斷、臨床情境與反思；混合單選、多選、是非、填空與問答。'},
     case: {label:'案例判讀', type:'mixed', count:5, difficulty:'advanced', strategy:'scenario', focus:'以案例資訊整合、判讀依據與下一步處置為主；情境單選與問答混合。'},
     quality: {label:'品質管理／異常處理', type:'mixed_all', count:10, difficulty:'standard', strategy:'safety', focus:'聚焦 QC、異常辨識、故障排除、通報與病人安全；混合單選、多選與問答。'},
     advanced: {label:'進階組內訓練', type:'mixed_all', count:10, difficulty:'advanced', strategy:'scenario', focus:'提高多步推理與情境整合比例，增加多選與問答，避免只考記憶。'},
@@ -434,7 +434,7 @@
 
   function applyAiCustomMix76(catId){
     const root=document.querySelector(`[data-ai-custom-mix-76="${CSS.escape(String(catId))}"]`); if(!root) return;
-    const counts={choice:0,multi:0,fill:0,essay:0};
+    const counts={choice:0,multi:0,true_false:0,fill:0,essay:0};
     Object.keys(counts).forEach(type=>{counts[type]=Math.max(0,Number(root.querySelector(`[data-mix-type="${type}"]`)?.value||0));});
     const active=Object.entries(counts).filter(([,n])=>n>0),total=active.reduce((sum,[,n])=>sum+n,0);
     if(!total){alert('請至少設定一種題型的題數');return;}
@@ -443,14 +443,14 @@
     else if(active.every(([t])=>['choice','multi'].includes(t))) type='mixed_choice_multi';
     else if(active.every(([t])=>['choice','essay'].includes(t))) type='mixed';
     setAiControl76(catId,'type',type); setAiControl76(catId,'count',total);
-    const labels={choice:'單選',multi:'多選',fill:'填空',essay:'問答'};
+    const labels={choice:'單選',multi:'多選',true_false:'是非',fill:'填空',essay:'問答'};
     const request=active.map(([t,n])=>`${labels[t]} ${n} 題`).join('、');
     const focus=document.getElementById(`ai-focus-${catId}`); if(focus) focus.value=`[自訂題型配置] 目標共 ${total} 題：${request}。請盡量嚴格依此配置產生，題目內容仍須完全根據所選教材。`;
     const note=document.querySelector(`[data-ai-preset-note-76="${CSS.escape(String(catId))}"]`); if(note) note.textContent=`自訂混搭：${request}（共 ${total} 題）`;
   }
 
   function aiPresetPanel76(catId){
-    return `<section data-ai-ux-76 class="mb-4 rounded-2xl border border-violet-200 bg-violet-50/50 p-4"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-violet-700">STEP 2 / 3 · 出題策略</div><h5 class="mt-1 font-black text-slate-900">依教學需求自動混搭題型</h5><p class="mt-1 text-xs text-slate-500">先選用途快速套用；需要精準配置時再使用自訂混搭。</p></div><span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-violet-700 border border-violet-100">產生後進入 STEP 3 審核</span></div><div class="mt-3 grid sm:grid-cols-[1fr_140px_auto] gap-2"><select data-ai-preset-select-76 class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm"><option value="auto">✨ 自動均衡</option><option value="newcomer">🌱 新人基礎考核</option><option value="pgy">🎯 PGY 核心能力</option><option value="case">🧩 案例判讀</option><option value="quality">🛡️ 品質管理／異常處理</option><option value="advanced">🧠 進階組內訓練</option><option value="image">🖼️ 圖片判讀</option><option value="video">🎬 影片互動</option><option value="custom">⚙️ 自訂混搭</option></select><select data-ai-primary-count-77 class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm"><option value="5">5 題</option><option value="10" selected>10 題</option><option value="15">15 題</option><option value="20">20 題</option></select><button type="button" data-ai-apply-preset-76 class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">套用</button></div><p data-ai-preset-note-76="${esc(catId)}" class="mt-2 text-[11px] leading-5 text-violet-700">自動均衡：系統依教材重點配置題型。</p><div data-ai-custom-mix-76="${esc(catId)}" class="hidden mt-3 rounded-xl border border-violet-100 bg-white p-3"><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">${[['choice','單選',4],['multi','多選',2],['fill','填空',2],['essay','問答',2]].map(([t,l,n])=>`<label class="text-xs font-bold text-slate-600">${l}<input data-mix-type="${t}" type="number" min="0" max="30" value="${n}" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"></label>`).join('')}</div><button type="button" data-ai-apply-custom-76 class="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">套用自訂題型配置</button><p class="mt-2 text-[10px] leading-4 text-slate-400">自訂混搭會沿用同一支 AI 出題服務，以總題數＋明確配置要求產生候選題；教師仍需在匯入前審核。</p></div></section>`;
+    return `<section data-ai-ux-76 class="mb-4 rounded-2xl border border-violet-200 bg-violet-50/50 p-4"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-violet-700">STEP 2 / 3 · 出題策略</div><h5 class="mt-1 font-black text-slate-900">依教學需求自動混搭題型</h5><p class="mt-1 text-xs text-slate-500">先選用途快速套用；需要精準配置時再使用自訂混搭。</p></div><span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-violet-700 border border-violet-100">產生後進入 STEP 3 審核</span></div><div class="mt-3 grid sm:grid-cols-[1fr_140px_auto] gap-2"><select data-ai-preset-select-76 class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm"><option value="auto">✨ 自動均衡</option><option value="newcomer">🌱 新人基礎考核</option><option value="pgy">🎯 PGY 核心能力</option><option value="case">🧩 案例判讀</option><option value="quality">🛡️ 品質管理／異常處理</option><option value="advanced">🧠 進階組內訓練</option><option value="image">🖼️ 圖片判讀</option><option value="video">🎬 影片互動</option><option value="custom">⚙️ 自訂混搭</option></select><select data-ai-primary-count-77 class="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm"><option value="5">5 題</option><option value="10" selected>10 題</option><option value="15">15 題</option><option value="20">20 題</option></select><button type="button" data-ai-apply-preset-76 class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">套用</button></div><p data-ai-preset-note-76="${esc(catId)}" class="mt-2 text-[11px] leading-5 text-violet-700">自動均衡：系統依教材重點配置題型。</p><div data-ai-custom-mix-76="${esc(catId)}" class="hidden mt-3 rounded-xl border border-violet-100 bg-white p-3"><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">${[['choice','單選',3],['multi','多選',2],['true_false','是非',2],['fill','填空',1],['essay','問答',2]].map(([t,l,n])=>`<label class="text-xs font-bold text-slate-600">${l}<input data-mix-type="${t}" type="number" min="0" max="30" value="${n}" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"></label>`).join('')}</div><button type="button" data-ai-apply-custom-76 class="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">套用自訂題型配置</button><p class="mt-2 text-[10px] leading-4 text-slate-400">自訂混搭會沿用同一支 AI 出題服務，以總題數＋明確配置要求產生候選題；教師仍需在匯入前審核。</p></div></section>`;
   }
 
   async function waitForAiSection76(catId,timeout=6500){
