@@ -23,6 +23,8 @@ class ContentContainerConvergence77Tests(unittest.TestCase):
             self.assertIn(token,self.studio)
         self.assertIn("confirmQuestionPreset('choice',catId)",self.studio)
         self.assertIn("mountAiPanel(catId)",self.studio)
+        for marker in ("1｜加入題目", "2｜✨ AI 輔助出題", "3｜管理與發布", "⚙️ 設定與發布"):
+            self.assertIn(marker, self.studio)
 
     def test_exam_creation_keeps_canonical_mutation_owner(self):
         self.assertIn('adminCreateQuizCategory',self.studio)
