@@ -131,7 +131,10 @@
     let panel = body.querySelector(':scope > [data-teacher-course-tools-1014]');
     if (!panel) {
       panel = document.createElement('section');
-      panel.dataset.teacherCourseTools1014 = '1';
+      // dataset camel-casing would serialize this as data-teacher-course-tools1014.
+      // Keep the public selector contract explicit, including the separator
+      // before the numeric suffix.
+      panel.setAttribute('data-teacher-course-tools-1014', '1');
       panel.className = 'hidden lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-4';
       const title = document.createElement('div');
       title.className = 'text-xs font-black text-slate-800';
