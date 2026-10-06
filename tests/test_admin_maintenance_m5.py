@@ -121,8 +121,14 @@ setImmediate(() => {
         self.assertIn('overflow: visible;', rules[1])
         self.assertNotIn('data-section="teacher"', css)
 
-    def test_system_settings_scroll_includes_announcements(self):
-        self.check_scroll('admin-section-system', 'admin-announcement-list')
+    def test_system_settings_no_longer_owns_teaching_announcement_editor(self):
+        self.check_scroll('admin-section-system', 'admin-system-storage')
+        html = self.source('static/system.html')
+        announcements = self.source('static/admin-announcements.js')
+        self.assertNotIn('admin-announcement-list', html)
+        self.assertNotIn('首頁公告', html)
+        self.assertIn('system-announcement-card-1014', announcements)
+        self.assertIn('teacher-announcement-workspace-1014', announcements)
 
     def test_people_scroll_includes_account_management(self):
         self.check_scroll('admin-section-people', 'admin-user-accounts-body')
