@@ -5,7 +5,7 @@
 const MODE_META={
   later:{label:'稍後建立',next:'這次先不建立考卷，可直接前往確認與發布。'},
   bank:{label:'自己出題',next:'開啟考卷工作區，可逐題建立，也可從既有題庫加入。'},
-  ai:{label:'AI 協助出題',next:'開啟 AI 出題工作區；AI 可協助產生單選、多選、填空、問答與影音互動候選題。'},
+  ai:{label:'AI 協助出題',next:'開啟 AI 出題工作區；AI 可協助產生單選、多選、是非、填空、問答與影音互動候選題。'},
   blueprint:{label:'Blueprint（進階）',next:'題型配額與抽題規則保留在考卷進階設定，不放在主要建立流程。'}
 };
 const AI_PLAN_META={
@@ -961,7 +961,7 @@ async function openCourseWorkspace(){
 function reset(){
   if(state.created&&!canLeaveCourse())return alert('目前教材尚未全部完成，請先等待或處理失敗工作。');
   state.watchToken++;
-  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.resultHtml='';clearWorkflowId();
+  state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
