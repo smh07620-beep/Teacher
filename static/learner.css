@@ -311,6 +311,23 @@ body.learning-center-page #panel-exam>.edu-card{
         .course-empty-row{padding:.9rem;border:1px dashed #cbd5e1;border-radius:.8rem;color:#94a3b8;font-size:.75rem;text-align:center;background:#f8fafc}
         @media(max-width:640px){.course-learning-summary{align-items:flex-start;padding:.9rem}.course-material-row{align-items:flex-start}.course-material-row .course-row-actions{width:100%;margin-top:.35rem}.course-material-row{flex-wrap:wrap}}
 
+        /* 2026-10-06 learner scanability: course rows should read like tasks,
+         * not full cards before the learner expands them. */
+        #course-overview .course-learning-summary{padding:.72rem .9rem;gap:.65rem}
+        #course-overview .teaching-course-header{gap:.55rem;align-items:center}
+        #course-overview .teaching-course-number{font-size:1.05rem;line-height:1}
+        #course-overview .teaching-course-header h3{font-size:.95rem!important;line-height:1.35}
+        #course-overview .teaching-meta{margin-top:.28rem;display:flex;flex-wrap:wrap;gap:.2rem .7rem;font-size:.72rem;line-height:1.35}
+        #course-overview .course-progress-mini{margin-top:.42rem!important}
+        #course-overview .course-learning-chevron{width:1.8rem;height:1.8rem;border-radius:.6rem;flex:none}
+        #course-overview .course-learning-card:not([open]){box-shadow:0 3px 12px rgba(15,51,66,.04)}
+        #course-overview .course-learning-card+ .course-learning-card{margin-top:.65rem}
+        @media(max-width:640px){
+          #course-overview .course-learning-summary{padding:.7rem .75rem;align-items:center}
+          #course-overview .teaching-meta{gap:.18rem .55rem}
+          #course-overview .teaching-course-header h3{font-size:.9rem!important}
+        }
+
       .viewer-tool-light{display:inline-flex;align-items:center;justify-content:center;min-width:2.15rem;height:2.15rem;padding:0 .55rem;border-radius:.65rem;border:1px solid #d7e0e4;background:#fff;font-size:.75rem;font-weight:700;color:#475569;transition:.15s}
       .viewer-tool-light:hover{background:#f1f8f7;color:#006b64;border-color:#9ccbc5}
       @media(max-width:640px){.viewer-tool-light{min-width:2rem;height:2rem;padding:0 .4rem}}
