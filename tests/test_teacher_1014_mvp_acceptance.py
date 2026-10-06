@@ -27,18 +27,17 @@ class Teacher1014MvpAcceptanceTests(unittest.TestCase):
         self.assertIn("const canSystem = roles.has('system_admin')", self.workspace)
         self.assertNotIn("X-Admin-Key", self.workspace)
 
-    def test_acceptance_teacher_navigation_is_exactly_the_1014_first_cut(self):
-        expected = (
-            "📚 教材與課程",
-            "📝 評量與出題",
-            "📄 紙本文件與匯出",
-        )
-        for label in expected:
+    def test_acceptance_teacher_navigation_has_two_jobs_and_guided_contextual_tools(self):
+        for label in ("📚 教材與課程", "📝 評量與追蹤"):
             self.assertIn(label, self.workspace)
-        self.assertNotIn("🎙️ 媒體製作", self.workspace)
-        self.assertIn("媒體製作收在教材工具內", self.workspace)
-        for deferred in ("我的學員", "臨床技能評核", "能力追蹤", "教學分析"):
-            self.assertNotIn(deferred, self.workspace)
+        self.assertNotIn("makeNavButton('teacher-nav-announcements-1014'", self.workspace)
+        self.assertNotIn("makeNavButton('teacher-nav-documents-1014'", self.workspace)
+        for utility in ("teacher-guide-open-1014", "teacher-announcements-open-1014", "teacher-documents-open-1014"):
+            self.assertIn(utility, self.workspace)
+        for guided_job in ("準備教材與課程", "製作教學內容", "建立考題與發布", "批改與追蹤"):
+            self.assertIn(guided_job, self.workspace)
+        for followup in ("我的學員", "臨床技能評核", "能力追蹤", "教學分析"):
+            self.assertIn(followup, self.workspace)
         self.assertIn("navHost.replaceChildren(navGroup('教師工作台', buttons))", self.workspace)
 
     def test_acceptance_system_admin_does_not_duplicate_daily_teaching_navigation(self):
