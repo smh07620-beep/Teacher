@@ -34,6 +34,7 @@ def main():
         "MATERIAL_WORKER_ENABLED": "true", "MATERIAL_DIRECT_UPLOAD_ENABLED": "true",
         "MATERIAL_BACKGROUND_JOBS": "false",
         "MATERIAL_WORKER_HEARTBEAT_SECONDS": "5",
+        "MATERIAL_WORKER_HTTP_RATE_LIMIT_PER_MINUTE": "1800",
         "MEDIA_SCRIPT_JOB_MAX_PER_MINUTE": "30",
     })
     processes, logs = [], []

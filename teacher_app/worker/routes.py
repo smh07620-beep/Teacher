@@ -63,9 +63,14 @@ _worker_metadata = worker_protocol.sanitize_metadata
 def _worker_rate_ok() -> bool:
     key = str(request.remote_addr or "unknown")[:80]
     now = time.monotonic()
+    try:
+        limit = int(os.environ.get("MATERIAL_WORKER_HTTP_RATE_LIMIT_PER_MINUTE", "120"))
+    except (TypeError, ValueError):
+        limit = 120
+    limit = max(120, min(3600, limit))
     with _RATE_LOCK:
         recent = [stamp for stamp in _RATE.get(key, []) if now - stamp < 60]
-        if len(recent) >= 120:
+        if len(recent) >= limit:
             _RATE[key] = recent
             return False
         recent.append(now)
