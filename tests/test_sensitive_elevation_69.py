@@ -15,7 +15,7 @@ class FakeBase:
         routes = (
             ("/api/users/<username>", "user_update", ["PATCH"]),
             ("/api/users", "user_list", ["GET"]),
-            ("/api/storage/migrate-to-mega", "storage_migrate", ["POST"]),
+            ("/api/storage/migrate-to-r2", "storage_migrate", ["POST"]),
             ("/api/maintenance/backup", "backup", ["GET"]),
             ("/api/maintenance/restore", "restore", ["POST"]),
             ("/api/records", "records_delete", ["DELETE"]),
@@ -47,7 +47,7 @@ class SensitiveElevation69Tests(unittest.TestCase):
 
     def test_storage_migration_requires_elevation(self):
         base, client = self.client()
-        response = client.post("/api/storage/migrate-to-mega")
+        response = client.post("/api/storage/migrate-to-r2")
         self.assertEqual(response.status_code, 428)
         self.assertEqual(base.guard_calls, [("storage.manage",)])
 
