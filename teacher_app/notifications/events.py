@@ -290,18 +290,24 @@ def _operational_incident_events(
     return output
 
 
-def build_events(user: Optional[Mapping[str, Any]], *, now: Optional[dt.datetime] = None) -> dict[str, Any]:
+def build_events(
+    user: Optional[Mapping[str, Any]],
+    *,
+    now: Optional[dt.datetime] = None,
+    persona: str = "",
+) -> dict[str, Any]:
     if not user:
         raise ApiError("LOGIN_REQUIRED", "請先登入後再查看通知。", status=401, extra={"loginRequired": True})
     current = now or dt.datetime.now(dt.timezone.utc)
     if current.tzinfo is None:
         current = current.replace(tzinfo=dt.timezone.utc)
     current = current.astimezone(dt.timezone.utc)
-    command = service.build_summary(user, now=current)
+    persona_mode = str(persona or "").strip().lower()
+    command = service.build_summary(user, now=current, persona=persona_mode)
     events = [_event(item) for item in command.get("items") or []]
-    incident_events = _operational_incident_events(user, current)
+    incident_events = [] if persona_mode == "learner" else _operational_incident_events(user, current)
     events.extend(incident_events)
-    if not any(
+    if persona_mode != "learner" and not any(
         row.get("incidentType") == "worker_offline"
         and not str(row.get("kind") or "").endswith("recovery")
         for row in incident_events
