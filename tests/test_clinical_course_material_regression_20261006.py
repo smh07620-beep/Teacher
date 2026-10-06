@@ -29,6 +29,21 @@ class ClinicalCourseMaterialRegression20261006Tests(unittest.TestCase):
         self.assertIn("rows.map(row=>String(row.materialId||''))", self.wizard)
         self.assertIn("await verifyCreatedCourseMaterials()", self.wizard)
 
+    def test_course_wizard_publishes_only_after_readiness_and_then_returns(self):
+        for marker in (
+            "courseWizard681PublishAndOpen",
+            "publishAndOpenCourseWorkspace",
+            "/readiness",
+            "action:'mark_ready'",
+            "action:'publish'",
+            "發布課程並返回",
+            "暫存草稿並返回",
+            "publicationBlockerText",
+            "publishedCourse.active!==true",
+            "課程發布回應未確認為學員可見狀態",
+        ):
+            self.assertIn(marker, self.wizard)
+
     def test_orphaned_materials_can_be_relinked_without_reupload(self):
         for marker in (
             "data-material-course-link",
