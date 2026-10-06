@@ -29,6 +29,13 @@ class UxConsolidation681Tests(unittest.TestCase):
         self.assertIn("name === 'assessment' || name === 'questions'",self.workspace)
         self.assertIn("return 'assessment'",self.workspace)
 
+    def test_teacher_assessment_surface_includes_tracking_and_mobile_progress_is_direct(self):
+        self.assertIn('評量與追蹤 Workspace', self.html)
+        self.assertIn("switchLearningModule('progress')", self.html)
+        mobile = self.html[self.html.index('v56-system-mobile-nav'):self.html.index('back-to-top')]
+        self.assertIn("switchLearningModule('progress')", mobile)
+        self.assertNotIn('<a href="/"><span>▥</span>進度</a>', mobile)
+
     def test_opening_admin_keeps_cached_sections_and_defers_worker_probe(self):
         self.assertIn("loaded: {content:false, quiz:false, word:false, pgy:false, results:false}",self.workspace)
         self.assertIn("if (!force && state.loaded[name]) return",self.workspace)
