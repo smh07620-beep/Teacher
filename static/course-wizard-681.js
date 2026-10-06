@@ -3,19 +3,19 @@
 'use strict';
 
 const MODE_META={
-  later:{label:'稍後建立',next:'課程建立後先回課程總覽，之後再補考卷。'},
-  bank:{label:'從題庫選',next:'建立考卷後直接前往「題庫與考卷」加入既有題目。'},
-  ai:{label:'AI 草稿',next:'建立考卷後直接前往「題庫與考卷」選教材並產生 AI 草稿。'},
-  blueprint:{label:'Blueprint',next:'建立考卷後直接前往「題庫與考卷」設定 Blueprint 與題型配額。'}
+  later:{label:'稍後建立',next:'這次先不建立考卷，可直接前往確認與發布。'},
+  bank:{label:'自己出題',next:'開啟考卷工作區，可逐題建立，也可從既有題庫加入。'},
+  ai:{label:'AI 協助出題',next:'開啟 AI 出題工作區；AI 可協助產生單選、多選、填空、問答與影音互動候選題。'},
+  blueprint:{label:'Blueprint（進階）',next:'題型配額與抽題規則保留在考卷進階設定，不放在主要建立流程。'}
 };
 const AI_PLAN_META={
-  none:{label:'不需要 AI 製作',detail:'直接使用原教材；之後仍可從課程管理進入 AI／影音製作。'},
-  presentation:{label:'AI PowerPoint',detail:'發布後直接進入 PowerPoint：來源 → 大綱 → 修正 → 簡報。'},
-  narration:{label:'講稿與配音',detail:'發布後直接進入講稿：建立／修正 → 核准 → 試聽 → 配音。'},
-  video:{label:'AI 教學影片',detail:'發布後直接進入影片流程；可使用來源內容或已核准 PowerPoint。'}
+  none:{label:'不需要 AI 製作',detail:'直接使用目前教材；未來仍可從課程管理再次進入 AI 製作。'},
+  presentation:{label:'AI PowerPoint',detail:'以目前教材或額外資料建立投影片；完成後回到本頁，再加入這門課。'},
+  narration:{label:'講稿與配音',detail:'以教材建立講稿、修改、核准、試聽與產生配音；完成後回到本頁。'},
+  video:{label:'AI 教學影片',detail:'以教材、投影片或其他來源製作影片；完成後回到本頁確認。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},resultHtml:'',watchToken:0};
+const state={step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
