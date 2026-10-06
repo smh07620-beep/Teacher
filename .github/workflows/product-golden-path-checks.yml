@@ -235,6 +235,55 @@ jobs:
       - name: Source material → PowerPoint revision → provenance → video handoff → canonical material derivative history
         run: python -m unittest discover -s tests -p 'test_f5_*.py' -v
 
+  ai-question-full-stack-browser:
+    name: GP-11 AI question Browser → route → DB job → real Worker → question bank
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: |
+          python -m pip install -r requirements.txt 'moto[server]>=5.1,<6.0'
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Configure isolated R2, Flask and deterministic Worker provider
+        shell: bash
+        run: |
+          moto_server -H 127.0.0.1 -p 9001 > ai-media-s3.log 2>&1 & echo $! > ai-media-s3.pid
+          until curl --fail --silent http://127.0.0.1:9001/ >/dev/null; do sleep 1; done
+          python -c "import boto3; boto3.client('s3',endpoint_url='http://127.0.0.1:9001',aws_access_key_id='ci',aws_secret_access_key='ci-secret',region_name='us-east-1').create_bucket(Bucket='teacher-ai-media-e2e')"
+          cat >> "$GITHUB_ENV" <<EOF
+          R2_ACCESS_KEY_ID=ci
+          R2_SECRET_ACCESS_KEY=ci-secret
+          R2_ACCOUNT_ID=ci
+          R2_BUCKET_NAME=teacher-ai-media-e2e
+          R2_ENDPOINT_URL=http://127.0.0.1:9001
+          R2_REGION=us-east-1
+          AI_WORKER_TOKEN=e2e-worker-token
+          AI_WORKER_TRANSPORT=https
+          AI_WORKER_ALLOW_INSECURE_LOCAL_HTTP=true
+          TEACHER_BASE_URL=http://127.0.0.1:4176
+          TEACHER_E2E_TEST_MODE=1
+          TEACHER_E2E_DETERMINISTIC_STUBS=1
+          TEACHER_CI_BROWSER_PASSWORD=$(python -c 'import secrets;print(secrets.token_urlsafe(18))')
+          EOF
+      - name: Browser → route → persistent job → canonical AI Worker → question bank
+        shell: bash
+        run: |
+          python tests/ai_media_fullstack_server.py > ai-media-web.log 2>&1 & echo $! > ai-media-web.pid
+          until curl --fail --silent http://127.0.0.1:4176/ready >/dev/null; do sleep 1; done
+          python ai_question_worker.py > ai-media-worker.log 2>&1 & echo $! > ai-media-worker.pid
+          TEACHER_AI_MEDIA_FULLSTACK_BASE_URL=http://127.0.0.1:4176 npx playwright test tests/playwright/ai-question-fullstack-golden-path.spec.js --reporter=line --workers=1
+      - if: always()
+        shell: bash
+        run: |
+          test ! -f ai-media-worker.pid || kill "$(cat ai-media-worker.pid)" || true
+          test ! -f ai-media-web.pid || kill "$(cat ai-media-web.pid)" || true
+          test ! -f ai-media-s3.pid || kill "$(cat ai-media-s3.pid)" || true
+
 
   production-readiness:
     name: GP-10 production readiness, content governance, and recovery contracts
