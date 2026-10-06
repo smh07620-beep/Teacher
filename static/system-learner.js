@@ -47,6 +47,16 @@ function formatFileSize(bytes) {
 }
 
 
+async function deleteUploadedSlide(id) {
+    if (typeof window.deleteAdminMaterial !== 'function') {
+        alert('教材管理功能尚未完成載入，請重新整理後再試。');
+        return;
+    }
+    return window.deleteAdminMaterial(id);
+}
+window.deleteUploadedSlide = deleteUploadedSlide;
+
+
 function buildSlideCardHTML(s) {
 
     const catLabel = s.categoryLabel || slideCategoryLabels[s.category] || slideCategoryLabels[''];
