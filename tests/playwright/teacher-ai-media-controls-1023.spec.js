@@ -378,7 +378,12 @@ test('F5 hydration and observers issue one PowerPoint request per selected sourc
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
   const source = page.locator('#teacher-media-source-1018');
   await expect(source).toBeEnabled();
-  await source.selectOption('doc-1');
+  // The global source select is now an intentionally hidden compatibility bridge.
+  // Drive it programmatically here; visible source selection belongs to each media mode.
+  await source.evaluate((select, value) => {
+    select.value = value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }, 'doc-1');
   await expect(page.locator('#teacher-ai-video-presentation-1015')).toHaveValue('ppt-1');
   await page.locator('main').evaluate(main => {
     for (let index = 0; index < 20; index += 1) main.appendChild(document.createElement('div'));
