@@ -80,6 +80,28 @@ class SystemCspEnforcementTests(unittest.TestCase):
         self.assertNotIn("new Function", source)
         self.assertIn("/system-csp-actions.js", ASSET_MANIFEST["system"]["body"])
 
+    def test_live_csp_actions_are_allowlisted_and_have_owners(self):
+        registry = (STATIC / "system-csp-actions.js").read_text(encoding="utf-8")
+        owners = {
+            "resetAdminUserPassword": "admin-people.js",
+            "toggleAdminUserAccount": "admin-people.js",
+            "adminSaveExpandedQuestionEdits": "admin-question-actions.js",
+            "jumpToAdminQuiz": "admin-course-material.js",
+            "deleteUploadedSlide": "system-learner.js",
+            "prepareMaterialVersionUpload": "admin-material-upload.js",
+        }
+        for action, filename in owners.items():
+            with self.subTest(action=action):
+                self.assertIn(f"'{action}'", registry)
+                owner = (STATIC / filename).read_text(encoding="utf-8")
+                self.assertIn(f"window.{action}", owner)
+        for retired in (
+            "applyWizardMaterialBulkType",
+            "renderWizardMaterialClassifier",
+            "migrateMaterialsToMega",
+        ):
+            self.assertNotIn(f"'{retired}'", registry)
+
     def test_question_delete_discovery_uses_csp_action_attributes(self):
         source = (STATIC / "admin-question-bank.js").read_text(encoding="utf-8")
         self.assertNotIn('button[onclick*=', source)
