@@ -30,7 +30,7 @@ class Phase3AdminWorkspaceRouterTests(unittest.TestCase):
         self.assertIn("name === 'assessment' || name === 'questions'", self.router)
         self.assertIn("name === 'scoring' || name === 'pgy'", self.router)
 
-    def test_router_loads_before_rbac_wrapper(self):
+    def test_rbac_bootstrap_loads_before_router(self):
         ordered = dict(ASSET_MANIFEST["system"]["ordered"])["/system-admin.js"]
         self.assertLess(ordered.index('/admin-workspace.js'), ordered.index('/admin-results-workspace.js'))
         app = Flask(__name__)
@@ -40,15 +40,17 @@ class Phase3AdminWorkspaceRouterTests(unittest.TestCase):
         def system_page():
             return (
                 '<html><body>'
+                '<script defer src="/shared-core.js?v=6500"></script>'
                 '<script defer src="/system-admin.js?v=6502"></script>'
                 '<script defer src="/rbac-ui-681.js?v=6811"></script>'
                 '</body></html>'
             )
 
         html = app.test_client().get('/system').get_data(as_text=True)
+        self.assertLess(html.index('/shared-core.js?v='), html.index('/rbac-ui-681.js?v='))
+        self.assertLess(html.index('/rbac-ui-681.js?v='), html.index('/system-admin.js?v='))
         self.assertLess(html.index('/system-admin.js?v='), html.index('/admin-workspace.js?v='))
         self.assertLess(html.index('/admin-workspace.js?v='), html.index('/admin-results-workspace.js?v='))
-        self.assertLess(html.index('/admin-results-workspace.js?v='), html.index('/rbac-ui-681.js?v='))
         self.assertNotIn('/system-admin.js?v=6502', html)
         self.assertNotIn('/admin-workspace.js?v=7110', html)
 
