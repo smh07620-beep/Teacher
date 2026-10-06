@@ -53,23 +53,15 @@
       const buttons=[...document.querySelectorAll('[data-csp-click="courseWizard681OpenCourse()"]')];
       buttons.forEach(button=>{button.disabled=true;button.setAttribute('aria-busy','true');});
       try{
-        // Switching the workspace already owns its render lifecycle. Avoid a
-        // second explicit course-hub render here because it can re-enter while
-        // the background-job watcher still has callbacks in flight.
-        if(typeof window.switchAdminWorkspace==='function'){
-          await window.switchAdminWorkspace('course-materials',true);
-        }else{
-          const target='/system?module=course-materials';
-          if(window.location.pathname+window.location.search!==target){
-            window.location.assign(target);
-            return;
-          }
-        }
-        requestAnimationFrame(()=>{
-          document.getElementById('admin-course-material-hub')?.scrollIntoView({behavior:'smooth',block:'start'});
-        });
+        // Keep the canonical action as the only owner. It closes Teacher
+        // Content Studio, switches/refreshes the course-material workspace and
+        // resets the completed wizard. The former partial copy switched only
+        // the hidden workspace underneath the studio, so the green return
+        // button looked like it did nothing.
+        return await canonical();
       }catch(error){
         console.error('Course Wizard finish navigation failed',error);
+        window.teacherContentStudioClose?.(false);
         window.location.assign('/system?module=course-materials');
       }finally{
         buttons.forEach(button=>{button.disabled=false;button.removeAttribute('aria-busy');});
