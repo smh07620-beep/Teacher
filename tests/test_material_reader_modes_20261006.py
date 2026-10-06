@@ -13,7 +13,7 @@ class MaterialReaderModes20261006Tests(unittest.TestCase):
 
     def test_powerpoint_preview_is_detected_as_presentation_reader(self):
         self.assertIn("function inferPdfReaderMode(entry = {})", self.learner)
-        self.assertIn(r"/\\.(ppt|pptx|pps|ppsx|odp)$/", self.learner)
+        self.assertIn("/\\.(ppt|pptx|pps|ppsx|odp)$/", self.learner)
         self.assertIn("meta.derivativeType", self.learner)
         self.assertIn("entry.sourcePresentationId", self.learner)
         self.assertIn("readerMode: inferPdfReaderMode(entry)", self.learner)
