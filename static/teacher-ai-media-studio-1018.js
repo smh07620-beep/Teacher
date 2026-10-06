@@ -275,6 +275,195 @@
     $('teacher-ai-video-powerpoint-author-1027')?.remove();
   }
 
+
+  function setSimpleFlowStatus(mode, message, bad = false) {
+    const node = $(\`teacher-media-simple-status-\${mode}-1032\`);
+    if (!node) return;
+    node.textContent = message;
+    node.className = bad
+      ? 'text-xs font-bold text-rose-700'
+      : 'text-xs font-bold text-slate-600';
+  }
+
+  function mergeRevisionRequirement(current, request) {
+    const base = String(current || '').trim();
+    const revision = String(request || '').trim();
+    const combined = [base, revision ? \`教師下一輪修正：\${revision}\` : ''].filter(Boolean).join('；');
+    return combined.slice(0, 500);
+  }
+
+  function simpleFlowResultDetail(mode) {
+    const presentationCard = document.querySelector('#teacher-ai-presentation-results-1016 [data-presentation-id]');
+    const videoCard = document.querySelector('#teacher-ai-video-results-1015 [data-video-id]');
+    const materialId = String(
+      $('teacher-script-material-1014')?.value
+      || $('teacher-media-source-1018')?.value
+      || ''
+    );
+    return {
+      mode,
+      materialId,
+      scriptId: String($('teacher-audio-script-1014')?.value || ''),
+      presentationId: String(
+        presentationCard?.dataset?.presentationId
+        || $('teacher-ai-video-presentation-1015')?.value
+        || ''
+      ),
+      videoId: String(videoCard?.dataset?.videoId || ''),
+      returnTarget: 'course-materials',
+      finishedAt: new Date().toISOString(),
+    };
+  }
+
+  async function finishSimpleFlow(mode) {
+    const detail = simpleFlowResultDetail(mode);
+    try {
+      sessionStorage.setItem('teacher.mediaAuthoring.lastResult.v1', JSON.stringify(detail));
+    } catch (_) {
+      // Storage can be unavailable in strict browser privacy modes.
+    }
+
+    // Stable handoff contract for the course/material builder. A caller that is
+    // already managing a create-course flow can preventDefault() and restore its
+    // own screen; otherwise the studio falls back to the canonical course area.
+    const event = new CustomEvent('teacher-media-authoring-finished', {
+      detail,
+      cancelable: true,
+    });
+    const continueFallback = window.dispatchEvent(event);
+    if (!continueFallback || event.defaultPrevented) {
+      setSimpleFlowStatus(mode, '✅ 製作結果已交回教材建立流程。');
+      return true;
+    }
+
+    setSimpleFlowStatus(mode, '✅ 製作完成，正在回到教材與課程…');
+    if (typeof window.TeacherWorkspace1014?.openCourse === 'function') {
+      await window.TeacherWorkspace1014.openCourse();
+      return true;
+    }
+    $('teacher-media-pick-material-1014')?.click();
+    return true;
+  }
+
+  async function reviseSimpleFlow(mode) {
+    const input = $(\`teacher-media-simple-revision-\${mode}-1032\`);
+    const request = String(input?.value || '').trim();
+    if (!request) {
+      setSimpleFlowStatus(mode, '請先寫一句希望 AI 怎麼修改，例如「更精簡、加強 QC 異常處理」。', true);
+      input?.focus?.();
+      return false;
+    }
+
+    if (mode === 'presentation') {
+      const host = $('teacher-media-panel-presentation-1018');
+      window.TeacherAIMaterial1014?.ensureMounted?.(host || null);
+      window.TeacherAIMaterial1014?.configureContext?.('presentation');
+      const focus = $('teacher-ai-material-focus-1014');
+      const generate = $('teacher-ai-material-generate-1014');
+      if (!focus || !generate) {
+        setSimpleFlowStatus(mode, 'PowerPoint AI 修正工具尚未載入完成，請稍候再試。', true);
+        return false;
+      }
+      focus.value = mergeRevisionRequirement(focus.value, request);
+      setSimpleFlowStatus(mode, '已加入修正要求，正在重新試產出 PowerPoint 大綱…');
+      generate.click();
+      if (input) input.value = '';
+      return true;
+    }
+
+    if (mode === 'narration') {
+      const focus = $('teacher-script-focus-1014');
+      const generate = $('teacher-script-generate-1014');
+      if (!focus || !generate) {
+        setSimpleFlowStatus(mode, '講稿 AI 修正工具尚未載入完成，請稍候再試。', true);
+        return false;
+      }
+      focus.value = mergeRevisionRequirement(focus.value, request);
+      setSimpleFlowStatus(mode, '已加入修正要求，正在重新試產出講稿…');
+      generate.click();
+      if (input) input.value = '';
+      return true;
+    }
+
+    if (mode === 'video') {
+      const presentationId = String($('teacher-ai-video-presentation-1015')?.value || '');
+      const rows = Array.isArray(window.TeacherPresentationChoicesCache1026?.rows)
+        ? window.TeacherPresentationChoicesCache1026.rows
+        : [];
+      const presentation = rows.find(item => String(item?.id || '') === presentationId) || null;
+      const materialId = String(presentation?.materialId || $('teacher-media-source-1018')?.value || '');
+      const opener = window.TeacherAIMediaControls1023?.openVideoSourceWorkspace;
+      if (typeof opener !== 'function') {
+        setSimpleFlowStatus(mode, '影片內容修正工具尚未載入完成，請稍候再試。', true);
+        return false;
+      }
+      const opened = await opener();
+      if (opened === false) return false;
+      window.TeacherAIMaterial1014?.configureContext?.('presentation');
+      if (materialId) await window.TeacherAIMaterial1014?.paintMaterialOptions?.(materialId);
+      const focus = $('teacher-ai-material-focus-1014');
+      const generate = $('teacher-ai-material-generate-1014');
+      if (focus) focus.value = mergeRevisionRequirement(focus.value, request);
+      if (!materialId) {
+        setSimpleFlowStatus(mode, '已開啟影片來源修正區。請先加入／選擇來源，再按「試產出」。');
+        return true;
+      }
+      if (!generate) {
+        setSimpleFlowStatus(mode, '影片來源 AI 修正工具尚未載入完成，請稍候再試。', true);
+        return false;
+      }
+      setSimpleFlowStatus(mode, '已把修正要求送回影片內容來源；正在產生新的畫面大綱，核准後即可再試產影片。');
+      generate.click();
+      if (input) input.value = '';
+      return true;
+    }
+    return false;
+  }
+
+  function ensureSimpleFlow(panel, mode) {
+    if (!panel || !['presentation', 'narration', 'video'].includes(mode)) return null;
+    const oldGuide = $(\`teacher-media-mode-guide-\${mode}-1018\`);
+    oldGuide?.classList.add('hidden');
+    if (mode === 'presentation') $('teacher-ai-material-flow-1014')?.classList.add('hidden');
+    if (mode === 'narration') $('teacher-media-narration-flow-1028')?.classList.add('hidden');
+
+    let flow = $(\`teacher-media-simple-flow-\${mode}-1032\`);
+    if (!flow) {
+      const modeLabel = mode === 'presentation' ? 'PowerPoint' : mode === 'narration' ? '講稿／配音' : '教學影片';
+      const modeNote = mode === 'video'
+        ? '影片的內容語氣／篇幅在來源整理階段調整；最終片長依核准投影片與旁白而定。'
+        : '語氣、篇幅與特別重點全部都是選填；留空就使用系統預設。';
+      flow = document.createElement('section');
+      flow.id = \`teacher-media-simple-flow-\${mode}-1032\`;
+      flow.className = 'rounded-2xl border border-cyan-200 bg-cyan-50/40 p-3 sm:p-4';
+      flow.innerHTML = \`
+        <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div><b class="text-sm text-slate-950">\${modeLabel}｜簡易製作</b><p class="mt-1 text-xs leading-5 text-slate-600">丟入資料就能先試做，不必先填完所有設定。 \${modeNote}</p></div>
+          <div class="grid grid-cols-2 gap-1.5 text-center text-[11px] font-black text-slate-600 sm:grid-cols-4">
+            <span class="rounded-lg bg-white px-2 py-2">1 丟入資料</span>
+            <span class="rounded-lg bg-white px-2 py-2">2 需求（選填）</span>
+            <span class="rounded-lg bg-white px-2 py-2">3 試產出／AI 修正</span>
+            <span class="rounded-lg bg-white px-2 py-2">4 完成帶回教材</span>
+          </div>
+        </div>
+        <div class="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <input id="teacher-media-simple-revision-\${mode}-1032" class="learning-input" maxlength="400" placeholder="不滿意？直接告訴 AI 怎麼修，例如：更精簡、加強 QC 異常處理">
+          <button id="teacher-media-simple-revise-\${mode}-1032" type="button" class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-xs font-black text-cyan-800">↻ 請 AI 再修一次</button>
+          <button id="teacher-media-simple-finish-\${mode}-1032" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white">✅ 製作完成，帶回教材</button>
+        </div>
+        <p id="teacher-media-simple-status-\${mode}-1032" class="mt-2 text-xs font-bold text-slate-600">先從下方加入／選擇來源，直接按「試產出」即可。</p>\`;
+      panel.prepend(flow);
+      $(\`teacher-media-simple-revise-\${mode}-1032\`)?.addEventListener('click', () => void reviseSimpleFlow(mode));
+      $(\`teacher-media-simple-finish-\${mode}-1032\`)?.addEventListener('click', () => void finishSimpleFlow(mode));
+      $(\`teacher-media-simple-revision-\${mode}-1032\`)?.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' || event.shiftKey) return;
+        event.preventDefault();
+        void reviseSimpleFlow(mode);
+      });
+    }
+    return flow;
+  }
+
   function attachPanels(studio) {
     const presentation = $('teacher-media-panel-presentation-1018');
     const narration = $('teacher-media-panel-narration-1018');
@@ -364,6 +553,10 @@
     ensureModeGuide(narration, 'narration');
     ensureModeGuide(recording, 'recording');
     ensureModeGuide(video, 'video');
+
+    ensureSimpleFlow(presentation, 'presentation');
+    ensureSimpleFlow(narration, 'narration');
+    ensureSimpleFlow(video, 'video');
 
     let advanced = $('teacher-media-advanced-1018');
     if (!advanced) {
@@ -516,6 +709,7 @@
     showMode: (mode, focus = false) => { install(); showMode(mode, focus); },
     activeMode: () => activeMode,
     refreshPresentationChoices: (materialId, options = {}) => refreshPresentationChoices(materialId, options),
+    finishAndReturn: (mode = activeMode) => finishSimpleFlow(mode),
   });
   refreshLifecycle();
 })();
