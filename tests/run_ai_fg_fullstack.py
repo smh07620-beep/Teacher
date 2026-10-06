@@ -33,6 +33,9 @@ def main():
         "TEACHER_AI_FG_FULLSTACK_RUN": "1",
         "AI_EXTERNAL_PROCESSING_ENABLED": "true",
         "AI_EXTERNAL_MEDIA_ENABLED": "true",
+        # Production privacy stays fail-closed. Only this double-opt-in isolated
+        # fixture may exercise video-question generation from local media.
+        "AI_EXTERNAL_MEDIA_ALLOWED": "true",
         "TEACHER_CI_BROWSER_PASSWORD": secrets.token_urlsafe(24),
         "MATERIAL_WORKER_TOKEN": secrets.token_urlsafe(32),
         "MATERIAL_WORKER_ALLOW_INSECURE_LOCALHOST": "true",
