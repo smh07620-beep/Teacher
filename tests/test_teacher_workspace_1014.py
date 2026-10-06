@@ -37,16 +37,39 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
         self.assertNotIn("position: fixed", self.styles)
         self.assertNotIn("bottom:", self.styles)
 
-    def test_teacher_navigation_is_focused_on_first_cut(self):
+    def test_teacher_navigation_is_two_primary_jobs_with_header_utilities(self):
         for label in (
             "📚 教材與課程",
-            "📝 評量與出題",
-            "📄 紙本文件與匯出",
+            "📝 評量與追蹤",
         ):
             self.assertIn(label, self.source)
-        self.assertNotIn("🎙️ 媒體製作", self.source)
-        self.assertIn("媒體製作收在教材工具內", self.source)
+        self.assertNotIn("makeNavButton('teacher-nav-announcements-1014'", self.source)
+        self.assertNotIn("makeNavButton('teacher-nav-documents-1014'", self.source)
+        for utility in (
+            "teacher-guide-open-1014",
+            "teacher-announcements-open-1014",
+            "teacher-documents-open-1014",
+        ):
+            self.assertIn(utility, self.source)
+        self.assertIn("AI 製作從教材內進入", self.source)
         self.assertIn("navHost.replaceChildren(navGroup('教師工作台', buttons))", self.source)
+
+    def test_first_use_guide_explains_the_complete_teacher_job(self):
+        for marker in (
+            "teacher-usage-guide-1014",
+            "第一次使用？照這四件事走就好",
+            "準備教材與課程",
+            "製作教學內容",
+            "建立考題與發布",
+            "批改與追蹤",
+            "我的學員",
+            "臨床技能評核",
+            "能力追蹤",
+            "教學分析",
+            "openReview",
+            "openLearnerTracking",
+        ):
+            self.assertIn(marker, self.source)
 
     def test_media_workspace_reuses_course_material_scope(self):
         self.assertIn("await window.switchAdminWorkspace?.('course-materials', true)", self.source)
