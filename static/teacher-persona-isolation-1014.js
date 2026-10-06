@@ -36,13 +36,14 @@
   // teaching tools inside the course/material workflow.
   const buttonSpec = [
     ['teacher-nav-course-1014', '📚 教材與課程', () => T.openCourse?.()],
-    ['teacher-nav-assessment-1014', '📝 評量與出題', () => T.openAssessment?.()],
+    ['teacher-nav-assessment-1014', '📝 評量與追蹤', () => T.openAssessment?.()],
   ];
 
   function currentMode() {
     const now = new URLSearchParams(window.location.search);
     const mode = now.get('teacherMode') || '';
-    if (mode === 'media' || mode === 'documents') return 'course';
+    if (mode === 'media') return 'course';
+    if (mode === 'documents' || mode === 'announcements') return 'utility';
     return now.get('workspace') === 'assessment' ? 'assessment' : 'course';
   }
 
@@ -68,7 +69,7 @@
     if (icon) icon.textContent = '👨‍🏫';
     if (title && !title.textContent.includes('媒體製作')) title.textContent = '檢驗科教學平台｜教師工作區';
     if (summary && !title?.textContent?.includes('媒體製作')) {
-      summary.textContent = '主要工作只保留教材與課程、評量與出題；媒體與紙本輸出從教材流程內開啟。';
+      summary.textContent = '主要工作只保留教材與課程、評量與追蹤；AI 製作從教材流程內開啟，公告、文件與使用導覽在右上工具。';
     }
 
     const banner = document.getElementById('rbac-workspace-banner');
