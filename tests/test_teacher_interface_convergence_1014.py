@@ -5,6 +5,17 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = (ROOT / "teacher_app" / "frontend" / "assets.py").read_text(encoding="utf-8")
 UI = (ROOT / "static" / "teacher-interface-convergence-1014.js").read_text(encoding="utf-8")
+VOICE_CATALOG = (ROOT / "static" / "teacher-voice-catalog-1026.js").read_text(encoding="utf-8")
+VOICE_RUNTIME = (ROOT / "teacher_app" / "materials" / "media_audio_runtime.py").read_text(encoding="utf-8")
+VOICE_CONSUMERS = [
+    (ROOT / "static" / name).read_text(encoding="utf-8")
+    for name in (
+        "teacher-media-audio-1014.js",
+        "teacher-ai-video-1015.js",
+        "teacher-interface-convergence-1014.js",
+        "teacher-assignment-experience-1014.js",
+    )
+]
 
 
 class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
@@ -15,22 +26,25 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
             ASSETS.index('"/teacher-persona-isolation-1014.js"'),
         )
 
-    def test_kokoro_ids_are_internal_values_but_not_teacher_labels(self):
-        for voice_id in (
-            "zf_xiaobei",
-            "zf_xiaoni",
-            "zf_xiaoxiao",
-            "zf_xiaoyi",
-            "zm_yunjian",
-            "zm_yunxi",
-            "zm_yunxia",
-            "zm_yunyang",
-        ):
-            self.assertIn(voice_id, UI)
-        self.assertIn("option.value", UI)
-        self.assertIn("option.textContent = label", UI)
-        self.assertIn("中文女聲 A", UI)
-        self.assertIn("中文男聲 D", UI)
+    def test_voice_labels_have_one_backend_source_and_one_frontend_catalog(self):
+        self.assertIn('"/teacher-voice-catalog-1026.js"', ASSETS)
+        self.assertLess(
+            ASSETS.index('"/teacher-voice-catalog-1026.js"'),
+            ASSETS.index('"/teacher-media-audio-1014.js"'),
+        )
+        self.assertIn("voiceOptions", VOICE_CATALOG)
+        self.assertIn("TeacherVoiceCatalog1026", VOICE_CATALOG)
+        self.assertIn('"zf_001": "中文女聲 A"', VOICE_RUNTIME)
+        self.assertIn('"zm_012": "中文男聲 D"', VOICE_RUNTIME)
+        for source in VOICE_CONSUMERS:
+            self.assertIn("TeacherVoiceCatalog1026", source)
+            self.assertNotIn("中文女聲 A", source)
+            self.assertNotIn("中文男聲 D", source)
+            for legacy_id in (
+                "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi",
+                "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
+            ):
+                self.assertNotIn(legacy_id, source)
 
     def test_media_is_nested_under_course_workspace(self):
         self.assertIn("document.getElementById('teacher-nav-media-1014')?.remove()", UI)

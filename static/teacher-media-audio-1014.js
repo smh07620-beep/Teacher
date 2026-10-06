@@ -15,13 +15,7 @@
   let approvedScriptsGeneration = 0;
   let approvedScriptsMaterialId = '';
 
-  const voiceLabel = value => ({
-    zf_001: '中文女聲 A', zf_002: '中文女聲 B', zf_003: '中文女聲 C', zf_004: '中文女聲 D',
-    zm_009: '中文男聲 A', zm_010: '中文男聲 B', zm_011: '中文男聲 C', zm_012: '中文男聲 D',
-    zf_xiaoxiao: '中文女聲 A', zf_xiaobei: '中文女聲 B', zf_xiaoni: '中文女聲 C',
-    zf_xiaoyi: '中文女聲 D', zm_yunxi: '中文男聲 A', zm_yunjian: '中文男聲 B',
-    zm_yunxia: '中文男聲 C', zm_yunyang: '中文男聲 D'
-  }[String(value || '')] || '中文教學聲音');
+  const voiceLabel = value => window.TeacherVoiceCatalog1026?.label?.(value) || '中文語音';
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
@@ -101,12 +95,17 @@
       window.dispatchEvent(new CustomEvent('teacher-media-audio-status-1014', {detail:{status:statusInfo}}));
       const voice = document.getElementById('teacher-audio-voice-1014');
       if (voice) {
+        const choices = Array.isArray(data.voiceOptions) && data.voiceOptions.length
+          ? data.voiceOptions
+          : (Array.isArray(data.voices) ? data.voices.map(id => ({id, label:voiceLabel(id)})) : []);
         voice.replaceChildren();
-        (Array.isArray(data.voices) ? data.voices : []).forEach(item => {
+        choices.forEach(item => {
+          const id = String(item?.id || '').trim();
+          if (!id) return;
           const option = document.createElement('option');
-          option.value = item;
-          option.textContent = voiceLabel(item);
-          if (item === data.defaultVoice) option.selected = true;
+          option.value = id;
+          option.textContent = String(item?.label || voiceLabel(id));
+          if (id === data.defaultVoice) option.selected = true;
           voice.appendChild(option);
         });
       }

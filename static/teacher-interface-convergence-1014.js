@@ -7,25 +7,6 @@
 (function () {
   'use strict';
 
-  const VOICE_LABELS = Object.freeze({
-    zf_001: '中文女聲 A',
-    zf_002: '中文女聲 B',
-    zf_003: '中文女聲 C',
-    zf_004: '中文女聲 D',
-    zm_009: '中文男聲 A',
-    zm_010: '中文男聲 B',
-    zm_011: '中文男聲 C',
-    zm_012: '中文男聲 D',
-    zf_xiaoxiao: '中文女聲 A',
-    zf_xiaobei: '中文女聲 B',
-    zf_xiaoni: '中文女聲 C',
-    zf_xiaoyi: '中文女聲 D',
-    zm_yunxi: '中文男聲 A',
-    zm_yunjian: '中文男聲 B',
-    zm_yunxia: '中文男聲 C',
-    zm_yunyang: '中文男聲 D',
-  });
-
   const state = {
     voiceSelectObserver: null,
     voiceSelect: null,
@@ -37,16 +18,18 @@
   };
 
   function voiceLabel(id) {
-    return VOICE_LABELS[String(id || '').trim()] || '中文語音';
+    return window.TeacherVoiceCatalog1026?.label?.(id) || '中文語音';
+  }
+
+  function voiceOptions() {
+    return window.TeacherVoiceCatalog1026?.options?.() || [];
   }
 
   function rewriteVoiceOptions(select) {
     if (!select) return;
     Array.from(select.options || []).forEach(option => {
       const id = String(option.value || '').trim();
-      if (!VOICE_LABELS[id]) return;
-      // The raw ID is deliberately retained as the submitted value. Only the
-      // teacher-facing label is translated; API/job diagnostics keep the ID.
+      if (!id) return;
       const label = voiceLabel(id);
       if (option.textContent !== label) option.textContent = label;
     });
@@ -54,12 +37,14 @@
 
   function rewriteVoiceResult(host) {
     if (!host) return;
+    const rows = voiceOptions();
+    if (!rows.length) return;
     host.querySelectorAll('p').forEach(node => {
       const original = String(node.textContent || '');
       if (!original.includes('Voice：')) return;
       let next = original;
-      Object.entries(VOICE_LABELS).forEach(([id, label]) => {
-        if (next.includes(id)) next = next.split(id).join(label);
+      rows.forEach(({id, label}) => {
+        if (id && next.includes(id)) next = next.split(id).join(label || '中文語音');
       });
       if (next !== original) node.textContent = next;
     });

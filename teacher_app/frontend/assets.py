@@ -61,6 +61,7 @@ ASSET_MANIFEST = {
             "/teacher-workspace-nav-fix-1014.js",
             "/teacher-media-script-1014.js",
             "/teacher-media-source-fix-1014.js",
+            "/teacher-voice-catalog-1026.js",
             "/teacher-media-audio-1014.js",
             "/teacher-media-subtitle-1014.js",
             "/teacher-ai-presentation-1016.js",

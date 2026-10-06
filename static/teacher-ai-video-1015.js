@@ -11,10 +11,7 @@
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
   const rendererLabel = value => ({'powerpoint-com':'Microsoft PowerPoint','libreoffice-headless':'LibreOffice','text-fallback':'安全文字備援'}[String(value || '')] || String(value || '尚未記錄'));
   const qualityLabel = value => ({ok:'品質通過',warning:'品質警告',error:'品質阻擋'}[String(value || '')] || '待檢查');
-  const voiceLabels = {
-    zf_001:'中文女聲 A', zf_002:'中文女聲 B', zf_003:'中文女聲 C', zf_004:'中文女聲 D',
-    zm_009:'中文男聲 A', zm_010:'中文男聲 B', zm_011:'中文男聲 C', zm_012:'中文男聲 D'
-  };
+  const voiceLabel = value => window.TeacherVoiceCatalog1026?.label?.(value) || '中文語音';
   const note = (text, error) => {
     const node = $('teacher-ai-video-status-1015');
     if (node) {
@@ -52,15 +49,16 @@
   function syncVoiceOptions(data) {
     const select = $('teacher-ai-video-voice-1015');
     if (!select) return;
+    window.TeacherVoiceCatalog1026?.update?.(data || {});
     const source = Array.isArray(data?.voiceOptions) && data.voiceOptions.length
       ? data.voiceOptions
-      : (Array.isArray(data?.voices) ? data.voices.map(id => ({id, label:voiceLabels[id] || id})) : []);
+      : (window.TeacherVoiceCatalog1026?.options?.() || []);
     const voices = source
-      .map(item => typeof item === 'string' ? {id:item, label:voiceLabels[item] || item} : item)
+      .map(item => typeof item === 'string' ? {id:item, label:voiceLabel(item)} : item)
       .filter(item => item && item.id);
     if (!voices.length) return;
     const current = select.value;
-    select.innerHTML = voices.map(item => '<option value="' + escape(item.id) + '">' + escape(item.label || voiceLabels[item.id] || item.id) + '</option>').join('');
+    select.innerHTML = voices.map(item => '<option value="' + escape(item.id) + '">' + escape(item.label || voiceLabel(item.id)) + '</option>').join('');
     if (voices.some(item => item.id === current)) select.value = current;
     else if (voices.some(item => item.id === data?.defaultVoice)) select.value = data.defaultVoice;
   }
@@ -323,7 +321,7 @@
     const panel = document.createElement('section');
     panel.id = 'teacher-ai-video-1015';
     panel.className = 'bg-white border border-indigo-200 rounded-2xl p-5 shadow-sm space-y-4';
-    panel.innerHTML = `<div class="flex flex-col lg:flex-row lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-indigo-700">AI VIDEO · F5</p><h4 class="text-lg font-black text-slate-950">🎬 來源內容 + 旁白 → 教學影片</h4><p class="mt-1 text-xs text-slate-500">可從已準備好的簡報開始，也可直接加入 PDF、Word、PPTX、圖片或貼入文字；不必先發布成正式教材。系統需要時會先準備可渲染畫面，再進入旁白、字幕、品質檢查與教師核准。</p></div><div class="flex flex-col items-start lg:items-end gap-2"><span id="teacher-ai-video-provider-1015" class="rounded-full bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-800">檢查服務中…</span><span id="teacher-ai-video-renderer-1015" class="text-[11px] font-bold text-slate-600">品質檢查中…</span></div></div><div class="grid md:grid-cols-3 gap-3"><label class="text-xs font-bold text-slate-600 md:col-span-2">影片畫面來源<div class="mt-1 flex flex-col gap-2"><select id="teacher-ai-video-presentation-1015" class="learning-input"><option value="">正在讀取已準備來源…</option></select><div class="flex flex-wrap gap-2"><button id="teacher-ai-video-source-author-1028" type="button" class="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-black text-white">＋ 加入 PDF／Word／圖片／文字</button></div></div><span class="mt-1 block text-[10px] text-slate-500">不強制綁正式教材。直接加入的檔案／文字會先保持為私人製作來源；只有完成教師核准後的可渲染版本才會列入正式影片生成。</span></label><div class="text-xs font-bold text-slate-600">旁白聲音<select id="teacher-ai-video-voice-1015" class="learning-input mt-1"><option value="zf_001">中文女聲 A</option><option value="zf_002">中文女聲 B</option><option value="zf_003">中文女聲 C</option><option value="zf_004">中文女聲 D</option><option value="zm_009">中文男聲 A</option><option value="zm_010">中文男聲 B</option><option value="zm_011">中文男聲 C</option><option value="zm_012">中文男聲 D</option></select><div class="mt-2 flex flex-wrap items-center gap-2"><button id="teacher-ai-video-voice-preview-1015" type="button" class="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-black text-indigo-700 disabled:opacity-40">▶ 試聽聲音</button><audio id="teacher-ai-video-voice-player-1015" hidden controls preload="none" class="h-8 max-w-full" aria-label="旁白聲音試聽"></audio></div><div id="teacher-ai-video-voice-health-1015" hidden class="hidden" role="status" aria-live="polite"></div></div></div><div class="flex flex-wrap items-center gap-3"><button id="teacher-ai-video-generate-1015" type="button" class="rounded-xl bg-indigo-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">🎬 建立教學影片</button><button id="teacher-ai-video-refresh-1015" type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-700">讀取影片版本</button><span id="teacher-ai-video-status-1015" class="text-xs text-slate-600">請選擇已準備影片畫面，或直接加入來源資料。</span></div><div id="teacher-ai-video-results-1015" class="space-y-2"></div><div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-900"><b>核准與發布：</b>影片會先以草稿建立；請完成預覽與品質檢查後，由授課教師核准並發布。</div>`;
+    panel.innerHTML = `<div class="flex flex-col lg:flex-row lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-indigo-700">AI VIDEO · F5</p><h4 class="text-lg font-black text-slate-950">🎬 來源內容 + 旁白 → 教學影片</h4><p class="mt-1 text-xs text-slate-500">可從已準備好的簡報開始，也可直接加入 PDF、Word、PPTX、圖片或貼入文字；不必先發布成正式教材。系統需要時會先準備可渲染畫面，再進入旁白、字幕、品質檢查與教師核准。</p></div><div class="flex flex-col items-start lg:items-end gap-2"><span id="teacher-ai-video-provider-1015" class="rounded-full bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-800">檢查服務中…</span><span id="teacher-ai-video-renderer-1015" class="text-[11px] font-bold text-slate-600">品質檢查中…</span></div></div><div class="grid md:grid-cols-3 gap-3"><label class="text-xs font-bold text-slate-600 md:col-span-2">影片畫面來源<div class="mt-1 flex flex-col gap-2"><select id="teacher-ai-video-presentation-1015" class="learning-input"><option value="">正在讀取已準備來源…</option></select><div class="flex flex-wrap gap-2"><button id="teacher-ai-video-source-author-1028" type="button" class="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-black text-white">＋ 加入 PDF／Word／圖片／文字</button></div></div><span class="mt-1 block text-[10px] text-slate-500">不強制綁正式教材。直接加入的檔案／文字會先保持為私人製作來源；只有完成教師核准後的可渲染版本才會列入正式影片生成。</span></label><div class="text-xs font-bold text-slate-600">旁白聲音<select id="teacher-ai-video-voice-1015" class="learning-input mt-1"><option value="">讀取可用聲音…</option></select><div class="mt-2 flex flex-wrap items-center gap-2"><button id="teacher-ai-video-voice-preview-1015" type="button" class="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-black text-indigo-700 disabled:opacity-40">▶ 試聽聲音</button><audio id="teacher-ai-video-voice-player-1015" hidden controls preload="none" class="h-8 max-w-full" aria-label="旁白聲音試聽"></audio></div><div id="teacher-ai-video-voice-health-1015" hidden class="hidden" role="status" aria-live="polite"></div></div></div><div class="flex flex-wrap items-center gap-3"><button id="teacher-ai-video-generate-1015" type="button" class="rounded-xl bg-indigo-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">🎬 建立教學影片</button><button id="teacher-ai-video-refresh-1015" type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-700">讀取影片版本</button><span id="teacher-ai-video-status-1015" class="text-xs text-slate-600">請選擇已準備影片畫面，或直接加入來源資料。</span></div><div id="teacher-ai-video-results-1015" class="space-y-2"></div><div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-900"><b>核准與發布：</b>影片會先以草稿建立；請完成預覽與品質檢查後，由授課教師核准並發布。</div>`;
     host.appendChild(panel);
     panel.addEventListener('click', videoAction);
     $('teacher-ai-video-generate-1015').addEventListener('click', generate);
@@ -357,6 +355,7 @@
     });
     window.addEventListener('teacher-media-audio-status-1014', event => {
       audioStatus = event.detail?.status || {};
+      syncVoiceOptions(audioStatus);
       renderVoiceHealth(audioStatus);
     });
     void loadStatus();
