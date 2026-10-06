@@ -553,8 +553,8 @@
   };
 
   window.deleteAdminMaterial = async function(id){
-    if (!confirm('確定刪除這份教材嗎？教材檔案與轉換圖片都會刪除，此操作無法復原。')) return;
-    const res = await fetch(`/api/slides/${id}`, {method:'DELETE',});
+    if (!confirm('確定刪除這份教材嗎？\n\n教材會從教材清單與課程關聯中移除；目前使用中的教材檔案／預覽也會依儲存規則刪除。此操作無法從教師工作區復原。')) return;
+    const res = await fetch(`/api/slides/${encodeURIComponent(id)}`, {method:'DELETE',credentials:'same-origin'});
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { alert(data.error || '刪除失敗'); return; }
     invalidateAdminMaterialsCache();
