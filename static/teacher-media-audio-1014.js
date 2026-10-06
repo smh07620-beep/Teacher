@@ -30,30 +30,19 @@
   function renderServiceHealth(data) {
     const host = document.getElementById('teacher-audio-health-1014');
     if (!host) return;
-    const worker = data?.worker || {};
-    const statusUnavailable = worker.statusUnavailable === true;
-    const httpsControl = worker.heartbeatTransport === 'https' || worker.controlPlaneReady === true;
-    const workerText = statusUnavailable
-      ? '🔴 AI Worker 狀態讀取失敗'
-      : !httpsControl && worker.databaseReady === false
-        ? '🔴 AI Worker DB 無法連線'
-        : !httpsControl && worker.databaseIdentityMatch === false
-          ? '🔴 AI Worker DB 不一致'
-          : worker.online ? '🟢 AI Worker 在線' : worker.seen ? '🔴 AI Worker 離線' : '🟠 AI Worker 尚未回報';
-    const kokoroText = statusUnavailable
-      ? '⚪ Kokoro 無法確認'
-      : worker.kokoroInstalled === true
-        ? '🟢 Kokoro 已安裝'
-        : worker.kokoroInstalled === false
-          ? '🔴 Kokoro 未安裝'
-          : worker.seen ? '🟠 Kokoro 能力未回報' : '⚪ Kokoro 等待 AI Worker';
-    const r2Text = data?.r2Ready ? '🟢 R2 正常' : '🔴 R2 未設定';
     const ready = !!data?.readyForPreview;
-    host.className = ready
-      ? 'rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-900'
-      : 'rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900';
-    const diagnostic = String(data?.diagnostic?.message || '').trim();
-    host.innerHTML = `<div class="font-black">AI 語音服務</div><div class="mt-1 flex flex-wrap gap-x-3 gap-y-1"><span>${workerText}</span><span>${kokoroText}</span><span>${r2Text}</span></div>${worker.lastSeen ? `<div class="mt-1 text-[10px] opacity-70">AI Worker 最後回報：${escapeHtml(new Date(worker.lastSeen).toLocaleString())}</div>` : ''}${diagnostic && !ready ? `<div class="mt-1 text-[10px] leading-4 font-bold">${escapeHtml(diagnostic)}</div>` : ''}`;
+    if (ready) {
+      host.hidden = true;
+      host.className = 'hidden';
+      host.replaceChildren();
+      return;
+    }
+    host.hidden = false;
+    host.className = 'rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900';
+    const message = data?.enabled === false
+      ? 'AI 語音目前尚未啟用；老師錄音／錄影功能仍可正常使用。'
+      : 'AI 語音目前暫時無法使用。請稍後再試；若持續發生，請至 Worker / Job 狀態查看服務狀況。';
+    host.innerHTML = `<div class="font-bold">⚠️ ${escapeHtml(message)}</div>`;
   }
 
   async function fetchJson(url, options = {}, timeoutMs = 15000) {
@@ -126,8 +115,8 @@
       renderServiceHealth(data);
       const provider = document.getElementById('teacher-audio-provider-1014');
       if (provider) provider.textContent = data.readyForPreview
-        ? 'AI 語音可用｜本機 Kokoro'
-        : data.enabled ? 'AI 語音待 AI Worker' : 'AI 語音服務尚未啟用';
+        ? 'AI 語音可使用'
+        : data.enabled ? 'AI 語音暫時不可用' : 'AI 語音服務尚未啟用';
       const formalJob = data.activeJob || null;
       setBusy(Boolean(formalJob));
       if (formalJob) {
@@ -253,7 +242,7 @@
       return;
     }
     if (!statusInfo?.readyForPreview) {
-      setStatus(statusInfo?.diagnostic?.message || 'AI 語音尚未就緒；請確認 AI Worker、Kokoro 與 R2 狀態。', 'error');
+      setStatus('AI 語音目前暫時無法使用；請稍後再試。若持續發生，請至 Worker / Job 狀態查看服務狀況。', 'error');
       return;
     }
     const script = scripts.find(item => item.id === scriptId);
@@ -310,7 +299,7 @@
         <div><p class="admin-page-eyebrow text-emerald-700">STEP 2 · NARRATION</p><h4 class="text-lg font-black text-slate-950">🎧 核准講稿 → 選聲音 → AI 配音</h4><p class="mt-1 text-xs text-slate-500">上一步講稿核准後會自動帶入這裡；選聲音、試聽並產生正式配音，不需要重新建立另一份內容。</p></div>
         <span id="teacher-audio-provider-1014" class="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-600">檢查服務中…</span>
       </div>
-      <div id="teacher-audio-health-1014" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">正在確認 AI Worker、Kokoro 與 R2…</div>
+      <div id="teacher-audio-health-1014" hidden class="hidden" role="status" aria-live="polite"></div>
       <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
         <label class="text-xs font-bold text-slate-600 xl:col-span-2">已核准講稿<select id="teacher-audio-script-1014" class="learning-input mt-1"><option value="">請先選擇來源教材</option></select></label>
         <label class="text-xs font-bold text-slate-600">AI 聲音<select id="teacher-audio-voice-1014" class="learning-input mt-1"><option value="">讀取中…</option></select><span id="teacher-audio-status-1014" class="mt-2 block text-xs text-slate-600" role="status" aria-live="polite">檢查 AI 語音服務中…</span></label>
