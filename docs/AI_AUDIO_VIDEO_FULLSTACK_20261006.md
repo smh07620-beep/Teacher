@@ -25,9 +25,12 @@ button, polls the real job, and inspects actual MP4 bytes from both preview and
 S3. FFmpeg must successfully decode the output and report a positive duration
 matching the persisted timeline. Hash, MIME, model/voice, renderer and segment
 metrics are verified. Both captions are read from their formal routes.
-The real UI MP4 link opens the stored video; Linux CI additionally requires
-browser playback and positive playback time. Bundled Windows Chromium may lack
-the OS H264 decoder; local runs still require real FFmpeg decoding.
+The real UI MP4 link opens the stored video; Linux CI runs this E contract in
+branded Google Chrome, asserts H.264/AAC codec support, verifies byte-range
+delivery, requires a positive browser duration, and requires playback time to
+advance. Bundled Windows Chromium may lack the OS H264 decoder; local Windows
+runs still require real FFmpeg decoding. Browser failure in Linux CI is not
+replaced by the FFmpeg result.
 Teacher approve/publish buttons create a receipt and a canonical material
 derivative, whose persisted version ledger is read again through the real API.
 
