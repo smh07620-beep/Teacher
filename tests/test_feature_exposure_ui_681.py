@@ -51,8 +51,10 @@ class FeatureExposureUi681Tests(unittest.TestCase):
 
     def test_stepper_preserves_files_and_supports_all_exam_choices(self):
         self.assertIn("state.files", self.wizard)
-        for choice in ("稍後建立", "從題庫選", "AI 草稿", "Blueprint"):
+        for choice in ("稍後建立", "自己出題", "AI 協助出題", "Blueprint（進階）"):
             self.assertIn(choice, self.wizard)
+        self.assertNotIn("從題庫選", self.wizard)
+        self.assertNotIn("ai:{label:'AI 草稿'", self.wizard)
         self.assertIn("MaterialUploadClient.enqueue", self.wizard)
         self.assertNotIn("/api/slides/upload", self.wizard)
 
