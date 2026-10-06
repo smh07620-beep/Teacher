@@ -192,6 +192,7 @@ function updateUIForActiveKey() {
     renderQuickJumpGrid();
     renderQuestions();
     bindVideoQuestionTimeHandlers();
+    void attachVideoQuestionSubtitles();
     installQuestionTimingObserver();
     updateProgressStats();
 }
@@ -251,6 +252,45 @@ function bindVideoQuestionTimeHandlers(){
         video.dataset.questionTimeBound='1';
         video.addEventListener('timeupdate',()=>handleVideoQuestionTime(Number(video.dataset.questionIndex||0),video,Number(video.dataset.questionPauseAt||0)));
     });
+}
+function questionVideoMaterialId(answerConfig={}){
+    const explicit=String(answerConfig.materialId||'').trim();
+    if(explicit)return explicit;
+    const mediaUrl=String(answerConfig.mediaUrl||'').trim();
+    if(!mediaUrl)return '';
+    try{
+        const parsed=new URL(mediaUrl,window.location.origin);
+        const match=parsed.pathname.match(/^\/view\/([^/?#]+)/);
+        return match?decodeURIComponent(match[1]):'';
+    }catch(_){return '';}
+}
+async function attachVideoQuestionSubtitles(){
+    const questions=allQuizData[currentCatKey]?.questions||[];
+    await Promise.all(questions.map(async(q,i)=>{
+        const video=document.getElementById(`question-video-${i}`);
+        if(!video||video.dataset.subtitleBound==='1')return;
+        const explicit=String(q.answerConfig?.subtitleUrl||'').trim();
+        const materialId=questionVideoMaterialId(q.answerConfig||{});
+        let subtitle={vttUrl:explicit,language:'zh-TW',label:'繁體中文字幕'};
+        if(!subtitle.vttUrl&&materialId){
+            try{
+                const response=await fetch(`/api/materials/${encodeURIComponent(materialId)}/subtitles/approved`,{credentials:'same-origin',cache:'no-store'});
+                if(response.ok){
+                    const data=await response.json().catch(()=>({}));
+                    subtitle=data.subtitle||{};
+                }
+            }catch(_){return;}
+        }
+        if(!subtitle?.vttUrl)return;
+        const track=document.createElement('track');
+        track.kind='subtitles';
+        track.src=subtitle.vttUrl;
+        track.srclang=String(subtitle.language||'zh-TW');
+        track.label=String(subtitle.label||'字幕');
+        track.default=true;
+        video.appendChild(track);
+        video.dataset.subtitleBound='1';
+    }));
 }
 function renderQuestions(){const c=document.getElementById('quiz-questions-list');c.innerHTML='';const quizList=allQuizData[currentCatKey].questions,userAnswers=userAnswersMap[currentCatKey],flags=flaggedQuestionsMap[currentCatKey],submitted=isSubmittedMap[currentCatKey];quizList.forEach((q,i)=>{const type=q.questionType||'choice',ans=userAnswers[i];const card=document.createElement('div');card.id=`question-card-${i}`;card.className=submitted?'bg-slate-50/60 p-5 sm:p-6 rounded-2xl border-2 border-slate-300 shadow-sm space-y-4 scroll-mt-24':'question-card-learning micro-card bg-white p-5 sm:p-6 border space-y-4 scroll-mt-28';let body='';if(type==='essay'){body=`<textarea ${submitted?'disabled':''} data-csp-input="selectEssay(${i},this.value)" rows="7" class="w-full min-h-[190px] border border-slate-300 rounded-2xl p-4 text-sm leading-7" placeholder="請在此完整填寫作答內容……">${escapeHtml(typeof ans==='string'?ans:'')}</textarea><p class="text-xs text-slate-400">問答題由考核者人工閱卷。</p>`;}else if(type==='fill'){body=`<input ${submitted?'disabled':''} value="${escapeHtml(typeof ans==='string'?ans:'')}" data-csp-input="selectFill(${i},this.value)" class="fill-answer" placeholder="請輸入答案"><p class="text-xs text-slate-400">請依題意填入關鍵字或數值。</p>`;}else{(q.options||[]).forEach((opt,j)=>{const chosen=type==='multi'?(Array.isArray(ans)&&ans.includes(j)):ans===j;let cls='hover:bg-slate-50 cursor-pointer';if(submitted)cls=chosen?'border-2 border-teal-400 bg-teal-50 font-bold':'opacity-60 bg-slate-50';body+=`<label class="choice-learning flex items-start gap-3 p-4 border ${cls}"><input type="${type==='multi'?'checkbox':'radio'}" ${type==='multi'?'class="multi-check mt-1"':'class="mt-1"'} name="question-${i}" ${chosen?'checked':''} ${submitted?'disabled':''} data-csp-change="${type==='multi'?`selectMulti(${i},${j},this.checked)`:`selectOption(${i},${j})`}"><span class="text-sm font-medium"><b class="mr-1">${String.fromCharCode(65+j)}.</b>${escapeHtml(opt)}</span></label>`;});}const videoLocked=!!q.answerConfig?.mediaUrl&&Number(q.answerConfig?.pauseAt||0)>0&&!submitted&&!answerHasValue(ans);card.innerHTML=`<div class="flex flex-wrap justify-between gap-2 border-b border-slate-100 pb-3"><div class="flex items-center gap-2 flex-wrap"><span class="w-8 h-8 rounded-lg bg-[#0b3342] text-white flex items-center justify-center font-black">${i+1}</span>${blindTestMode?'':`<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-800">${escapeHtml(q.category||q.tag||'一般')}</span>`}<span class="question-type-pill ${type==='multi'?'bg-violet-100 text-violet-800':type==='fill'?'bg-sky-100 text-sky-800':type==='essay'?'bg-amber-100 text-amber-800':'bg-slate-100 text-slate-600'}">${q.answerConfig?.mediaUrl?'影片・':''}${questionTypeLabel(type)}</span><span id="answer-status-${i}" class="answer-status-pill ${answerHasValue(ans)?'answered':'unanswered'}">${answerHasValue(ans)?'✓ 已作答':'○ 未作答'}</span></div><button data-csp-click="toggleFlag(${i})" id="flag-btn-${i}" class="text-xs px-2.5 py-1 rounded-lg border border-slate-200">${flags[i]?'🚩 取消標記':'🏳️ 標記此題'}</button></div>${renderQuestionMedia(q,i,submitted)}<div id="video-answer-${i}" class="${videoLocked?'hidden ':''}space-y-4"><h3 class="text-base sm:text-lg font-black leading-relaxed">${escapeHtml(q.question)}</h3><div class="space-y-2.5">${body}</div></div>`;c.appendChild(card);});const b=document.getElementById('submit-btn');if(submitted){b.disabled=true;b.className='w-full sm:w-auto bg-slate-400 text-white font-bold px-8 py-3 rounded-xl shadow cursor-not-allowed';b.textContent='🔒 本分頁考卷已繳交';}else{b.disabled=false;b.className='w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white font-bold px-8 py-3 rounded-xl shadow-lg';b.textContent='📋 提交試卷結算成績';}updateQuickJumpButtons();}
 
