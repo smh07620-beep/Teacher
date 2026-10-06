@@ -28,9 +28,10 @@ from teacher_app.storage import providers  # noqa: E402
 app = create_app()
 password = os.environ["TEACHER_CI_BROWSER_PASSWORD"]
 if not auth_repository.find_user("e2eteacher"):
-    accounts.create_account({"username": "e2eteacher", "password": password, "name": "E2E 臨床教師", "empId": "E2ET01", "role": "clinical_teacher", "roles": ["clinical_teacher"], "preferredArea": "internal", "preferredGroup": "grpBio"})
+    accounts.create_account({"username": "e2eteacher", "password": password, "name": "E2E 臨床教師", "empId": "E2ET01", "role": "clinical_teacher", "roles": ["clinical_teacher", "group_leader"], "preferredArea": "internal", "preferredGroup": "grpBio"})
 
-source = "E2E 教材：檢體收件後應核對病人識別、檢體種類與採檢時間。異常要依 SOP 回報。\n"
+accounts.create_account({"username": "e2estudent", "password": password, "name": "E2E 學員", "empId": "E2ES01", "role": "student", "roles": ["student"], "preferredArea": "internal", "preferredGroup": "grpBio"})
+source = "E2E 教材：檢體收件後應核對病人識別、檢體種類與採檢時間。異常要依 SOP 回報。檢驗流程需注意檢體品質、實驗室安全及品質控制，每次作業應留下可追溯紀錄。遇到不符合收件標準的檢體，需聯絡採檢單位並记录處理結果。\n"
 key = "materials/e2e-source/source.txt"
 providers.r2_client().put_object(Bucket=providers.R2_BUCKET_NAME, Key=key, Body=source.encode("utf-8"), ContentType="text/plain")
 materials.insert_material({"id": "e2e-source", "filename": "e2e-source.txt", "title": "E2E 多來源教材", "description": "deterministic full-stack source", "category": "", "group_key": "grpBio", "training_area": "internal", "course_id": "", "folder": "e2e-source", "page_count": 1, "date_added": "2026-10-06", "storage_filename": "e2e-source.txt", "storage_backend": "r2", "storage_key": key, "slides_prefix": "", "storage_meta": "{}", "material_type": "standard", "atlas_meta": "{}", "active": True}, ignore_conflict=True)

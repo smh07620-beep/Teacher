@@ -43,11 +43,18 @@ def install() -> None:
     if not enabled():
         raise RuntimeError("deterministic provider is restricted to isolated E2E CI")
 
+    os.environ["GROQ_API_KEY"] = "isolated-e2e-not-a-real-key"
+    os.environ["AI_PROVIDER"] = "groq"
+
     from teacher_app.assessments import ai_runtime
     from teacher_app.materials import ai_video_runtime, media_audio_runtime, media_script_runtime
 
     def questions(materials, *, count=1, qtype="choice", **_kwargs):
         source = materials[0] if materials else {}
+        chunks = []
+        for material in materials:
+            text, _ = ai_runtime.extract_material_text_for_ai(material)
+            chunks.extend(ai_runtime.build_retrieval_chunks(material, text))
         media_url = f"/view/{source.get('id', '')}" if str(qtype).startswith("video_") else ""
         question_type = "video" if media_url else "choice"
         result = []
@@ -63,14 +70,14 @@ def install() -> None:
                 "difficulty": "standard",
                 "explanation": "由 deterministic provider 根據已選教材建立。",
             })
-        return result, str(source.get("title") or "E2E 教材"), ["text" for _ in materials]
+        return ai_runtime.attach_question_provenance(result, chunks)
 
     ai_runtime.ai_question_is_configured = lambda _settings=None: True
     # Keep the canonical provider key so the production fallback dispatcher
     # still invokes the real runtime contract; only inference is replaced.
     ai_runtime.active_ai_provider = lambda _settings=None: "groq"
     ai_runtime.ai_model_name = lambda _settings=None: "deterministic-e2e-v1"
-    ai_runtime.generate_ai_questions_from_materials = questions
+    ai_runtime.generate_groq_multisource_candidates = questions
 
     def text_provider(_settings, _provider, _prompt, progress_callback=None):
         if progress_callback:

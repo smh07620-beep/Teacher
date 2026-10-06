@@ -54,7 +54,7 @@
     'renderMaterialJobs','renderStorageStatus','resetAdminUserPassword','resetCurrentQuiz',
     'retryMaterialJob','reviewCurrentExam','saveAdminUserEditor','saveExamSettings','saveQuizMaterialLinks',
     'openExamRemediationMaterials','restartExamAfterRemediation',
-    'scrollToFirstFlagged','scrollToFirstUnanswered','scrollToReview','searchTeachingResources','selectEssay','selectFill',
+    'scrollToFirstFlagged','scrollToFirstUnanswered','scrollToReview','searchTeachingResources','selectEssay','selectFill','selectOption','selectMulti',
     'selectPgyAssessmentType','setMediaRate','setMediaSize','setMediaVolume','slideViewerNext','slideViewerPrev',
     'slideViewerResetZoom','slideViewerZoom','submitEssayReview','submitPgyAssessment','submitQuiz','switchAdminWorkspace',
     'switchDynamicCategory','switchLearningModule','switchTeacherMode','syncExamDrawModeUI','syncGlobalLearningSearch',
