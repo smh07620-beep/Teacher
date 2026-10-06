@@ -20,8 +20,9 @@ class CourseWizardFlow69Tests(unittest.TestCase):
         self.assertNotIn('X-Admin-Key', self.source)
 
     def test_wizard_preserves_four_clear_steps(self):
-        for marker in ('課程設定', '教材', '評量與 AI', '確認發布'):
+        for marker in ('課程設定', '教材＋AI', '評量／考卷', '確認發布'):
             self.assertIn(marker, self.source)
+        self.assertNotIn("const steps=['課程設定','教材','評量與 AI','確認發布']", self.source)
         self.assertIn("state.files", self.source)
         self.assertIn("state.existing", self.source)
         self.assertIn(">上一步</button>", self.source)
@@ -39,16 +40,27 @@ class CourseWizardFlow69Tests(unittest.TestCase):
             "AI PowerPoint",
             "講稿與配音",
             "AI 教學影片",
-            "TeacherAIMediaStudio1018?.showMode",
+            "openTeacherCourseMediaAuthoring",
+            "courseWizard681OpenAiAuthoring",
+            "teacher-ai-presentation-published",
+            "attachAiProducts",
         ):
             self.assertIn(marker, self.source)
 
-    def test_exam_modes_have_explicit_next_action(self):
-        for marker in ("later:{label:'稍後建立'", "bank:{label:'從題庫選'", "ai:{label:'AI 草稿'", "blueprint:{label:'Blueprint'"):
+    def test_exam_modes_match_guided_course_authoring_contract(self):
+        for marker in (
+            "later:{label:'稍後建立'",
+            "bank:{label:'自己出題'",
+            "ai:{label:'AI 協助出題'",
+            "blueprint:{label:'Blueprint（進階）'",
+            "ensureAssessmentDraft",
+            "openTeacherCourseAssessmentAuthoring",
+            "courseWizard681OpenAssessmentAuthoring",
+        ):
             self.assertIn(marker, self.source)
-        self.assertIn("courseWizard681Continue", self.source)
-        self.assertIn("switchAdminWorkspace('assessment',true)", self.source)
-        self.assertIn('前往題庫與考卷', self.source)
+        self.assertNotIn("bank:{label:'從題庫選'", self.source)
+        self.assertNotIn("ai:{label:'AI 草稿'", self.source)
+        self.assertIn("進階：Blueprint／題型配額", self.source)
 
     def test_created_course_links_existing_and_queues_new_materials(self):
         self.assertIn("courseId:course.id", self.source)
@@ -69,15 +81,29 @@ class CourseWizardFlow69Tests(unittest.TestCase):
         self.assertIn('教材上傳未完整完成', self.source)
         self.assertIn('error?.message', self.source)
 
-    def test_exam_is_created_as_skeleton_without_auto_publish(self):
-        create = self.source[self.source.index('async function create()'):self.source.index('async function continueToAssessment()')]
+    def test_course_checkpoint_does_not_create_exam_until_assessment_step(self):
+        create = self.source[self.source.index('async function create()'):self.source.index('async function ensureCourseDraft()')]
         self.assertIn("api('/api/course-bundles'", create)
-        self.assertIn('examMode:state.examMode', create)
+        self.assertIn("examMode:'later',examTitle:''", create)
+        self.assertNotIn('examMode:state.examMode', create)
+        self.assertIn("api('/api/quiz-categories'", self.source)
+        self.assertIn("courseId:state.course.id", self.source)
         self.assertIn('"draft"', self.bundle)
         self.assertIn('"active": False', self.bundle)
         self.assertNotIn('/publish', create)
-        self.assertNotIn('publishExam', create)
-        self.assertNotIn('publishQuiz', create)
+
+    def test_first_step_waits_for_rbac_before_claiming_assignment_denial(self):
+        self.assertIn("assignPermission:null", self.source)
+        self.assertIn("TeacherRBAC681Ready", self.source)
+        self.assertIn("正在確認你的學習指派權限", self.source)
+        self.assertIn("resolveAssignmentPermission", self.source)
+
+    def test_publish_is_only_step_four_and_does_not_launch_ai_after_publish(self):
+        self.assertIn("courseWizard681CreateAndPublish", self.source)
+        self.assertIn("確認並正式發布", self.source)
+        publish = self.source[self.source.index('async function publishAndOpenCourseWorkspace()'):self.source.index('async function openCourseWorkspace()')]
+        self.assertNotIn("TeacherAIMediaStudio1018?.showMode", publish)
+        self.assertNotIn("openMedia", publish)
 
 
 if __name__ == '__main__':
