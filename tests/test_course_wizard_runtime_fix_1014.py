@@ -24,8 +24,10 @@ class CourseWizardRuntimeFix1014Tests(unittest.TestCase):
             self.assertIn(marker, self.guard)
 
     def test_finish_action_avoids_double_course_hub_render(self):
-        self.assertIn("switchAdminWorkspace('course-materials',true)", self.guard)
+        self.assertIn("const canonical=window.courseWizard681OpenCourse", self.guard)
+        self.assertIn("return await canonical()", self.guard)
         self.assertIn("Course Wizard finish navigation failed", self.guard)
+        self.assertIn("window.location.assign('/system?module=course-materials')", self.guard)
         self.assertNotIn("renderAdminCourseMaterialHub", self.guard)
 
     def test_legacy_duplicate_worker_failure_panel_is_suppressed(self):
