@@ -490,6 +490,8 @@ test('AI PowerPoint accepts pasted SOP text as a private authoring source', asyn
   });
 
   await page.addScriptTag({ path: asset('teacher-ai-material-1014.js') });
+  await page.locator('#teacher-ai-material-paste-details-1014 > summary').click();
+  await expect(page.locator('#teacher-ai-material-paste-1014')).toBeVisible();
   await page.locator('#teacher-ai-material-paste-title-1014').fill('急件 SOP');
   await page.locator('#teacher-ai-material-paste-1014').fill('檢體收到後先確認病人識別，再依序完成離心、分析與異常結果複核。');
   await page.locator('#teacher-ai-material-paste-add-1014').click();
