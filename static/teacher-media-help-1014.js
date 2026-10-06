@@ -18,22 +18,14 @@
 
   function install() {
     const media = document.getElementById('teacher-media-production-1014');
-    if (!media || document.getElementById('teacher-media-help-toggle-1014')) return Boolean(media);
+    const shell = document.getElementById('teacher-media-studio-shell-1018');
+    if (!media || !shell) return false;
+    if (document.getElementById('teacher-media-help-toggle-1014')) return true;
 
-    const summary = [...media.children].find(node => {
-      const title = node.querySelector?.('h4')?.textContent || '';
-      return title.includes('教材媒體製作');
-    });
-    if (!summary) return false;
-
-    const children = [...summary.children];
-    const header = children[0];
-    if (!header) return false;
-
-    const titleBox = header.querySelector('h4')?.parentElement;
-    const lead = titleBox?.querySelector('p.mt-1');
+    const lead = shell.querySelector('h4')?.parentElement?.querySelector('p.mt-1');
     if (lead) lead.style.setProperty('display', 'none', 'important');
 
+    const actions = shell.querySelector('.teacher-media-shell-actions-1014') || shell;
     const button = document.createElement('button');
     button.id = 'teacher-media-help-toggle-1014';
     button.type = 'button';
@@ -41,31 +33,24 @@
     button.setAttribute('aria-controls', 'teacher-media-help-panel-1014');
     button.setAttribute('aria-expanded', 'false');
     button.textContent = '？ 使用說明與架設需求';
+    actions.prepend(button);
 
-    const chip = header.querySelector('.admin-workspace-chip');
-    if (chip) chip.replaceWith(button);
-    else header.appendChild(button);
-
-    const panel = document.createElement('div');
+    document.getElementById('teacher-media-help-panel-1014')?.remove();
+    const panel = document.createElement('section');
     panel.id = 'teacher-media-help-panel-1014';
-    panel.className = 'space-y-4 rounded-2xl border border-cyan-100 bg-cyan-50/40 p-4';
+    panel.className = 'rounded-2xl border border-cyan-100 bg-cyan-50/40 p-4';
     panel.innerHTML = `
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-xs leading-5 text-slate-700">
-        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">AI 講稿</b><p class="mt-1">是真功能：從已上傳教材抽取文字，建立 AI 草稿，再由老師修改與核准。課程建立畫面的「AI 草稿」是 AI 出題，不是這個講稿功能。</p></div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">免費 AI 語音</b><p class="mt-1">只接受老師已核准的講稿。語音由院內 Windows AI Worker 使用本機 Kokoro 產生，不使用 OpenAI TTS，也不產生每次生成的 TTS API 費用。</p></div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">老師錄音／錄影</b><p class="mt-1">是真功能：使用瀏覽器麥克風、攝影機或螢幕分享錄製。瀏覽器需允許權限，正式上傳沿用 Browser → R2 → Worker。</p></div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">目前沒有自動 AI 影片</b><p class="mt-1">現階段的影片功能是老師自行錄影或錄製螢幕，不是 AI 自動生成虛擬講師影片。</p></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">AI PowerPoint</b><p class="mt-1">加入檔案、既有教材或貼入文字，產生大綱後由教師修正與核准，再產生正式簡報。</p></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">講稿與配音</b><p class="mt-1">講稿建立、教師核准、Kokoro 試聽與正式配音放在同一條流程，不需要跨頁搬資料。</p></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">老師自己錄影</b><p class="mt-1">可使用麥克風、攝影機或螢幕分享；瀏覽器需允許權限，完成後沿用 Browser → R2 → Worker。</p></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-slate-900">AI 教學影片</b><p class="mt-1">可由核准 PowerPoint／來源內容建立影片，再校正字幕與預覽，最後由教師確認發布。</p></div>
       </div>
-      <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
-        <b>架設需求</b><br>
-        1. AI 講稿／AI 出題：AI_EXTERNAL_PROCESSING_ENABLED=true，並設定免費 AI_PROVIDER 對應金鑰（目前預設 Groq 時使用 GROQ_API_KEY）。<br>
-        2. 免費 AI 語音：AI_TTS_PROVIDER=kokoro；本機 AI Worker 安裝 requirements-ai-worker.txt，並設定既有 R2_ACCOUNT_ID、R2_ACCESS_KEY_ID、R2_SECRET_ACCESS_KEY、R2_BUCKET_NAME。<br>
-        3. 背景處理：本地 AI Worker 必須持續執行 ai_question_worker.py；Web 只排工作，不執行長時間 AI 任務。<br>
-        4. 真人錄音／錄影：使用 HTTPS 網站，瀏覽器允許麥克風／攝影機／螢幕分享即可；上傳仍需要既有 R2/Worker 流程正常。
-      </div>`;
-
-    children.slice(1).forEach(node => panel.appendChild(node));
-    summary.appendChild(panel);
+      <details class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+        <summary class="cursor-pointer font-black">架設／技術需求</summary>
+        <div class="mt-2">AI 工作由院內 AI Worker 執行；Kokoro、FFmpeg、R2 與 AI provider 狀態請由系統管理／Worker 狀態確認。一般教師只需要依畫面完成來源、審核與發布，不需要操作技術設定。</div>
+      </details>`;
+    shell.insertAdjacentElement('afterend', panel);
     setPanelOpen(button, panel, false);
     button.addEventListener('click', () => setPanelOpen(button, panel, panel.hidden));
     return true;
