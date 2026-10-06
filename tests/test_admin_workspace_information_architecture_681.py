@@ -60,7 +60,7 @@ class AdminWorkspaceInformationArchitecture681Tests(unittest.TestCase):
     def test_assessment_workspace_is_list_first_with_scope_and_status_summary(self):
         for marker in (
             'ASSESSMENT & AUTHORING WORKSPACE',
-            '評量與出題 Workspace',
+            '評量與追蹤 Workspace',
             'id="assessment-workspace-create-exam"',
             'id="admin-quiz-scope-78"',
             'id="admin-quiz-total-count"',
