@@ -289,12 +289,18 @@ function inferPdfReaderMode(entry = {}) {
 
     if (String(entry.materialType || '').toLowerCase() === 'sop') return 'document';
 
+    // Word-like documents are intentionally paged. This preserves the source
+    // document's page boundaries and must not depend on storage backend or
+    // whether the Worker produced a single PDF or page images.
+    const sourceName = String(entry.filename || entry.storageFilename || '').split(/[?#]/)[0].toLowerCase();
+    if (/\.(doc|docx|odt)$/.test(sourceName)) return 'paged_document';
+    if (explicitHints.some(value => ['paged_document', 'paged-document', 'document_paged', 'word'].includes(value))) return 'paged_document';
+
     // A converted PPT/PPTX may carry generic PDF preview metadata. Preserve the
     // original teaching format: presentation evidence must win over "pdf".
     if (explicitHints.some(value => ['presentation', 'slides', 'powerpoint', 'ai_presentation', 'ai-powerpoint'].includes(value))) return 'presentation';
     if (entry.sourcePresentationId || entry.presentationId || meta.sourcePresentationId || meta.presentationId) return 'presentation';
 
-    const sourceName = String(entry.filename || entry.storageFilename || '').split(/[?#]/)[0].toLowerCase();
     if (/\.(ppt|pptx|pps|ppsx|odp)$/.test(sourceName)) return 'presentation';
 
     const title = String(entry.title || '').toLowerCase();
@@ -398,7 +404,12 @@ function openSlide(id) {
 
     if (!images.length) { alert("此教材尚無可閱讀頁面，請聯絡教師確認轉檔狀態。"); return; }
 
-    openSlideViewer({ images, title: entry.title, materialId: id });
+    openSlideViewer({
+        images,
+        title: entry.title,
+        materialId: id,
+        readerMode: inferPdfReaderMode(entry)
+    });
 
 }
 
@@ -423,7 +434,12 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
     const mode = previewUrl ? 'pdf' : 'images';
 
     const total = mode === 'pdf' ? Math.max(1, Number(pageCount||1)) : images.length;
-    const normalizedReaderMode = mode === 'pdf' && readerMode !== 'presentation' ? 'document' : 'presentation';
+    const requestedReaderMode = String(readerMode || 'presentation').trim().toLowerCase();
+    const normalizedReaderMode = requestedReaderMode === 'presentation'
+        ? 'presentation'
+        : requestedReaderMode === 'paged_document'
+            ? 'paged_document'
+            : (mode === 'pdf' ? 'document' : 'paged_document');
 
     slideViewerState = { images, previewUrl, pageCount: total, mode, readerMode: normalizedReaderMode, index: teachingReadPage(materialId, total), title, zoom: 1, materialId };
     window.slideViewerState = slideViewerState;
@@ -435,20 +451,24 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
     const subtitle=document.getElementById('slide-viewer-subtitle');
 
     const presentationPdf = mode === 'pdf' && normalizedReaderMode === 'presentation';
+    const pagedDocument = normalizedReaderMode === 'paged_document';
+    const pagedDocumentPdf = mode === 'pdf' && pagedDocument;
     const documentPdf = mode === 'pdf' && normalizedReaderMode === 'document';
+    const pagedReader = normalizedReaderMode === 'presentation' || pagedDocument;
 
     shell?.classList.toggle('single-preview-mode', mode==='pdf');
     shell?.classList.toggle('presentation-preview-mode', presentationPdf);
+    shell?.classList.toggle('paged-document-preview-mode', pagedDocument);
     shell?.classList.toggle('document-preview-mode', documentPdf);
 
-    // Presentation PDFs are rendered as one cached page image at a time.
-    // Only true document PDFs stay inside the native PDF iframe.
+    // Presentation and Word-like paged PDFs are rendered one page at a time.
+    // Only true continuous documents stay inside the native PDF iframe.
     canvas?.classList.toggle('hidden', documentPdf);
 
     pdf?.classList.toggle('hidden', !documentPdf);
 
     const viewerImage=document.getElementById('slide-viewer-image');
-    if(presentationPdf){
+    if(presentationPdf || pagedDocumentPdf){
         viewerImage?.removeAttribute('src');
         if(viewerImage) viewerImage.style.visibility='hidden';
     }else if(viewerImage){
@@ -457,11 +477,13 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
 
     document.querySelectorAll('[data-slide-image-tool]').forEach(el=>el.classList.toggle('hidden',documentPdf));
 
-    if(subtitle) subtitle.textContent = presentationPdf
+    if(subtitle) subtitle.textContent = normalizedReaderMode === 'presentation'
         ? '教學專用・不得轉發、轉載、販售｜投影片模式・請用左右箭頭或鍵盤 ← → 翻頁'
-        : documentPdf
-            ? '教學專用・不得轉發、轉載、販售｜文件模式・可上下捲動閱讀'
-            : '教學專用・不得轉發、轉載、販售｜原始教材不提供下載';
+        : pagedDocument
+            ? '教學專用・不得轉發、轉載、販售｜Word 文件分頁模式・可用上一頁／下一頁或頁碼跳轉'
+            : documentPdf
+                ? '教學專用・不得轉發、轉載、販售｜文件模式・可上下捲動閱讀'
+                : '教學專用・不得轉發、轉載、販售｜原始教材不提供下載';
 
     renderSlideThumbs();
 
@@ -554,7 +576,7 @@ function initPdfPresentationWheel(){
     if(!stage||stage.dataset.presentationWheelReady==='1')return;
     stage.dataset.presentationWheelReady='1';
     stage.addEventListener('wheel',event=>{
-        if(slideViewerState.mode!=='pdf'||slideViewerState.readerMode!=='presentation')return;
+        if(slideViewerState.readerMode!=='presentation'&&slideViewerState.readerMode!=='paged_document')return;
         event.preventDefault();
         event.stopPropagation();
     },{passive:false});
@@ -627,7 +649,7 @@ function updateSlideViewerPresentationPage(page,total){
             if(serial!==slidePresentationImageSerial)return;
             img.onerror=()=>{
                 const hint=document.getElementById('reader-learning-context');
-                if(hint)hint.textContent='投影片頁面載入失敗，請再試一次。';
+                if(hint)hint.textContent=slideViewerState.readerMode==='paged_document'?'Word 文件頁面載入失敗，請再試一次。':'投影片頁面載入失敗，請再試一次。';
             };
             img.onload=()=>{
                 if(serial!==slidePresentationImageSerial)return;
@@ -635,7 +657,7 @@ function updateSlideViewerPresentationPage(page,total){
                 applySlideZoom();
             };
             img.src=wanted;
-            img.alt=`投影片第 ${page} 頁`;
+            img.alt=slideViewerState.readerMode==='paged_document'?`Word 文件第 ${page} 頁`:`投影片第 ${page} 頁`;
             prefetchPresentationPage(page+1);
             prefetchPresentationPage(page-1);
         };
@@ -648,7 +670,7 @@ function updateSlideViewerPresentationPage(page,total){
     loader.onerror=()=>{
         if(serial!==slidePresentationImageSerial)return;
         const hint=document.getElementById('reader-learning-context');
-        if(hint)hint.textContent='投影片頁面載入失敗，仍保留目前頁面，可再試一次。';
+        if(hint)hint.textContent=slideViewerState.readerMode==='paged_document'?'Word 文件頁面載入失敗，仍保留目前頁面，可再試一次。':'投影片頁面載入失敗，仍保留目前頁面，可再試一次。';
     };
     loader.src=wanted;
     updateViewerNav(total);
@@ -666,8 +688,10 @@ function updateSlideViewerPdf(){
 
     const base=slideViewerState.previewUrl;
     const presentationMode=slideViewerState.readerMode==='presentation';
+    const pagedDocumentMode=slideViewerState.readerMode==='paged_document';
+    const pageByPageMode=presentationMode||pagedDocumentMode;
 
-    if(presentationMode){
+    if(pageByPageMode){
         // Never reload Chrome's native PDF viewer for slide decks. It paints
         // page 1 during every initialization, causing the visible flash/refresh
         // loop reported by learners. Use a server-rendered cached page image.
@@ -695,7 +719,11 @@ function updateSlideViewerPdf(){
 
     const hint=document.getElementById('reader-learning-context');
 
-    if(hint&&!hint.textContent) hint.textContent=presentationMode?'正在載入投影片頁面…':'正在載入文件 PDF…';
+    if(hint&&!hint.textContent) hint.textContent=presentationMode
+        ? '正在載入投影片頁面…'
+        : pagedDocumentMode
+            ? '正在載入 Word 文件頁面…'
+            : '正在載入文件 PDF…';
 
 }
 
