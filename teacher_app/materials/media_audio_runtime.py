@@ -62,6 +62,7 @@ LEGACY_VOICE_ALIASES = {
 _KOKORO_PIPELINE = None
 _KOKORO_PIPELINE_KEY = ""
 _KOKORO_PIPELINE_LOCK = threading.Lock()
+_TTS_CACHE_CLEANED_AT = 0.0
 
 
 def _repo_id() -> str:
@@ -94,6 +95,37 @@ def _ensure_hf_home() -> str:
     resolved = str(cache_path)
     os.environ["HF_HOME"] = resolved
     return resolved
+
+
+def _tts_cache_root() -> Path:
+    configured = str(os.environ.get("KOKORO_CACHE_DIR") or "").strip()
+    if configured:
+        return Path(os.path.expandvars(configured)).expanduser()
+    return Path(_ensure_hf_home()).parent / "kokoro-tts"
+
+
+def _normalized_text(text: str) -> str:
+    return " ".join(str(text or "").replace("\x00", " ").split())
+
+
+def tts_cache_key(text: str, *, repo_id: str, voice: str, speed: float) -> str:
+    payload = [repo_id, _voice(voice), round(float(speed), 2), _normalized_text(text)]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _clean_tts_cache(root: Path) -> None:
+    global _TTS_CACHE_CLEANED_AT
+    now = dt.datetime.now().timestamp()
+    if now - _TTS_CACHE_CLEANED_AT < 3600:
+        return
+    _TTS_CACHE_CLEANED_AT = now
+    try:
+        expiry = now - max(1, min(90, int(os.environ.get("KOKORO_TTS_CACHE_DAYS", "14") or 14))) * 86400
+        for path in root.glob("*.wav"):
+            if path.stat().st_mtime < expiry:
+                path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _pipeline_device(pipeline) -> str:
@@ -166,6 +198,11 @@ def _kokoro_pipeline(repo_id: str):
     with _KOKORO_PIPELINE_LOCK:
         if _KOKORO_PIPELINE is not None and _KOKORO_PIPELINE_KEY == key:
             return _KOKORO_PIPELINE
+        try:
+            import torch
+            torch.set_num_threads(max(1, min(4, int(os.environ.get("KOKORO_TORCH_THREADS", "2") or 2))))
+        except Exception:
+            pass
         from kokoro import KPipeline
         _KOKORO_PIPELINE = KPipeline(lang_code="z", repo_id=repo_id)
         _KOKORO_PIPELINE_KEY = key
@@ -337,11 +374,20 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
     if model_label == "Kokoro-82M":
         model_label = DEFAULT_MODEL
     speed = _tts_speed()
+    normalized = _normalized_text(text)
+    cache_root = _tts_cache_root()
+    cache_path = cache_root / f"{tts_cache_key(normalized, repo_id=repo_id, voice=voice, speed=speed)}.wav"
+    _clean_tts_cache(cache_root)
+    try:
+        if cache_path.is_file() and cache_path.stat().st_size >= 1024:
+            return cache_path.read_bytes(), model_label
+    except OSError:
+        pass
 
     try:
         pipeline = _kokoro_pipeline(repo_id)
         chunks = []
-        for result in pipeline(text, voice=voice, speed=speed, split_pattern=r"\n+"):
+        for result in pipeline(normalized, voice=voice, speed=speed, split_pattern=r"\n+"):
             audio = getattr(result, "audio", None)
             if audio is None and isinstance(result, (tuple, list)) and len(result) >= 3:
                 audio = result[2]
@@ -376,6 +422,16 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
     audio_bytes = buffer.getvalue()
     if len(audio_bytes) < 1024:
         raise RuntimeError("本機 Kokoro 沒有回傳有效音訊。")
+    try:
+        cache_root.mkdir(parents=True, exist_ok=True)
+        temporary = cache_path.with_name(f"{cache_path.name}.{os.getpid()}.tmp")
+        temporary.write_bytes(audio_bytes)
+        os.replace(temporary, cache_path)
+    except OSError:
+        try:
+            temporary.unlink(missing_ok=True)
+        except (OSError, UnboundLocalError):
+            pass
     return audio_bytes, model_label
 
 
@@ -575,4 +631,5 @@ __all__ = [
     "preview_url",
     "preload_kokoro",
     "public_status",
+    "tts_cache_key",
 ]

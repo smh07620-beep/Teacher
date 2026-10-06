@@ -86,6 +86,12 @@ def sanitize_render_metrics(value: Mapping[str, Any] | None) -> dict[str, Any]:
             result = 0
         return max(0, min(upper, result))
 
+    timings = {}
+    for name in ("slideRenderMs", "ttsMs", "segmentEncodeMs", "concatMs", "publishMs"):
+        try:
+            timings[name] = max(0, min(10**9, int(dict(payload.get("stageTimingsMs") or {}).get(name) or 0)))
+        except (TypeError, ValueError):
+            timings[name] = 0
     return {
         "rulesetVersion": _clean(payload.get("rulesetVersion") or RULESET_VERSION, 40),
         "durationMs": integer("durationMs"),
@@ -96,6 +102,9 @@ def sanitize_render_metrics(value: Mapping[str, Any] | None) -> dict[str, Any]:
         "frameRenderer": _clean(payload.get("frameRenderer"), 80),
         "rendererAttempts": _renderer_attempts(payload.get("rendererAttempts")),
         "jobId": _clean(payload.get("jobId"), 120),
+        "stageTimingsMs": timings,
+        "segmentCacheHits": integer("segmentCacheHits", 500),
+        "encoder": _clean(payload.get("encoder") or "libx264", 40),
     }
 
 

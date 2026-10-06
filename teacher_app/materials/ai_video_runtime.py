@@ -5,6 +5,10 @@ import subprocess
 import tempfile
 import time
 import wave
+import hashlib
+import json
+import os
+import shutil
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -17,6 +21,82 @@ from teacher_app.materials.ai_presentation_storage import PPTX_MIME, Presentatio
 from teacher_app.materials.ai_video_storage import VideoStorage
 from teacher_app.materials.media_audio_runtime import DEFAULT_MODEL, _synthesize, _voice
 from teacher_app.materials.media_subtitle_runtime import segments_to_srt, segments_to_vtt
+
+
+VIDEO_ENCODING = {
+    "fps": 5,
+    "codec": "libx264",
+    "preset": "veryfast",
+    "tune": "stillimage",
+    "crf": 23,
+    "pix_fmt": "yuv420p",
+    "audio_codec": "aac",
+    "audio_bitrate": "128k",
+    "audio_rate": 24000,
+    "threads": 2,
+    "size": "1280:720",
+}
+_QSV_AVAILABLE: bool | None = None
+
+
+def _cache_root() -> Path:
+    default = r"C:\TeacherWorker\.video_cache" if os.name == "nt" else "/var/tmp/teacher-video-cache"
+    return Path(str(os.environ.get("AI_VIDEO_CACHE_DIR") or default)).expanduser()
+
+
+def _hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _ffmpeg() -> str:
+    configured = str(os.environ.get("FFMPEG_PATH") or "").strip()
+    if configured and Path(configured).is_file():
+        return configured
+    return shutil.which("ffmpeg") or "ffmpeg"
+
+
+def _qsv_available() -> bool:
+    global _QSV_AVAILABLE
+    requested = str(os.environ.get("AI_VIDEO_QSV_ENABLED", "false") or "false").strip().lower()
+    if requested not in {"1", "true", "yes", "on"}:
+        return False
+    if _QSV_AVAILABLE is not None:
+        return _QSV_AVAILABLE
+    try:
+        completed = subprocess.run([_ffmpeg(), "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=15, check=False)
+        _QSV_AVAILABLE = completed.returncode == 0 and "h264_qsv" in (completed.stdout + completed.stderr)
+    except (OSError, subprocess.TimeoutExpired):
+        _QSV_AVAILABLE = False
+    return _QSV_AVAILABLE
+
+
+def _segment_key(image: Path, audio: Path, *, encoder: str) -> str:
+    payload = {"image": _hash_file(image), "audio": _hash_file(audio), "encoder": encoder, "encoding": VIDEO_ENCODING}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _segment_command(image: Path, audio: Path, target: Path, *, encoder: str = "libx264") -> list[str]:
+    command = [
+        _ffmpeg(), "-y", "-loop", "1", "-framerate", str(VIDEO_ENCODING["fps"]), "-i", str(image), "-i", str(audio),
+        "-threads", str(VIDEO_ENCODING["threads"]), "-c:v", encoder,
+    ]
+    if encoder == "libx264":
+        command += ["-preset", VIDEO_ENCODING["preset"], "-tune", VIDEO_ENCODING["tune"], "-crf", str(VIDEO_ENCODING["crf"])]
+    else:
+        command += ["-global_quality", str(VIDEO_ENCODING["crf"])]
+    return command + [
+        "-vf", f"scale={VIDEO_ENCODING['size']}:force_original_aspect_ratio=decrease,pad={VIDEO_ENCODING['size']}:(ow-iw)/2:(oh-ih)/2",
+        "-c:a", VIDEO_ENCODING["audio_codec"], "-b:a", VIDEO_ENCODING["audio_bitrate"], "-ar", str(VIDEO_ENCODING["audio_rate"]),
+        "-pix_fmt", VIDEO_ENCODING["pix_fmt"], "-shortest", "-movflags", "+faststart", str(target),
+    ]
+
+
+def _concat_command(manifest: Path, output: Path) -> list[str]:
+    return [_ffmpeg(), "-y", "-f", "concat", "-safe", "0", "-i", str(manifest), "-c", "copy", "-movflags", "+faststart", str(output)]
 
 
 def _safe_text(value: Any, limit=4000) -> str:
@@ -169,12 +249,33 @@ def _render_frames(
     source = (presentation_storage or PresentationStorage()).download(
         _presentation_location(presentation), root / "approved-source.pptx",
     )
+    # A LibreOffice/COM export always renders a complete deck. Cache those
+    # rasterized pages by immutable deck content so an unchanged revision does
+    # not launch Office again on later video jobs.
+    deck_hash = _hash_file(source)
+    cache_dir = _cache_root() / "frames" / deck_hash
+    manifest_path = cache_dir / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        cached = [cache_dir / name for name in list(manifest.get("files") or [])]
+        if len(cached) == len(slides) and all(item.is_file() and item.stat().st_size > 0 for item in cached):
+            restored = []
+            restored_dir = root / "cached-frames"
+            restored_dir.mkdir(parents=True, exist_ok=True)
+            for index, item in enumerate(cached, 1):
+                destination = restored_dir / f"slide-{index:04d}.png"
+                shutil.copyfile(item, destination)
+                restored.append(destination)
+            return restored, str(manifest.get("renderer") or renderer.SAFE_FALLBACK), list(manifest.get("attempts") or [])
+    except (OSError, ValueError, TypeError):
+        pass
     frames, selected, attempts = renderer.render_exact_frames(
         source,
         expected_count=len(slides),
         root=root,
     )
     if frames and selected:
+        _store_frame_cache(cache_dir, frames, selected, attempts)
         return frames, selected, attempts
 
     fallback_dir = root / "fallback-frames"
@@ -191,49 +292,73 @@ def _render_frames(
             "detail": "safe-text-renderer",
         }
     )
+    _store_frame_cache(cache_dir, fallback_frames, renderer.SAFE_FALLBACK, attempts)
     return fallback_frames, renderer.SAFE_FALLBACK, attempts
 
 
-def _compose_mp4(root: Path, parts: list[dict], output: Path) -> None:
+def _store_frame_cache(cache_dir: Path, frames: list[Path], selected: str, attempts: list[dict[str, str]]) -> None:
+    try:
+        staging = cache_dir.with_name(cache_dir.name + f".tmp-{os.getpid()}")
+        shutil.rmtree(staging, ignore_errors=True)
+        staging.mkdir(parents=True, exist_ok=True)
+        names = []
+        for index, frame in enumerate(frames, 1):
+            name = f"slide-{index:04d}.png"
+            shutil.copyfile(frame, staging / name)
+            names.append(name)
+        (staging / "manifest.json").write_text(json.dumps({"renderer": selected, "attempts": attempts, "files": names}, ensure_ascii=False), encoding="utf-8")
+        cache_dir.parent.mkdir(parents=True, exist_ok=True)
+        if cache_dir.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+        else:
+            os.replace(staging, cache_dir)
+    except OSError:
+        pass
+
+
+def _compose_mp4(root: Path, parts: list[dict], output: Path, *, progress_callback: Callable | None = None) -> dict[str, int | str]:
     segment_paths = []
+    hits = 0
+    started = time.perf_counter()
+    requested_encoder = "h264_qsv" if _qsv_available() else "libx264"
     for index, part in enumerate(parts, 1):
         segment = root / f"segment-{index:04d}.mp4"
-        _run(
-            [
-                "ffmpeg",
-                "-y",
-                "-loop",
-                "1",
-                "-i",
-                str(part["image"]),
-                "-i",
-                str(part["audio"]),
-                "-c:v",
-                "libx264",
-                "-tune",
-                "stillimage",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "128k",
-                "-pix_fmt",
-                "yuv420p",
-                "-shortest",
-                "-r",
-                "30",
-                str(segment),
-            ],
-            timeout=300,
-            message="FFmpeg 無法合成投影片片段",
-        )
+        key = _segment_key(part["image"], part["audio"], encoder=requested_encoder)
+        cached = _cache_root() / "segments" / f"{key}.mp4"
+        if cached.is_file() and cached.stat().st_size > 1024:
+            shutil.copyfile(cached, segment)
+            hits += 1
+        else:
+            temporary = cached.with_name(f"{cached.name}.{os.getpid()}.tmp")
+            try:
+                cached.parent.mkdir(parents=True, exist_ok=True)
+                _run(_segment_command(part["image"], part["audio"], temporary, encoder=requested_encoder), timeout=300, message="FFmpeg 無法合成投影片片段")
+            except RuntimeError:
+                if requested_encoder != "h264_qsv":
+                    raise
+                # Encoder availability is not enough: an Intel driver may be
+                # absent or busy. Retry this page with the default CPU codec.
+                _run(_segment_command(part["image"], part["audio"], temporary, encoder="libx264"), timeout=300, message="FFmpeg 無法以 x264 合成投影片片段")
+                requested_encoder = "libx264"
+                key = _segment_key(part["image"], part["audio"], encoder=requested_encoder)
+                cached = _cache_root() / "segments" / f"{key}.mp4"
+            try:
+                os.replace(temporary, cached)
+            except OSError:
+                shutil.copyfile(temporary, segment)
+            else:
+                shutil.copyfile(cached, segment)
+        if progress_callback:
+            progress_callback(74 + (14 * index / max(1, len(parts))), "編碼投影片片段", f"第 {index}/{len(parts)} 頁；segment cache {'命中' if segment.exists() and cached.exists() else '重建'}")
         segment_paths.append(segment)
     manifest = root / "concat.txt"
     manifest.write_text("".join(f"file '{path.as_posix()}'\n" for path in segment_paths), encoding="utf-8")
-    _run(
-        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(manifest), "-c", "copy", "-movflags", "+faststart", str(output)],
-        timeout=600,
-        message="FFmpeg 無法合成 MP4",
-    )
+    if progress_callback:
+        progress_callback(89, "無重編碼合併 MP4", "以 concat demuxer 直接複製每頁片段並加入 faststart")
+    segment_ms = round((time.perf_counter() - started) * 1000)
+    concat_started = time.perf_counter()
+    _run(_concat_command(manifest, output), timeout=600, message="FFmpeg 無法合成 MP4")
+    return {"segmentCacheHits": hits, "encoder": requested_encoder, "segmentEncodeMs": segment_ms, "concatMs": round((time.perf_counter() - concat_started) * 1000)}
 
 
 def generate_video(
@@ -265,6 +390,8 @@ def generate_video(
     voice = _voice((job.get("request") or {}).get("voice"))
     timeline, captions, parts = [], [], []
     started = time.perf_counter()
+    stage_started = started
+    stage_timings: dict[str, int] = {}
     model = DEFAULT_MODEL
     if progress_callback:
         progress_callback(8, "確認已核准 PowerPoint", "讀取不可變 revision、正式 PPTX artifact 與安全 provenance")
@@ -282,6 +409,8 @@ def generate_video(
             root,
             presentation_storage=presentation_storage,
         )
+        stage_timings["slideRenderMs"] = round((time.perf_counter() - stage_started) * 1000)
+        stage_started = time.perf_counter()
         cursor = 0.0
         for index, (slide, image) in enumerate(zip(slides, frames), 1):
             if progress_callback:
@@ -307,6 +436,8 @@ def generate_video(
             captions.append({"start": cursor, "end": cursor + duration, "text": narration})
             parts.append({"audio": audio, "image": image})
             cursor += duration
+        stage_timings["ttsMs"] = round((time.perf_counter() - stage_started) * 1000)
+        stage_started = time.perf_counter()
         if progress_callback:
             progress_callback(64, "建立字幕與時間軸", "輸出 WebVTT / SRT，並驗證每頁時間軸與 Phase 4 拆頁結果")
         vtt, srt = segments_to_vtt(captions), segments_to_srt(captions)
@@ -322,8 +453,11 @@ def generate_video(
             raise RuntimeError("AI 影片品質檢查發現阻擋錯誤，已停止產生。")
         output = root / "presentation.mp4"
         if progress_callback:
-            progress_callback(74, "FFmpeg 合成 MP4", "依正式投影片畫面、Kokoro 語音與時間軸合成影片")
-        _compose_mp4(root, parts, output)
+            progress_callback(74, "FFmpeg 編碼", "使用 5fps 靜態投影片參數，逐頁重用可用 segment cache")
+        compose_metrics = _compose_mp4(root, parts, output, progress_callback=progress_callback)
+        stage_timings["segmentEncodeMs"] = int(compose_metrics.get("segmentEncodeMs", 0) or 0)
+        stage_timings["concatMs"] = int(compose_metrics.get("concatMs", 0) or 0)
+        stage_started = time.perf_counter()
         if progress_callback:
             progress_callback(90, "保存 MP4", "正在將影片直接保存至共享 durable provider")
         artifact = storage.store(
@@ -331,6 +465,7 @@ def generate_video(
             job_id=str(job.get("id") or ""),
             filename=f"{_safe_text(presentation.get('title'), 60) or 'AI教學投影片'}-r{presentation.get('revisionNumber') or 1}.mp4",
         )
+        stage_timings["publishMs"] = round((time.perf_counter() - stage_started) * 1000)
     metrics = quality.sanitize_render_metrics(
         {
             "rulesetVersion": quality.RULESET_VERSION,
@@ -342,6 +477,9 @@ def generate_video(
             "frameRenderer": frame_renderer,
             "rendererAttempts": renderer_attempts,
             "jobId": str(job.get("id") or ""),
+            "stageTimingsMs": stage_timings,
+            "segmentCacheHits": compose_metrics.get("segmentCacheHits", 0),
+            "encoder": compose_metrics.get("encoder", "libx264"),
         }
     )
     video = repository.create_video(

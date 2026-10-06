@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
+import threading
 import uuid
 from typing import Any, Mapping
 
@@ -65,8 +66,32 @@ class AiVideoJobProcessor:
     def run_job(self, job_id: str) -> bool:
         token = uuid.uuid4().hex; job = repository.claim(job_id, token)
         if not job: return False
+        state = [0.0, "AI 影片處理中", "AI Worker 正在準備工作"]
+        state_lock = threading.Lock()
+        stop = threading.Event()
+
+        def report(percent, stage, detail):
+            with state_lock:
+                state[:] = [percent, stage, detail]
+            return repository.set_progress(job_id, token, percent, stage, detail)
+
+        def keepalive():
+            # Worker heartbeat remains active globally. This job-level pulse
+            # additionally refreshes updated_at while FFmpeg/Office is inside
+            # a long blocking process, preventing false stale recovery.
+            while not stop.wait(_env_int("AI_VIDEO_JOB_PROGRESS_HEARTBEAT_SECONDS", 30, 10, 90)):
+                try:
+                    with state_lock:
+                        repository.set_progress(job_id, token, *state)
+                except Exception:
+                    # The main execution path owns terminal failure handling.
+                    # A transient keepalive failure must not kill its thread.
+                    pass
+
+        heartbeat = threading.Thread(target=keepalive, name="teacher-ai-video-progress", daemon=True)
+        heartbeat.start()
         try:
-            result = ai_video_runtime.generate_video(job=job, progress_callback=lambda percent, stage, detail: repository.set_progress(job_id, token, percent, stage, detail))
+            result = ai_video_runtime.generate_video(job=job, progress_callback=report)
             repository.complete(job_id, token, result)
         except Exception as exc:
             LOGGER.warning(
@@ -75,6 +100,9 @@ class AiVideoJobProcessor:
                 type(exc).__name__,
             )
             repository.fail(job_id, token, str(exc))
+        finally:
+            stop.set()
+            heartbeat.join(timeout=2)
         return True
 
     def run_next_queued(self) -> bool:

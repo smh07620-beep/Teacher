@@ -27,6 +27,7 @@ from teacher_app.materials import (
     ai_presentation_jobs,
     ai_video_jobs,
     ai_video_renderer,
+    media_audio_runtime,
     media_audio_jobs,
     media_audio_runtime,
     media_script_jobs,
@@ -284,6 +285,15 @@ def main() -> int:
         f"free_fallback=enabled control_transport={transport}"
     )
     log(_renderer_status_line())
+    # This intentionally happens in the dedicated AI Worker, not in the
+    # supervisor import probe.  A failed warm-up is observable but leaves all
+    # other Worker queues available.
+    if str(os.environ.get("AI_TTS_PROVIDER", "kokoro") or "kokoro").strip().lower() == "kokoro":
+        try:
+            model = media_audio_runtime.preload_kokoro()
+            log(f"kokoro warmed model={model}")
+        except Exception as exc:
+            log(f"kokoro warmup error type={type(exc).__name__}")
     heartbeat_seconds = _env_int("AI_WORKER_HEARTBEAT_SECONDS", 30, 10, 90)
     try:
         with _AIHeartbeat(heartbeat_seconds, transport=transport, api=api) as heartbeat:
