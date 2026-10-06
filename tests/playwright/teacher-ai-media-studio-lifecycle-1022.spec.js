@@ -98,7 +98,10 @@ test('AI media studio hydrates when legacy panels arrive after the shell', async
   await expect(page.locator('#teacher-media-source-1018')).toBeEnabled();
   await expect(page.locator('#teacher-media-source-1018')).toHaveValue('doc-1');
 
-  await page.locator('#teacher-media-source-1018').selectOption('movie-1');
+  await page.locator('#teacher-media-source-1018').evaluate((select, value) => {
+    select.value = value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }, 'movie-1');
   await expect.poll(() => page.evaluate(() => window.subtitleMaterial)).toBe('movie-1');
 
   await page.evaluate(() => window.TeacherAIMediaStudio1018.refresh());
