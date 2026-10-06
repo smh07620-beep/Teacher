@@ -296,6 +296,30 @@
       });
   }
 
+  async function jumpToAdminQuiz(quizId,area,group){
+      const targetArea=String(area||currentTrainingArea||'internal');
+      const targetGroup=String(group||currentGroupKey||'grpBio');
+      const areaSelect=document.getElementById('admin-quiz-area');
+      const groupSelect=document.getElementById('admin-quiz-group');
+      if(areaSelect)areaSelect.value=targetArea;
+      if(groupSelect){
+          if(typeof window.groupOptionsForArea==='function'){
+              groupSelect.innerHTML=window.groupOptionsForArea(targetArea);
+          }
+          if([...groupSelect.options].some(option=>option.value===targetGroup)){
+              groupSelect.value=targetGroup;
+          }
+      }
+      await Promise.resolve(window.switchAdminWorkspace?.('assessment',true));
+      await Promise.resolve(window.renderAdminQuizCategories?.(true));
+      const panel=document.getElementById(`qpanel-${quizId}`);
+      if(!panel){alert('找不到這份考卷，請重新整理後再試。');return;}
+      if(panel.classList.contains('hidden')){
+          await Promise.resolve(window.toggleQuizQuestionsPanel?.(quizId));
+      }
+      panel.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
   function paintAdminCourseMaterialHub(box,state){
       if(!box)return;
       bindMaterialPurgeControls(box);
@@ -486,6 +510,7 @@
       return state;
   }
 
+  window.jumpToAdminQuiz=jumpToAdminQuiz;
   window.adminMaterialTypeBadge=adminMaterialTypeBadge;
   window.adminHubMaterialRow=adminHubMaterialRow;
   window.paintAdminCourseMaterialHub=paintAdminCourseMaterialHub;
