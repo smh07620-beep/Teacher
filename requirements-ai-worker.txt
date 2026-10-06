@@ -15,5 +15,5 @@ PyMuPDF>=1.24,<2.0
 # Local-only free TTS stack. run_ai_worker_autostart.ps1 installs/synchronizes
 # this file into the shared Worker .venv.
 kokoro>=0.9.4,<1.0
-misaki[zh]>=0.9.4,<1.0
+misaki[zh,en]>=0.9.4,<1.0
 numpy>=2.0,<3.0
