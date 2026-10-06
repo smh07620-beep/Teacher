@@ -95,7 +95,7 @@ def _ai_worker_capabilities(transport: str | None = None) -> dict:
         **_worker_build_identity(),
         "workerKind": "ai",
         "workerMachine": str(socket.gethostname() or "")[:80],
-        "heartbeatContract": 3 if web_mode else 2,
+        "heartbeatContract": 4 if web_mode else 2,
         "heartbeatTransport": "https" if web_mode else "database",
         "controlPlaneReady": web_mode,
         "databaseReady": None if web_mode else True,

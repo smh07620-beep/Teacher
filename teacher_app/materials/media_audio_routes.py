@@ -169,6 +169,14 @@ def _ai_worker_status() -> dict:
                 f"AI Worker 最後回報已超過 120 秒（約 {heartbeat_age} 秒前）。"
                 "請檢查 Windows 排程「Teacher AI Worker」是否仍在執行。"
             )
+        elif https_control and (heartbeat_contract < 4 or not worker_sha):
+            online = False
+            diagnostic_code = "worker_build_unknown"
+            diagnostic_message = (
+                "AI Worker heartbeat 仍是舊版格式，沒有可驗證的 Git SHA。"
+                "請更新院內 Teacher 專案到目前 main 並重新啟動 Teacher AI Worker；"
+                "新版 Worker 會回報 heartbeat contract 4 與 workerSha。"
+            )
         elif code_identity_match is False:
             online = False
             diagnostic_code = "worker_code_mismatch"
