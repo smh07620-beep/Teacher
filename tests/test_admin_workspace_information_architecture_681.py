@@ -14,6 +14,7 @@ class AdminWorkspaceInformationArchitecture681Tests(unittest.TestCase):
         cls.wizard = ROOT.joinpath("static", "course-wizard-681.js").read_text(encoding="utf-8")
         cls.results = ROOT.joinpath("static", "admin-results-workspace.js").read_text(encoding="utf-8")
         cls.system = ROOT.joinpath("static", "admin-system.js").read_text(encoding="utf-8")
+        cls.announcements = ROOT.joinpath("static", "admin-announcements.js").read_text(encoding="utf-8")
         cls.questions = ROOT.joinpath("static", "admin-question-bank.js").read_text(encoding="utf-8")
         cls.people = ROOT.joinpath("static", "admin-people.js").read_text(encoding="utf-8")
         cls.csp = ROOT.joinpath("static", "system-csp-actions.js").read_text(encoding="utf-8")
@@ -97,16 +98,20 @@ class AdminWorkspaceInformationArchitecture681Tests(unittest.TestCase):
         self.assertIn("paperDocuments?.classList.toggle('hidden', !documents)", self.results)
         self.assertIn('.admin-results-overview', self.css)
 
-    def test_system_workspace_separates_health_storage_security_and_communication(self):
+    def test_system_workspace_keeps_health_static_and_system_notice_dynamic(self):
         for marker in (
             'admin-system-overview',
             'admin-system-health-grid',
             'admin-system-detail-grid',
             'admin-system-storage-card',
             'admin-system-safety-card',
-            'admin-announcement-workspace',
         ):
             self.assertIn(marker, self.html)
+        self.assertNotIn('admin-announcement-workspace', self.html)
+        self.assertNotIn('admin-announcement-title', self.html)
+        self.assertIn('system-announcement-card-1014', self.announcements)
+        self.assertIn("managerMarkup('system')", self.announcements)
+        self.assertIn('一般教學通知請到教師工作區', self.announcements)
         self.assertIn('admin-system-status-card', self.system)
         self.assertIn('is-good', self.system)
         self.assertIn('is-warning', self.system)
