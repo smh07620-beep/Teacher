@@ -24,7 +24,11 @@ class CourseWizardIdempotentBundle72Tests(unittest.TestCase):
         self.assertIn("sessionStorage", self.wizard)
         self.assertIn("credentials:'same-origin'", self.wizard)
         self.assertNotIn("api('/api/courses'", self.wizard)
-        self.assertNotIn("api('/api/quiz-categories'", self.wizard)
+        create = self.wizard[self.wizard.index("async function create()"):self.wizard.index("async function ensureCourseDraft()")]
+        self.assertNotIn("api('/api/quiz-categories'", create)
+        assessment = self.wizard[self.wizard.index("async function ensureAssessmentDraft()"):self.wizard.index("async function attachAiProducts()")]
+        self.assertIn("api('/api/quiz-categories'", assessment)
+        self.assertIn("courseId:state.course.id", assessment)
         self.assertNotIn("X-Admin-Key", self.wizard)
         self.assertNotIn("getAdminKey", self.wizard)
 
