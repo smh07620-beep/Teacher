@@ -18,6 +18,7 @@ MATERIAL_TYPES = {"standard", "atlas", "infographic", "video", "troubleshooting"
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+PRESENTATION_EXTENSIONS = {".ppt", ".pptx", ".pps", ".ppsx", ".odp"}
 
 
 def material_row_to_dict(row_or_legacy_base, legacy_row=None) -> dict:
@@ -62,6 +63,13 @@ def material_row_to_dict(row_or_legacy_base, legacy_row=None) -> dict:
     r["versionUpdatedAt"] = str(r.pop("version_updated_at", "") or "")
     r["versionUpdatedBy"] = str(r.pop("version_updated_by", "") or "")
     ext = Path(r.get("filename", "")).suffix.lower()
+    r["readerMode"] = (
+        "document"
+        if r["materialType"] == "sop"
+        else "presentation"
+        if ext in PRESENTATION_EXTENSIONS
+        else "document"
+    )
     if ext in VIDEO_EXTENSIONS:
         r["viewerMode"] = "video"
     elif ext in AUDIO_EXTENSIONS:
