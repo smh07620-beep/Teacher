@@ -879,6 +879,26 @@
         ? '<div class="space-y-2">'+operationalIssues.map(issue=>'<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><b>'+escapeHtml(issue.message||issue.code||'維運提醒')+'</b>'+(issue.code?'<span class="ml-1 font-mono text-[10px]">['+escapeHtml(issue.code)+']</span>':'')+(issue.action?'<div class="mt-1">'+escapeHtml(issue.action)+'</div>':'')+'</div>').join('')+'</div>'
         : '';
       const staging = data.staging || {};
+      const r2Budget = data.r2Budget || {};
+      const aiWorkerHealth = !workerStatusAvailable
+        ? '⚪ AI Worker 狀態讀取失敗'
+        : activeAiWorkers.length
+          ? '🟢 AI Worker 在線'
+          : aiWorkers.length ? '🔴 AI Worker 離線' : '🟠 AI Worker 尚未回報';
+      const kokoroHealth = activeAiWorkers.some(worker => worker.kokoroInstalled === true)
+        ? '🟢 Kokoro 已安裝'
+        : aiWorkers.some(worker => worker.kokoroInstalled === false)
+          ? '🔴 Kokoro 未安裝'
+          : '🟠 Kokoro 待確認';
+      const stagingBackend = String(staging.backend || '').toLowerCase();
+      const r2Health = stagingBackend === 'r2'
+        ? (staging.available ? '🟢 R2 正常' : '🔴 R2 異常')
+        : stagingBackend
+          ? `⚪ R2 非目前 staging（${escapeHtml(stagingBackend)}）`
+          : '🟠 R2 待確認';
+      const r2Usage = Number.isFinite(Number(r2Budget.usagePercent))
+        ? ` · 預估使用 ${Math.round(Number(r2Budget.usagePercent))}%`
+        : '';
       const emptyWorkerMessage = recentOfflineWorkers.length
         ? '⚠ 目前沒有在線 Worker；下方仍保留最近 24 小時內的離線紀錄供檢查。'
         : '⚠ 尚未收到本機 Worker heartbeat。若這是第一次使用，請展開下方「第一次安裝」完成院內電腦設定。';
@@ -926,6 +946,13 @@
             <div><h4 class="font-black text-slate-950 text-lg">🖥️ Worker / Job 狀態</h4>
             <p class="text-xs text-slate-500 mt-1">失敗原因、Worker、真實進度、heartbeat、處理時間與重試次數會保留在工作紀錄中；長時間處理不等於卡住。</p></div>
             <button id="worker-refresh-70" type="button" class="text-xs border border-slate-300 bg-white px-3 py-2 rounded-xl">↻ 立即更新</button>
+          </div>
+          <div id="worker-service-health-70" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <div class="text-[11px] font-black text-slate-700">服務執行環境</div>
+            <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-slate-700">
+              <span>${aiWorkerHealth}</span><span>${kokoroHealth}</span><span>${r2Health}${r2Usage}</span>
+            </div>
+            <div class="mt-1 text-[10px] text-slate-500">教師／課程頁只顯示操作是否可用；Worker、Kokoro、R2 與 heartbeat 技術狀態集中在此。</div>
           </div>
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
             ${queueCard('⏳', '待處理', data.pendingJobs, 'queued + retry_wait')}
