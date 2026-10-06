@@ -163,6 +163,9 @@ class TeacherActionQueue1024Tests(unittest.TestCase):
         self.assertNotIn("X-Admin-Key", source)
         self.assertNotIn("getAdminKey", source)
         self.assertNotIn("localStorage", source)
+        self.assertIn("✓ 目前沒有需要你處理的項目。", source)
+        self.assertIn("查看其餘", source)
+        self.assertNotIn("今天先處理第一順位", source)
 
     def test_material_failure_action_delegates_to_canonical_retry_owner(self):
         source = ROOT.joinpath("static", "teacher-action-queue-1024.js").read_text(encoding="utf-8")
