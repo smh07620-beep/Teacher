@@ -95,7 +95,7 @@
 
   function adminHubMaterialRow(m){
       const version=Math.max(1,Number(m.currentVersion||1));
-      return `<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.title||m.filename||'未命名教材')}</div><span class="rounded-full bg-white border border-slate-200 px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${version}</span></div><div class="text-[10px] text-slate-500 mt-1">${adminMaterialTypeBadge(m)}${m.categoryLabel?' · 對應：'+escapeHtml(m.categoryLabel):''}${m.active===false?' · 已停用':''}</div></div>${m.isBuiltin?'':`<div class="flex flex-wrap gap-1.5 shrink-0"><button data-csp-click="editAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white">管理教材</button><button data-csp-click="prepareMaterialVersionUpload('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-teal-700 text-white">上傳新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700">版本紀錄</button><button data-csp-click="toggleAdminMaterial('${m.id}',${m.active?'false':'true'})" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-amber-500 text-white">${m.active?'停用':'啟用'}</button><button data-csp-click="deleteAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-rose-300 bg-rose-50 font-bold text-rose-700">🗑️ 刪除教材</button>${canSystemPurgeMaterial()?`<button type="button" data-material-purge-check="${escapeHtml(m.id||'')}" title="系統管理員用：清除無任何引用的實體儲存" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500">系統永久清除…</button>`:''}</div>`}</div>`;
+      return `<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.title||m.filename||'未命名教材')}</div><span class="rounded-full bg-white border border-slate-200 px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${version}</span></div><div class="text-[10px] text-slate-500 mt-1">${adminMaterialTypeBadge(m)}${m.categoryLabel?' · 對應：'+escapeHtml(m.categoryLabel):''}${m.active===false?' · 已停用':''}</div></div>${m.isBuiltin?'':`<div class="flex flex-wrap gap-1.5 shrink-0"><button data-csp-click="editAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white">管理教材</button><button data-csp-click="prepareMaterialVersionUpload('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-teal-700 text-white">上傳新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700">版本紀錄</button><button data-csp-click="toggleAdminMaterial('${m.id}',${m.active?'false':'true'})" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-amber-500 text-white">${m.active?'停用':'啟用'}</button><button type="button" data-material-course-link="${escapeHtml(m.id||'')}" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-teal-200 bg-white font-bold text-teal-800">${m.courseId?'更換課程':'歸入課程'}</button><button data-csp-click="deleteAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-rose-300 bg-rose-50 font-bold text-rose-700">🗑️ 刪除教材</button>${canSystemPurgeMaterial()?`<button type="button" data-material-purge-check="${escapeHtml(m.id||'')}" title="系統管理員用：清除無任何引用的實體儲存" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-500">系統永久清除…</button>`:''}</div>`}</div>`;
   }
 
   function ensureMaterialPurgeDialog(){
@@ -240,6 +240,62 @@
       if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();else dialog.setAttribute('open','');
   }
 
+  function ensureMaterialCourseLinkDialog(){
+      let dialog=document.getElementById('material-course-link-dialog');
+      if(dialog)return dialog;
+      dialog=document.createElement('dialog');
+      dialog.id='material-course-link-dialog';
+      dialog.className='v561-profile-dialog';
+      dialog.innerHTML='<form class="v561-profile-card"><div class="v561-profile-head"><div><strong>教材歸入課程</strong><span>可把刪除課程後留下的未關聯教材重新掛到新課程；掛入課程時會同步啟用，課程正式發布後學員即可看到。</span></div><button type="button" data-course-link-close aria-label="關閉">×</button></div><label class="block text-xs font-bold text-slate-700">目標課程<select data-course-link-select class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"></select></label><p data-course-link-status class="mt-2 text-xs text-slate-500"></p><div class="v561-profile-actions"><button type="button" class="secondary" data-course-link-close>取消</button><button type="submit">儲存關聯</button></div></form>';
+      document.body.appendChild(dialog);
+      const close=()=>{try{dialog.close();}catch(_){dialog.removeAttribute('open');}};
+      dialog.querySelectorAll('[data-course-link-close]').forEach(button=>button.addEventListener('click',close));
+      dialog.querySelector('form')?.addEventListener('submit',async event=>{
+          event.preventDefault();
+          const ctx=dialog._courseLinkState||{},select=dialog.querySelector('[data-course-link-select]'),status=dialog.querySelector('[data-course-link-status]');
+          const courseId=String(select?.value||'');
+          const button=dialog.querySelector('button[type="submit"]');
+          if(button)button.disabled=true;
+          if(status)status.textContent='儲存教材關聯中…';
+          try{
+              const response=await fetch('/api/slides/'+encodeURIComponent(ctx.materialId||''),{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({courseId,active:courseId?true:ctx.active!==false})});
+              const data=await response.json().catch(()=>({}));
+              if(!response.ok)throw new Error(data.error||'教材關聯更新失敗');
+              window.invalidateAdminMaterialsCache?.();
+              close();
+              await renderAdminCourseMaterialHub(true);
+              await window.renderAdminMaterials?.(true);
+          }catch(error){
+              if(status)status.textContent='❌ '+(error.message||'教材關聯更新失敗');
+          }finally{if(button)button.disabled=false;}
+      });
+      return dialog;
+  }
+
+  function openMaterialCourseLinkDialog(materialId,box){
+      const state=box?._adminCourseMaterialState||box?._learningAssignmentState||{};
+      const material=(state.materials||[]).find(item=>String(item.id||'')===String(materialId||''));
+      if(!material)return alert('找不到教材資料，請重新整理後再試。');
+      const courses=(state.courses||[]).filter(course=>String(course.group||'')===String(material.group||state.group||'')&&String(course.area||'')===String(material.area||state.area||''));
+      const dialog=ensureMaterialCourseLinkDialog(),select=dialog.querySelector('[data-course-link-select]'),status=dialog.querySelector('[data-course-link-status]');
+      dialog._courseLinkState={materialId:String(material.id||''),active:material.active!==false};
+      select.replaceChildren(new Option('通用／未歸類（不掛課程）',''),...courses.map(course=>new Option(course.title||course.id,String(course.id||''))));
+      select.value=courses.some(course=>String(course.id||'')===String(material.courseId||''))?String(material.courseId||''):'';
+      if(status)status.textContent=material.courseId?'目前已掛入課程；可改到其他課程或設為未歸類。':'目前是未關聯教材，請選擇要掛入的課程。';
+      if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
+  }
+
+  function bindMaterialCourseLinkControls(box){
+      if(!box||box.dataset.materialCourseLinkBound==='1')return;
+      box.dataset.materialCourseLinkBound='1';
+      box.addEventListener('click',event=>{
+          const button=event.target.closest?.('[data-material-course-link]');
+          if(!button)return;
+          event.preventDefault();event.stopPropagation();
+          openMaterialCourseLinkDialog(button.dataset.materialCourseLink||'',box);
+      });
+  }
+
   function bindMaterialPurgeControls(box){
       if(!box||box.dataset.materialPurgeBound==='1')return;
       box.dataset.materialPurgeBound='1';
@@ -323,6 +379,7 @@
   function paintAdminCourseMaterialHub(box,state){
       if(!box)return;
       bindMaterialPurgeControls(box);
+      bindMaterialCourseLinkControls(box);
       const {area,group}=state;
       const courses=Array.isArray(state.courses)?state.courses:[];
       const visibleLimit=Math.max(30,Number(box.dataset.courseVisibleLimit)||30);
