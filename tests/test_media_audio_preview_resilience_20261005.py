@@ -1,4 +1,5 @@
 import datetime as dt
+import os
 import sqlite3
 import unittest
 from contextlib import contextmanager
@@ -118,6 +119,30 @@ class MediaAudioPreviewResilienceTests(unittest.TestCase):
 
         self.assertEqual(result["mimeType"], "audio/wav")
         self.assertEqual(result["previewUrl"], "https://r2.example/voice.wav")
+
+    def test_preview_cache_identity_changes_with_repo_voice_text_and_speed(self):
+        base_env = {
+            "KOKORO_REPO_ID": "hexgrad/Kokoro-82M-v1.1-zh",
+            "KOKORO_MODEL": "Kokoro-82M-v1.1-zh",
+            "KOKORO_TTS_SPEED": "1.0",
+        }
+        with patch.dict(os.environ, base_env, clear=False):
+            base = media_audio_runtime._preview_identity("zf_001")[2]
+            repeated = media_audio_runtime._preview_identity("zf_001")[2]
+            voice_changed = media_audio_runtime._preview_identity("zf_002")[2]
+        with patch.dict(os.environ, {**base_env, "KOKORO_TTS_SPEED": "1.1"}, clear=False):
+            speed_changed = media_audio_runtime._preview_identity("zf_001")[2]
+        with patch.dict(os.environ, {**base_env, "KOKORO_REPO_ID": "example/alternate-kokoro"}, clear=False):
+            repo_changed = media_audio_runtime._preview_identity("zf_001")[2]
+        with patch.dict(os.environ, base_env, clear=False), \
+             patch.object(media_audio_runtime, "VOICE_PREVIEW_TEXT", "不同的固定試聽文字"):
+            text_changed = media_audio_runtime._preview_identity("zf_001")[2]
+
+        self.assertEqual(base, repeated)
+        self.assertNotEqual(base, voice_changed)
+        self.assertNotEqual(base, speed_changed)
+        self.assertNotEqual(base, repo_changed)
+        self.assertNotEqual(base, text_changed)
 
     def test_repository_preview_lookup_and_timeout_are_compare_and_set(self):
         conn = sqlite3.connect(":memory:")
