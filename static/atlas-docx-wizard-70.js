@@ -142,10 +142,12 @@
               <p class="mt-1 text-xs text-slate-500">${esc(item.section||'無周圍文字')}</p>
               <details class="mt-2">
                 <summary class="cursor-pointer text-xs text-teal-700">覆寫此圖片 metadata</summary>
+                <p class="mt-2 text-[11px] font-bold text-teal-700">已把圖片同段文字帶入名稱，前後附近文字帶入描述；可直接修改。</p>
                 <div class="mt-2 space-y-2">${fields('item-'+Number(item.index)+'-',{
                   ...common,
                   category:item.suggestedCategory||common.category,
-                  title:item.caption||''
+                  title:item.suggestedTitle||item.caption||common.title||'',
+                  description:item.suggestedDescription||item.section||common.description||''
                 })}</div>
               </details>
             </fieldset>`).join('')}
