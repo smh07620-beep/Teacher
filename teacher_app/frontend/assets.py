@@ -155,18 +155,28 @@ def _append_missing_assets(html: str, paths, closing_tag: str) -> str:
 
 
 def _ensure_ordered_scripts_after(html: str, anchor_path: str, paths) -> str:
-    """Place one canonical copy of each script directly after its anchor."""
+    """Place one canonical copy of each script directly after its anchor.
+
+    Fail closed on a missing anchor: never remove existing scripts unless the
+    anchor that will receive their canonical copies is present.
+    """
+    anchor_pattern = re.compile(
+        rf'<script\b[^>]*\bsrc=["\']{re.escape(anchor_path)}(?:\?[^"\']*)?["\'][^>]*></script>',
+        re.IGNORECASE,
+    )
+    if not anchor_pattern.search(html):
+        return html
+
     for path in paths:
         pattern = re.compile(
             rf'\s*<script\b[^>]*\bsrc=["\']{re.escape(path)}(?:\?[^"\']*)?["\'][^>]*></script>',
             re.IGNORECASE,
         )
         html = pattern.sub("", html)
-    anchor = re.search(
-        rf'<script\b[^>]*\bsrc=["\']{re.escape(anchor_path)}(?:\?[^"\']*)?["\'][^>]*></script>',
-        html,
-        re.IGNORECASE,
-    )
+
+    # Re-resolve after removals because deleting a script before the anchor
+    # changes its character offsets.
+    anchor = anchor_pattern.search(html)
     if not anchor:
         return html
     insertion = "\n" + "\n".join(_asset_tag(path) for path in paths)
