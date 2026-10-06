@@ -32,14 +32,27 @@ Local Windows source-format runs may explicitly restrict `E2E_SOURCE_FORMATS`
 when LibreOffice is absent. The workflow never restricts source formats and
 must pass the full PDF/DOCX/PPTX/image/text matrix.
 
-## Deliberately not started in this round
+## Completed continuation: D–G
 
-Per the user's final instruction, finish C and do not leave D half-built.
-D (real preview/formal audio job → inspected WAV), E (real FFmpeg → inspected
-MP4/captions/storage), F (subtitle/timestamp question learner playback → saved
-answers), and G (one combined teacher-to-student path) still need their own
-full-stack browser tests. Existing media/F5 integration tests are retained but
-are not substitutes for these tests.
+- D: `tests/playwright/ai-audio-fullstack.spec.js` drives the real narration UI,
+  canonical persisted audio jobs and canonical HTTPS AI Worker transport. It
+  validates the generated WAV object and browser playback. CI inference is
+  deterministic; production Kokoro remains a separate acceptance check.
+- E: `tests/playwright/ai-video-fullstack.spec.js` drives approved PowerPoint →
+  real Worker/FFmpeg → MP4/VTT/SRT → browser review → teacher publication. Linux
+  CI uses branded Chrome and requires H.264/AAC support, byte-range delivery,
+  positive duration and advancing playback time.
+- F: `tests/playwright/ai-subtitle-timed-question-fullstack.spec.js` proves
+  generated/approved VTT → timed video question → learner cue unlock → saved
+  answer → teacher-visible persisted record.
+- G: `tests/playwright/ai-total-golden-path.spec.js` crosses one combined path:
+  Browser upload → script → audio → PowerPoint → video → subtitles/questions →
+  learner completion → teacher record.
+
+The F/G pair is continuously gated by `.github/workflows/ai-fg-golden-path-checks.yml`.
+The A–E paths remain covered by the Product Golden Path/GP-11 job. These
+full-stack browser contracts supplement rather than replace production
+Kokoro/R2/account acceptance.
 
 ## Production acceptance remains separate
 
