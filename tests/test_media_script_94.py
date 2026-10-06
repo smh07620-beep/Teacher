@@ -109,6 +109,36 @@ class MediaScriptRoute94Tests(unittest.TestCase):
         enqueue.assert_called_once()
         self.assertEqual(response.get_json()["jobId"], "msjob-1")
 
+    def test_generate_accepts_private_extra_narration_sources(self):
+        app = self._app("grpBio")
+        materials = {
+            "mat-main": {"id": "mat-main", "group": "grpBio", "area": "internal", "active": True},
+            "mat-extra": {"id": "mat-extra", "group": "grpBio", "area": "internal", "active": False},
+        }
+        queued = {
+            "id": "msjob-extra", "materialId": "mat-main", "group": "grpBio", "area": "internal",
+            "status": "queued", "request": {"outputType": "script", "referenceMaterialIds": ["mat-extra"]},
+            "progressPercent": 0, "progressStage": "等待產生講稿", "progressDetail": "",
+            "createdAt": "", "updatedAt": "", "startedAt": "", "completedAt": "",
+        }
+        captured = {}
+
+        def enqueue(body, _user):
+            captured.update(body)
+            return queued
+
+        with app.test_client() as client, \
+             patch("teacher_app.materials.media_script_routes.material_repository.get_material", side_effect=lambda material_id: materials.get(material_id)), \
+             patch("teacher_app.materials.media_script_routes._ai_worker_online_error", return_value=None), \
+             patch("teacher_app.materials.media_script_routes.media_script_jobs.enqueue", side_effect=enqueue), \
+             patch("teacher_app.materials.media_script_routes.audit.record_event"):
+            response = client.post(
+                "/api/media-scripts/generate",
+                json={"materialId": "mat-main", "referenceMaterialIds": ["mat-extra", "mat-extra"]},
+            )
+        self.assertEqual(response.status_code, 202, response.get_data(as_text=True))
+        self.assertEqual(captured["referenceMaterialIds"], ["mat-extra"])
+
     def test_generate_denies_teacher_outside_group_scope(self):
         app = self._app("grpBio")
         material = {"id": "mat-2", "group": "grpBB", "area": "internal", "active": True}
