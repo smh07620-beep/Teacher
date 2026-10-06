@@ -27,6 +27,7 @@ GROUP_SCOPED_PERMISSIONS = {
     "group.content.manage",
     "group.result.read",
     "learning.assign",
+    "announcement.manage",
 }
 
 DEFAULT_GROUP_ENDPOINTS = {
