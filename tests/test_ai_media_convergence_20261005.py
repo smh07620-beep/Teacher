@@ -21,6 +21,7 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
         cls.script = ROOT.joinpath("static", "teacher-media-script-1014.js").read_text(encoding="utf-8")
         cls.audio = ROOT.joinpath("static", "teacher-media-audio-1014.js").read_text(encoding="utf-8")
         cls.video = ROOT.joinpath("static", "teacher-ai-video-1015.js").read_text(encoding="utf-8")
+        cls.material = ROOT.joinpath("static", "teacher-ai-material-1014.js").read_text(encoding="utf-8")
         cls.convergence = ROOT.joinpath("static", "teacher-ai-material-convergence-1014.js").read_text(encoding="utf-8")
 
     def test_supabase_direct_and_pooler_urls_have_same_non_secret_identity(self):
@@ -98,6 +99,9 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
         ):
             self.assertIn(marker, self.video)
         self.assertIn("openVideoSourceWorkspace", self.controls)
+        self.assertIn("['clinical_teacher','group_leader','education_admin','system_admin']", self.material)
+        self.assertIn("addEventListener('drop'", self.material)
+        self.assertIn("authoringOnly", self.material)
         self.assertIn("teacher-ai-video-source-workspace-1028", self.controls)
         self.assertIn("showMode?.('video')", self.controls)
         self.assertNotIn("const opened = await openPowerPointWorkspace({purpose:'video'});", self.controls)
