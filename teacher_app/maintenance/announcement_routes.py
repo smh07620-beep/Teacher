@@ -84,7 +84,7 @@ def _scope_payload(user, payload, *, existing=None):
         data.update({"scopeType": "all", "area": "", "group": "", "courseId": ""})
         return data, None
 
-    if not (has_role(user, "clinical_teacher") or has_role(user, "group_leader")):
+    if not scope_filter.is_group_scoped_actor(user):
         return data, None
 
     own_group = scope_filter.preferred_group(user)
@@ -130,7 +130,7 @@ def _can_manage_existing(user, item):
         return denied
     if kind != "teaching":
         return None
-    if not (has_role(user, "clinical_teacher") or has_role(user, "group_leader")):
+    if not scope_filter.is_group_scoped_actor(user):
         return None
     own_group = scope_filter.preferred_group(user)
     if not own_group or str((item or {}).get("group") or "") != own_group:
@@ -175,9 +175,7 @@ def register_announcement_routes(owner):
             return _permission_denied()
 
         group = ""
-        if kind != "system" and (
-            has_role(user, "clinical_teacher") or has_role(user, "group_leader")
-        ):
+        if kind != "system" and scope_filter.is_group_scoped_actor(user):
             group = scope_filter.preferred_group(user)
             if not group:
                 return jsonify({"error": "此帳號尚未設定可管理的組別範圍。"}), 403
