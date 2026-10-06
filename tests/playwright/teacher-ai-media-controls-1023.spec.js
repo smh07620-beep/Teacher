@@ -120,6 +120,40 @@ test('shared media source never repaints or duplicates the AI PowerPoint supplem
   )).toContain('doc-1');
 });
 
+test('concurrent AI material option hydration is atomic and never duplicates visible sources', async ({ page }) => {
+  await page.setContent('<main><section id="teacher-media-production-1014"></section></main>');
+  await installTeacherRBAC(page);
+  await page.evaluate(() => {
+    window.currentGroupKey = 'grpBio';
+    window.currentTrainingArea = 'internal';
+    window.fetch = async url => {
+      if (String(url) === '/api/slides/admin') {
+        await new Promise(resolve => setTimeout(resolve, 35));
+        return {ok:true,json:async()=>[
+          {id:'c503-new',title:'2026生化組教育訓練：c503 操作與維護',group:'grpBio',area:'internal',active:true,updatedAt:'2026-10-06T01:00:00Z'},
+          {id:'c503-old',title:'2026生化組教育訓練：c503 操作與維護',group:'grpBio',area:'internal',active:true,updatedAt:'2026-10-05T01:00:00Z'},
+          {id:'b211-new',title:'2026生化組教育訓練：Cobas b 211 儀器教育訓練',group:'grpBio',area:'internal',active:true,updatedAt:'2026-10-06T01:00:00Z'},
+          {id:'b211-old',title:'2026生化組教育訓練：Cobas b 211 儀器教育訓練',group:'grpBio',area:'internal',active:true,updatedAt:'2026-10-05T01:00:00Z'},
+        ]};
+      }
+      return {ok:true,json:async()=>[]};
+    };
+  });
+  await page.addScriptTag({ path: asset('teacher-ai-material-1014.js') });
+  await expect.poll(() => Boolean(page.locator('#teacher-ai-material-source-1014'))).toBeTruthy();
+  await Promise.all([
+    page.evaluate(() => window.TeacherAIMaterial1014.paintMaterialOptions()),
+    page.evaluate(() => window.TeacherAIMaterial1014.paintMaterialOptions()),
+    page.evaluate(() => window.TeacherAIMaterial1014.paintMaterialOptions()),
+  ]);
+  const labels = await page.locator('#teacher-ai-material-source-1014 option').allTextContents();
+  expect(labels).toEqual([
+    '選擇既有教材…',
+    'grpBio｜2026生化組教育訓練：c503 操作與維護',
+    'grpBio｜2026生化組教育訓練：Cobas b 211 儀器教育訓練',
+  ]);
+});
+
 test('approved PowerPoint list loads independently of material selection and coalesces duplicate refreshes', async ({ page }) => {
   await page.setContent(`
     <section id="teacher-media-production-1014">

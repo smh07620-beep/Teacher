@@ -30,6 +30,9 @@ class TeacherAiPresentationStudio1022Tests(unittest.TestCase):
         self.assertNotIn("paintSelect($('teacher-ai-material-source-1014')", controls)
         self.assertNotIn("authoring.add(new Option", controls)
         self.assertIn("option.selected = true", controls)
+        self.assertIn("materialOptionsGeneration", material)
+        self.assertIn("select.replaceChildren(...options)", material)
+        self.assertNotIn("select.appendChild(option)", material)
 
     def test_presentation_publish_defaults_to_current_revision_and_collapses_history(self):
         source = (ROOT / "static" / "teacher-ai-presentation-1016.js").read_text(encoding="utf-8")

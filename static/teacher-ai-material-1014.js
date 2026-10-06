@@ -25,6 +25,7 @@
   // These are private authoring inputs, not learner-visible material.  They
   // become a formal teaching material only through the explicit publish flow.
   let authoringSourceIds = [];
+  let materialOptionsGeneration = 0;
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
@@ -139,10 +140,16 @@
   async function paintMaterialOptions(preferredId = '') {
     const select = document.getElementById('teacher-ai-material-source-1014');
     if (!select) return;
-    const previous = preferredId || select.value;
-    select.innerHTML = '<option value="">選擇既有教材…</option>';
+    const generation = ++materialOptionsGeneration;
+    const selectedBefore = new Set(
+      preferredId
+        ? [String(preferredId)]
+        : [...select.selectedOptions].map(option => String(option.value || '')).filter(Boolean)
+    );
+    if (!select.options.length) select.replaceChildren(new Option('讀取教材中…', ''));
     try {
       await fetchMaterials();
+      if (generation !== materialOptionsGeneration) return false;
       const {area, group} = currentScope();
       // Multi-source generation is deliberately same-scope on the server.
       // Do the same in the picker so teachers cannot accidentally combine
@@ -151,18 +158,24 @@
         .filter(item => (!group || !item.group || String(item.group) === String(group))
           && (!area || !item.area || String(item.area) === String(area)))
         .sort((a, b) => materialLabel(a).localeCompare(materialLabel(b), 'zh-Hant'));
+      const options = [new Option('選擇既有教材…', '')];
       ordered.forEach(item => {
-        const option = document.createElement('option');
-        option.value = item.id || '';
-        option.textContent = materialLabel(item);
-        select.appendChild(option);
+        const option = new Option(materialLabel(item), String(item.id || ''));
+        option.selected = selectedBefore.has(option.value);
+        options.push(option);
       });
-      if ([...select.options].some(option => option.value === previous)) select.value = previous;
+      // Atomic replacement is intentional. Multiple workspace hydration paths can
+      // ask for a refresh at the same time; appending after an await caused the
+      // exact A,B,A,B duplicate list seen by teachers.
+      select.replaceChildren(...options);
       window.dispatchEvent(new CustomEvent('teacher-ai-material-options-rendered-1014', {
         detail: { ids: ordered.map(item => String(item.id || '')) }
       }));
+      return true;
     } catch (error) {
+      if (generation !== materialOptionsGeneration) return false;
       status(`教材清單讀取失敗：${error.message}`, 'error');
+      return false;
     }
   }
 
