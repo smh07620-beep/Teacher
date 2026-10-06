@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import importlib.util
 import os
+from pathlib import Path
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -16,6 +18,7 @@ from teacher_app.materials import (
     ai_video_jobs,
     ai_video_renderer,
     media_audio_jobs,
+    media_audio_runtime,
     media_script_jobs,
     media_subtitle_jobs,
 )
@@ -48,6 +51,39 @@ def _module_available(name: str) -> bool:
         return False
 
 
+def _worker_build_identity() -> dict:
+    root = Path(__file__).resolve().parent
+    try:
+        version = (root / "VERSION").read_text(encoding="utf-8").strip()[:32]
+    except OSError:
+        version = ""
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        sha = str(completed.stdout or "").strip().lower() if completed.returncode == 0 else ""
+    except (OSError, subprocess.TimeoutExpired):
+        sha = ""
+    try:
+        completed = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        branch = str(completed.stdout or "").strip()[:80] if completed.returncode == 0 else ""
+    except (OSError, subprocess.TimeoutExpired):
+        branch = ""
+    return {"workerVersion": version, "workerSha": sha[:40], "workerBranch": branch}
+
+
 def _ai_worker_capabilities(transport: str | None = None) -> dict:
     transport = transport or ai_remote.transport_mode()
     kokoro_ready = _module_available("kokoro")
@@ -56,6 +92,7 @@ def _ai_worker_capabilities(transport: str | None = None) -> dict:
     whisper_ready = _module_available("faster_whisper")
     web_mode = transport == ai_remote.TRANSPORT_HTTPS
     payload = {
+        **_worker_build_identity(),
         "workerKind": "ai",
         "workerMachine": str(socket.gethostname() or "")[:80],
         "heartbeatContract": 3 if web_mode else 2,
@@ -68,6 +105,14 @@ def _ai_worker_capabilities(transport: str | None = None) -> dict:
             "kokoro": kokoro_ready,
             "numpy": numpy_ready,
             "misaki": misaki_ready,
+        },
+        "tts": {
+            "provider": "kokoro-local",
+            "repoId": str(os.environ.get("KOKORO_REPO_ID") or media_audio_runtime.DEFAULT_REPO_ID)[:160],
+            "model": str(os.environ.get("KOKORO_MODEL") or media_audio_runtime.DEFAULT_MODEL)[:120],
+            "defaultVoice": media_audio_runtime._voice(
+                os.environ.get("KOKORO_VOICE") or media_audio_runtime.DEFAULT_VOICE
+            ),
         },
         "whisper": {"available": whisper_ready},
         "queues": ["ai_questions", "media_scripts", "ai_presentations", "ai_videos", "media_audio", "media_subtitles"],

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 
 from flask import g, jsonify, request
 
@@ -62,6 +63,12 @@ def _ai_worker_status() -> dict:
         "lastSeen": "",
         "heartbeatAgeSeconds": None,
         "workerId": "",
+        "workerVersion": "",
+        "workerSha": "",
+        "workerBranch": "",
+        "codeIdentityMatch": None,
+        "ttsRepoId": "",
+        "ttsVoice": "",
         "queues": [],
         "queueCapabilitiesReported": False,
         "kokoroInstalled": None,
@@ -123,6 +130,18 @@ def _ai_worker_status() -> dict:
         control_plane_ready = capabilities.get("controlPlaneReady")
         control_plane_ready = None if control_plane_ready is None else bool(control_plane_ready)
         https_control = heartbeat_transport == "https" or control_plane_ready is True
+        worker_version = str(capabilities.get("workerVersion") or "")[:32]
+        worker_sha = str(capabilities.get("workerSha") or "").strip().lower()[:40]
+        worker_branch = str(capabilities.get("workerBranch") or "")[:80]
+        web_sha = str(os.environ.get("RENDER_GIT_COMMIT") or "").strip().lower()[:40]
+        code_identity_match = (
+            None
+            if not worker_sha or not web_sha
+            else web_sha.startswith(worker_sha) or worker_sha.startswith(web_sha)
+        )
+        tts = capabilities.get("tts") if isinstance(capabilities.get("tts"), dict) else {}
+        tts_repo_id = str(tts.get("repoId") or "")[:160]
+        tts_voice = str(tts.get("defaultVoice") or "")[:80]
 
         diagnostic_code = "worker_ready"
         diagnostic_message = (
@@ -150,6 +169,14 @@ def _ai_worker_status() -> dict:
                 f"AI Worker 最後回報已超過 120 秒（約 {heartbeat_age} 秒前）。"
                 "請檢查 Windows 排程「Teacher AI Worker」是否仍在執行。"
             )
+        elif code_identity_match is False:
+            online = False
+            diagnostic_code = "worker_code_mismatch"
+            diagnostic_message = (
+                f"AI Worker 程式版本與目前 Render 不一致（Worker {worker_sha[:12] or 'unknown'} / "
+                f"Web {web_sha[:12] or 'unknown'}）。請先更新院內 Teacher 專案到目前 main，"
+                "再重新啟動 Teacher AI Worker；版本一致前不再送 Kokoro 工作。"
+            )
         elif kokoro_installed is False:
             diagnostic_code = "kokoro_unavailable"
             diagnostic_message = (
@@ -169,6 +196,12 @@ def _ai_worker_status() -> dict:
             "lastSeen": latest_seen.isoformat(),
             "heartbeatAgeSeconds": heartbeat_age,
             "workerId": str(row.get("worker_id") or row.get("workerId") or "")[:100],
+            "workerVersion": worker_version,
+            "workerSha": worker_sha,
+            "workerBranch": worker_branch,
+            "codeIdentityMatch": code_identity_match,
+            "ttsRepoId": tts_repo_id,
+            "ttsVoice": tts_voice,
             "queues": queues,
             "queueCapabilitiesReported": isinstance(raw_queues, (list, tuple, set)),
             "kokoroInstalled": kokoro_installed,
