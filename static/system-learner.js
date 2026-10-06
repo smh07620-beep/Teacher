@@ -17,6 +17,7 @@ const slideCategoryLabels = {
 
 
 let cachedSlidesList = []; // 最近一次從後端取得的簡報清單快取，供開啟檢視器使用
+window.cachedSlidesList = cachedSlidesList;
 
 let cachedCourses = [];
 
@@ -191,6 +192,7 @@ async function renderSlidesGrid() {
         const courseMap = Object.fromEntries(cachedCourses.map(c => [c.id, c.title]));
 
         cachedSlidesList = (await res.json()).map(x => ({...x, courseTitle: courseMap[x.courseId] || ''}));
+        window.cachedSlidesList = cachedSlidesList;
 
         const allInGroup = cachedSlidesList.filter(s => (s.group || 'grpBio') === currentGroupKey);
 
@@ -270,6 +272,8 @@ async function renderSlidesGrid() {
 // --- 教材檢視器：V5.7.0 單一 preview.pdf + Range/Fast Web View；舊教材保留逐頁圖片相容 ---
 
 let slideViewerState = { images: [], previewUrl: '', pageCount: 0, mode: 'images', readerMode: 'presentation', index: 0, title: '', zoom: 1, materialId: '' };
+window.slideViewerState = slideViewerState;
+let slidePdfSwapSerial = 0;
 
 function inferPdfReaderMode(entry = {}) {
     const meta = entry.storageMeta || {};
@@ -421,6 +425,7 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
     const normalizedReaderMode = mode === 'pdf' && readerMode !== 'presentation' ? 'document' : 'presentation';
 
     slideViewerState = { images, previewUrl, pageCount: total, mode, readerMode: normalizedReaderMode, index: teachingReadPage(materialId, total), title, zoom: 1, materialId };
+    window.slideViewerState = slideViewerState;
 
     document.getElementById('slide-viewer-title').textContent = title;
 
@@ -586,6 +591,65 @@ function updateViewerNav(total){
 
 
 
+function swapPresentationPdfFrame(wanted,page){
+
+    const current=document.getElementById('slide-viewer-pdf');
+    const stage=document.getElementById('slide-viewer-stage');
+    if(!current||!stage)return;
+
+    const existingPending=document.getElementById('slide-viewer-pdf-pending');
+    if(current.dataset.src===wanted&&!existingPending)return;
+    existingPending?.remove();
+
+    const serial=++slidePdfSwapSerial;
+    const incoming=current.cloneNode(false);
+    incoming.removeAttribute('src');
+    incoming.id='slide-viewer-pdf-pending';
+    incoming.classList.remove('hidden');
+    incoming.dataset.src=wanted;
+    incoming.dataset.readerMode='presentation';
+    incoming.setAttribute('scrolling','no');
+    incoming.tabIndex=-1;
+    incoming.title=`投影片第 ${page} 頁`;
+    incoming.style.opacity='0';
+    incoming.style.pointerEvents='none';
+    incoming.style.zIndex='2';
+    incoming.style.transition='none';
+    current.style.zIndex='1';
+    current.dataset.pendingSrc=wanted;
+    stage.appendChild(incoming);
+
+    let committed=false;
+    const commitSwap=()=>{
+        if(committed)return;
+        committed=true;
+        window.setTimeout(()=>{
+            if(serial!==slidePdfSwapSerial||!incoming.isConnected){incoming.remove();return;}
+            const active=document.getElementById('slide-viewer-pdf');
+            if(!active){incoming.remove();return;}
+            active.removeAttribute('id');
+            active.remove();
+            incoming.id='slide-viewer-pdf';
+            incoming.style.transition='opacity 80ms linear';
+            incoming.style.opacity='1';
+            incoming.style.zIndex='';
+            incoming.dataset.src=wanted;
+            incoming.dataset.pendingSrc='';
+        },320);
+    };
+    incoming.addEventListener('load',commitSwap,{once:true});
+    incoming.addEventListener('error',()=>{
+        if(serial===slidePdfSwapSerial){
+            incoming.remove();
+            current.dataset.pendingSrc='';
+            const hint=document.getElementById('reader-learning-context');
+            if(hint)hint.textContent='投影片頁面載入失敗，仍保留目前頁面，可再試一次。';
+        }
+    },{once:true});
+    window.setTimeout(commitSwap,1200);
+    incoming.src=wanted;
+}
+
 function updateSlideViewerPdf(){
 
     const total=Math.max(1,Number(slideViewerState.pageCount||1));
@@ -599,21 +663,28 @@ function updateSlideViewerPdf(){
     const base=slideViewerState.previewUrl;
     const presentationMode=slideViewerState.readerMode==='presentation';
 
-    // Chrome PDF Viewer can ignore a fragment-only navigation on an existing
-    // iframe. A page-specific query forces a real navigation while retaining
-    // browser cache for the underlying PDF response.
+    // Chrome PDF Viewer briefly paints page 1 while it initializes. For slide
+    // decks, keep the current page visible and preload the requested page in a
+    // transparent sibling iframe; swap only after the new viewer has settled.
     const separator=base.includes('?')?'&':'?';
     const presentationBase=presentationMode?`${base}${separator}reader_page=${page}`:base;
     const wanted=presentationMode
         ? `${presentationBase}#page=${page}&toolbar=0&navpanes=0&scrollbar=0&view=Fit`
         : `${base}#page=${page}&toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
 
-    frame.dataset.readerMode=presentationMode?'presentation':'document';
-    frame.setAttribute('scrolling',presentationMode?'no':'yes');
-    frame.tabIndex=presentationMode?-1:0;
-    frame.title=presentationMode?`投影片第 ${page} 頁`:'文件 PDF 預覽';
-
-    if(frame.dataset.src!==wanted){frame.dataset.src=wanted;frame.src=wanted;}
+    if(presentationMode){
+        swapPresentationPdfFrame(wanted,page);
+    }else{
+        ++slidePdfSwapSerial;
+        document.getElementById('slide-viewer-pdf-pending')?.remove();
+        frame.dataset.readerMode='document';
+        frame.setAttribute('scrolling','yes');
+        frame.tabIndex=0;
+        frame.title='文件 PDF 預覽';
+        frame.style.opacity='1';
+        frame.style.pointerEvents='';
+        if(frame.dataset.src!==wanted){frame.dataset.src=wanted;frame.src=wanted;}
+    }
 
     updateViewerNav(total);
 
@@ -685,6 +756,7 @@ function goToSlidePage(i) {
     if (!Number.isInteger(next) || next < 0 || next >= total) return;
     slideViewerState.index = next;
     slideViewerState.zoom = 1;
+    window.slideViewerState = slideViewerState;
     renderSlideThumbs();
     if(slideViewerState.mode==='pdf')updateSlideViewerPdf();else updateSlideViewerImage();
 }
@@ -699,7 +771,7 @@ window.goToSlidePage = goToSlidePage;
 window.slideViewerPrev = slideViewerPrev;
 window.slideViewerNext = slideViewerNext;
 
-function closeSlideViewer() { const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); }
+function closeSlideViewer() { ++slidePdfSwapSerial; document.getElementById('slide-viewer-pdf-pending')?.remove(); const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';pdf.dataset.pendingSrc='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); }
 
 
 
