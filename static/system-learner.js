@@ -103,7 +103,7 @@ function buildSlideCardHTML(s) {
 
             </div>
 
-            <div><p class="edu-kicker">LEARNING MATERIAL</p><h4 class="text-base font-black text-slate-900 break-all leading-snug mt-1">${s.title}</h4></div>
+            <div><p class="edu-kicker">LEARNING MATERIAL</p><h4 class="material-card-title text-base font-black text-slate-900 break-words leading-snug mt-1">${s.title}</h4></div>
 
             <p class="text-xs text-slate-500 flex-grow">${s.desc || ''}</p>
 
@@ -269,7 +269,32 @@ async function renderSlidesGrid() {
 
 // --- 教材檢視器：V5.7.0 單一 preview.pdf + Range/Fast Web View；舊教材保留逐頁圖片相容 ---
 
-let slideViewerState = { images: [], previewUrl: '', pageCount: 0, mode: 'images', index: 0, title: '', zoom: 1, materialId: '' };
+let slideViewerState = { images: [], previewUrl: '', pageCount: 0, mode: 'images', readerMode: 'presentation', index: 0, title: '', zoom: 1, materialId: '' };
+
+function inferPdfReaderMode(entry = {}) {
+    const meta = entry.storageMeta || {};
+    const explicitHints = [
+        entry.readerMode,
+        meta.readerMode,
+        meta.readerKind,
+        meta.derivativeType,
+        meta.sourceType,
+        meta.sourceKind
+    ].map(value => String(value || '').trim().toLowerCase()).filter(Boolean);
+
+    if (String(entry.materialType || '').toLowerCase() === 'sop') return 'document';
+    if (explicitHints.some(value => ['document', 'continuous', 'pdf', 'sop'].includes(value))) return 'document';
+    if (explicitHints.some(value => ['presentation', 'slides', 'powerpoint', 'ai_presentation', 'ai-powerpoint'].includes(value))) return 'presentation';
+    if (entry.sourcePresentationId || entry.presentationId || meta.sourcePresentationId || meta.presentationId) return 'presentation';
+
+    const sourceName = String(entry.filename || entry.storageFilename || '').split(/[?#]/)[0].toLowerCase();
+    if (/\.(ppt|pptx|pps|ppsx|odp)$/.test(sourceName)) return 'presentation';
+
+    const title = String(entry.title || '').toLowerCase();
+    if (/(powerpoint|ai\s*powerpoint|投影片|簡報)/.test(title)) return 'presentation';
+
+    return 'document';
+}
 
 
 
@@ -373,19 +398,26 @@ function openSlide(id) {
 
 function openPdfPreview(entry) {
 
-    openSlideViewer({ previewUrl: entry.previewUrl, pageCount: Number(entry.pageCount||entry.storageMeta?.pageCount||1), title: entry.title, materialId: entry.id });
+    openSlideViewer({
+        previewUrl: entry.previewUrl,
+        pageCount: Number(entry.pageCount||entry.storageMeta?.pageCount||1),
+        title: entry.title,
+        materialId: entry.id,
+        readerMode: inferPdfReaderMode(entry)
+    });
 
 }
 
 
 
-function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, materialId = "" }) {
+function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, materialId = "", readerMode = 'presentation' }) {
 
     const mode = previewUrl ? 'pdf' : 'images';
 
     const total = mode === 'pdf' ? Math.max(1, Number(pageCount||1)) : images.length;
+    const normalizedReaderMode = mode === 'pdf' && readerMode !== 'presentation' ? 'document' : 'presentation';
 
-    slideViewerState = { images, previewUrl, pageCount: total, mode, index: teachingReadPage(materialId, total), title, zoom: 1, materialId };
+    slideViewerState = { images, previewUrl, pageCount: total, mode, readerMode: normalizedReaderMode, index: teachingReadPage(materialId, total), title, zoom: 1, materialId };
 
     document.getElementById('slide-viewer-title').textContent = title;
 
@@ -393,7 +425,12 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
 
     const subtitle=document.getElementById('slide-viewer-subtitle');
 
+    const presentationPdf = mode === 'pdf' && normalizedReaderMode === 'presentation';
+    const documentPdf = mode === 'pdf' && normalizedReaderMode === 'document';
+
     shell?.classList.toggle('single-preview-mode', mode==='pdf');
+    shell?.classList.toggle('presentation-preview-mode', presentationPdf);
+    shell?.classList.toggle('document-preview-mode', documentPdf);
 
     canvas?.classList.toggle('hidden', mode==='pdf');
 
@@ -401,7 +438,11 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
 
     document.querySelectorAll('[data-slide-image-tool]').forEach(el=>el.classList.toggle('hidden',mode==='pdf'));
 
-    if(subtitle) subtitle.textContent=mode==='pdf'?'教學專用・不得轉發、轉載、販售｜單一預覽檔・原始教材不提供下載':'教學專用・不得轉發、轉載、販售｜原始教材不提供下載';
+    if(subtitle) subtitle.textContent = presentationPdf
+        ? '教學專用・不得轉發、轉載、販售｜投影片模式・請用左右箭頭或鍵盤 ← → 翻頁'
+        : documentPdf
+            ? '教學專用・不得轉發、轉載、販售｜文件模式・可上下捲動閱讀'
+            : '教學專用・不得轉發、轉載、販售｜原始教材不提供下載';
 
     renderSlideThumbs();
 
@@ -411,7 +452,7 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
 
     document.body.style.overflow = 'hidden';
 
-    initSlidePan(); updateSlidePanState();
+    initSlidePan(); initPdfPresentationWheel(); updateSlidePanState();
 
 }
 
@@ -489,6 +530,17 @@ function initSlidePan(){
 
 
 
+function initPdfPresentationWheel(){
+    const stage=document.getElementById('slide-viewer-stage');
+    if(!stage||stage.dataset.presentationWheelReady==='1')return;
+    stage.dataset.presentationWheelReady='1';
+    stage.addEventListener('wheel',event=>{
+        if(slideViewerState.mode!=='pdf'||slideViewerState.readerMode!=='presentation')return;
+        event.preventDefault();
+        event.stopPropagation();
+    },{passive:false});
+}
+
 async function toggleSlideFullscreen() {
 
     const shell = document.getElementById('slide-viewer-shell');
@@ -542,8 +594,16 @@ function updateSlideViewerPdf(){
     const page=slideViewerState.index+1;
 
     const base=slideViewerState.previewUrl;
+    const presentationMode=slideViewerState.readerMode==='presentation';
 
-    const wanted=`${base}#page=${page}&toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
+    const wanted=presentationMode
+        ? `${base}#page=${page}&toolbar=0&navpanes=0&scrollbar=0&view=Fit`
+        : `${base}#page=${page}&toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
+
+    frame.dataset.readerMode=presentationMode?'presentation':'document';
+    frame.setAttribute('scrolling',presentationMode?'no':'yes');
+    frame.tabIndex=presentationMode?-1:0;
+    frame.title=presentationMode?`投影片第 ${page} 頁`:'文件 PDF 預覽';
 
     if(frame.dataset.src!==wanted){frame.dataset.src=wanted;frame.src=wanted;}
 
@@ -551,7 +611,7 @@ function updateSlideViewerPdf(){
 
     const hint=document.getElementById('reader-learning-context');
 
-    if(hint&&!hint.textContent) hint.textContent='正在載入單一預覽檔…';
+    if(hint&&!hint.textContent) hint.textContent=presentationMode?'正在載入投影片頁面…':'正在載入文件 PDF…';
 
 }
 
@@ -845,7 +905,7 @@ function buildCourseMaterialRow(m){
 
     const detail=[m.pageCount?`${m.pageCount} 頁`:'',m.dateAdded?`上傳 ${m.dateAdded}`:''].filter(Boolean).join(' · ');
 
-    return `<div class="course-material-row"><span class="course-type-icon">${meta.icon}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-sm text-slate-800 break-words">${escapeHtml(m.title||m.filename||'未命名教材')}</span><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.tone}">${escapeHtml(meta.label)}</span>${done?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✓ 已完成</span>':''}</div><p class="text-[11px] text-slate-400 mt-1">${escapeHtml(detail||m.description||'')}</p></div><div class="course-row-actions flex items-center gap-2"><button data-csp-click="openMaterial('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg bg-[#006b64] hover:bg-[#005a54] text-white text-xs font-bold">${meta.key==='media'?'▶ 播放':'📖 閱讀'}</button>${m.isBuiltin?'':`<button data-csp-click="markMaterialComplete('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg border ${done?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'} text-xs font-bold">${done?'✓ 已完成':'完成標記'}</button><button type="button" data-save-learning-item="material" data-save-learning-id="${escapeHtml(m.id)}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">${savedLearningItems.has(savedLearningKey('material',m.id))?'★ 已收藏':'☆ 稍後閱讀'}</button>`}</div></div>`;
+    return `<div class="course-material-row"><span class="course-type-icon">${meta.icon}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="course-material-title font-bold text-sm text-slate-800 break-words">${escapeHtml(m.title||m.filename||'未命名教材')}</span><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.tone}">${escapeHtml(meta.label)}</span>${done?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✓ 已完成</span>':''}</div><p class="text-[11px] text-slate-400 mt-1">${escapeHtml(detail||m.description||'')}</p></div><div class="course-row-actions flex items-center gap-2"><button data-csp-click="openMaterial('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg bg-[#006b64] hover:bg-[#005a54] text-white text-xs font-bold">${meta.key==='media'?'▶ 播放':'📖 閱讀'}</button>${m.isBuiltin?'':`<button data-csp-click="markMaterialComplete('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg border ${done?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'} text-xs font-bold">${done?'✓ 已完成':'完成標記'}</button><button type="button" data-save-learning-item="material" data-save-learning-id="${escapeHtml(m.id)}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">${savedLearningItems.has(savedLearningKey('material',m.id))?'★ 已收藏':'☆ 稍後閱讀'}</button>`}</div></div>`;
 
 }
 
