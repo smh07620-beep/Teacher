@@ -15,3 +15,24 @@ if os.environ.get("TEACHER_E2E_TEST_MODE") == "1" and os.environ.get("TEACHER_E2
         )
 
     media_subtitle_runtime.transcribe_segments = _deterministic_segments
+
+
+# Keep the real FFmpeg command path but expose stderr in isolated CI failures.
+# Production runtime intentionally keeps user-facing errors terse; this seam
+# makes the E2E job actionable without changing production behavior.
+if os.environ.get("TEACHER_E2E_TEST_MODE") == "1" and os.environ.get("TEACHER_E2E_DETERMINISTIC_STUBS") == "1":
+    import subprocess
+    from teacher_app.materials import ai_video_runtime
+
+    def _diagnostic_run(command, *, timeout, message):
+        try:
+            completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+        except FileNotFoundError as exc:
+            raise RuntimeError(message) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"{message}（逾時）") from exc
+        if completed.returncode != 0:
+            detail = " ".join((completed.stderr or completed.stdout or "").split())[-1200:]
+            raise RuntimeError(f"{message}（exit={completed.returncode}）｜{detail}")
+
+    ai_video_runtime._run = _diagnostic_run
