@@ -153,7 +153,7 @@
     try {
       const [profile, command] = await Promise.all([
         loadProfile(force),
-        getJSON('/api/training-command-center')
+        getJSON('/api/training-command-center?persona=learner')
       ]);
       section.classList.remove('hidden');
       render(profile, command);
