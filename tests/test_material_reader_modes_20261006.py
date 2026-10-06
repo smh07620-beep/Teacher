@@ -11,6 +11,14 @@ class MaterialReaderModes20261006Tests(unittest.TestCase):
         cls.learner = ROOT.joinpath("static", "system-learner.js").read_text(encoding="utf-8")
         cls.css = ROOT.joinpath("static", "learner.css").read_text(encoding="utf-8")
         cls.delivery = ROOT.joinpath("teacher_app", "materials", "delivery_routes.py").read_text(encoding="utf-8")
+        cls.repository = ROOT.joinpath("teacher_app", "materials", "repository.py").read_text(encoding="utf-8")
+
+    def test_repository_projects_word_as_paged_and_sop_as_continuous(self):
+        self.assertIn('PAGED_DOCUMENT_EXTENSIONS = {".doc", ".docx", ".odt"}', self.repository)
+        self.assertIn('"paged_document"', self.repository)
+        sop_pos = self.repository.index('if r["materialType"] == "sop"')
+        word_pos = self.repository.index('if ext in PAGED_DOCUMENT_EXTENSIONS')
+        self.assertLess(sop_pos, word_pos)
 
     def test_powerpoint_preview_is_detected_as_presentation_reader(self):
         self.assertIn("function inferPdfReaderMode(entry = {})", self.learner)
