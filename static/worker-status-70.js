@@ -686,15 +686,15 @@
     if(type==='worker_offline')return {href:'#worker-runtime-70',label:'查看 Worker'};
     if(type==='trend_anomaly'||category==='trend'||category==='capacity')return {href:'#worker-slo-70',label:'查看 SLO 趨勢'};
     if(type==='job_stalled'||type==='failure_rate'||(type==='error_burst'&&category==='worker'))return {href:'#worker-problems-70',label:'查看異常工作'};
-    if(category==='storage'||/(R2|GDRIVE|MEGA|OCI|STORAGE)/.test(code))return {href:'/system?admin=1&workspace=system&persona=system&from=incident&focus=storage',label:'前往系統與儲存'};
+    if(category==='storage'||/(R2|GDRIVE|MEGA|OCI|STORAGE)/.test(code))return {href:window.AppWorkspaceRoutes.url('system',{from:'incident',params:{focus:'storage'}}),label:'前往系統與儲存'};
     if(category==='ai'||type==='ai_queue_failure'){
       const canTeach=Boolean(window.TeacherWorkspace1014?.canTeach);
       if(canTeach){
         const assessment=resource==='question';
         return {
           href:assessment
-            ? '/system?admin=1&workspace=assessment&persona=teacher&from=incident&focus=ai-question'
-            : '/system?admin=1&workspace=course-materials&persona=teacher&from=incident&focus=ai-media',
+            ? window.AppWorkspaceRoutes.url('assessment',{persona:'teacher',from:'incident',params:{focus:'ai-question'}})
+            : window.AppWorkspaceRoutes.url('course-materials',{persona:'teacher',from:'incident',params:{focus:'ai-media'}}),
           label:assessment?'前往評量與出題':'前往教材與媒體'
         };
       }
@@ -1070,7 +1070,7 @@
     initialParams.get('persona') === 'system'
   ) {
     setTimeout(() => {
-      void window.switchAdminWorkspace?.('worker', true);
+      void window.AppWorkspaceRoutes.show('worker', true);
     }, 0);
   }
 })();

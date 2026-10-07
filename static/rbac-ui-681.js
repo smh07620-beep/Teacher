@@ -231,13 +231,13 @@ window.TeacherRBAC681Ready = (async function () {
     document.querySelectorAll('.v580-admin-group').forEach(group => {
       const label = group.querySelector('.v580-admin-group-label');
       if (!label) return;
-      if (group.querySelector('#admin-nav-course-materials,#admin-nav-assessment,#admin-nav-questions,#admin-nav-exams')) {
-        label.textContent = surface.teachingLabel;
-      } else if (group.querySelector('#admin-nav-teacher,#admin-nav-results,#admin-nav-compliance')) {
-        label.textContent = surface.evaluationLabel;
-      } else if (group.querySelector('#admin-nav-word,#admin-nav-people,#admin-nav-system')) {
-        label.textContent = surface.platformLabel;
-      }
+      // Each group declares its product area (教學 / 評量 / 系統管理); only the
+      // wording is role-specific.  Groups built by later scripts have no
+      // data-admin-area and keep the label they were given.
+      const area = group.dataset.adminArea || '';
+      if (area === 'teaching') label.textContent = surface.teachingLabel;
+      else if (area === 'assessment') label.textContent = surface.evaluationLabel;
+      else if (area === 'system') label.textContent = surface.platformLabel;
     });
   }
 

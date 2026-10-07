@@ -16,7 +16,7 @@
     const params=new URLSearchParams(window.location.search);
     const workspace=params.get('workspace')||'';
     return params.get('persona')==='system'
-      || (params.get('admin')==='1'&&['people','system','worker','maintenance','audit'].includes(workspace));
+      || (params.get('admin')==='1'&&window.AppWorkspaceRoutes.systemNames().includes(workspace));
   }
 
   function isLearnerContext(){

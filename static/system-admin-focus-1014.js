@@ -11,7 +11,7 @@
   const params = new URLSearchParams(window.location.search);
   const requestedPersona = params.get('persona') || '';
   const requestedWorkspace = params.get('workspace') || '';
-  const legacySystemWorkspaces = new Set(['people','system','worker','maintenance','audit']);
+  const legacySystemWorkspaces = new Set(window.AppWorkspaceRoutes.systemNames());
   const systemPersona = params.get('admin') === '1' && (
     requestedPersona === 'system' || (!requestedPersona && legacySystemWorkspaces.has(requestedWorkspace))
   );
@@ -57,7 +57,7 @@
     url.searchParams.set('workspace', 'people');
     url.searchParams.set('persona', 'system');
     window.history?.replaceState?.(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-    void window.switchAdminWorkspace?.('people', true);
+    void window.AppWorkspaceRoutes.show('people', true);
   }
 
   function applySystemFocus() {

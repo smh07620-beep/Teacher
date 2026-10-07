@@ -139,7 +139,7 @@
 
   async function prepareCanonicalForm(){
     const q=state.question,d=q?.draft;if(!q||!d)throw new Error('題目資料遺失，請重新開始。');
-    await window.openAdminWorkspace?.('assessment');
+    await window.AppWorkspaceRoutes.open('assessment');
     const area=document.getElementById('admin-quiz-area'),group=document.getElementById('admin-quiz-group');
     if(area)area.value=q.area;if(group)group.value=q.group;
     await window.renderAdminQuizCategories?.(true);
@@ -170,7 +170,7 @@
       const succeeded=!!before&&!(canonicalQuestion?.value.trim());
       if(!succeeded)throw new Error('題目尚未建立，請檢查欄位或權限後再試。');
       window.TeacherContentComposer72?.showOutcome?.('success','題目已建立','題目已加入考卷。你可以繼續出下一題，或回到已建立題目清單管理。',[
-        {label:'回到已建立題目',run:async()=>{window.teacherContentStudioClose?.();await window.openAdminWorkspace?.('assessment');await window.renderAdminQuizCategories?.(true);const panel=document.getElementById(`qpanel-${state.question.catId}`);if(panel?.classList.contains('hidden'))await window.toggleQuizQuestionsPanel?.(state.question.catId);panel?.scrollIntoView({behavior:'smooth',block:'start'});scheduleReconcile();}},
+        {label:'回到已建立題目',run:async()=>{window.teacherContentStudioClose?.();await window.AppWorkspaceRoutes.open('assessment');await window.renderAdminQuizCategories?.(true);const panel=document.getElementById(`qpanel-${state.question.catId}`);if(panel?.classList.contains('hidden'))await window.toggleQuizQuestionsPanel?.(state.question.catId);panel?.scrollIntoView({behavior:'smooth',block:'start'});scheduleReconcile();}},
         {label:'繼續出下一題',primary:true,run:()=>{state.question.draft=null;window.teacherContentStudioOpen?.();renderQuestionEdit();}}
       ]);
     }catch(error){

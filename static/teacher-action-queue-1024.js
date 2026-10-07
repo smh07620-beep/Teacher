@@ -159,7 +159,7 @@
   }
 
   async function openReview(item) {
-    await window.switchAdminWorkspace?.('teacher', true);
+    await window.AppWorkspaceRoutes.show('teacher', true);
     await window.switchTeacherMode?.('scoring');
     if (typeof window.renderAdminTable === 'function') await window.renderAdminTable();
     const records = typeof adminRecords !== 'undefined' && Array.isArray(adminRecords) ? adminRecords : [];
@@ -221,7 +221,7 @@
   }
 
   async function openIntervention(item) {
-    await window.switchAdminWorkspace?.('course-materials', true);
+    await window.AppWorkspaceRoutes.show('course-materials', true);
     if (typeof window.TeacherWorkspace1014?.openLearners === 'function') {
       await window.TeacherWorkspace1014.openLearners();
     }

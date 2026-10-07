@@ -17,6 +17,10 @@ LEGACY_COMPAT_ASSETS = (
 
 ASSET_MANIFEST = {
     "portal": {
+        # Back-office destination table; portal links ask it for their URLs.
+        "ordered": (
+            ("/shared-core.js", ("/workspace-routes-1007.js",)),
+        ),
         "body": (
             "/home-profile-title-71.js",
             "/portal-navigation-73.js",
@@ -29,6 +33,10 @@ ASSET_MANIFEST = {
             (
                 "/shared-core.js",
                 (
+                    # Back-office destination table (names, aliases, areas,
+                    # URLs). Read by the workspace shell and every script that
+                    # links to a workspace, so it must come first.
+                    "/workspace-routes-1007.js",
                     # RBAC publishes the readiness promise consumed by every
                     # teacher workspace. Load it before the large deferred
                     # admin bundle so first navigation cannot race it in CI.

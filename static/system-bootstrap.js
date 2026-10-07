@@ -52,7 +52,7 @@ window.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const ws=urlParams.get('workspace');
-        if(['course-materials','courses','materials','assessment','questions','exams','teacher','scoring','results','compliance','pgy','word','people','system','maintenance','audit','worker'].includes(ws) && typeof window.switchAdminWorkspace==='function'){
+        if(window.AppWorkspaceRoutes.has(ws) && typeof window.switchAdminWorkspace==='function'){
             await window.switchAdminWorkspace(ws,true);
         }
     },0);

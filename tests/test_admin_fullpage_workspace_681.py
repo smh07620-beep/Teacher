@@ -26,7 +26,7 @@ class AdminFullPageWorkspace681Tests(unittest.TestCase):
 
     def test_staff_entries_use_page_workspace_navigation(self):
         self.assertIn('data-csp-click="openTeachingMaterials()"', self.html)
-        self.assertIn("window.location.assign(workspaceUrl(name || 'course-materials'))", self.router)
+        self.assertIn("window.location.assign(workspaceUrl(name || ROUTES.DEFAULT_WORKSPACE))", self.router)
         self.assertIn("url.searchParams.set(PAGE_MODE_PARAM, '1')", self.router)
         self.assertIn("url.searchParams.set('workspace'", self.router)
 
@@ -43,8 +43,12 @@ class AdminFullPageWorkspace681Tests(unittest.TestCase):
         self.assertIn("window.location.assign(learningUrl())", self.router)
 
     def test_bootstrap_can_restore_extension_workspaces_from_url(self):
+        # The accepted deep-link names come from the route registry, which owns
+        # every workspace key (see tests/test_workspace_routes_1007.py).
+        self.assertIn("window.AppWorkspaceRoutes.has(ws)", self.bootstrap)
+        registry = (ROOT / "static" / "workspace-routes-1007.js").read_text(encoding="utf-8")
         for workspace in ("maintenance", "audit", "worker"):
-            self.assertIn(f"'{workspace}'", self.bootstrap)
+            self.assertIn(f"{workspace}: entry('system'", registry)
 
 
 if __name__ == "__main__":

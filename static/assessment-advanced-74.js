@@ -229,7 +229,7 @@
   }
 
   async function open(tab='blueprint') {
-    await window.openAdminWorkspace?.('assessment');
+    await window.AppWorkspaceRoutes.open('assessment');
     const panel = ensurePanel(); if (!panel) return;
     state.tab = tab === 'analytics' ? 'analytics' : 'blueprint';
     panel.querySelector('details').open = true;

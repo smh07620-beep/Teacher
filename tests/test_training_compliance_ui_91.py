@@ -30,11 +30,12 @@ class TrainingComplianceUiTests(unittest.TestCase):
         self.assertIn("registerWorkspace('compliance'", self.ui)
         self.assertIn("compliance: ['training.compliance.read']", self.rbac)
         self.assertIn("'admin-nav-compliance': WORKSPACE_RULES.compliance", self.rbac)
-        self.assertIn("compliance: {icon:'✅'", self.router)
+        registry = ROOT.joinpath("static", "workspace-routes-1007.js").read_text(encoding="utf-8")
+        self.assertIn("compliance: entry('assessment', '✅'", registry)
 
     def test_asset_and_deep_link_are_registered(self):
         self.assertIn('"/admin-compliance-91.js"', self.assets)
-        self.assertIn("'compliance'", self.bootstrap)
+        self.assertIn("window.AppWorkspaceRoutes.has(ws)", self.bootstrap)
 
     def test_no_inline_event_handlers_added_to_new_panel(self):
         start = self.html.index('id="admin-section-compliance"')

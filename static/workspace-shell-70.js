@@ -341,7 +341,7 @@
       modal.classList.remove('hidden');
       modal.setAttribute('aria-hidden', 'false');
       document.body?.classList.add('overflow-hidden');
-      await window.switchAdminWorkspace('audit', true);
+      await window.AppWorkspaceRoutes.show('audit', true);
       return {handled:true, result:true};
     }
     return null;

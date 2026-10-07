@@ -26,9 +26,13 @@ class Phase3AdminWorkspaceRouterTests(unittest.TestCase):
             'openTeacherAssessment',
         ):
             self.assertIn(f'window.{name}', self.router)
-        self.assertIn("name === 'courses' || name === 'materials'", self.router)
-        self.assertIn("name === 'assessment' || name === 'questions'", self.router)
-        self.assertIn("name === 'scoring' || name === 'pgy'", self.router)
+        # Aliases are owned by the route registry; the router must delegate.
+        self.assertIn("return ROUTES.normalize(name)", self.router)
+        registry = (ROOT / "static" / "workspace-routes-1007.js").read_text(encoding="utf-8")
+        for alias, target in (("courses", "course-materials"), ("materials", "course-materials"),
+                              ("questions", "assessment"), ("exams", "assessment"),
+                              ("scoring", "teacher"), ("pgy", "teacher")):
+            self.assertIn(f"{alias}: '{target}'", registry)
 
     def test_rbac_bootstrap_loads_before_router(self):
         ordered = dict(ASSET_MANIFEST["system"]["ordered"])["/system-admin.js"]

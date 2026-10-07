@@ -215,7 +215,7 @@
   async function openResults(event){
     const item=latest.learners?.[Number(event.currentTarget?.dataset?.p2Results)];
     if(!item)return;
-    await window.switchAdminWorkspace?.('results',true);
+    await window.AppWorkspaceRoutes.show('results',true);
     const search=document.getElementById('admin-results-search');
     if(search)search.value=item.empId||item.name||item.username||'';
     if(typeof window.renderAdminTable==='function')await window.renderAdminTable();

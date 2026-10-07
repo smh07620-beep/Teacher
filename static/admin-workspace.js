@@ -7,8 +7,10 @@
 (() => {
   'use strict';
 
+  // Names, aliases, areas and URLs come from workspace-routes-1007.js.
+  const ROUTES = window.AppWorkspaceRoutes;
   const state = {
-    workspace: 'course-materials',
+    workspace: ROUTES.DEFAULT_WORKSPACE,
     section: 'content',
     loaded: {content:false, quiz:false, word:false, pgy:false, results:false}
   };
@@ -20,36 +22,14 @@
   const modalGuards = [];
   const afterModalHooks = [];
   const PAGE_MODE_PARAM = 'admin';
-  const SYSTEM_WORKSPACES = new Set(['people','system','worker','maintenance','audit']);
+  const SYSTEM_WORKSPACES = new Set(ROUTES.systemNames());
   const DEFERRED_EXTENSION_WORKSPACES = new Set(['worker','maintenance','audit']);
-  const WORKSPACE_META = Object.freeze({
-    'course-materials': {
-      icon: '📚',
-      title: '教材與課程 Workspace',
-      summary: '管理課程、教材、影音、圖譜與內容處理進度。',
-    },
-    assessment: {
-      icon: '📝',
-      title: '評量與追蹤 Workspace',
-      summary: '管理考卷、題庫、AI 輔助出題、審核發布、待批改與學員追蹤。',
-    },
-    teacher: {icon:'👩‍🏫', title:'教師評核 Workspace', summary:'集中處理人工閱卷、問答評分與 PGY 教師評核。'},
-    results: {icon:'📊', title:'成績管理 Workspace', summary:'查閱歷次成績、通過狀態、批改結果與考核分析。'},
-    compliance: {icon:'✅', title:'訓練合規 Workspace', summary:'依指派查看人員完訓、逾期、重訓、補強、考核與完訓證明狀態。'},
-    word: {icon:'📝', title:'Word 範本 Workspace', summary:'維護各組正式考核表範本與套版輸出。'},
-    people: {icon:'👥', title:'人員管理 Workspace', summary:'管理帳號、角色、範圍與教學存取權限。'},
-    system: {icon:'⚙️', title:'系統設定 Workspace', summary:'檢查系統服務、儲存、安全設定與維運型系統公告。'},
-    maintenance: {icon:'🛡️', title:'備份維護 Workspace', summary:'執行授權範圍內的備份、還原與維護工作。'},
-    audit: {icon:'🔎', title:'稽核紀錄 Workspace', summary:'唯讀檢視授權範圍內的系統與教學稽核紀錄。'},
-    worker: {icon:'⚙️', title:'Worker Workspace', summary:'檢查教材背景處理與工作執行狀態。'},
-  });
-
   function isPageMode() {
     return new URLSearchParams(window.location.search).get(PAGE_MODE_PARAM) === '1';
   }
 
-  function workspaceUrl(workspace = state.workspace || 'course-materials') {
-    const canonical = normalizeWorkspace(String(workspace || 'course-materials'));
+  function workspaceUrl(workspace = state.workspace || ROUTES.DEFAULT_WORKSPACE) {
+    const canonical = normalizeWorkspace(String(workspace || ROUTES.DEFAULT_WORKSPACE));
     const url = new URL(window.location.href);
     url.searchParams.set(PAGE_MODE_PARAM, '1');
     url.searchParams.set('workspace', String(workspace || canonical));
@@ -106,12 +86,8 @@
   }
 
   function normalizeWorkspace(name) {
-    if (name === 'courses' || name === 'materials') return 'course-materials';
-    // "exams" was used by the older settings page's return button.  Keep it
-    // as an alias instead of leaving the router in an unhandled workspace.
-    if (name === 'assessment' || name === 'questions' || name === 'exams') return 'assessment';
-    if (name === 'scoring' || name === 'pgy') return 'teacher';
-    return name;
+    // Aliases (courses, questions, exams, scoring, pgy...) live in the route registry.
+    return ROUTES.normalize(name);
   }
 
   function paintWorkspaceNav(name) {
@@ -132,13 +108,20 @@
 
   function paintWorkspaceHeader(name) {
     const key = normalizeWorkspace(name);
-    const meta = WORKSPACE_META[key] || {icon:'⚙️', title:'檢驗科教學平台｜教學管理', summary:'依工作目的分區：建立內容、執行評量、維護平台。'};
+    const meta = ROUTES.has(key)
+      ? ROUTES.get(key)
+      : {icon:'⚙️', title:'檢驗科教學平台｜教學管理', summary:'依工作目的分區：建立內容、執行評量、維護平台。'};
     const icon = document.getElementById('admin-workspace-icon');
     const title = document.getElementById('admin-workspace-title');
     const summary = document.getElementById('admin-workspace-summary');
     if (icon) icon.textContent = meta.icon;
     if (title) title.textContent = meta.title;
-    if (summary) summary.textContent = meta.summary;
+    // Eleven internal workspaces, four product areas: always say which area
+    // (教學 / 評量 / 系統管理) the current workspace belongs to.
+    const area = ROUTES.has(key) ? ROUTES.areaLabel(key) : '';
+    if (summary) summary.textContent = area ? `${area}｜${meta.summary}` : meta.summary;
+    const modal = document.getElementById('admin-modal');
+    if (modal) modal.dataset.area = area ? ROUTES.areaOf(key) : '';
   }
 
   function syncSectionChrome(name) {
@@ -287,7 +270,7 @@
     if (!modal) return false;
     if (show) {
       if (!isPageMode()) {
-        window.location.assign(workspaceUrl(state.workspace || 'course-materials'));
+        window.location.assign(workspaceUrl(state.workspace || ROUTES.DEFAULT_WORKSPACE));
         return true;
       }
       syncPageModeClass(true);
@@ -298,7 +281,7 @@
       if (quizSelect) quizSelect.value = window.currentGroupKey || quizSelect.value;
       modal.classList.remove('hidden');
       const requestedWorkspace = new URLSearchParams(window.location.search).get('workspace');
-      await window.switchAdminWorkspace?.(requestedWorkspace || state.workspace || 'course-materials', false);
+      await window.switchAdminWorkspace?.(requestedWorkspace || state.workspace || ROUTES.DEFAULT_WORKSPACE, false);
       return true;
     }
     if (isPageMode()) {
@@ -330,7 +313,7 @@
 
   async function openWorkspace(name) {
     if (!isPageMode()) {
-      window.location.assign(workspaceUrl(name || 'course-materials'));
+      window.location.assign(workspaceUrl(name || ROUTES.DEFAULT_WORKSPACE));
       return true;
     }
     const opened = await window.toggleAdminModal?.(true);

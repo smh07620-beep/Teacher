@@ -32,7 +32,7 @@ class SystemAdminFocus1014Tests(unittest.TestCase):
         self.assertIn("params.get('workspace') !== 'word'", self.source)
         self.assertIn("url.searchParams.set('workspace', 'people')", self.source)
         self.assertIn("url.searchParams.set('persona', 'system')", self.source)
-        self.assertIn("window.switchAdminWorkspace?.('people', true)", self.source)
+        self.assertIn("window.AppWorkspaceRoutes.show('people', true)", self.source)
         self.assertIn("紙本輸出與範本維護已移至「教師工作區」", self.source)
 
     def test_teaching_daily_work_is_not_reintroduced_into_system_nav(self):

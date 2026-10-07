@@ -74,7 +74,7 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
         self.assertNotIn("data-teacher-guide-action", self.source)
 
     def test_media_workspace_reuses_course_material_scope(self):
-        self.assertIn("await window.switchAdminWorkspace?.('course-materials', true)", self.source)
+        self.assertIn("await window.AppWorkspaceRoutes.show('course-materials', true)", self.source)
         self.assertIn("教材 → 講稿 → 語音／影片 → 發布", self.source)
         self.assertIn("正式發布仍沿用原教材權限", self.source)
         self.assertNotIn("/api/media-generation", self.source)
@@ -88,7 +88,7 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
         self.assertNotIn("id=\"teacher-media-open-presentation-1014\"", self.source)
 
     def test_paper_documents_reuse_existing_teacher_export_flow(self):
-        self.assertIn("await window.switchAdminWorkspace?.('teacher', true)", self.source)
+        self.assertIn("await window.AppWorkspaceRoutes.show('teacher', true)", self.source)
         self.assertIn("await window.switchTeacherMode?.('documents')", self.source)
         self.assertNotIn("template.manage", self.source)
 
@@ -96,7 +96,7 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
         self.assertIn("歷史紀錄", self.source)
         self.assertIn("待批改會優先出現在「需要我處理」", self.source)
         self.assertIn("查看歷史紀錄", self.source)
-        self.assertIn("await window.switchAdminWorkspace?.('results', true)", self.source)
+        self.assertIn("await window.AppWorkspaceRoutes.show('results', true)", self.source)
         self.assertNotIn("待批改／教師評核", self.source)
 
     def test_module_does_not_create_authorization_policy(self):

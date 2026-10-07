@@ -179,7 +179,7 @@
 
   async function submitMaterial(){
     const draft=state.material;if(!draft)return;
-    window.teacherContentStudioClose?.();await window.openAdminWorkspace?.('course-materials');
+    window.teacherContentStudioClose?.();await window.AppWorkspaceRoutes.open('course-materials');
     const area=document.getElementById('admin-material-area'),group=document.getElementById('admin-material-group');if(area)area.value=draft.area;if(group)group.value=draft.group;
     await Promise.resolve(window.refreshAdminMaterialCourses?.());
     const title=document.getElementById('admin-material-title'),desc=document.getElementById('admin-material-desc'),course=document.getElementById('admin-material-course'),type=document.getElementById('admin-material-type');if(title)title.value=draft.title;if(desc)desc.value=draft.desc;if(course&&[...course.options].some(o=>o.value===draft.courseId))course.value=draft.courseId;setSelect(type,draft.kind==='video'?'video-material':'standard');window.updateAdminMaterialTypeFields?.();
@@ -209,7 +209,7 @@
 
   async function submitExternal(){
     const draft=state.external;if(!draft)return;
-    window.teacherContentStudioClose?.();await window.openAdminWorkspace?.('course-materials');
+    window.teacherContentStudioClose?.();await window.AppWorkspaceRoutes.open('course-materials');
     const area=document.getElementById('admin-material-area'),group=document.getElementById('admin-material-group');if(area)area.value=draft.area;if(group)group.value=draft.group;
     const opener=window.openExternalMaterialCreateDrawer;await opener?.();
     const set=(id,value)=>{const el=document.getElementById(id);if(el)el.value=value||'';};set('external-material-title',draft.title);set('external-material-description',draft.desc);set('external-material-url',draft.url);set('external-material-area',draft.area);set('external-material-group',draft.group);set('external-material-course',draft.courseId);

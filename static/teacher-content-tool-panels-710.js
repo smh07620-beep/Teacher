@@ -54,7 +54,7 @@
   async function prepareCanonicalPanel(catId){
     const selected=scope();
     showLoading('正在準備考卷工作區…','只載入這份考卷需要的功能，不展開其他工具。');
-    if(typeof window.openAdminWorkspace==='function')await window.openAdminWorkspace('assessment');
+    if(typeof window.openAdminWorkspace==='function')await window.AppWorkspaceRoutes.open('assessment');
     const area=document.getElementById('admin-quiz-area');
     const group=document.getElementById('admin-quiz-group');
     if(area)area.value=selected.area;

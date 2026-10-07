@@ -44,9 +44,9 @@ function syncGlobalLearningSearch(value){
 }
 function handleGlobalLearningSearchKey(event){
     if(event.key!=='Enter')return;event.preventDefault();const q=(event.currentTarget?.value||'').trim();
-    if(q.includes('題庫'))return openAdminWorkspace('questions');
-    if(q.includes('教師')||q.includes('閱卷')||q.includes('評分'))return openAdminWorkspace('teacher');
-    if(q.includes('設定'))return openAdminWorkspace('system');
+    if(q.includes('題庫'))return AppWorkspaceRoutes.open('questions');
+    if(q.includes('教師')||q.includes('閱卷')||q.includes('評分'))return AppWorkspaceRoutes.open('teacher');
+    if(q.includes('設定'))return AppWorkspaceRoutes.open('system');
     if(q.includes('考核')||q.includes('考卷'))return switchLearningModule('exam');
     switchLearningModule('materials');setTimeout(()=>renderCourseOverview(),0);
 }
@@ -170,7 +170,7 @@ function switchLearningModule(module){
 // default landing surface and applies server-backed RBAC before opening it.
 async function openTeachingMaterials(){
     if(typeof window.openAdminWorkspace==='function'){
-        return window.openAdminWorkspace('course-materials');
+        return window.AppWorkspaceRoutes.open('course-materials');
     }
     return window.toggleAdminModal?.(true);
 }

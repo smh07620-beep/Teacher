@@ -159,7 +159,7 @@
 
   async function prepareAssessment77(selectedScope=scope(),force=false){
     if(!document.getElementById('admin-quiz-categories-list')){
-      await timeout77(window.openAdminWorkspace?.('assessment'),2200,'切換考卷管理');
+      await timeout77(window.AppWorkspaceRoutes.open('assessment'),2200,'切換考卷管理');
     }
     const area=document.getElementById('admin-quiz-area'),group=document.getElementById('admin-quiz-group');
     if(area)area.value=selectedScope.area;
@@ -261,7 +261,7 @@
     host.innerHTML='<div class="rounded-2xl border border-teal-100 bg-teal-50 p-5 text-sm text-teal-700">正在整理課程與教材…</div>';
     try{
       let root=document.getElementById('admin-course-material-hub');
-      if(!root){await timeout77(window.openAdminWorkspace?.('course-materials'),2200,'開啟教材與課程管理');root=await waitFor77('#admin-course-material-hub',2400);}
+      if(!root){await timeout77(window.AppWorkspaceRoutes.open('course-materials'),2200,'開啟教材與課程管理');root=await waitFor77('#admin-course-material-hub',2400);}
       if(!root)throw new Error('教材與課程管理尚未載入，請重新嘗試。');
       const placeholder=document.createElement('div');placeholder.hidden=true;placeholder.dataset.teacher78MaterialHubPlaceholder='1';root.before(placeholder);materialHubMount.root=root;materialHubMount.placeholder=placeholder;
       host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-4 flex items-start justify-between gap-3 flex-wrap"><div><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 返回教材與課程</button><h4 class="mt-2 text-xl font-black text-slate-950">📚 教材與課程管理</h4><p class="mt-1 text-xs text-slate-500">先選課程，再管理該課程的教材與考卷；未歸類內容只保留作為整理入口。</p></div>${canCourse()?'<button type="button" data-studio-action="course" class="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white">＋ 建立課程</button>':''}</div><div data-material-refresh-status-79 class="mb-3 rounded-xl border border-teal-100 bg-teal-50 px-3 py-2 text-xs text-teal-700">正在背景更新課程與教材…</div><div data-material-hub-host-78></div></div>`;
@@ -292,7 +292,7 @@
     restoreMediaMount();
     studioState.courseAuthoringStep=0;
     window.TeacherCourseAuthoringContext={active:false};
-    if(typeof window.switchAdminWorkspace==='function')await window.switchAdminWorkspace('course-materials',false);
+    if(typeof window.switchAdminWorkspace==='function')await window.AppWorkspaceRoutes.show('course-materials',false);
     window.courseWizard681ResumeStep?.(step);
     openStudio('course-materials','教材與課程｜建立課程','課程設定 → 教材與 AI → 評量／考卷 → 確認發布；子工作完成後會回到原步驟。');
     await mountCourseWizardInStudio();
@@ -364,7 +364,7 @@
     try{
       let root=document.getElementById('course-wizard-681');
       if(!root){
-        await timeout77(window.openAdminWorkspace?.('course-materials'),2200,'開啟課程建立器');
+        await timeout77(window.AppWorkspaceRoutes.open('course-materials'),2200,'開啟課程建立器');
         root=await waitFor77('#course-wizard-681',2400);
       }
       if(!root)throw new Error('課程建立器尚未載入，請重新嘗試。');
@@ -461,7 +461,7 @@
       let panel=document.getElementById(`qpanel-${catId}`);
       if(!panel){
         aiPrepare77(host,'正在切換考卷工作區…','準備目前考卷的題庫與 AI 工具');
-        await timeout77(window.openAdminWorkspace?.('assessment'),Math.min(1800,remaining()),'切換考卷工作區');
+        await timeout77(window.AppWorkspaceRoutes.open('assessment'),Math.min(1800,remaining()),'切換考卷工作區');
         const area=document.getElementById('admin-quiz-area'),group=document.getElementById('admin-quiz-group');if(area)area.value=selectedScope.area;if(group)group.value=selectedScope.group;
         aiPrepare77(host,'正在讀取考卷…','同步題庫與關聯教材');
         await timeout77(window.renderAdminQuizCategories?.(true),Math.min(2300,remaining()),'讀取考卷');
@@ -496,7 +496,7 @@
     if(!catId) return;
     const selectedScope = scope();
     closeStudio();
-    await window.openAdminWorkspace?.('assessment');
+    await window.AppWorkspaceRoutes.open('assessment');
     const area = document.getElementById('admin-quiz-area');
     const group = document.getElementById('admin-quiz-group');
     if(area) area.value = selectedScope.area;
@@ -516,7 +516,7 @@
 
   async function openMaterialUpload(kind){
     closeStudio();
-    await window.openAdminWorkspace?.('course-materials');
+    await window.AppWorkspaceRoutes.open('course-materials');
     const type = document.getElementById('admin-material-type');
     setSelectByValueOrText(type, kind === 'video' ? 'video-material' : 'standard');
     window.updateAdminMaterialTypeFields?.();
@@ -564,7 +564,7 @@
     if(action==='materials-manager')return mountMaterialManagerInStudio();
     if(action==='material')return openMaterialUpload('standard');
     if(action==='video-material')return openMaterialUpload('video');
-    if(action==='external'){closeStudio();await window.openAdminWorkspace?.('course-materials');await window.openExternalMaterialCreateDrawer?.();return;}
+    if(action==='external'){closeStudio();await window.AppWorkspaceRoutes.open('course-materials');await window.openExternalMaterialCreateDrawer?.();return;}
     if(action==='atlas')return openAtlas();
     if(action==='atlas-docx')return openTeacherAtlasDocxWorkspace();
   }

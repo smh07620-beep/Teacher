@@ -828,7 +828,7 @@ async function continueToAssessment(){
   if(!canLeaveCourse())return alert('新教材尚未全部完成處理。請等到所有教材顯示「已完成」後再前往下一步。');
   if(!state.categoryId)return openCourseWorkspace();
   state.watchToken++;
-  if(typeof window.switchAdminWorkspace==='function')await window.switchAdminWorkspace('assessment',true);
+  if(typeof window.switchAdminWorkspace==='function')await window.AppWorkspaceRoutes.show('assessment',true);
   if(typeof window.renderAdminQuizCategories==='function')await window.renderAdminQuizCategories(true).catch(()=>{});
   const targets=[`qpanel-${state.categoryId}`,`qcard-${state.categoryId}`,`quiz-${state.categoryId}`];
   let target=null;for(const id of targets){target=el(id);if(target)break;}
@@ -944,7 +944,7 @@ async function openCourseWorkspace(){
   // The wizard is mounted inside Teacher Content Studio. Switching only the
   // underlying workspace leaves the studio visible and makes this button look inert.
   window.teacherContentStudioClose?.(false);
-  if(typeof window.switchAdminWorkspace==='function')await window.switchAdminWorkspace('course-materials',true);
+  if(typeof window.switchAdminWorkspace==='function')await window.AppWorkspaceRoutes.show('course-materials',true);
   if(typeof window.renderAdminCourseMaterialHub==='function')await window.renderAdminCourseMaterialHub(true).catch(()=>{});
   el('admin-course-material-hub')?.scrollIntoView({behavior:'smooth',block:'start'});
 

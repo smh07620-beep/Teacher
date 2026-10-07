@@ -29,8 +29,10 @@ class UxConsolidation681Tests(unittest.TestCase):
         self.assertIn('評量與出題',self.html)
         self.assertNotIn('admin-nav-questions',self.html)
         self.assertNotIn('admin-nav-exams',self.html)
-        self.assertIn("name === 'assessment' || name === 'questions'",self.workspace)
-        self.assertIn("return 'assessment'",self.workspace)
+        self.assertIn("return ROUTES.normalize(name)",self.workspace)
+        registry=ROOT.joinpath('static/workspace-routes-1007.js').read_text(encoding='utf-8')
+        self.assertIn("questions: 'assessment'",registry)
+        self.assertIn("exams: 'assessment'",registry)
 
     def test_teacher_assessment_surface_includes_tracking_and_mobile_progress_is_direct(self):
         self.assertIn('評量與追蹤 Workspace', self.html)

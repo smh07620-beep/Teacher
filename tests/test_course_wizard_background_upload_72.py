@@ -63,7 +63,7 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         self.assertIn("window.courseWizard681HasPending", source)
         self.assertIn("window.courseWizard681PendingMessage", source)
         self.assertIn("clearWorkflowId();", source)
-        self.assertIn("window.switchAdminWorkspace('course-materials',true)", source)
+        self.assertIn("window.AppWorkspaceRoutes.show('course-materials',true)", source)
 
     def test_completed_course_materials_show_resolved_type_and_docx_atlas_offer(self):
         source = ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8')

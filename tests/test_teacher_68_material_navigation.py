@@ -395,7 +395,7 @@ class MaterialNavigationFrontend68Tests(unittest.TestCase):
         core = self.source("static/system-core.js")
         self.assertIn('data-csp-click="openTeachingMaterials()"', html)
         self.assertIn("function openTeachingMaterials()", core)
-        self.assertIn("window.openAdminWorkspace('course-materials')", core)
+        self.assertIn("window.AppWorkspaceRoutes.open('course-materials')", core)
         self.assertNotIn('🔒 教材管理', html)
         self.assertNotIn('⚙️ 開啟管理後台', html)
 

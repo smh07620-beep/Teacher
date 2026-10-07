@@ -20,7 +20,7 @@ class ProductGoldenPathP1BrowserContractTests(unittest.TestCase):
             self.admin_workspace,
         )
         self.assertIn(
-            "requestedWorkspace || state.workspace || 'course-materials'",
+            "requestedWorkspace || state.workspace || ROUTES.DEFAULT_WORKSPACE",
             self.admin_workspace,
         )
         self.assertNotIn(

@@ -16,6 +16,7 @@ from teacher_app.common.auth import has_role
 from teacher_app.worker import operations as worker_operations
 from teacher_app.notifications import incidents
 from teacher_app.common.errors import ApiError
+from teacher_app.common.workspace_routes import workspace_url
 from teacher_app.exams import windows as exam_windows
 
 
@@ -54,7 +55,7 @@ def _href(item: Mapping[str, Any]) -> str:
     resource_id = str(item.get("resourceId") or item.get("id") or "")
     course_id = str(item.get("courseId") or "")
     if target == "worker" or item.get("kind") in {"worker_offline", "operational_incident", "operational_recovery"}:
-        return "/system?admin=1&workspace=worker&persona=system&from=notification-center"
+        return workspace_url("worker", source="notification-center")
     if target == "pgy-workflow":
         return f"/system?area=pgy&group={group or 'grpNew'}&module=assessment&from=notification-center"
     if target == "exam" or item.get("kind") == "exam":
@@ -64,8 +65,11 @@ def _href(item: Mapping[str, Any]) -> str:
         suffix = f"&recordId={resource_id}" if resource_id else ""
         return f"/system?area={area}&group={group}&module=exam&from=notification-center{suffix}"
     if target == "course-materials" or item.get("persona") == "teacher":
-        suffix = f"&courseId={course_id or resource_id}" if (course_id or resource_id) else ""
-        return f"/system?area={area}&group={group}&admin=1&workspace=course-materials&persona=teacher&from=notification-center{suffix}"
+        extra = {"courseId": course_id or resource_id}
+        return workspace_url(
+            "course-materials", area=area, group=group, persona="teacher",
+            source="notification-center", params=extra,
+        )
     suffix = f"&courseId={course_id}" if course_id else ""
     material_id = str(item.get("materialId") or "")
     if material_id:

@@ -80,9 +80,10 @@ class WorkerStatusUi70Tests(unittest.TestCase):
     def test_incident_actions_use_plain_links_and_route_by_domain(self):
         self.assertIn("function incidentActionMeta(incident)", self.source)
         self.assertIn("function incidentResponseMeta(incident)", self.source)
-        self.assertIn("workspace=system&persona=system&from=incident&focus=storage", self.source)
-        self.assertIn("workspace=assessment&persona=teacher&from=incident&focus=ai-question", self.source)
-        self.assertIn("workspace=course-materials&persona=teacher&from=incident&focus=ai-media", self.source)
+        # Links are built by the route registry instead of hand-written URLs.
+        self.assertIn("AppWorkspaceRoutes.url('system',{from:'incident',params:{focus:'storage'}})", self.source)
+        self.assertIn("AppWorkspaceRoutes.url('assessment',{persona:'teacher',from:'incident',params:{focus:'ai-question'}})", self.source)
+        self.assertIn("AppWorkspaceRoutes.url('course-materials',{persona:'teacher',from:'incident',params:{focus:'ai-media'}})", self.source)
         self.assertIn("Boolean(window.TeacherWorkspace1014?.canTeach)", self.source)
         incident_block = self.source[
             self.source.index("function incidentCards"):

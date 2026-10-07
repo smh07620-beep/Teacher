@@ -14,11 +14,11 @@
   const params = new URLSearchParams(window.location.search);
   const adminPage = params.get('admin') === '1';
   const requestedPersona = params.get('persona') || '';
-  const requestedWorkspace = params.get('workspace') || 'course-materials';
-  const teacherOwnedWorkspaces = new Set([
-    'course-materials','courses','materials','assessment','questions','exams',
-    'teacher','scoring','results','compliance','pgy','word'
-  ]);
+  const requestedWorkspace = params.get('workspace') || window.AppWorkspaceRoutes.DEFAULT_WORKSPACE;
+  // Teaching and assessment areas (and their aliases) belong to the teacher persona.
+  const teacherOwnedWorkspaces = new Set(
+    window.AppWorkspaceRoutes.names().filter(name => !window.AppWorkspaceRoutes.isSystem(name))
+  );
   const teacherPersonaActive = adminPage && canTeach && (
     requestedPersona === 'teacher' ||
     (!requestedPersona && teacherOwnedWorkspaces.has(requestedWorkspace))
@@ -381,7 +381,7 @@
     state.mode = 'course';
     restoreCourseWorkspace();
     setTeacherModeParam('course');
-    await window.switchAdminWorkspace?.('course-materials', true);
+    await window.AppWorkspaceRoutes.show('course-materials', true);
     restoreCourseWorkspace();
     markTeacherNav('course');
   }
@@ -404,7 +404,7 @@
     state.mode = 'assessment';
     restoreCourseWorkspace();
     setTeacherModeParam('assessment');
-    await window.switchAdminWorkspace?.('assessment', true);
+    await window.AppWorkspaceRoutes.show('assessment', true);
     markTeacherNav('assessment');
   }
 
@@ -412,7 +412,7 @@
     state.mode = 'assessment';
     restoreCourseWorkspace();
     setTeacherModeParam('assessment');
-    await window.switchAdminWorkspace?.('teacher', true);
+    await window.AppWorkspaceRoutes.show('teacher', true);
     await window.switchTeacherMode?.('scoring');
     markTeacherNav('assessment');
   }
@@ -434,7 +434,7 @@
   async function openMedia() {
     state.mode = 'media';
     setTeacherModeParam('media');
-    await window.switchAdminWorkspace?.('course-materials', true);
+    await window.AppWorkspaceRoutes.show('course-materials', true);
     showMediaWorkspace();
     markTeacherNav('media');
   }
@@ -443,7 +443,7 @@
     state.mode = 'documents';
     restoreCourseWorkspace();
     setTeacherModeParam('documents');
-    await window.switchAdminWorkspace?.('teacher', true);
+    await window.AppWorkspaceRoutes.show('teacher', true);
     await window.switchTeacherMode?.('documents');
     markTeacherNav('documents');
   }
@@ -460,7 +460,7 @@
     state.mode = 'announcements';
     restoreCourseWorkspace();
     setTeacherModeParam('announcements');
-    await window.switchAdminWorkspace?.('course-materials', true);
+    await window.AppWorkspaceRoutes.show('course-materials', true);
     if (await waitForAnnouncementWorkspace()) {
       await window.openTeacherAnnouncementWorkspace();
     }
@@ -497,13 +497,13 @@
     panel.appendChild(section);
     section.querySelector('#teacher-open-pending-review-1014')?.addEventListener('click', async () => {
       state.mode = 'assessment';
-      await window.switchAdminWorkspace?.('teacher', true);
+      await window.AppWorkspaceRoutes.show('teacher', true);
       await window.switchTeacherMode?.('scoring');
       markTeacherNav('assessment');
     });
     section.querySelector('#teacher-open-review-1014')?.addEventListener('click', async () => {
       state.mode = 'assessment';
-      await window.switchAdminWorkspace?.('results', true);
+      await window.AppWorkspaceRoutes.show('results', true);
       markTeacherNav('assessment');
     });
   }

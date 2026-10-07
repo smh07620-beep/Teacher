@@ -196,7 +196,7 @@
   async function prepareQuestionPanel(catId,label){
     const selected=currentScope();
     showSkeleton(label,'正在切換到這份考卷；不再等待整份考卷清單強制重新整理。');
-    const opened=typeof window.openAdminWorkspace==='function'?await window.openAdminWorkspace('assessment'):true;
+    const opened=typeof window.openAdminWorkspace==='function'?await window.AppWorkspaceRoutes.open('assessment'):true;
     if(opened===false)throw new Error('考卷管理工作區無法開啟。');
     const area=document.getElementById('admin-quiz-area');
     const group=document.getElementById('admin-quiz-group');
@@ -234,7 +234,7 @@
     try{
       const selected=currentScope();
       showSkeleton('正在開啟考卷設定…','設定頁先切換；考卷清單同步留在背景。');
-      const opened=typeof window.openAdminWorkspace==='function'?await window.openAdminWorkspace('assessment'):true;
+      const opened=typeof window.openAdminWorkspace==='function'?await window.AppWorkspaceRoutes.open('assessment'):true;
       if(opened===false)throw new Error('考卷管理工作區無法開啟。');
       const area=document.getElementById('admin-quiz-area');
       const group=document.getElementById('admin-quiz-group');

@@ -9,9 +9,10 @@
   const params = new URLSearchParams(window.location.search);
   const workspace = params.get('workspace') || '';
   const persona = params.get('persona') || '';
+  // Teaching/assessment workspaces (+ aliases) plus the section names the router also accepts.
   const teacherOwnedWorkspaces = new Set([
-    'course-materials','content','assessment','questions','quiz','exams','exam-settings',
-    'teacher','scoring','pgy','results','compliance','word'
+    ...window.AppWorkspaceRoutes.names().filter(name => !window.AppWorkspaceRoutes.isSystem(name)),
+    'content','quiz','exam-settings'
   ]);
   const teacherPersona = params.get('admin') === '1' && !!T.canTeach && (
     persona === 'teacher' || (!persona && teacherOwnedWorkspaces.has(workspace))
@@ -133,7 +134,7 @@
 
   // If an explicitly teacher URL inherited a platform-only workspace, move it
   // back to the teacher landing workspace once without exposing the Worker page.
-  if (new Set(['people','system','worker','maintenance','audit']).has(workspace)) {
+  if (window.AppWorkspaceRoutes.isSystem(workspace)) {
     await T.openCourse?.();
     rebuildTeacherNav();
   }

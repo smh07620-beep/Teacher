@@ -20,7 +20,7 @@
 
   if (!adminPage || !navHost) return;
 
-  const systemWorkspaceNames = new Set(['people', 'system', 'worker', 'maintenance', 'audit']);
+  const systemWorkspaceNames = new Set(window.AppWorkspaceRoutes.systemNames());
   const isSystemPersona = () => surfaceKey === 'system' && (
     persona() === 'system' || (!persona() && systemWorkspaceNames.has(workspace()))
   );

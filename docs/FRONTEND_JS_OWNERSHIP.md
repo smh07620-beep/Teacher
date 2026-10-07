@@ -103,3 +103,25 @@ These globals have one mutation owner. Callers may invoke them, but no compatibi
 | 300 | `sensitive-elevation-69` | `static/sensitive-elevation-69.js` | Sensitive-action elevation retry. |
 
 To share another read endpoint, add its exact path to `SHARED_PATHS` in `static/api-get-dedupe-1007.js` and extend `tests/js/api-get-dedupe-1007.test.js`; never add polling, job-status, login, upload, exam-taking or signing endpoints.
+
+## Back-office workspace routes (`static/workspace-routes-1007.js`)
+
+The back office has eleven internal workspace keys that map onto the four product
+areas of `PRODUCT_INFORMATION_ARCHITECTURE_20261001.md`:
+
+| Area | Workspaces |
+|---|---|
+| 教學 | `course-materials`, `word` |
+| 評量 | `assessment`, `teacher`, `results`, `compliance` |
+| 系統管理 | `people`, `system`, `maintenance`, `audit`, `worker` |
+
+`window.AppWorkspaceRoutes` is the only place that knows workspace names, aliases
+(`courses`, `materials`, `questions`, `exams`, `scoring`, `pgy`), area labels, titles and URLs.
+It is injected first after `/shared-core.js` on the system page and on the portal pages.
+
+* Link to a workspace: `AppWorkspaceRoutes.url('assessment', {persona:'teacher', from:'incident', params:{focus:'ai-question'}})`.
+* Navigate: `AppWorkspaceRoutes.open(name)` (page navigation) or `.show(name, force)` (switch inside the shell).
+* Server code: `teacher_app/common/workspace_routes.workspace_url(...)` (same table, same URL shape).
+* Never hand-write `workspace=...` or call `openAdminWorkspace('literal')`; `tests/test_workspace_routes_1007.py`
+  fails if a script does, and checks the JavaScript and Python tables stay identical.
+* To add a workspace: add it to both tables (and the nav markup in `system.html` under its area group).

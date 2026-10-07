@@ -93,7 +93,7 @@ class WorkspaceShell70Tests(unittest.TestCase):
         self.assertIn("entry.setAttribute('data-csp-click', 'toggleAdminModal(true)')", self.source)
         self.assertNotIn("entry.onclick = event =>", self.source)
         self.assertIn("document.querySelectorAll('.admin-section-panel').forEach", self.source)
-        self.assertIn("window.switchAdminWorkspace('audit', true)", self.source)
+        self.assertIn("window.AppWorkspaceRoutes.show('audit', true)", self.source)
         # Profile metadata may be documented in comments, but must never take part
         # in the actual role/capability calculation block.
         auth_block = self.source[self.source.index("const roles"):self.source.index("const workspaceHost")]

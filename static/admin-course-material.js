@@ -367,7 +367,7 @@
               groupSelect.value=targetGroup;
           }
       }
-      await Promise.resolve(window.switchAdminWorkspace?.('assessment',true));
+      await Promise.resolve(window.AppWorkspaceRoutes.show('assessment',true));
       await Promise.resolve(window.renderAdminQuizCategories?.(true));
       const panel=document.getElementById(`qpanel-${quizId}`);
       if(!panel){alert('找不到這份考卷，請重新整理後再試。');return;}

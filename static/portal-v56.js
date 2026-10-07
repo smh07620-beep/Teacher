@@ -9,8 +9,9 @@
   if(back){const sync=()=>back.classList.toggle('show',scrollY>350);addEventListener('scroll',sync,{passive:true});back.addEventListener('click',()=>scrollTo({top:0,behavior:'smooth'}));sync();}
   const search=$('[data-v56-search]');
   if(search){
+    const W=window.AppWorkspaceRoutes;
     const routes=[
-      ['生化','/system?area=internal&group=grpBio&module=materials'],['鏡檢','/system?area=internal&group=grpMicro&module=materials'],['血清','/system?area=internal&group=grpSero&module=materials'],['血庫','/system?area=internal&group=grpBB&module=materials'],['細菌','/system?area=internal&group=grpBact&module=materials'],['血液','/system?area=internal&group=grpHema&module=materials'],['PGY','/system?area=pgy&group=grpNew&module=materials&from=home'],['新進','/system?area=pgy&group=grpNew&module=materials&from=home'],['考核','/system?area=internal&group=grpBio&module=exam'],['教材','/internal'],['課程管理','/system?area=internal&group=grpBio&admin=1&workspace=course-materials'],['題庫','/system?area=internal&group=grpBio&admin=1&workspace=questions'],['教師評核','/system?area=internal&group=grpBio&admin=1&workspace=teacher']
+      ['生化','/system?area=internal&group=grpBio&module=materials'],['鏡檢','/system?area=internal&group=grpMicro&module=materials'],['血清','/system?area=internal&group=grpSero&module=materials'],['血庫','/system?area=internal&group=grpBB&module=materials'],['細菌','/system?area=internal&group=grpBact&module=materials'],['血液','/system?area=internal&group=grpHema&module=materials'],['PGY','/system?area=pgy&group=grpNew&module=materials&from=home'],['新進','/system?area=pgy&group=grpNew&module=materials&from=home'],['考核','/system?area=internal&group=grpBio&module=exam'],['教材','/internal'],['課程管理',W.url('course-materials',{area:'internal',group:'grpBio'})],['題庫',W.url('questions',{area:'internal',group:'grpBio'})],['教師評核',W.url('teacher',{area:'internal',group:'grpBio'})]
     ];
     search.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const q=search.value.trim().toLowerCase();if(!q)return;const hit=routes.find(([k])=>q.includes(k.toLowerCase())||k.toLowerCase().includes(q));location.href=hit?hit[1]:'/#groups';});
   }
