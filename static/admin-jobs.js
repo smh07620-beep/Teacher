@@ -120,13 +120,14 @@
       const protocolWarning=protocolBlocked?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2 font-bold text-rose-800">⚠ 本機 Worker 協議版本過舊。系統已暫停讓它領取新教材；工作會安全留在佇列，不會因此增加重試次數。更新 Worker 後會自動恢復。</div>':'';
       const storageWarning=storageBlocked?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2 font-bold text-rose-800">⚠ Worker 儲存 preflight 未通過（'+escapeHtml(worker.storagePreflightBackend||'storage')+'）。系統不會讓它領取新教材；Queue 與 R2 原始檔會保持安全。'+(worker.storagePreflightError?'<div class="mt-1 font-normal">'+escapeHtml(worker.storagePreflightError)+'</div>':'')+'</div>':'';
       const workerUpdate=worker?.updateAvailable&&!protocolBlocked?'<div class="mt-1 text-amber-800 font-bold">⚠ Worker 有新版待更新；目前協議仍相容，可繼續處理。</div>':'';
+      const siteVersionWarning=worker&&['version_mismatch','commit_differs'].includes(worker.siteVersionState)?`<div class="mt-1 text-amber-800 font-bold">⚠ ${escapeHtml(worker.siteVersionMessage||'Worker 與網站版本不一致，請更新院內 Worker。')}</div>`:'';
       const workerChecked=worker?.lastUpdateCheckAt?`<div class="mt-1">Last update check: ${escapeHtml(worker.lastUpdateCheckAt)}</div>`:'';
       const recentWorkerErrors=problemJobs.filter(j=>String(j.errorCode||j.error||j.detail||'').trim()).length;
       const recentTerminalFailures=problemJobs.filter(j=>j.status==='failed').length;
       const summaryClass=workerStatusAvailable?'border-sky-200 bg-sky-50 text-sky-950':'border-rose-200 bg-rose-50 text-rose-800';
       const average=Math.max(0,Number(d.averageCompletedDurationSeconds||0));
       const averageText=average?` · 近期平均完成 ${durationLabel(average)}`:'';
-      const technicalSummary=`Worker：${workerLabel}　${escapeHtml(workerDetail)}${workerBuild}${workerUpdate}${workerChecked}${protocolWarning}${storageWarning}`;
+      const technicalSummary=`Worker：${workerLabel}　${escapeHtml(workerDetail)}${workerBuild}${workerUpdate}${siteVersionWarning}${workerChecked}${protocolWarning}${storageWarning}`;
       const livenessText='心跳正常 '+Number(d.healthyProcessingJobs||0)+' · 回報延遲 '+Number(d.heartbeatDelayedJobs||0)+' · 可能卡住 '+Number(d.stalledJobs||0);
       const thresholdText='heartbeat 警戒 '+durationLabel(d.heartbeatWarningSeconds||120)+' · stale '+durationLabel(d.staleThresholdSeconds||1800);
       const summary=`<div class="rounded-xl border ${summaryClass} p-3 text-xs"><b>背景教材處理</b><div class="mt-2">等待處理 ${Number(d.pendingJobs||0)+Number(d.retryJobs||0)} · 處理中 ${Number(d.processingJobs||0)} · 需要處理 ${Number(d.failedJobs||0)}${averageText}</div><div class="mt-1">${livenessText} · ${thresholdText}</div><div class="mt-1 font-bold ${recentWorkerErrors?'text-amber-800':'text-emerald-700'}">${recentWorkerErrors?'有教材需要留意；原始檔仍保留時可直接重新處理。':'目前沒有需要人工處理的教材工作。'}</div><details class="mt-2 rounded-lg border border-slate-200 bg-white/70 p-2"><summary class="cursor-pointer font-bold text-slate-600">查看 Worker 技術狀態</summary><div class="mt-2 text-slate-600">${technicalSummary}<div class="mt-1">近期 Worker 錯誤／重試 ${recentWorkerErrors} · 近期最終失敗 ${recentTerminalFailures}</div></div></details></div>`;

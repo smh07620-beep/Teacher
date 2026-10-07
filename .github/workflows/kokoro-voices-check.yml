@@ -1,0 +1,22 @@
+name: Kokoro voice list check
+
+# Weekly: every voice offered by the product must exist in the Hugging Face repo.
+# Schedule/manual only (must not join the checksPass deployment gate).
+on:
+  schedule:
+    - cron: "23 20 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  voices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python tools/check_kokoro_voices.py

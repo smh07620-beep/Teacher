@@ -651,6 +651,17 @@ def recover_stale_processing_jobs(
     return counts
 
 
+
+def _site_version_projection(capabilities) -> dict:
+    """Bounded projection of the Worker-published site version check."""
+    check = capabilities.get("siteVersionCheck") if isinstance(capabilities, dict) else None
+    if not isinstance(check, dict):
+        return {"siteVersionState": "", "siteVersionMessage": ""}
+    return {
+        "siteVersionState": str(check.get("state") or "")[:32],
+        "siteVersionMessage": str(check.get("message") or "")[:240],
+    }
+
 def status(
     staging_capability: Callable[[], dict],
     *,
@@ -777,6 +788,7 @@ def status(
                     "lastUpdateCheckAt": str(
                         capabilities.get("lastUpdateCheckAt") or ""
                     )[:64],
+                    **_site_version_projection(capabilities),
                 }
             )
         for item, capabilities, seen in _latest_ai_heartbeat_per_machine(heartbeats):
@@ -818,6 +830,7 @@ def status(
                         else bool(capabilities.get("databaseReady"))
                     ),
                     "databaseIdentityMatch": database_identity_match,
+                    **_site_version_projection(capabilities),
                 }
             )
     except Exception:

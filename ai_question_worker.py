@@ -34,6 +34,7 @@ from teacher_app.materials import (
     media_subtitle_jobs,
 )
 from teacher_app.worker import ai_remote
+from teacher_app.worker import site_check
 from teacher_app.worker import repository as worker_repository
 
 
@@ -59,6 +60,13 @@ def _env_int(name: str, default: int, lower: int, upper: int) -> int:
 
 def log(message: str) -> None:
     print(f"[teacher-ai-worker] {message}", flush=True)
+
+
+_SITE_VERSION = site_check.SiteVersionMonitor(
+    lambda: os.environ.get("TEACHER_BASE_URL", ""),
+    interval_seconds=float(os.environ.get("WORKER_SITE_VERSION_CHECK_MINUTES", "30") or 30) * 60,
+    log=log,
+)
 
 
 def _ai_worker_id() -> str:
@@ -142,6 +150,7 @@ def _ai_worker_capabilities(transport: str | None = None) -> dict:
         },
         "whisper": {"available": whisper_ready},
         "queues": ["ai_questions", "media_scripts", "ai_presentations", "ai_videos", "media_audio", "media_subtitles"],
+        "siteVersionCheck": _SITE_VERSION.snapshot(),
     }
     if os.environ.get("TEACHER_E2E_DETERMINISTIC_STUBS") == "1":
         payload = deterministic_ai_provider.tts_capabilities(payload)
@@ -326,6 +335,7 @@ def main() -> int:
         f"free_fallback=enabled control_transport={transport}"
     )
     log(_renderer_status_line())
+    _SITE_VERSION.snapshot(force=True)
     heartbeat_seconds = _env_int("AI_WORKER_HEARTBEAT_SECONDS", 30, 10, 90)
     try:
         with _AIHeartbeat(heartbeat_seconds, transport=transport, api=api) as heartbeat:

@@ -1,0 +1,53 @@
+name: Production synthetic transaction
+
+# Daily end-to-end check against the REAL production chain: Web -> Supabase -> R2
+# -> hospital Material Worker / AI Worker. CI proves components connect with
+# stubs; this proves production is connected right now. It uses a dedicated,
+# least-privilege monitoring account and cleans up after itself (E2E-TEST-*).
+#
+# Required repository secrets (otherwise the job is skipped successfully):
+#   TEACHER_SYNTHETIC_USERNAME / TEACHER_SYNTHETIC_PASSWORD
+# Optional repository variables: TEACHER_PRODUCTION_URL, TEACHER_SYNTHETIC_GROUP.
+#
+# Like the production smoke probe this runs on a schedule/manually only: it must
+# not participate in the checksPass deployment gate (circular gate).
+on:
+  schedule:
+    - cron: "17 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-synthetic
+  cancel-in-progress: false
+
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TEACHER_PRODUCTION_URL: ${{ vars.TEACHER_PRODUCTION_URL || 'https://teacher-j3id.onrender.com' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run production synthetic transaction
+        env:
+          TEACHER_SYNTHETIC_USERNAME: ${{ secrets.TEACHER_SYNTHETIC_USERNAME }}
+          TEACHER_SYNTHETIC_PASSWORD: ${{ secrets.TEACHER_SYNTHETIC_PASSWORD }}
+          TEACHER_SYNTHETIC_GROUP: ${{ vars.TEACHER_SYNTHETIC_GROUP }}
+        run: python tools/production_synthetic.py --base-url "$TEACHER_PRODUCTION_URL"
+
+      - name: Upload synthetic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-synthetic-${{ github.run_id }}
+          path: production-synthetic-report.json
+          if-no-files-found: warn
+          retention-days: 14

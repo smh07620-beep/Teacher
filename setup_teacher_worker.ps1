@@ -11,6 +11,7 @@ param(
   [switch]$SkipDownloads,
   [switch]$SkipPythonSync,
   [switch]$SkipReleaseUpdate,
+  [switch]$SkipDoctor,
   [switch]$NonInteractive,
   [switch]$DryRun
 )
@@ -403,6 +404,26 @@ function Show-TaskHealth {
   }
 }
 
+function Invoke-WorkerDoctor {
+  # Connectivity self-test: URL/token reach the Web service, matching code
+  # version, R2 read/write, FFmpeg/LibreOffice. --quick skips the slow
+  # LibreOffice warm-up conversion and the Kokoro synthesis; run
+  # `python worker_doctor.py` without --quick for the full check.
+  if ($SkipDoctor) {
+    Write-Step "Worker doctor skipped by parameter."
+    return
+  }
+  if ($DryRun -or -not (Test-Path -LiteralPath $venvPython -PathType Leaf)) {
+    Write-Step "Worker doctor skipped (dry-run or .venv not created yet)."
+    return
+  }
+  Write-Step "Running Worker connectivity self-test (worker_doctor.py --quick)."
+  & $venvPython (Join-Path $root "worker_doctor.py") --quick
+  if ($LASTEXITCODE -ne 0) {
+    Add-Warning "Worker doctor reported failures. Fix the listed items, then re-run: .venv\Scripts\python.exe worker_doctor.py"
+  }
+}
+
 try {
   Assert-RepositorySafe
   Write-Step "Safe one-click bootstrap/upgrade started. Secrets will not be printed."
@@ -419,6 +440,7 @@ try {
   Install-WorkerTasks
   Restart-WorkerTasks
   Show-TaskHealth
+  Invoke-WorkerDoctor
 
   if ($script:Warnings.Count -gt 0) {
     Write-Output "Teacher Worker bootstrap completed with $($script:Warnings.Count) warning(s). Review warnings before relying on AI video production."

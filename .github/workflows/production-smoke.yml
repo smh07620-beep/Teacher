@@ -44,11 +44,24 @@ jobs:
             --max-wait-seconds 720 \
             --poll-seconds 15
 
+      # Authenticated, read-only: are the hospital Material/AI Workers online,
+      # current and Kokoro-ready? Skipped (exit 0) when the monitoring-account
+      # secrets are absent. Worker problems are warnings unless the repository
+      # variable SMOKE_REQUIRE_WORKERS is "true". See tools/production_worker_check.py.
+      - name: Verify hospital Workers are online and current
+        env:
+          TEACHER_SMOKE_USERNAME: ${{ secrets.TEACHER_SMOKE_USERNAME }}
+          TEACHER_SMOKE_PASSWORD: ${{ secrets.TEACHER_SMOKE_PASSWORD }}
+          SMOKE_REQUIRE_WORKERS: ${{ vars.SMOKE_REQUIRE_WORKERS || 'false' }}
+        run: python tools/production_worker_check.py --base-url "$TEACHER_PRODUCTION_URL"
+
       - name: Upload production smoke report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: production-smoke-${{ github.run_id }}
-          path: production-smoke-report.json
+          path: |
+            production-smoke-report.json
+            production-worker-report.json
           if-no-files-found: warn
           retention-days: 14

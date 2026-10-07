@@ -26,6 +26,7 @@ One command can safely coordinate:
 10. PowerPoint/video shared durable-provider readiness;
 11. existing Material + AI Worker Task Scheduler installation;
 12. optional Worker task restart and state summary.
+13. a connectivity self-test (`worker_doctor.py --quick`, skip with `-SkipDoctor`).
 
 The script does **not** install NVIDIA/CUDA/display drivers. GPU driver management remains a host-admin action.
 
@@ -140,3 +141,26 @@ This remains additive and reuses `ai_video_*`, the current AI Worker queue, dura
 ## Compatibility lineage: AI Video Phase 2 authoring
 
 Phase 6 intentionally preserves the earlier AI Video Phase 2 authoring contract instead of replacing it. The authoring lineage still supports **editable narration per slide**, keeps immutable revision links through `parentRevisionId` and `videoFamilyId`, retains the **clinical-teacher/group-leader approval** boundary, and continues to **reuse `ai_video_*`** persistence/queue/runtime ownership. Phase 6 only strengthens renderer resilience, observability, teacher preview, and publication quality gates on top of that existing pipeline.
+
+## Worker doctor (`worker_doctor.py`)
+
+When "every feature exists but they do not connect", run this on the Worker PC
+(inside the Worker `.venv`):
+
+```powershell
+.venv\Scripts\python.exe worker_doctor.py          # full check
+.venv\Scripts\python.exe worker_doctor.py --quick  # skip slow LibreOffice/Kokoro checks
+.venv\Scripts\python.exe worker_doctor.py --json   # machine readable
+```
+
+It loads `.local-worker.env` exactly like the Task Scheduler supervisors and
+verifies, in order: required settings, Web reachability (`/health`), that the
+Material and AI Worker tokens are accepted (no job is claimed and no heartbeat
+row is created), that the Worker code matches the deployed Web version, FFmpeg /
+FFprobe / LibreOffice, final storage preflight, a real R2 write/read/delete,
+a real LibreOffice warm-up conversion, and a real Kokoro synthesis. No secret
+value is printed. Exit code is `1` when any check fails.
+
+The Material Worker and AI Worker also compare their code with the Web service
+at startup and every `WORKER_SITE_VERSION_CHECK_MINUTES` (default 30); the
+result is logged and shown in the Worker status panel.

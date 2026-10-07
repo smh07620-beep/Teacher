@@ -89,7 +89,8 @@ class WarmLibreOfficeConverter:
         return {
             "enabled": self.enabled,
             "running": self.running,
-            "warmed": bool(self.warmed and self.running),
+            "warmed": bool(self.warmed),
+            "armed": bool(self.running),
             "warmupSeconds": round(float(self.warmup_seconds), 2),
             "lastConvertSeconds": round(float(self.last_convert_seconds), 2),
             "lastError": str(self.last_error or "")[:240],
@@ -196,7 +197,29 @@ class WarmLibreOfficeConverter:
         self.close()
         return self.ensure_running()
 
+    def _rearm(self) -> None:
+        """Start the next resident instance right after a conversion.
+
+        Measured behaviour: a ``--convert-to`` forwarded to the resident instance
+        is executed there (fast, ~0.6s) and the resident instance then EXITS.
+        Without re-arming, only the first conversion after a (re)start was warm
+        and every later job fell back to a cold start.  Starting the next
+        resident immediately lets it finish loading while the Worker uploads and
+        waits for the next job.
+        """
+        try:
+            if self.enabled and not self.running:
+                self.ensure_running()
+        except Exception:
+            pass
+
     def convert_to_pdf(self, source: Path, out_dir: Path, *, timeout: int) -> Path:
+        try:
+            return self._convert_to_pdf(source, out_dir, timeout=timeout)
+        finally:
+            self._rearm()
+
+    def _convert_to_pdf(self, source: Path, out_dir: Path, *, timeout: int) -> Path:
         if not self.ensure_running():
             raise RuntimeError(self.last_error or "LibreOffice warm instance unavailable")
         started = time.monotonic()
@@ -250,7 +273,6 @@ class WarmLibreOfficeConverter:
     def close(self) -> None:
         process = self._process
         self._process = None
-        self.warmed = False
         if process is not None and process.poll() is None:
             try:
                 process.terminate()

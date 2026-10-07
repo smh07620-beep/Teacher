@@ -15,6 +15,7 @@ from teacher_app.materials.validation import (
 from teacher_app.materials import ai_video_renderer, classification
 from teacher_app.storage.worker_runtime import OFFICE_EXT, WorkerMaterialStorageAdapter
 from teacher_app.worker import protocol as worker_protocol
+from teacher_app.worker import site_check
 
 LOGGER=logging.getLogger("teacher.material_worker")
 
@@ -166,6 +167,11 @@ class AutoUpdateController:
 AUTO_UPDATER=AutoUpdateController()
 
 def log(message): print(f"[teacher-local-worker {WORKER_ID}] {message}",flush=True)
+SITE_VERSION=site_check.SiteVersionMonitor(
+    lambda: BASE_URL,
+    interval_seconds=float(os.environ.get("WORKER_SITE_VERSION_CHECK_MINUTES","30") or 30)*60,
+    log=log,
+)
 def _elapsed_ms(start): return max(0,int(round((time.monotonic()-start)*1000)))
 def _bin(env,fallback):
     value=os.environ.get(env,"").strip()
@@ -215,6 +221,7 @@ class WorkerApi:
     def heartbeat(self,job_id="",capabilities=None):
         path=f"/api/material-worker/{job_id}/heartbeat" if job_id else "/api/material-worker/heartbeat"
         caps=capabilities if isinstance(capabilities,dict) else capability()
+        caps={**caps,"siteVersionCheck":SITE_VERSION.snapshot()}
         return self.post(path,{"workerId":WORKER_ID,"capabilities":caps,**AUTO_UPDATER.metadata()})
     def progress(self,job_id,stage,detail="",progress_percent=None):
         percent=WORKER_PROGRESS_PERCENT.get(str(stage or "")) if progress_percent is None else progress_percent
@@ -786,6 +793,7 @@ def main():
     try:api=WorkerApi()
     except RuntimeError as exc:log(str(exc));return 2
     base_caps=capability();log(f"startup ffmpeg={base_caps['ffmpeg']['available']} ffprobe={base_caps['ffprobe']['available']} libreoffice={base_caps['libreOffice']['available']}")
+    SITE_VERSION.snapshot(force=True)
 
     preflight_attempt=0
     last_preflight_error=""

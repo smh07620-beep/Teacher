@@ -52,7 +52,40 @@ class LibreOfficeColdStartTests(unittest.TestCase):
             self.assertTrue(status["warmed"])
             self.assertEqual(status["lastError"], "")
             runtime.close()
-            self.assertFalse(runtime.warmed)
+            # The profile stays warm on disk; only the resident process is gone.
+            self.assertTrue(runtime.warmed)
+            self.assertFalse(runtime.status()["armed"])
+
+    def test_resident_instance_is_rearmed_after_every_conversion(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            runtime = self._runtime(temp_name)
+            starts = []
+
+            class Exiting(FakeProcess):
+                def __init__(self):
+                    starts.append(1)
+
+                def poll(self):
+                    return self.returncode
+
+            def fake_run(command, **_kwargs):
+                out_dir = Path(command[command.index("--outdir") + 1])
+                out_dir.mkdir(parents=True, exist_ok=True)
+                (out_dir / "x.pdf").write_bytes(b"%PDF")
+                # LibreOffice quirk: the resident process exits after a forwarded job.
+                runtime._process.returncode = 0
+                return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+            with patch("teacher_app.worker.libreoffice_warm.subprocess.Popen", side_effect=lambda *a, **k: Exiting()), patch(
+                "teacher_app.worker.libreoffice_warm.subprocess.run", side_effect=fake_run
+            ), patch("teacher_app.worker.libreoffice_warm.time.sleep"):
+                src = Path(temp_name) / "a.pptx"
+                src.write_bytes(b"x")
+                runtime.convert_to_pdf(src, Path(temp_name) / "o1", timeout=10)
+                self.assertEqual(len(starts), 2)  # started for the job, re-armed after it
+                runtime.convert_to_pdf(src, Path(temp_name) / "o2", timeout=10)
+                self.assertEqual(len(starts), 3)
+            runtime.close()
 
     def test_warmup_failure_never_raises_and_is_not_warmed(self):
         with tempfile.TemporaryDirectory() as temp_name:
