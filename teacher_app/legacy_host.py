@@ -6111,7 +6111,11 @@ def api_courses():
     from teacher_app.courses import service as canonical_courses
     area = request.args.get("area", DEFAULT_TRAINING_AREA)
     group = request.args.get("group", "") or None
-    return jsonify(canonical_courses.list_courses(sys.modules[__name__], area, group, False))
+    from teacher_app.courses import visibility as course_visibility
+    courses = canonical_courses.list_courses(sys.modules[__name__], area, group, False)
+    # Same owner-group/audience rule as /api/slides: no empty course shells for
+    # accounts that cannot see any of the course's materials.
+    return jsonify(course_visibility.filter_courses_for_user(_current_user(), courses))
 
 @app.get("/api/courses/admin")
 def api_courses_admin():
