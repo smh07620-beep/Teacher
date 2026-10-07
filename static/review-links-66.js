@@ -811,7 +811,9 @@
             'font-bold text-teal-900';
 
         heading.textContent =
-            '📚 建議回到教材加強閱讀';
+            source.anchorType === 'region' || source.regionHint
+                ? '🔬 建議回到圖譜重新判讀'
+                : '📚 建議回到教材加強閱讀';
 
         panel.appendChild(
             heading
@@ -907,9 +909,11 @@
                 'mt-1 inline-flex items-center gap-2 rounded-lg bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold px-4 py-2';
 
             button.textContent =
-                source.page
-                    ? `📖 回到教材第 ${source.page} 頁`
-                    : '📖 回到教材';
+                source.anchorType === 'region' || source.regionHint
+                    ? '🔬 回到圖譜複習'
+                    : (source.page
+                        ? `📖 回到教材第 ${source.page} 頁`
+                        : '📖 回到教材');
 
             button.addEventListener(
                 'click',
@@ -976,19 +980,17 @@
                             || {}
                         );
 
-                    if (
-                        !hasSource(
-                            source
-                        )
-                    ) {
+                    const detail =
+                        Array.isArray(window.currentExamAnswerDetails)
+                            ? window.currentExamAnswerDetails[index]
+                            : null;
+                    if (detail && detail.isCorrect !== false) {
                         return;
                     }
-
-                    card.appendChild(
-                        reviewPanel(
-                            source
-                        )
-                    );
+                    if (!hasSource(source)) {
+                        return;
+                    }
+                    card.appendChild(reviewPanel(source));
                 }
             );
         } catch (

@@ -59,6 +59,51 @@
     pager.querySelector('[data-admin-results-page="next"]')?.addEventListener('click',()=>{page=Math.min(pages,page+1);window.renderAdminTable();});
   }
 
+  function resultPersonKey(record) {
+    return [
+      record?.groupLabel || '',
+      record?.role || record?.examineeRole || '未分類',
+      record?.empId || record?.username || '',
+      record?.name || '',
+      record?.quizTitle || ''
+    ].join('|');
+  }
+
+  function recordTime(record) {
+    const raw = record?.timestamp || record?.submittedAt || record?.recordedAt || '';
+    const time = Date.parse(raw);
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function collapseExamHistory(records) {
+    const groups = new Map();
+    for (const record of Array.isArray(records) ? records : []) {
+      const key = resultPersonKey(record);
+      const list = groups.get(key) || [];
+      list.push(record);
+      groups.set(key, list);
+    }
+    const chosen = [];
+    for (const list of groups.values()) {
+      const completed = list.filter(r => r?.reviewStatus !== 'pending');
+      const passed = completed.filter(r => r?.status === '合格' || Number(r?.score) >= Number(r?.passingScore || 80));
+      const source = passed.length ? passed : completed;
+      if (!source.length) {
+        chosen.push([...list].sort((a,b) => recordTime(b)-recordTime(a))[0]);
+        continue;
+      }
+      chosen.push([...source].sort((a,b) => recordTime(b)-recordTime(a))[0]);
+    }
+    return chosen.sort((a,b) =>
+      String(a?.role || a?.examineeRole || '未分類').localeCompare(String(b?.role || b?.examineeRole || '未分類'), 'zh-Hant') ||
+      String(a?.groupLabel || '').localeCompare(String(b?.groupLabel || ''), 'zh-Hant') ||
+      String(a?.name || '').localeCompare(String(b?.name || ''), 'zh-Hant') ||
+      recordTime(b)-recordTime(a)
+    );
+  }
+
+  window.collapseExamHistory = collapseExamHistory;
+
   window.renderAdminTable = async function(){
     window.updateResultsWorkspacePresentation?.();
     const tbody=document.getElementById('admin-table-body');
@@ -73,7 +118,7 @@
         return;
       }
       window.renderResultsAnalytics(records);
-      let visibleRecords=[...records];
+      let visibleRecords=collapseExamHistory(records);
       const query=(document.getElementById('admin-results-search')?.value||'').trim().toLowerCase();
       const filter=document.getElementById('admin-results-filter')?.value||'all';
       visibleRecords=visibleRecords.filter(r=>{

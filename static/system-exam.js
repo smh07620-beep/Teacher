@@ -446,6 +446,8 @@ async function submitQuiz() {
 
     const totalScore=Number(result.score||0),correctCount=Number(result.correctCount||0),wrongCount=Number(result.wrongCount||0),passingScore=Number(result.passingScore||allQuizData[currentCatKey].passingScore||80),essayCount=Number(result.essayCount||0);
     window.currentExamRemediationPlan=result.remediation||null;
+    window.currentExamAnswerDetails=Array.isArray(result.answerDetails)?result.answerDetails:[];
+    window.currentExamReviewQuestions=Array.isArray(result.reviewQuestions)?result.reviewQuestions:[];
 
     document.getElementById('result-user-info').innerText = `考核者：${nameInput} (工號：${idInput})`;
     document.getElementById('final-score-text').innerText = totalScore;
