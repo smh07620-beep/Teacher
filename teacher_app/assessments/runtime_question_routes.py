@@ -291,6 +291,7 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         data = request.get_json(silent=True) or {}
         category_id = str(data.get("quizCategoryId", "")).strip()
         url = str(data.get("url", "")).strip()
+        dry_run = data.get("dryRun") is True
         if not repository.get_category_full(category_id):
             return jsonify({"error": "找不到考題頁籤"}), 400
         parsed = urllib.parse.urlparse(url)
@@ -336,8 +337,12 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
             "影片題": "video", "video": "video",
             "選擇題": "choice", "單選題": "choice", "choice": "choice", "single": "choice",
         }
+        total_rows = len(items)
+        if total_rows > 500:
+            errors.append(f"檔案共 {total_rows} 題，超過單次 500 題上限；第 501 題之後不會處理")
         for index, item in enumerate(items[:500], 1):
             if not isinstance(item, dict):
+                errors.append(f"第{index}題不是有效的題目資料")
                 continue
             question = str(item.get("question") or item.get("題目") or "").strip()
             qtype = str(item.get("questionType") or item.get("type") or item.get("題型") or "choice").strip().lower()
@@ -417,16 +422,35 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
                 "imageUrl": item.get("imageUrl", ""),
             }
             try:
-                runtime_questions.insert_payload(
-                    category_id,
-                    payload,
-                    allow_hosts=app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
-                )
+                if dry_run:
+                    # Same validator as the real insert, but nothing is written.
+                    runtime_questions.normalize_payload(
+                        payload,
+                        allow_hosts=app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+                    )
+                else:
+                    runtime_questions.insert_payload(
+                        category_id,
+                        payload,
+                        allow_hosts=app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+                    )
                 imported += 1
             except ValueError as exc:
                 errors.append(f"第{index}題：{exc}")
+        if dry_run:
+            return jsonify({
+                "ok": True,
+                "dryRun": True,
+                "total": total_rows,
+                "valid": imported,
+                "errorCount": len(errors),
+                "errors": errors[:50],
+                "reviewInvalidated": False,
+            })
         if imported:
             runtime_questions.mark_category_draft(category_id)
+        # Real-import response shape is an established contract; the richer
+        # counts live in the new dry-run response only.
         return jsonify({"ok": True, "imported": imported, "errors": errors[:20], "reviewInvalidated": bool(imported)})
 
     def api_delete_quiz_question(question_id):

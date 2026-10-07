@@ -474,6 +474,111 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
         self.assertEqual(category["review_status"], "draft")
         self.assertEqual(category["active"], 0)
 
+    def _post_import(self, csv_text, **extra):
+        class Response:
+            headers = {"Content-Type": "text/csv; charset=utf-8"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read(_limit):
+                return csv_text.encode("utf-8")
+
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        ), patch(
+            "teacher_app.assessments.runtime_question_routes.urllib.request.urlopen",
+            return_value=Response(),
+        ):
+            return self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": "https://example.test/questions.csv", **extra},
+            )
+
+    def _count_questions(self):
+        conn, _ = self.base.connect()
+        try:
+            return conn.execute(
+                "SELECT COUNT(*) AS n FROM quiz_questions WHERE quiz_category_id='cat-1'"
+            ).fetchone()["n"]
+        finally:
+            conn.close()
+
+    def test_import_url_dry_run_reports_without_writing_or_invalidating_review(self):
+        csv_text = (
+            "question,optionA,optionB,correct\n"
+            "有效題,A,B,B\n"
+            ",只有一個選項,,A\n"
+        )
+        before = self._count_questions()
+        response = self._post_import(csv_text, dryRun=True)
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertTrue(payload["dryRun"])
+        self.assertEqual(payload["total"], 2)
+        self.assertEqual(payload["valid"], 1)
+        self.assertEqual(payload["errorCount"], 1)
+        self.assertEqual(payload["errors"], ["第2題格式不足"])
+        self.assertFalse(payload["reviewInvalidated"])
+        self.assertEqual(self._count_questions(), before)
+
+    def test_import_url_dry_run_matches_real_import_result(self):
+        csv_text = (
+            "question,optionA,optionB,correct\n"
+            "有效題一,A,B,A\n"
+            "有效題二,A,B,B\n"
+            ",缺題幹,,A\n"
+        )
+        dry = self._post_import(csv_text, dryRun=True).get_json()
+        before = self._count_questions()
+        real = self._post_import(csv_text).get_json()
+        self.assertEqual(dry["valid"], real["imported"])
+        self.assertEqual(dry["errors"], real["errors"])
+        self.assertEqual(self._count_questions(), before + real["imported"])
+
+    def test_import_url_only_literal_true_enables_dry_run(self):
+        csv_text = "question,optionA,optionB,correct\n有效題,A,B,A\n"
+        before = self._count_questions()
+        response = self._post_import(csv_text, dryRun="true")
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()["imported"], 1)
+        self.assertEqual(self._count_questions(), before + 1)
+
+    def test_import_url_reports_non_object_rows_instead_of_silently_skipping(self):
+        class Response:
+            headers = {"Content-Type": "application/json"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read(_limit):
+                return b'[{"question":"ok","options":["A","B"],"correct":0}, "oops", 7]'
+
+        with patch(
+            "teacher_app.assessments.runtime_question_routes.socket.getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        ), patch(
+            "teacher_app.assessments.runtime_question_routes.urllib.request.urlopen",
+            return_value=Response(),
+        ):
+            response = self.client.post(
+                "/api/quiz-questions/import-url",
+                json={"quizCategoryId": "cat-1", "url": "https://example.test/q.json", "dryRun": True},
+            )
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 3)
+        self.assertEqual(payload["valid"], 1)
+        self.assertEqual(payload["errorCount"], 2)
+
     def _assert_repository_template_imports_cleanly(self, filename, content_type):
         body = ROOT.joinpath(filename).read_bytes()
 

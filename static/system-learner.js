@@ -624,9 +624,38 @@ function updateViewerNav(total){
 
 
 
+let slidePageRetryNonce=0;
+
+function showSlidePageError(message){
+    const box=document.getElementById('slide-page-error');
+    if(!box)return;
+    const text=document.getElementById('slide-page-error-text');
+    if(text&&message)text.textContent=message;
+    // The hidden attribute keeps this overlay hidden even if the utility CSS
+    // (Tailwind CDN) is slow or blocked, so it can never cover a working page.
+    box.hidden=false;
+    box.classList.remove('hidden');
+}
+
+function hideSlidePageError(){
+    const box=document.getElementById('slide-page-error');
+    if(!box)return;
+    box.hidden=true;
+    box.classList.add('hidden');
+}
+
+function slideViewerRetryPage(){
+    // A failed image can be cached by the browser; a one-off query token forces
+    // a fresh request without changing the server route or the saved page.
+    slidePageRetryNonce=Date.now();
+    hideSlidePageError();
+    if(slideViewerState.mode==='pdf')updateSlideViewerPdf();else updateSlideViewerImage();
+}
+window.slideViewerRetryPage = slideViewerRetryPage;
+
 function presentationPreviewPageUrl(page){
     const id=encodeURIComponent(String(slideViewerState.materialId||''));
-    return `/material-preview/${id}/page/${page}.png`;
+    return `/material-preview/${id}/page/${page}.png${slidePageRetryNonce?`?r=${slidePageRetryNonce}`:''}`;
 }
 
 function prefetchPresentationPage(page){
@@ -650,10 +679,12 @@ function updateSlideViewerPresentationPage(page,total){
             img.onerror=()=>{
                 const hint=document.getElementById('reader-learning-context');
                 if(hint)hint.textContent=slideViewerState.readerMode==='paged_document'?'Word 文件頁面載入失敗，請再試一次。':'投影片頁面載入失敗，請再試一次。';
+                showSlidePageError();
             };
             img.onload=()=>{
                 if(serial!==slidePresentationImageSerial)return;
                 img.style.visibility='visible';
+                hideSlidePageError();
                 applySlideZoom();
             };
             img.src=wanted;
@@ -671,6 +702,7 @@ function updateSlideViewerPresentationPage(page,total){
         if(serial!==slidePresentationImageSerial)return;
         const hint=document.getElementById('reader-learning-context');
         if(hint)hint.textContent=slideViewerState.readerMode==='paged_document'?'Word 文件頁面載入失敗，仍保留目前頁面，可再試一次。':'投影片頁面載入失敗，仍保留目前頁面，可再試一次。';
+        showSlidePageError(`第 ${page} 頁載入失敗，畫面仍停在上一頁。請重試；若持續失敗，請通知教師確認教材轉檔狀態。`);
     };
     loader.src=wanted;
     updateViewerNav(total);
@@ -741,11 +773,11 @@ function updateSlideViewerImage() {
 
     const img = document.getElementById('slide-viewer-image');
 
-    img.onerror = () => { const hint=document.getElementById('reader-learning-context'); if(hint) hint.innerHTML='<span class="text-rose-700 font-bold">❌ 教材頁面載入失敗</span><span class="text-slate-500">請檢查網路／雲端儲存狀態後重試；目前閱讀進度不會被清除。</span>'; };
+    img.onerror = () => { const hint=document.getElementById('reader-learning-context'); if(hint) hint.innerHTML='<span class="text-rose-700 font-bold">❌ 教材頁面載入失敗</span><span class="text-slate-500">請檢查網路／雲端儲存狀態後重試；目前閱讀進度不會被清除。</span>'; showSlidePageError(); };
 
-    img.onload = () => { applySlideZoom(); const hint=document.getElementById('reader-learning-context'); if(hint&&hint.textContent.includes('載入失敗')) hint.textContent='教材已恢復載入，可繼續閱讀。'; };
+    img.onload = () => { hideSlidePageError(); applySlideZoom(); const hint=document.getElementById('reader-learning-context'); if(hint&&hint.textContent.includes('載入失敗')) hint.textContent='教材已恢復載入，可繼續閱讀。'; };
 
-    img.src = images[index];
+    img.src = slidePageRetryNonce ? `${images[index]}${images[index].includes('?')?'&':'?'}r=${slidePageRetryNonce}` : images[index];
 
     updateViewerNav(images.length);
 
@@ -789,6 +821,8 @@ function goToSlidePage(i) {
     if (!Number.isInteger(next) || next < 0 || next >= total) return;
     slideViewerState.index = next;
     slideViewerState.zoom = 1;
+    slidePageRetryNonce = 0;
+    hideSlidePageError();
     window.slideViewerState = slideViewerState;
     renderSlideThumbs();
     if(slideViewerState.mode==='pdf')updateSlideViewerPdf();else updateSlideViewerImage();
@@ -804,7 +838,7 @@ window.goToSlidePage = goToSlidePage;
 window.slideViewerPrev = slideViewerPrev;
 window.slideViewerNext = slideViewerNext;
 
-function closeSlideViewer() { ++slidePdfSwapSerial; ++slidePresentationImageSerial; document.getElementById('slide-viewer-pdf-pending')?.remove(); const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';pdf.dataset.pendingSrc='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); }
+function closeSlideViewer() { ++slidePdfSwapSerial; ++slidePresentationImageSerial; slidePageRetryNonce=0; hideSlidePageError(); document.getElementById('slide-viewer-pdf-pending')?.remove(); const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';pdf.dataset.pendingSrc='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); }
 
 
 

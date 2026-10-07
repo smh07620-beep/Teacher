@@ -231,9 +231,26 @@
   window.adminImportQuizUrl = async function(catId){
     const el=document.getElementById(`qimport-${catId}`),url=el?.value.trim();
     if(!url){alert('請貼上 JSON 或 CSV 題庫公開連結');return;}
-    const r=await fetch('/api/quiz-questions/import-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quizCategoryId:catId,url})});
-    const d=await r.json().catch(()=>({})); if(!r.ok){alert(d.error||'匯入失敗');return;}
-    alert(`成功匯入 ${d.imported} 題${d.errors?.length?`；另有 ${d.errors.length} 筆略過`:''}`);
+    const post=async dryRun=>{
+      const r=await fetch('/api/quiz-questions/import-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quizCategoryId:catId,url,dryRun})});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(d.error||'匯入失敗');
+      return d;
+    };
+    // Step 1: validate only. Nothing is written until the teacher confirms.
+    let check;
+    try{ check=await post(true); }catch(e){ alert(e.message); return; }
+    const bad=Number(check.errorCount||0),good=Number(check.valid||0),total=Number(check.total||0);
+    if(!good){
+      alert(`檢查完成：共 ${total} 題，沒有可匯入的題目。\n\n${(check.errors||[]).slice(0,8).join('\n')}${bad>8?`\n…另有 ${bad-8} 項問題`:''}`);
+      return;
+    }
+    const detail=bad?`\n\n有 ${bad} 項問題將會略過：\n${(check.errors||[]).slice(0,8).join('\n')}${bad>8?`\n…另有 ${bad-8} 項`:''}`:'';
+    if(!confirm(`檢查完成：共 ${total} 題，可匯入 ${good} 題。${detail}\n\n確定匯入這 ${good} 題？匯入後考卷需重新審核。`)) return;
+    // Step 2: real import.
+    let d;
+    try{ d=await post(false); }catch(e){ alert(e.message); return; }
+    alert(`成功匯入 ${d.imported} 題${d.errors?.length?`；另有 ${d.errors.length} 項略過`:''}`);
     if(el) el.value='';
     delete allQuizData[catId];
     await window.loadQuizQuestionsIntoPanel(catId);
