@@ -54,7 +54,10 @@ def load_env_file(path: Path, environ: dict[str, str] | None = None) -> int:
     if not path.is_file():
         return 0
     count = 0
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    # utf-8-sig: Notepad / PowerShell often save a BOM; PowerShell's Get-Content
+    # strips it, so the doctor must too or the first key (e.g. TEACHER_BASE_URL)
+    # is misread as missing.
+    for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
         match = _ENV_LINE.match(line)
         if match:
             environ[match.group(1)] = match.group(2)

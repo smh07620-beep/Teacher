@@ -93,6 +93,15 @@ class DoctorTests(unittest.TestCase):
             doctor.load_env_file(path, env)
             self.assertEqual(env, {"A": "1", "B": "two"})
 
+    def test_env_file_loader_ignores_utf8_bom_on_first_key(self):
+        # Notepad/PowerShell often save a BOM; the first key must still be read.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "e.env"
+            path.write_bytes(b"\xef\xbb\xbfTEACHER_BASE_URL=https://example.test\nB=2\n")
+            env = {}
+            doctor.load_env_file(path, env)
+            self.assertEqual(env, {"TEACHER_BASE_URL": "https://example.test", "B": "2"})
+
     def test_bootstrap_runs_doctor(self):
         text = (ROOT / "setup_teacher_worker.ps1").read_text(encoding="utf-8")
         self.assertIn("Invoke-WorkerDoctor", text)
