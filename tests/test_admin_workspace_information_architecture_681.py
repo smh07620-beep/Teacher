@@ -61,7 +61,6 @@ class AdminWorkspaceInformationArchitecture681Tests(unittest.TestCase):
         for marker in (
             'ASSESSMENT & AUTHORING WORKSPACE',
             '評量與追蹤 Workspace',
-            'id="assessment-workspace-create-exam"',
             'id="admin-quiz-scope-78"',
             'id="admin-quiz-total-count"',
             'id="admin-quiz-published-count"',

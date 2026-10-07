@@ -47,7 +47,7 @@ class PortalInformationArchitecture73Tests(unittest.TestCase):
         self.assertIn("if(document.readyState==='loading')", self.navigation)
         self.assertIn("normalizePublicPortal", self.navigation)
         self.assertIn("normalizeSystem", self.navigation)
-        self.assertIn("data-portal73-area-link", self.navigation)
+        self.assertNotIn("data-portal73-area-link", self.navigation)  # breadcrumb owns the area link
         self.assertNotIn('new MutationObserver', self.navigation)
         self.assertNotIn("setInterval", self.navigation)
 

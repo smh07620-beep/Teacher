@@ -13,7 +13,7 @@ class ManagementSurfaceSimplification78Tests(unittest.TestCase):
         self.assertNotIn('id="admin-quiz-guide"',html)
         self.assertIn('data-teacher78-canonical-create-executor',html)
         self.assertIn('評量與追蹤 Workspace',html)
-        self.assertIn('id="assessment-workspace-create-exam"',html)
+        self.assertNotIn('id="assessment-workspace-create-exam"',html)  # exams are created from the course wizard
         self.assertIn('不再使用大型彈窗',html)
 
     def test_exam_list_is_compact_searchable_and_paged(self):

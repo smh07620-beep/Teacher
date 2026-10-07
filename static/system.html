@@ -40,6 +40,7 @@
             <div class="v56-system-actions">
                 <input id="global-learning-search" class="v56-system-search" type="search" aria-label="搜尋本組課程與教材" placeholder="搜尋本組課程、教材…" data-csp-input="syncGlobalLearningSearch(this.value)" data-csp-keydown="handleGlobalLearningSearchKey(event)">
                 <div class="v573-system-user" title="由首頁個人資料自動連動"><strong id="v573-system-user-name">未設定個人資料</strong><small id="v573-system-user-id" aria-live="polite">載入身分…</small></div>
+                <a id="global-account-link" class="v573-system-account-link" href="/account" title="修改個人資料與密碼">帳號設定</a>
             </div>
         </div>
     </header>
@@ -54,10 +55,6 @@
                 <a id="learning-area-link" href="/#groups" class="breadcrumb-link"><span id="learning-area-crumb">院內訓練</span></a><span class="text-slate-300">›</span>
                 <span id="learning-group-crumb" class="font-bold text-slate-700 px-2 py-1 rounded-lg bg-slate-100">生化組</span>
             </nav>
-            <div class="flex items-center gap-2">
-                <span class="hidden sm:inline text-xs text-slate-400">目前僅瀏覽此組內容</span>
-                <button data-csp-click="goBackLearning()" class="text-xs font-bold text-[#006b64] border border-teal-200 bg-teal-50 hover:bg-teal-100 px-3 py-2 rounded-lg">← 回訓練區選組別</button>
-            </div>
         </section>
 
         <section class="edu-card v687-learning-path-card p-4 sm:p-5">
@@ -487,9 +484,6 @@
                             <div><p class="admin-page-eyebrow">ASSESSMENT & AUTHORING WORKSPACE</p><h4 class="font-black text-slate-950 text-xl">評量與追蹤 Workspace</h4><p class="text-xs text-slate-500 mt-1">考卷、題庫、AI 輔助出題、審核發布、待批改與學員追蹤集中在同一個工作頁。</p></div>
                             <div class="admin-page-heading-tools">
                                 <div id="admin-quiz-scope-78" class="admin-scope-toolbar" aria-label="評量與出題管理範圍"><label><span>訓練區</span><select id="admin-quiz-area"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></label><label><span>組別</span><select id="admin-quiz-group" data-csp-change="onAdminQuizGroupChange()"></select></label><button type="button" data-csp-click="renderAdminQuizCategories(true)" class="admin-toolbar-button">↻ 更新清單</button></div>
-                                <div class="admin-workspace-primary-actions">
-                                    <button id="assessment-workspace-create-exam" type="button" class="admin-workspace-primary-button">＋ 建立考卷</button>
-                                </div>
                             </div>
                         </div>
                         <div id="admin-quiz-overview" class="admin-quiz-overview">

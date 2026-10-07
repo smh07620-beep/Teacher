@@ -116,6 +116,12 @@
       }));
     }
     host.replaceChildren(...expected);
+
+    // The persona switcher already reaches every workspace this account may use,
+    // so the separate header entry (教學管理 / 平台管理) is a duplicate.
+    document.querySelectorAll('.v575-manage-direct').forEach(entry => {
+      entry.dataset.personaDuplicate = '1';
+    });
   }
 
   function makeNavButton(id, label, handler) {
@@ -165,7 +171,8 @@
     if (!teacherPersonaActive) return;
 
     // Keep the global header focused on destination switching. Teacher help
-    // and account settings stay contextual to this workspace instead.
+    // stays contextual to this workspace; account settings live in the outer
+    // site header (#global-account-link) because every role edits its own profile.
     document.getElementById('teacher-utility-actions-1014')?.remove();
 
     const summary = document.getElementById('admin-workspace-summary');
@@ -183,14 +190,7 @@
       guide.textContent = '操作說明';
       guide.addEventListener('click', () => showTeacherGuide());
 
-      const account = document.createElement('button');
-      account.id = 'teacher-account-open-1014';
-      account.type = 'button';
-      account.className = 'font-bold text-slate-300 hover:text-white underline decoration-dotted underline-offset-2';
-      account.textContent = '帳號設定';
-      account.addEventListener('click', () => { window.location.href = '/account'; });
-
-      host.append(guide, account);
+      host.append(guide);
       summary.insertAdjacentElement('afterend', host);
     }
   }
@@ -221,24 +221,13 @@
           ${guideCard('3','評量／考卷','可以選擇稍後建立、教師自己出題，或讓 AI 產生候選題；Blueprint 與題型配額收在進階設定。')}
           ${guideCard('4','確認發布','最後確認教材、評量、學習指派與 AI 產物；只有正式發布後，學員才會看到這門課。')}
         </div>
-        <div class="mt-3 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="mt-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2">
           <div class="text-xs leading-5 text-slate-600"><b class="text-slate-800">發布後：</b>待批改、學員追蹤、臨床技能評核、能力追蹤與教學分析，都回「評量與追蹤」處理。</div>
-          <button id="teacher-guide-start-course-1014" type="button" class="shrink-0 rounded-lg bg-teal-700 px-4 py-2 text-xs font-black text-white">開始建立課程</button>
         </div>`;
       workspace.insertBefore(panel, workspace.firstChild);
       panel.querySelector('#teacher-guide-close-1014')?.addEventListener('click', () => {
         panel.classList.add('hidden');
         rememberGuideDismissed();
-      });
-      panel.querySelector('#teacher-guide-start-course-1014')?.addEventListener('click', () => {
-        void (async () => {
-          await openCourse();
-          for (let attempt = 0; attempt < 20; attempt += 1) {
-            const button = document.getElementById('course-workspace-create-course');
-            if (button) { button.click(); break; }
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
-        })();
       });
     }
     panel.classList.toggle('hidden', guideDismissed());

@@ -47,7 +47,7 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
         self.assertNotIn("makeNavButton('teacher-nav-documents-1014'", self.source)
         self.assertIn("teacher-inline-support-1014", self.source)
         self.assertIn("teacher-guide-open-1014", self.source)
-        self.assertIn("teacher-account-open-1014", self.source)
+        self.assertNotIn("teacher-account-open-1014", self.source)  # account settings live in the outer header
         self.assertNotIn("utilityButton('teacher-announcements-open-1014'", self.source)
         self.assertNotIn("utilityButton('teacher-documents-open-1014'", self.source)
         self.assertIn("AI 製作從課程的教材流程內進入", self.source)
@@ -67,7 +67,6 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
             "臨床技能評核",
             "能力追蹤",
             "教學分析",
-            "teacher-guide-start-course-1014",
             "openReview",
             "openLearnerTracking",
         ):
