@@ -31,8 +31,8 @@ class ProductConvergence101Tests(unittest.TestCase):
         self.assertIn("document.getElementById('teacher-context-tools-101')?.remove()", self.shell)
         self.assertNotIn("teacher-context-media-101", self.shell)
         self.assertNotIn("teacher-context-documents-101", self.shell)
-        self.assertIn("AI 製作從教材流程內開啟", self.shell)
-        self.assertIn("公告、文件與使用導覽在右上工具", self.shell)
+        self.assertIn("AI 製作從課程的教材流程內開啟", self.shell)
+        self.assertNotIn("公告、文件與使用導覽在右上工具", self.shell)
 
     def test_teacher_and_convergence_layers_do_not_compete_for_navigation(self):
         self.assertIn("final teacher persona navigation is owned by teacher-persona-isolation", self.shell)

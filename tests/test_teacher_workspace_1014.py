@@ -45,23 +45,22 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
             self.assertIn(label, self.source)
         self.assertNotIn("makeNavButton('teacher-nav-announcements-1014'", self.source)
         self.assertNotIn("makeNavButton('teacher-nav-documents-1014'", self.source)
-        for utility in (
-            "teacher-guide-open-1014",
-            "teacher-announcements-open-1014",
-            "teacher-documents-open-1014",
-        ):
-            self.assertIn(utility, self.source)
-        self.assertIn("AI 製作從教材內進入", self.source)
+        self.assertIn("teacher-inline-support-1014", self.source)
+        self.assertIn("teacher-guide-open-1014", self.source)
+        self.assertIn("teacher-account-open-1014", self.source)
+        self.assertNotIn("utilityButton('teacher-announcements-open-1014'", self.source)
+        self.assertNotIn("utilityButton('teacher-documents-open-1014'", self.source)
+        self.assertIn("AI 製作從課程的教材流程內進入", self.source)
         self.assertIn("navHost.replaceChildren(navGroup('教師工作台', buttons))", self.source)
 
     def test_first_use_guide_explains_the_complete_teacher_job(self):
         for marker in (
             "teacher-usage-guide-1014",
-            "第一次使用？照這四件事走就好",
-            "準備教材與課程",
-            "製作教學內容",
-            "建立考題與發布",
-            "批改與追蹤",
+            "第一次使用？照這四步就好",
+            "課程設定",
+            "加入教材／需要時 AI 製作",
+            "建立評量與發布",
+            "批改與學員追蹤",
             "我的學員",
             "臨床技能評核",
             "能力追蹤",

@@ -81,7 +81,8 @@ test('large internal course scope stays interactive without summary warnings', a
   await expect(firstCourse.locator('[data-teacher-course-tools-1014]')).toBeVisible();
   await firstCourse.locator('[data-teacher-course-media-1014]').click();
   expect(await page.evaluate(() => window.mediaOpened)).toBe(true);
-  await page.getByRole('button', { name: '批次指派' }).click();
+  await page.locator('#teacher-course-advanced-tools-1014 > summary').click();
+  await page.getByRole('button', { name: '批次指派多門課程' }).click();
   await expect(page.locator('#teacher-batch-assignment-dialog-1014')).toHaveAttribute('open', '');
   await expect(page.locator('[data-batch-course]')).toHaveCount(1541);
   expect(warnings).toEqual([]);

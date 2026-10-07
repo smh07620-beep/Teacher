@@ -31,7 +31,7 @@ class CourseWizardFlow69Tests(unittest.TestCase):
         for marker in (
             "/api/learning-assignments/audience-options",
             "發布後立即建立學習指派",
-            "課程性質",
+            "學習要求",
             "完成期限",
             "createWizardAssignment",
             "/api/learning-assignments",

@@ -25,10 +25,10 @@ class AdminWorkspaceInformationArchitecture681Tests(unittest.TestCase):
             'COURSES & MATERIALS WORKSPACE',
             '教材與課程 Workspace',
             'id="course-workspace-create-course"',
-            'id="course-workspace-add-material"',
             'id="course-wizard-legacy-fields"',
         ):
             self.assertIn(marker, self.html)
+        self.assertNotIn('id="course-workspace-add-material"', self.html)
         self.assertIn('#admin-course-workspace > #course-wizard-681', self.css)
         self.assertIn('display: none !important', self.css)
         self.assertIn("const old=el('course-wizard-legacy-fields')", self.wizard)

@@ -33,8 +33,11 @@ class TeacherPersonaIsolation1014Tests(unittest.TestCase):
 
     def test_media_documents_and_help_do_not_duplicate_primary_navigation(self):
         self.assertIn("document.getElementById('teacher-context-tools-101')?.remove()", self.product_convergence)
-        for utility in ("teacher-guide-open-1014", "teacher-announcements-open-1014", "teacher-documents-open-1014"):
-            self.assertIn(utility, self.teacher_workspace)
+        self.assertIn("teacher-inline-support-1014", self.teacher_workspace)
+        self.assertIn("teacher-guide-open-1014", self.teacher_workspace)
+        self.assertIn("teacher-account-open-1014", self.teacher_workspace)
+        self.assertNotIn("utilityButton('teacher-announcements-open-1014'", self.teacher_workspace)
+        self.assertNotIn("utilityButton('teacher-documents-open-1014'", self.teacher_workspace)
         self.assertIn("openMedia", self.teacher_workspace)
         self.assertIn("openDocuments", self.teacher_workspace)
 
