@@ -36,14 +36,37 @@ def build_recovery_audit(connection_factory: Callable | None = None) -> dict[str
         def add(key,label,count,severity="error",detail=""):
             checks.append({
                 "key":key,"label":label,"count":int(count or 0),
-                "ok":int(count or 0)==0,"severity":severity,"detail":detail,
+                "ok":int(count or 0)==0 or severity=="info","severity":severity,"detail":detail,
             })
 
         if {"material_versions","materials"} <= present:
+            orphan_sql=(
+                "SELECT COUNT(*) AS n FROM material_versions v "
+                "LEFT JOIN materials m ON m.id=v.material_id WHERE m.id IS NULL"
+            )
+            total_orphans=_count(conn,orphan_sql)
+            # delete_material() removes the catalog row but deliberately keeps the
+            # immutable version history (and its provider storage). Orphans whose
+            # material has a recorded material.delete audit event are that retained
+            # history, not corruption; only unexplained orphans stay an error.
+            retained=0
+            if total_orphans and "audit_events" in present:
+                retained=_count(
+                    conn,
+                    orphan_sql+" AND EXISTS (SELECT 1 FROM audit_events a "
+                    "WHERE a.action='material.delete' AND a.target_type='material' "
+                    "AND a.target_id=v.material_id)",
+                )
             add(
                 "orphan_material_versions","教材版本找不到主教材",
-                _count(conn,"SELECT COUNT(*) AS n FROM material_versions v LEFT JOIN materials m ON m.id=v.material_id WHERE m.id IS NULL"),
+                total_orphans-retained,
             )
+            if retained:
+                add(
+                    "retained_material_versions","已刪除教材保留的版本歷史",
+                    retained,severity="info",
+                    detail="教材刪除時系統刻意保留版本歷史與儲存檔案，以便日後還原；這是設計行為，不是損壞。",
+                )
         if {"material_derivative_publications","materials"} <= present:
             add(
                 "orphan_material_derivatives","AI 衍生內容找不到主教材",
