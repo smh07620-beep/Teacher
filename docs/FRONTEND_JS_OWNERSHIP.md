@@ -30,12 +30,12 @@ These are not separate product owners, but classic scripts can reassign bare glo
 | Global/API | Canonical owner | Wrapper chain | Wrapper responsibility |
 | --- | --- | --- | --- |
 | `adminQuestionEditFormHTML` | `static/admin-question-editor-ui.js` | `static/review-links-66.js` | Preserve the canonical question editor HTML and append review-source fields only. |
-| `renderQuestions` | `static/system-exam.js` | `static/review-links-66.js` | Preserve learner exam rendering, then inject review-source presentation. |
+| `renderQuestions` | `static/system-exam.js` | `static/review-links-66.js`, `static/learner-study-exam-loop-1032.js` | Preserve learner exam rendering, then inject review-source presentation and atlas re-read hints. |
 | `renderSlidesGrid` | `static/system-learner.js` | `static/review-links-66.js` → `static/learner-reading-progress-f2.js` | Review-links resolves a pending review deep-link. F2 then refreshes `/api/learning-progress` and repaints server-derived reading/completion state after the canonical grid render. |
 | `teachingSavePage` | `static/teaching.js` | `static/teaching.js` reader-next wrapper → `static/review-links-66.js` review-context wrapper | Save the page once, then synchronize reader-next state and review context. |
 | `teachingNextMaterial` | `static/teaching.js` | `static/teaching.js` sequential-reader wrapper | Block next-material navigation until the current material is completed; no second persistence owner. |
-| `switchDynamicCategory` | `static/system-exam.js` | `static/teaching.js` empty-exam wrapper | Prevent an empty exam from creating/entering an attempt; otherwise call the canonical exam switch once. |
-| `buildCourseExamRow` | `static/system-learner.js` | `static/teaching.js` empty-exam presentation wrapper | Render zero-question exams as not-ready instead of actionable. |
+| `switchDynamicCategory` | `static/system-exam.js` | `static/teaching.js` empty-exam wrapper, `static/learner-study-exam-loop-1032.js` | Prevent an empty exam from creating/entering an attempt; otherwise call the canonical exam switch once; then restore the last-result card. |
+| `buildCourseExamRow` | `static/system-learner.js` | `static/teaching.js` empty-exam presentation wrapper, `static/learner-study-exam-loop-1032.js` pass/fail badge wrapper | Render zero-question exams as not-ready instead of actionable; add pass/fail status and retake hint. |
 | `renderAdminQuizCategories` / `paintAdminQuizCategories` | `static/admin-question-bank.js` | `static/teacher-ui-resilience-1014.js` | Synchronize assessment scope and add empty-state recovery without owning question CRUD or fetch policy. |
 
 ## Duplicate owners removed in this audit
