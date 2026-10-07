@@ -184,11 +184,35 @@ def ensure_material_version_baseline_on_connection(conn, kind: str, entry: dict)
         )
 
 
+# Newly created materials are shared with every training group by default; the
+# database column default stays ``group_only`` so rows created before this change
+# keep their restriction.  Teachers narrow a material with 設定範圍.
+DEFAULT_NEW_MATERIAL_AUDIENCE = "all_staff"
+_AUDIENCE_VALUES = {"group_only", "all_staff", "multi_group"}
+
+
+def _has_audience_column(conn, kind: str) -> bool:
+    if kind == "postgres":
+        return bool(
+            conn.execute(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_schema=current_schema() AND table_name='materials' AND column_name='audience_scope'"
+            ).fetchone()
+        )
+    return any(str(row[1]) == "audience_scope" for row in conn.execute("PRAGMA table_info(materials)").fetchall())
+
+
 def insert_material_on_connection(conn, kind: str, entry: dict, *, ignore_conflict: bool = False) -> None:
     ph = common_db.placeholder(kind)
-    columns = ",".join(MATERIAL_DB_COLUMNS)
-    marks = ",".join([ph] * len(MATERIAL_DB_COLUMNS))
-    values = tuple((bool(entry.get(name)) if name == "active" and kind == "postgres" else int(bool(entry.get(name))) if name == "active" else entry.get(name)) for name in MATERIAL_DB_COLUMNS)
+    names = list(MATERIAL_DB_COLUMNS)
+    entry = dict(entry)
+    if _has_audience_column(conn, kind):
+        supplied = str(entry.get("audience_scope") or entry.get("audienceScope") or "").strip().lower()
+        entry["audience_scope"] = supplied if supplied in _AUDIENCE_VALUES else DEFAULT_NEW_MATERIAL_AUDIENCE
+        names.append("audience_scope")
+    columns = ",".join(names)
+    marks = ",".join([ph] * len(names))
+    values = tuple((bool(entry.get(name)) if name == "active" and kind == "postgres" else int(bool(entry.get(name))) if name == "active" else entry.get(name)) for name in names)
     if kind == "sqlite" and ignore_conflict:
         sql = f"INSERT OR IGNORE INTO materials ({columns}) VALUES ({marks})"
     else:

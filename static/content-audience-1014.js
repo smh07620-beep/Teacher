@@ -92,6 +92,15 @@
     button.textContent = '設定範圍';
     button.addEventListener('click', onClick);
     host.append(badge, button);
+    // A restricted material is invisible to other groups' learners. Say so right
+    // next to the control instead of leaving teachers to discover empty courses.
+    if ((item?.audienceScope || 'group_only') === 'group_only') {
+      const hint = document.createElement('span');
+      hint.className = 'text-[10px] font-bold text-amber-700';
+      hint.dataset.audienceHint = 'group_only';
+      hint.textContent = '其他組別看不到；要開放請按「設定範圍」';
+      host.append(hint);
+    }
     return host;
   }
 
