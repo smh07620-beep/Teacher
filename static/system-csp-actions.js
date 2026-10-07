@@ -56,7 +56,7 @@
     'openExamRemediationMaterials','restartExamAfterRemediation',
     'scrollToFirstFlagged','scrollToFirstUnanswered','scrollToReview','searchTeachingResources','selectEssay','selectFill','selectOption','selectMulti',
     'selectPgyAssessmentType','setMediaRate','setMediaSize','setMediaVolume','slideViewerNext','slideViewerPrev',
-    'slideViewerResetZoom','slideViewerZoom','submitEssayReview','submitPgyAssessment','submitQuiz','switchAdminWorkspace',
+    'slideViewerResetZoom','slideViewerRetryPage','slideViewerZoom','submitEssayReview','submitPgyAssessment','submitQuiz','switchAdminWorkspace',
     'switchDynamicCategory','switchLearningModule','switchTeacherMode','syncExamDrawModeUI','syncGlobalLearningSearch',
     'teacher78FilterQuizCategories','teacher78LoadMoreQuizCategories','teacher78SetQuizStatus','teachingCloseEditor',
     'teachingEditCourse','teachingFinishReading','teachingNextMaterial','teachingSaveCourse','toggleAdminAnnouncement',

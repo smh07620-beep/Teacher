@@ -23,6 +23,26 @@ _OFFICE_EXTENSIONS = {
 }
 
 
+
+def _sanitize_conversion_warnings(storage_meta: dict) -> dict:
+    """Keep Worker-supplied conversion warnings small, typed and display-safe."""
+    raw = storage_meta.get("conversionWarnings")
+    if raw is None:
+        return storage_meta
+    cleaned = []
+    if isinstance(raw, list):
+        for item in raw[:6]:
+            if not isinstance(item, dict):
+                continue
+            code = str(item.get("code") or "").strip()[:40]
+            message = str(item.get("message") or "").strip()[:300]
+            if code and message:
+                cleaned.append({"code": code, "message": message})
+    result = {key: value for key, value in storage_meta.items() if key != "conversionWarnings"}
+    if cleaned:
+        result["conversionWarnings"] = cleaned
+    return result
+
 def commit(job: dict, result: dict) -> dict:
     """Persist a Worker-produced material only after Web ownership validation."""
     payload = dict(job.get("payload") or {})
@@ -52,6 +72,7 @@ def commit(job: dict, result: dict) -> dict:
     storage_meta = (
         result.get("storageMeta") if isinstance(result.get("storageMeta"), dict) else {}
     )
+    storage_meta = _sanitize_conversion_warnings(storage_meta)
     if Path(original).suffix.lower() in _OFFICE_EXTENSIONS:
         preview_mode = str(storage_meta.get("previewMode") or "").strip().lower()
         slides_prefix = str(result.get("slidesPrefix") or "").strip()

@@ -174,6 +174,7 @@ GitHub Actions 的 `Teacher release checks` 會執行 Python compile、完整 re
 - `docs/COURSE_FEEDBACK_0087.md`：一般課程學員回饋、scope 與匿名管理彙總契約
 - `docs/SAVED_LEARNING_ITEMS_0088.md`：跨裝置課程／教材收藏與 browser-local 頁碼 bookmark 分工
 - `VERSION` / `release_contract.py`：目前正式 release contract
+- `docs/RELEASE_ACCEPTANCE_CHECKLIST.md`：每次部署後的人工驗收清單（上傳→轉檔→預覽→翻頁→考試→匯入）
 
 ## GitHub 安全原則
 

@@ -16,6 +16,7 @@ from teacher_app.materials import ai_video_renderer, classification
 from teacher_app.storage.worker_runtime import OFFICE_EXT, WorkerMaterialStorageAdapter
 from teacher_app.worker import protocol as worker_protocol
 from teacher_app.worker import site_check
+from teacher_app.worker import office_fidelity
 
 LOGGER=logging.getLogger("teacher.material_worker")
 
@@ -738,6 +739,11 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
     timings["renderAndProviderMs"]=_elapsed_ms(render_publish_started)
     report("正式發布",f"{backend.upper()} 正式教材寫入完成，準備發布確認。",92)
     meta={**(meta or {}),"workerTimingsMs":dict(timings)}
+    if ext in OFFICE_EXT:
+        # Diagnostic only: explains likely layout drift (missing fonts, autofit)
+        # so the teacher can choose to upload a PDF exported from PowerPoint.
+        fidelity_warnings=office_fidelity.conversion_warnings(source)
+        if fidelity_warnings: meta["conversionWarnings"]=fidelity_warnings
     return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta,"materialType":resolved_material_type,"classificationMethod":classification_method,"classificationReason":str(classification_reason or "")[:240],"publishKey":publish_key,"publishSourceSha256":source_sha256}
 
 def process_one(api,job,capabilities=None):

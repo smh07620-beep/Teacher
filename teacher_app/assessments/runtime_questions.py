@@ -326,7 +326,13 @@ def delete_question(question_id: str) -> dict:
     return {"ok": True}
 
 
-def insert_payload(category_id: str, payload: Mapping[str, Any], *, allow_hosts=()) -> str:
+def normalize_payload(payload: Mapping[str, Any], *, allow_hosts=()) -> dict:
+    """Validate and normalize one question payload without writing anything.
+
+    Raises ValueError with a learner-safe message. ``insert_payload`` and the
+    import dry-run both use this so a pre-check can never disagree with the
+    real import.
+    """
     qtext = str(payload.get("question", "")).strip()
     qtype = str(payload.get("questionType", "choice")).lower()
     if qtype not in QUESTION_TYPES:
@@ -373,6 +379,24 @@ def insert_payload(category_id: str, payload: Mapping[str, Any], *, allow_hosts=
     difficulty = str(payload.get("difficulty", "standard") or "standard").lower()
     if difficulty not in {"basic", "standard", "advanced"}:
         difficulty = "standard"
+    return {
+        "qtext": qtext,
+        "qtype": qtype,
+        "options": options,
+        "correct": correct,
+        "config": config,
+        "difficulty": difficulty,
+    }
+
+
+def insert_payload(category_id: str, payload: Mapping[str, Any], *, allow_hosts=()) -> str:
+    normalized = normalize_payload(payload, allow_hosts=allow_hosts)
+    qtext = normalized["qtext"]
+    qtype = normalized["qtype"]
+    options = normalized["options"]
+    correct = normalized["correct"]
+    config = normalized["config"]
+    difficulty = normalized["difficulty"]
     question_id = f"q-{uuid.uuid4().hex[:12]}"
     with common_db.transaction() as (conn, kind):
         order = repository.next_question_sort_order(conn, kind, category_id)
