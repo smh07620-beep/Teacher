@@ -12,12 +12,13 @@ class GuidanceActionDensity1033Tests(unittest.TestCase):
         cls.media_studio = (ROOT / "static" / "teacher-ai-media-studio-1018.js").read_text(encoding="utf-8")
         cls.system_html = (ROOT / "static" / "system.html").read_text(encoding="utf-8")
 
-    def test_teacher_quick_start_cards_are_explanatory_with_one_footer_action(self):
+    def test_teacher_quick_start_cards_are_explanatory_without_a_second_create_course_action(self):
         start = self.workspace.index("function guideCard")
         end = self.workspace.index("function showTeacherGuide", start)
         guide = self.workspace[start:end]
         self.assertNotIn("data-teacher-guide-action", guide)
-        self.assertEqual(guide.count('id="teacher-guide-start-course-1014"'), 1)
+        # The workspace's own 「＋ 建立課程」 is the single create-course entry.
+        self.assertNotIn('teacher-guide-start-course-1014', guide)
         card_fn = guide[:guide.index("function ensureTeacherGuide")]
         self.assertNotIn("<button", card_fn)
 

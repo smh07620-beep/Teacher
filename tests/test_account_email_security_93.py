@@ -35,10 +35,13 @@ class AccountEmailSecurity93Tests(unittest.TestCase):
         self.assertIn("scripts/send_email_reminders.py",workflow)
         self.assertNotIn("run_due_reminders",worker)
 
-    def test_exam_creation_exposes_final_date(self):
+    def test_exam_settings_expose_final_date(self):
         source=Path(__file__).parents[1].joinpath("static","teacher-content-studio-71.js").read_text(encoding="utf-8")
-        self.assertIn("teacher77-exam-closes-at",source)
-        self.assertIn("/api/exam-windows/",source)
+        # Exams are created by the course wizard; the final date is set in exam settings.
+        settings=Path(__file__).parents[1].joinpath("static","admin-exam-settings.js").read_text(encoding="utf-8")
+        self.assertNotIn("teacher77-exam-closes-at",source)
+        self.assertIn("exam-settings-closes-at",settings)
+        self.assertIn("/api/exam-windows/",settings)
 
 if __name__=="__main__":
     unittest.main()

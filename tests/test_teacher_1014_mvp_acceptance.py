@@ -34,13 +34,13 @@ class Teacher1014MvpAcceptanceTests(unittest.TestCase):
         self.assertNotIn("makeNavButton('teacher-nav-documents-1014'", self.workspace)
         self.assertIn("teacher-inline-support-1014", self.workspace)
         self.assertIn("teacher-guide-open-1014", self.workspace)
-        self.assertIn("teacher-account-open-1014", self.workspace)
+        self.assertNotIn("teacher-account-open-1014", self.workspace)
         self.assertNotIn("utilityButton('teacher-announcements-open-1014'", self.workspace)
         self.assertNotIn("utilityButton('teacher-documents-open-1014'", self.workspace)
         for guided_job in ("課程設定", "教材＋AI", "評量／考卷", "確認發布"):
             self.assertIn(guided_job, self.workspace)
         self.assertIn("指定完成／自由選讀", self.workspace)
-        self.assertIn("teacher-guide-start-course-1014", self.workspace)
+        self.assertNotIn("teacher-guide-start-course-1014", self.workspace)
         self.assertNotIn("data-teacher-guide-action", self.workspace)
         for followup in ("學員追蹤", "臨床技能評核", "能力追蹤", "教學分析"):
             self.assertIn(followup, self.workspace)

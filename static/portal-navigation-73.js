@@ -57,23 +57,12 @@
     const areaHref=area==='pgy'?'/pgy':'/internal';
     const areaLabel=area==='pgy'?'PGY 學習':'院內課程';
 
-    const nav=document.querySelector('.v575-system-nav');
-    if(nav && !nav.querySelector('[data-portal73-area-link]')){
-      const link=document.createElement('a');
-      link.dataset.portal73AreaLink='1';
-      link.href=areaHref;
-      link.textContent=areaLabel;
-      const manage=nav.querySelector('.v575-manage-direct');
-      if(manage) nav.insertBefore(link,manage); else nav.appendChild(link);
-    }
-
+    // The breadcrumb already links back to the training area, so the primary
+    // nav no longer carries a second copy of that link.
     const rootCrumb=document.querySelector('nav[aria-label="教學導覽"] a[href="/"]');
     text(rootCrumb,'首頁');
     const areaLink=document.getElementById('learning-area-link');
     if(areaLink){ areaLink.href=areaHref; text(areaLink,areaLabel); }
-
-    const back=[...document.querySelectorAll('button')].find(button=>button.getAttribute('onclick')?.includes('goBackLearning'));
-    if(back) text(back,`← 回${areaLabel}`);
   }
 
   function install(){

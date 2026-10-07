@@ -11,7 +11,7 @@ class ContentContainerConvergence77Tests(unittest.TestCase):
 
     def test_studio_outer_surface_only_exposes_exam_management(self):
         self.assertIn('openTeacherAssessmentWorkspace',self.studio)
-        self.assertIn('openTeacherAssessmentCreateWorkspace',self.studio)
+        self.assertNotIn('openTeacherAssessmentCreateWorkspace',self.studio)
         self.assertIn('考卷工作畫面',self.studio)
         self.assertNotIn("card('question'",self.studio)
         self.assertNotIn("card('image-question'",self.studio)
@@ -27,7 +27,11 @@ class ContentContainerConvergence77Tests(unittest.TestCase):
             self.assertIn(marker, self.studio)
 
     def test_exam_creation_keeps_canonical_mutation_owner(self):
-        self.assertIn('adminCreateQuizCategory',self.studio)
+        # The studio no longer creates exams itself; creation stays with the
+        # canonical admin-question-panel owner (used by the course wizard).
+        panel=ROOT.joinpath('static/admin-question-panel.js').read_text(encoding='utf-8')
+        self.assertIn('window.adminCreateQuizCategory',panel)
+        self.assertNotIn('adminCreateQuizCategory',self.studio)
         self.assertNotIn("fetch('/api/quiz-categories'",self.studio)
 
     def test_course_wizard_is_mounted_inside_studio(self):

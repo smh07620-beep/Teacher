@@ -252,3 +252,9 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
     padding: 1rem;
   }
 }
+
+/* The persona switcher already covers these destinations; keep the duplicate
+ * header entry hidden even if RBAC scripts re-render its label/visibility. */
+.v575-manage-direct[data-persona-duplicate="1"] {
+  display: none !important;
+}
