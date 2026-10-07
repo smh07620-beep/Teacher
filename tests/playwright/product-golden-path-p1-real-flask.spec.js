@@ -3,6 +3,14 @@ const { test, expect } = require('@playwright/test');
 const baseURL = process.env.TEACHER_FLASK_BASE_URL || 'http://127.0.0.1:4174';
 const fixturePassword = process.env.TEACHER_CI_BROWSER_PASSWORD || '';
 
+// These golden paths exercise our own Flask-served code. Third-party CDN
+// scripts (Tailwind, Chart.js, ...) are render-blocking in system.html, so a slow
+// CDN on the CI runner stalls navigation and makes the login helper time out.
+// Fail them fast instead so the result depends only on this repository.
+test.beforeEach(async ({ page }) => {
+  await page.route(/^https:\/\/(cdn\.tailwindcss\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, route => route.abort());
+});
+
 async function login(page, username, next = '/system?area=internal&group=grpBio') {
   expect(fixturePassword, 'CI must provide the ephemeral real-Flask browser fixture password').not.toBe('');
   await page.goto(`${baseURL}/login?next=${encodeURIComponent(next)}`, { waitUntil: 'domcontentloaded' });
