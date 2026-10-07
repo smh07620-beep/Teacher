@@ -102,6 +102,26 @@ class DoctorTests(unittest.TestCase):
             doctor.load_env_file(path, env)
             self.assertEqual(env, {"TEACHER_BASE_URL": "https://example.test", "B": "2"})
 
+    def test_doctor_entry_loads_env_file_before_storage_module_import(self):
+        # providers.py captures R2_* once at import; the entry script must load
+        # the env file first or configured R2 is reported as "not set".
+        import subprocess, sys
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "e.env"
+            path.write_bytes(b"\xef\xbb\xbfR2_BUCKET_NAME=bucket-x\nR2_ACCOUNT_ID=acct\nR2_ACCESS_KEY_ID=k\nR2_SECRET_ACCESS_KEY=s\n")
+            code = (
+                "import sys; root=sys.argv[2]; env=sys.argv[1]; sys.argv=['worker_doctor.py','--env-file',env]; "
+                "sys.path.insert(0, root); "
+                "import worker_doctor; from teacher_app.storage import providers; "
+                "print(providers.R2_BUCKET_NAME, providers.R2_ACCOUNT_ID, providers.R2_ACCESS_KEY_ID, providers.R2_SECRET_ACCESS_KEY)"
+            )
+            out = subprocess.run(
+                [sys.executable, "-I", "-c", code, str(path), str(ROOT)],
+                cwd=str(ROOT), capture_output=True, text=True, timeout=120,
+                env={k: v for k, v in __import__("os").environ.items() if not k.startswith(("R2_", "MEGA_"))} ,
+            )
+            self.assertEqual(out.stdout.strip().splitlines()[-1], "bucket-x acct k s", out.stderr[-500:])
+
     def test_bootstrap_runs_doctor(self):
         text = (ROOT / "setup_teacher_worker.ps1").read_text(encoding="utf-8")
         self.assertIn("Invoke-WorkerDoctor", text)
