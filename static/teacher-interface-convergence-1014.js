@@ -93,7 +93,7 @@
 
     const summary = document.getElementById('admin-workspace-summary');
     if (summary && summary.textContent?.includes('教材與課程、媒體製作')) {
-      summary.textContent = '日常工作只分「教材與課程」與「評量與追蹤」；媒體製作收在教材流程，公告與文件放在右上工具。';
+      summary.textContent = '日常工作只分「教材與課程」與「評量與追蹤」；媒體製作收在課程的教材流程內。';
     }
   }
 

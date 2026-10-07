@@ -67,11 +67,12 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
             "臨床技能評核",
             "能力追蹤",
             "教學分析",
-            "create-course",
+            "teacher-guide-start-course-1014",
             "openReview",
             "openLearnerTracking",
         ):
             self.assertIn(marker, self.source)
+        self.assertNotIn("data-teacher-guide-action", self.source)
 
     def test_media_workspace_reuses_course_material_scope(self):
         self.assertIn("await window.switchAdminWorkspace?.('course-materials', true)", self.source)

@@ -195,10 +195,9 @@
     }
   }
 
-  function guideCard(number, title, description, actions = '') {
+  function guideCard(number, title, description) {
     return `<article class="rounded-xl border border-slate-200 bg-white p-3">
       <div class="flex items-start gap-2"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-[11px] font-black text-teal-700">${number}</span><div class="min-w-0"><b class="text-sm text-slate-900">${title}</b><p class="mt-1 text-xs leading-5 text-slate-500">${description}</p></div></div>
-      ${actions ? `<div class="mt-3 flex flex-wrap gap-2">${actions}</div>` : ''}
     </article>`;
   }
 
@@ -217,33 +216,29 @@
           <button id="teacher-guide-close-1014" type="button" class="shrink-0 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-bold text-teal-800">關閉導覽</button>
         </div>
         <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          ${guideCard('1','課程設定','填寫課程名稱與範圍；有指派權限時，同一步設定學習對象、學習要求（指定完成／自由選讀）與完成期限。','<button type="button" data-teacher-guide-action="create-course" class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-black text-white">開始建立課程</button>')}
+          ${guideCard('1','課程設定','填寫課程名稱與範圍；有指派權限時，同一步設定學習對象、學習要求（指定完成／自由選讀）與完成期限。')}
           ${guideCard('2','教材＋AI','上傳新教材或選擇既有教材，先確認系統辨識；需要時才從這一步啟動 AI PowerPoint、講稿／配音或影片製作，完成後會回到原課程。')}
           ${guideCard('3','評量／考卷','可以選擇稍後建立、教師自己出題，或讓 AI 產生候選題；Blueprint 與題型配額收在進階設定。')}
           ${guideCard('4','確認發布','最後確認教材、評量、學習指派與 AI 產物；只有正式發布後，學員才會看到這門課。')}
         </div>
-        <div class="mt-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-600"><b class="text-slate-800">發布後：</b>待批改、學員追蹤、臨床技能評核、能力追蹤與教學分析，都回「評量與追蹤」處理。</div>`;
+        <div class="mt-3 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="text-xs leading-5 text-slate-600"><b class="text-slate-800">發布後：</b>待批改、學員追蹤、臨床技能評核、能力追蹤與教學分析，都回「評量與追蹤」處理。</div>
+          <button id="teacher-guide-start-course-1014" type="button" class="shrink-0 rounded-lg bg-teal-700 px-4 py-2 text-xs font-black text-white">開始建立課程</button>
+        </div>`;
       workspace.insertBefore(panel, workspace.firstChild);
       panel.querySelector('#teacher-guide-close-1014')?.addEventListener('click', () => {
         panel.classList.add('hidden');
         rememberGuideDismissed();
       });
-      panel.addEventListener('click', event => {
-        const action = event.target.closest?.('[data-teacher-guide-action]')?.dataset.teacherGuideAction;
-        if (action === 'create-course') {
-          void (async () => {
-            await openCourse();
-            for (let attempt = 0; attempt < 20; attempt += 1) {
-              const button = document.getElementById('course-workspace-create-course');
-              if (button) { button.click(); break; }
-              await new Promise(resolve => setTimeout(resolve, 50));
-            }
-          })();
-        } else if (action === 'course') void openCourse();
-        else if (action === 'media') void openMedia();
-        else if (action === 'assessment') void openAssessment();
-        else if (action === 'review') void openReview();
-        else if (action === 'learners') void openLearnerTracking();
+      panel.querySelector('#teacher-guide-start-course-1014')?.addEventListener('click', () => {
+        void (async () => {
+          await openCourse();
+          for (let attempt = 0; attempt < 20; attempt += 1) {
+            const button = document.getElementById('course-workspace-create-course');
+            if (button) { button.click(); break; }
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        })();
       });
     }
     panel.classList.toggle('hidden', guideDismissed());

@@ -13,7 +13,7 @@
     if (expanded) panel.style.removeProperty('display');
     else panel.style.setProperty('display', 'none', 'important');
     button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    button.textContent = expanded ? '收起說明' : '？ 使用說明與架設需求';
+    button.textContent = expanded ? '收起說明' : '操作說明';
   }
 
   function install() {
@@ -29,10 +29,10 @@
     const button = document.createElement('button');
     button.id = 'teacher-media-help-toggle-1014';
     button.type = 'button';
-    button.className = 'shrink-0 rounded-xl border border-cyan-200 bg-white px-3 py-2 text-xs font-black text-cyan-800 hover:bg-cyan-50';
+    button.className = 'shrink-0 px-1 py-1 text-xs font-bold text-cyan-700 underline decoration-dotted underline-offset-4 hover:text-cyan-900';
     button.setAttribute('aria-controls', 'teacher-media-help-panel-1014');
     button.setAttribute('aria-expanded', 'false');
-    button.textContent = '？ 使用說明與架設需求';
+    button.textContent = '操作說明';
     actions.prepend(button);
 
     document.getElementById('teacher-media-help-panel-1014')?.remove();
