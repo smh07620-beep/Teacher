@@ -241,15 +241,31 @@ def submit_attempt(base_or_user, user_or_attempt_id, attempt_id_or_data, data: M
         group=attempt.get("group_key"),
         materials=remediation_materials,
     )
+    review_questions = []
+    for index, question in enumerate(questions):
+        if not isinstance(question, dict):
+            continue
+        detail = result["answersDetail"][index] if index < len(result["answersDetail"]) else {}
+        reviewed_question = grading.review_question(question)
+        review_questions.append({
+            "number": index + 1,
+            "questionId": str(question.get("id") or ""),
+            "questionText": str(question.get("question") or "")[:5000],
+            "isCorrect": detail.get("isCorrect"),
+            "reviewSource": reviewed_question.get("reviewSource") or {},
+            "questionType": str(question.get("questionType") or "choice"),
+        })
     return {
         "ok": True, "attemptId": str(attempt["id"]), "recordId": record_id, "score": result["score"],
         "status": result["status"], "correctCount": result["correctCount"], "wrongCount": result["wrongCount"],
         "essayCount": result["essayCount"], "passingScore": passing_score, "categoryStats": result["categoryStats"],
+        "answerDetails": result["answersDetail"],
         "questions": [
             grading.review_question(question)
             for question in questions
             if isinstance(question, dict)
         ],
+        "reviewQuestions": review_questions,
         "remediation": remediation_plan,
         "submittedAt": submitted_at,
     }
