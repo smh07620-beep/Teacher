@@ -808,7 +808,9 @@ def main():
                 api.heartbeat(capabilities=caps)
                 log(
                     f"storage preflight ready backend={preflight.get('backend') or 'unknown'} "
-                    f"libreoffice_warm={bool(office_warm.get('running'))}"
+                    f"libreoffice_warm={bool(office_warm.get('running'))} "
+                    f"libreoffice_warmed={bool(office_warm.get('warmed'))} "
+                    f"libreoffice_warmup_seconds={office_warm.get('warmupSeconds', 0)}"
                 )
                 break
             preflight_attempt+=1

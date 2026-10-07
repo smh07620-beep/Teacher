@@ -50,6 +50,10 @@ MATERIAL_VIDEO_HARDWARE_ENCODER=auto
 # instance fails, Worker restarts it once and then uses isolated one-shot soffice.
 MATERIAL_LIBREOFFICE_WARM_ENABLED=true
 MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS=5
+# 持久 LibreOffice profile（避免每次重啟都重建字型快取）；空白 = LOCALAPPDATA\Teacher\libreoffice-profile
+MATERIAL_LIBREOFFICE_PROFILE_DIR=
+MATERIAL_WEBP_METHOD=4
+MATERIAL_SLIDE_DPI=170
 # Safe release updater. Runtime auto-check remains opt-in by default.
 MATERIAL_WORKER_AUTO_UPDATE=false
 MATERIAL_WORKER_UPDATE_INTERVAL_HOURS=6
@@ -148,6 +152,10 @@ Worker 會重啟一次再試，第二次仍失敗才退回原本的隔離 one-sh
 ```text
 MATERIAL_LIBREOFFICE_WARM_ENABLED=true
 MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS=5
+# 持久 LibreOffice profile（避免每次重啟都重建字型快取）；空白 = LOCALAPPDATA\Teacher\libreoffice-profile
+MATERIAL_LIBREOFFICE_PROFILE_DIR=
+MATERIAL_WEBP_METHOD=4
+MATERIAL_SLIDE_DPI=170
 ```
 
 `storageMeta.officeConversionMode` 會記錄 `warm` 或 `oneshot`，

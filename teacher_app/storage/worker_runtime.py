@@ -18,13 +18,14 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Any
 
 from teacher_app.storage import providers
 from teacher_app.storage.service import StorageConfigurationError, StorageProviderAdapter, select_backend
-from teacher_app.worker.libreoffice_warm import WarmLibreOfficeConverter
+from teacher_app.worker.libreoffice_warm import WarmLibreOfficeConverter, default_profile_root
 
 try:
     import pymupdf
@@ -65,6 +66,16 @@ class WorkerMaterialStorageAdapter:
         if self.slide_format_name not in {"webp", "png"}:
             self.slide_format_name = "webp"
         self.webp_quality = max(70, min(96, int(os.environ.get("MATERIAL_WEBP_QUALITY", "88"))))
+        # WebP method 6 is the slowest encoder setting; 4 is visually the same
+        # at this quality and much faster on the CPU-only local Worker.
+        try:
+            self.webp_method = max(0, min(6, int(os.environ.get("MATERIAL_WEBP_METHOD", "4"))))
+        except ValueError:
+            self.webp_method = 4
+        try:
+            self.slide_dpi = max(100, min(220, int(os.environ.get("MATERIAL_SLIDE_DPI", "170"))))
+        except ValueError:
+            self.slide_dpi = 170
         self.soffice = os.environ.get("SOFFICE_PATH", "soffice")
         try:
             warm_startup = float(os.environ.get("MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS", "5") or 5)
@@ -78,6 +89,8 @@ class WorkerMaterialStorageAdapter:
         )
         self._last_office_mode = ""
         self._last_office_fallback = ""
+        self._last_office_seconds = 0.0
+        self._last_render_seconds = 0.0
 
     # ------------------------------------------------------------------
     # Provider selection / MEGAcmd runtime
@@ -329,7 +342,7 @@ class WorkerMaterialStorageAdapter:
                 with Image.open(io.BytesIO(pix.tobytes("png"))) as image:
                     if image.mode not in {"RGB", "RGBA"}:
                         image = image.convert("RGB")
-                    image.save(output, format="WEBP", quality=self.webp_quality, method=6)
+                    image.save(output, format="WEBP", quality=self.webp_quality, method=self.webp_method)
                 return output
             except Exception:
                 pass
@@ -424,22 +437,70 @@ class WorkerMaterialStorageAdapter:
         status = dict(self._libreoffice_warm.status())
         status["mode"] = self._last_office_mode
         status["fallback"] = self._last_office_fallback[:240]
+        status["lastOfficeSeconds"] = round(float(self._last_office_seconds), 2)
+        status["lastRenderSeconds"] = round(float(self._last_render_seconds), 2)
         return status
 
     def warmup_libreoffice(self) -> dict[str, object]:
-        """Best-effort prewarm; failure never blocks material claims."""
+        """Best-effort prewarm; failure never blocks material claims.
+
+        Performs a real conversion of a tiny deck (see ``WarmLibreOfficeConverter.warmup``)
+        so the profile/font cache and Impress module are loaded before the first
+        real material is claimed.
+        """
         if not self.libreoffice_warm_enabled:
             return self.libreoffice_status()
         try:
-            self._libreoffice_warm.ensure_running()
+            with _CONVERSION_LOCK:
+                self._libreoffice_warm.warmup()
         except Exception as exc:
             self._libreoffice_warm.last_error = type(exc).__name__
         return self.libreoffice_status()
 
-    def _office_to_pdf_once(self, source_path: Path, workdir: Path, *, timeout: int) -> Path:
+    def _oneshot_profile_dir(self, workdir: Path, *, fresh: bool) -> Path:
+        """Persistent profile for the one-shot path, so it is not a cold start every time."""
+        if not fresh:
+            persistent = default_profile_root() / "oneshot"
+            try:
+                persistent.mkdir(parents=True, exist_ok=True)
+                for name in (".lock", ".~lock"):
+                    (persistent / "user" / name).unlink(missing_ok=True)
+                return persistent
+            except OSError:
+                pass
         profile_dir = workdir / f"profile-{uuid.uuid4().hex}"
-        pdf_dir = workdir / f"pdf-{uuid.uuid4().hex}"
         profile_dir.mkdir(parents=True, exist_ok=True)
+        return profile_dir
+
+    def _office_to_pdf_once(self, source_path: Path, workdir: Path, *, timeout: int) -> Path:
+        try:
+            return self._office_to_pdf_once_with_profile(
+                source_path,
+                workdir,
+                timeout=timeout,
+                profile_dir=self._oneshot_profile_dir(workdir, fresh=False),
+            )
+        except subprocess.TimeoutExpired:
+            raise
+        except RuntimeError:
+            # A corrupted persistent profile must not break conversion: retry once
+            # with a disposable profile, exactly like the legacy behaviour.
+            return self._office_to_pdf_once_with_profile(
+                source_path,
+                workdir,
+                timeout=timeout,
+                profile_dir=self._oneshot_profile_dir(workdir, fresh=True),
+            )
+
+    def _office_to_pdf_once_with_profile(
+        self,
+        source_path: Path,
+        workdir: Path,
+        *,
+        timeout: int,
+        profile_dir: Path,
+    ) -> Path:
+        pdf_dir = workdir / f"pdf-{uuid.uuid4().hex}"
         pdf_dir.mkdir(parents=True, exist_ok=True)
         command = [
             self.soffice,
@@ -461,6 +522,13 @@ class WorkerMaterialStorageAdapter:
         return pdfs[0]
 
     def _office_to_pdf(self, source_path: Path, workdir: Path, *, timeout: int) -> Path:
+        started = time.monotonic()
+        try:
+            return self._office_to_pdf_inner(source_path, workdir, timeout=timeout)
+        finally:
+            self._last_office_seconds = time.monotonic() - started
+
+    def _office_to_pdf_inner(self, source_path: Path, workdir: Path, *, timeout: int) -> Path:
         self._last_office_mode = ""
         self._last_office_fallback = ""
         if self.libreoffice_warm_enabled:
@@ -522,9 +590,10 @@ class WorkerMaterialStorageAdapter:
         if pymupdf is None:
             raise RuntimeError("本機 Worker 缺少 PyMuPDF 套件")
         out_folder.mkdir(parents=True, exist_ok=True)
+        started = time.monotonic()
         document = pymupdf.open(str(pdf_path))
         try:
-            matrix = pymupdf.Matrix(170 / 72.0, 170 / 72.0)
+            matrix = pymupdf.Matrix(self.slide_dpi / 72.0, self.slide_dpi / 72.0)
             page_count = int(document.page_count or 0)
             for index in range(page_count):
                 pixmap = document.load_page(index).get_pixmap(matrix=matrix)
@@ -534,6 +603,7 @@ class WorkerMaterialStorageAdapter:
             return page_count
         finally:
             document.close()
+            self._last_render_seconds = time.monotonic() - started
 
     def convert_office_to_images(self, source_path: Path, out_folder: Path) -> int:
         with tempfile.TemporaryDirectory(prefix="teacher-worker-office-") as temp:

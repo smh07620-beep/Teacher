@@ -255,13 +255,43 @@ def _warm_kokoro_on_startup() -> dict:
 
     _KOKORO_STARTUP_STATE = dict(state)
     loaded = len(state.get("loadedVoices") or [])
+    timings = state.get("timings") or {}
     log(
         "kokoro preload ready "
         f"device={state.get('device') or 'unknown'} "
         f"cuda_available={bool(state.get('cudaAvailable'))} "
-        f"voices_cached={loaded} hf_cache=persistent"
+        f"voices_cached={loaded} hf_cache=persistent "
+        f"hf_offline={bool(state.get('hfOffline'))} "
+        + " ".join(f"{key}={value}s" for key, value in timings.items())
     )
     return state
+
+
+# Set once the (background) Kokoro warmup finished or failed.  The audio queue
+# waits for it so a job never races the one-time Torch/Kokoro load; every other
+# queue starts immediately instead of waiting behind the TTS warmup.
+_KOKORO_WARM_DONE = threading.Event()
+
+
+def _kokoro_warm_thread_body() -> None:
+    try:
+        _warm_kokoro_on_startup()
+    finally:
+        _KOKORO_WARM_DONE.set()
+
+
+def _start_kokoro_warmup() -> None:
+    """Warm Kokoro in the background (default) or inline when AI_WORKER_KOKORO_WARM_BLOCKING=true."""
+    blocking = str(os.environ.get("AI_WORKER_KOKORO_WARM_BLOCKING", "false")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if blocking:
+        _kokoro_warm_thread_body()
+        return
+    threading.Thread(target=_kokoro_warm_thread_body, name="teacher-kokoro-warmup", daemon=True).start()
 
 
 def _renderer_status_line() -> str:
@@ -300,8 +330,9 @@ def main() -> int:
     try:
         with _AIHeartbeat(heartbeat_seconds, transport=transport, api=api) as heartbeat:
             # Publish heartbeat first, then pay the one-time Kokoro/Torch load
-            # cost. The warmup helper is the only startup owner of preload_kokoro().
-            _warm_kokoro_on_startup()
+            # cost in the background so non-TTS queues start immediately.  The
+            # warmup helper is the only startup owner of preload_kokoro().
+            _start_kokoro_warmup()
             while True:
                 try:
                     heartbeat.raise_if_unhealthy()
@@ -336,8 +367,10 @@ def main() -> int:
                     did_work = question_processor.run_next_queued()
                     did_work = script_processor.run_next_queued() or did_work
                     did_work = presentation_processor.run_next_queued() or did_work
-                    did_work = video_processor.run_next_queued() or did_work
-                    did_work = audio_processor.run_next_queued() or did_work
+                    if _KOKORO_WARM_DONE.is_set():
+                        did_work = video_processor.run_next_queued() or did_work
+                    if _KOKORO_WARM_DONE.is_set():
+                        did_work = audio_processor.run_next_queued() or did_work
                     did_work = subtitle_processor.run_next_queued() or did_work
                     if did_work:
                         continue

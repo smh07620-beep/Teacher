@@ -12,7 +12,9 @@ import io
 import json
 import os
 from pathlib import Path
+import sys
 import threading
+import time
 import wave
 from typing import Any
 
@@ -63,6 +65,7 @@ _KOKORO_PIPELINE = None
 _KOKORO_PIPELINE_KEY = ""
 _KOKORO_PIPELINE_LOCK = threading.Lock()
 _TTS_CACHE_CLEANED_AT = 0.0
+_HF_OFFLINE_AUTO = False
 
 
 def _repo_id() -> str:
@@ -95,6 +98,78 @@ def _ensure_hf_home() -> str:
     resolved = str(cache_path)
     os.environ["HF_HOME"] = resolved
     return resolved
+
+
+def _hf_hub_cache_dir() -> Path:
+    configured = str(os.environ.get("HF_HUB_CACHE") or os.environ.get("HUGGINGFACE_HUB_CACHE") or "").strip()
+    if configured:
+        return Path(os.path.expandvars(configured)).expanduser()
+    return Path(_ensure_hf_home()) / "hub"
+
+
+def _kokoro_assets_cached(repo_id: str, voice: str) -> bool:
+    """True when the model weights, config and the given voice are all in the HF cache."""
+    snapshots = _hf_hub_cache_dir() / ("models--" + repo_id.replace("/", "--")) / "snapshots"
+    try:
+        for snapshot in snapshots.iterdir():
+            if not (snapshot / "config.json").is_file():
+                continue
+            if not any(snapshot.glob("*.pth")):
+                continue
+            if (snapshot / "voices" / f"{voice}.pt").is_file():
+                return True
+    except OSError:
+        return False
+    return False
+
+
+def _set_hf_offline(enabled: bool) -> None:
+    if enabled:
+        os.environ["HF_HUB_OFFLINE"] = "1"
+    else:
+        os.environ.pop("HF_HUB_OFFLINE", None)
+    # huggingface_hub reads the flag at import time; update it if already loaded.
+    constants = getattr(sys.modules.get("huggingface_hub"), "constants", None)
+    if constants is not None:
+        try:
+            constants.HF_HUB_OFFLINE = bool(enabled)
+        except Exception:
+            pass
+
+
+def _configure_hf_offline(repo_id: str, voice: str) -> bool:
+    """Skip Hugging Face network checks on every Worker start once assets are cached.
+
+    KOKORO_HF_OFFLINE=auto (default) enables offline mode only when the model and
+    the default voice are already cached; 1 forces it on; 0 forces it off.  An
+    explicit HF_HUB_OFFLINE in the environment is always respected.  When
+    auto-enabled, synthesis of a not-yet-cached voice re-enables the network
+    once (see ``_disable_auto_hf_offline``).
+    """
+    global _HF_OFFLINE_AUTO
+    if str(os.environ.get("HF_HUB_OFFLINE") or "").strip():
+        return False
+    mode = str(os.environ.get("KOKORO_HF_OFFLINE") or "auto").strip().lower()
+    if mode in {"0", "false", "no", "off"}:
+        return False
+    if mode in {"1", "true", "yes", "on"}:
+        _set_hf_offline(True)
+        return True
+    if _kokoro_assets_cached(repo_id, voice):
+        _set_hf_offline(True)
+        _HF_OFFLINE_AUTO = True
+        return True
+    return False
+
+
+def _disable_auto_hf_offline() -> bool:
+    """Undo auto offline mode (e.g. a voice that is not cached yet needs a download)."""
+    global _HF_OFFLINE_AUTO
+    if not _HF_OFFLINE_AUTO:
+        return False
+    _HF_OFFLINE_AUTO = False
+    _set_hf_offline(False)
+    return True
 
 
 def _tts_cache_root() -> Path:
@@ -146,27 +221,46 @@ def preload_kokoro() -> dict[str, Any]:
     repo_id = _repo_id()
     voice = _voice(os.environ.get("KOKORO_VOICE") or DEFAULT_VOICE)
     speed = _tts_speed()
+    timings: dict[str, float] = {}
+    started = time.monotonic()
+    offline = _configure_hf_offline(repo_id, voice)
+
+    mark = time.monotonic()
     try:
         import torch
         cuda_available = bool(torch.cuda.is_available())
     except Exception:
         cuda_available = False
+    timings["importTorch"] = round(time.monotonic() - mark, 2)
 
+    mark = time.monotonic()
     pipeline = _kokoro_pipeline(repo_id)
+    timings["createPipeline"] = round(time.monotonic() - mark, 2)
 
-    # Prime every selectable voice file into the same persistent HF cache when
-    # the installed Kokoro exposes load_voice().  One missing optional voice
-    # should not prevent the default voice warmup below.
+    # Only the default voice is loaded at startup.  Other voices are loaded by
+    # Kokoro the first time they are selected (and cached in memory/HF cache),
+    # so startup no longer pays for every selectable voice file.  Set
+    # KOKORO_PRELOAD_ALL_VOICES=true to prime every voice like the old behaviour.
+    mark = time.monotonic()
     loaded_voices = []
+    preload_all = str(os.environ.get("KOKORO_PRELOAD_ALL_VOICES", "false")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    candidates = sorted(ALLOWED_VOICES) if preload_all else [voice]
     load_voice = getattr(pipeline, "load_voice", None)
     if callable(load_voice):
-        for candidate in sorted(ALLOWED_VOICES):
+        for candidate in candidates:
             try:
                 load_voice(candidate)
                 loaded_voices.append(candidate)
             except Exception:
                 continue
+    timings["loadVoices"] = round(time.monotonic() - mark, 2)
 
+    mark = time.monotonic()
     produced_audio = False
     for result in pipeline("你好", voice=voice, speed=speed, split_pattern=r"\n+"):
         audio = getattr(result, "audio", None)
@@ -176,9 +270,13 @@ def preload_kokoro() -> dict[str, Any]:
             produced_audio = True
     if not produced_audio:
         raise RuntimeError("Kokoro 暖機沒有產生有效音訊。")
+    timings["firstSynthesis"] = round(time.monotonic() - mark, 2)
+    timings["total"] = round(time.monotonic() - started, 2)
 
     return {
         "warmed": True,
+        "hfOffline": bool(offline),
+        "timings": timings,
         "repoId": repo_id,
         "voice": voice,
         "speed": speed,
@@ -388,7 +486,7 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
             "本機免費語音尚未安裝完成；請在 AI Worker 執行 requirements-ai-worker.txt。"
         ) from exc
 
-    try:
+    def _synthesize_waveform():
         pipeline = _kokoro_pipeline(repo_id)
         chunks = []
         for result in pipeline(normalized, voice=voice, speed=speed, split_pattern=r"\n+"):
@@ -402,7 +500,18 @@ def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str
                 chunks.append(chunk)
         if not chunks:
             raise RuntimeError("Kokoro 沒有產生有效音訊。")
-        waveform = np.concatenate(chunks)
+        return np.concatenate(chunks)
+
+    try:
+        try:
+            waveform = _synthesize_waveform()
+        except Exception:
+            # Auto offline mode only skips network checks for cached assets.  A
+            # voice that is not cached yet needs one download, so re-enable the
+            # network once and retry before reporting a failure.
+            if not _disable_auto_hf_offline():
+                raise
+            waveform = _synthesize_waveform()
     except Exception as exc:
         message = str(exc)
         if "Entry Not Found" in message or "404 Client Error" in message or "/voices/" in message:
