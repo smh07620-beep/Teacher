@@ -9,7 +9,7 @@ async function login(page, username, next = '/system?area=internal&group=grpBio'
   await page.locator('#login-username').fill(username);
   await page.locator('#login-password').fill(fixturePassword);
   await Promise.all([
-    page.waitForURL(url => !url.pathname.endsWith('/login'), { timeout: 15000 }),
+    page.waitForURL(url => !url.pathname.endsWith('/login'), { timeout: 15000, waitUntil: 'domcontentloaded' }),
     page.locator('#login-form button[type="submit"]').click(),
   ]);
   await page.waitForLoadState('domcontentloaded');
@@ -39,7 +39,7 @@ test('GP-07 dual-role account switches learner and teacher personas without syst
   await expect(switcher.getByRole('button', { name: /系統管理/ })).toHaveCount(0);
 
   await switcher.getByRole('button', { name: /教師工作區/ }).click();
-  await page.waitForURL(url => url.searchParams.get('persona') === 'teacher', { timeout: 15000 });
+  await page.waitForURL(url => url.searchParams.get('persona') === 'teacher', { timeout: 15000, waitUntil: 'domcontentloaded' });
   await expect(page.locator('#teacher-nav-course-1014')).toBeVisible({ timeout: 15000 });
   await expect(page.locator('#teacher-nav-assessment-1014')).toBeVisible();
   await expect(page.locator('#admin-nav-worker')).toBeHidden();
@@ -60,14 +60,14 @@ test('GP-07 dual-role account switches learner and teacher personas without syst
   const teacherSwitcher = page.locator('#teacher-persona-switch-1014');
   await expect(teacherSwitcher.getByRole('button', { name: /我的學習/ })).toBeVisible();
   await teacherSwitcher.getByRole('button', { name: /我的學習/ }).click();
-  await page.waitForURL(url => !url.searchParams.has('admin') && !url.searchParams.has('persona'), { timeout: 15000 });
+  await page.waitForURL(url => !url.searchParams.has('admin') && !url.searchParams.has('persona'), { timeout: 15000, waitUntil: 'domcontentloaded' });
   await expect(page.locator('#teacher-persona-switch-1014')).toBeVisible({ timeout: 15000 });
   await expect(page.locator('#admin-section-worker')).toBeHidden();
 });
 
 test('GP-08 system administrator provisions scoped teacher who gets only canonical permissions', async ({ page }) => {
   await login(page, 'gp08admin', '/system?admin=1&workspace=people&persona=system');
-  await page.waitForURL(url => url.searchParams.get('workspace') === 'people', { timeout: 15000 });
+  await page.waitForURL(url => url.searchParams.get('workspace') === 'people', { timeout: 15000, waitUntil: 'domcontentloaded' });
   const peopleRuntime = await page.evaluate(() => ({
     peoplePanel: document.getElementById('admin-section-people')?.outerHTML?.slice(0, 5000) || null,
     createPanel: document.getElementById('admin-user-create-panel')?.outerHTML || null,
