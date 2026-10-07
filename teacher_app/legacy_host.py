@@ -3512,7 +3512,7 @@ def api_list_material_jobs():
         limit = 30
     cleanup_r2_budget_state()
     ops = material_job_operations_status()
-    return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS, "workerEnabled": MATERIAL_WORKER_ENABLED, "queueBackend": "material_jobs", "staging": shared_staging_capability(), "workers": ops.get("workers", []), "pendingJobs": ops.get("pendingJobs", 0), "processingJobs": ops.get("processingJobs", 0), "retryJobs": ops.get("retryJobs", 0), "failedJobs": ops.get("failedJobs", 0), "r2Budget": ops.get("r2Budget", {})})
+    return jsonify({"jobs": list_material_jobs(limit), "backgroundEnabled": MATERIAL_BACKGROUND_JOBS, "workerEnabled": MATERIAL_WORKER_ENABLED, "queueBackend": "material_jobs", "staging": shared_staging_capability(), "workers": ops.get("workers", []), "aiWorkers": ops.get("aiWorkers", []), "pendingJobs": ops.get("pendingJobs", 0), "processingJobs": ops.get("processingJobs", 0), "retryJobs": ops.get("retryJobs", 0), "failedJobs": ops.get("failedJobs", 0), "r2Budget": ops.get("r2Budget", {})})
 
 
 

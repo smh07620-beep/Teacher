@@ -57,6 +57,7 @@ class MaterialJobRoutesBaseFreeTests(unittest.TestCase):
             cleanup_budget_state=lambda: self.events.append("budget-cleanup"),
             operations_status=lambda: {
                 "workers": [{"workerId": "w1"}],
+                "aiWorkers": [{"workerId": "w1-ai", "status": "online"}],
                 "pendingJobs": 1,
                 "processingJobs": 2,
                 "retryJobs": 3,
@@ -293,6 +294,8 @@ class MaterialJobRoutesBaseFreeTests(unittest.TestCase):
         self.assertEqual(body["failedJobsTotal"], 4)
         self.assertEqual(body["failedAttentionHours"], 24)
         self.assertEqual(body["workers"], [{"workerId": "w1"}])
+        # The Worker/Job page reads AI Workers from this payload; dropping it shows "尚未回報".
+        self.assertEqual(body["aiWorkers"], [{"workerId": "w1-ai", "status": "online"}])
         self.assertEqual(body["r2Budget"], {"ok": True})
         self.assertEqual(body["pendingJobs"], 1)
         self.assertIn("budget-cleanup", self.events)
