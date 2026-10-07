@@ -148,6 +148,17 @@ class NoHandWrittenRoutesTests(unittest.TestCase):
         offenders = [p.name for p, text in self.scripts() if pattern.search(text)]
         self.assertEqual(offenders, [])
 
+    def test_no_script_sends_back_office_workspaces_to_the_learner_module_parameter(self):
+        # `module=` selects a learner page (materials/exam/...); using it with a
+        # workspace name silently lands on the learner home instead.
+        # Learner modules legitimately reuse a few names (materials, assessment),
+        # so only the unambiguous back-office keys are checked.
+        learner_modules = {"assessment", "system", "materials", "exams", "questions"}
+        names = "|".join(sorted(set(py_routes.WORKSPACE_AREAS) - learner_modules))
+        pattern = re.compile(rf"module=(?:{names})\b")
+        offenders = [p.name for p, text in self.scripts() if pattern.search(text)]
+        self.assertEqual(offenders, [])
+
     def test_no_script_calls_the_router_with_a_literal_name(self):
         pattern = re.compile(r"(?:openAdminWorkspace|switchAdminWorkspace)\??\.?\(\s*['\"][a-z-]+['\"]")
         offenders = []

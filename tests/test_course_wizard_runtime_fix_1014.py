@@ -27,7 +27,7 @@ class CourseWizardRuntimeFix1014Tests(unittest.TestCase):
         self.assertIn("const canonical=window.courseWizard681OpenCourse", self.guard)
         self.assertIn("return await canonical()", self.guard)
         self.assertIn("Course Wizard finish navigation failed", self.guard)
-        self.assertIn("window.location.assign('/system?module=course-materials')", self.guard)
+        self.assertIn("window.AppWorkspaceRoutes.url('course-materials',{persona:'teacher'})", self.guard)
         self.assertNotIn("renderAdminCourseMaterialHub", self.guard)
 
     def test_legacy_duplicate_worker_failure_panel_is_suppressed(self):

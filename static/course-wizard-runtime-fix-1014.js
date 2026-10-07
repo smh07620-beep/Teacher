@@ -62,7 +62,9 @@
       }catch(error){
         console.error('Course Wizard finish navigation failed',error);
         window.teacherContentStudioClose?.(false);
-        window.location.assign('/system?module=course-materials');
+        // `module=` is a learner-page parameter; the course workspace is a back-office
+        // workspace and must be reached through the route registry.
+        window.location.assign(window.AppWorkspaceRoutes.url('course-materials',{persona:'teacher'}));
       }finally{
         buttons.forEach(button=>{button.disabled=false;button.removeAttribute('aria-busy');});
       }
