@@ -174,6 +174,7 @@
     }
     host.replaceChildren(
       utilityButton('teacher-guide-open-1014', '❓ 使用導覽', () => showTeacherGuide()),
+      utilityButton('teacher-account-open-1014', '👤 個人帳號', () => { window.location.href = '/account'; }),
       utilityButton('teacher-announcements-open-1014', '📣 公告', () => void openAnnouncements()),
       utilityButton('teacher-documents-open-1014', '📄 文件', () => void openDocuments())
     );
@@ -197,14 +198,14 @@
       panel.className = 'mb-4 rounded-2xl border border-teal-200 bg-teal-50/50 p-4 shadow-sm';
       panel.innerHTML = `
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div><p class="admin-page-eyebrow text-teal-700">TEACHER QUICK START</p><h4 class="text-base font-black text-slate-950">第一次使用？照這四件事走就好</h4><p class="mt-1 text-xs leading-5 text-slate-600">不需要先理解系統名詞。先準備教材，需要時再製作內容；接著建立評量，最後處理批改與學員追蹤。</p></div>
+          <div><p class="admin-page-eyebrow text-teal-700">TEACHER QUICK START</p><h4 class="text-base font-black text-slate-950">第一次使用？照這四步就好</h4><p class="mt-1 text-xs leading-5 text-slate-600">先完成課程設定與學習對象，再加入教材；需要時才啟動 AI 製作。接著建立評量並發布，最後處理批改與學員追蹤。</p></div>
           <button id="teacher-guide-close-1014" type="button" class="shrink-0 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-bold text-teal-800">關閉導覽</button>
         </div>
         <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          ${guideCard('1','準備教材與課程','上傳或整理教材、建立課程，再設定要讓哪些學員學習。','<button type="button" data-teacher-guide-action="course" class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-black text-white">前往教材與課程</button>')}
-          ${guideCard('2','製作教學內容','需要時才做 AI PowerPoint、講稿與配音、老師錄影或 AI 教學影片；不是每堂課都必須製作。','<button type="button" data-teacher-guide-action="media" class="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-black text-white">開啟製作室</button>')}
-          ${guideCard('3','建立考題與發布','從教材出題或手動建立，教師檢查內容後設定對象、期限，再發布給學員。','<button type="button" data-teacher-guide-action="assessment" class="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-black text-white">前往評量與追蹤</button>')}
-          ${guideCard('4','批改與追蹤','處理待批改，再看我的學員、臨床技能評核、能力追蹤與教學分析。','<button type="button" data-teacher-guide-action="review" class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white">待批改</button><button type="button" data-teacher-guide-action="learners" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-black text-slate-700">學員追蹤</button>')}
+          ${guideCard('1','課程設定','先建立課程，設定適用學員、開放／截止時間與發布範圍。','<button type="button" data-teacher-guide-action="course" class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-black text-white">前往教材與課程</button>')}
+          ${guideCard('2','加入教材／需要時 AI 製作','上傳或選既有教材；系統辨識後，再決定是否開啟 AI PowerPoint、講稿、配音、老師錄影或 AI 教學影片。','<button type="button" data-teacher-guide-action="course" class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-black text-white">前往教材</button><button type="button" data-teacher-guide-action="media" class="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-black text-white">需要 AI 時開啟製作室</button>')}
+          ${guideCard('3','建立評量與發布','可手動出題或讓 AI 產生候選題；教師確認後設定對象與期限，再發布給學員。','<button type="button" data-teacher-guide-action="assessment" class="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-black text-white">前往評量與追蹤</button>')}
+          ${guideCard('4','批改與學員追蹤','處理待批改，再看我的學員、臨床技能評核、能力追蹤與教學分析。','<button type="button" data-teacher-guide-action="review" class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white">待批改</button><button type="button" data-teacher-guide-action="learners" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-black text-slate-700">學員追蹤</button>')}
         </div>`;
       workspace.insertBefore(panel, workspace.firstChild);
       panel.querySelector('#teacher-guide-close-1014')?.addEventListener('click', () => {
