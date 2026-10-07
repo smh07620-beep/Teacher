@@ -24,7 +24,7 @@ class LearningFlow66Tests(
             "Teacher 6.6 M3 · sequential reader unlock",
             "teacher66SyncReaderNext",
             "teacher66CurrentMaterialDone",
-            "完成本份後解鎖",
+            "不再強制完成標記才解鎖",
             "下一份教材 →",
             "requestAnimationFrame",
         ):

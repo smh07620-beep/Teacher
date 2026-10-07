@@ -132,6 +132,7 @@ ASSET_MANIFEST = {
             "/learner-reading-progress-f2.js",
             "/course-lifecycle-f2.js",
             "/teacher-course-tracking-f2.js",
+            "/learner-study-exam-loop-1032.js",
         ),
     },
 }

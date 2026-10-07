@@ -144,7 +144,7 @@ function renderTeachingCourseOverview() {
         const next = mats.find(m => !myCompletedMaterials[m.id]);
         const objectives = (course.learningObjectives || '').split('\n').map(s => s.trim()).filter(Boolean);
         const pct = mats.length ? Math.round(done / mats.length * 100) : 0;
-        return `<details class="course-learning-card" data-course="${escapeHtml(course.id)}" ${openIds.has(course.id) || (!hadCards && shown === 1) ? 'open' : ''}><summary class="course-learning-summary"><div class="min-w-0 flex-1"><div class="teaching-course-header"><span class="teaching-course-number">${general ? '+' : String(index + 1).padStart(2,'0')}</span><h3 class="text-lg font-black">${escapeHtml(course.title)}</h3></div><div class="teaching-meta"><span>教材完成 ${done}／${mats.length}</span>${course.estimatedMinutes ? `<span>建議 ${course.estimatedMinutes} 分鐘</span>` : ''}${course.startDate || course.endDate ? `<span>建議學習期間：${escapeHtml(course.startDate || '不限')} ～ ${escapeHtml(course.endDate || '不限')}</span>` : ''}<span>課後評量 ${exams.length} 份</span></div>${mats.length ? `<div class="course-progress-mini mt-3" role="progressbar" aria-label="教材完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>` : ''}</div><span class="course-learning-chevron">⌄</span></summary><div class="teaching-plan"><div>${course.desc ? `<p>${escapeHtml(course.desc)}</p>` : ''}${objectives.length ? `<h4 class="mt-3">學完這堂課，你將能夠</h4><ul>${objectives.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : '<p class="teaching-help">依下方順序閱讀教材，再進行課後評量。</p>'}</div><div>${next ? `<button class="teaching-primary" data-material-open="${escapeHtml(next.id)}">${done ? '繼續下一份教材' : '開始學習'} →</button>` : `<p class="teaching-help">${complete ? '教材已完成，可複習或進行課後評量。' : '教師正在準備教材。'}</p>`}</div></div><div class="course-material-group"><h4 class="teaching-section-title">${general ? '選讀教材' : '學習路徑 · 請依序閱讀'}</h4>${mats.map(teachingMaterialRow).join('') || '<p class="teaching-help">尚無教材。</p>'}${exams.length ? `<div class="mt-5"><h4 class="teaching-section-title">課後評量</h4><p class="teaching-help">建議先完成教材。閱讀完成與考核通過分別計算。</p>${exams.map(buildCourseExamRow).join('')}</div>` : ''}</div></details>`;
+        return `<details class="course-learning-card" data-course="${escapeHtml(course.id)}" ${openIds.has(course.id) || (!hadCards && shown === 1) ? 'open' : ''}><summary class="course-learning-summary"><div class="min-w-0 flex-1"><div class="teaching-course-header"><span class="teaching-course-number">${general ? '+' : String(index + 1).padStart(2,'0')}</span><h3 class="text-lg font-black">${escapeHtml(course.title)}</h3></div><div class="teaching-meta"><span>教材完成 ${done}／${mats.length}</span>${course.estimatedMinutes ? `<span>建議 ${course.estimatedMinutes} 分鐘</span>` : ''}${course.startDate || course.endDate ? `<span>建議學習期間：${escapeHtml(course.startDate || '不限')} ～ ${escapeHtml(course.endDate || '不限')}</span>` : ''}<span>課後評量 ${exams.length} 份</span></div>${mats.length ? `<div class="course-progress-mini mt-3" role="progressbar" aria-label="教材完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>` : ''}</div><span class="course-learning-chevron">⌄</span></summary><div class="teaching-plan"><div>${course.desc ? `<p>${escapeHtml(course.desc)}</p>` : ''}${objectives.length ? `<h4 class="mt-3">學完這堂課，你將能夠</h4><ul>${objectives.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : '<p class="teaching-help">依下方順序閱讀教材，再進行課後評量。</p>'}</div><div>${next ? `<button class="teaching-primary" data-material-open="${escapeHtml(next.id)}">${done ? '繼續下一份教材' : '開始學習'} →</button>` : `<p class="teaching-help">${complete ? '教材已完成，可複習或進行課後評量。' : '教師正在準備教材。'}</p>`}</div></div><div class="course-material-group"><h4 class="teaching-section-title">${general ? '選讀教材' : '學習路徑 · 請依序閱讀'}</h4>${mats.map(teachingMaterialRow).join('') || '<p class="teaching-help">尚無教材。</p>'}${exams.length ? `<div class="mt-5"><h4 class="teaching-section-title">課後評量</h4><p class="teaching-help">看完教材即可直接考核，不需先按完成標記；考核未通過可隨時回教材複習後重考。</p>${exams.map(buildCourseExamRow).join('')}</div>` : ''}</div></details>`;
     }).join('') || '<div class="course-empty-row">沒有符合條件的課程。請更換關鍵字或閱讀狀態；尚無課程時請聯絡教師。</div>';
     document.getElementById('learning-result-count').textContent = `顯示 ${shown} 個課程／資源區`;
     document.getElementById('course-overview-course-count').textContent = `課程 ${courses.length}`;
@@ -312,11 +312,11 @@ function teachingNextMedia() {
         const currentDone =
             teacher66CurrentMaterialDone();
 
+        // 2026-10 learning loop: completion is no longer a hard gate.
         button.disabled =
             Boolean(
                 teachingReaderBusy
                 || !next
-                || !currentDone
             );
 
         if (!next) {
@@ -334,13 +334,13 @@ function teachingNextMedia() {
 
         if (!currentDone) {
             button.textContent =
-                '完成本份後解鎖 →';
+                '下一份教材 →';
 
             button.title =
-                '請先標記目前教材完成';
+                '本份尚未標記完成；可直接前往下一份或直接進入考核（不再強制完成標記才解鎖）';
 
             button.dataset.learningState =
-                'locked';
+                'unmarked';
 
             return;
         }
@@ -434,17 +434,8 @@ function teachingNextMedia() {
 
     teachingNextMaterial =
         function () {
-            if (
-                !teacher66CurrentMaterialDone()
-            ) {
-                teacher66SyncReaderNext();
-
-                alert(
-                    '請先完成目前這份教材，再進入下一份教材。'
-                );
-
-                return;
-            }
+            // Not marking a material complete no longer blocks navigation.
+            teacher66SyncReaderNext();
 
             return teacher66OriginalNextMaterial
                 .apply(
