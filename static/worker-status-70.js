@@ -840,6 +840,8 @@
   async function renderWorkerStatus(force = false) {
     if (loading && !force) return;
     loading = true;
+    const keptOpen = {};
+    panel.querySelectorAll('details[data-keep]').forEach(d => { keptOpen[d.dataset.keep] = d.open; });
     if (force || panel.dataset.workerLoaded !== 'true') {
       panel.innerHTML = `<section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div class="animate-pulse text-sm text-slate-400">讀取 Worker 與佇列狀態中…</div></section>${firstRunGuide()}`;
     }
@@ -944,7 +946,7 @@
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div><h4 class="font-black text-slate-950 text-lg">🖥️ Worker / Job 狀態</h4>
-            <p class="text-xs text-slate-500 mt-1">失敗原因、Worker、真實進度、heartbeat、處理時間與重試次數會保留在工作紀錄中；長時間處理不等於卡住。</p></div>
+            <p class="text-xs text-slate-500 mt-1">Worker、佇列與失敗工作一覽；長時間處理不等於卡住。</p></div>
             <button id="worker-refresh-70" type="button" class="text-xs border border-slate-300 bg-white px-3 py-2 rounded-xl">↻ 立即更新</button>
           </div>
           <div id="worker-service-health-70" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
@@ -960,6 +962,7 @@
             ${queueCard('🔁', '等待重試', data.retryJobs, '保留原始檔後再次處理')}
             ${queueCard('❌', `近${Number(data.failedAttentionHours||24)}小時失敗`, data.failedJobs, Number(data.failedJobsTotal||0) > Number(data.failedJobs||0) ? `歷史共 ${Number(data.failedJobsTotal||0)} 筆；舊失敗保留在紀錄但不持續亮紅燈` : '近期失敗會在下方顯示原因')}
           </div>
+          <details data-keep="more-numbers" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><summary class="cursor-pointer text-xs font-black text-slate-700">更多數字（等待時間、失敗率、heartbeat、儲存）</summary><div class="mt-3 space-y-2">
           <div class="grid sm:grid-cols-3 gap-2 text-xs">
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">最舊待處理等待：</span><b>${formatDuration(data.oldestPendingAgeSeconds)}</b>${data.oldestPendingAt ? ` · ${formatWhen(data.oldestPendingAt)}` : ''}</div>
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">近${Number(data.metricsWindowHours||24)}小時失敗率：</span><b>${Number(data.recentTerminalJobs||0) ? Math.round(Number(data.recentFailureRate || 0) * 100) + '%' : '—'}</b> · ${Number(data.recentTerminalJobs || 0)} 筆完成/失敗</div>
@@ -971,33 +974,44 @@
             <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2"><span class="text-rose-700">🔴 可能卡住：</span><b>${Number(data.stalledJobs||0)}</b><div class="mt-1 text-[10px]">stale ${formatDuration(data.staleThresholdSeconds||1800)}</div></div>
           </div>
           <div class="text-xs rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">Shared staging：<b>${escapeHtml(staging.backend || '未設定')}</b> · ${staging.available ? '可用' : '不可用'}${staging.shared ? ' · Web/Worker 共用' : ''}</div>
+          </div></details>
           ${operationalIssueHtml}
-        </section>
-        ${renderSloDashboard(sloMetrics)}
-        ${renderEmailDeliveryHealth(emailHealth)}
-        <section id="worker-runtime-70" class="space-y-3 scroll-mt-4">
-          <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">教材 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
-          ${workerBody}
-        </section>
-        <section id="ai-worker-runtime-70" class="space-y-3 scroll-mt-4">
-          <div class="flex items-center justify-between gap-3"><div><h5 class="font-black text-slate-900">AI Worker</h5><p class="mt-1 text-[11px] text-slate-500">AI 出題、講稿、PowerPoint、Kokoro 配音、字幕與影片共用；與教材轉檔 Worker 分開顯示。</p></div><span class="text-xs text-slate-400">${activeAiWorkers.length ? activeAiWorkers.length + ' 台在線' : '尚無在線回報'}</span></div>
-          ${aiWorkerBody}
         </section>
         <section id="worker-incidents-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4 scroll-mt-4">
           <div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-slate-900">🚨 維運事件</h5><p class="mt-1 text-[11px] text-slate-500">Worker、AI 與 Storage 的持續性問題集中在這裡；單次可恢復 fallback 不會升級成事件。</p></div><div class="flex gap-2 text-[11px]"><span class="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 font-bold text-rose-700">目前問題 ${currentIncidents.length}</span><span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 font-bold text-emerald-700">已恢復 ${resolvedIncidents.length}</span></div></div>
-          <div><div class="mb-2 text-xs font-black text-slate-700">目前問題</div><div class="space-y-2">${incidentCards(currentIncidents,'目前沒有需要處理的維運事件。',incidentResponders)}</div></div>
-          <details class="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><summary class="cursor-pointer text-xs font-black text-slate-700">最近已恢復（24 小時） · ${resolvedIncidents.length} 筆</summary><div class="mt-3 space-y-2">${incidentCards(resolvedIncidents,'最近 24 小時沒有已恢復事件。',incidentResponders)}</div></details>
+          <div><div class="mb-2 text-xs font-black text-slate-700">目前問題</div><div class="space-y-2">${incidentCards(currentIncidents.slice(0,3),'目前沒有需要處理的維運事件。',incidentResponders)}</div>
+          ${currentIncidents.length > 3 ? `<details data-keep="more-incidents" class="mt-2 rounded-xl border border-rose-200 bg-rose-50/40 p-3"><summary class="cursor-pointer text-xs font-black text-rose-800">其餘 ${currentIncidents.length - 3} 筆目前問題</summary><div class="mt-3 space-y-2">${incidentCards(currentIncidents.slice(3),'',incidentResponders)}</div></details>` : ''}</div>
+          <details data-keep="resolved-incidents" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><summary class="cursor-pointer text-xs font-black text-slate-700">最近已恢復（24 小時） · ${resolvedIncidents.length} 筆</summary><div class="mt-3 space-y-2">${incidentCards(resolvedIncidents,'最近 24 小時沒有已恢復事件。',incidentResponders)}</div></details>
         </section>
         <section id="worker-problems-70" class="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm space-y-3 scroll-mt-4">
           <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">⚠ 需要注意的工作</h5><span class="text-[11px] text-slate-400">${problemJobs.length} 筆</span></div>
-          <div class="space-y-2">${failureCards(problemJobs)}</div>
+          <div class="space-y-2">${failureCards(problemJobs.slice(0,5))}</div>
+          ${problemJobs.length > 5 ? `<details data-keep="more-problems" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><summary class="cursor-pointer text-xs font-black text-slate-700">其餘 ${problemJobs.length - 5} 筆</summary><div class="mt-3 space-y-2">${failureCards(problemJobs.slice(5))}</div></details>` : ''}
         </section>
-        <section id="worker-jobs-history-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 scroll-mt-4">
-          <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">最近背景工作</h5><span class="text-[11px] text-slate-400">最近 ${jobs.length} 筆</span></div>
-          <div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs"><thead class="bg-slate-50"><tr><th class="p-3">Job ID</th><th class="p-3">教材</th><th class="p-3">狀態</th><th class="p-3">階段／原因</th><th class="p-3">耗時</th><th class="p-3">更新時間</th></tr></thead><tbody class="divide-y divide-slate-100">${jobRows(jobs)}</tbody></table></div>
-        </section>
+        <details data-keep="worker-group" ${(activeWorkers.length && activeAiWorkers.length) ? '' : 'open'} class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <summary class="cursor-pointer font-black text-slate-900">🖥️ Worker 在線狀況 <span class="ml-2 text-xs font-bold text-slate-500">教材 ${workerSummary} · AI ${activeAiWorkers.length ? activeAiWorkers.length + ' 台在線' : '尚無在線回報'}</span></summary>
+          <div class="mt-4 space-y-4">
+            <section id="worker-runtime-70" class="space-y-3 scroll-mt-4">
+              <div class="flex items-center justify-between"><h5 class="font-black text-slate-900">教材 Worker</h5><span class="text-xs text-slate-400">${workerSummary}</span></div>
+              ${workerBody}
+            </section>
+            <section id="ai-worker-runtime-70" class="space-y-3 scroll-mt-4">
+              <div class="flex items-center justify-between gap-3"><div><h5 class="font-black text-slate-900">AI Worker</h5><p class="mt-1 text-[11px] text-slate-500">AI 出題、講稿、PowerPoint、Kokoro 配音、字幕與影片共用；與教材轉檔 Worker 分開顯示。</p></div><span class="text-xs text-slate-400">${activeAiWorkers.length ? activeAiWorkers.length + ' 台在線' : '尚無在線回報'}</span></div>
+              ${aiWorkerBody}
+            </section>
+          </div>
+        </details>
+        <details data-keep="advanced" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <summary class="cursor-pointer font-black text-slate-900">📈 維運趨勢與寄信狀況（進階）</summary>
+          <div class="mt-4 space-y-4">${renderSloDashboard(sloMetrics)}${renderEmailDeliveryHealth(emailHealth)}</div>
+        </details>
+        <details id="worker-jobs-history-70" data-keep="jobs-history" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm scroll-mt-4">
+          <summary class="cursor-pointer font-black text-slate-900">最近背景工作 <span class="ml-2 text-[11px] font-bold text-slate-400">最近 ${jobs.length} 筆</span></summary>
+          <div class="mt-3 overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs"><thead class="bg-slate-50"><tr><th class="p-3">Job ID</th><th class="p-3">教材</th><th class="p-3">狀態</th><th class="p-3">階段／原因</th><th class="p-3">耗時</th><th class="p-3">更新時間</th></tr></thead><tbody class="divide-y divide-slate-100">${jobRows(jobs)}</tbody></table></div>
+        </details>
         ${firstRunGuide()}`;
       panel.dataset.workerLoaded = 'true';
+      panel.querySelectorAll('details[data-keep]').forEach(d => { if (d.dataset.keep in keptOpen) d.open = keptOpen[d.dataset.keep]; });
       document.getElementById('worker-refresh-70').onclick = () => renderWorkerStatus(true);
       bindIncidentControls();
       bindSloControls();
