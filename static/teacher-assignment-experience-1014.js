@@ -213,7 +213,7 @@
         </div>
         <label><span>指派對象</span><select id="teacher-batch-audience-type-1014"></select></label>
         <label id="teacher-batch-audience-wrap-1014"><span id="teacher-batch-audience-label-1014">組別</span><input id="teacher-batch-person-search-1014" type="search" class="hidden" placeholder="搜尋姓名、工號或帳號"><select id="teacher-batch-audience-key-1014"></select></label>
-        <label><span>課程性質</span><select id="teacher-batch-requirement-1014"><option value="required">必修</option><option value="elective">選修</option></select></label>
+        <label><span>學習要求</span><select id="teacher-batch-requirement-1014"><option value="required">指定完成</option><option value="elective">自由選讀</option></select></label>
         <label><span>完成期限</span><input id="teacher-batch-due-1014" type="date"></label>
         <p id="teacher-batch-status-1014" class="v561-profile-status">可一次建立多門課程指派；已存在的相同指派會自動略過。</p>
         <div class="v561-profile-actions"><button type="button" data-batch-close class="secondary">取消</button><button type="submit">套用到已選課程</button></div>
@@ -350,34 +350,28 @@
 
   function ensureBatchEntry() {
     if (!canAssign) return;
-    const entry = document.getElementById('teacher-course-media-entry-1014');
     const box = document.getElementById('admin-course-material-hub');
     if (!box || document.getElementById('teacher-batch-manage-1014')) return;
+
+    // Batch assignment is intentionally an advanced operation so the primary
+    // course workspace action remains only "建立課程".
+    let details = document.getElementById('teacher-course-advanced-tools-1014');
+    if (!details) {
+      details = document.createElement('details');
+      details.id = 'teacher-course-advanced-tools-1014';
+      details.className = 'mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2';
+      details.innerHTML = `<summary class="cursor-pointer text-xs font-bold text-slate-500 hover:text-slate-700">進階管理</summary><div class="mt-3 flex flex-wrap items-center justify-between gap-3" data-teacher-course-advanced-actions-1014><p class="text-[11px] text-slate-500">需要一次替多門既有課程設定相同學習要求時再使用。</p></div>`;
+      box.appendChild(details);
+    }
+    const actions = details.querySelector('[data-teacher-course-advanced-actions-1014]');
+    if (!actions) return;
     const button = document.createElement('button');
     button.id = 'teacher-batch-manage-1014';
     button.type = 'button';
-    button.className = 'shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50';
-    button.textContent = '批次指派';
+    button.className = 'shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100';
+    button.textContent = '批次指派多門課程';
     button.addEventListener('click', event => { event.preventDefault(); void openBatchDialog(); });
-    if (entry) {
-      let actions = entry.querySelector('[data-teacher-course-actions-1014]');
-      if (!actions) {
-        actions = document.createElement('div');
-        actions.dataset.teacherCourseActions1014 = '1';
-        actions.className = 'flex flex-wrap gap-2';
-        const mediaButton = entry.querySelector('button');
-        if (mediaButton) actions.appendChild(mediaButton);
-        entry.appendChild(actions);
-      }
-      actions.appendChild(button);
-    } else {
-      const dashboard = box.querySelector('.admin-course-dashboard');
-      if (!dashboard) return;
-      const row = document.createElement('div');
-      row.className = 'mb-2 flex justify-end';
-      row.appendChild(button);
-      box.insertBefore(row, dashboard);
-    }
+    actions.appendChild(button);
   }
 
   async function playVoicePreview(voice, button, status, audio) {

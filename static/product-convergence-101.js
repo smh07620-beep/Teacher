@@ -37,7 +37,7 @@
     const summary = document.getElementById('admin-workspace-summary');
     const now = new URLSearchParams(window.location.search);
     if (summary && now.get('workspace') === 'course-materials' && !now.get('teacherMode')) {
-      summary.textContent = '主要工作只保留「教材與課程」與「評量與追蹤」；AI 製作從教材流程內開啟，公告、文件與使用導覽在右上工具。';
+      summary.textContent = '主要工作只保留「教材與課程」與「評量與追蹤」；AI 製作從課程的教材流程內開啟。';
     }
     return true;
   }

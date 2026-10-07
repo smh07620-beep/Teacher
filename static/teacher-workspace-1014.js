@@ -163,21 +163,36 @@
 
   function ensureTeacherUtilities() {
     if (!teacherPersonaActive) return;
-    const actions = personaMountTarget().actions;
-    if (!actions) return;
-    let host = document.getElementById('teacher-utility-actions-1014');
+
+    // Keep the global header focused on destination switching. Teacher help
+    // and account settings stay contextual to this workspace instead.
+    document.getElementById('teacher-utility-actions-1014')?.remove();
+
+    const summary = document.getElementById('admin-workspace-summary');
+    if (!summary) return;
+    let host = document.getElementById('teacher-inline-support-1014');
     if (!host) {
       host = document.createElement('div');
-      host.id = 'teacher-utility-actions-1014';
-      host.className = 'flex items-center gap-1';
-      actions.appendChild(host);
+      host.id = 'teacher-inline-support-1014';
+      host.className = 'mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]';
+
+      const guide = document.createElement('button');
+      guide.id = 'teacher-guide-open-1014';
+      guide.type = 'button';
+      guide.className = 'font-bold text-teal-300 hover:text-teal-200 underline decoration-dotted underline-offset-2';
+      guide.textContent = '操作說明';
+      guide.addEventListener('click', () => showTeacherGuide());
+
+      const account = document.createElement('button');
+      account.id = 'teacher-account-open-1014';
+      account.type = 'button';
+      account.className = 'font-bold text-slate-300 hover:text-white underline decoration-dotted underline-offset-2';
+      account.textContent = '帳號設定';
+      account.addEventListener('click', () => { window.location.href = '/account'; });
+
+      host.append(guide, account);
+      summary.insertAdjacentElement('afterend', host);
     }
-    host.replaceChildren(
-      utilityButton('teacher-guide-open-1014', '❓ 使用導覽', () => showTeacherGuide()),
-      utilityButton('teacher-account-open-1014', '👤 個人帳號', () => { window.location.href = '/account'; }),
-      utilityButton('teacher-announcements-open-1014', '📣 公告', () => void openAnnouncements()),
-      utilityButton('teacher-documents-open-1014', '📄 文件', () => void openDocuments())
-    );
   }
 
   function guideCard(number, title, description, actions) {
@@ -520,7 +535,7 @@
     const title = document.getElementById('admin-workspace-title');
     const summary = document.getElementById('admin-workspace-summary');
     if (title && !state.mode.startsWith('media')) title.textContent = '教師工作區';
-    if (summary && state.mode === 'course') summary.textContent = '日常工作只分兩區：教材與課程、評量與追蹤。AI 製作從教材內進入；公告、紙本文件與使用導覽放在右上工具。';
+    if (summary && state.mode === 'course') summary.textContent = '日常工作只分兩區：教材與課程、評量與追蹤。AI 製作從課程的教材流程內進入。';
   }
 
   ensurePersonaSwitcher();

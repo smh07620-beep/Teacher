@@ -70,7 +70,7 @@
     if (icon) icon.textContent = '👨‍🏫';
     if (title && !title.textContent.includes('媒體製作')) title.textContent = '檢驗科教學平台｜教師工作區';
     if (summary && !title?.textContent?.includes('媒體製作')) {
-      summary.textContent = '主要工作只保留教材與課程、評量與追蹤；AI 製作從教材流程內開啟，公告、文件與使用導覽在右上工具。';
+      summary.textContent = '主要工作只保留教材與課程、評量與追蹤；AI 製作從課程的教材流程內開啟。';
     }
 
     const banner = document.getElementById('rbac-workspace-banner');

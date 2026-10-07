@@ -173,14 +173,14 @@ function render(){
 
 function stepOne(){
   const s=scope(),options=[...document.querySelectorAll('#wizard-group option')],permissionPending=state.assignPermission===null,canAssign=canAssignLearning(),locked=state.created?'disabled':'';
-  const checkpointNote=state.created?'<div class="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800"><b>✓ 課程草稿 checkpoint 已建立</b><p class="mt-1">課程名稱、訓練區與組別已鎖定；學習對象、必修／選修與期限仍可在發布前調整。</p></div>':'';
+  const checkpointNote=state.created?'<div class="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800"><b>✓ 課程草稿 checkpoint 已建立</b><p class="mt-1">課程名稱、訓練區與組別已鎖定；學習對象、學習要求與期限仍可在發布前調整。</p></div>':'';
   const assignmentPanel=permissionPending?`<section class="md:col-span-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800"><b>學習對象與期限</b><p class="mt-1">正在確認你的學習指派權限…</p></section>`:canAssign?`<section class="md:col-span-2 rounded-xl border border-teal-100 bg-teal-50/50 p-3">
     <label class="flex items-center gap-2 text-xs font-black text-teal-950"><input id="cw681-assignment-enabled" type="checkbox" ${state.assignmentEnabled?'checked':''}> 發布後立即建立學習指派</label>
-    <p class="mt-1 text-[11px] text-teal-800">課程可見範圍仍由上方訓練區／組別控制；這裡設定誰需要完成、必修／選修與期限。</p>
+    <p class="mt-1 text-[11px] text-teal-800">課程可見範圍仍由上方訓練區／組別控制；這裡設定誰需要完成、學習要求與期限。</p>
     <div class="mt-3 grid gap-3 md:grid-cols-4">
       <label class="text-xs font-bold">指派對象<select id="cw681-assignee-type" class="mt-1 w-full rounded border bg-white p-2"></select></label>
       <label class="text-xs font-bold">人員／組別<select id="cw681-assignee-key" class="mt-1 w-full rounded border bg-white p-2"></select></label>
-      <label class="text-xs font-bold">課程性質<select id="cw681-required" class="mt-1 w-full rounded border bg-white p-2"><option value="required" ${state.assignmentRequired?'selected':''}>必修</option><option value="elective" ${!state.assignmentRequired?'selected':''}>選修</option></select></label>
+      <label class="text-xs font-bold">學習要求<select id="cw681-required" class="mt-1 w-full rounded border bg-white p-2"><option value="required" ${state.assignmentRequired?'selected':''}>指定完成</option><option value="elective" ${!state.assignmentRequired?'selected':''}>自由選讀</option></select></label>
       <label class="text-xs font-bold">完成期限<input id="cw681-due-at" type="date" value="${esc(state.dueAt)}" class="mt-1 w-full rounded border bg-white p-2"></label>
     </div>
     <p id="cw681-audience-status" class="mt-2 text-[11px] text-slate-500">正在讀取可指派對象…</p>

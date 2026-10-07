@@ -157,7 +157,7 @@
         <div id="learning-assignment-existing" class="space-y-2 mb-4"></div>
         <label><span>指派對象</span><select id="learning-assignment-audience-type"><option value="group">目前組別</option><option value="user">指定學員帳號</option><option value="all">全體人員</option></select></label>
         <label id="learning-assignment-audience-key-wrap"><span id="learning-assignment-audience-key-label">組別</span><input id="learning-assignment-audience-key" autocomplete="off"></label>
-        <label><span>課程性質</span><select id="learning-assignment-requirement"><option value="required">必修</option><option value="elective">選修</option></select></label>
+        <label><span>學習要求</span><select id="learning-assignment-requirement"><option value="required">指定完成</option><option value="elective">自由選讀</option></select></label>
         <label><span>完成期限</span><input id="learning-assignment-due-at" type="date"></label>
         <p id="learning-assignment-status" class="v561-profile-status">建立後會出現在學員首頁、我的待辦與通知中心。</p>
         <div class="v561-profile-actions"><button type="button" id="learning-assignment-cancel" class="secondary">取消</button><button type="submit">建立指派</button></div>
@@ -209,7 +209,7 @@
       if(!host)return;
       const rows=(Array.isArray(state.assignments)?state.assignments:[]).filter(item=>item.courseId===courseId&&item.active!==false);
       host.innerHTML=rows.length
-        ? `<div class="text-xs font-black text-slate-700">目前有效指派</div>${rows.map(item=>`<div class="rounded-xl border border-teal-100 bg-teal-50/40 px-3 py-2 flex items-center justify-between gap-2"><div><b class="text-xs text-slate-800">${escapeHtml(learningAssignmentAudienceLabel(item))}</b><div class="text-[10px] text-slate-500 mt-1">${item.required===false?'選修':'必修'}${item.dueAt?` · 期限 ${escapeHtml(String(item.dueAt).slice(0,10))}`:' · 未設定期限'}</div></div><button type="button" data-learning-assignment-cancel="${escapeHtml(item.id||'')}" class="text-[10px] text-rose-700 px-2 py-1">取消指派</button></div>`).join('')}`
+        ? `<div class="text-xs font-black text-slate-700">目前有效指派</div>${rows.map(item=>`<div class="rounded-xl border border-teal-100 bg-teal-50/40 px-3 py-2 flex items-center justify-between gap-2"><div><b class="text-xs text-slate-800">${escapeHtml(learningAssignmentAudienceLabel(item))}</b><div class="text-[10px] text-slate-500 mt-1">${item.required===false?'自由選讀':'指定完成'}${item.dueAt?` · 期限 ${escapeHtml(String(item.dueAt).slice(0,10))}`:' · 未設定期限'}</div></div><button type="button" data-learning-assignment-cancel="${escapeHtml(item.id||'')}" class="text-[10px] text-rose-700 px-2 py-1">取消指派</button></div>`).join('')}`
         : '<div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">目前沒有有效指派。</div>';
       host.querySelectorAll('[data-learning-assignment-cancel]').forEach(button=>button.addEventListener('click',async()=>{
           const id=button.dataset.learningAssignmentCancel||'';
