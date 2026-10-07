@@ -27,7 +27,7 @@
 
   const WORKSPACES = Object.freeze({
     'course-materials': entry('teaching', '📚', '教材與課程', '教材與課程 Workspace', '管理課程、教材、影音、圖譜與內容處理進度。'),
-    word: entry('teaching', '📝', 'Word 範本', 'Word 範本 Workspace', '維護各組正式考核表範本與套版輸出。'),
+    word: entry('assessment', '📄', '輸出範本', '輸出範本 Workspace', '維護各組正式考核表的 Word 範本；老師在成績與評核畫面選用自己組的範本匯出。'),
     assessment: entry('assessment', '📝', '評量與追蹤', '評量與追蹤 Workspace', '管理考卷、題庫、AI 輔助出題、審核發布、待批改與學員追蹤。'),
     teacher: entry('assessment', '👩‍🏫', '教師評核', '教師評核 Workspace', '集中處理人工閱卷、問答評分與 PGY 教師評核。'),
     results: entry('assessment', '📊', '成績管理', '成績管理 Workspace', '查閱歷次成績、通過狀態、批改結果與考核分析。'),

@@ -24,7 +24,7 @@ AREAS = {
 # key -> product area
 WORKSPACE_AREAS = {
     "course-materials": "teaching",
-    "word": "teaching",
+    "word": "assessment",
     "assessment": "assessment",
     "teacher": "assessment",
     "results": "assessment",

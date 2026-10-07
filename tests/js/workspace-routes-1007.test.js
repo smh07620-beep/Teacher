@@ -29,7 +29,7 @@ test('every workspace belongs to one of the product areas', () => {
     assert.ok(R.AREAS[meta.area], key);
     assert.ok(meta.title && meta.summary && meta.icon, key);
   }
-  assert.equal(R.areaLabel('word'), '教學');
+  assert.equal(R.areaLabel('word'), '評量');
   assert.equal(R.areaLabel('compliance'), '評量');
   assert.equal(R.areaLabel('worker'), '系統管理');
   assert.deepEqual([...R.systemNames()].sort(), ['audit', 'maintenance', 'people', 'system', 'worker']);

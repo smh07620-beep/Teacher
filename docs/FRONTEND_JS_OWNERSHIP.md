@@ -111,8 +111,8 @@ areas of `PRODUCT_INFORMATION_ARCHITECTURE_20261001.md`:
 
 | Area | Workspaces |
 |---|---|
-| 教學 | `course-materials`, `word` |
-| 評量 | `assessment`, `teacher`, `results`, `compliance` |
+| 教學 | `course-materials` |
+| 評量 | `assessment`, `teacher`, `results`, `compliance`, `word` (輸出範本: per-group Word templates used to export results into each group's SOP form) |
 | 系統管理 | `people`, `system`, `maintenance`, `audit`, `worker` |
 
 `window.AppWorkspaceRoutes` is the only place that knows workspace names, aliases
