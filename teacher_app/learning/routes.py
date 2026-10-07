@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import shutil
 from pathlib import Path
 from typing import Callable
 
@@ -44,6 +45,76 @@ def _material_path(paths, material: dict, material_id: str) -> Path:
     )
 
 
+# Storage providers whose originals live outside the web host.  Production
+# materials are stored here (e.g. MEGA), so the web process must fetch a
+# temporary copy to read their slide text.
+REMOTE_BACKENDS = frozenset({"mega", "gdrive", "oci", "r2"})
+
+
+def default_source_fetcher(material: dict, paths) -> tuple[Path, Path]:
+    """Download a cloud-stored original to a temp folder: ``(temp_root, source)``.
+
+    The caller owns ``temp_root`` and must delete it.  Imported lazily so the AI
+    runtime is only loaded when a cloud original really has to be fetched.
+    """
+    from teacher_app.assessments import ai_runtime
+
+    return ai_runtime.material_source_to_temp(material, paths_provider=lambda: paths)
+
+
+def _read_rows(extractor, source: Path):
+    """Extract slide text from one local file: ``(status, rows, reason, source_kind)``."""
+    kind = source.suffix.lower()
+    try:
+        rows = extractor(source)
+    except Exception:
+        return "failed", [], "文字抽取失敗", kind
+    if rows:
+        return "indexed", rows, "", kind
+    return "no_text", [], "找不到可擷取文字；掃描型 PDF 不提供假性搜尋結果。", kind
+
+
+def build_material_index(
+    material_id: str,
+    material: dict,
+    paths,
+    *,
+    extractor: Callable[[Path], list[tuple[int, str, str]]] = content.extract_slide_text,
+    source_fetcher=None,
+):
+    """Read a material's searchable text, wherever its original is stored.
+
+    Returns ``(status, rows, reason, source_kind)`` and never raises.  ``status``
+    is one of ``indexed``, ``no_text``, ``failed`` or ``unsupported``.  Only
+    ``indexed``/``no_text`` should replace the stored text; a ``failed`` fetch
+    (for example a MEGA timeout) must leave any earlier good index untouched.
+    """
+    backend = str(material.get("storageBackend") or "").lower()
+    if backend == "local":
+        path = _material_path(paths, material, material_id)
+        if not path.is_file():
+            return "unsupported", [], "此教材目前無可安全索引的本機原始檔", backend
+        return _read_rows(extractor, path)
+
+    if backend in REMOTE_BACKENDS:
+        suffix = Path(str(material.get("filename") or material.get("storageFilename") or "")).suffix.lower()
+        if suffix not in content.INDEXABLE_SUFFIXES:
+            return "no_text", [], "此檔案類型沒有可搜尋的投影片文字。", suffix or backend
+        fetch = source_fetcher or default_source_fetcher
+        temp_root = None
+        try:
+            try:
+                temp_root, source = fetch(material, paths)
+            except Exception:
+                return "failed", [], "無法從雲端儲存取回原始檔，請稍後再試。", backend
+            return _read_rows(extractor, Path(source))
+        finally:
+            if temp_root is not None:
+                shutil.rmtree(temp_root, ignore_errors=True)
+
+    return "unsupported", [], "此教材目前無可安全索引的原始檔", backend
+
+
 def auto_index_material(
     owner,
     material_id: str,
@@ -51,6 +122,7 @@ def auto_index_material(
     extractor: Callable[[Path], list[tuple[int, str, str]]] = content.extract_slide_text,
     paths=None,
     material_getter=None,
+    source_fetcher=None,
 ) -> str:
     """Best-effort completion hook; never affects Worker completion/heartbeat."""
     getter = material_getter or getattr(owner, "get_material", None) or material_repository.get_material
@@ -78,18 +150,11 @@ def auto_index_material(
     if not material:
         return terminal("unsupported", "找不到教材")
 
-    path = _material_path(paths, material, material_id)
-    backend = str(material.get("storageBackend") or "")
-    if backend != "local" or not path.is_file():
-        return terminal("unsupported", "此教材目前無可安全索引的本機原始檔", backend)
-
-    try:
-        rows = extractor(path)
-    except Exception:
-        return terminal("failed", "文字抽取失敗", path.suffix.lower())
-
-    status = "indexed" if rows else "no_text"
-    reason = "" if rows else "無可搜尋文字"
+    status, rows, reason, source_kind = build_material_index(
+        material_id, material, paths, extractor=extractor, source_fetcher=source_fetcher
+    )
+    if status not in {"indexed", "no_text"}:
+        return terminal(status, reason, source_kind)
     try:
         repository.replace_text_index(
             material_id,
@@ -97,11 +162,11 @@ def auto_index_material(
             indexed_at=_now(),
             status=status,
             reason=reason,
-            source_kind=path.suffix.lower(),
+            source_kind=source_kind,
         )
         return status
     except Exception:
-        return terminal("failed", "索引寫入失敗", path.suffix.lower())
+        return terminal("failed", "索引寫入失敗", source_kind)
 
 
 def register_smart_learning(
@@ -111,6 +176,7 @@ def register_smart_learning(
     paths=None,
     paths_provider=None,
     material_getter=None,
+    source_fetcher=None,
 ):
     app = getattr(owner, "app", owner)
     if app.extensions.get("teacher_smart_learning_67_registered"):
@@ -391,28 +457,32 @@ def register_smart_learning(
         material = get_material(material_id)
         if not material:
             return jsonify({"error": "找不到教材"}), 404
-        path = _material_path(current_paths(), material, material_id)
-        backend = str(material.get("storageBackend") or "")
-        if backend != "local" or not path.is_file():
+        status, rows, reason, source_kind = build_material_index(
+            material_id,
+            material,
+            current_paths(),
+            extractor=extractor,
+            source_fetcher=source_fetcher,
+        )
+        if status in {"unsupported", "failed"}:
+            # A failed fetch/extract keeps any earlier good text rows; only the
+            # status is updated.  409 (not 5xx) so proxies pass the JSON body on.
             repository.write_terminal_status(
                 material_id,
-                "unsupported",
+                status,
                 page_count=0,
-                indexed_at="",
-                reason="此教材目前無可安全索引的本機原始檔",
-                source_kind=backend,
+                indexed_at="" if status == "unsupported" else _now(),
+                reason=reason,
+                source_kind=source_kind,
             )
-            return jsonify({"error": "此教材目前無可安全索引的本機原始檔", "status": "unsupported"}), 409
-        rows = extractor(path)
-        status = "indexed" if rows else "no_text"
-        reason = "" if rows else "找不到可擷取文字；掃描型 PDF 不提供假性搜尋結果。"
+            return jsonify({"error": reason, "status": status}), 409
         repository.replace_text_index(
             material_id,
             rows,
             indexed_at=_now(),
             status=status,
             reason=reason,
-            source_kind=path.suffix.lower(),
+            source_kind=source_kind,
         )
         return jsonify({"ok": True, "pages": len(rows), "searchable": bool(rows), "status": status})
 

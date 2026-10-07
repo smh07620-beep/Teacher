@@ -34,6 +34,10 @@ ASSET_MANIFEST = {
                     # admin bundle so first navigation cannot race it in CI.
                     "/rbac-ui-681.js",
                     "/api-client.js",
+                    # Middleware that shares identical read-only API calls made
+                    # by many page scripts; must follow api-client.js and
+                    # precede every feature script that fetches at load.
+                    "/api-get-dedupe-1007.js",
                 ),
             ),
             (

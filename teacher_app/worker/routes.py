@@ -31,6 +31,30 @@ from teacher_app.worker import operations as worker_operations
 from teacher_app.worker.web_runtime import WorkerWebRuntime, runtime_from_owner
 
 
+_INDEX_LOCK = threading.Lock()
+
+
+def _index_material_in_background(app, material_id: str) -> None:
+    """Index one finished material off the request thread (best-effort).
+
+    One at a time: the web service has only a few threads and little memory, so
+    several uploads finishing together must not each download a file at once.
+    A failure is recorded as the material's index status and can be retried
+    with the admin "重建索引" button.
+    """
+    if not material_id:
+        return
+
+    def run() -> None:
+        with _INDEX_LOCK:
+            try:
+                auto_index_material(app, material_id)
+            except Exception:
+                LOGGER.exception("background material indexing failed: %s", material_id)
+
+    threading.Thread(target=run, name=f"teacher-material-index-{material_id}", daemon=True).start()
+
+
 _RATE_LOCK = threading.Lock()
 _RATE: dict[str, list[float]] = {}
 _AI_RATE: dict[str, list[float]] = {}
@@ -729,10 +753,9 @@ def register_free_worker(owner, *, runtime: WorkerWebRuntime | None = None):
             _sync_media_metadata(runtime, job, "completed")
             # Indexing is best-effort and deliberately occurs after the job is
             # terminal; it cannot delay heartbeats or alter restart semantics.
-            try:
-                auto_index_material(app, str(result.get("id") or job.get("materialId") or ""))
-            except Exception:
-                pass
+            # Cloud originals (MEGA...) must be downloaded first, which can take
+            # minutes, so it runs in the background instead of in this request.
+            _index_material_in_background(app, str(result.get("id") or job.get("materialId") or ""))
             return jsonify({"ok": True, "status": "completed", "cleanupPending": cleanup_pending, "publishKey": receipt.get("publishKey", "")})
         if action == "retry":
             retry = worker_protocol.retry_plan(

@@ -90,3 +90,16 @@ These globals have one mutation owner. Callers may invoke them, but no compatibi
 - Operational Incident actions rendered by `static/worker-status-70.js` are ordinary `<a href>` navigation. They never use `data-csp-click`, `.onclick`, or `.admin-nav-btn`; Worker incidents use in-page anchors, Storage incidents enter the system workspace, and AI incidents enter teacher-owned workspaces only when the current account has teaching capability.
 - Teacher authoring capture handlers are scoped to the Teacher Content Studio (for example `[data-composer-question-next]`) and do not match `.admin-nav-btn`, Notification Center links, or Worker controls.
 - Browser regression counts calls to `switchAdminWorkspace` when System and Worker buttons are clicked and requires exactly one dispatch per click.
+
+## Request pipeline middleware
+
+`static/api-client.js` owns `window.fetch`; features add behaviour only through `AppApiClient.use(name, handler, priority)` and never reassign `window.fetch`. Registered middleware, in run order (lower priority number runs first):
+
+| Priority | Name | File | Responsibility |
+| --- | --- | --- | --- |
+| 50 | `api-get-dedupe-1007` | `static/api-get-dedupe-1007.js` | Share identical same-origin read-only GETs (course/slide lists, learning progress, command-center progress and analytics, `/api/auth/me`, `/api/auth/profile`) that many page scripts request while the page boots. Concurrent callers share one network call; a successful answer is reused for 3 s except by `cache: no-store`/`reload`/`no-cache` callers, which only join a request still in flight. Any `/api/` write clears everything before and after it runs. Callers with an `AbortSignal` are never shared. Failed answers are never kept. |
+| 100 | `teacher-content-latency-712` | `static/teacher-content-latency-712.js` | Cache and de-duplicate the exam-list endpoints (`/api/quiz-categories*`); these paths are intentionally absent from the shared allow-list above. |
+| 200 | `review-source-66` | `static/review-links-66.js` | Review-link source handling. |
+| 300 | `sensitive-elevation-69` | `static/sensitive-elevation-69.js` | Sensitive-action elevation retry. |
+
+To share another read endpoint, add its exact path to `SHARED_PATHS` in `static/api-get-dedupe-1007.js` and extend `tests/js/api-get-dedupe-1007.test.js`; never add polling, job-status, login, upload, exam-taking or signing endpoints.

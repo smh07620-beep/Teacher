@@ -6,6 +6,12 @@ import zipfile
 from pathlib import Path
 
 
+# File types ``extract_slide_text`` can read.  Cloud-stored originals of any other
+# type (video, images, Word...) are never downloaded just to discover they have
+# no searchable slide text.
+INDEXABLE_SUFFIXES = frozenset({".pptx", ".pdf"})
+
+
 def extract_slide_text(path: Path):
     """Return reliable native text only; scanned PDFs deliberately return no hits."""
     suffix = path.suffix.lower()

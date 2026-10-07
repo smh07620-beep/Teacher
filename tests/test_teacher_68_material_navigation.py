@@ -12,6 +12,7 @@ from werkzeug.security import generate_password_hash
 import app as legacy_app
 import pgy_app
 from smart_learning_67 import auto_index_material
+from teacher_app.learning.routes import auto_index_material as canonical_auto_index
 
 
 ROOT = Path(__file__).parents[1]
@@ -289,12 +290,100 @@ class MaterialReadAccess68Tests(unittest.TestCase):
             response = self.client.post("/api/material-search/manual-scan/index", headers={"Origin":"http://localhost"})
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(response.get_json()["status"], "no_text")
-        unsupported = {**material, "id":"remote-1", "storageBackend":"r2"}
-        with patch.object(legacy_app, "get_material", return_value=unsupported), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", source.parent):
-            self.assertEqual(auto_index_material(legacy_app, "remote-1"), "unsupported")
+        # A cloud original the web host cannot reach is a retryable "failed",
+        # not a permanent "unsupported" (cloud files are indexable now).
+        unreachable = {**material, "id":"remote-1", "storageBackend":"r2"}
+        with patch.object(legacy_app, "get_material", return_value=unreachable), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", source.parent):
+            self.assertEqual(auto_index_material(legacy_app, "remote-1"), "failed")
         conn, _ = self.connect()
-        try: self.assertEqual(conn.execute("SELECT status FROM material_search_status WHERE material_id=?", ("remote-1",)).fetchone()[0], "unsupported")
+        try: self.assertEqual(conn.execute("SELECT status FROM material_search_status WHERE material_id=?", ("remote-1",)).fetchone()[0], "failed")
         finally: conn.close()
+        # A local material whose file is missing is still permanently unsupported.
+        missing = {**material, "id":"missing-1", "storageFilename":"gone.pdf", "filename":"gone.pdf"}
+        with patch.object(legacy_app, "get_material", return_value=missing), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", source.parent):
+            self.assertEqual(auto_index_material(legacy_app, "missing-1"), "unsupported")
+
+    # --- cloud-stored (e.g. MEGA) originals: the production case -------------
+
+    def _pptx_bytes(self, *slides):
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            for number, text in enumerate(slides, 1):
+                archive.writestr(f"ppt/slides/slide{number}.xml", f"<p:sld><a:t>{text}</a:t></p:sld>")
+        return buffer.getvalue()
+
+    def _fake_fetcher(self, payload, calls):
+        """Stand-in for the MEGA/R2 download: writes the file to a temp dir."""
+        def fetch(material, paths):
+            calls.append(material["id"])
+            root = Path(tempfile.mkdtemp(dir=self.temp.name))
+            source = root / "source.pptx"
+            source.write_bytes(payload)
+            self.fetched_roots.append(root)
+            return root, source
+        return fetch
+
+    def _material_rows(self, material_id):
+        conn, _ = self.connect()
+        try:
+            return conn.execute(
+                "SELECT page_no,text FROM material_text_index WHERE material_id=? ORDER BY page_no", (material_id,)
+            ).fetchall()
+        finally:
+            conn.close()
+
+    def _status(self, material_id):
+        conn, _ = self.connect()
+        try:
+            row = conn.execute("SELECT status,page_count FROM material_search_status WHERE material_id=?", (material_id,)).fetchone()
+            return (row[0], row[1]) if row else None
+        finally:
+            conn.close()
+
+    def test_cloud_stored_pptx_is_indexed_and_temp_copy_is_removed(self):
+        self.fetched_roots = []
+        calls = []
+        material = {"id":"mega-1","group":"grpBio","folder":"mega-1","storageFilename":"c503.pptx","filename":"c503.pptx","storageBackend":"mega"}
+        fetcher = self._fake_fetcher(self._pptx_bytes("試劑裝載管理 Reagent", "急診上機模式 STAT"), calls)
+        with patch.object(legacy_app, "get_material", return_value=material), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", Path(self.temp.name)):
+            self.assertEqual(canonical_auto_index(legacy_app, "mega-1", source_fetcher=fetcher), "indexed")
+        self.assertEqual(calls, ["mega-1"])
+        self.assertEqual([(r[0], r[1]) for r in self._material_rows("mega-1")], [(1, "試劑裝載管理 Reagent"), (2, "急診上機模式 STAT")])
+        self.assertEqual(self._status("mega-1"), ("indexed", 2))
+        self.assertTrue(all(not root.exists() for root in self.fetched_roots), "temp download must be deleted")
+
+    def test_cloud_video_is_not_downloaded_just_to_find_no_text(self):
+        self.fetched_roots = []
+        calls = []
+        material = {"id":"mega-video","group":"grpBio","folder":"v","storageFilename":"demo.mp4","filename":"demo.mp4","storageBackend":"mega"}
+        with patch.object(legacy_app, "get_material", return_value=material), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", Path(self.temp.name)):
+            self.assertEqual(canonical_auto_index(legacy_app, "mega-video", source_fetcher=self._fake_fetcher(b"x", calls)), "no_text")
+        self.assertEqual(calls, [], "no download for non-slide file types")
+
+    def test_failed_cloud_download_keeps_the_previous_good_index(self):
+        self.fetched_roots = []
+        material = {"id":"mega-keep","group":"grpBio","folder":"k","storageFilename":"a.pptx","filename":"a.pptx","storageBackend":"mega"}
+        with patch.object(legacy_app, "get_material", return_value=material), patch.object(legacy_app, "UPLOADED_SLIDES_DIR", Path(self.temp.name)):
+            self.assertEqual(canonical_auto_index(legacy_app, "mega-keep", source_fetcher=self._fake_fetcher(self._pptx_bytes("舊索引內容"), [])), "indexed")
+
+            def broken(material, paths):
+                raise RuntimeError("MEGA timeout")
+            self.assertEqual(canonical_auto_index(legacy_app, "mega-keep", source_fetcher=broken), "failed")
+        self.assertEqual(self._status("mega-keep")[0], "failed")
+        self.assertEqual([r[1] for r in self._material_rows("mega-keep")], ["舊索引內容"], "a transient failure must not wipe the index")
+
+    def test_admin_rebuild_button_indexes_a_cloud_stored_material(self):
+        self.fetched_roots = []
+        calls = []
+        material = {"id":"mega-rebuild","group":"grpHema","folder":"r","storageFilename":"a.pptx","filename":"a.pptx","storageBackend":"mega"}
+        self.login("education-admin")
+        with patch("teacher_app.materials.repository.get_material", return_value=material), \
+             patch("teacher_app.learning.routes.default_source_fetcher", self._fake_fetcher(self._pptx_bytes("抗體鑑定流程"), calls)):
+            response = self.client.post("/api/material-search/mega-rebuild/index", headers={"Origin":"http://localhost"})
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual((response.get_json()["status"], response.get_json()["pages"]), ("indexed", 1))
+        self.assertEqual([r[1] for r in self._material_rows("mega-rebuild")], ["抗體鑑定流程"])
+        self.assertTrue(all(not root.exists() for root in self.fetched_roots))
 
 
 class MaterialNavigationFrontend68Tests(unittest.TestCase):
