@@ -214,7 +214,9 @@ class AnnouncementWorkspace116Tests(unittest.TestCase):
         self.assertIn("system-announcement-card-1014", ui)
         self.assertIn("/api/announcements/admin?kind=", ui)
         self.assertIn("Email 通知仍由既有課程／考核提醒排程負責", ui)
-        self.assertIn("teacher-announcements-open-1014", teacher)
+        # The header utility button was removed in the simplified teacher
+        # workspace; announcements stay reachable through openAnnouncements().
+        self.assertNotIn("utilityButton('teacher-announcements-open-1014'", teacher)
         self.assertIn("openAnnouncements", teacher)
         self.assertIn("renderAdminAnnouncements?.('system')", workspace)
 
