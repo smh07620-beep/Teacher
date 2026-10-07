@@ -56,15 +56,18 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
     def test_first_use_guide_explains_the_complete_teacher_job(self):
         for marker in (
             "teacher-usage-guide-1014",
-            "第一次使用？照這四步就好",
+            "建立一門課，照這四步完成",
             "課程設定",
-            "加入教材／需要時 AI 製作",
-            "建立評量與發布",
-            "批改與學員追蹤",
-            "我的學員",
+            "教材＋AI",
+            "評量／考卷",
+            "確認發布",
+            "指定完成／自由選讀",
+            "發布後：",
+            "學員追蹤",
             "臨床技能評核",
             "能力追蹤",
             "教學分析",
+            "create-course",
             "openReview",
             "openLearnerTracking",
         ):

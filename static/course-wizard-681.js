@@ -273,7 +273,7 @@ function bindStepThreeControls(){}
 function assignmentSummary(){
   if(!canAssignLearning()||!state.assignmentEnabled)return '不建立額外學習指派';
   const type={group:'目前組別',user:'指定人員',all:'全體人員'}[state.assigneeType]||state.assigneeType;
-  return `${type}${state.assigneeKey?' · '+state.assigneeKey:''} · ${state.assignmentRequired?'必修':'選修'}${state.dueAt?' · '+state.dueAt+' 前完成':' · 無期限'}`;
+  return `${type}${state.assigneeKey?' · '+state.assigneeKey:''} · ${state.assignmentRequired?'指定完成':'自由選讀'}${state.dueAt?' · '+state.dueAt+' 前完成':' · 無期限'}`;
 }
 
 function stepFour(){

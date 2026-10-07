@@ -195,10 +195,10 @@
     }
   }
 
-  function guideCard(number, title, description, actions) {
+  function guideCard(number, title, description, actions = '') {
     return `<article class="rounded-xl border border-slate-200 bg-white p-3">
       <div class="flex items-start gap-2"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-[11px] font-black text-teal-700">${number}</span><div class="min-w-0"><b class="text-sm text-slate-900">${title}</b><p class="mt-1 text-xs leading-5 text-slate-500">${description}</p></div></div>
-      <div class="mt-3 flex flex-wrap gap-2">${actions}</div>
+      ${actions ? `<div class="mt-3 flex flex-wrap gap-2">${actions}</div>` : ''}
     </article>`;
   }
 
@@ -213,15 +213,16 @@
       panel.className = 'mb-4 rounded-2xl border border-teal-200 bg-teal-50/50 p-4 shadow-sm';
       panel.innerHTML = `
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div><p class="admin-page-eyebrow text-teal-700">TEACHER QUICK START</p><h4 class="text-base font-black text-slate-950">第一次使用？照這四步就好</h4><p class="mt-1 text-xs leading-5 text-slate-600">先完成課程設定與學習對象，再加入教材；需要時才啟動 AI 製作。接著建立評量並發布，最後處理批改與學員追蹤。</p></div>
+          <div><p class="admin-page-eyebrow text-teal-700">TEACHER QUICK START</p><h4 class="text-base font-black text-slate-950">建立一門課，照這四步完成</h4><p class="mt-1 text-xs leading-5 text-slate-600">這裡和「建立課程」精靈使用同一套流程；AI 製作與出題都從課程裡進入，不需要先到其他工作區找功能。</p></div>
           <button id="teacher-guide-close-1014" type="button" class="shrink-0 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-bold text-teal-800">關閉導覽</button>
         </div>
         <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          ${guideCard('1','課程設定','先建立課程，設定適用學員、開放／截止時間與發布範圍。','<button type="button" data-teacher-guide-action="course" class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-black text-white">前往教材與課程</button>')}
-          ${guideCard('2','加入教材／需要時 AI 製作','上傳或選既有教材；系統辨識後，再決定是否開啟 AI PowerPoint、講稿、配音、老師錄影或 AI 教學影片。','<button type="button" data-teacher-guide-action="course" class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-black text-white">前往教材</button><button type="button" data-teacher-guide-action="media" class="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-black text-white">需要 AI 時開啟製作室</button>')}
-          ${guideCard('3','建立評量與發布','可手動出題或讓 AI 產生候選題；教師確認後設定對象與期限，再發布給學員。','<button type="button" data-teacher-guide-action="assessment" class="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-black text-white">前往評量與追蹤</button>')}
-          ${guideCard('4','批改與學員追蹤','處理待批改，再看我的學員、臨床技能評核、能力追蹤與教學分析。','<button type="button" data-teacher-guide-action="review" class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-black text-white">待批改</button><button type="button" data-teacher-guide-action="learners" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-black text-slate-700">學員追蹤</button>')}
-        </div>`;
+          ${guideCard('1','課程設定','填寫課程名稱與範圍；有指派權限時，同一步設定學習對象、學習要求（指定完成／自由選讀）與完成期限。','<button type="button" data-teacher-guide-action="create-course" class="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-black text-white">開始建立課程</button>')}
+          ${guideCard('2','教材＋AI','上傳新教材或選擇既有教材，先確認系統辨識；需要時才從這一步啟動 AI PowerPoint、講稿／配音或影片製作，完成後會回到原課程。')}
+          ${guideCard('3','評量／考卷','可以選擇稍後建立、教師自己出題，或讓 AI 產生候選題；Blueprint 與題型配額收在進階設定。')}
+          ${guideCard('4','確認發布','最後確認教材、評量、學習指派與 AI 產物；只有正式發布後，學員才會看到這門課。')}
+        </div>
+        <div class="mt-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-600"><b class="text-slate-800">發布後：</b>待批改、學員追蹤、臨床技能評核、能力追蹤與教學分析，都回「評量與追蹤」處理。</div>`;
       workspace.insertBefore(panel, workspace.firstChild);
       panel.querySelector('#teacher-guide-close-1014')?.addEventListener('click', () => {
         panel.classList.add('hidden');
@@ -229,7 +230,16 @@
       });
       panel.addEventListener('click', event => {
         const action = event.target.closest?.('[data-teacher-guide-action]')?.dataset.teacherGuideAction;
-        if (action === 'course') void openCourse();
+        if (action === 'create-course') {
+          void (async () => {
+            await openCourse();
+            for (let attempt = 0; attempt < 20; attempt += 1) {
+              const button = document.getElementById('course-workspace-create-course');
+              if (button) { button.click(); break; }
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+          })();
+        } else if (action === 'course') void openCourse();
         else if (action === 'media') void openMedia();
         else if (action === 'assessment') void openAssessment();
         else if (action === 'review') void openReview();
