@@ -291,6 +291,25 @@ class FreeAIFallbackTests(unittest.TestCase):
         post.assert_not_called()
         self.assertTrue(free_ai_fallback.is_retryable_provider_error(ctx.exception))
 
+    def test_provider_call_counter_resets_each_day(self):
+        import tempfile
+        from pathlib import Path as _P
+        with tempfile.TemporaryDirectory() as tmp:
+            target = str(_P(tmp) / "usage.json")
+            with patch.dict("os.environ", {"AI_USAGE_FILE": target}):
+                self.assertEqual(free_ai_fallback.record_provider_call("gemini"), 1)
+                self.assertEqual(free_ai_fallback.record_provider_call("gemini"), 2)
+                with patch.object(free_ai_fallback, "_usage_day", return_value="2099-01-01"):
+                    self.assertEqual(free_ai_fallback.record_provider_call("gemini"), 1)
+
+    def test_ollama_offline_message_is_actionable(self):
+        local = SimpleNamespace(enabled=True, ollama_enabled=True, ollama_model="m",
+                                ollama_base_url="http://127.0.0.1:1", ollama_timeout_seconds=1)
+        with patch.object(free_ai_fallback.requests, "post", side_effect=free_ai_fallback.requests.ConnectionError("x")):
+            with self.assertRaises(RuntimeError) as ctx:
+                free_ai_fallback.ollama_chat("hi", json_mode=False, local=local)
+        self.assertIn("沒有開啟", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

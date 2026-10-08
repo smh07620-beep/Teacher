@@ -37,6 +37,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `AI_TEMP_PURGE_ENABLED` | `true` | `teacher_app/maintenance/retention.py` |  |  |
 | `AI_TEMP_RETENTION_HOURS` |  | `teacher_app/maintenance/retention.py` |  |  |
 | `AI_TTS_PROVIDER` |  | `teacher_app/materials/media_audio_runtime.py` | yes | yes |
+| `AI_USAGE_FILE` | `.ai-usage.json` | `teacher_app/assessments/free_ai_fallback.py` |  |  |
 | `AI_VIDEO_ALLOW_LOCAL_STORAGE` |  | `teacher_app/materials/ai_video_storage.py` | yes |  |
 | `AI_VIDEO_CACHE_DIR` |  | `teacher_app/materials/ai_video_runtime.py` |  |  |
 | `AI_VIDEO_FALLBACK_TO_R2` |  | `teacher_app/materials/ai_video_storage.py` | yes |  |

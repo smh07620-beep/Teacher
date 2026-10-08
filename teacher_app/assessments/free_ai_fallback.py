@@ -163,6 +163,39 @@ def provider_model(provider: str, *, settings=None, local: LocalFallbackSettings
     }.get(provider, "")
 
 
+def _usage_file() -> Path:
+    return Path(os.environ.get("AI_USAGE_FILE", ".ai-usage.json"))
+
+
+def _usage_day() -> str:
+    # Google 免費額度以太平洋時間午夜重置，近似用 UTC-8。
+    import datetime as _dt
+    return (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=8)).strftime("%Y-%m-%d")
+
+
+def record_provider_call(provider: str) -> int:
+    """Count one outbound request for today (best-effort, local to this worker)."""
+    path = _usage_file()
+    day = _usage_day()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, ValueError):
+        data = {}
+    if not isinstance(data, dict) or data.get("day") != day:
+        data = {"day": day, "counts": {}}
+    counts = data.setdefault("counts", {})
+    counts[provider] = int(counts.get(provider, 0) or 0) + 1
+    try:
+        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+    return int(counts[provider])
+
+
+def gemini_daily_limit() -> int:
+    return _int_env("GEMINI_DAILY_LIMIT", 20, 1, 100000)
+
+
 def _provider_label(provider: str) -> str:
     return {"groq": "Groq", "gemini": "Gemini", "ollama": "本機 AI", "openai": "OpenAI"}.get(provider, "AI")
 
@@ -296,7 +329,7 @@ def ollama_chat(prompt: str, *, json_mode: bool, local: LocalFallbackSettings | 
             timeout=local.ollama_timeout_seconds,
         )
     except requests.RequestException as exc:
-        raise RuntimeError("本機 Ollama connection unavailable。") from exc
+        raise RuntimeError("本機 AI（Ollama）沒有開啟或無法連線：請先在這台電腦啟動 Ollama 程式，或把 OLLAMA_ENABLED 改成 false。") from exc
     if response.status_code >= 500:
         raise RuntimeError(f"本機 Ollama provider unavailable HTTP {response.status_code}。")
     if response.status_code >= 400:
@@ -454,6 +487,13 @@ def install_question_runtime_fallback(runtime):
             call_kwargs = {**kwargs, **override}
             if provider == native:
                 return original_generate(entries, **call_kwargs)
+            if provider == "gemini":
+                used = record_provider_call("gemini")
+                if progress_callback is not None and progress_id:
+                    progress_callback(
+                        progress_id, 61, "使用 Gemini",
+                        f"Gemini 今天第 {used}/{gemini_daily_limit()} 次請求（免費版每天有上限，用完要等隔天）",
+                    )
             provider_settings = replace(settings, provider=provider)
             return ai_runtime.generate_ai_questions_from_materials(
                 entries,

@@ -1,5 +1,6 @@
 .local-worker.env
 .worker-id
+.ai-usage.json
 .worker-supervisor.lock
 .worker-runtime.lock
 .worker-update-state.json
