@@ -97,3 +97,17 @@ powershell -ExecutionPolicy Bypass -File .\setup_teacher_worker.ps1 -InstallOpti
 | 一直沒有更新 | 檢查 `.local-worker.env` 是否有 `MATERIAL_WORKER_AUTO_UPDATE=true` 和 `MATERIAL_WORKER_RELEASE_REF=worker-stable`；程式資料夾有被手動修改過（dirty）時更新器會拒絕。 |
 | 更新後 AI 語音還是「暫時不可用」 | 網站頁面會顯示具體原因，照那一行處理；多半是 AI Worker 還沒重新啟動。 |
 | 想暫停自動更新 | 把 `MATERIAL_WORKER_AUTO_UPDATE` 改成 `false`，AI Worker 設 `AI_WORKER_RESTART_ON_UPDATE=false`，再重新啟動兩個排程。 |
+
+## 六、重要註記：網站什麼時候會擋 AI Worker（2026-10-08 修改）
+
+**這是刻意放寬過的規則，請勿忘記。**
+
+- 原本：網站（Render）與 AI Worker 的 Git commit 只要不同，就把 Worker 視為離線，擋掉 AI 講稿與 Kokoro 語音（診斷代碼 `worker_code_mismatch`）。
+- 問題：Render 每次 main 有新推送就自動部署，但 Worker 只跟 `worker-stable` 標籤，所以每次小改動都會出現空窗期，無法測試。
+- 現在：
+  - commit 不同、但 `VERSION` 檔相同 → **不擋**，只顯示提醒（診斷代碼 `worker_code_behind`，`codeIdentityMatch` 仍為 false）。
+  - `VERSION` 不同 → **仍然擋**（`worker_code_mismatch`）。
+  - 其他檢查完全不變：heartbeat 超過 120 秒、heartbeat contract < 4 或沒有 workerSha（`worker_build_unknown`）、缺少 media_audio 佇列、Kokoro 不可用，都仍會擋。
+- 程式位置：`teacher_app/materials/media_audio_routes.py` 的 `_evaluate_ai_worker`；測試：`tests/test_ai_worker_small_drift_20261008.py`。
+- **什麼時候要自己更新 Worker**：改了 `VERSION`；或改動影響網站與 Worker 之間的資料格式（API、佇列、heartbeat）。做法：Actions → Release Worker，再依第二、四節更新 Worker。
+- 若要恢復嚴格比對，把該段 `elif` 的 `and _web_version() and worker_version and worker_version != _web_version()` 條件拿掉即可，並更新上述測試。
