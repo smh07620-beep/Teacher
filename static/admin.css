@@ -1050,6 +1050,11 @@ details[data-course-id] > summary { border-radius: 1rem; }
 details[data-course-id][open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 details[data-course-id][open] > :last-child { border-bottom-left-radius: 1rem; border-bottom-right-radius: 1rem; }
 details[data-course-id] [data-material-more][open] { position: relative; z-index: 30; }
+/* Same for the 通用／未歸類 group: no overflow clipping, corners rounded on children. */
+details[data-unassigned-group] > summary { border-radius: 1rem; }
+details[data-unassigned-group][open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+details[data-unassigned-group][open] > :last-child { border-bottom-left-radius: 1rem; border-bottom-right-radius: 1rem; }
+details[data-unassigned-group] [data-material-more][open] { position: relative; z-index: 30; }
 
 /* Assessment page slimming: counts are one quiet line, not four cards. */
 .admin-quiz-summary-line {
