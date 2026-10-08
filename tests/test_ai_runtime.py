@@ -50,7 +50,12 @@ class AIRuntimeProviderTests(unittest.TestCase):
         self.assertEqual(settings.groq_transcribe_model, "whisper-large-v3-turbo")
         self.assertEqual(settings.gemini_model, "gemini-3.8-flash")
         self.assertEqual(settings.openai_model, "gpt-5.6-luna")
-        self.assertEqual(settings.source_max_chars, 50000)
+        # Groq 免費版每分鐘 token 很少，預設只送 6000 字；改用其他提供者或明確設定則照舊。
+        self.assertEqual(settings.source_max_chars, 6000)
+        with patch.dict("os.environ", {"AI_PROVIDER": "gemini"}, clear=True):
+            self.assertEqual(ai_runtime.ai_settings().source_max_chars, 50000)
+        with patch.dict("os.environ", {"AI_SOURCE_MAX_CHARS": "20000"}, clear=True):
+            self.assertEqual(ai_runtime.ai_settings().source_max_chars, 20000)
         self.assertEqual(settings.max_questions, 15)
         self.assertEqual(settings.media_max_mb, 300)
         self.assertEqual(settings.max_materials, 4)

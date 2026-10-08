@@ -91,7 +91,14 @@ class AISettings:
             gemini_model=(os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"),
             openai_api_key=os.environ.get("OPENAI_API_KEY", "").strip(),
             openai_model=(os.environ.get("OPENAI_MODEL", "gpt-5.6-luna").strip() or "gpt-5.6-luna"),
-            source_max_chars=_int_env("AI_SOURCE_MAX_CHARS", 50000, 5000, 120000),
+            # Groq 免費版每分鐘只有約 6K～8K token：單一請求送太多教材會直接被拒絕（看起來像額度爆掉）。
+            # 主要提供者是 Groq 時預設只送 6000 字；明確設定 AI_SOURCE_MAX_CHARS 則照設定。
+            source_max_chars=_int_env(
+                "AI_SOURCE_MAX_CHARS",
+                6000 if (os.environ.get("AI_PROVIDER", "groq").strip().lower() or "groq") in {"groq", "auto"} else 50000,
+                5000,
+                120000,
+            ),
             max_questions=_int_env("AI_MAX_QUESTIONS", 15, 1, 30),
             media_max_mb=_int_env("AI_MEDIA_MAX_MB", 300, 10, 2000),
             max_materials=_int_env("AI_MAX_MATERIALS", 4, 1, 8),
