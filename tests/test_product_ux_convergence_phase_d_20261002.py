@@ -46,9 +46,9 @@ class ProductUxConvergencePhaseDTests(unittest.TestCase):
     def test_assessment_workspace_uses_queue_for_actions_and_shortcut_for_history(self):
         self.assertIn("setAttribute('data-product-section','overview')", self.quiz)
         self.assertIn("box.dataset.productSection='current-work'", self.quiz)
-        self.assertIn("section.dataset.productSection = 'history'", self.teacher)
+        self.assertIn("data-assessment-tab-1030=\"history\"", self.teacher)
         self.assertIn("歷史紀錄", self.teacher)
-        self.assertIn("待批改會優先出現在「需要我處理」", self.teacher)
+        self.assertIn("teacher-assessment-pending-badge-1030", self.teacher)
         self.assertIn("AppWorkspaceRoutes.show('results', true)", self.teacher)
 
     def test_learner_home_uses_the_same_four_section_contract(self):

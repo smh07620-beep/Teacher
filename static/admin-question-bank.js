@@ -17,7 +17,10 @@
       'admin-quiz-draft-count':draft,
     };
     Object.entries(values).forEach(([id,value])=>{const node=document.getElementById(id);if(node)node.textContent=String(value);});
-    document.querySelector('#admin-quiz-workspace .admin-quiz-summary-grid')?.setAttribute('data-product-section','overview');
+    document.querySelector('#admin-quiz-workspace .admin-quiz-summary-line')?.setAttribute('data-product-section','overview');
+    const pending=rows.reduce((sum,c)=>sum+Number(c?.reviewSummary?.pending||0),0);
+    window.__teacherAssessmentPending1030=pending;
+    document.dispatchEvent(new CustomEvent('teacher-assessment-pending-1030',{detail:{pending}}));
   }
 
   window.groupOptionsForArea = function(area){
@@ -249,36 +252,36 @@
       const count=Number(c?.questionCount||0);
       if(c?.active){
         const now=Date.now(), opens=c?.examWindow?.opens_at ? new Date(c.examWindow.opens_at).getTime() : 0, closes=c?.examWindow?.closes_at ? new Date(c.examWindow.closes_at).getTime() : 0;
-        if(opens&&now<opens)return {label:'尚未開始',tone:'bg-sky-50 text-sky-700',next:'等待開放時間／檢查發布設定'};
+        if(opens&&now<opens)return {primary:'查看考卷',label:'尚未開始',tone:'bg-sky-50 text-sky-700',next:'等待開放時間／檢查發布設定'};
         if(closes&&now>closes){
           const pending=Number(c?.reviewSummary?.pending||0), total=Number(c?.reviewSummary?.total||0);
-          if(pending>0)return {label:'待批改',tone:'bg-indigo-50 text-indigo-700',next:`尚有 ${pending} 份作答待人工批改`};
-          if(total>0)return {label:'完成',tone:'bg-violet-50 text-violet-700',next:'查看考核結果與歷史紀錄'};
-          return {label:'已截止',tone:'bg-slate-200 text-slate-700',next:'目前沒有待批改作答'};
+          if(pending>0)return {primary:'查看考卷',label:'待批改',tone:'bg-indigo-50 text-indigo-700',next:`尚有 ${pending} 份作答待人工批改`};
+          if(total>0)return {primary:'查看考卷',label:'完成',tone:'bg-violet-50 text-violet-700',next:'查看考核結果與歷史紀錄'};
+          return {primary:'查看考卷',label:'已截止',tone:'bg-slate-200 text-slate-700',next:'目前沒有待批改作答'};
         }
-        return {label:'進行中',tone:'bg-emerald-50 text-emerald-700',next:'查看作答／待批改'};
+        return {primary:'查看考卷',label:'進行中',tone:'bg-emerald-50 text-emerald-700',next:'查看作答／待批改'};
       }
-      if(c?.reviewStatus==='approved')return {label:'待發布',tone:'bg-sky-50 text-sky-700',next:'確認對象、期限後發布'};
-      if(count>0)return {label:'題目準備中',tone:'bg-indigo-50 text-indigo-700',next:'完成題目並送審'};
-      return {label:'草稿',tone:'bg-amber-100 text-amber-800',next:'新增或 AI 產生題目'};
+      if(c?.reviewStatus==='approved')return {primary:'發布',label:'待發布',tone:'bg-sky-50 text-sky-700',next:'確認對象、期限後發布'};
+      if(count>0)return {primary:'繼續編輯',label:'題目準備中',tone:'bg-indigo-50 text-indigo-700',next:'完成題目並送審'};
+      return {primary:'繼續編輯',label:'草稿',tone:'bg-amber-100 text-amber-800',next:'新增或 AI 產生題目'};
   }
 
   function quizCategoryCardHTML(c) {
       const teacherStatus=quizTeacherStatus78(c);
       return `
           <article class="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden">
-              <div class="p-4 flex items-start justify-between gap-3 flex-wrap bg-gradient-to-r from-white to-slate-50">
+              <div class="px-4 py-3 flex items-center justify-between gap-3 flex-wrap bg-gradient-to-r from-white to-slate-50" data-quiz-row-1030>
                   <div class="min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
-                          <span class="font-black text-base text-slate-900 break-all">${escapeHtml(c.title)}</span>
+                          <span class="font-black text-sm text-slate-900 break-all">${escapeHtml(c.title)}</span>
                           <span class="text-[11px] px-2 py-0.5 rounded-full ${teacherStatus.tone} font-bold">${teacherStatus.label}</span>${c.blindMode?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-slate-900 text-white font-bold">導師設定：盲測</span>':''}
+                          <span class="text-[10px] font-bold text-indigo-700">下一步：${escapeHtml(teacherStatus.next)}</span>
                       </div>
-                      <div class="text-xs text-slate-500 mt-1">${escapeHtml(c.desc || '尚未填寫考卷說明')}</div><div class="mt-1 text-[10px] font-bold text-indigo-700">下一步：${escapeHtml(teacherStatus.next)}</div>
-                      <div class="flex flex-wrap gap-1.5 mt-2"><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">👤 ${escapeHtml(examAudienceLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">🧠 題庫 ${Number(c.questionCount||0)} 題</span><span class="text-[10px] px-2 py-1 rounded-full bg-teal-50 text-teal-700">📋 ${escapeHtml(examDrawLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">🎯 及格 ${Number(c.passingScore||80)} 分</span>${c.publicationHash?`<span class="text-[10px] px-2 py-1 rounded-full bg-violet-50 text-violet-700" title="發布快照 SHA-256：${escapeHtml(c.publicationHash)}">🔒 快照 ${escapeHtml(c.publicationHash.slice(0,10))}</span>`:''}</div>
+                      <div class="flex flex-wrap gap-1.5 mt-1.5" title="${escapeHtml(c.desc || '尚未填寫考卷說明')}"><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">👤 ${escapeHtml(examAudienceLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">🧠 題庫 ${Number(c.questionCount||0)} 題</span><span class="text-[10px] px-2 py-1 rounded-full bg-teal-50 text-teal-700">📋 ${escapeHtml(examDrawLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">🎯 及格 ${Number(c.passingScore||80)} 分</span>${c.publicationHash?`<span class="text-[10px] px-2 py-1 rounded-full bg-violet-50 text-violet-700" title="發布快照 SHA-256：${escapeHtml(c.publicationHash)}">🔒 快照 ${escapeHtml(c.publicationHash.slice(0,10))}</span>`:''}</div>
                   </div>
-                  <div class="flex gap-2 shrink-0 items-center">
-                       <button data-admin-role="questions-action" data-csp-click="window.openTeacherContentExam?.('${c.id}') || toggleQuizQuestionsPanel('${c.id}')" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-black">${c.active?'查看考卷':'繼續編輯'}</button><button data-admin-role="exam-action" data-csp-click="adminDeleteQuizCategory('${c.id}')" class="text-xs border border-rose-200 bg-white hover:bg-rose-50 text-rose-700 px-3 py-2 rounded-lg font-bold">🗑️ 刪除考卷</button>
-                      <details data-quiz-overflow-78 class="relative"><summary class="list-none cursor-pointer text-xs bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold">⋯</summary><div class="absolute right-0 mt-1 z-30 w-48 bg-white border border-slate-200 shadow-xl rounded-xl p-2"><button data-admin-role="exam-action" data-csp-click="adminEditQuizCategory('${c.id}')" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">⚙️ 考卷設定</button><button id="blind-toggle-${c.id}" data-csp-click="adminToggleBlindMode('${c.id}',${c.blindMode?'false':'true'})" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">🕶️ ${c.blindMode?'關閉':'開啟'}盲測</button><button data-csp-click="openQuizMaterialLinker('${c.id}')" class="w-full text-left text-xs hover:bg-cyan-50 text-cyan-700 px-3 py-2 rounded-lg">🔗 調整關聯教材</button><button data-csp-click="adminDeleteQuizCategory('${c.id}')" class="w-full text-left text-xs hover:bg-rose-50 text-rose-700 px-3 py-2 rounded-lg">🗑️ 刪除考卷</button></div></details>
+                  <div class="flex gap-2 shrink-0 items-center whitespace-nowrap">
+                       <button data-admin-role="questions-action" data-quiz-primary-1030 data-csp-click="window.openTeacherContentExam?.('${c.id}') || toggleQuizQuestionsPanel('${c.id}')" class="whitespace-nowrap shrink-0 text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-black">${escapeHtml(teacherStatus.primary)}</button>
+                      <details data-quiz-overflow-78 class="relative"><summary class="list-none cursor-pointer whitespace-nowrap text-xs bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold" aria-label="更多考卷操作">⋯</summary><div class="absolute right-0 mt-1 z-30 w-48 bg-white border border-slate-200 shadow-xl rounded-xl p-2"><button data-admin-role="exam-action" data-csp-click="adminEditQuizCategory('${c.id}')" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">⚙️ 考卷設定</button><button id="blind-toggle-${c.id}" data-csp-click="adminToggleBlindMode('${c.id}',${c.blindMode?'false':'true'})" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">🕶️ ${c.blindMode?'關閉':'開啟'}盲測</button><button data-csp-click="openQuizMaterialLinker('${c.id}')" class="w-full text-left text-xs hover:bg-cyan-50 text-cyan-700 px-3 py-2 rounded-lg">🔗 調整關聯教材</button><button data-csp-click="adminDeleteQuizCategory('${c.id}')" class="w-full text-left text-xs hover:bg-rose-50 text-rose-700 px-3 py-2 rounded-lg">🗑️ 刪除考卷</button></div></details>
                   </div>
               </div>
               <div id="qpanel-${c.id}" class="hidden border-t border-slate-200 p-4 space-y-4 bg-slate-50/60">

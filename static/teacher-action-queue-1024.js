@@ -102,7 +102,7 @@
     if (section.parentElement !== panel) {
       const context = currentContext();
       const anchor = context === 'assessment'
-        ? (document.getElementById('teacher-review-shortcut-1014') || panel.firstChild)
+        ? (document.getElementById('teacher-assessment-flow-1014')?.nextSibling || panel.firstChild)
         : (document.getElementById('teacher-context-tools-101') || panel.firstChild);
       const safeAnchor = anchor?.parentElement === panel ? anchor : panel.firstChild;
       panel.insertBefore(section, safeAnchor || null);

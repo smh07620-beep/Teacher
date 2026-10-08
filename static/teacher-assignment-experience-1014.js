@@ -551,7 +551,6 @@
 
   function trimInlineHelp() {
     document.querySelector('#teacher-course-media-entry-1014 p')?.classList.add('hidden');
-    document.querySelector('#teacher-review-shortcut-1014 p')?.classList.add('hidden');
   }
 
   function converge() {
