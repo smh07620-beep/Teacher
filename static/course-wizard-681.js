@@ -15,7 +15,7 @@ const AI_PLAN_META={
   video:{label:'AI 教學影片',detail:'以教材、投影片或其他來源製作影片；完成後回到本頁確認。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],resultHtml:'',watchToken:0};
+const state={editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],externalLinks:[],resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -282,11 +282,58 @@ function bindStepOneControls(){
   void loadWizardAudienceOptions();
 }
 
+function isAllowedExternalUrl(url){
+  try{const u=new URL(url);return u.protocol==='https:';}catch(_){return false;}
+}
+
+async function flushExternalLinks(){
+  if(!state.course?.id)return;
+  const {area,group}=scope();
+  for(const item of (state.externalLinks||[])){
+    if(item.status==='done'||item.busy)continue;
+    item.busy=true;
+    try{
+      const created=await api('/api/materials/external',{
+        method:'POST',
+        body:JSON.stringify({title:item.title,description:'',area,group,courseId:state.course.id,category:state.categoryId||'',url:item.url})
+      });
+      item.status='done';item.error='';
+      const id=String(created?.material?.id||'');
+      if(id)item.materialId=id;
+    }catch(error){
+      item.status='failed';item.error=String(error?.message||'建立失敗');
+    }finally{item.busy=false;}
+  }
+  try{window.invalidateAdminMaterialsCache?.();}catch(_){}
+}
+
+window.courseWizard681AddExternal=async()=>{
+  const title=String(el('cw681-ext-title')?.value||'').trim();
+  const url=String(el('cw681-ext-url')?.value||'').trim();
+  if(!title)return alert('請輸入這個外部影音的名稱。');
+  if(!isAllowedExternalUrl(url))return alert('網址必須是 https:// 開頭（例如 YouTube、Vimeo 連結）。');
+  state.externalLinks=state.externalLinks||[];
+  state.externalLinks.push({title,url,status:'pending',error:''});
+  if(state.course?.id&&(state.created||state.editing)){
+    await flushExternalLinks();
+    try{await loadMaterials();}catch(_){}
+  }
+  render();
+};
+
+window.courseWizard681RemoveExternal=index=>{
+  const item=(state.externalLinks||[])[Number(index)];
+  if(!item||item.status==='done')return;
+  state.externalLinks.splice(Number(index),1);
+  render();
+};
+
 function stepTwo(){
   const products=(state.aiProducts||[]).map(item=>`<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"><div><b class="text-emerald-950">✅ ${esc(item.title||'AI 製作產物')}</b><div class="mt-0.5 text-[11px] text-emerald-700">${esc(item.kind||'AI')}｜${item.derived?'附於來源教材，已隨課程發布':item.linked?'已加入本課程':'等待加入本課程'}</div></div>${item.derived?'<span class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800">已發布</span>':`<button type="button" data-csp-click="courseWizard681AttachAiProducts()" class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800">${item.linked?'已加入':'加入本課程教材'}</button>`}</div>`).join('');
   return `<h5 class="font-black">2. 教材與 AI 製作</h5><p class="mt-1 text-xs text-slate-500">先匯入／選擇教材並確認系統判定；需要 AI 時，再從本步驟進入對應製作區，完成後回到這裡。</p>
   <div class="mt-3 grid gap-4 lg:grid-cols-2"><div><label class="block text-xs font-bold">上傳新教材<input id="cw681-files" type="file" multiple ${state.created&&!state.editing?'disabled':''} class="mt-1 w-full text-sm disabled:opacity-50" data-csp-change="courseWizard681FilesChanged(this)"></label><div id="cw681-file-summary" class="mt-2 text-xs text-slate-500"></div>${state.editing?'<button type="button" data-csp-click="courseWizard681AddFiles()" class="mt-2 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white">上傳到本課程</button>':''}</div><div><div class="flex justify-between"><b class="text-xs">既有教材</b><button type="button" data-csp-click="courseWizard681RefreshMaterials()" class="text-xs text-violet-700">更新</button></div><div id="cw681-materials" class="mt-2 max-h-48 overflow-auto rounded border bg-white p-2 text-xs">讀取中…</div></div></div>
-  <p class="mt-3 text-xs text-violet-800">${state.editing?'編輯模式：選好檔案後按「上傳到本課程」，教材處理完成會自動掛入這門課；也可以用下方 AI 製作新增內容。':state.created?'✓ 原始教材已寫入課程草稿；如需新增內容，可使用下方 AI 製作。':'外部連結請先用「＋新增單一教材 → 外部連結」建立，之後可在這裡直接掛入課程。'}</p>
+  <details data-cw681-external class="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3" ${(state.externalLinks||[]).length?'open':''}><summary class="cursor-pointer list-none text-sm font-bold text-sky-950">🔗 加入外部影音連結（YouTube／Vimeo）${(state.externalLinks||[]).length?` · 已加入 ${(state.externalLinks||[]).length} 筆`:''} <span class="text-[11px] font-normal text-sky-700">點此展開</span></summary><p class="mt-2 text-[11px] text-sky-800">不用上傳檔案，貼上 https 網址即可。課程草稿建立後會自動掛進這門課；課程已建立則立刻掛入。</p>${(state.externalLinks||[]).map((item,i)=>`<div class="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border ${item.status==='failed'?'border-rose-200 bg-rose-50':'border-sky-200 bg-white'} px-3 py-2 text-xs"><div class="min-w-0"><b>${item.status==='done'?'✅':item.status==='failed'?'❌':'⏳'} ${esc(item.title)}</b><div class="break-all text-[11px] text-slate-500">${esc(item.url)}${item.status==='failed'?'｜'+esc(item.error||'建立失敗'):item.status==='pending'?'｜等待課程草稿建立後掛入':''}</div></div>${item.status==='done'?'':`<button type="button" data-csp-click="courseWizard681RemoveExternal(${i})" class="rounded-lg border border-slate-300 bg-white px-2 py-1 font-bold text-slate-700">移除</button>`}</div>`).join('')}<div class="mt-3 grid gap-2 sm:grid-cols-[1fr_2fr_auto]"><input id="cw681-ext-title" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="名稱，例如：儀器操作示範"><input id="cw681-ext-url" type="url" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="https://www.youtube.com/watch?v=..."><button type="button" data-csp-click="courseWizard681AddExternal()" class="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white">＋ 加入連結</button></div></details>
+  <p class="mt-3 text-xs text-violet-800">${state.editing?'編輯模式：選好檔案後按「上傳到本課程」，教材處理完成會自動掛入這門課；也可以用下方 AI 製作新增內容。':state.created?'✓ 原始教材已寫入課程草稿；如需新增內容，可使用下方 AI 製作。':'可以選檔案上傳，也可以在上方貼外部影音連結；兩者都會在建立課程草稿時一起掛入。'}</p>
   <section class="mt-5 border-t border-violet-100 pt-4"><div><b class="text-sm text-slate-900">需要 AI 協助製作嗎？</b><p class="mt-1 text-xs text-slate-500">AI 是教材製作工具，不是發布條件；選「不需要」即可直接下一步。</p></div><div class="mt-3 grid gap-2 md:grid-cols-2">${Object.entries(AI_PLAN_META).map(([id,meta])=>`<button type="button" data-cw-ai-plan="${id}" class="rounded-xl border p-3 text-left text-sm ${state.aiPlan===id?'border-teal-500 bg-teal-50':'bg-white'}"><b>${esc(meta.label)}</b><span class="mt-1 block text-xs text-slate-500">${esc(meta.detail)}</span></button>`).join('')}</div>${state.aiPlan!=='none'?`<div class="mt-3 flex items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 p-3"><p class="text-xs text-teal-900">選擇「${esc(aiPlan().label)}」後，可先建立安全草稿 checkpoint，再在同一個全頁 Studio 開啟製作區。</p><button type="button" data-csp-click="courseWizard681OpenAiAuthoring()" class="shrink-0 rounded-xl bg-teal-700 px-4 py-2 text-xs font-black text-white">開啟 ${esc(aiPlan().label)} →</button></div>`:''}${products?`<div class="mt-3 space-y-2"><b class="text-xs text-slate-700">本次 AI 製作產物</b>${products}</div>`:''}</section>`;
 }
 
@@ -767,6 +814,7 @@ async function create(){
     state.jobRows=[];
     status.textContent='⏳ 同步課程與教材清單…';await refreshWorkspaceData();
     state.created=true;
+    await flushExternalLinks();
     if(state.expectedJobs<=0)await verifyCreatedCourseMaterials();
     const ready=canLeaveCourse();
     const retryNote=bundle.reused?'（本次安全沿用既有課程草稿，未重複建立）':'';
@@ -908,7 +956,7 @@ function clearWizardState(){
   state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
-  state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.resultHtml='';
+  state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';
   clearWorkflowId();
 }
 
@@ -1177,7 +1225,7 @@ async function openCourseWorkspace(){
   state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
-  state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.resultHtml='';
+  state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';
   clearWorkflowId();
   render();
   loadMaterials();
@@ -1186,7 +1234,7 @@ async function openCourseWorkspace(){
 function reset(){
   if(state.created&&!canLeaveCourse())return alert('目前教材尚未全部完成，請先等待或處理失敗工作。');
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.resultHtml='';clearWorkflowId();
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
