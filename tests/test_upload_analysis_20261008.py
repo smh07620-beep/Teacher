@@ -1,12 +1,11 @@
 """Upload-time analysis: type decision + Word image summary in one pass."""
 import io
 import tempfile
+import zipfile
 import unittest
 from pathlib import Path
 
 from PIL import Image
-from docx import Document
-from docx.shared import Inches
 
 from teacher_app.materials import upload_analysis
 
@@ -22,13 +21,34 @@ def _png(color):
 
 class UploadAnalysisTests(unittest.TestCase):
     def _docx(self, tmp, images=2):
-        doc = Document()
-        doc.add_paragraph("血液抹片判讀")
+        """Hand-built minimal DOCX (CI does not install python-docx)."""
+        ns = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+              'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+              'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+              'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"')
+        body = ["<w:p><w:r><w:t>血液抹片判讀</w:t></w:r></w:p>"]
+        rels = []
         for index in range(images):
-            doc.add_paragraph(f"圖 {index + 1}：中性球形態")
-            doc.add_picture(_png((index * 90, 20, 30)), width=Inches(1))
+            rid = f"rId{index + 10}"
+            body.append(f"<w:p><w:r><w:t>圖 {index + 1}：中性球形態</w:t></w:r></w:p>")
+            body.append(
+                f'<w:p><w:r><w:drawing><wp:inline><a:graphic><a:graphicData><a:blip r:embed="{rid}"/>'
+                "</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"
+            )
+            rels.append(
+                f'<Relationship Id="{rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+                f'Target="media/image{index + 1}.png"/>'
+            )
+        document = f'<?xml version="1.0" encoding="UTF-8"?><w:document {ns}><w:body>{"".join(body)}</w:body></w:document>'
+        rels_xml = ('<?xml version="1.0" encoding="UTF-8"?><Relationships '
+                    'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + "".join(rels) + "</Relationships>")
         path = Path(tmp) / "atlas.docx"
-        doc.save(path)
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+            archive.writestr("word/document.xml", document)
+            archive.writestr("word/_rels/document.xml.rels", rels_xml)
+            for index in range(images):
+                archive.writestr(f"word/media/image{index + 1}.png", _png((index * 90, 20, 30)).read())
         return path
 
     def test_docx_images_are_counted_with_captions_at_upload_time(self):
