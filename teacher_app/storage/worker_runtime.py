@@ -110,6 +110,15 @@ class WorkerMaterialStorageAdapter:
         )
         values: list[str] = []
         seen: set[str] = set()
+        # 排程用 SYSTEM 帳號執行時，看不到其他使用者 AppData 下的 MEGAcmd；
+        # 可用 MEGACMD_EXTRA_DIRS（以分號分隔的資料夾）明確指定位置。
+        for extra in str(os.environ.get("MEGACMD_EXTRA_DIRS", "")).split(";"):
+            extra = extra.strip().strip('"')
+            if extra:
+                normalized = path_module.normcase(path_module.normpath(extra))
+                if normalized not in seen:
+                    seen.add(normalized)
+                    values.append(extra)
         for base in bases:
             if not base:
                 continue

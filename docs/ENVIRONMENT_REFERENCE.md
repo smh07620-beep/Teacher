@@ -180,6 +180,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `MEDIA_SUBTITLE_JOB_MAX_PER_MINUTE` | `3` | `teacher_app/materials/media_subtitle_jobs.py` |  |  |
 | `MEDIA_SUBTITLE_JOB_RECOVERY_LIMIT` | `20` | `teacher_app/materials/media_subtitle_jobs.py` |  |  |
 | `MEDIA_SUBTITLE_JOB_STALE_MINUTES` | `30` | `teacher_app/materials/media_subtitle_jobs.py` | yes |  |
+| `MEGACMD_EXTRA_DIRS` |  | `teacher_app/storage/worker_runtime.py` | yes |  |
 | `MEGACMD_HOME` |  | `teacher_app/storage/providers.py` |  | yes |
 | `MEGACMD_TIMEOUT_SECONDS` | `300` | `teacher_app/storage/providers.py` |  | yes |
 | `MEGA_EMAIL` |  | `teacher_app/storage/providers.py` | yes | yes |
