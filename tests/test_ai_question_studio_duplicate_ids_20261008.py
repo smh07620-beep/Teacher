@@ -17,3 +17,9 @@ class DuplicateIdTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AutoSelectTests(unittest.TestCase):
+    def test_generated_audio_is_not_auto_selected_for_question_generation(self):
+        self.assertIn("!['video','audio'].includes(kind(m)[0])", SRC)
+        self.assertNotIn("filter(m=>kind(m)[0]!=='video').slice(0,4)", SRC)
