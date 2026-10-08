@@ -105,6 +105,12 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_single_exam_response_includes_active_question_count(self):
+        # 清單 API 有題數；打開單一考卷時也要有，否則畫面顯示「題庫 0 題」。
+        response = self.client.get("/api/quiz-categories/cat-1")
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()["questionCount"], 1)
+
     def test_settings_patch_cannot_self_approve_or_publish(self):
         response = self.client.patch(
             "/api/quiz-categories/cat-1",

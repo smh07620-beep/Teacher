@@ -176,7 +176,7 @@
     const filtered=filteredQuizCategories78(),shown=filtered.slice(0,quizListView78.visible);
     renderQuizOverview78();
     box.dataset.productSection='current-work';
-    box.innerHTML=`<div data-quiz-list-tools-78 class="sticky top-0 z-10 rounded-xl border border-slate-200 bg-white/95 p-3 backdrop-blur"><div class="grid gap-2 sm:grid-cols-[1fr_150px_auto]"><input value="${escapeHtml(quizListView78.query)}" data-csp-input="teacher78FilterQuizCategories(this.value)" placeholder="🔎 搜尋考卷名稱…" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"><select data-csp-change="teacher78SetQuizStatus(this.value)" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="all" ${quizListView78.status==='all'?'selected':''}>全部狀態</option><option value="active" ${quizListView78.status==='active'?'selected':''}>已發布</option><option value="approved" ${quizListView78.status==='approved'?'selected':''}>已審核</option><option value="draft" ${quizListView78.status==='draft'?'selected':''}>草稿</option></select><span class="self-center text-xs text-slate-400">${filtered.length} 份考卷</span></div>${quizListView78.status==='draft'&&filtered.length?`<button type="button" data-csp-click="teacher78DeleteListedDrafts()" class="mt-2 w-full rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100">🗑️ 一鍵刪除目前列出的 ${filtered.length} 份草稿考卷</button>`:''}</div><div data-quiz-list-items-78 class="space-y-2">${shown.length?shown.map(quizCategoryCardHTML).join(''):'<div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-500">沒有符合條件的考卷。</div>'}</div>${shown.length<filtered.length?`<button type="button" data-csp-click="teacher78LoadMoreQuizCategories()" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">顯示更多（尚有 ${filtered.length-shown.length} 份）</button>`:''}`;
+    box.innerHTML=`<div data-quiz-list-tools-78 class="sticky top-0 z-10 rounded-xl border border-slate-200 bg-white/95 p-2 backdrop-blur"><div class="grid gap-2 sm:grid-cols-[1fr_150px_auto]"><input value="${escapeHtml(quizListView78.query)}" data-csp-input="teacher78FilterQuizCategories(this.value)" placeholder="🔎 搜尋考卷名稱…" class="w-full rounded-xl border border-slate-300 px-3 py-1.5 text-sm"><select data-csp-change="teacher78SetQuizStatus(this.value)" class="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-sm"><option value="all" ${quizListView78.status==='all'?'selected':''}>全部狀態</option><option value="active" ${quizListView78.status==='active'?'selected':''}>已發布</option><option value="approved" ${quizListView78.status==='approved'?'selected':''}>已審核</option><option value="draft" ${quizListView78.status==='draft'?'selected':''}>草稿</option></select><span class="self-center text-xs text-slate-400">${filtered.length} 份考卷</span></div>${quizListView78.status==='draft'&&filtered.length?`<button type="button" data-csp-click="teacher78DeleteListedDrafts()" class="mt-2 w-full rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100">🗑️ 一鍵刪除目前列出的 ${filtered.length} 份草稿考卷</button>`:''}</div><div data-quiz-list-items-78 class="space-y-2">${shown.length?shown.map(quizCategoryCardHTML).join(''):'<div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-500">沒有符合條件的考卷。</div>'}</div>${shown.length<filtered.length?`<button type="button" data-csp-click="teacher78LoadMoreQuizCategories()" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">顯示更多（尚有 ${filtered.length-shown.length} 份）</button>`:''}`;
     window.exposeQuestionDeleteActions(box);
     updateQuizWorkspacePresentation();
     collapseQuizPanels78(box);
@@ -386,6 +386,26 @@
   }
 
   window.setAdminQuizSyncStatus=setAdminQuizSyncStatus;
+  // 考卷卡片右邊的「⋯」更多操作：貼近畫面底部時改成往上展開，
+  // 避免選單被底部固定列蓋住、還要再往下捲才點得到「考卷設定」。
+  document.addEventListener('toggle',event=>{
+    const details=event.target;
+    if(!(details instanceof HTMLDetailsElement)||!details.matches('[data-quiz-overflow-78]'))return;
+    const menu=details.querySelector(':scope > div');
+    const summary=details.querySelector(':scope > summary');
+    if(!menu||!summary)return;
+    menu.classList.remove('bottom-full','mb-1');
+    menu.classList.add('mt-1');
+    if(!details.open)return;
+    const box=summary.getBoundingClientRect();
+    const need=menu.offsetHeight+72; // 72 ≈ 底部固定版本列的高度與留白
+    const below=window.innerHeight-box.bottom;
+    if(below<need&&box.top>below){
+      menu.classList.remove('mt-1');
+      menu.classList.add('bottom-full','mb-1');
+    }
+  },true);
+
   window.renderQuizOverview78=renderQuizOverview78;
   window.adminHasExpandedQuestionEditor=adminHasExpandedQuestionEditor;
   window.quizCategoryCardHTML=quizCategoryCardHTML;

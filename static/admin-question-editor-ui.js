@@ -117,14 +117,24 @@
     document.getElementById(`qedit-${ids[0]}`)?.scrollIntoView({behavior:'smooth',block:'center'});
   };
 
+  // 同一份考卷的題庫面板可能同時存在兩份（隱藏的原始面板＋搬進工作畫面的那份），id 會重複；
+  // getElementById 只會拿到第一份，資料就會畫到看不見的那份，看得到的那份永遠停在「讀取題庫中…」。
+  // 這裡優先取「看得見」的那份（跟 AI 出題面板的作法一致）。
+  window.pickQuestionEl = function(name, catId){
+    const found=document.querySelectorAll(`[id="${String(name)}-${String(catId).replace(/"/g,'\\"')}"]`);
+    for(const el of found){ if(el.getClientRects().length) return el; }
+    return found[0]||null;
+  };
+
   window.renderFilteredQuestionList = function(catId){
-    const box=document.getElementById(`qlist-${catId}`);
+    const pick=(name)=>window.pickQuestionEl(name,catId);
+    const box=pick('qlist');
     if(!box) return;
     const all=adminQuizQuestionCache[catId]||[];
-    const txt=(document.getElementById(`qfilter-text-${catId}`)?.value||'').trim().toLowerCase();
-    const type=document.getElementById(`qfilter-type-${catId}`)?.value||'';
-    const diff=document.getElementById(`qfilter-difficulty-${catId}`)?.value||'';
-    const active=document.getElementById(`qfilter-active-${catId}`)?.value||'';
+    const txt=(pick('qfilter-text')?.value||'').trim().toLowerCase();
+    const type=pick('qfilter-type')?.value||'';
+    const diff=pick('qfilter-difficulty')?.value||'';
+    const active=pick('qfilter-active')?.value||'';
     const list=all.filter(q=>{
       if(type&&(q.questionType||'choice')!==type) return false;
       if(diff&&(q.difficulty||'standard')!==diff) return false;

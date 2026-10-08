@@ -556,10 +556,13 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
             else:
                 errors.append(f"第{index}題：題目格式錯誤")
         try:
+            # 老師已在候選題畫面逐題核對並確認加入，所以題目直接視為已審核，
+            # 審核者以伺服器端登入身分為準（不信任瀏覽器送來的名稱）。
             inserted = runtime_questions.insert_payloads_bulk(
                 category_id,
                 valid,
                 allow_hosts=app.config.get("DIRECT_MEDIA_ALLOWLIST", []),
+                reviewed_by=str((audit_actor() or {}).get("username") or ""),
             )
         except Exception as exc:
             return jsonify({"error": f"批次匯入失敗：{exc}"}), 400

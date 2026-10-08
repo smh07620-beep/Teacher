@@ -356,7 +356,10 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
         self.assertEqual(imported.status_code, 200, imported.get_data(as_text=True))
         self.assertEqual(imported.get_json()["imported"], 1)
         self.assertEqual(len(imported.get_json()["questions"]), 1)
-        self.assertEqual(imported.get_json()["questions"][0]["status"], "draft")
+        # 老師已在候選題畫面逐題核對並確認加入，題目直接視為已審核；
+        # 審核者是伺服器端登入者，不是瀏覽器送來的名稱。
+        self.assertEqual(imported.get_json()["questions"][0]["status"], "reviewed")
+        self.assertEqual(imported.get_json()["questions"][0]["reviewedBy"], "teacher")
         self.assertEqual(imported.get_json()["questions"][0]["origin"], "ai_generated")
         review_source = imported.get_json()["questions"][0]["answerConfig"]["reviewSource"]
         self.assertEqual(review_source["materialId"], "mat-1")
@@ -366,10 +369,18 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
             category = conn.execute(
                 "SELECT review_status,active FROM quiz_categories WHERE id='cat-1'"
             ).fetchone()
+            stored = conn.execute(
+                "SELECT status,reviewed_by,origin FROM quiz_questions WHERE id=?",
+                (imported.get_json()["questions"][0]["id"],),
+            ).fetchone()
         finally:
             conn.close()
+        # 題目已審核，但整份考卷內容變動了，仍須重新審核並發布。
         self.assertEqual(category["review_status"], "draft")
         self.assertEqual(category["active"], 0)
+        self.assertEqual(stored["status"], "reviewed")
+        self.assertEqual(stored["reviewed_by"], "teacher")
+        self.assertEqual(stored["origin"], "ai_generated")
 
     def test_external_video_url_uses_canonical_media_validation(self):
         created = self.client.post(

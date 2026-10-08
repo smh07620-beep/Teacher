@@ -691,6 +691,53 @@ def reset_question_review_on_connection(
     )
 
 
+def approve_questions_on_connection(
+    conn,
+    kind: str,
+    question_ids: list[str],
+    *,
+    reviewer: str,
+    stamp: str,
+) -> bool:
+    """Mark questions as reviewed by an authenticated teacher.
+
+    Used when the teacher has already checked each candidate before adding it
+    to the bank, so it should not need a second review.  Returns False (and
+    leaves the questions untouched) if the workflow columns are unavailable.
+    """
+    reviewer = str(reviewer or "").strip()
+    if not question_ids or not reviewer:
+        return False
+    if kind == "postgres":
+        rows = conn.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='quiz_questions'"
+        ).fetchall()
+        columns = {str(dict(row).get("column_name") or "").lower() for row in rows}
+    else:
+        columns = {
+            str(row[1]).lower()
+            for row in conn.execute("PRAGMA table_info(quiz_questions)").fetchall()
+        }
+    if "status" not in columns:
+        return False
+    ph = common_db.placeholder(kind)
+    assignments = [f"status={ph}"]
+    values: list[Any] = ["reviewed"]
+    if "reviewed_by" in columns:
+        assignments.append(f"reviewed_by={ph}")
+        values.append(reviewer[:100])
+    if "reviewed_at" in columns:
+        assignments.append(f"reviewed_at={ph}")
+        values.append(str(stamp or ""))
+    placeholders = ",".join([ph] * len(question_ids))
+    conn.execute(
+        f"UPDATE quiz_questions SET {','.join(assignments)} WHERE id IN ({placeholders})",
+        tuple(values) + tuple(question_ids),
+    )
+    return True
+
+
 def get_questions_by_ids_on_connection(conn, kind: str, question_ids: list[str]) -> dict[str, dict]:
     if not question_ids:
         return {}

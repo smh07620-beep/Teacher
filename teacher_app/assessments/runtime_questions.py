@@ -5,6 +5,7 @@ database ownership in :mod:`teacher_app.assessments.repository`.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import uuid
 from typing import Any, Mapping
@@ -428,7 +429,20 @@ def insert_payload(category_id: str, payload: Mapping[str, Any], *, allow_hosts=
     return question_id
 
 
-def insert_payloads_bulk(category_id: str, items: list[Mapping[str, Any]], *, allow_hosts=()) -> list[dict]:
+def insert_payloads_bulk(
+    category_id: str,
+    items: list[Mapping[str, Any]],
+    *,
+    allow_hosts=(),
+    reviewed_by: str = "",
+) -> list[dict]:
+    """Insert AI-candidate questions the teacher already checked.
+
+    When ``reviewed_by`` (the authenticated teacher, resolved server-side) is
+    given, the questions are stored as already reviewed by that teacher; the
+    exam itself still goes back to draft so it must be reviewed and published
+    again.  Without a reviewer the questions stay drafts.
+    """
     prepared = []
     for payload in items:
         if not isinstance(payload, dict):
@@ -549,5 +563,19 @@ def insert_payloads_bulk(category_id: str, items: list[Mapping[str, Any]], *, al
             [item["id"] for item in prepared],
             origin="ai_generated",
         )
+        reviewer = str(reviewed_by or "").strip()
+        if reviewer:
+            stamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            if repository.approve_questions_on_connection(
+                conn,
+                kind,
+                [item["id"] for item in prepared],
+                reviewer=reviewer,
+                stamp=stamp,
+            ):
+                for item in prepared:
+                    item["status"] = "reviewed"
+                    item["reviewedBy"] = reviewer[:100]
+                    item["reviewedAt"] = stamp
         mark_category_draft(category_id, conn, kind)
     return prepared

@@ -497,6 +497,12 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
     padding-top: 8px;
 }
 
+/* 統計列併在標題下方，不再自成一整列，讓考卷清單更靠上、少往下捲。 */
+.admin-page-section-heading .admin-quiz-overview {
+    border-top: 0;
+    padding-top: 4px;
+}
+
 .admin-quiz-summary-grid,
 .admin-people-summary-grid {
     display: grid;

@@ -67,6 +67,23 @@ def update_course(base, course_id: str, data: Mapping[str, Any]) -> dict:
 COURSE_LIFECYCLE = {"draft", "ready", "published", "ended", "archived"}
 
 
+def _exam_blocker_message(unpublished_exams: list[dict]) -> str:
+    """Tell the teacher exactly which exam step is still missing."""
+
+    def names(items: list[dict]) -> str:
+        shown = [f"「{str(item.get('title') or '未命名考卷')}」" for item in items[:3]]
+        return "、".join(shown) + (f" 等 {len(items)} 份" if len(items) > 3 else "")
+
+    not_reviewed = [item for item in unpublished_exams if item.get("reviewStatus") != "approved"]
+    reviewed_only = [item for item in unpublished_exams if item.get("reviewStatus") == "approved"]
+    parts = [f"尚有 {len(unpublished_exams)} 份考卷未完成審核／發布。"]
+    if not_reviewed:
+        parts.append(f"考卷{names(not_reviewed)}尚未審核：請到該考卷按「預覽」→「審核」，再按「發布」。")
+    if reviewed_only:
+        parts.append(f"考卷{names(reviewed_only)}已審核但尚未發布：請到該考卷按「發布」（需先設定適用人員與考核期間）。")
+    return "".join(parts)
+
+
 def publication_readiness(course_id: str) -> dict:
     course = repository.get_course(course_id)
     if not course:
@@ -93,11 +110,7 @@ def publication_readiness(course_id: str) -> dict:
     if unpublished_exams:
         blockers.append({
             "code": "COURSE_EXAM_UNPUBLISHED",
-            "message": (
-                f"尚有 {len(unpublished_exams)} 份考卷未完成審核／發布。"
-                "請到該考卷的「考卷總覽」，依序按「預覽」→「審核」→「發布」；"
-                "AI 產生的題目請先到「題目管理」檢查。"
-            ),
+            "message": _exam_blocker_message(unpublished_exams),
         })
 
     return {

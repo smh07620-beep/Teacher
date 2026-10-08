@@ -63,6 +63,24 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
             self.assertIn(f"'{action}'", csp)
         self.assertIn('returnToExam\n  };', panels)
 
+    def test_question_manager_targets_visible_panel_and_exam_list_is_compact(self):
+        editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
+        actions = ROOT.joinpath('static/admin-question-actions.js').read_text(encoding='utf-8')
+        bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
+        html = ROOT.joinpath('static/system.html').read_text(encoding='utf-8')
+        # 題庫面板可能同時有兩份（隱藏的＋搬進工作畫面的），必須寫進看得見的那份。
+        self.assertIn('window.pickQuestionEl', editor)
+        self.assertIn("pick('qlist')", editor)
+        self.assertNotIn('document.getElementById(`qlist-${catId}`)', editor)
+        self.assertIn("pick('qlist')", actions)
+        self.assertNotIn('document.getElementById(`qlist-${catId}`)', actions)
+        # 「⋯」選單貼近畫面底部時往上展開，不用再往下捲。
+        self.assertIn('data-quiz-overflow-78', bank)
+        self.assertIn("'bottom-full'", bank)
+        # 統計列併在標題下方（只出現一次），不再自成一整列。
+        self.assertEqual(html.count('id="admin-quiz-overview"'), 1)
+        self.assertLess(html.index('id="admin-quiz-overview"'), html.index('admin-page-heading-tools', html.index('id="admin-quiz-workspace"')))
+
     def test_mobile_question_actions_are_collapsed(self):
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
         bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')

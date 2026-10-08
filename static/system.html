@@ -475,15 +475,16 @@
 
                 <!-- ② Quiz & AI -->
                 <div id="admin-section-quiz" class="admin-section-panel hidden space-y-5">
-                    <section id="admin-quiz-workspace" class="admin-primary-workspace bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                    <section id="admin-quiz-workspace" class="admin-primary-workspace bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
                         <div class="admin-page-section-heading">
-                            <div><p class="admin-page-eyebrow">ASSESSMENT & AUTHORING WORKSPACE</p><h4 class="font-black text-slate-950 text-xl">評量與追蹤 Workspace</h4></div>
+                            <div><p class="admin-page-eyebrow">ASSESSMENT & AUTHORING WORKSPACE</p><h4 class="font-black text-slate-950 text-xl">評量與追蹤 Workspace</h4>
+                                <div id="admin-quiz-overview" class="admin-quiz-overview">
+                                    <p class="admin-quiz-summary-line" aria-label="考卷狀態摘要">共 <strong id="admin-quiz-total-count">—</strong> 份・已發布 <strong id="admin-quiz-published-count">—</strong>・待發布 <strong id="admin-quiz-approved-count">—</strong>・草稿 <strong id="admin-quiz-draft-count">—</strong><span id="admin-quiz-sync-status" class="ml-2 text-[11px] px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-bold">待同步</span></p>
+                                </div>
+                            </div>
                             <div class="admin-page-heading-tools">
                                 <div id="admin-quiz-scope-78" class="admin-scope-toolbar" aria-label="評量與出題管理範圍"><label><span>訓練區</span><select id="admin-quiz-area"><option value="internal">內部教育訓練區</option><option value="pgy">PGY訓練區</option></select></label><label><span>組別</span><select id="admin-quiz-group" data-csp-change="onAdminQuizGroupChange()"></select></label><button type="button" data-csp-click="renderAdminQuizCategories(true)" class="admin-toolbar-button">↻ 更新清單</button></div>
                             </div>
-                        </div>
-                        <div id="admin-quiz-overview" class="admin-quiz-overview">
-                            <p class="admin-quiz-summary-line" aria-label="考卷狀態摘要">共 <strong id="admin-quiz-total-count">—</strong> 份・已發布 <strong id="admin-quiz-published-count">—</strong>・待發布 <strong id="admin-quiz-approved-count">—</strong>・草稿 <strong id="admin-quiz-draft-count">—</strong><span id="admin-quiz-sync-status" class="ml-2 text-[11px] px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-bold">待同步</span></p>
                         </div>
                         <div data-teacher78-canonical-create-executor class="hidden" aria-hidden="true"><input id="admin-new-category-title" type="text" maxlength="255"><button type="button" data-csp-click="adminCreateQuizCategory()">建立</button></div>
                         <div id="admin-quiz-categories-list" class="space-y-3"></div>

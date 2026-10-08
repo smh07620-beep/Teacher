@@ -97,6 +97,9 @@ def register_assessment_routes(owner):
         )
         if scope_denied:
             return scope_denied
+        # 清單 API 有帶題數，打開單一考卷時也要帶，否則畫面會顯示「題庫 0 題」。
+        category = dict(category)
+        category["questionCount"] = len(repository.list_questions(category_id, include_inactive=False))
         return jsonify(category)
 
     def guarded(handler, *args, **kwargs):

@@ -23,7 +23,7 @@ class Phase3AdminAiQuestionsTests(unittest.TestCase):
         self.assertNotIn('getAdminKey', source)
         self.assertNotIn('X-Admin-Key', source)
         self.assertNotIn('/api/slides/upload-progress/', source)
-        self.assertIn('待審核題庫', source)
+        self.assertIn('加入題庫', source)
         self.assertNotIn('professional_title', source)
         self.assertNotIn('responsibility_tags', source)
         self.assertNotIn('role ===', source)

@@ -93,7 +93,9 @@
   };
 
   window.loadQuizQuestionsIntoPanel = async function(catId){
-    const list=document.getElementById(`qlist-${catId}`);
+    // 優先取「看得見」的那份面板（同一份考卷可能同時有隱藏的原始面板與搬進工作畫面的那份）。
+    const pick=name=>typeof window.pickQuestionEl==='function'?window.pickQuestionEl(name,catId):document.getElementById(`${name}-${catId}`);
+    const list=pick('qlist');
     if(list) list.innerHTML='<p class="text-xs text-slate-400 py-3">讀取題庫中…</p>';
     try{
       const r=await fetch(`/api/quiz-questions/admin?category=${encodeURIComponent(catId)}`,{});
@@ -101,10 +103,11 @@
       if(!r.ok) throw new Error(d.error||'題庫讀取失敗');
       adminQuizQuestionCache[catId]=Array.isArray(d)?d:[];
       window.renderFilteredQuestionList(catId);
-      const count=document.getElementById(`qcount-${catId}`);
+      const count=pick('qcount');
       if(count) count.textContent=adminQuizQuestionCache[catId].filter(q=>q.active!==false).length;
     }catch(e){
-      if(list) list.innerHTML=`<p class="text-xs text-rose-600 py-3">❌ ${escapeHtml(e.message)}</p>`;
+      const target=pick('qlist')||list;
+      if(target) target.innerHTML=`<p class="text-xs text-rose-600 py-3">❌ ${escapeHtml(e.message)}</p>`;
     }
   };
 
