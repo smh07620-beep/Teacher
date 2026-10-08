@@ -29,7 +29,7 @@
   const ALLOWED_ACTIONS = new Set([
     'adminAddQuizQuestion','adminBulkDeleteQuestions','adminBulkSetQuestionActive','adminBulkSetQuestionTag',
     'adminCreateQuizCategory','adminDeleteCourse','adminDeleteDocTemplate','adminDeletePgyTemplate',
-    'adminDeleteQuizCategory','adminDeleteQuizQuestion','adminEditQuizCategory','adminEditSelectedQuestions',
+    'adminDeleteQuizCategory','teacher78DeleteListedDrafts','adminDeleteQuizQuestion','adminEditQuizCategory','adminEditSelectedQuestions',
     'adminGenerateAiQuestions','adminImportAiCandidates','adminImportQuizUrl','adminImportTslmEpa',
     'adminInlineQuestionTypeChanged','adminResultDetail','adminSaveExpandedQuestionEdits','adminSaveOneInlineQuestion',
     'adminSelectAllQuestions','adminSetProfileTag','adminSyncProfileTagChecks','adminToggleBlindMode',

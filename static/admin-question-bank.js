@@ -157,12 +157,26 @@
     box?.querySelectorAll('[id^="qpanel-"]').forEach(panel=>panel.classList.add('hidden'));
   }
 
+  window.teacher78DeleteListedDrafts=async function(){
+    const list=filteredQuizCategories78().filter(c=>!c.active&&c.reviewStatus!=='approved');
+    if(!list.length)return alert('目前沒有可刪除的草稿考卷');
+    const names=list.slice(0,8).map(c=>'・'+(c.name||c.title||c.id)).join('\n')+(list.length>8?`\n…共 ${list.length} 份`:'');
+    if(!confirm(`確定一次刪除以下 ${list.length} 份草稿考卷？\n裡面的題目也會一併刪除，無法復原。\n\n${names}`))return;
+    let ok=0,fail=0;
+    for(const c of list){
+      try{const r=await fetch(`/api/quiz-categories/${encodeURIComponent(c.id)}`,{method:'DELETE'});if(r.ok){ok++;delete allQuizData[c.id];}else fail++;}catch(e){fail++;}
+    }
+    try{Object.keys(dynamicCategoriesCache).forEach(k=>delete dynamicCategoriesCache[k]);adminQuizCategoriesCache.clear();}catch(e){}
+    await window.renderAdminQuizCategories(true);
+    try{await window.refreshAdminMaterialCategoryOptions();}catch(e){}
+    alert(`已刪除 ${ok} 份草稿考卷`+(fail?`，${fail} 份刪除失敗，請重試`:''));
+  };
   function renderQuizList78(){
     const box=document.getElementById('admin-quiz-categories-list');if(!box)return;
     const filtered=filteredQuizCategories78(),shown=filtered.slice(0,quizListView78.visible);
     renderQuizOverview78();
     box.dataset.productSection='current-work';
-    box.innerHTML=`<div data-quiz-list-tools-78 class="sticky top-0 z-10 rounded-xl border border-slate-200 bg-white/95 p-3 backdrop-blur"><div class="grid gap-2 sm:grid-cols-[1fr_150px_auto]"><input value="${escapeHtml(quizListView78.query)}" data-csp-input="teacher78FilterQuizCategories(this.value)" placeholder="🔎 搜尋考卷名稱…" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"><select data-csp-change="teacher78SetQuizStatus(this.value)" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="all" ${quizListView78.status==='all'?'selected':''}>全部狀態</option><option value="active" ${quizListView78.status==='active'?'selected':''}>已發布</option><option value="approved" ${quizListView78.status==='approved'?'selected':''}>已審核</option><option value="draft" ${quizListView78.status==='draft'?'selected':''}>草稿</option></select><span class="self-center text-xs text-slate-400">${filtered.length} 份考卷</span></div></div><div data-quiz-list-items-78 class="space-y-2">${shown.length?shown.map(quizCategoryCardHTML).join(''):'<div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-500">沒有符合條件的考卷。</div>'}</div>${shown.length<filtered.length?`<button type="button" data-csp-click="teacher78LoadMoreQuizCategories()" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">顯示更多（尚有 ${filtered.length-shown.length} 份）</button>`:''}`;
+    box.innerHTML=`<div data-quiz-list-tools-78 class="sticky top-0 z-10 rounded-xl border border-slate-200 bg-white/95 p-3 backdrop-blur"><div class="grid gap-2 sm:grid-cols-[1fr_150px_auto]"><input value="${escapeHtml(quizListView78.query)}" data-csp-input="teacher78FilterQuizCategories(this.value)" placeholder="🔎 搜尋考卷名稱…" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"><select data-csp-change="teacher78SetQuizStatus(this.value)" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="all" ${quizListView78.status==='all'?'selected':''}>全部狀態</option><option value="active" ${quizListView78.status==='active'?'selected':''}>已發布</option><option value="approved" ${quizListView78.status==='approved'?'selected':''}>已審核</option><option value="draft" ${quizListView78.status==='draft'?'selected':''}>草稿</option></select><span class="self-center text-xs text-slate-400">${filtered.length} 份考卷</span></div>${quizListView78.status==='draft'&&filtered.length?`<button type="button" data-csp-click="teacher78DeleteListedDrafts()" class="mt-2 w-full rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100">🗑️ 一鍵刪除目前列出的 ${filtered.length} 份草稿考卷</button>`:''}</div><div data-quiz-list-items-78 class="space-y-2">${shown.length?shown.map(quizCategoryCardHTML).join(''):'<div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-500">沒有符合條件的考卷。</div>'}</div>${shown.length<filtered.length?`<button type="button" data-csp-click="teacher78LoadMoreQuizCategories()" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">顯示更多（尚有 ${filtered.length-shown.length} 份）</button>`:''}`;
     window.exposeQuestionDeleteActions(box);
     updateQuizWorkspacePresentation();
     collapseQuizPanels78(box);
