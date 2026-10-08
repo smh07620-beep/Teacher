@@ -56,8 +56,8 @@ def _kokoro_capability(capabilities: dict) -> bool | None:
     return None
 
 
-def _ai_worker_status() -> dict:
-    status = {
+def _default_ai_worker_status() -> dict:
+    return {
         "seen": False,
         "online": False,
         "lastSeen": "",
@@ -84,9 +84,148 @@ def _ai_worker_status() -> dict:
             "TEACHER_BASE_URL 與 Worker token 可透過 HTTPS 443 連到 Render Web。"
         ),
     }
+
+
+def _evaluate_ai_worker(row: dict, capabilities: dict, latest_seen) -> dict:
+    """Judge ONE AI Worker heartbeat (online, version, queues, Kokoro)."""
+    status = _default_ai_worker_status()
+    now = dt.datetime.now(dt.timezone.utc)
+    heartbeat_age = max(0, int((now - latest_seen).total_seconds()))
+    online = heartbeat_age <= 120
+    raw_queues = capabilities.get("queues")
+    queues = sorted({
+        str(item or "").strip()
+        for item in raw_queues
+        if str(item or "").strip()
+    }) if isinstance(raw_queues, (list, tuple, set)) else []
+    kokoro_installed = _kokoro_capability(capabilities)
+    database_ready = capabilities.get("databaseReady")
+    database_ready = None if database_ready is None else bool(database_ready)
+    worker_database_identity = str(capabilities.get("databaseIdentity") or "").strip()
+    web_database_identity = teacher_config.database_identity()
+    database_identity_match = (
+        None
+        if not worker_database_identity or not web_database_identity
+        else worker_database_identity == web_database_identity
+    )
+    heartbeat_contract = int(capabilities.get("heartbeatContract") or 0)
+    heartbeat_transport = str(capabilities.get("heartbeatTransport") or "")[:32]
+    control_plane_ready = capabilities.get("controlPlaneReady")
+    control_plane_ready = None if control_plane_ready is None else bool(control_plane_ready)
+    https_control = heartbeat_transport == "https" or control_plane_ready is True
+    worker_version = str(capabilities.get("workerVersion") or "")[:32]
+    worker_sha = str(capabilities.get("workerSha") or "").strip().lower()[:40]
+    worker_branch = str(capabilities.get("workerBranch") or "")[:80]
+    web_sha = str(os.environ.get("RENDER_GIT_COMMIT") or "").strip().lower()[:40]
+    code_identity_match = (
+        None
+        if not worker_sha or not web_sha
+        else web_sha.startswith(worker_sha) or worker_sha.startswith(web_sha)
+    )
+    tts = capabilities.get("tts") if isinstance(capabilities.get("tts"), dict) else {}
+    tts_repo_id = str(tts.get("repoId") or "")[:160]
+    tts_voice = str(tts.get("defaultVoice") or "")[:80]
+
+    diagnostic_code = "worker_ready"
+    diagnostic_message = (
+        "AI Worker 已透過 HTTPS 443 control plane 回報，Kokoro 可建立語音試聽。"
+        if https_control
+        else "AI Worker 與 Kokoro 已回報，可建立語音試聽。"
+    )
+    if not https_control and database_ready is False:
+        online = False
+        diagnostic_code = "worker_database_unavailable"
+        diagnostic_message = (
+            "偵測到舊版 direct-database AI Worker heartbeat，但院內環境無法使用該傳輸。"
+            "請更新 Worker 至目前 main，設定 AI_WORKER_TRANSPORT=https，改由 Render HTTPS 443 control plane 回報。"
+        )
+    elif not https_control and database_identity_match is False:
+        online = False
+        diagnostic_code = "worker_database_mismatch"
+        diagnostic_message = (
+            "偵測到舊版 direct-database AI Worker，且資料庫識別與 Render Web 不一致。"
+            "正式院內 Worker 請改用 AI_WORKER_TRANSPORT=https，由 Render HTTPS 443 control plane 統一存取資料庫。"
+        )
+    elif not online:
+        diagnostic_code = "worker_offline"
+        diagnostic_message = (
+            f"AI Worker 最後回報已超過 120 秒（約 {heartbeat_age} 秒前）。"
+            "請檢查 Windows 排程「Teacher AI Worker」是否仍在執行。"
+        )
+    elif https_control and (heartbeat_contract < 4 or not worker_sha):
+        online = False
+        diagnostic_code = "worker_build_unknown"
+        diagnostic_message = (
+            "AI Worker heartbeat 仍是舊版格式，沒有可驗證的 Git SHA。"
+            "請更新院內 Teacher 專案到目前 main 並重新啟動 Teacher AI Worker；"
+            "新版 Worker 會回報 heartbeat contract 4 與 workerSha。"
+        )
+    elif code_identity_match is False:
+        online = False
+        diagnostic_code = "worker_code_mismatch"
+        diagnostic_message = (
+            f"AI Worker 程式版本與目前 Render 不一致（Worker {worker_sha[:12] or 'unknown'} / "
+            f"Web {web_sha[:12] or 'unknown'}）。請先更新院內 Teacher 專案到目前 main，"
+            "再重新啟動 Teacher AI Worker；版本一致前不再送 Kokoro 工作。"
+        )
+    elif kokoro_installed is False:
+        diagnostic_code = "kokoro_unavailable"
+        diagnostic_message = (
+            "AI Worker 已在線，但 Kokoro capability 回報不可用。"
+            "請同步 requirements-ai-worker.txt 後重啟 Teacher AI Worker。"
+        )
+    elif kokoro_installed is None:
+        diagnostic_code = "kokoro_unknown"
+        diagnostic_message = (
+            "AI Worker 已回報，但沒有 Kokoro capability 資訊。"
+            "請更新院內 Worker 程式與 AI dependencies 後重啟。"
+        )
+
+    status.update({
+        "seen": True,
+        "online": online,
+        "lastSeen": latest_seen.isoformat(),
+        "heartbeatAgeSeconds": heartbeat_age,
+        "workerId": str(row.get("worker_id") or row.get("workerId") or "")[:100],
+        "workerVersion": worker_version,
+        "workerSha": worker_sha,
+        "workerBranch": worker_branch,
+        "codeIdentityMatch": code_identity_match,
+        "ttsRepoId": tts_repo_id,
+        "ttsVoice": tts_voice,
+        "queues": queues,
+        "queueCapabilitiesReported": isinstance(raw_queues, (list, tuple, set)),
+        "kokoroInstalled": kokoro_installed,
+        "databaseReady": database_ready,
+        "databaseIdentityMatch": database_identity_match,
+        "controlPlaneReady": control_plane_ready,
+        "heartbeatContract": heartbeat_contract,
+        "heartbeatTransport": heartbeat_transport,
+        "diagnosticCode": diagnostic_code,
+        "diagnosticMessage": diagnostic_message,
+    })
+    return status
+
+
+def _worker_is_ready(status: dict) -> bool:
+    return bool(
+        status.get("online")
+        and "media_audio" in set(status.get("queues") or [])
+        and status.get("kokoroInstalled") is True
+    )
+
+
+def _ai_worker_status() -> dict:
+    """Status of the AI Worker fleet.
+
+    Several AI Workers may report at the same time (for example a second PC).  One
+    healthy worker is enough for narration to work, so a healthy worker wins over a
+    more recent heartbeat from a broken or outdated one; with none healthy the most
+    recent heartbeat explains why.
+    """
+    status = _default_ai_worker_status()
     try:
-        latest = None
-        latest_seen = None
+        candidates = []
         for row in worker_repository.list_heartbeats(100):
             capabilities = row.get("capabilities") or {}
             if not isinstance(capabilities, dict) or not _is_ai_worker_heartbeat(row, capabilities):
@@ -99,128 +238,16 @@ def _ai_worker_status() -> dict:
                 seen = seen.astimezone(dt.timezone.utc)
             except (TypeError, ValueError):
                 continue
-            if latest_seen is None or seen > latest_seen:
-                latest = (row, capabilities)
-                latest_seen = seen
-        if latest is None or latest_seen is None:
+            candidates.append((seen, row, capabilities))
+        if not candidates:
             return status
-
-        row, capabilities = latest
-        now = dt.datetime.now(dt.timezone.utc)
-        heartbeat_age = max(0, int((now - latest_seen).total_seconds()))
-        online = heartbeat_age <= 120
-        raw_queues = capabilities.get("queues")
-        queues = sorted({
-            str(item or "").strip()
-            for item in raw_queues
-            if str(item or "").strip()
-        }) if isinstance(raw_queues, (list, tuple, set)) else []
-        kokoro_installed = _kokoro_capability(capabilities)
-        database_ready = capabilities.get("databaseReady")
-        database_ready = None if database_ready is None else bool(database_ready)
-        worker_database_identity = str(capabilities.get("databaseIdentity") or "").strip()
-        web_database_identity = teacher_config.database_identity()
-        database_identity_match = (
-            None
-            if not worker_database_identity or not web_database_identity
-            else worker_database_identity == web_database_identity
-        )
-        heartbeat_contract = int(capabilities.get("heartbeatContract") or 0)
-        heartbeat_transport = str(capabilities.get("heartbeatTransport") or "")[:32]
-        control_plane_ready = capabilities.get("controlPlaneReady")
-        control_plane_ready = None if control_plane_ready is None else bool(control_plane_ready)
-        https_control = heartbeat_transport == "https" or control_plane_ready is True
-        worker_version = str(capabilities.get("workerVersion") or "")[:32]
-        worker_sha = str(capabilities.get("workerSha") or "").strip().lower()[:40]
-        worker_branch = str(capabilities.get("workerBranch") or "")[:80]
-        web_sha = str(os.environ.get("RENDER_GIT_COMMIT") or "").strip().lower()[:40]
-        code_identity_match = (
-            None
-            if not worker_sha or not web_sha
-            else web_sha.startswith(worker_sha) or worker_sha.startswith(web_sha)
-        )
-        tts = capabilities.get("tts") if isinstance(capabilities.get("tts"), dict) else {}
-        tts_repo_id = str(tts.get("repoId") or "")[:160]
-        tts_voice = str(tts.get("defaultVoice") or "")[:80]
-
-        diagnostic_code = "worker_ready"
-        diagnostic_message = (
-            "AI Worker 已透過 HTTPS 443 control plane 回報，Kokoro 可建立語音試聽。"
-            if https_control
-            else "AI Worker 與 Kokoro 已回報，可建立語音試聽。"
-        )
-        if not https_control and database_ready is False:
-            online = False
-            diagnostic_code = "worker_database_unavailable"
-            diagnostic_message = (
-                "偵測到舊版 direct-database AI Worker heartbeat，但院內環境無法使用該傳輸。"
-                "請更新 Worker 至目前 main，設定 AI_WORKER_TRANSPORT=https，改由 Render HTTPS 443 control plane 回報。"
-            )
-        elif not https_control and database_identity_match is False:
-            online = False
-            diagnostic_code = "worker_database_mismatch"
-            diagnostic_message = (
-                "偵測到舊版 direct-database AI Worker，且資料庫識別與 Render Web 不一致。"
-                "正式院內 Worker 請改用 AI_WORKER_TRANSPORT=https，由 Render HTTPS 443 control plane 統一存取資料庫。"
-            )
-        elif not online:
-            diagnostic_code = "worker_offline"
-            diagnostic_message = (
-                f"AI Worker 最後回報已超過 120 秒（約 {heartbeat_age} 秒前）。"
-                "請檢查 Windows 排程「Teacher AI Worker」是否仍在執行。"
-            )
-        elif https_control and (heartbeat_contract < 4 or not worker_sha):
-            online = False
-            diagnostic_code = "worker_build_unknown"
-            diagnostic_message = (
-                "AI Worker heartbeat 仍是舊版格式，沒有可驗證的 Git SHA。"
-                "請更新院內 Teacher 專案到目前 main 並重新啟動 Teacher AI Worker；"
-                "新版 Worker 會回報 heartbeat contract 4 與 workerSha。"
-            )
-        elif code_identity_match is False:
-            online = False
-            diagnostic_code = "worker_code_mismatch"
-            diagnostic_message = (
-                f"AI Worker 程式版本與目前 Render 不一致（Worker {worker_sha[:12] or 'unknown'} / "
-                f"Web {web_sha[:12] or 'unknown'}）。請先更新院內 Teacher 專案到目前 main，"
-                "再重新啟動 Teacher AI Worker；版本一致前不再送 Kokoro 工作。"
-            )
-        elif kokoro_installed is False:
-            diagnostic_code = "kokoro_unavailable"
-            diagnostic_message = (
-                "AI Worker 已在線，但 Kokoro capability 回報不可用。"
-                "請同步 requirements-ai-worker.txt 後重啟 Teacher AI Worker。"
-            )
-        elif kokoro_installed is None:
-            diagnostic_code = "kokoro_unknown"
-            diagnostic_message = (
-                "AI Worker 已回報，但沒有 Kokoro capability 資訊。"
-                "請更新院內 Worker 程式與 AI dependencies 後重啟。"
-            )
-
-        status.update({
-            "seen": True,
-            "online": online,
-            "lastSeen": latest_seen.isoformat(),
-            "heartbeatAgeSeconds": heartbeat_age,
-            "workerId": str(row.get("worker_id") or row.get("workerId") or "")[:100],
-            "workerVersion": worker_version,
-            "workerSha": worker_sha,
-            "workerBranch": worker_branch,
-            "codeIdentityMatch": code_identity_match,
-            "ttsRepoId": tts_repo_id,
-            "ttsVoice": tts_voice,
-            "queues": queues,
-            "queueCapabilitiesReported": isinstance(raw_queues, (list, tuple, set)),
-            "kokoroInstalled": kokoro_installed,
-            "databaseReady": database_ready,
-            "databaseIdentityMatch": database_identity_match,
-            "controlPlaneReady": control_plane_ready,
-            "heartbeatContract": heartbeat_contract,
-            "heartbeatTransport": heartbeat_transport,
-            "diagnosticCode": diagnostic_code,
-            "diagnosticMessage": diagnostic_message,
-        })
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        evaluated = [_evaluate_ai_worker(row, capabilities, seen) for seen, row, capabilities in candidates]
+        ready = [item for item in evaluated if _worker_is_ready(item)]
+        chosen = (ready or evaluated)[0]
+        chosen["onlineWorkers"] = sum(1 for item in evaluated if item.get("online"))
+        chosen["readyWorkers"] = len(ready)
+        return chosen
     except Exception:
         status.update({
             "statusUnavailable": True,

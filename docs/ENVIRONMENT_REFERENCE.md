@@ -61,6 +61,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `AI_WORKER_HTTP_TIMEOUT_SECONDS` | `20` | `teacher_app/worker/ai_remote.py` | yes |  |
 | `AI_WORKER_JOB_HEARTBEAT_SECONDS` | `30` | `teacher_app/worker/ai_remote.py` | yes |  |
 | `AI_WORKER_KOKORO_WARM_BLOCKING` | `false` | `ai_question_worker.py` | yes |  |
+| `AI_WORKER_RESTART_ON_UPDATE` | `true` | `ai_question_worker.py` | yes |  |
 | `AI_WORKER_RPC_MAX_BYTES` |  | `teacher_app/worker/routes.py` |  | yes |
 | `AI_WORKER_TOKEN` |  | `teacher_app/worker/ai_remote.py`, `teacher_app/worker/routes.py` | yes | yes |
 | `AI_WORKER_TRANSPORT` |  | `teacher_app/worker/ai_remote.py` | yes |  |

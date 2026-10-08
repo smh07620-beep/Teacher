@@ -157,6 +157,42 @@ def _ai_worker_capabilities(transport: str | None = None) -> dict:
     return payload
 
 
+class _CheckoutWatcher:
+    """Ask the supervisor for a restart once another process updated this checkout.
+
+    The AI Worker never runs git or the updater itself: the existing safe updater
+    (``update_material_worker.ps1``, run by the Material Worker on the same
+    checkout) or a manual ``git pull`` changes the files, and this watcher only
+    notices that HEAD moved so the next start loads the new code.  Python never
+    hot-reloads; the supervisor restarts the process on exit code 75.
+    """
+
+    def __init__(self, interval_seconds: float = 60.0, identity=None, clock=None):
+        self._identity = identity or _worker_build_identity
+        self._clock = clock or time.monotonic
+        self._interval = max(5.0, float(interval_seconds))
+        self.enabled = str(os.environ.get("AI_WORKER_RESTART_ON_UPDATE", "true")).strip().lower() in {"1", "true", "yes", "on"}
+        self._baseline = self._sha()
+        self._next_check = self._clock() + self._interval
+
+    def _sha(self) -> str:
+        try:
+            return str((self._identity() or {}).get("workerSha") or "").strip().lower()
+        except Exception:
+            return ""
+
+    def changed(self) -> bool:
+        """True when HEAD differs from the version this process started with."""
+        if not self.enabled or not self._baseline:
+            return False
+        now = self._clock()
+        if now < self._next_check:
+            return False
+        self._next_check = now + self._interval
+        current = self._sha()
+        return bool(current) and current != self._baseline
+
+
 class _AIHeartbeat:
     def __init__(
         self,
@@ -337,6 +373,7 @@ def main() -> int:
     log(_renderer_status_line())
     _SITE_VERSION.snapshot(force=True)
     heartbeat_seconds = _env_int("AI_WORKER_HEARTBEAT_SECONDS", 30, 10, 90)
+    checkout_watcher = _CheckoutWatcher()
     try:
         with _AIHeartbeat(heartbeat_seconds, transport=transport, api=api) as heartbeat:
             # Publish heartbeat first, then pay the one-time Kokoro/Torch load
@@ -384,6 +421,10 @@ def main() -> int:
                     did_work = subtitle_processor.run_next_queued() or did_work
                     if did_work:
                         continue
+                    # Idle only: never interrupt a job to pick up a new version.
+                    if checkout_watcher.changed():
+                        log("worker code was updated on disk; restarting to load the new version")
+                        return 75
                     time.sleep(poll_seconds)
                 except KeyboardInterrupt:
                     log("stopped")
