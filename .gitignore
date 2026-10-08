@@ -4,6 +4,7 @@
 .worker-runtime.lock
 .worker-update-state.json
 .worker-requirements.sha256
+.ai-worker-requirements.sha256
 .env
 .env.*
 *.env
