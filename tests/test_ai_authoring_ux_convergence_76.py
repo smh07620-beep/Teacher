@@ -81,6 +81,14 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         self.assertEqual(html.count('id="admin-quiz-overview"'), 1)
         self.assertLess(html.index('id="admin-quiz-overview"'), html.index('admin-page-heading-tools', html.index('id="admin-quiz-workspace"')))
 
+    def test_ai_progress_is_visible_and_shows_wait_time(self):
+        ai = ROOT.joinpath('static/admin-ai-questions.js').read_text(encoding='utf-8')
+        # 進度條外框預設 hidden，挑選時要看父層是否可見，否則進度會寫到隱藏的那份。
+        self.assertIn('el.parentElement?.getClientRects().length', ai)
+        self.assertIn('排隊等待 AI 接手', ai)
+        self.assertIn('已進行 ${fmtSec(sec)}', ai)
+        self.assertIn('d.examReview', ai)
+
     def test_mobile_question_actions_are_collapsed(self):
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
         bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')

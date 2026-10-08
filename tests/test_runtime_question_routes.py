@@ -381,6 +381,38 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
         self.assertEqual(stored["status"], "reviewed")
         self.assertEqual(stored["reviewed_by"], "teacher")
         self.assertEqual(stored["origin"], "ai_generated")
+        review = imported.get_json()["examReview"]
+        self.assertFalse(review["attempted"])
+        self.assertEqual(review["reviewStatus"], "draft")
+        self.assertTrue(review["issues"])
+
+    def test_ai_import_auto_reviews_exam_when_all_questions_reviewed(self):
+        conn, _ = self.base.connect()
+        try:
+            conn.execute("UPDATE quiz_questions SET status='reviewed' WHERE quiz_category_id='cat-1'")
+            conn.commit()
+        finally:
+            conn.close()
+        imported = self.client.post(
+            "/api/ai-questions/import",
+            json={"quizCategoryId": "cat-1", "questions": [{
+                "question": "AI 匯入題", "questionType": "choice",
+                "options": ["A", "B"], "correct": 0,
+            }]},
+        )
+        self.assertEqual(imported.status_code, 200, imported.get_data(as_text=True))
+        review = imported.get_json()["examReview"]
+        self.assertEqual(review["reviewStatus"], "approved", review)
+        conn, _ = self.base.connect()
+        try:
+            category = conn.execute(
+                "SELECT review_status,active,reviewer_name FROM quiz_categories WHERE id='cat-1'"
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(category["review_status"], "approved")
+        self.assertEqual(category["active"], 0)  # 發布仍須明確操作
+        self.assertEqual(category["reviewer_name"], "teacher")
 
     def test_external_video_url_uses_canonical_media_validation(self):
         created = self.client.post(

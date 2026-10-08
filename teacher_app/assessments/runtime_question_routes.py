@@ -67,6 +67,48 @@ def _question_guard(owner, *, scoped: bool):
     return scope_filter.denied(owner, "question.manage")[1]
 
 
+def _auto_review_after_import(app, category_id: str, imported: bool, actor) -> dict:
+    """Approve the exam after an AI import when every active question is reviewed.
+
+    The teacher already confirmed each candidate, so a second manual 審核 click only
+    blocks them. Publishing stays explicit. The reviewer is the server-side actor.
+    """
+    result = {"attempted": False, "reviewStatus": "draft", "issues": []}
+    if not imported:
+        return result
+    from teacher_app.assessments import service
+    from teacher_app.common.errors import ApiError
+
+    reviewer = str((actor or {}).get("username") or "").strip()
+    questions = repository.list_questions(category_id, include_inactive=False)
+    pending = [q for q in questions if str(q.get("status") or "") != "reviewed"]
+    if not reviewer or not questions:
+        return result
+    if pending:
+        result["issues"] = [f"尚有 {len(pending)} 題未審核，請到題目管理確認"]
+        return result
+    result["attempted"] = True
+    try:
+        payload = service.review_category(
+            app, category_id, reviewer=reviewer, reviewer_title=str((actor or {}).get("title") or "")
+        )
+    except ApiError as exc:
+        result["issues"] = list((getattr(exc, "extra", None) or {}).get("issues") or [str(exc)])[:20]
+        return result
+    except Exception as exc:  # review must never break a successful import
+        result["issues"] = [str(exc)]
+        return result
+    result["reviewStatus"] = payload.get("reviewStatus", "approved")
+    audit.record_event(
+        actor=actor,
+        action="assessment.review",
+        target_type="assessment",
+        target_id=category_id,
+        detail={"auto": True, "trigger": "ai.candidates.import", "questionCount": len(questions)},
+    )
+    return result
+
+
 def _bind_or_add(app, rule: str, endpoint: str, view, methods: list[str]) -> None:
     """Replace a copied legacy endpoint, or add the canonical rule standalone."""
     if endpoint in app.view_functions:
@@ -580,7 +622,14 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
                 "rejected": len(errors),
             },
         )
-        return jsonify({"ok": True, "imported": len(inserted), "errors": errors[:20], "questions": inserted})
+        review = _auto_review_after_import(app, category_id, bool(inserted), audit_actor())
+        return jsonify({
+            "ok": True,
+            "imported": len(inserted),
+            "errors": errors[:20],
+            "questions": inserted,
+            "examReview": review,
+        })
 
     rules = (
         ("/api/quiz-question-images", "api_upload_question_image", api_upload_question_image, ["POST"]),
