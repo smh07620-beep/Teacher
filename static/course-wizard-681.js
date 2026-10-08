@@ -994,7 +994,7 @@ async function addFilesToCourse(){
     state.queuedMaterialIds.push(...(result.materials||[]));
     state.expectedMaterialIds=[...new Set([...state.expectedMaterialIds,...(result.materials||[])])];
     state.linksVerified=false;
-    const note=state.failedUploads.length?`有 ${state.failedUploads.length} 份教材上傳失敗，可按重試。`:`已排入背景處理 ${result.uploaded} 份教材；請等到全部完成再前往下一步。`;
+    const note=state.failedUploads.length?`有 ${state.failedUploads.length} 份教材上傳失敗：${state.failedUploads.slice(0,2).map(item=>`${item.fileName}（${item.reason}）`).join('；')}。請確認後重新選擇檔案再按「上傳到本課程」。`:`已排入背景處理 ${result.uploaded} 份教材；請等到全部完成再前往下一步。`;
     state.resultHtml=`<span class="font-bold ${state.failedUploads.length?'text-amber-700':'text-sky-700'}">${state.failedUploads.length?'⚠️':'⏳'} ${esc(note)}</span><div id="cw681-background-jobs"></div>`;
     render();
     watchQueuedJobs(queuedIds());
