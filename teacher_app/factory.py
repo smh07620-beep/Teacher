@@ -252,6 +252,10 @@ def create_app() -> Flask:
     app = _register_canonical_blueprints(app)
     app = _register_production(app)
     register_error_handlers(app)
+    # 24 小時清理未發布的 AI 成品／草稿／臨時來源（每小時一次；AI_TEMP_PURGE_ENABLED=false 可關閉）。
+    from teacher_app.maintenance.retention import start_background_purge
+
+    start_background_purge(app)
     return app
 
 

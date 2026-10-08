@@ -206,6 +206,29 @@ def _docx_inline_images(path: Path) -> list[dict]:
     return images
 
 
+def summarize_docx_images(path: Path, *, limit: int = 200) -> dict:
+    """Cheap, persistent summary of verified inline DOCX images (no image bytes).
+
+    Run once by the upload worker so the teacher sees "N images found" as soon
+    as the file is processed.  Thumbnails/bytes are produced on demand later.
+    """
+    try:
+        images = _docx_inline_images(Path(path))
+    except (KeyError, ET.ParseError, zipfile.BadZipFile) as exc:
+        return {"imageCount": 0, "images": [], "error": type(exc).__name__}
+    rows = [
+        {
+            "index": int(item.get("index") or 0),
+            "fileName": str(item.get("fileName") or "")[:120],
+            "caption": str(item.get("caption") or "")[:120],
+            "section": str(item.get("section") or "")[:200],
+            "category": str(item.get("suggestedCategory") or "")[:60],
+        }
+        for item in images[: max(0, int(limit))]
+    ]
+    return {"imageCount": len(images), "images": rows, "truncated": len(images) > len(rows)}
+
+
 def preview_docx_atlas(path: Path) -> dict:
     """Preview verified embedded images that can become independent Atlas drafts."""
     try:

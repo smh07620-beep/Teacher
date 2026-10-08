@@ -32,6 +32,8 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `AI_QUESTION_WORKER_POLL_SECONDS` | `2` | `ai_question_worker.py` | yes |  |
 | `AI_QUESTION_WORKER_RECOVERY_SECONDS` | `300` | `ai_question_worker.py` | yes |  |
 | `AI_SOURCE_MAX_CHARS` | `50000` | `teacher_app/legacy_host.py` |  | yes |
+| `AI_TEMP_PURGE_ENABLED` | `true` | `teacher_app/maintenance/retention.py` |  |  |
+| `AI_TEMP_RETENTION_HOURS` |  | `teacher_app/maintenance/retention.py` |  |  |
 | `AI_TTS_PROVIDER` |  | `teacher_app/materials/media_audio_runtime.py` | yes | yes |
 | `AI_VIDEO_ALLOW_LOCAL_STORAGE` |  | `teacher_app/materials/ai_video_storage.py` | yes |  |
 | `AI_VIDEO_CACHE_DIR` |  | `teacher_app/materials/ai_video_runtime.py` |  |  |
