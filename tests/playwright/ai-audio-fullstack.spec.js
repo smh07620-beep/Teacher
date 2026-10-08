@@ -17,6 +17,8 @@ test('Audio: real preview and approved-script job → Worker → S3 WAV → cano
   await page.evaluate(()=>window.TeacherWorkspace1014.openMedia());
   await page.locator('#teacher-media-tab-narration-1018').click();
   await expect(page.locator('#teacher-script-material-1014')).toContainText('E2E 多來源教材');
+  // 已有教材的選單預設收合在「改用已有教材」裡；老師要用既有教材時先展開它。
+  await page.locator('#teacher-script-existing-source-1033 > summary').click();
   await page.locator('#teacher-script-material-1014').selectOption('e2e-source');
   await expect(page.locator('#teacher-audio-script-1014')).toContainText('D approved narration');
   await page.locator('#teacher-audio-script-1014').selectOption(saved.script.id);
