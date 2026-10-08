@@ -1,0 +1,36 @@
+name: Release Worker (move worker-stable tag)
+
+# 手動按鈕：GitHub 網頁 → Actions → "Release Worker" → Run workflow。
+# 只會把註解標籤 worker-stable 移到 main 的最新版本；院內 Worker 的安全更新器
+# 之後會在閒置時更新到這個版本。刻意不設定自動觸發，保留「人工核准發布」這道關卡。
+# （從 Releases 網頁建立的是輕量標籤，更新器只接受註解標籤，所以用這個流程建立。）
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-worker
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Move worker-stable to main
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Create annotated worker-stable tag on this commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          sha="$(git rev-parse HEAD)"
+          version="$(tr -d '[:space:]' < VERSION)"
+          git tag -f -a worker-stable -m "Worker release ${version} (${sha:0:7})" "$sha"
+          git push --force origin refs/tags/worker-stable
+          echo "worker-stable -> ${sha:0:12} (VERSION ${version})" >> "$GITHUB_STEP_SUMMARY"

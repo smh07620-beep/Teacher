@@ -13,7 +13,7 @@
 
 目前那台電腦的 Worker 版本太舊，還沒有自動更新的功能，所以第一次必須手動更新。
 
-**開始之前，要先有 `worker-stable` 這個標籤。** 標籤只能由有權限的人建立（Claude 的工作階段沒有權限）。在你的開發電腦的 PowerShell 做第四節那三行，或到 GitHub 專案頁：右側點「Releases」→「Create a new release」→ 在「Choose a tag」輸入 `worker-stable` 並選「Create new tag」→ 目標選 `main` → 按「Publish release」。
+**開始之前，要先有 `worker-stable` 這個標籤，而且必須是「註解標籤」。** 不要從 GitHub 的 Releases 頁面建立，那樣建出來的是輕量標籤，更新器會拒絕（錯誤訊息：release ref must be an annotated tag）。請照第四節按一下「Release Worker」按鈕建立。
 
 1. 在放 Worker 的那台電腦按 Windows 鍵，輸入 `PowerShell`，對「Windows PowerShell」按右鍵，選「以系統管理員身分執行」。
 2. 進入 Worker 資料夾（以實際位置為準，下面以 `C:\TeacherWorker` 為例），然後貼上這幾行，一行一行按 Enter：
@@ -77,15 +77,18 @@ powershell -ExecutionPolicy Bypass -File .\setup_teacher_worker.ps1 -InstallOpti
 
 ## 四、發布新版給 Worker（把標籤往前移）
 
-每次想讓 Worker 用到最新的 `main`，在開發電腦執行下面三行（會把標籤移到 `main` 目前的最新版本）：
+每次想讓 Worker 用到最新的 `main`，在 GitHub 網頁按一個按鈕：
 
-```powershell
-git fetch origin main
-git tag -f -a worker-stable -m "Worker release" origin/main
-git push -f origin worker-stable
-```
+1. 打開專案頁，上方點「Actions」。
+2. 左邊清單點「Release Worker (move worker-stable tag)」。
+3. 右邊點「Run workflow」，確認分支是 `main`，再按綠色的「Run workflow」。
+4. 約 10 到 20 秒後出現綠色勾勾，就表示 `worker-stable` 標籤已移到 `main` 目前的最新版本。
 
-之後最多 1 小時（第二節設定的檢查間隔），教材 Worker 就會更新並重新啟動，AI Worker 約 1 分鐘內跟著重新啟動。也可以直接請 Claude「發布 Worker」代為執行。
+之後最多 1 小時（第二節設定的檢查間隔），教材 Worker 就會更新並重新啟動，AI Worker 約 1 分鐘內跟著重新啟動。
+
+如果之前已經從 Releases 頁面建立過 `worker-stable`，按上面的按鈕會直接把它換成註解標籤，不用先刪除。想整理的話，可以把 Releases 頁面上那筆 `worker-stable` 的 Release 刪掉（只刪 Release，不要刪標籤）。
+
+（熟悉指令的人也可以在有 git 的電腦執行：`git fetch origin main`、`git tag -f -a worker-stable -m "Worker release" origin/main`、`git push -f origin worker-stable`。）
 
 ## 五、出問題時
 
