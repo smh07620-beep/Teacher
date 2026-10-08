@@ -33,10 +33,12 @@
     }
     host.hidden = false;
     host.className = 'rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900';
+    const reason = String(data?.diagnostic?.message || data?.worker?.diagnosticMessage || '').trim().slice(0, 400);
     const message = data?.enabled === false
       ? 'AI 語音目前尚未啟用；老師錄音／錄影功能仍可正常使用。'
       : 'AI 語音目前暫時無法使用。請稍後再試；若持續發生，請至 Worker / Job 狀態查看服務狀況。';
-    host.innerHTML = `<div class="font-bold">⚠️ ${escapeHtml(message)}</div>`;
+    host.innerHTML = `<div class="font-bold">⚠️ ${escapeHtml(message)}</div>`
+      + (reason ? `<div class="mt-1 font-medium">原因：${escapeHtml(reason)}</div>` : '');
   }
 
   async function fetchJson(url, options = {}, timeoutMs = 15000) {
@@ -79,7 +81,9 @@
   }
 
   function sourceMaterialId() {
-    return document.getElementById('teacher-script-material-1014')?.value || '';
+    return window.TeacherMediaScript1014?.currentMaterialId?.()
+      || document.getElementById('teacher-script-material-1014')?.value
+      || '';
   }
 
   function sourceMaterialLabel() {

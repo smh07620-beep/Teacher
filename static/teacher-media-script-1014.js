@@ -14,6 +14,9 @@
   let materials = [];
   let authoringReferenceIds = [];
   let uploadedPrivateSourceIds = [];
+  // 本次講稿的主要來源 ID。不能只靠下拉選單記住：其他腳本重繪教材清單時會把選單清空，
+  // 造成「上傳成功卻說請先選擇教材」。
+  let primarySourceId = '';
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
@@ -56,9 +59,32 @@
     });
   }
 
+  function currentMaterialId() {
+    return primarySourceId || document.getElementById('teacher-script-material-1014')?.value || '';
+  }
+
+  // 只有教師在「改用已有教材」展開並選了教材時，才把下拉選單的值當作使用者的選擇。
+  function existingSourceChoice() {
+    const details = document.getElementById('teacher-script-existing-source-1033');
+    const value = document.getElementById('teacher-script-material-1014')?.value || '';
+    return (!details || details.open) ? value : '';
+  }
+
+  // 讓下拉選單與主要來源一致；刻意不送 change 事件，避免其他腳本的同步橋把它重設成空白。
+  function applyPrimarySelection(id) {
+    primarySourceId = String(id || '');
+    const select = document.getElementById('teacher-script-material-1014');
+    if (!select || !primarySourceId) return;
+    if (![...select.options].some(option => option.value === primarySourceId)) {
+      const item = materials.find(row => String(row.id) === primarySourceId);
+      select.add(new Option(`［私人來源］${item?.title || item?.filename || primarySourceId}`, primarySourceId));
+    }
+    select.value = primarySourceId;
+  }
+
   async function syncNarrationOptions() {
     const loader = window.TeacherMediaAudio1014?.loadApprovedScripts;
-    if (typeof loader === 'function') await loader();
+    if (typeof loader === 'function') await loader(currentMaterialId());
   }
 
   function updateMaterialCache(rows) {
@@ -84,7 +110,7 @@
     const select = document.getElementById('teacher-script-material-1014');
     if (!select) return;
     const previous = select.value;
-    select.innerHTML = '<option value="">選擇教材或剛加入的私人來源…</option>';
+    select.innerHTML = '<option value="">選擇系統內已有的教材…</option>';
     try {
       await fetchMaterials();
       materials.forEach(item => {
@@ -95,7 +121,8 @@
         option.textContent = `${draft}${group ? `${group}｜` : ''}${item.title || item.filename || item.id}`;
         select.appendChild(option);
       });
-      if ([...select.options].some(option => option.value === previous)) select.value = previous;
+      const keep = primarySourceId || previous;
+      if ([...select.options].some(option => option.value === keep)) select.value = keep;
     } catch (error) {
       status(`教材清單讀取失敗：${error.message}`, 'error');
     }
@@ -124,12 +151,12 @@
     throw new Error(`${label}等待逾時，工作仍可能在背景繼續。`);
   }
 
-  async function uploadScriptSources(files) {
+  // ctx.primaryId：本次「匯入並產生講稿」已確定的主要來源；第一份新上傳的來源在沒有主要來源時成為主要來源。
+  async function uploadScriptSources(files, ctx = {}) {
     const rows = [...(files || [])];
     if (!rows.length) return status('請先選擇講稿來源檔案。', 'error');
     if (!window.MaterialUploadClient?.enqueue) return status('教材安全上傳元件尚未載入。', 'error');
     const {area, group} = currentScope();
-    const selectedPrimary = document.getElementById('teacher-script-material-1014')?.value || '';
     const uploaded = [];
     const token = ++pollToken;
     setBusy(true);
@@ -158,17 +185,17 @@
         uploaded.push(String(queued.materialId));
         uploadedPrivateSourceIds = [...new Set([...uploadedPrivateSourceIds, String(queued.materialId)])];
       }
-      await paintMaterialOptions();
-      const select = document.getElementById('teacher-script-material-1014');
-      if (!selectedPrimary && uploaded[0] && select && [...select.options].some(option => option.value === uploaded[0])) {
-        select.value = uploaded[0];
-        select.dispatchEvent(new Event('change', {bubbles:true}));
+      if (!ctx.primaryId && uploaded[0]) {
+        ctx.primaryId = uploaded[0];
         authoringReferenceIds = [...new Set([...authoringReferenceIds, ...uploaded.slice(1)])];
       } else {
         authoringReferenceIds = [...new Set([...authoringReferenceIds, ...uploaded])];
       }
+      primarySourceId = String(ctx.primaryId || '');
+      await paintMaterialOptions();
+      applyPrimarySelection(primarySourceId);
       renderAuthoringReferences();
-      status(`✅ 已加入 ${uploaded.length} 份私人講稿來源；可直接產生講稿草稿。`, 'success');
+      status(`✅ 已加入 ${uploaded.length} 份講稿來源，接著開始產生講稿。`, 'success');
       return true;
     } catch (error) {
       status(`講稿來源處理失敗：${error.message}`, 'error');
@@ -178,12 +205,12 @@
     }
   }
 
-  async function addPastedScriptSource() {
+  async function addPastedScriptSource(ctx = {}) {
     const title = String(document.getElementById('teacher-script-paste-title-1030')?.value || '講稿文字來源').trim() || '講稿文字來源';
     const body = String(document.getElementById('teacher-script-paste-1030')?.value || '').trim();
     if (body.length < 20) return status('請貼入至少 20 個字的講稿來源內容。', 'error');
     const file = new File([body], safeTextFilename(title), {type:'text/plain;charset=utf-8', lastModified:Date.now()});
-    const ok = await uploadScriptSources([file]);
+    const ok = await uploadScriptSources([file], ctx);
     if (ok) {
       const titleInput = document.getElementById('teacher-script-paste-title-1030');
       const textInput = document.getElementById('teacher-script-paste-1030');
@@ -230,6 +257,7 @@
       if (data.status === 'completed') {
         setBusy(false);
         showEditor(data.result || {});
+        applyPrimarySelection(primarySourceId);
         status('✅ 講稿草稿已完成。請由老師編修、儲存後再核准。', 'success');
         return;
       }
@@ -245,23 +273,28 @@
     const input = document.getElementById('teacher-script-source-file-1030');
     const pasted = String(document.getElementById('teacher-script-paste-1030')?.value || '').trim();
     const files = [...(input?.files || [])];
-    if (files.length) {
-      const ok = await uploadScriptSources(files);
-      if (!ok) return false;
-      if (input) input.value = '';
-    }
-    if (pasted) {
-      if (pasted.length < 20) return status('請貼入至少 20 個字的講稿來源內容。', 'error');
-      const ok = await addPastedScriptSource();
-      if (ok === false) return false;
+    if (files.length || pasted) {
+      if (pasted && pasted.length < 20) return status('請貼入至少 20 個字的講稿來源內容。', 'error');
+      // 教師有展開「改用已有教材」並選了教材時，新上傳的來源只是補充；否則第一份新來源就是主要教材。
+      const ctx = {primaryId: existingSourceChoice()};
+      if (files.length) {
+        const ok = await uploadScriptSources(files, ctx);
+        if (!ok) return false;
+        if (input) input.value = '';
+      }
+      if (pasted) {
+        const ok = await addPastedScriptSource(ctx);
+        if (ok === false) return false;
+      }
+      applyPrimarySelection(ctx.primaryId);
     }
     return generateScript();
   }
 
   async function generateScript() {
-    const materialId = document.getElementById('teacher-script-material-1014')?.value || '';
+    const materialId = currentMaterialId();
     if (!materialId) {
-      status('請先選擇一份教材。', 'error');
+      status('請先選擇來源檔案（或貼上文字），再按「匯入並產生講稿」。若要用系統內已有的教材，請展開下方「改用已有教材」。', 'error');
       return;
     }
     const payload = {
@@ -365,7 +398,7 @@
       await syncNarrationOptions();
       window.dispatchEvent(new CustomEvent('teacher-media-script-approved-1027', {
         detail: {
-          materialId: document.getElementById('teacher-script-material-1014')?.value || '',
+          materialId: currentMaterialId(),
           scriptId: script.id || activeScriptId,
           title: script.title || ''
         }
@@ -396,7 +429,7 @@
   }
 
   async function loadSavedScripts() {
-    const materialId = document.getElementById('teacher-script-material-1014')?.value || '';
+    const materialId = currentMaterialId();
     const host = document.getElementById('teacher-script-saved-1014');
     if (!host) return;
     if (!materialId) {
@@ -494,6 +527,7 @@
     }
     uploadedPrivateSourceIds = failed;
     authoringReferenceIds = authoringReferenceIds.filter(id => failed.includes(id));
+    if (primarySourceId && ids.includes(primarySourceId) && !failed.includes(primarySourceId)) primarySourceId = '';
     renderAuthoringReferences();
     window.invalidateAdminMaterialsCache?.();
     return failed.length === 0;
@@ -505,6 +539,7 @@
     activeJobId = '';
     activeScriptId = '';
     authoringReferenceIds = [];
+    primarySourceId = '';
     ['teacher-script-editor-1014', 'teacher-script-source-1014'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
     ['teacher-script-body-1014', 'teacher-script-title-1014', 'teacher-script-paste-1030', 'teacher-script-paste-title-1030',
       'teacher-script-revision-1032', 'teacher-script-focus-1014'].forEach(id => {
@@ -518,7 +553,9 @@
     document.getElementById('teacher-audio-result-1014')?.classList.add('hidden');
     renderAuthoringReferences();
     setBusy(false);
-    status('加入來源後按「匯入並產生講稿」即可開始。');
+    const existing = document.getElementById('teacher-script-existing-source-1033');
+    if (existing) existing.open = false;
+    status('選好檔案（或貼上文字）後，直接按「匯入並產生講稿」即可開始。');
     void loadSavedScripts();
   }
 
@@ -579,8 +616,9 @@
     section.className = 'bg-white border border-indigo-200 rounded-2xl p-5 shadow-sm space-y-5';
     section.innerHTML = `
       <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-indigo-700">STEP 1 · SCRIPT</p><h4 class="text-lg font-black text-slate-950">📝 先建立並核准講稿</h4><p class="mt-1 text-xs text-slate-500">請在這裡選擇要製作講稿的教材來源；這個來源只服務講稿／配音流程。講稿核准後會直接銜接 AI 配音，不必切換到另一套流程。</p></div><span class="rounded-full bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-700">AI 草稿 → 教師核准</span></div>
-      <div class="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3"><label class="block text-xs font-bold text-slate-700">加入講稿來源（PDF／Word／PPTX／圖片／文字，可多選）<input id="teacher-script-source-file-1030" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.odt,.ods,.txt,.csv,.png,.jpg,.jpeg,.webp" class="mt-2 block w-full text-sm"></label><div class="grid gap-3 lg:grid-cols-[minmax(0,200px)_minmax(0,1fr)] lg:items-end"><label class="text-xs font-bold text-slate-700">貼入文字標題（選填）<input id="teacher-script-paste-title-1030" maxlength="120" class="learning-input mt-1" placeholder="例如：SOP 補充說明"></label><label class="text-xs font-bold text-slate-700">或直接貼入內容<textarea id="teacher-script-paste-1030" rows="4" maxlength="60000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-6" placeholder="可貼入 SOP、課程重點、會議紀錄或其他講稿來源"></textarea></label></div><div id="teacher-script-added-sources-1030" class="flex flex-wrap gap-2"></div></div>
-      <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-xs font-bold text-slate-600 xl:col-span-2">主要教材／來源<select id="teacher-script-material-1014" class="learning-input mt-1"><option value="">讀取教材中…</option></select><span class="mt-1 block text-[10px] font-medium text-slate-400">可直接選既有教材，也可先在上方加入私人來源；額外來源會一起送給 AI 統整。</span></label><label class="text-xs font-bold text-slate-600">目標長度<select id="teacher-script-minutes-1014" class="learning-input mt-1"><option value="3">約 3 分鐘</option><option value="5" selected>約 5 分鐘</option><option value="10">約 10 分鐘</option><option value="15">約 15 分鐘</option><option value="20">約 20 分鐘</option></select></label><label class="text-xs font-bold text-slate-600">講課語氣<select id="teacher-script-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
+      <div class="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3"><label class="block text-xs font-bold text-slate-700">加入講稿來源（PDF／Word／PPTX／圖片／文字，可多選）<input id="teacher-script-source-file-1030" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.odt,.ods,.txt,.csv,.png,.jpg,.jpeg,.webp" class="mt-2 block w-full text-sm"><span class="mt-1 block text-[11px] font-medium text-indigo-700">選好檔案後，請直接按下方「✨ 匯入並產生講稿」；按下後系統才會上傳並開始製作（只選檔案還不會上傳）。第一份檔案會自動當作主要教材。</span></label><div class="grid gap-3 lg:grid-cols-[minmax(0,200px)_minmax(0,1fr)] lg:items-end"><label class="text-xs font-bold text-slate-700">貼入文字標題（選填）<input id="teacher-script-paste-title-1030" maxlength="120" class="learning-input mt-1" placeholder="例如：SOP 補充說明"></label><label class="text-xs font-bold text-slate-700">或直接貼入內容<textarea id="teacher-script-paste-1030" rows="4" maxlength="60000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-6" placeholder="可貼入 SOP、課程重點、會議紀錄或其他講稿來源"></textarea></label></div><div id="teacher-script-added-sources-1030" class="flex flex-wrap gap-2"></div></div>
+      <details id="teacher-script-existing-source-1033" class="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2"><summary class="cursor-pointer text-xs font-black text-slate-700">改用已有教材（沒有要上傳新檔案時才需要）</summary><div class="mt-3"><label class="block text-xs font-bold text-slate-600 md:max-w-xl">系統內已有的教材<select id="teacher-script-material-1014" class="learning-input mt-1"><option value="">讀取教材中…</option></select><span class="mt-1 block text-[10px] font-medium text-slate-400">選了這裡的教材後，上方新加入的檔案會變成補充來源，一起送給 AI 統整。</span></label></div></details>
+      <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-xs font-bold text-slate-600">目標長度<select id="teacher-script-minutes-1014" class="learning-input mt-1"><option value="3">約 3 分鐘</option><option value="5" selected>約 5 分鐘</option><option value="10">約 10 分鐘</option><option value="15">約 15 分鐘</option><option value="20">約 20 分鐘</option></select></label><label class="text-xs font-bold text-slate-600">講課語氣<select id="teacher-script-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
       <div class="flex flex-col sm:flex-row gap-2"><input id="teacher-script-focus-1014" class="learning-input flex-1" maxlength="500" placeholder="選填：特別聚焦，例如抗體鑑定判讀步驟、QC 異常處理"><button id="teacher-script-generate-1014" type="button" class="rounded-xl bg-indigo-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">✨ 匯入並產生講稿</button></div>
       <div id="teacher-script-status-1014" class="text-xs text-slate-600">選擇教材後即可產生講稿。</div>
       <div id="teacher-script-source-1014" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-slate-700"></div>
@@ -599,12 +637,14 @@
       authoringReferenceIds = authoringReferenceIds.filter(id => id !== button.dataset.removeScriptSource);
       renderAuthoringReferences();
     });
-    document.getElementById('teacher-script-material-1014')?.addEventListener('change', () => {
+    document.getElementById('teacher-script-material-1014')?.addEventListener('change', event => {
+      // 只有教師親自換選教材才放棄剛上傳的主要來源；程式同步送出的 change 不算。
+      if (event.isTrusted) primarySourceId = '';
       activeScriptId = '';
       activeJobId = '';
       pollToken += 1;
       const shared = document.getElementById('teacher-media-source-1018');
-      const selected = document.getElementById('teacher-script-material-1014')?.value || '';
+      const selected = currentMaterialId();
       if (shared && shared.value !== selected) {
         shared.value = selected;
         shared.dispatchEvent(new Event('change', {bubbles:true}));
@@ -627,5 +667,5 @@
     updateMaterialCache(event.detail?.materials);
   });
 
-  window.TeacherMediaScript1014 = Object.freeze({ generateScript, importAndGenerate, loadSavedScripts, resetFlow, discardDraft, discardAll, cleanupPrivateSources });
+  window.TeacherMediaScript1014 = Object.freeze({ currentMaterialId, generateScript, importAndGenerate, loadSavedScripts, resetFlow, discardDraft, discardAll, cleanupPrivateSources });
 })();
