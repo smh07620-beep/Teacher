@@ -577,7 +577,7 @@
     if(action==='materials-manager')return mountMaterialManagerInStudio();
     if(action==='material')return openMaterialUpload('standard');
     if(action==='video-material')return openMaterialUpload('video');
-    if(action==='external'){closeStudio();await window.AppWorkspaceRoutes.open('course-materials');await window.openExternalMaterialCreateDrawer?.();return;}
+    if(action==='external')return launch('course');// 外部影音連結統一在課程精靈第 2 步加入，不再跳到舊抽屜
     if(action==='atlas')return openAtlas();
     if(action==='atlas-docx')return openTeacherAtlasDocxWorkspace();
   }

@@ -210,6 +210,33 @@
     }
   };
 
+  // 以下拉選單選擇「對應考卷」，取代原本要自己輸入考卷代碼的 prompt。
+  async function pickMaterialExamCategory(material, group){
+    let rows = [];
+    try {
+      const area = material.area || 'internal';
+      const res = await fetch(`/api/quiz-categories/admin?group=${encodeURIComponent(group || 'grpBio')}&area=${encodeURIComponent(area)}`, {credentials:'same-origin'});
+      const data = await res.json().catch(() => []);
+      rows = Array.isArray(data) ? data : (Array.isArray(data?.categories) ? data.categories : []);
+    } catch (_err) { rows = []; }
+    const current = String(material.category || '');
+    if (!rows.length) return current;
+    return new Promise(resolve => {
+      const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const dialog = document.createElement('dialog');
+      dialog.className = 'rounded-2xl p-0 shadow-xl backdrop:bg-slate-900/40';
+      dialog.innerHTML = `<form method="dialog" class="w-[min(92vw,420px)] space-y-3 p-5"><h4 class="text-base font-black text-slate-900">這份教材對應哪一份考卷？</h4><select class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"><option value="">不對應考卷（未分類）</option>${rows.map(c => `<option value="${esc(c.id)}" ${String(c.id) === current ? 'selected' : ''}>${esc(c.title || c.name || c.id)}${c.active ? '' : '（草稿）'}</option>`).join('')}</select><div class="flex justify-end gap-2"><button value="cancel" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold">取消</button><button value="ok" class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white">確定</button></div></form>`;
+      dialog.addEventListener('close', () => {
+        const ok = dialog.returnValue === 'ok';
+        const value = dialog.querySelector('select')?.value ?? current;
+        dialog.remove();
+        resolve(ok ? value : null);
+      });
+      document.body.appendChild(dialog);
+      dialog.showModal();
+    });
+  }
+
   async function resolveMaterialVersionIntent(file,meta){
     const materials=(await window.fetchAdminMaterials?.())||[];
     const filename=String(file?.name||'').trim().toLocaleLowerCase();
@@ -407,7 +434,7 @@
     const groupOptions = Object.entries(GROUPS).filter(([k,g])=>(m.area||'internal')==='pgy'||!g.pgyOnly).map(([k, g]) => `${k}=${g.label}`).join('、');
     const group = prompt(`所屬組別代碼（${groupOptions}）：`, m.group || 'grpBio');
     if (group === null) return;
-    const category = prompt('對應考卷代碼（可於「建立考卷與智慧題庫」查看；留白代表未分類）：', m.category || '');
+    const category = await pickMaterialExamCategory(m, group);
     if (category === null) return;
     const atlasMeta={...(m.atlasMeta||{})};
     if((m.materialType||'standard')==='atlas'){
