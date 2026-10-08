@@ -15,7 +15,7 @@ const AI_PLAN_META={
   video:{label:'AI 教學影片',detail:'以教材、投影片或其他來源製作影片；完成後回到本頁確認。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],resultHtml:'',watchToken:0};
+const state={editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -185,7 +185,7 @@ function stepOne(){
     <p class="mt-1 text-[11px] text-teal-800">課程可見範圍仍由上方訓練區／組別控制；這裡設定誰需要完成、學習要求與期限。</p>
     <div class="mt-3 grid gap-3 md:grid-cols-4">
       <label class="text-xs font-bold">指派對象<select id="cw681-assignee-type" class="mt-1 w-full rounded border bg-white p-2"></select></label>
-      <label class="text-xs font-bold">人員／組別<select id="cw681-assignee-key" class="mt-1 w-full rounded border bg-white p-2"></select></label>
+      <div class="text-xs font-bold"><label for="cw681-assignee-key">人員／組別</label><select id="cw681-assignee-key" class="mt-1 w-full rounded border bg-white p-2"></select><div id="cw681-assignee-people" class="mt-1 hidden rounded border bg-white p-2"><div class="mb-1 flex items-center justify-between gap-2 text-[11px] font-normal text-slate-500"><span id="cw681-assignee-count">已選 0 人</span><span><button type="button" id="cw681-assignee-all" class="rounded bg-teal-50 px-2 py-0.5 font-bold text-teal-800">全選</button> <button type="button" id="cw681-assignee-none" class="rounded bg-slate-100 px-2 py-0.5 font-bold text-slate-600">清除</button></span></div><div id="cw681-assignee-list" class="max-h-44 space-y-1 overflow-y-auto font-normal"></div></div></div>
       <label class="text-xs font-bold">學習要求<select id="cw681-required" class="mt-1 w-full rounded border bg-white p-2"><option value="required" ${state.assignmentRequired?'selected':''}>指定完成</option><option value="elective" ${!state.assignmentRequired?'selected':''}>自由選讀</option></select></label>
       <label class="text-xs font-bold">完成期限<input id="cw681-due-at" type="date" value="${esc(state.dueAt)}" class="mt-1 w-full rounded border bg-white p-2"></label>
     </div>
@@ -199,6 +199,27 @@ function personLabel(person){
   return name+(emp?'｜'+emp:'');
 }
 
+function selectedAssigneeKeys(){
+  const list=el('cw681-assignee-list');
+  if(list)return [...list.querySelectorAll('input[type=checkbox]:checked')].map(box=>box.value).filter(Boolean);
+  return Array.isArray(state.assigneeKeys)?state.assigneeKeys:[];
+}
+
+function paintAssigneeChecklist(people){
+  const list=el('cw681-assignee-list');
+  if(!list)return;
+  const chosen=new Set((state.assigneeKeys||[]).map(String));
+  const enabled=Boolean(el('cw681-assignment-enabled')?.checked);
+  list.innerHTML=people.length?people.map(person=>{const id=String(person.username||'');return `<label class="flex items-center gap-2"><input type="checkbox" value="${esc(id)}" ${chosen.has(id)?'checked':''} ${enabled?'':'disabled'}> ${esc(personLabel(person))}</label>`;}).join(''):'<p class="text-[11px] text-slate-500">這個組別目前沒有可指派的人員。</p>';
+  updateAssigneeCount();
+}
+
+function updateAssigneeCount(){
+  const count=selectedAssigneeKeys().length;
+  const node=el('cw681-assignee-count');
+  if(node)node.textContent=`已選 ${count} 人`;
+}
+
 function paintWizardAudienceOptions(){
   if(!canAssignLearning())return;
   const type=el('cw681-assignee-type'),key=el('cw681-assignee-key'),status=el('cw681-audience-status');
@@ -210,12 +231,12 @@ function paintWizardAudienceOptions(){
   type.value=previousType;state.assigneeType=previousType;
 
   if(previousType==='all'){
-    key.replaceChildren(new Option('全體人員',''));key.disabled=true;state.assigneeKey='';
+    key.replaceChildren(new Option('全體人員',''));key.disabled=true;state.assigneeKey='';state.assigneeKeys=[];
   }else if(previousType==='user'){
     const people=Array.isArray(options.people)?options.people:[];
     key.disabled=false;
-    key.replaceChildren(new Option('請選擇人員',''),...people.map(person=>new Option(personLabel(person),person.username||'')));
-    if([...key.options].some(option=>option.value===state.assigneeKey))key.value=state.assigneeKey;
+    key.replaceChildren(new Option('請選擇人員',''));
+    paintAssigneeChecklist(people);
   }else{
     const current=String(options.group||el('cw681-group')?.value||scope().group||'');
     const groups=(Array.isArray(options.groups)?options.groups:[]).filter(item=>!current||String(item.key)===current);
@@ -225,6 +246,10 @@ function paintWizardAudienceOptions(){
     state.assigneeKey=key.value||current;
   }
   const enabled=Boolean(el('cw681-assignment-enabled')?.checked);
+  const multi=previousType==='user';
+  key.classList.toggle('hidden',multi);
+  el('cw681-assignee-people')?.classList.toggle('hidden',!multi);
+  [...document.querySelectorAll('#cw681-assignee-list input,#cw681-assignee-all,#cw681-assignee-none')].forEach(node=>node.disabled=!enabled);
   [type,key,el('cw681-required'),el('cw681-due-at')].filter(Boolean).forEach(node=>node.disabled=!enabled||(node===key&&previousType==='all'));
   if(status)status.textContent=enabled?'發布完成後會自動建立這筆指派。':'未啟用；只建立／發布課程，不額外建立學習指派。';
 }
@@ -241,12 +266,16 @@ async function loadWizardAudienceOptions(){
 function bindStepOneControls(){
   const enabled=el('cw681-assignment-enabled');
   enabled?.addEventListener('change',()=>{state.assignmentEnabled=enabled.checked;paintWizardAudienceOptions();});
-  el('cw681-assignee-type')?.addEventListener('change',event=>{state.assigneeType=event.target.value;state.assigneeKey='';paintWizardAudienceOptions();});
+  el('cw681-assignee-type')?.addEventListener('change',event=>{state.assigneeType=event.target.value;state.assigneeKey='';state.assigneeKeys=[];paintWizardAudienceOptions();});
   el('cw681-assignee-key')?.addEventListener('change',event=>{state.assigneeKey=event.target.value;});
+  el('cw681-assignee-list')?.addEventListener('change',()=>{state.assigneeKeys=selectedAssigneeKeys();updateAssigneeCount();});
+  const setAll=checked=>{document.querySelectorAll('#cw681-assignee-list input[type=checkbox]').forEach(box=>{if(!box.disabled)box.checked=checked;});state.assigneeKeys=selectedAssigneeKeys();updateAssigneeCount();};
+  el('cw681-assignee-all')?.addEventListener('click',()=>setAll(true));
+  el('cw681-assignee-none')?.addEventListener('click',()=>setAll(false));
   [el('cw681-area'),el('cw681-group')].filter(Boolean).forEach(node=>node.addEventListener('change',()=>{
     if(el('wizard-area'))el('wizard-area').value=el('cw681-area')?.value||'pgy';
     if(el('wizard-group'))el('wizard-group').value=el('cw681-group')?.value||el('wizard-group').value;
-    state.audienceOptions=null;state.assigneeKey='';void loadWizardAudienceOptions();
+    state.audienceOptions=null;state.assigneeKey='';state.assigneeKeys=[];void loadWizardAudienceOptions();
   }));
   paintWizardAudienceOptions();
   void loadWizardAudienceOptions();
@@ -279,7 +308,8 @@ function bindStepThreeControls(){}
 function assignmentSummary(){
   if(!canAssignLearning()||!state.assignmentEnabled)return '不建立額外學習指派';
   const type={group:'目前組別',user:'指定人員',all:'全體人員'}[state.assigneeType]||state.assigneeType;
-  return `${type}${state.assigneeKey?' · '+state.assigneeKey:''} · ${state.assignmentRequired?'指定完成':'自由選讀'}${state.dueAt?' · '+state.dueAt+' 前完成':' · 無期限'}`;
+  const who=state.assigneeType==='user'?` · ${(state.assigneeKeys||[]).length} 人`:(state.assigneeKey?' · '+state.assigneeKey:'');
+  return `${type}${who} · ${state.assignmentRequired?'指定完成':'自由選讀'}${state.dueAt?' · '+state.dueAt+' 前完成':' · 無期限'}`;
 }
 
 function stepFour(){
@@ -318,6 +348,7 @@ function syncInputs(){
       state.assignmentEnabled=Boolean(el('cw681-assignment-enabled')?.checked);
       state.assigneeType=el('cw681-assignee-type')?.value||state.assigneeType||'group';
       state.assigneeKey=state.assigneeType==='all'?'':(el('cw681-assignee-key')?.value||state.assigneeKey||'');
+      if(state.assigneeType==='user'&&el('cw681-assignee-list'))state.assigneeKeys=selectedAssigneeKeys();
       state.assignmentRequired=(el('cw681-required')?.value||'required')==='required';
       state.dueAt=el('cw681-due-at')?.value||'';
     }
@@ -869,7 +900,7 @@ async function openAssessmentAuthoring(){
 
 function clearWizardState(){
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.resultHtml='';
@@ -1024,11 +1055,7 @@ function publicationStatusNode(){
   return box;
 }
 
-async function createWizardAssignment(courseId){
-  if(!canAssignLearning()||!state.assignmentEnabled)return {skipped:true};
-  const assigneeType=state.assigneeType||'group';
-  const assigneeKey=assigneeType==='all'?'':(state.assigneeKey||(assigneeType==='group'?scope().group:''));
-  if(assigneeType==='user'&&!assigneeKey)throw new Error('尚未選擇要指派的人員。');
+async function postWizardAssignment(courseId,assigneeType,assigneeKey){
   const response=await fetch('/api/learning-assignments',{
     method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({courseId,assigneeType,assigneeKey,required:state.assignmentRequired!==false,dueAt:state.dueAt||''})
@@ -1039,6 +1066,25 @@ async function createWizardAssignment(courseId){
   if(response.status===403)throw new Error(data.error||'此帳號沒有建立學習指派的權限。');
   if(!response.ok)throw new Error(data.error||'課程已發布，但學習指派建立失敗。');
   return {created:true,data};
+}
+
+// One assignment per person.  Re-publishing is safe: people who already have
+// the assignment come back as "reused" and are not duplicated.
+async function createWizardAssignment(courseId){
+  if(!canAssignLearning()||!state.assignmentEnabled)return {skipped:true};
+  const assigneeType=state.assigneeType||'group';
+  if(assigneeType==='user'){
+    const keys=[...new Set((state.assigneeKeys||[]).map(String).filter(Boolean))];
+    if(!keys.length)throw new Error('尚未選擇要指派的人員。');
+    let created=0,reused=0;
+    for(const key of keys){
+      const result=await postWizardAssignment(courseId,'user',key);
+      if(result.created)created+=1;else if(result.reused)reused+=1;
+    }
+    return {created:created>0,reused:created===0&&reused>0,createdCount:created,reusedCount:reused,total:keys.length};
+  }
+  const assigneeKey=assigneeType==='all'?'':(state.assigneeKey||(assigneeType==='group'?scope().group:''));
+  return postWizardAssignment(courseId,assigneeType,assigneeKey);
 }
 
 async function publishAndOpenCourseWorkspace(){
@@ -1092,7 +1138,7 @@ async function publishAndOpenCourseWorkspace(){
       alert('課程已發布，但學習指派尚未完成：\n'+(error.message||'建立失敗'));
       return;
     }
-    const assignmentNote=assignmentResult.created?'；學習指派已建立':assignmentResult.reused?'；既有學習指派已沿用':'';
+    const assignmentNote=assignmentResult.total>1?`；已指派 ${assignmentResult.total} 人（新增 ${assignmentResult.createdCount}、既有 ${assignmentResult.reusedCount}）`:assignmentResult.created?'；學習指派已建立':assignmentResult.reused?'；既有學習指派已沿用':'';
     if(publicationBox)publicationBox.innerHTML=`<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-2 font-bold text-emerald-800">✅ 課程已正式發布${assignmentNote}。</div>`;
     await refreshWorkspaceData();
     await openCourseWorkspace();
@@ -1118,7 +1164,7 @@ async function openCourseWorkspace(){
   el('admin-course-material-hub')?.scrollIntoView({behavior:'smooth',block:'start'});
 
   // Do not leak a completed course into the next create-course flow.
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.resultHtml='';
@@ -1130,7 +1176,7 @@ async function openCourseWorkspace(){
 function reset(){
   if(state.created&&!canLeaveCourse())return alert('目前教材尚未全部完成，請先等待或處理失敗工作。');
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.resultHtml='';clearWorkflowId();
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
