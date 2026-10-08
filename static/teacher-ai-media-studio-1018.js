@@ -319,7 +319,7 @@
     const detail = simpleFlowResultDetail(mode);
     // 成品已進教材；本次臨時加入的私人來源不再需要，清掉以免佔用雲端空間。
     if (mode === 'narration') {
-      await window.TeacherMediaScript1014?.cleanupPrivateSources?.();
+      await window.TeacherMediaScript1014?.cleanupPrivateSources?.({finished: true});
     } else if ((mode === 'presentation' && detail.presentationId) || (mode === 'video' && detail.videoId)) {
       await window.TeacherAIMaterial1014?.cleanupAuthoringSources?.();
     }

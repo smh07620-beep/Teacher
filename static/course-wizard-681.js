@@ -856,7 +856,7 @@ async function attachAiProducts(){
     for(const item of pending){
       await api('/api/slides/'+encodeURIComponent(item.materialId),{
         method:'PATCH',
-        body:JSON.stringify({courseId:state.course.id,active:true})
+        body:JSON.stringify(item.asSource?{courseId:state.course.id,active:true,desc:''}:{courseId:state.course.id,active:true})
       });
       item.linked=true;
       state.expectedMaterialIds=[...new Set([...state.expectedMaterialIds,String(item.materialId)])];
@@ -1025,6 +1025,11 @@ function recordAiProduct(detail={},kind='AI PowerPoint',derived=false){
   if(state.step===2)render();
 }
 
+window.addEventListener('teacher-ai-source-kept',event=>{
+  const detail=event.detail||{};recordAiProduct(detail,'講稿來源（主要教材）');
+  const item=(state.aiProducts||[]).find(product=>String(product.materialId)===String(detail.materialId||''));
+  if(item)item.asSource=true;
+});
 window.addEventListener('teacher-ai-presentation-published',event=>recordAiProduct(event.detail||{}));
 window.addEventListener('teacher-ai-narration-published',event=>recordAiProduct(event.detail||{},'AI 講稿配音'));
 window.addEventListener('teacher-ai-video-published',event=>recordAiProduct(event.detail||{},'AI 教學影片',true));

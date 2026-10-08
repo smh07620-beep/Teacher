@@ -54,6 +54,6 @@ class ContentContainerConvergence77Tests(unittest.TestCase):
     def test_ai_auto_selects_up_to_four_linked_materials(self):
         self.assertIn("mats.filter(m=>m.category===id)",self.ai)
         self.assertIn("auto.slice(0,4)",self.ai)
-        self.assertIn("kind(m)[0]!=='video'",self.ai)
+        self.assertIn("!['video','audio'].includes(kind(m)[0])",self.ai)
 
 if __name__=='__main__': unittest.main()

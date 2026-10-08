@@ -60,6 +60,8 @@
 
   // 沒有來源或正在處理時鎖住按鈕，避免送出空工作讓 Worker 白跑一趟。
   function updateGenerateState() {
+    const keepRow = document.getElementById('teacher-script-keep-source-row-1033');
+    if (keepRow) keepRow.hidden = !window.TeacherCourseAuthoringContext?.active;
     const generate = document.getElementById('teacher-script-generate-1014');
     if (!generate) return;
     const ready = sourcesReady();
@@ -542,8 +544,19 @@
   }
 
   // 本次製作臨時加入的「私人來源」只為產生講稿而存在；完成或放棄後移除，避免佔用雲端儲存空間。
-  async function cleanupPrivateSources() {
-    const ids = [...uploadedPrivateSourceIds];
+  // 從「建立課程」精靈進來、且勾選了保留時，講稿完成後把第一份來源檔留給課程當主要教材。
+  function keepSourceRequested() {
+    return Boolean(
+      window.TeacherCourseAuthoringContext?.active
+      && document.getElementById('teacher-script-keep-source-1033')?.checked
+      && primarySourceId
+      && uploadedPrivateSourceIds.includes(primarySourceId)
+    );
+  }
+
+  async function cleanupPrivateSources(options = {}) {
+    const keepId = options.finished && keepSourceRequested() ? primarySourceId : '';
+    const ids = uploadedPrivateSourceIds.filter(id => id !== keepId);
     const failed = [];
     for (const id of ids) {
       try {
@@ -553,9 +566,15 @@
         failed.push(id);
       }
     }
-    uploadedPrivateSourceIds = failed;
+    uploadedPrivateSourceIds = keepId ? [...failed, keepId] : failed;
     authoringReferenceIds = authoringReferenceIds.filter(id => failed.includes(id));
     if (primarySourceId && ids.includes(primarySourceId) && !failed.includes(primarySourceId)) primarySourceId = '';
+    if (keepId) {
+      const option = [...(document.getElementById('teacher-script-material-1014')?.options || [])].find(item => item.value === keepId);
+      const title = String(option?.textContent || '').replace('［私人來源］', '').trim() || '講稿來源教材';
+      window.dispatchEvent(new CustomEvent('teacher-ai-source-kept', {detail: {materialId: keepId, title}}));
+      uploadedPrivateSourceIds = uploadedPrivateSourceIds.filter(id => id !== keepId);
+    }
     renderAuthoringReferences();
     window.invalidateAdminMaterialsCache?.();
     return failed.length === 0;
@@ -578,6 +597,8 @@
     if (file) file.value = '';
     const select = document.getElementById('teacher-script-material-1014');
     if (select) select.value = '';
+    const keepRow = document.getElementById('teacher-script-keep-source-row-1033');
+    if (keepRow) keepRow.hidden = !window.TeacherCourseAuthoringContext?.active;
     document.getElementById('teacher-audio-result-1014')?.classList.add('hidden');
     renderAuthoringReferences();
     setBusy(false);
@@ -645,7 +666,7 @@
     section.className = 'bg-white border border-indigo-200 rounded-2xl p-5 shadow-sm space-y-5';
     section.innerHTML = `
       <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-indigo-700">STEP 1 · SCRIPT</p><h4 class="text-lg font-black text-slate-950">📝 先建立並核准講稿</h4><p class="mt-1 text-xs text-slate-500">請在這裡選擇要製作講稿的教材來源；這個來源只服務講稿／配音流程。講稿核准後會直接銜接 AI 配音，不必切換到另一套流程。</p></div><span class="rounded-full bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-700">AI 草稿 → 教師核准</span></div>
-      <div class="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3"><label class="block text-xs font-bold text-slate-700">加入講稿來源（PDF／Word／PPTX／圖片／文字，可多選）<input id="teacher-script-source-file-1030" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.odt,.ods,.txt,.csv,.png,.jpg,.jpeg,.webp" class="mt-2 block w-full text-sm"><span class="mt-1 block text-[11px] font-medium text-indigo-700">選好檔案後，請直接按下方「✨ 匯入並產生講稿」；按下後系統才會上傳並開始製作（只選檔案還不會上傳）。第一份檔案會自動當作主要教材。</span></label><div class="grid gap-3 lg:grid-cols-[minmax(0,200px)_minmax(0,1fr)] lg:items-end"><label class="text-xs font-bold text-slate-700">貼入文字標題（選填）<input id="teacher-script-paste-title-1030" maxlength="120" class="learning-input mt-1" placeholder="例如：SOP 補充說明"></label><label class="text-xs font-bold text-slate-700">或直接貼入內容<textarea id="teacher-script-paste-1030" rows="4" maxlength="60000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-6" placeholder="可貼入 SOP、課程重點、會議紀錄或其他講稿來源"></textarea></label></div><div id="teacher-script-added-sources-1030" class="flex flex-wrap gap-2"></div></div>
+      <div class="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3"><label class="block text-xs font-bold text-slate-700">加入講稿來源（PDF／Word／PPTX／圖片／文字，可多選）<input id="teacher-script-source-file-1030" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odp,.odt,.ods,.txt,.csv,.png,.jpg,.jpeg,.webp" class="mt-2 block w-full text-sm"><span class="mt-1 block text-[11px] font-medium text-indigo-700">選好檔案後，請直接按下方「✨ 匯入並產生講稿」；按下後系統才會上傳並開始製作（只選檔案還不會上傳）。第一份檔案會自動當作主要教材。</span></label><label id="teacher-script-keep-source-row-1033" class="flex items-start gap-2 text-xs font-bold text-indigo-900" hidden><input id="teacher-script-keep-source-1033" type="checkbox" checked class="mt-0.5"><span>同時把第一份上傳的檔案保留，作為這門課的主要教材<span class="block text-[11px] font-medium text-indigo-700">不勾選的話，講稿完成後會自動清除這份來源檔，學員看不到它。</span></span></label><div class="grid gap-3 lg:grid-cols-[minmax(0,200px)_minmax(0,1fr)] lg:items-end"><label class="text-xs font-bold text-slate-700">貼入文字標題（選填）<input id="teacher-script-paste-title-1030" maxlength="120" class="learning-input mt-1" placeholder="例如：SOP 補充說明"></label><label class="text-xs font-bold text-slate-700">或直接貼入內容<textarea id="teacher-script-paste-1030" rows="4" maxlength="60000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-6" placeholder="可貼入 SOP、課程重點、會議紀錄或其他講稿來源"></textarea></label></div><div id="teacher-script-added-sources-1030" class="flex flex-wrap gap-2"></div></div>
       <details id="teacher-script-existing-source-1033" class="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2"><summary class="cursor-pointer text-xs font-black text-slate-700">改用已有教材（沒有要上傳新檔案時才需要）</summary><div class="mt-3"><label class="block text-xs font-bold text-slate-600 md:max-w-xl">系統內已有的教材<select id="teacher-script-material-1014" class="learning-input mt-1"><option value="">讀取教材中…</option></select><span class="mt-1 block text-[10px] font-medium text-slate-400">選了這裡的教材後，上方新加入的檔案會變成補充來源，一起送給 AI 統整。</span></label></div></details>
       <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><label class="text-xs font-bold text-slate-600">目標長度<select id="teacher-script-minutes-1014" class="learning-input mt-1"><option value="3">約 3 分鐘</option><option value="5" selected>約 5 分鐘</option><option value="10">約 10 分鐘</option><option value="15">約 15 分鐘</option><option value="20">約 20 分鐘</option></select></label><label class="text-xs font-bold text-slate-600">講課語氣<select id="teacher-script-tone-1014" class="learning-input mt-1"><option value="clinical">專業臨床教學</option><option value="friendly">自然口語</option><option value="brief">精簡重點</option></select></label></div>
       <div class="flex flex-col sm:flex-row gap-2"><input id="teacher-script-focus-1014" class="learning-input flex-1" maxlength="500" placeholder="選填：特別聚焦，例如抗體鑑定判讀步驟、QC 異常處理"><button id="teacher-script-generate-1014" type="button" class="rounded-xl bg-indigo-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">✨ 匯入並產生講稿</button></div>
