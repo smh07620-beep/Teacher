@@ -115,6 +115,18 @@ def active_count_for_actor(username: str) -> int:
     return int(dict(row).get("n", 0) or 0)
 
 
+def active_for_material(material_id: str, *, since: str) -> dict | None:
+    """Newest queued/processing script job for one material (ignores jobs older than ``since``)."""
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT * FROM media_script_jobs WHERE material_id={ph} AND status IN ({ph},{ph}) "
+            f"AND created_at>={ph} ORDER BY created_at DESC LIMIT 1",
+            (str(material_id or ""), *ACTIVE_STATUSES, since),
+        ).fetchone()
+    return project_job(row)
+
+
 def total_active_count() -> int:
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)

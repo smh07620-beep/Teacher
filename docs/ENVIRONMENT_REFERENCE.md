@@ -175,6 +175,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `MEDIA_AUDIO_PREVIEW_MAX_PER_MINUTE` | `10` | `teacher_app/materials/media_audio_jobs.py` |  |  |
 | `MEDIA_AUDIO_PREVIEW_QUEUE_TIMEOUT_SECONDS` | `45` | `teacher_app/materials/media_audio_jobs.py` |  |  |
 | `MEDIA_AUDIO_PREVIEW_STALE_MINUTES` | `8` | `teacher_app/materials/media_audio_jobs.py` |  |  |
+| `MEDIA_SCRIPT_JOB_LOCK_MINUTES` | `20` | `teacher_app/materials/media_script_routes.py` |  |  |
 | `MEDIA_SCRIPT_JOB_MAX_ACTIVE_PER_USER` | `2` | `teacher_app/materials/media_script_jobs.py` |  |  |
 | `MEDIA_SCRIPT_JOB_MAX_ACTIVE_TOTAL` | `10` | `teacher_app/materials/media_script_jobs.py` |  |  |
 | `MEDIA_SCRIPT_JOB_MAX_PER_MINUTE` | `4` | `teacher_app/materials/media_script_jobs.py` |  |  |

@@ -1,6 +1,9 @@
 """Teacher HTTP routes for AI-assisted lecture scripts."""
 from __future__ import annotations
 
+import datetime as dt
+import os
+
 from flask import g, jsonify, request
 
 from teacher_app.common import audit, scope_filter
@@ -76,6 +79,17 @@ def register_media_script_routes(owner):
         readiness_error = _ai_worker_online_error(required_queue="media_scripts")
         if readiness_error:
             return readiness_error
+        # 同一份教材已有講稿工作在跑時不重複送出（省免費額度，也避免手滑連按），接續顯示原進度。
+        try:
+            lock_minutes = max(1, min(240, int(os.environ.get("MEDIA_SCRIPT_JOB_LOCK_MINUTES", "20"))))
+        except ValueError:
+            lock_minutes = 20
+        since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=lock_minutes)).isoformat()
+        running = media_script_repository.active_for_material(material_id, since=since)
+        if running:
+            payload = dict(media_script_jobs.public_job(running))
+            payload["alreadyRunning"] = True
+            return jsonify(payload), 202
         try:
             job = media_script_jobs.enqueue(body, user)
         except media_script_jobs.MediaScriptLimitError as exc:

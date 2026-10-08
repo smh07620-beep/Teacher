@@ -109,6 +109,27 @@ class MediaScriptRoute94Tests(unittest.TestCase):
         enqueue.assert_called_once()
         self.assertEqual(response.get_json()["jobId"], "msjob-1")
 
+    def test_generate_reuses_running_job_instead_of_enqueueing_again(self):
+        app = self._app("grpBio")
+        material = {"id": "mat-1", "group": "grpBio", "area": "internal", "active": True}
+        running = {
+            "id": "msjob-run", "materialId": "mat-1", "group": "grpBio", "area": "internal",
+            "status": "processing", "progressPercent": 30, "progressStage": "產生中",
+            "progressDetail": "", "createdAt": "", "updatedAt": "", "startedAt": "", "completedAt": "",
+        }
+        with app.test_client() as client, \
+             patch("teacher_app.materials.media_script_routes.material_repository.get_material", return_value=material), \
+             patch("teacher_app.materials.media_script_routes._ai_worker_online_error", return_value=None), \
+             patch("teacher_app.materials.media_script_routes.media_script_repository.active_for_material", return_value=running), \
+             patch("teacher_app.materials.media_script_routes.media_script_jobs.enqueue") as enqueue, \
+             patch("teacher_app.materials.media_script_routes.audit.record_event"):
+            response = client.post("/api/media-scripts/generate", json={"materialId": "mat-1", "targetMinutes": 5})
+        self.assertEqual(response.status_code, 202)
+        enqueue.assert_not_called()
+        body = response.get_json()
+        self.assertTrue(body["alreadyRunning"])
+        self.assertEqual(body["jobId"], "msjob-run")
+
     def test_generate_accepts_private_extra_narration_sources(self):
         app = self._app("grpBio")
         materials = {
