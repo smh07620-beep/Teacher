@@ -269,8 +269,8 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.get_json(), {"error": "此資源不在你的授權範圍。"})
 
-    def test_ai_enqueue_limits_active_jobs_per_actor(self):
-        with patch.dict("os.environ", {"AI_QUESTION_JOB_MAX_ACTIVE_PER_USER": "1"}), patch.object(
+    def test_ai_generate_reuses_running_job_for_same_exam(self):
+        with patch.object(
             runtime_question_routes.material_repository,
             "get_material",
             side_effect=self.base.get_material,
@@ -282,6 +282,34 @@ class RuntimeQuestionRouteTests(unittest.TestCase):
             second = self.client.post(
                 "/api/ai-questions/generate",
                 json={"quizCategoryId": "cat-1", "materialIds": ["mat-1"]},
+            )
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(second.status_code, 202)
+        self.assertTrue(second.get_json()["alreadyRunning"])
+        self.assertEqual(second.get_json()["jobId"], first.get_json()["jobId"])
+
+    def test_ai_enqueue_limits_active_jobs_per_actor(self):
+        conn, _ = self.base.connect()
+        try:
+            conn.execute(
+                "INSERT INTO quiz_categories(id,group_key,training_area,title,active,draw_count,draw_rules,review_status) "
+                "VALUES('cat-2','grpBio','internal','考卷2',1,1,'{}','approved')"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        with patch.dict("os.environ", {"AI_QUESTION_JOB_MAX_ACTIVE_PER_USER": "1"}), patch.object(
+            runtime_question_routes.material_repository,
+            "get_material",
+            side_effect=self.base.get_material,
+        ):
+            first = self.client.post(
+                "/api/ai-questions/generate",
+                json={"quizCategoryId": "cat-1", "materialIds": ["mat-1"]},
+            )
+            second = self.client.post(
+                "/api/ai-questions/generate",
+                json={"quizCategoryId": "cat-2", "materialIds": ["mat-1"]},
             )
         self.assertEqual(first.status_code, 202)
         self.assertEqual(second.status_code, 429)

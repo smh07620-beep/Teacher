@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import csv
+import datetime
 import io
 import ipaddress
 import json
+import os
 from pathlib import Path
 import random
 import re
@@ -538,6 +540,23 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         if denied:
             return denied
         data = request.get_json(silent=True) or {}
+        # 同一份考卷已有出題工作在跑時不重複送出（避免白白消耗 Gemini 每天 20 次等免費額度），
+        # 直接回傳進行中的工作，讓畫面接續顯示進度。逾時（預設 20 分鐘）的舊工作不會鎖住。
+        category_id = str(data.get("quizCategoryId") or "").strip()
+        if category_id:
+            try:
+                lock_minutes = max(1, min(240, int(os.environ.get("AI_QUESTION_JOB_LOCK_MINUTES", "20"))))
+            except ValueError:
+                lock_minutes = 20
+            since = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=lock_minutes)).isoformat()
+            running = ai_job_repository.active_for_category(category_id, since=since)
+            if running:
+                return jsonify({
+                    "ok": True,
+                    "jobId": running.get("id"),
+                    "status": str(running.get("status") or "queued"),
+                    "alreadyRunning": True,
+                }), 202
         try:
             job = ai_jobs.enqueue(data, runtime, _current_user(owner))
         except ai_jobs.AiJobLimitError as exc:

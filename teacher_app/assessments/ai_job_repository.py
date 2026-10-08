@@ -104,6 +104,18 @@ def active_count_for_actor(username: str) -> int:
     return int(dict(row).get("n", 0) or 0)
 
 
+def active_for_category(category_id: str, *, since: str) -> dict | None:
+    """Newest queued/running job for one exam (ignores jobs older than ``since``)."""
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            f"SELECT * FROM ai_question_jobs WHERE quiz_category_id={ph} AND status IN ({ph},{ph}) "
+            f"AND created_at>={ph} ORDER BY created_at DESC LIMIT 1",
+            (str(category_id or ""), *ACTIVE_STATUSES, since),
+        ).fetchone()
+    return project(row) if row else None
+
+
 def total_active_count() -> int:
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)

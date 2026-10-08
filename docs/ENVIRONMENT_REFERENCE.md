@@ -24,6 +24,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `AI_PRESENTATION_STORAGE_BACKEND` |  | `teacher_app/materials/ai_presentation_storage.py`, `teacher_app/materials/ai_video_storage.py` | yes |  |
 | `AI_PRESENTATION_TEMPLATE_MAX_MB` | `25` | `teacher_app/materials/ai_presentation_routes.py` |  |  |
 | `AI_PROVIDER` | `groq` | `teacher_app/assessments/ai_runtime.py`, `teacher_app/config.py`, `teacher_app/legacy_host.py` (+1) | yes | yes |
+| `AI_QUESTION_JOB_LOCK_MINUTES` | `20` | `teacher_app/assessments/runtime_question_routes.py` |  |  |
 | `AI_QUESTION_JOB_MAX_ACTIVE_PER_USER` | `3` | `teacher_app/assessments/ai_jobs.py` |  |  |
 | `AI_QUESTION_JOB_MAX_ACTIVE_TOTAL` | `20` | `teacher_app/assessments/ai_jobs.py` |  |  |
 | `AI_QUESTION_JOB_MAX_PER_MINUTE` | `6` | `teacher_app/assessments/ai_jobs.py` |  |  |
