@@ -1423,7 +1423,7 @@ def generate_groq_multisource_candidates(
             "messages": [{"role": "user", "content": content}],
             "temperature": 0.15,
             "response_format": {"type": "json_object"},
-            "max_completion_tokens": 8000,
+            "max_completion_tokens": groq_max_completion_tokens(count, len(str(content[0].get("text", "")))),
         }
         progress(62, "AI 正在產生候選題", f"{settings.groq_model} 正在整合教材、比對既有題庫並產生題目")
         response = requests.post(
@@ -1458,6 +1458,25 @@ def generate_groq_multisource_candidates(
             shutil.rmtree(temp_root, ignore_errors=True)
 
 
+def groq_max_completion_tokens(count, prompt_chars: int) -> int:
+    """Groq counts max_completion_tokens against the per-minute token limit up front.
+
+    A fixed 8000 exceeds the free tier's ~8K TPM on its own, so every request was
+    rejected before generating anything. Size it to the number of questions and
+    leave room for the prompt (conservatively ~1 token per character).
+    """
+    try:
+        tpm = max(2000, int(os.environ.get("GROQ_TOKENS_PER_MINUTE", "8000")))
+    except ValueError:
+        tpm = 8000
+    try:
+        wanted = 1200 + 450 * max(1, int(count))
+    except (TypeError, ValueError):
+        wanted = 3000
+    room = tpm - int(prompt_chars) - 300
+    return int(max(1000, min(8000, wanted, room)))
+
+
 def generate_ai_question_candidates(
     source_text: str,
     *,
@@ -1485,7 +1504,7 @@ def generate_ai_question_candidates(
             "messages": [{"role": "user", "content": system_prompt + "\n\n" + base_prompt}],
             "temperature": 0.15,
             "response_format": {"type": "json_object"},
-            "max_completion_tokens": 8000,
+            "max_completion_tokens": groq_max_completion_tokens(count2, len(system_prompt) + len(base_prompt)),
         }
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",

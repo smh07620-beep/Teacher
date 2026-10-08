@@ -42,6 +42,14 @@ class _Response:
 
 
 class AIRuntimeProviderTests(unittest.TestCase):
+    def test_groq_max_completion_tokens_fits_free_tier_minute_limit(self):
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(ai_runtime.groq_max_completion_tokens(5, 3000), 3450)
+            # 提示很長時要讓出空間，但不低於 1000。
+            self.assertEqual(ai_runtime.groq_max_completion_tokens(10, 6500), 1200)
+            self.assertEqual(ai_runtime.groq_max_completion_tokens(10, 9000), 1000)
+            self.assertLessEqual(3000 + ai_runtime.groq_max_completion_tokens(5, 3000), 8000)
+
     def test_env_defaults_and_provider_selection_match_legacy(self):
         with patch.dict("os.environ", {}, clear=True):
             settings = ai_runtime.ai_settings()

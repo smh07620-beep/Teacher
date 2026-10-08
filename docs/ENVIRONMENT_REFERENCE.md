@@ -88,6 +88,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `GEMINI_MODEL` | `gemini-3.8-flash` | `teacher_app/assessments/ai_runtime.py`, `teacher_app/legacy_host.py` | yes | yes |
 | `GROQ_API_KEY` |  | `teacher_app/config.py`, `teacher_app/legacy_host.py`, `teacher_app/materials/classification.py` (+1) | yes | yes |
 | `GROQ_MODEL` | `qwen/qwen3.8-27b` | `teacher_app/legacy_host.py`, `teacher_app/materials/classification.py` | yes | yes |
+| `GROQ_TOKENS_PER_MINUTE` | `8000` | `teacher_app/assessments/ai_runtime.py` |  |  |
 | `GROQ_TRANSCRIBE_MODEL` | `whisper-large-v3-turbo` | `teacher_app/assessments/ai_runtime.py`, `teacher_app/legacy_host.py` | yes | yes |
 | `GUNICORN_THREADS` | `4` | `teacher_app/common/db.py` |  |  |
 | `HF_HOME` |  | `ai_question_worker.py`, `teacher_app/materials/media_audio_runtime.py` | yes |  |
