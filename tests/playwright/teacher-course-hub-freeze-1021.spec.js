@@ -75,7 +75,7 @@ test('large internal course scope stays interactive without summary warnings', a
   const afterRerenderNodeCount = await page.locator('#admin-course-material-hub *').count();
   expect(afterRerenderNodeCount).toBeLessThan(initialNodeCount * 3);
   const firstCourse = page.locator('.admin-course-list > details').first();
-  if (!(await firstCourse.getAttribute('open'))) await firstCourse.locator('summary').click();
+  if (!(await firstCourse.getAttribute('open'))) await firstCourse.locator(':scope > summary').click();
   await expect(firstCourse).toHaveAttribute('open', '');
   await firstCourse.locator('[data-teacher-course-more-1014] > summary').click();
   await expect(firstCourse.locator('[data-teacher-course-more-menu-1014]')).toBeVisible();
