@@ -294,6 +294,7 @@
                       <div class="flex flex-wrap gap-1.5 mt-1.5" title="${escapeHtml(c.desc || '尚未填寫考卷說明')}"><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">👤 ${escapeHtml(examAudienceLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">🧠 題庫 ${Number(c.questionCount||0)} 題</span><span class="text-[10px] px-2 py-1 rounded-full bg-teal-50 text-teal-700">📋 ${escapeHtml(examDrawLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">🎯 及格 ${Number(c.passingScore||80)} 分</span>${c.publicationHash?`<span class="text-[10px] px-2 py-1 rounded-full bg-violet-50 text-violet-700" title="發布快照 SHA-256：${escapeHtml(c.publicationHash)}">🔒 快照 ${escapeHtml(c.publicationHash.slice(0,10))}</span>`:''}</div>
                   </div>
                   <div class="flex gap-2 shrink-0 items-center whitespace-nowrap">
+                       ${(Number(c?.questionCount||0)>0&&c?.reviewStatus!=='approved'&&!c?.active)?`<button type="button" data-admin-role="questions-action" data-csp-click="adminQuickReviewExam('${c.id}')" class="whitespace-nowrap shrink-0 text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-black">✅ 送審</button>`:''}
                        <button data-admin-role="questions-action" data-quiz-primary-1030 data-csp-click="window.openTeacherContentExam?.('${c.id}') || toggleQuizQuestionsPanel('${c.id}')" class="whitespace-nowrap shrink-0 text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-black">${escapeHtml(teacherStatus.primary)}</button>
                       <details data-quiz-overflow-78 class="relative"><summary class="list-none cursor-pointer whitespace-nowrap text-xs bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold" aria-label="更多考卷操作">⋯</summary><div class="absolute right-0 mt-1 z-50 flex w-48 flex-col gap-0.5 whitespace-normal bg-white border border-slate-200 shadow-xl rounded-xl p-2"><button data-admin-role="exam-action" data-csp-click="adminEditQuizCategory('${c.id}')" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">⚙️ 考卷設定</button><button id="blind-toggle-${c.id}" data-csp-click="adminToggleBlindMode('${c.id}',${c.blindMode?'false':'true'})" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">🕶️ ${c.blindMode?'關閉':'開啟'}盲測</button><button data-csp-click="openQuizMaterialLinker('${c.id}')" class="w-full text-left text-xs hover:bg-cyan-50 text-cyan-700 px-3 py-2 rounded-lg">🔗 調整關聯教材</button><button data-csp-click="adminDeleteQuizCategory('${c.id}')" class="w-full text-left text-xs hover:bg-rose-50 text-rose-700 px-3 py-2 rounded-lg">🗑️ 刪除考卷</button></div></details>
                   </div>
@@ -407,6 +408,16 @@
     }
   },true);
 
+  window.adminQuickReviewExam=async function(catId){
+    if(!confirm('確定送審這份考卷？系統會檢查所有啟用中的題目（題幹、選項、問答題評分參考）。通過後再按「發布」即可。'))return;
+    try{
+      const r=await fetch(`/api/quiz-categories/${encodeURIComponent(catId)}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.issues?.length?`${d.error}：${d.issues.join('、')}`:(d.error||'送審失敗'));
+      alert(`✅ 審核完成（${d.reviewerName||'目前登入者'}）。接著請到「繼續編輯／設定」確認適用人員與考核期間後按「發布」。`);
+    }catch(e){alert(`❌ ${e.message}`);}
+    await window.renderAdminQuizCategories?.(true);
+  };
   window.renderQuizOverview78=renderQuizOverview78;
   window.adminHasExpandedQuestionEditor=adminHasExpandedQuestionEditor;
   window.quizCategoryCardHTML=quizCategoryCardHTML;

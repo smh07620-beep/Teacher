@@ -30,7 +30,7 @@
     'adminAddQuizQuestion','adminBulkDeleteQuestions','adminBulkSetQuestionActive','adminBulkSetQuestionTag',
     'adminCreateQuizCategory','adminDeleteCourse','adminDeleteDocTemplate','adminDeletePgyTemplate',
     'adminDeleteQuizCategory','teacher78DeleteListedDrafts','adminDeleteQuizQuestion','adminEditQuizCategory','adminEditSelectedQuestions',
-    'adminGenerateAiQuestions','adminImportAiCandidates','aiGoReviewQuestions','aiGoBackToExam','adminImportQuizUrl','adminImportTslmEpa',
+    'adminGenerateAiQuestions','adminImportAiCandidates','adminQuickReviewExam','aiGoReviewQuestions','aiGoBackToExam','adminImportQuizUrl','adminImportTslmEpa',
     'adminInlineQuestionTypeChanged','adminResultDetail','adminSaveExpandedQuestionEdits','adminSaveOneInlineQuestion',
     'adminSelectAllQuestions','adminSetProfileTag','adminSyncProfileTagChecks','adminToggleBlindMode',
     'adminToggleInlineQuestionEditor','adminToggleQuizQuestion','adminTriggerDocTemplateUpload','adminTriggerPgyTemplateUpload',

@@ -82,10 +82,11 @@
   window.adminUpdateQuestionSelection = function(catId){
     const all=[...document.querySelectorAll(`.qselect-${catId}`)];
     const selected=all.filter(x=>x.checked);
-    const badge=document.getElementById(`qselected-${catId}`);
+    const pk=n=>(window.pickQuestionEl?window.pickQuestionEl(n,catId):null)||document.getElementById(`${n}-${catId}`);
+    const badge=pk('qselected');
     if(badge) badge.textContent=`已選 ${selected.length} 題`;
-    document.getElementById(`qbulk-actions-${catId}`)?.classList.toggle('hidden',selected.length===0);
-    const master=document.getElementById(`qselect-all-${catId}`);
+    pk('qbulk-actions')?.classList.toggle('hidden',selected.length===0);
+    const master=pk('qselect-all');
     if(master){
       master.checked=all.length>0&&selected.length===all.length;
       master.indeterminate=selected.length>0&&selected.length<all.length;

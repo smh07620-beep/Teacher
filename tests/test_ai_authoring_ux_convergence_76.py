@@ -99,6 +99,14 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         self.assertIn('目前沒有正在編輯的題目', actions)
         self.assertNotIn("alert('請先勾選要儲存的題目。')", actions)
 
+    def test_exam_card_has_direct_submit_for_review_and_selection_badge_uses_visible_copy(self):
+        bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
+        csp = ROOT.joinpath('static/system-csp-actions.js').read_text(encoding='utf-8')
+        editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
+        self.assertIn('adminQuickReviewExam', bank)
+        self.assertIn("'adminQuickReviewExam'", csp)
+        self.assertIn("pk('qselected')", editor)
+
     def test_mobile_question_actions_are_collapsed(self):
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
         bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
