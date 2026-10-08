@@ -147,6 +147,32 @@ class MediaScriptRoute94Tests(unittest.TestCase):
             response = client.post("/api/media-scripts/generate", json={"materialId": "mat-2"})
         self.assertEqual(response.status_code, 403)
 
+    def test_teacher_can_discard_own_group_draft(self):
+        app = self._app("grpBio")
+        script = {"id": "mscript-1", "group": "grpBio", "draftType": "script", "title": "草稿", "status": "draft"}
+        with app.test_client() as client, \
+             patch("teacher_app.materials.media_script_routes.media_script_repository.get_script", return_value=script), \
+             patch("teacher_app.materials.media_script_routes.media_script_repository.delete_script", return_value=True) as delete, \
+             patch("teacher_app.materials.media_script_routes.audit.record_event") as record:
+            response = client.delete("/api/media-scripts/mscript-1")
+        self.assertEqual(response.status_code, 200)
+        delete.assert_called_once_with("mscript-1")
+        self.assertEqual(record.call_args.kwargs["action"], "media.script.discard")
+
+    def test_discard_denies_other_group_and_unknown_script(self):
+        app = self._app("grpBio")
+        other = {"id": "mscript-2", "group": "grpBB", "draftType": "script", "title": "別組", "status": "draft"}
+        with app.test_client() as client, \
+             patch("teacher_app.materials.media_script_routes.media_script_repository.get_script", return_value=other), \
+             patch("teacher_app.materials.media_script_routes.media_script_repository.delete_script") as delete:
+            denied = client.delete("/api/media-scripts/mscript-2")
+        self.assertEqual(denied.status_code, 403)
+        delete.assert_not_called()
+        with app.test_client() as client, \
+             patch("teacher_app.materials.media_script_routes.media_script_repository.get_script", return_value=None):
+            missing = client.delete("/api/media-scripts/nope")
+        self.assertEqual(missing.status_code, 404)
+
 
 class MediaScriptFrontend94Tests(unittest.TestCase):
     @classmethod

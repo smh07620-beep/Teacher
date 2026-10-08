@@ -64,9 +64,9 @@
       ? '這裡不建立講稿或考題。大綱核准後繼續產生 PowerPoint；其他工作請使用對應入口。'
       : '測驗題草稿若要進正式題庫，仍請到「評量與追蹤」完成審核與建立。';
     const generate = document.getElementById('teacher-ai-material-generate-1014');
-    if (generate) generate.textContent = presentation ? '✨ 試產出 PowerPoint 大綱' : '✨ 試產出';
+    if (generate) generate.textContent = presentation ? '✨ 匯入並產生 PowerPoint 大綱' : '✨ 試產出';
     const upload = document.getElementById('teacher-ai-material-upload-1014');
-    if (upload) upload.textContent = '＋ 加入來源';
+    if (upload) upload.classList.add('hidden');
 
     const savedHeading = document.getElementById('teacher-ai-material-saved-heading-1014');
     if (savedHeading) savedHeading.textContent = presentation ? '已儲存 PowerPoint 大綱' : '已儲存 AI 草稿';
@@ -165,7 +165,7 @@
       const emptySettingsRow = generateRow?.querySelector('div');
       if (emptySettingsRow && !emptySettingsRow.children.length) emptySettingsRow.remove();
       if (generateRow) generateRow.className = 'flex justify-end';
-      generate.textContent = authoringContext === 'presentation' ? '✨ 試產出 PowerPoint 大綱' : '✨ 試產出';
+      generate.textContent = authoringContext === 'presentation' ? '✨ 匯入並產生 PowerPoint 大綱' : '✨ 試產出';
     }
 
     const saved = document.getElementById('teacher-ai-material-saved-1014');
@@ -462,6 +462,100 @@
     }
   }
 
+  async function importAndGenerateDraft() {
+    const fileInput = document.getElementById('teacher-ai-material-file-1014');
+    const pasted = String(document.getElementById('teacher-ai-material-paste-1014')?.value || '').trim();
+    const files = [...(fileInput?.files || [])];
+    if (files.length) {
+      const ok = await uploadAuthoringFiles(files);
+      if (!ok) return false;
+      if (fileInput) fileInput.value = '';
+    }
+    if (pasted) {
+      if (pasted.length < 20) return status('請貼入至少 20 個字的 SOP、教學內容或補充資料。', 'error');
+      await addPastedSource();
+    }
+    return generateDraft();
+  }
+
+  async function discardDraft() {
+    const saved = activeDraft && activeDraft.id;
+    if (!confirm(saved ? '確定放棄並刪除這份大綱草稿嗎？刪除後無法復原。' : '確定放棄這份尚未儲存的 AI 草稿嗎？')) return false;
+    if (saved) {
+      try {
+        const response = await fetch(`/api/ai-material-drafts/${encodeURIComponent(activeDraft.id)}`, {
+          method:'DELETE', credentials:'same-origin',
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || '刪除草稿失敗');
+      } catch (error) {
+        status(`放棄草稿失敗：${error.message}`, 'error');
+        return false;
+      }
+    }
+    activeDraft = null;
+    activeJobId = '';
+    pollToken += 1;
+    document.getElementById('teacher-ai-material-editor-1014')?.classList.add('hidden');
+    document.getElementById('teacher-ai-material-source-info-1014')?.classList.add('hidden');
+    const body = document.getElementById('teacher-ai-material-body-1014');
+    if (body) body.value = '';
+    syncEditorButtons();
+    await loadDrafts();
+    status('🗑 草稿已放棄並刪除。可調整重點後再按「匯入並產生 PowerPoint 大綱」。', 'success');
+    return true;
+  }
+
+  async function regenerateWithRevision() {
+    const input = document.getElementById('teacher-ai-material-revision-1032');
+    const request = String(input?.value || '').trim();
+    if (!request) {
+      status('請先寫一句希望 AI 怎麼修改，例如「更精簡、加強 QC 異常處理」。', 'error');
+      input?.focus?.();
+      return false;
+    }
+    const focus = document.getElementById('teacher-ai-material-focus-1014');
+    if (focus) focus.value = [String(focus.value || '').trim(), `教師下一輪修正：${request}`].filter(Boolean).join('；').slice(0, 500);
+    if (input) input.value = '';
+    return generateDraft();
+  }
+
+  // 本次臨時加入的私人來源只為產生草稿而存在；完成或放棄後移除，避免長期佔用雲端儲存空間。
+  async function cleanupAuthoringSources() {
+    const ids = [...authoringSourceIds];
+    const failed = [];
+    for (const id of ids) {
+      try {
+        const response = await fetch(`/api/slides/${encodeURIComponent(id)}`, {method:'DELETE', credentials:'same-origin'});
+        if (!response.ok && response.status !== 404) failed.push(id);
+      } catch (_) {
+        failed.push(id);
+      }
+    }
+    authoringSourceIds = failed;
+    renderAuthoringSources();
+    window.invalidateAdminMaterialsCache?.();
+    return failed.length === 0;
+  }
+
+  function resetFlow() {
+    activeDraft = null;
+    activeJobId = '';
+    pollToken += 1;
+    authoringSourceIds = [];
+    ['teacher-ai-material-editor-1014', 'teacher-ai-material-source-info-1014'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+    ['teacher-ai-material-body-1014', 'teacher-ai-material-title-1014', 'teacher-ai-material-paste-1014',
+      'teacher-ai-material-paste-title-1014', 'teacher-ai-material-focus-1014', 'teacher-ai-material-revision-1032'].forEach(id => {
+      const node = document.getElementById(id);
+      if (node) node.value = '';
+    });
+    const file = document.getElementById('teacher-ai-material-file-1014');
+    if (file) file.value = '';
+    renderAuthoringSources();
+    syncEditorButtons();
+    status('選好來源後按「匯入並產生 PowerPoint 大綱」即可開始。');
+  }
+
   async function generateDraft() {
     const materialId = primarySourceId();
     if (!materialId) return status('請先上傳來源資料或選擇既有教材。', 'error');
@@ -663,14 +757,18 @@
       <div class="grid md:grid-cols-[1fr_auto] gap-3"><div class="grid sm:grid-cols-[1fr_160px] gap-3"><input id="teacher-ai-material-focus-1014" class="learning-input" maxlength="500" placeholder="Step 2｜設定：特別聚焦的重點（選填）"><select id="teacher-ai-material-depth-1014" class="learning-input" title="教學講稿目標長度；其他產出類型會作為篇幅參考"><option value="3">精簡</option><option value="5" selected>標準</option><option value="10">較完整</option><option value="15">深入</option></select></div><button id="teacher-ai-material-generate-1014" type="button" class="rounded-xl bg-violet-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40">Step 3｜產生 AI 草稿</button></div>
       <div id="teacher-ai-material-status-1014" class="text-sm text-slate-600">選好來源後，設定產出類型與重點，再產生 AI 草稿。</div>
       <div id="teacher-ai-material-source-info-1014" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-slate-700"></div>
-      <div id="teacher-ai-material-editor-1014" class="hidden space-y-3"><h5 class="text-base font-black text-slate-900">Step 3｜投影片大綱</h5><label class="block text-sm font-bold text-slate-700">標題<input id="teacher-ai-material-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-sm font-bold text-slate-700">內容<textarea id="teacher-ai-material-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-base leading-7" placeholder="AI 草稿會出現在這裡；請由教師逐段確認與修改。"></textarea></label><div class="flex flex-wrap gap-2"><button id="teacher-ai-material-save-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-black text-violet-700">💾 儲存草稿</button><button id="teacher-ai-material-approve-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-40">✅ 教師核准</button><button id="teacher-ai-material-publish-1014" type="button" disabled class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-40">📚 選擇發布成正式教材</button></div><p id="teacher-ai-material-editor-note-1014" class="text-sm text-slate-500">測驗題草稿若要進正式題庫，仍請到「評量與追蹤」完成審核與建立。</p></div>
+      <div id="teacher-ai-material-editor-1014" class="hidden space-y-3"><h5 class="text-base font-black text-slate-900">Step 3｜投影片大綱</h5><label class="block text-sm font-bold text-slate-700">標題<input id="teacher-ai-material-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-sm font-bold text-slate-700">內容<textarea id="teacher-ai-material-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-base leading-7" placeholder="AI 草稿會出現在這裡；請由教師逐段確認與修改。"></textarea></label><div class="flex flex-wrap gap-2"><button id="teacher-ai-material-save-1014" type="button" class="rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-black text-violet-700">💾 儲存草稿</button><button id="teacher-ai-material-approve-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-40">✅ 教師核准</button><button id="teacher-ai-material-publish-1014" type="button" disabled class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-40">📚 選擇發布成正式教材</button></div><div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2"><label class="block text-sm font-bold text-slate-600">不滿意？告訴 AI 怎麼修，直接重新產出（來源不用重新匯入）<input id="teacher-ai-material-revision-1032" maxlength="400" class="learning-input mt-1" placeholder="例如：更精簡、加強 QC 異常處理"></label><div class="flex flex-wrap gap-2"><button id="teacher-ai-material-regenerate-1032" type="button" class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-sm font-black text-cyan-800">↻ 依修改要求重新產出</button><button id="teacher-ai-material-discard-1032" type="button" class="rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-black text-rose-700">🗑 放棄這份草稿</button></div></div><p id="teacher-ai-material-editor-note-1014" class="text-sm text-slate-500">測驗題草稿若要進正式題庫，仍請到「評量與追蹤」完成審核與建立。</p></div>
       <div class="border-t border-slate-100 pt-4"><h5 id="teacher-ai-material-saved-heading-1014" class="text-base font-black text-slate-900">已儲存 AI 草稿</h5><div id="teacher-ai-material-saved-1014" class="mt-2 grid gap-2"><p class="text-sm text-slate-500">選擇來源教材後會顯示已儲存草稿。</p></div></div>
       <div id="teacher-ai-material-presentation-stage-1014" class="border-t border-slate-100 pt-5"></div>`;
     const dashboard = box.querySelector('.admin-course-dashboard');
     box.insertBefore(section, dashboard || box.firstChild);
     document.getElementById('teacher-ai-material-upload-1014')?.addEventListener('click', uploadSource);
-    document.getElementById('teacher-ai-material-paste-add-1014')?.addEventListener('click', addPastedSource);
-    document.getElementById('teacher-ai-material-generate-1014')?.addEventListener('click', generateDraft);
+    const pasteAdd = document.getElementById('teacher-ai-material-paste-add-1014');
+    pasteAdd?.addEventListener('click', addPastedSource);
+    pasteAdd?.classList.add('hidden');
+    document.getElementById('teacher-ai-material-regenerate-1032')?.addEventListener('click', regenerateWithRevision);
+    document.getElementById('teacher-ai-material-discard-1032')?.addEventListener('click', discardDraft);
+    document.getElementById('teacher-ai-material-generate-1014')?.addEventListener('click', importAndGenerateDraft);
     document.getElementById('teacher-ai-material-save-1014')?.addEventListener('click', saveDraft);
     document.getElementById('teacher-ai-material-approve-1014')?.addEventListener('click', approveDraft);
     document.getElementById('teacher-ai-material-publish-1014')?.addEventListener('click', publishDraft);
@@ -728,5 +826,5 @@
   }
 
   window.addEventListener('teacher-ai-material-request-publication', () => void publishDraft());
-  window.TeacherAIMaterial1014 = Object.freeze({paintMaterialOptions, loadDrafts, publishCurrentDraft: publishDraft, ensureMounted, configureContext});
+  window.TeacherAIMaterial1014 = Object.freeze({resetFlow, cleanupAuthoringSources, discardDraft, importAndGenerateDraft, paintMaterialOptions, loadDrafts, publishCurrentDraft: publishDraft, ensureMounted, configureContext});
 })();

@@ -197,12 +197,17 @@
         <div><b class="text-sm text-emerald-950">✅ AI 語音教材已建立</b>
         <p class="mt-1 text-xs text-slate-700">${escapeHtml(material.title || material.filename || result.materialId || '')}</p>
         <p class="mt-1 text-[11px] text-slate-500">已使用 ${escapeHtml(voiceLabel(result.voice))} 產生 AI 語音。</p></div>
-        <button id="teacher-audio-back-course-1014" type="button" class="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-700">回教材與課程查看</button>
+        <button id="teacher-audio-back-course-1014" type="button" class="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-700">✅ 完成，帶回課程教材</button>
       </div>
       <div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-900">${escapeHtml(result.disclosure || statusInfo?.disclosure || '本音訊為 AI 合成語音。')}</div>`;
     host.classList.remove('hidden');
     host.querySelector('#teacher-audio-back-course-1014')?.addEventListener('click', async () => {
       window.invalidateAdminMaterialsCache?.();
+      const studio = window.TeacherAIMediaStudio1018;
+      if (typeof studio?.finishAndReturn === 'function') {
+        await studio.finishAndReturn('narration');
+        return;
+      }
       await window.TeacherWorkspace1014?.openCourse?.();
       void window.renderAdminCourseMaterialHub?.(true);
     });

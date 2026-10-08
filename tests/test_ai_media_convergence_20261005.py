@@ -86,7 +86,7 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
             "teacher-script-paste-1030",
             "authoringOnly",
             "referenceMaterialIds",
-            "＋ 加入講稿來源",
+            "✨ 匯入並產生講稿",
         ):
             self.assertIn(marker, self.script)
 

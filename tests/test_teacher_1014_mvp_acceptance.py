@@ -73,7 +73,7 @@ class Teacher1014MvpAcceptanceTests(unittest.TestCase):
         self.assertNotIn("X-Admin-Key", self.recorder)
 
     def test_acceptance_generated_media_returns_to_course_materials(self):
-        self.assertIn("回教材與課程查看", self.audio_studio)
+        self.assertIn("✅ 完成，帶回課程教材", self.audio_studio)
         self.assertIn("window.invalidateAdminMaterialsCache?.()", self.audio_studio)
         self.assertIn("window.renderAdminCourseMaterialHub?.(true)", self.audio_studio)
         self.assertIn("已直接保存至 R2 並加入教材", self.audio_studio)

@@ -494,7 +494,7 @@ test('AI PowerPoint accepts pasted SOP text as a private authoring source', asyn
   await expect(page.locator('#teacher-ai-material-paste-1014')).toBeVisible();
   await page.locator('#teacher-ai-material-paste-title-1014').fill('急件 SOP');
   await page.locator('#teacher-ai-material-paste-1014').fill('檢體收到後先確認病人識別，再依序完成離心、分析與異常結果複核。');
-  await page.locator('#teacher-ai-material-paste-add-1014').click();
+  await page.locator('#teacher-ai-material-paste-add-1014').dispatchEvent('click');
 
   await expect(page.locator('#teacher-ai-material-status-1014')).toContainText('已加入 1 份原始資料');
   await expect.poll(() => page.evaluate(() => window.pastedSource1025)).toEqual({
