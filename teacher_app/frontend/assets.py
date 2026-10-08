@@ -140,6 +140,7 @@ ASSET_MANIFEST = {
             "/teacher-persona-isolation-1014.js",
             "/product-convergence-101.js",
             "/teacher-action-queue-1024.js",
+            "/teacher-assessment-inline-1031.js",
             "/teacher-learners-p2.js",
             "/learner-reading-progress-f2.js",
             "/course-lifecycle-f2.js",

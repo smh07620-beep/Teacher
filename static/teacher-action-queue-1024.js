@@ -159,6 +159,12 @@
   }
 
   async function openReview(item) {
+    // 1031: 先在評量頁內開啟該份作答（不跳窗、不離開頁面）；舊流程保留作為後備。
+    const inline = window.TeacherAssessmentInline1031;
+    if (inline) {
+      await window.TeacherWorkspace1014?.openAssessment?.();
+      if (await inline.openRecord(item.resourceId || item.id)) return;
+    }
     await window.AppWorkspaceRoutes.show('teacher', true);
     await window.switchTeacherMode?.('scoring');
     if (typeof window.renderAdminTable === 'function') await window.renderAdminTable();
