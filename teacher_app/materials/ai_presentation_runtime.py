@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import os
 import re
 import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
+from teacher_app.materials import ai_presentation_images as picture_picker
 from teacher_app.materials import ai_presentation_repository as repository
 from teacher_app.materials import ai_presentation_quality as quality
 from teacher_app.materials.ai_presentation_storage import PresentationStorage
@@ -31,6 +34,7 @@ try:  # Pillow is already optional in other material-image paths.
 except ImportError:  # pragma: no cover
     Image = None
 
+LOGGER = logging.getLogger(__name__)
 _MAX_SLIDES = 60
 _MAX_BULLETS = 120
 _SECRET_MARKERS = (
@@ -325,10 +329,10 @@ def _placeholder_block(slide, block: dict, message: str) -> None:
         paragraph.font.size = Pt(14)
 
 
-def _set_body_font(frame, bullets: list[str]) -> None:
+def _set_body_font(frame, bullets: list[str], max_size: int = 24) -> None:
     total_chars = sum(len(str(value or "")) for value in bullets)
     size = 24 if total_chars <= 360 else (22 if total_chars <= 560 else 20)
-    size = max(18, size)
+    size = max(18, min(size, max_size))
     for paragraph in frame.paragraphs:
         paragraph.font.size = Pt(size)
 
@@ -391,13 +395,40 @@ def _image_box(path: Path, *, fit: str, left=1.0, top=1.7, width=10.9, height=4.
         return path, left + (width - rendered_w) / 2, top, rendered_w, rendered_h
 
 
-def _render_image(slide, block: dict, image_resolver=None, profile: dict | None = None) -> None:
+def _side_image_box(slide_width: float) -> tuple[float, float, float, float]:
+    """Right-hand picture area used when a slide also has bullets (text stays on the left)."""
+    width = max(3.0, slide_width * 0.43)
+    return (slide_width * 0.53, 1.7, width, 4.55)
+
+
+def _full_image_box(slide_width: float) -> tuple[float, float, float, float]:
+    margin = max(0.5, slide_width * 0.075)
+    return (margin, 1.7, max(3.0, slide_width - 2 * margin), 4.55)
+
+
+def _picture_placeholder_box(slide, profile: dict | None = None):
+    """Geometry of a template placeholder that is really meant for pictures (else None).
+
+    A body/text placeholder is never a picture area, otherwise a picture would be
+    drawn over the slide's own bullets.
+    """
+    selector = str(((profile or {}).get("placeholderMap") or {}).get("image") or "auto").strip().lower()
+    named = selector != "auto" and any(
+        selector in str(getattr(shape, "name", "") or "").lower() for shape in slide.placeholders if shape != slide.shapes.title)
+    if not named and not any(
+            _placeholder_score(shape, "image") >= 4 for shape in slide.placeholders if shape != slide.shapes.title):
+        return None
+    return _placeholder_box(slide, "image", profile)
+
+
+def _render_image(slide, block: dict, image_resolver=None, profile: dict | None = None,
+                  image_box: tuple[float, float, float, float] | None = None) -> None:
     asset = block.get("asset") if isinstance(block.get("asset"), dict) else None
     path = None
     try:
         path = image_resolver(asset) if asset and callable(image_resolver) else None
         if path and Path(path).is_file():
-            box = _placeholder_box(slide, "image", profile) or (1.0, 1.7, 10.9, 4.55)
+            box = image_box or (1.0, 1.7, 10.9, 4.55)
             image_path, left, top, width, height = _image_box(Path(path), fit=str(block.get("fit") or "contain"),
                                                                left=box[0], top=box[1], width=box[2], height=box[3])
             kwargs = {"width": Inches(width)}
@@ -407,7 +438,7 @@ def _render_image(slide, block: dict, image_resolver=None, profile: dict | None 
             source_label = _clean(block.get("sourceLabel"), 180)
             visible = "｜".join(value for value in (caption, source_label) if value)
             if visible:
-                frame = _textbox(slide, 1.0, 6.35, 10.9, 0.45, visible)
+                frame = _textbox(slide, box[0], 6.35, box[2], 0.45, visible)
                 for paragraph in frame.paragraphs: paragraph.font.size = Pt(10)
             return
     except Exception:
@@ -416,10 +447,11 @@ def _render_image(slide, block: dict, image_resolver=None, profile: dict | None 
     _placeholder_block(slide, block, "允許的圖片素材尚未提供")
 
 
-def _render_blocks(slide, blocks: list[dict], image_resolver=None, profile: dict | None = None) -> None:
+def _render_blocks(slide, blocks: list[dict], image_resolver=None, profile: dict | None = None,
+                   image_box: tuple[float, float, float, float] | None = None) -> None:
     for block in blocks:
         kind = block.get("type")
-        if kind == "image": _render_image(slide, block, image_resolver, profile)
+        if kind == "image": _render_image(slide, block, image_resolver, profile, image_box)
         elif kind == "chart": _render_chart(slide, block)
         elif kind == "table": _render_table(slide, block, profile)
         elif kind == "comparison": _render_comparison(slide, block)
@@ -481,6 +513,7 @@ def render_pptx(*, title: str, slides: list[dict], output_path: Path,
     prs = Presentation(str(template_path)) if template_path else Presentation()
     if template_path:
         _clear_template_slides(prs)
+    slide_width_in = float(prs.slide_width or Inches(10)) / float(Inches(1))
     core = prs.core_properties
     core.title = _clean(title, 255)
     core.subject = "Teacher AI reviewed teaching presentation"
@@ -495,12 +528,30 @@ def render_pptx(*, title: str, slides: list[dict], output_path: Path,
         body = _body_placeholder(slide, layout_profile)
         if body is None:
             body = slide.shapes.add_textbox(Inches(0.8), Inches(1.8), Inches(11.6), Inches(4.8))
+        # A slide with bullets AND a picture keeps its text on the left and the
+        # picture on the right instead of drawing the picture over the text.
+        has_image = any(isinstance(b, dict) and b.get("type") == "image" for b in (item.get("blocks") or []))
+        image_box = _picture_placeholder_box(slide, layout_profile) if has_image else None
+        side_box = None
+        if has_image and image_box is None:
+            if item["bullets"]:
+                image_box = side_box = _side_image_box(slide_width_in)
+            else:
+                image_box = _full_image_box(slide_width_in)
+        if side_box is not None:
+            try:
+                left, top, width, height = body.left, body.top, body.width, body.height
+                limit = Inches(max(3.0, side_box[0] - 0.3)) - left
+                if width > limit > 0:
+                    body.left, body.top, body.width, body.height = left, top, limit, height
+            except Exception:
+                pass  # geometry is best effort; the picture still renders in its own box
         frame = body.text_frame; frame.clear()
         for index, bullet in enumerate(item["bullets"]):
             paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
             paragraph.text = bullet; paragraph.level = 0
-        _set_body_font(frame, item["bullets"])
-        _render_blocks(slide, item.get("blocks") or [], image_resolver=image_resolver, profile=layout_profile)
+        _set_body_font(frame, item["bullets"], max_size=20 if side_box else 24)
+        _render_blocks(slide, item.get("blocks") or [], image_resolver=image_resolver, profile=layout_profile, image_box=image_box)
         _branding_footer(slide, branding)
         notes = "\n\n".join(filter(None, [_clean(item.get("speakerNotes"), 4000), "PROVENANCE " + provenance_json]))
         _write_notes(slide, notes)
@@ -553,8 +604,12 @@ def _validated_template(template_id: str, *, group: str, area: str):
     return template
 
 
-def _image_resolver(storage: PresentationStorage, root: Path):
-    """Resolve only normalized shared-provider image assets; failures become slide fallbacks."""
+def _image_resolver(storage: PresentationStorage, root: Path, local: dict[str, Path] | None = None):
+    """Resolve only normalized shared-provider image assets; failures become slide fallbacks.
+
+    ``local`` maps sha256 -> a picture this job just extracted, so those need no
+    second download from the shared provider.
+    """
     counter = 0
     def resolve(asset):
         nonlocal counter
@@ -563,6 +618,9 @@ def _image_resolver(storage: PresentationStorage, root: Path):
         key = str(asset.get("key") or "")
         if not _IMAGE_KEY.fullmatch(key):
             return None
+        cached = (local or {}).get(str(asset.get("sha256") or "").lower())
+        if cached and Path(cached).is_file():
+            return Path(cached)
         counter += 1
         suffix = ".png" if str(asset.get("mimeType") or "") == "image/png" else ".jpg"
         try:
@@ -573,6 +631,49 @@ def _image_resolver(storage: PresentationStorage, root: Path):
             # fallback for a missing optional image.
             return None
     return resolve
+
+
+def _auto_pictures_enabled(job: dict) -> bool:
+    if str(os.environ.get("AI_PRESENTATION_AUTO_PICTURES", "true")).strip().lower() in {"0", "false", "no", "off"}:
+        return False
+    return dict(job.get("request") or {}).get("autoPictures") is not False
+
+
+def _picture_sources(draft: dict, source: dict) -> list[dict]:
+    """The material the deck was written from, plus the reference files the teacher added."""
+    materials = [source]
+    job_id = str(draft.get("sourceJobId") or "")
+    try:
+        script_job = media_script_repository.get_job(job_id) if job_id else None
+        for reference_id in list(((script_job or {}).get("request") or {}).get("referenceMaterialIds") or [])[:9]:
+            reference = material_repository.get_material(str(reference_id or ""))
+            if (reference and str(reference.get("id") or "") != str(source.get("id") or "")
+                    and reference.get("group") == source.get("group") and reference.get("area") == source.get("area")):
+                materials.append(reference)
+    except Exception:
+        pass  # references are optional; the main material is still scanned
+    return materials
+
+
+def _attach_source_pictures(slides: list[dict], *, draft: dict, source: dict, storage: PresentationStorage,
+                            workdir: Path, local: dict[str, Path]) -> tuple[list[dict], dict[str, Any]]:
+    """Give slides pictures found in the teacher's own sources. Never fails the job."""
+    try:
+        if not storage.image_backend():
+            return slides, {"unsupported": True}
+        from teacher_app.assessments import ai_runtime
+
+        def store(path: Path, sha: str, mime: str) -> dict[str, Any]:
+            asset = storage.store_image(path, sha256=sha, mime_type=mime)
+            local[sha] = path
+            return asset
+
+        return picture_picker.attach_pictures(
+            slides, _picture_sources(draft, source), workdir=workdir,
+            fetch_source=lambda material: ai_runtime.material_source_to_temp(material), store_image=store)
+    except Exception:
+        LOGGER.warning("AI slide auto pictures skipped", exc_info=True)
+        return slides, {"failed": True}
 
 
 def generate_presentation(*, job: dict, progress_callback=None, storage: PresentationStorage | None = None) -> dict:
@@ -610,6 +711,16 @@ def generate_presentation(*, job: dict, progress_callback=None, storage: Present
     with tempfile.TemporaryDirectory(prefix="teacher-ppt-") as temp:
         root = Path(temp); template_path = None
         template_fallback_reason = ""
+        # 老師不必自己找圖：從教材與參考資料（Word／PowerPoint／PDF／圖片檔）抽出圖片，
+        # 依周圍文字自動配到最相關的投影片。失敗或沒有合適的圖都不影響產檔。
+        picture_info: dict[str, Any] = {}
+        local_pictures: dict[str, Path] = {}
+        if _auto_pictures_enabled(job):
+            if progress_callback: progress_callback(25, "從教材挑選圖片", "掃描教材與參考資料裡的圖片，配到相關的投影片")
+            slides, picture_info = _attach_source_pictures(slides, draft=draft, source=source, storage=storage,
+                                                           workdir=root / "pictures", local=local_pictures)
+            if picture_info.get("applied") and progress_callback:
+                progress_callback(28, "已自動配圖", f"在 {picture_info['applied']} 張投影片放入教材中的相關圖片")
         if template:
             if progress_callback: progress_callback(30, "下載簡報範本", "從共享 provider 下載組別範本")
             try:
@@ -627,11 +738,16 @@ def generate_presentation(*, job: dict, progress_callback=None, storage: Present
         if progress_callback: progress_callback(55, "建立 PowerPoint", "自動拆頁、圖片適配並寫入 speaker notes / provenance")
         render_pptx(title=str(draft.get("title") or source.get("title") or "AI 教學投影片"), slides=slides,
                     output_path=output, provenance=_source_context(draft, source, template_id=template_id), template_path=template_path,
-                    layout_profile=(template or {}).get("layoutProfile"), image_resolver=_image_resolver(storage, root),
+                    layout_profile=(template or {}).get("layoutProfile"), image_resolver=_image_resolver(storage, root, local_pictures),
                     branding=_branding_context(title=str(draft.get("title") or source.get("title") or "AI 教學投影片"),
                                                group=str(draft.get("group") or ""), area=str(draft.get("area") or ""),
                                                teacher=str(draft.get("approvedBy") or ""), revision=1),
                     quality_report=quality_report)
+        if picture_info.get("applied"):
+            # 圖片是自動挑的：請授課教師確認內容相符、沒有病人個資後再發布。
+            detail =f"已自動從教材配上 {picture_info['applied']} 張圖片，請確認圖片內容相符且不含病人個資。"
+            updated = quality.add_warning(quality_report, "AUTO_PICTURES", detail=detail)
+            quality_report.clear(); quality_report.update(updated)
         if template_fallback_reason:
             warnings=list(quality_report.get("warnings") or [])
             warnings.append({"code":"TEMPLATE_PROVIDER_FALLBACK","message":"組別範本無法從舊儲存讀取，已改用安全預設版型。"})

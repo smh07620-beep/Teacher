@@ -18,6 +18,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `AI_MEDIA_MAX_MB` | `300` | `teacher_app/legacy_host.py` |  | yes |
 | `AI_PRESENTATION_ALLOW_LOCAL_STORAGE` | `false` | `teacher_app/materials/ai_presentation_routes.py`, `teacher_app/materials/ai_presentation_storage.py` | yes |  |
 | `AI_PRESENTATION_ARTIFACT_MAX_MB` | `50` | `teacher_app/materials/ai_presentation_routes.py` |  |  |
+| `AI_PRESENTATION_AUTO_PICTURES` | `true` | `teacher_app/materials/ai_presentation_runtime.py` |  |  |
 | `AI_PRESENTATION_FALLBACK_TO_R2` | `True` | `teacher_app/materials/ai_presentation_storage.py`, `teacher_app/materials/ai_video_storage.py` | yes |  |
 | `AI_PRESENTATION_JOB_MAX_ATTEMPTS` | `3` | `teacher_app/materials/ai_presentation_jobs.py` |  |  |
 | `AI_PRESENTATION_JOB_STALE_SECONDS` | `1800` | `teacher_app/materials/ai_presentation_jobs.py` | yes |  |

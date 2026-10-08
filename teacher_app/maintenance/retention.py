@@ -137,26 +137,64 @@ def _purge_videos(cutoff: str, runtime, summary: dict) -> None:
             LOGGER.warning("retention: video %s not purged", row.get("id"), exc_info=True)
 
 
+_PICTURE_PREFIX = "ai-presentations/images/"
+
+
+def _picture_assets(slides_json: Any) -> set[tuple[str, str]]:
+    """(backend, key) of every slide picture a deck's slides point at."""
+    import json
+
+    value = slides_json
+    if isinstance(value, (str, bytes)):
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError):
+            return set()
+    found: set[tuple[str, str]] = set()
+    for slide in value if isinstance(value, list) else []:
+        for block in (slide.get("blocks") or []) if isinstance(slide, dict) else []:
+            asset = block.get("asset") if isinstance(block, dict) and block.get("type") == "image" else None
+            if isinstance(asset, dict) and str(asset.get("key") or "").startswith(_PICTURE_PREFIX):
+                found.add((str(asset.get("backend") or ""), str(asset["key"])))
+    return found
+
+
+def _picture_still_referenced(key: str) -> bool:
+    ph = _ph()
+    return bool(_rows(f"SELECT id FROM ai_presentations WHERE CAST(slides_json AS TEXT) LIKE {ph} LIMIT 1", (f"%{key}%",)))
+
+
 def _purge_presentations(cutoff: str, runtime, summary: dict) -> None:
     ph = _ph()
     rows = _rows(
-        "SELECT id,artifact_backend,artifact_storage_key FROM ai_presentations "
+        "SELECT id,artifact_backend,artifact_storage_key,slides_json FROM ai_presentations "
         f"WHERE status<>{ph} AND updated_at<{ph} "
         "AND id NOT IN (SELECT presentation_id FROM ai_presentation_publications) "
         # a kept video was rendered from this deck: keep the deck's provenance
         "AND id NOT IN (SELECT presentation_id FROM ai_presentation_videos)",
         ("published", cutoff),
     )
+    pictures: set[tuple[str, str]] = set()
     for row in rows:
         key = str(row.get("artifact_storage_key") or "")
         try:
             if not _artifact_still_referenced(key, ignore_table="ai_presentations", ignore_id=row["id"]):
                 _delete_artifact(row.get("artifact_backend"), key, kind="presentation", runtime=runtime)
             _execute(f"DELETE FROM ai_presentations WHERE id={ph}", (row["id"],))
+            pictures |= _picture_assets(row.get("slides_json"))
             summary["presentations"] += 1
         except Exception:
             summary["errors"] += 1
             LOGGER.warning("retention: presentation %s not purged", row.get("id"), exc_info=True)
+    # Slide pictures are shared by content hash: remove one only when no
+    # remaining deck (kept or not) still points at it.
+    for backend, key in sorted(pictures):
+        try:
+            if not _picture_still_referenced(key):
+                _delete_artifact(backend, key, kind="presentation", runtime=runtime)
+        except Exception:
+            summary["errors"] += 1
+            LOGGER.warning("retention: slide picture not purged", exc_info=True)
 
 
 def _purge_drafts_and_jobs(cutoff: str, summary: dict) -> None:

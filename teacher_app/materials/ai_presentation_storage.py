@@ -148,6 +148,50 @@ class PresentationStorage:
             key = relative.as_posix()
         return {"backend": backend, "key": str(key), "filename": filename, "sha256": digest, "byteSize": byte_size, "mimeType": PPTX_MIME}
 
+    def image_backend(self) -> str:
+        """Backend that can hold slide pictures ('' when none can).
+
+        Picture keys are content-addressed object keys, which only the S3-style
+        providers (R2 / OCI) give us; the other providers return opaque ids.
+        """
+        try:
+            backend = self.backend()
+        except Exception:
+            return ""
+        return backend if backend in {"r2", "oci"} else ""
+
+    def store_image(self, path: Path, *, sha256: str, mime_type: str) -> dict[str, Any]:
+        """Store one slide picture under ``ai-presentations/images/<sha256>.<ext>``."""
+        path = Path(path)
+        backend = self.image_backend()
+        extension = {"image/png": "png", "image/jpeg": "jpg"}.get(mime_type)
+        if not backend or not extension:
+            raise RuntimeError("目前的儲存位置不支援保存投影片圖片。")
+        if not path.is_file() or path.stat().st_size <= 0:
+            raise ValueError("投影片圖片不存在或空白。")
+        digest = str(sha256 or "").lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError("投影片圖片缺少有效的 sha256。")
+        key = f"ai-presentations/images/{digest}.{extension}"
+        client = providers.r2_client() if backend == "r2" else providers.oci_client()
+        bucket = providers.R2_BUCKET_NAME if backend == "r2" else providers.OCI_BUCKET_NAME
+        client.upload_file(str(path), bucket, key, ExtraArgs={"ContentType": mime_type})
+        if backend == "r2":
+            r2_ledger.record_object(key, int(path.stat().st_size), is_staging=False)
+        return {"backend": backend, "key": key, "sha256": digest, "mimeType": mime_type}
+
+    def delete_image(self, location: dict[str, Any]) -> None:
+        """Delete one picture object (used by retention once no deck references it)."""
+        backend = str(location.get("backend") or "").lower()
+        key = str(location.get("key") or "")
+        if backend not in {"r2", "oci"} or not key.startswith("ai-presentations/images/"):
+            return
+        client = providers.r2_client() if backend == "r2" else providers.oci_client()
+        bucket = providers.R2_BUCKET_NAME if backend == "r2" else providers.OCI_BUCKET_NAME
+        client.delete_object(Bucket=bucket, Key=key)
+        if backend == "r2":
+            r2_ledger.record_deleted(key)
+
     def download(self, location: dict[str, Any], target: Path) -> Path:
         backend = str(location.get("backend") or location.get("storageBackend") or "local").lower()
         key = str(location.get("key") or location.get("storageKey") or "")

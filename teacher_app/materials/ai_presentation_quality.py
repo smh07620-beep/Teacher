@@ -20,6 +20,7 @@ _QUALITY_CODES = {
     "TEXT_SPLIT", "TABLE_SPLIT", "COMPARISON_SPLIT", "MISSING_IMAGE",
     "TEMPLATE_FALLBACK", "PROVENANCE_MISSING", "NOTES_MISSING",
     "EMPTY_SLIDE", "NO_RENDERABLE_SLIDES", "OVERFLOW_RISK", "MANUAL_ARTIFACT_UNCHECKED",
+    "AUTO_PICTURES",
 }
 _MAX_QUALITY_ITEMS = 100
 
@@ -117,7 +118,9 @@ def select_layout(slide: Mapping[str, Any]) -> str:
         return "table"
     if "comparison" in kinds:
         return "comparison"
-    if "image" in kinds and len(bullets) <= 3:
+    # A picture slide with bullets keeps the normal text layout; the renderer puts
+    # the picture beside the text. The dedicated picture layout is for picture-only slides.
+    if "image" in kinds and not bullets:
         return "image"
     if not bullets and not blocks:
         return requested if requested in {"title", "section", "summary"} else "section"
