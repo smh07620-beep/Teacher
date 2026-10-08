@@ -13,9 +13,11 @@ def test_question_delete_actions_are_visible_and_explicit():
     assert "🗑️ 刪除已選題目" in source
     assert "🗑️ 刪除" in source
     assert "MutationObserver" in source
-    direct_delete = source.index('data-csp-click="adminDeleteQuizCategory')
+    # 1030: 刪除考卷 lives only inside the ⋯ menu (one primary button per row).
     overflow_menu = source.index('<details data-quiz-overflow-78')
-    assert direct_delete < overflow_menu
+    delete_menu = source.index('data-csp-click="adminDeleteQuizCategory', overflow_menu)
+    assert delete_menu > overflow_menu
+    assert source.count('data-csp-click="adminDeleteQuizCategory') == 1
 
 
 def test_existing_question_delete_contract_keeps_confirmation_and_delete_method():

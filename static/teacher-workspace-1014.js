@@ -421,7 +421,6 @@
     await openAssessment();
     for (let attempt = 0; attempt < 30; attempt += 1) {
       const target = document.getElementById('teacher-learners-p2')
-        || document.getElementById('teacher-review-shortcut-1014')
         || document.getElementById('teacher-assessment-flow-1014');
       if (target) {
         target.scrollIntoView?.({block:'start', behavior:'smooth'});
@@ -467,45 +466,67 @@
     markTeacherNav('announcements');
   }
 
+  // 評量頁上方分頁列：考卷｜待批改(n)｜歷史紀錄｜教學分析。
+  // 取代舊的六顆流程晶片、四張統計卡與「待批改→歷史紀錄」捷徑區塊。
+  function setAssessmentTab(name) {
+    const flow = document.getElementById('teacher-assessment-flow-1014');
+    if (!flow) return;
+    flow.querySelectorAll('[data-assessment-tab-1030]').forEach(button => {
+      const active = button.dataset.assessmentTab1030 === name;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+  }
+
   function ensureAssessmentWorkflow() {
     const panel = document.getElementById('admin-section-quiz');
     if (!panel) return;
     let flow = document.getElementById('teacher-assessment-flow-1014');
     if (!flow) {
-      flow = document.createElement('section');
+      flow = document.createElement('nav');
       flow.id = 'teacher-assessment-flow-1014';
-      flow.className = 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm';
+      flow.className = 'teacher-assessment-tabs-1030';
+      flow.setAttribute('role', 'tablist');
+      flow.setAttribute('aria-label', '評量與追蹤');
       flow.innerHTML = `
-        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-          <div><p class="admin-page-eyebrow text-indigo-700">ASSESSMENT FLOW</p><h4 class="text-base font-black text-slate-950">評量工作流程</h4><p class="mt-1 text-xs text-slate-500">從建立到批改使用同一條流程；題庫、AI 出題與教師評核不再拆成彼此競爭的入口。</p></div>
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 text-[10px] font-bold text-slate-700">
-            <span class="teacher-assessment-step-1014">1 建立評量</span><span class="teacher-assessment-step-1014">2 準備題目</span><span class="teacher-assessment-step-1014">3 對象／期限</span><span class="teacher-assessment-step-1014">4 審核發布</span><span class="teacher-assessment-step-1014">5 待批改</span><span class="teacher-assessment-step-1014">6 歷史紀錄</span>
-          </div>
-        </div>`;
+        <button type="button" role="tab" data-assessment-tab-1030="exams" class="teacher-assessment-tab-1030 is-active" aria-selected="true">📝 考卷</button>
+        <button type="button" role="tab" id="teacher-open-pending-review-1014" data-assessment-tab-1030="pending" class="teacher-assessment-tab-1030" aria-selected="false">待批改<span id="teacher-assessment-pending-badge-1030" class="teacher-assessment-badge-1030 hidden">0</span></button>
+        <button type="button" role="tab" id="teacher-open-review-1014" data-assessment-tab-1030="history" class="teacher-assessment-tab-1030" aria-selected="false">歷史紀錄</button>
+        <button type="button" role="tab" id="teacher-open-analytics-1030" data-assessment-tab-1030="analytics" class="teacher-assessment-tab-1030" aria-selected="false">教學分析</button>`;
+      flow.addEventListener('click', async event => {
+        const button = event.target.closest?.('[data-assessment-tab-1030]');
+        if (!button) return;
+        const tab = button.dataset.assessmentTab1030;
+        if (tab === 'exams') {
+          setAssessmentTab('exams');
+          document.getElementById('admin-quiz-workspace')?.scrollIntoView?.({block:'start', behavior:'smooth'});
+        } else if (tab === 'pending') {
+          await openReview();
+        } else if (tab === 'history') {
+          state.mode = 'assessment';
+          await window.AppWorkspaceRoutes.show('results', true);
+          markTeacherNav('assessment');
+        } else if (tab === 'analytics') {
+          setAssessmentTab('analytics');
+          document.getElementById('teacher-learners-p2')?.scrollIntoView?.({block:'start', behavior:'smooth'});
+        }
+      });
+      document.addEventListener('teacher-assessment-pending-1030', event => {
+        const badge = document.getElementById('teacher-assessment-pending-badge-1030');
+        if (!badge) return;
+        const pending = Number(event.detail?.pending || 0);
+        badge.textContent = String(pending);
+        badge.classList.toggle('hidden', pending <= 0);
+      });
     }
     if (flow.parentElement !== panel) panel.insertBefore(flow, panel.firstChild);
-  }
-
-  function ensureAssessmentReviewShortcut() {
-    const panel = document.getElementById('admin-section-quiz');
-    if (!panel || document.getElementById('teacher-review-shortcut-1014')) return;
-    const section = document.createElement('section');
-    section.id = 'teacher-review-shortcut-1014';
-    section.dataset.productSection = 'history';
-    section.className = 'rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3';
-    section.innerHTML = `<div><b class="text-sm text-indigo-950">⑤ 待批改 → ⑥ 歷史紀錄</b><p class="mt-1 text-xs text-indigo-700">待批改會優先出現在「需要我處理」；完成後自動進入歷史紀錄，不需要切換到另一套教師評核功能。</p></div><div class="flex flex-wrap gap-2"><button id="teacher-open-pending-review-1014" type="button" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-black text-white">查看待批改</button><button id="teacher-open-review-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">查看歷史紀錄</button></div>`;
-    panel.appendChild(section);
-    section.querySelector('#teacher-open-pending-review-1014')?.addEventListener('click', async () => {
-      state.mode = 'assessment';
-      await window.AppWorkspaceRoutes.show('teacher', true);
-      await window.switchTeacherMode?.('scoring');
-      markTeacherNav('assessment');
-    });
-    section.querySelector('#teacher-open-review-1014')?.addEventListener('click', async () => {
-      state.mode = 'assessment';
-      await window.AppWorkspaceRoutes.show('results', true);
-      markTeacherNav('assessment');
-    });
+    if (typeof window.__teacherAssessmentPending1030 === 'number') {
+      const badge = document.getElementById('teacher-assessment-pending-badge-1030');
+      if (badge) {
+        badge.textContent = String(window.__teacherAssessmentPending1030);
+        badge.classList.toggle('hidden', window.__teacherAssessmentPending1030 <= 0);
+      }
+    }
   }
 
   function buildTeacherNavigation() {
@@ -519,7 +540,6 @@
     navHost.replaceChildren(navGroup('教師工作台', buttons));
     markTeacherNav(state.mode === 'announcements' ? 'announcements' : (state.mode === 'documents' ? 'documents' : (state.mode === 'media' ? 'media' : (params.get('workspace') === 'assessment' ? 'assessment' : 'course'))));
     ensureAssessmentWorkflow();
-    ensureAssessmentReviewShortcut();
   }
 
   function syncTeacherHeader() {
@@ -540,7 +560,6 @@
   ensureTeacherGuide();
   ensureMediaWorkspace();
   ensureAssessmentWorkflow();
-  ensureAssessmentReviewShortcut();
   syncTeacherHeader();
 
   window.AdminWorkspaceShell?.addAfterWorkspace?.(({workspace}) => {
@@ -549,7 +568,6 @@
     ensureTeacherUtilities();
     ensureTeacherGuide();
     ensureAssessmentWorkflow();
-    ensureAssessmentReviewShortcut();
     if (state.mode === 'media' && workspace === 'course-materials') {
       showMediaWorkspace();
       markTeacherNav('media');

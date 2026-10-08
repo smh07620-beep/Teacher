@@ -94,8 +94,8 @@ class TeacherWorkspace1014Tests(unittest.TestCase):
 
     def test_manual_review_stays_under_assessment_not_new_top_level_nav(self):
         self.assertIn("歷史紀錄", self.source)
-        self.assertIn("待批改會優先出現在「需要我處理」", self.source)
-        self.assertIn("查看歷史紀錄", self.source)
+        self.assertIn("teacher-assessment-pending-badge-1030", self.source)
+        self.assertIn('data-assessment-tab-1030="history"', self.source)
         self.assertIn("await window.AppWorkspaceRoutes.show('results', true)", self.source)
         self.assertNotIn("待批改／教師評核", self.source)
 

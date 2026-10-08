@@ -494,7 +494,7 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
 
 .admin-quiz-overview {
     border-top: 1px solid #eef2f7;
-    padding-top: 16px;
+    padding-top: 8px;
 }
 
 .admin-quiz-summary-grid,
@@ -1050,3 +1050,20 @@ details[data-course-id] > summary { border-radius: 1rem; }
 details[data-course-id][open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 details[data-course-id][open] > :last-child { border-bottom-left-radius: 1rem; border-bottom-right-radius: 1rem; }
 details[data-course-id] [data-material-more][open] { position: relative; z-index: 30; }
+
+/* Assessment page slimming: counts are one quiet line, not four cards. */
+.admin-quiz-summary-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 4px;
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.admin-quiz-summary-line strong {
+    color: #0f172a;
+    font-size: 13px;
+}
