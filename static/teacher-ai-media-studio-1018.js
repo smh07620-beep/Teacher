@@ -317,6 +317,12 @@
 
   async function finishSimpleFlow(mode) {
     const detail = simpleFlowResultDetail(mode);
+    // 成品已進教材；本次臨時加入的私人來源不再需要，清掉以免佔用雲端空間。
+    if (mode === 'narration') {
+      await window.TeacherMediaScript1014?.cleanupPrivateSources?.();
+    } else if ((mode === 'presentation' && detail.presentationId) || (mode === 'video' && detail.videoId)) {
+      await window.TeacherAIMaterial1014?.cleanupAuthoringSources?.();
+    }
     try {
       sessionStorage.setItem('teacher.mediaAuthoring.lastResult.v1', JSON.stringify(detail));
     } catch (_) {
@@ -337,6 +343,12 @@
     }
 
     setSimpleFlowStatus(mode, '✅ 製作完成，正在回到教材與課程…');
+    // 從「建立課程」精靈進來的製作，必須回到精靈原本的步驟，而不是跳到課程總覽。
+    const authoring = window.TeacherCourseAuthoringContext;
+    if (authoring?.active && typeof window.returnTeacherCourseAuthoringStep === 'function') {
+      await window.returnTeacherCourseAuthoringStep(Number(authoring.returnStep || 2));
+      return true;
+    }
     if (typeof window.TeacherWorkspace1014?.openCourse === 'function') {
       await window.TeacherWorkspace1014.openCourse();
       return true;
@@ -420,8 +432,14 @@
     return false;
   }
 
+  // DOM id pattern: teacher-media-simple-flow-1032 (suffixed per mode).
   function ensureSimpleFlow(panel, mode) {
     if (!panel || !['presentation', 'narration', 'video'].includes(mode)) return null;
+    // 講稿與配音是一條線性流程（匯入 → 核准 → 配音 → 完成），不再把「重新修改／完成」釘在頁面最上方。
+    if (mode === 'narration') {
+      $(`teacher-media-simple-flow-${mode}-1032`)?.remove();
+      return null;
+    }
     const oldGuide = $(`teacher-media-mode-guide-${mode}-1018`);
     oldGuide?.classList.add('hidden');
     if (mode === 'presentation') $('teacher-ai-material-flow-1014')?.classList.add('hidden');
@@ -452,7 +470,12 @@
           <button id="teacher-media-simple-finish-${mode}-1032" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white">✅ 製作完成，帶回教材</button>
         </div>
         <p id="teacher-media-simple-status-${mode}-1032" class="mt-2 text-xs font-bold text-slate-600">先從下方加入／選擇來源，直接按「試產出」即可。</p>`;
-      panel.prepend(flow);
+      panel.appendChild(flow);
+      if (mode === 'presentation') {
+        // 大綱編輯區已有「重新產出／放棄草稿」，底部只保留「完成帶回教材」。
+        $(`teacher-media-simple-revision-${mode}-1032`)?.classList.add('hidden');
+        $(`teacher-media-simple-revise-${mode}-1032`)?.classList.add('hidden');
+      }
       $(`teacher-media-simple-revise-${mode}-1032`)?.addEventListener('click', () => void reviseSimpleFlow(mode));
       $(`teacher-media-simple-finish-${mode}-1032`)?.addEventListener('click', () => void finishSimpleFlow(mode));
       $(`teacher-media-simple-revision-${mode}-1032`)?.addEventListener('keydown', event => {
@@ -704,7 +727,18 @@
     }
   });
 
+  function resetFlowState() {
+    ['presentation', 'narration', 'video'].forEach(mode => {
+      const input = $(`teacher-media-simple-revision-${mode}-1032`);
+      if (input) input.value = '';
+      setSimpleFlowStatus(mode, '先從下方加入／選擇來源，直接按「試產出」即可。');
+    });
+    window.TeacherMediaScript1014?.resetFlow?.();
+    window.TeacherAIMaterial1014?.resetFlow?.();
+  }
+
   window.TeacherAIMediaStudio1018 = Object.freeze({
+    resetFlowState,
     refresh: refreshLifecycle,
     showMode: (mode, focus = false) => { install(); showMode(mode, focus); },
     activeMode: () => activeMode,

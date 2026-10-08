@@ -19,12 +19,9 @@ test('Script: real mixed source job → UI edit → save → reload → approved
   await openScript(page);
   const formats=(process.env.E2E_SOURCE_FORMATS||'source.pdf,source.pptx').split(',').filter(n=>['source.pdf','source.pptx'].includes(n));
   await page.locator('#teacher-script-source-file-1030').setInputFiles(formats.map(n=>path.join(process.env.E2E_SOURCE_DIR,n)));
-  await page.locator('#teacher-script-source-upload-1030').click();
-  await expect(page.locator('#teacher-script-status-1014')).toContainText(`已加入 ${formats.length} 份`,{timeout:90000});
   await page.locator('#teacher-script-paste-title-1030').fill('E2E-TEST-20261006 補充 SOP');
   await page.locator('#teacher-script-paste-1030').fill('Specimen collection safety, quality control and patient identity verification. '.repeat(5));
-  await page.locator('#teacher-script-paste-add-1030').click();
-  await expect(page.locator('#teacher-script-status-1014')).toContainText('已加入',{timeout:90000});
+  // 單一入口：匯入檔案 + 貼入文字後直接產生講稿草稿。
   await page.locator('#teacher-script-generate-1014').click();
   await expect(page.locator('#teacher-script-body-1014')).not.toHaveValue('',{timeout:90000});
   const original=await page.locator('#teacher-script-body-1014').inputValue();

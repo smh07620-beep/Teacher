@@ -177,6 +177,32 @@ def register_ai_material_routes(owner):
         )
         return jsonify({"ok": True, "draft": _public_draft(draft)}), 201
 
+    @app.delete("/api/ai-material-drafts/<draft_id>")
+    def ai_material_discard(draft_id):
+        """Discard an unsatisfactory AI outline/draft that was never published."""
+        user = _actor(owner)
+        if not user:
+            return jsonify({"error": "請先登入。", "loginRequired": True}), 401
+        current = media_script_repository.get_script(str(draft_id))
+        if not current:
+            return jsonify({"error": "找不到 AI 教材草稿"}), 404
+        denied = _scope(owner, str(current.get("group") or ""))
+        if denied:
+            return denied
+        if str(current.get("publicationMaterialId") or "").strip():
+            return jsonify({"error": "這份草稿已發布成教材，不能直接刪除；請由教材管理處理。"}), 409
+        if not media_script_repository.delete_script(str(draft_id)):
+            return jsonify({"error": "找不到 AI 教材草稿"}), 404
+        audit.record_event(
+            actor=user,
+            action="ai.material.draft.discard",
+            target_type="ai_material_draft",
+            target_id=str(draft_id),
+            group=str(current.get("group") or ""),
+            before={"title": current.get("title"), "draftType": current.get("draftType"), "status": current.get("status")},
+        )
+        return jsonify({"ok": True, "deleted": str(draft_id)})
+
     @app.patch("/api/ai-material-drafts/<draft_id>")
     def ai_material_update(draft_id):
         user = _actor(owner)

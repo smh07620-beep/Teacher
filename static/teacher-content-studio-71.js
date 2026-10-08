@@ -60,6 +60,16 @@
       const examAction = event.target.closest('[data-exam-action]');
       if(examAction){ dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId); return; }
       if(event.target.closest('[data-course-studio-back]')){ closeStudio(); return; }
+      if(event.target.closest('[data-course-authoring-abandon]')){
+        if(!confirm('確定放棄這次製作嗎？尚未核准的草稿與臨時加入的來源會被清除。')) return;
+        void (async()=>{
+          await window.TeacherMediaScript1014?.discardAll?.();
+          await window.TeacherAIMaterial1014?.cleanupAuthoringSources?.();
+          window.TeacherAIMediaStudio1018?.resetFlowState?.();
+          await returnToCourseAuthoring(Number(window.TeacherCourseAuthoringContext?.returnStep||2));
+        })();
+        return;
+      }
       const courseReturn=event.target.closest('[data-course-authoring-return]');
       if(courseReturn){ void returnToCourseAuthoring(Number(courseReturn.dataset.courseAuthoringReturn||2)); return; }
       const back = event.target.closest('[data-studio-back]');
@@ -318,9 +328,10 @@
     studioState.courseAuthoringStep=2;
     window.TeacherCourseAuthoringContext={active:true,kind:'media',returnStep:2};
     setStudioChrome('course-materials','建立課程｜2 教材與 AI','AI 製作是本課程的子工作；完成後回到教材步驟加入產物，不會提前發布課程。');
-    host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-4 flex flex-wrap items-start justify-between gap-3"><div><button type="button" data-course-authoring-return="2" class="text-sm font-bold text-teal-700">← 回到建立課程｜教材</button><h4 class="mt-2 text-xl font-black text-slate-950">✨ ${esc(({presentation:'AI PowerPoint',narration:'講稿與配音',video:'AI 教學影片'}[mode]||'AI 教材製作'))}</h4><p class="mt-1 text-xs text-slate-500">製作、修改、核准都留在這個子工作畫面；完成正式產物後再回課程精靈確認加入。</p></div><span class="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700">草稿已自動儲存</span></div><div data-course-media-host></div></div>`;
+    host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-4 flex flex-wrap items-start justify-between gap-3"><div><button type="button" data-course-authoring-return="2" class="text-sm font-bold text-teal-700">← 回到建立課程｜教材</button><h4 class="mt-2 text-xl font-black text-slate-950">✨ ${esc(({presentation:'AI PowerPoint',narration:'講稿與配音',video:'AI 教學影片'}[mode]||'AI 教材製作'))}</h4><p class="mt-1 text-xs text-slate-500">製作、修改、核准都留在這個子工作畫面；完成正式產物後再回課程精靈確認加入。</p></div><div class="flex items-center gap-2"><span class="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700">草稿已自動儲存</span><button type="button" data-course-authoring-abandon class="rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-rose-700">放棄這次製作</button></div></div><p id="teacher-authoring-lock-note-71" hidden class="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800" role="status"></p><div data-course-media-host></div></div>`;
     host.querySelector('[data-course-media-host]')?.appendChild(media);
     media.classList.remove('hidden');
+    window.TeacherAIMediaStudio1018?.resetFlowState?.();
     window.TeacherAIMediaStudio1018?.showMode?.(mode);
     media.scrollIntoView?.({block:'start'});
     return true;
@@ -639,6 +650,31 @@
   window.openTeacherCourseMediaAuthoring=openCourseMediaAuthoring;
   window.openTeacherCourseAssessmentAuthoring=openCourseAssessmentAuthoring;
   window.returnTeacherCourseAuthoringStep=returnToCourseAuthoring;
+
+  // 製作講稿／配音／影片時，教師只能「完成並回到建立課程」或「放棄」，不能從左側選單跳去別處，
+  // 否則製作中的草稿與課程精靈狀態會互相脫節。
+  function installAuthoringNavigationLock(){
+    const shell=window.AdminWorkspaceShell;
+    if(!shell?.addWorkspaceGuard) return false;
+    if(window.__teacherAuthoringNavLock) return true;
+    window.__teacherAuthoringNavLock=true;
+    shell.addWorkspaceGuard(()=>{
+      const ctx=window.TeacherCourseAuthoringContext;
+      if(!ctx?.active||ctx.kind!=='media') return true;
+      const note=document.getElementById('teacher-authoring-lock-note-71');
+      if(note){
+        note.hidden=false;
+        note.textContent='正在製作教材：請先按「← 回到建立課程」完成，或按「放棄這次製作」，再前往其他功能。';
+        note.scrollIntoView?.({block:'nearest'});
+      }
+      return false;
+    });
+    return true;
+  }
+  if(!installAuthoringNavigationLock()){
+    window.addEventListener('DOMContentLoaded',installAuthoringNavigationLock,{once:true});
+    window.addEventListener('load',installAuthoringNavigationLock,{once:true});
+  }
   window.openTeacherMaterialCreateWorkspace=openMaterialCreateWorkspace;
   window.openTeacherAtlasDocxWorkspace=openTeacherAtlasDocxWorkspace;
 

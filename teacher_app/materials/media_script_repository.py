@@ -297,8 +297,16 @@ def update_script(script_id: str, *, title: str, body: str, status: str, actor_u
     return get_script(script_id)
 
 
+def delete_script(script_id: str) -> bool:
+    """Permanently discard one AI draft/script row (teacher abandoned it)."""
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        cursor = conn.execute(f"DELETE FROM media_scripts WHERE id={ph}", (script_id,))
+        return bool(int(getattr(cursor, "rowcount", 0) or 0))
+
+
 __all__ = [
     "ACTIVE_STATUSES", "DRAFT_TYPES", "SCRIPT_STATUSES", "active_count_for_actor", "claim", "complete", "create_job",
-    "create_script", "fail", "get_job", "get_script", "list_drafts", "list_queued", "list_scripts", "now",
+    "create_script", "delete_script", "fail", "get_job", "get_script", "list_drafts", "list_queued", "list_scripts", "now",
     "recent_count_for_actor", "requeue_stale_processing", "set_progress", "total_active_count", "update_script",
 ]

@@ -201,6 +201,30 @@ def register_media_script_routes(owner):
         )
         return jsonify({"ok": True, "script": _public_script(updated or {})})
 
+    @app.delete("/api/media-scripts/<script_id>")
+    def media_script_discard(script_id):
+        """Let a teacher abandon an unsatisfactory AI draft instead of keeping it forever."""
+        user = _actor(owner)
+        if not user:
+            return jsonify({"error": "請先登入。", "loginRequired": True}), 401
+        current = media_script_repository.get_script(str(script_id))
+        if not current or str(current.get("draftType") or "script") != "script":
+            return jsonify({"error": "找不到講稿"}), 404
+        denied = _scope(owner, str(current.get("group") or ""))
+        if denied:
+            return denied
+        if not media_script_repository.delete_script(str(script_id)):
+            return jsonify({"error": "找不到講稿"}), 404
+        audit.record_event(
+            actor=user,
+            action="media.script.discard",
+            target_type="media_script",
+            target_id=str(script_id),
+            group=str(current.get("group") or ""),
+            before={"title": current.get("title"), "status": current.get("status")},
+        )
+        return jsonify({"ok": True, "deleted": str(script_id)})
+
     app.extensions["teacher_media_script_routes_registered"] = True
     return app
 

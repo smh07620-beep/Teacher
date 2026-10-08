@@ -44,11 +44,11 @@ def test_optional_requirements_are_progressively_disclosed_in_all_ai_modes():
 
     assert "teacher-ai-material-requirements-1032" in powerpoint
     assert "需求（選填）｜語氣、篇幅、特別重點" in powerpoint
-    assert "✨ 試產出 PowerPoint 大綱" in powerpoint
+    assert "✨ 匯入並產生 PowerPoint 大綱" in powerpoint
 
     assert "teacher-script-requirements-1032" in narration
     assert "需求（選填）｜語氣、篇幅、特別重點" in narration
-    assert "✨ 試產出講稿" in narration
+    assert "✨ 匯入並產生講稿" in narration
 
     assert "teacher-ai-video-requirements-1032" in video
     assert "需求（選填）｜旁白聲音" in video
