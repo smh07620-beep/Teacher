@@ -88,6 +88,9 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         self.assertIn('排隊等待 AI 接手', ai)
         self.assertIn('已進行 ${fmtSec(sec)}', ai)
         self.assertIn('d.examReview', ai)
+        bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
+        self.assertIn('id="ai-audience-${c.id}"', bank)
+        self.assertIn('/api/content-audience/questions/', ai)
 
     def test_mobile_question_actions_are_collapsed(self):
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
