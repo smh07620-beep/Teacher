@@ -125,6 +125,14 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         self.assertIn('pickQuestionEditBox(qId)', actions)
         self.assertIn("pickQuestionEl('qsticky-msg',catId)", actions)
 
+    def test_repaint_never_leaves_a_second_copy_of_a_mounted_tool(self):
+        panels = ROOT.joinpath('static/teacher-content-tool-panels-710.js').read_text(encoding='utf-8')
+        bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
+        self.assertIn('function reconcileAfterPaint', panels)
+        self.assertIn('reconcileAfterPaint,', panels)
+        start = bank.index('window.paintAdminQuizCategories=')
+        self.assertIn('reconcileAfterPaint', bank[start:bank.index('\n', start)])
+
     def test_mobile_question_actions_are_collapsed(self):
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
         bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')

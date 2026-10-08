@@ -185,7 +185,7 @@
   window.teacher78FilterQuizCategories=value=>{quizListView78.query=String(value||'');quizListView78.visible=20;renderQuizList78();};
   window.teacher78SetQuizStatus=value=>{quizListView78.status=String(value||'all');quizListView78.visible=20;renderQuizList78();};
   window.teacher78LoadMoreQuizCategories=()=>{quizListView78.visible+=20;renderQuizList78();};
-  window.paintAdminQuizCategories=function(cats){quizListView78.all=Array.isArray(cats)?cats:[];quizListView78.visible=20;renderQuizOverview78(quizListView78.all);renderQuizList78();};
+  window.paintAdminQuizCategories=function(cats){quizListView78.all=Array.isArray(cats)?cats:[];quizListView78.visible=20;renderQuizOverview78(quizListView78.all);renderQuizList78();window.TeacherContentToolPanels710?.reconcileAfterPaint?.();};
 
   window.optimisticInsertQuizCategory = function(cat, area, group){
     const k=adminScopeKey(area,group);

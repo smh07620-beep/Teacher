@@ -36,6 +36,31 @@
     mountState.kind='';
   }
 
+  // 根本修復：考卷清單重畫（同步、儲存、審核後都會發生）時，會在清單裡再蓋出一份全新的工具面板，
+  // 和已搬到工作畫面的那份撞 id。這裡把清單裡多出來的那份換成佔位符，確保畫面上永遠只有一份。
+  function counterpartIn(panel,kind,catId){
+    const id=CSS.escape(String(catId));
+    if(kind==='questions')return panel.querySelector(`[id="qlist-${String(catId).replace(/"/g,'\\"')}"]`)?.closest('section')||null;
+    if(kind==='manual')return panel.querySelector(`[id="qform-${String(catId).replace(/"/g,'\\"')}-question"]`)?.closest('details')||null;
+    if(kind==='ai')return panel.querySelector(`[data-ai-question-studio="${id}"]`)||panel.querySelector('[data-ai-question-studio]');
+    return null;
+  }
+  function reconcileAfterPaint(){
+    const node=mountState.node;
+    if(!node||!node.isConnected)return;
+    const catId=mountState.catId,kind=mountState.kind;
+    document.querySelectorAll(`[id="qpanel-${String(catId).replace(/"/g,'\\"')}"]`).forEach(panel=>{
+      if(panel.contains(node))return;
+      const dup=counterpartIn(panel,kind,catId);
+      if(!dup||dup===node||node.contains(dup))return;
+      const placeholder=document.createElement('div');
+      placeholder.hidden=true;
+      placeholder.dataset.teacher710ToolPlaceholder=`${kind}:${catId}`;
+      dup.replaceWith(placeholder);
+      if(!mountState.placeholder?.isConnected)mountState.placeholder=placeholder;
+    });
+  }
+
   function showLoading(title,detail){
     const host=body();
     if(!host)return;
@@ -193,6 +218,7 @@
 
   window.TeacherContentToolPanels710={
     restore:restoreMountedTool,
+    reconcileAfterPaint,
     openAi:openAiTool,
     openManual:openManualTool,
     openQuestions:openQuestionManager,
