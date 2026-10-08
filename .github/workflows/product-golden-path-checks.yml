@@ -4,10 +4,18 @@ on:
   push:
     branches:
       - main
+    # 只改說明文件時，不重跑耗時的瀏覽器／完整流程檢查（PR 仍會完整檢查）
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   material-operational:
