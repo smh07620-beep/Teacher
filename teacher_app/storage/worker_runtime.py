@@ -144,6 +144,14 @@ class WorkerMaterialStorageAdapter:
                 additions.append(directory)
                 known.add(normalized)
         env["PATH"] = separator.join([*additions, *current])
+        # MEGAcmd 用 %LOCALAPPDATA%\MEGAcmd\MEGAcmdServer.exe 啟動背景伺服器；
+        # SYSTEM 帳號的 LOCALAPPDATA 底下沒有它，所以改指向 MEGACMD_EXTRA_DIRS 的上一層。
+        if sys.platform.startswith("win"):
+            for extra in str(os.environ.get("MEGACMD_EXTRA_DIRS", "")).split(";"):
+                extra = extra.strip().strip('"')
+                if extra and path_module.basename(path_module.normpath(extra)).lower() == "megacmd":
+                    env["LOCALAPPDATA"] = path_module.dirname(path_module.normpath(extra))
+                    break
         return env
 
     def _mega_find(self, command: str) -> str:

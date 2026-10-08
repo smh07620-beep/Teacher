@@ -25,3 +25,18 @@ class ExtraDirsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LocalAppDataTests(unittest.TestCase):
+    def test_server_launch_dir_follows_the_extra_dir(self):
+        env = {"MEGACMD_EXTRA_DIRS": r"C:\Users\a\AppData\Local\MEGAcmd", "LOCALAPPDATA": r"C:\Windows\System32\config\systemprofile\AppData\Local",
+               "ProgramFiles": r"C:\Program Files", "ProgramFiles(x86)": r"C:\Program Files (x86)"}
+        with patch.object(worker_runtime.sys, "platform", "win32"), patch.dict(os.environ, env, clear=False):
+            out = worker_runtime.WorkerMaterialStorageAdapter()._megacmd_env()
+        self.assertEqual(out["LOCALAPPDATA"], r"C:\Users\a\AppData\Local")
+
+    def test_unset_leaves_localappdata_alone(self):
+        env = {"MEGACMD_EXTRA_DIRS": "", "LOCALAPPDATA": r"C:\X"}
+        with patch.object(worker_runtime.sys, "platform", "win32"), patch.dict(os.environ, env, clear=False):
+            out = worker_runtime.WorkerMaterialStorageAdapter()._megacmd_env()
+        self.assertEqual(out["LOCALAPPDATA"], r"C:\X")
