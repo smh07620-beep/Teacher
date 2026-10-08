@@ -60,7 +60,7 @@
     'switchDynamicCategory','switchLearningModule','switchTeacherMode','syncExamDrawModeUI','syncGlobalLearningSearch',
     'teacher78FilterQuizCategories','teacher78LoadMoreQuizCategories','teacher78SetQuizStatus','teachingCloseEditor',
     'teachingEditCourse','teachingFinishReading','teachingNextMaterial','teachingSaveCourse','toggleAdminAnnouncement',
-    'toggleAdminMaterial','toggleAdminModal','toggleAdminUserAccount','toggleAiMaterialSelection','toggleAtlasFullscreen','viewMaterialVersions',
+    'toggleAdminMaterial','toggleAdminModal','toggleAdminUserAccount','toggleAiMaterialSelection','loadAiMaterialOptions','toggleAtlasFullscreen','viewMaterialVersions',
     'toggleFlag','toggleMediaFullscreen','toggleQuizQuestionsPanel','toggleSlideFullscreen','updateAdminMaterialTypeFields',
     'updateManualQuestionType'
   ]);
