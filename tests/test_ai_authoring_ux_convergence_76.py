@@ -92,6 +92,13 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         self.assertIn('id="ai-audience-${c.id}"', bank)
         self.assertIn('/api/content-audience/questions/', ai)
 
+    def test_save_all_gives_visible_feedback_without_alert(self):
+        actions = ROOT.joinpath('static/admin-question-actions.js').read_text(encoding='utf-8')
+        bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
+        self.assertIn('id="qsticky-msg-${c.id}"', bank)
+        self.assertIn('目前沒有正在編輯的題目', actions)
+        self.assertNotIn("alert('請先勾選要儲存的題目。')", actions)
+
     def test_mobile_question_actions_are_collapsed(self):
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
         bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')

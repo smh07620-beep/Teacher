@@ -150,15 +150,16 @@
   };
 
   window.adminSaveExpandedQuestionEdits = async function(catId){
-    const ids=window.adminSelectedQuestionIds(catId)
-      .filter(id=>document.getElementById(`qedit-${id}`));
-    if(!ids.length){alert('請先勾選要儲存的題目。');return;}
+    const say=(text,bad)=>{const m=document.getElementById(`qsticky-msg-${catId}`);if(m){m.textContent=text;m.className=`text-[11px] ${bad?'text-rose-600 font-bold':'text-slate-500'}`;}};
+    const open=[...document.querySelectorAll('[id^="qedit-"]')].filter(el=>el.getClientRects().length).map(el=>el.id.slice(6));
+    const ids=[...new Set(open)].filter(id=>document.querySelector(`.qselect-${catId}[data-qid="${id}"]`));
+    if(!ids.length){say('目前沒有正在編輯的題目：請先按某題右邊的「✏️ 編輯」，修改後再按儲存。',true);return;}
     if(bulkBusy)return;
     let items;
     try{
       items=ids.map(id=>({id,data:window.adminBuildQuestionPayload(id)}));
     }catch(e){
-      alert(e.message||'題目內容檢查失敗');
+      say(`❌ ${e.message||'題目內容檢查失敗'}`,true);
       return;
     }
     window.setQuestionBulkBusy(catId,true,`儲存 ${items.length} 題中…`);
@@ -177,9 +178,10 @@
         : items.map(item=>({id:item.id,...item.data}));
       window.updateQuestionCacheAndPaint(catId,updated);
       if(progress)progress.textContent=`✅ 已儲存 ${items.length} 題`;
+      say(`✅ 已儲存 ${items.length} 題`,false);
     }catch(e){
       if(progress)progress.textContent=`❌ ${e.message||'批次儲存失敗'}`;
-      alert(e.message||'批次儲存失敗');
+      say(`❌ ${e.message||'批次儲存失敗'}`,true);
     }finally{
       window.setQuestionBulkBusy(catId,false);
     }

@@ -317,7 +317,7 @@
                           </div>
                           <span id="qbulk-progress-${c.id}" class="text-[11px] text-slate-500"></span>
                       </div>
-                      <div id="qlist-${c.id}" class="space-y-2"></div><div id="qsticky-save-${c.id}" class="sticky bottom-2 z-20 mt-3 rounded-xl border border-teal-200 bg-white/95 backdrop-blur shadow-lg p-2.5 flex items-center justify-between gap-3"><span class="text-[11px] text-slate-500">批次編輯後可直接在此儲存，不必回頁首。</span><button data-csp-click="adminSaveExpandedQuestionEdits('${c.id}')" class="text-xs bg-teal-700 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold">💾 儲存全部修改</button></div>
+                      <div id="qlist-${c.id}" class="space-y-2"></div><div id="qsticky-save-${c.id}" class="sticky bottom-2 z-20 mt-3 rounded-xl border border-teal-200 bg-white/95 backdrop-blur shadow-lg p-2.5 flex items-center justify-between gap-3"><span id="qsticky-msg-${c.id}" class="text-[11px] text-slate-500">先按題目右邊的「編輯」修改內容，再按這裡一次儲存。</span><button data-csp-click="adminSaveExpandedQuestionEdits('${c.id}')" class="text-xs bg-teal-700 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold">💾 儲存全部修改</button></div>
                   </section>
 
                   <section data-ai-question-studio="${c.id}" class="rounded-2xl border border-violet-200 bg-white overflow-hidden">
