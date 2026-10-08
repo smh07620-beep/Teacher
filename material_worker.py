@@ -685,6 +685,17 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
         "reason":str(classification_reason or "")[:240],
     }
     media_meta={**media_meta,**index_meta,"materialClassification":classification_meta}
+    try:
+        from teacher_app.materials import upload_analysis
+        media_meta["uploadAnalysis"]=upload_analysis.build_analysis(
+            source,
+            extension=ext,
+            resolved_type=resolved_material_type,
+            method=classification_method,
+            reason=classification_reason,
+        )
+    except Exception:
+        pass  # 分析失敗不得影響教材上傳
     render_publish_started=time.monotonic()
     if direct_presentation_frames:
         if pages<=0: raise RuntimeError("PowerPoint 原生逐頁預覽頁數為零，不能完成工作。")

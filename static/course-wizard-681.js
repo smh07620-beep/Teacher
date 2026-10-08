@@ -145,6 +145,8 @@ function mount(){
   window.courseWizard681OpenCourse=openCourseWorkspace;
   window.courseWizard681PublishAndOpen=publishAndOpenCourseWorkspace;
   window.courseWizard681OpenAtlasImport=openCourseAtlasImport;
+  window.courseWizard681ChangeType=changeMaterialType;
+  window.courseWizard681ConfirmType=confirmMaterialType;
   window.courseWizard681Reset=reset;
   render();void resolveAssignmentPermission();loadMaterials();
 }
@@ -293,7 +295,7 @@ function fileMeta(index,file){return {title:file.name.replace(/\.[^.]+$/,''),mat
 
 function renderFileSummary(){
   const box=el('cw681-file-summary');if(!box)return;
-  box.innerHTML=state.files.length?state.files.map((file,index)=>{const meta=fileMeta(index,file);return `<div class="mt-2 rounded border bg-white p-2"><b>${esc(file.name)}</b><div class="mt-1 grid gap-1 sm:grid-cols-2"><input value="${esc(meta.title)}" ${state.created?'disabled':''} data-csp-input="courseWizard681SetFileMeta(${index},'title',this.value)" class="rounded border p-1 disabled:bg-slate-100" aria-label="教材名稱"><select ${state.created?'disabled':''} data-csp-change="courseWizard681SetFileMeta(${index},'materialType',this.value)" class="rounded border p-1 disabled:bg-slate-100" aria-label="教材類型"><option value="auto" ${meta.materialType==='auto'?'selected':''}>✨ 自動判定</option><option value="standard" ${meta.materialType==='standard'?'selected':''}>一般教材／投影片</option><option value="atlas" ${meta.materialType==='atlas'?'selected':''}>🔬 Atlas 圖譜教材</option><option value="infographic" ${meta.materialType==='infographic'?'selected':''}>📊 資訊圖表／流程圖</option><option value="troubleshooting" ${meta.materialType==='troubleshooting'?'selected':''}>🧰 Troubleshooting</option><option value="case" ${meta.materialType==='case'?'selected':''}>🩸 案例分析</option><option value="sop" ${meta.materialType==='sop'?'selected':''}>📑 SOP</option><option value="video" ${meta.materialType==='video'?'selected':''}>🎬 影音教材</option></select></div></div>`;}).join(''):'尚未選擇新檔案。';
+  box.innerHTML=state.files.length?state.files.map((file,index)=>{const meta=fileMeta(index,file);return `<div class="mt-2 rounded border bg-white p-2"><b>${esc(file.name)}</b><div class="mt-1 grid gap-1 sm:grid-cols-2"><input value="${esc(meta.title)}" ${state.created?'disabled':''} data-csp-input="courseWizard681SetFileMeta(${index},'title',this.value)" class="rounded border p-1 disabled:bg-slate-100" aria-label="教材名稱"><p class="rounded border border-dashed bg-slate-50 p-1 text-[11px] text-slate-500">✨ 上傳後自動判定類型並偵測 Word 內的圖片</p></div></div>`;}).join(''):'尚未選擇新檔案。';
 }
 
 function paintMaterials(){
@@ -481,6 +483,11 @@ function materialFileName(item){
   return String(item?.filename||item?.storageFilename||'');
 }
 
+function materialAnalysis(item){
+  const stored=item?.storageMeta?.uploadAnalysis;
+  return stored&&typeof stored==='object'?stored:null;
+}
+
 function renderCompletedMaterialInsights(){
   const host=el('cw681-material-insights');
   if(!host)return;
@@ -490,49 +497,80 @@ function renderCompletedMaterialInsights(){
     host.innerHTML='';
     return;
   }
+  const typeOptions=type=>Object.entries(MATERIAL_TYPE_LABELS).map(([key,label])=>`<option value="${esc(key)}" ${key===type?'selected':''}>${esc(label)}</option>`).join('');
   const classificationRows=materials.map(item=>{
     const type=String(item.materialType||'standard');
-    const meta=item.storageMeta?.materialClassification||{};
-    const method=String(meta.method||'');
-    const reason=String(meta.reason||'');
-    const requested=String(meta.requested||'');
-    const decision=requested==='auto'
-      ? `自動判定：${esc(method||'規則分類')}${reason?'｜'+esc(reason):''}`
-      : `教師指定：${esc(MATERIAL_TYPE_LABELS[type]||type)}`;
-    return `<div class="rounded-lg border border-emerald-100 bg-white p-2"><div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(item.title||item.filename||item.id)}</b><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700">${esc(MATERIAL_TYPE_LABELS[type]||type)}</span></div><p class="mt-1 text-[11px] text-slate-500">${decision}</p></div>`;
+    const analysis=materialAnalysis(item);
+    const imageCount=Number(analysis?.imageCount||state.atlasCandidates?.[String(item.id)]?.count||0);
+    const confirmed=!!state.confirmedTypes?.[String(item.id)];
+    const needsReview=!!analysis?.needsReview&&!confirmed;
+    const chip=`${MATERIAL_TYPE_LABELS[type]||type}${imageCount?`｜內含 ${imageCount} 張圖`:''}`;
+    const id=esc(String(item.id));
+    const review=needsReview
+      ? `<p class="mt-1 text-[11px] font-bold text-amber-700">待確認：系統不太確定這份教材的類型。<button type="button" data-csp-click="courseWizard681ConfirmType('${id}')" class="ml-1 rounded bg-amber-100 px-2 py-0.5 font-black">沒錯</button></p>`
+      : '';
+    const fix=`<details class="mt-1 text-[11px] text-slate-500"><summary class="cursor-pointer">更正類型</summary><select data-csp-change="courseWizard681ChangeType('${id}',this.value)" class="mt-1 rounded border p-1" aria-label="更正教材類型">${typeOptions(type)}</select></details>`;
+    return `<div class="rounded-lg border ${needsReview?'border-amber-200':'border-emerald-100'} bg-white p-2"><div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(item.title||item.filename||item.id)}</b><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700">${esc(chip)}</span></div>${review}${fix}</div>`;
   }).join('');
   const atlasRows=atlasEntries.map(([materialId,info])=>`<div class="rounded-lg border border-teal-200 bg-teal-50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><div><b class="text-teal-950">🔬 Word 內偵測到 ${Number(info.count||0)} 張可獨立整理的圖片</b><p class="mt-1 text-[11px] text-teal-800">${esc(info.title||materialId)}｜原 Word 會保留；只會把你勾選的圖片另外建立 Atlas 草稿。</p></div><button type="button" data-csp-click="courseWizard681OpenAtlasImport('${esc(materialId)}')" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">檢視並建立 Atlas 草稿</button></div></div>`).join('');
   host.innerHTML=`<div class="mt-3 space-y-2"><div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><b class="text-emerald-900">✅ 教材自動歸類結果</b><div class="mt-2 grid gap-2 md:grid-cols-2">${classificationRows}</div></div>${atlasRows}</div>`;
 }
 
+// Runs as soon as each upload job finishes (not after the whole batch) and
+// merges into what is already shown.  Type + image count come from the
+// analysis the worker stored at upload time; the slow preview call is only a
+// fallback for older files that have no stored analysis.
 async function hydrateCompletedMaterialInsights(materialIds){
   const ids=new Set((materialIds||[]).map(String).filter(Boolean));
   if(!ids.size)return;
   try{
     const list=await api('/api/slides/admin');
     const rows=(Array.isArray(list)?list:[]).filter(item=>ids.has(String(item.id||'')));
-    state.completedMaterials=rows;
-    const nextCandidates={};
+    const merged=new Map((state.completedMaterials||[]).map(item=>[String(item.id),item]));
+    rows.forEach(item=>merged.set(String(item.id),item));
+    state.completedMaterials=[...merged.values()];
+    const candidates={...(state.atlasCandidates||{})};
     for(const item of rows.filter(row=>/\.docx$/i.test(materialFileName(row)))){
+      const analysis=materialAnalysis(item);
+      if(analysis){
+        if(Number(analysis.imageCount||0)>0){
+          candidates[String(item.id)]={count:Number(analysis.imageCount),title:item.title||item.filename||item.id,warnings:[]};
+        }
+        continue;
+      }
       try{
         const preview=await api('/api/atlas/import-docx/'+encodeURIComponent(item.id)+'/preview',{method:'POST'});
         const images=Array.isArray(preview?.preview?.images)?preview.preview.images:[];
         if(images.length){
-          nextCandidates[String(item.id)]={
-            count:images.length,
-            title:item.title||item.filename||item.id,
-            warnings:preview?.preview?.warnings||[]
-          };
+          candidates[String(item.id)]={count:images.length,title:item.title||item.filename||item.id,warnings:preview?.preview?.warnings||[]};
         }
       }catch(error){
         console.warn('DOCX Atlas candidate scan skipped',item.id,error);
       }
     }
-    state.atlasCandidates=nextCandidates;
+    state.atlasCandidates=candidates;
     renderCompletedMaterialInsights();
   }catch(error){
     console.warn('Course material classification summary unavailable',error);
   }
+}
+
+async function changeMaterialType(materialId,type){
+  const id=String(materialId||'');
+  if(!id||!MATERIAL_TYPE_LABELS[type])return;
+  try{
+    await api('/api/slides/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({materialType:type})});
+    state.confirmedTypes={...(state.confirmedTypes||{}),[id]:true};
+    state.completedMaterials=(state.completedMaterials||[]).map(item=>String(item.id)===id?{...item,materialType:type}:item);
+    renderCompletedMaterialInsights();
+  }catch(error){
+    alert('更正類型失敗：'+error.message);
+  }
+}
+
+function confirmMaterialType(materialId){
+  state.confirmedTypes={...(state.confirmedTypes||{}),[String(materialId||'')]:true};
+  renderCompletedMaterialInsights();
 }
 
 async function openCourseAtlasImport(materialId){
@@ -550,6 +588,7 @@ async function watchQueuedJobs(jobIds){
   const unique=[...new Set((jobIds||[]).filter(Boolean).map(String))];
   if(!unique.length){state.jobRows=[];syncCompletionControls();return;}
   const token=++state.watchToken;
+  const hydratedJobIds=new Set();
   while(token===state.watchToken){
     let metrics={};
     try{metrics=await api('/api/material-jobs?limit=20');}catch(_e){}
@@ -558,6 +597,8 @@ async function watchQueuedJobs(jobIds){
       catch(error){return {id,status:'unknown',stage:'狀態讀取失敗',detail:error.message,createdAt:new Date().toISOString()};}
     }))).filter(Boolean);
     state.jobRows=rows;
+    const freshlyDone=rows.filter(row=>row.status==='completed'&&row.materialId&&!hydratedJobIds.has(String(row.id))).map(row=>{hydratedJobIds.add(String(row.id));return String(row.materialId);});
+    if(freshlyDone.length)void hydrateCompletedMaterialInsights(freshlyDone);
     state.jobEstimateSeconds=Math.max(0,Number(metrics.averageCompletedDurationSeconds||0));
     state.workerProtocolBlocked=(Array.isArray(metrics.workers)?metrics.workers:[]).some(worker=>worker.protocolCompatible===false&&['online','busy'].includes(worker.status));
     const host=el('cw681-background-jobs');

@@ -112,6 +112,9 @@ def commit(job: dict, result: dict) -> dict:
     resolved_material_type=str(result.get("materialType") or payload.get("materialType") or "standard").strip().lower()
     if resolved_material_type not in material_repository.MATERIAL_TYPES:
         resolved_material_type="standard"
+    if bool(payload.get("authoringOnly", False)):
+        # 臨時私人來源：保留標記，供 24 小時清理明確辨識。
+        storage_meta={**storage_meta,"authoringOnly":True}
     classification_method=str(result.get("classificationMethod") or "").strip()[:120]
     classification_reason=str(result.get("classificationReason") or "").strip()[:240]
     if classification_method or classification_reason:

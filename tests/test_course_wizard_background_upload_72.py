@@ -69,7 +69,7 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
         source = ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8')
         for marker in (
             'hydrateCompletedMaterialInsights',
-            'materialClassification',
+            'uploadAnalysis',
             '教材自動歸類結果',
             '/api/atlas/import-docx/',
             '檢視並建立 Atlas 草稿',
