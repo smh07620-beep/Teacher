@@ -31,6 +31,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `AI_QUESTION_JOB_STALE_MINUTES` | `20` | `teacher_app/assessments/ai_jobs.py` |  |  |
 | `AI_QUESTION_WORKER_POLL_SECONDS` | `2` | `ai_question_worker.py` | yes |  |
 | `AI_QUESTION_WORKER_RECOVERY_SECONDS` | `300` | `ai_question_worker.py` | yes |  |
+| `AI_RATE_LIMIT_RETRY_SECONDS` | `25` | `teacher_app/assessments/free_ai_fallback.py` |  |  |
 | `AI_SOURCE_MAX_CHARS` | `50000` | `teacher_app/legacy_host.py` |  | yes |
 | `AI_TEMP_PURGE_ENABLED` | `true` | `teacher_app/maintenance/retention.py` |  |  |
 | `AI_TEMP_RETENTION_HOURS` |  | `teacher_app/maintenance/retention.py` |  |  |

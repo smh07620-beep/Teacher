@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import re
 import shutil
 from dataclasses import dataclass, replace
@@ -128,6 +129,13 @@ def is_retryable_provider_error(exc: BaseException) -> bool:
     return bool(text and any(marker in text for marker in _RETRYABLE_MARKERS))
 
 
+def _rate_limit_retry_seconds() -> int:
+    try:
+        return max(0, min(90, int(os.environ.get("AI_RATE_LIMIT_RETRY_SECONDS", "25"))))
+    except ValueError:
+        return 25
+
+
 def describe_provider_error(exc: BaseException) -> str:
     """Short, non-secret reason shown to teachers when a provider is skipped."""
     if isinstance(exc, requests.Timeout):
@@ -181,7 +189,17 @@ def run_with_fallback(
         if caller is None:
             continue
         try:
-            value = caller()
+            try:
+                value = caller()
+            except Exception as first_exc:
+                # 免費雲端常只是「每分鐘」上限：等一下重試同一家，通常就過了，
+                # 不必馬上換到很慢的本機 AI。只重試一次，且只針對 429 類錯誤。
+                wait = _rate_limit_retry_seconds()
+                if provider == "ollama" or wait <= 0 or describe_provider_error(first_exc) != "額度或速率限制（429）":
+                    raise
+                LOGGER.warning("AI provider rate limited; retrying once provider=%s wait=%s", provider, wait)
+                time.sleep(wait)
+                value = caller()
             return value, {
                 "provider": provider,
                 "model": provider_model(provider, settings=settings, local=local),
@@ -364,13 +382,14 @@ def install_question_runtime_fallback(runtime):
         progress_callback = kwargs.get("progress_callback")
         progress_id = str(kwargs.get("progress_id") or "")
 
+        trail: list[str] = []
+
         def notify(failed: str, next_provider: str, reason: str = "") -> None:
+            trail.append(f"{_provider_label(failed)}（{reason or '暫時無法使用'}）")
             if progress_callback is not None and progress_id:
                 slow = "；本機 AI 速度較慢，可能需要數分鐘，請耐心等候" if next_provider == "ollama" else ""
-                progress_callback(
-                    progress_id, 58, "切換免費 AI 備援",
-                    f"{_provider_label(failed)} {reason or '額度/速率或服務暫時不可用'}，改用 {_provider_label(next_provider)}{slow}。",
-                )
+                path = " → ".join(trail + [_provider_label(next_provider)])
+                progress_callback(progress_id, 58, "切換免費 AI 備援", f"嘗試順序：{path}{slow}。")
 
         def canonical(provider: str):
             if provider == primary:

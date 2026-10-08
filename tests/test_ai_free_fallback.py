@@ -6,6 +6,11 @@ from teacher_app.assessments import ai_runtime, free_ai_fallback
 
 
 class FreeAIFallbackTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.dict("os.environ", {"AI_RATE_LIMIT_RETRY_SECONDS": "0"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _settings(self):
         return ai_runtime.AISettings(
             provider="groq",
@@ -208,6 +213,27 @@ class FreeAIFallbackTests(unittest.TestCase):
                 notify=lambda *args: seen.append(args),
             )
         self.assertEqual(seen, [("gemini", "ollama", "額度或速率限制（429）")])
+
+    def test_rate_limit_is_retried_once_before_switching(self):
+        calls = []
+
+        def flaky():
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("429 quota")
+            return "ok"
+
+        with patch.dict("os.environ", {"AI_RATE_LIMIT_RETRY_SECONDS": "1"}), \
+                patch.object(free_ai_fallback.time, "sleep") as sleep, \
+                patch.object(free_ai_fallback, "provider_chain", return_value=["groq", "ollama"]):
+            value, meta = free_ai_fallback.run_with_fallback(
+                "groq", cloud_callers={"groq": flaky}, local_caller=lambda: "local",
+                settings=self._settings(), local=SimpleNamespace(enabled=True, ollama_model="m"),
+            )
+        self.assertEqual(value, "ok")
+        self.assertEqual(meta["provider"], "groq")
+        self.assertFalse(meta["fallbackUsed"])
+        sleep.assert_called_once_with(1)
 
 
 if __name__ == "__main__":
