@@ -20,6 +20,7 @@ from teacher_app.materials import ai_presentation_runtime
 from teacher_app.materials import ai_presentation_quality as quality
 from teacher_app.materials.ai_presentation_storage import PPTX_MIME, PresentationStorage, safe_filename
 from teacher_app.materials import media_script_repository
+from teacher_app.materials import script_alignment
 from teacher_app.materials import repository as material_repository
 from teacher_app.materials import derivative_repository
 from teacher_app.materials.media_audio_routes import _ai_worker_online_error, _ai_worker_status
@@ -347,6 +348,29 @@ def register_ai_presentation_routes(owner):
         audit.record_event(actor=user, action="presentation.create", target_type="ai_presentation_job", target_id=str(job.get("id") or ""),
                            group=str(draft.get("group") or ""), detail={"draftId":draft.get("id"),"templateId":template_id,"ruleset":quality.RULESET_VERSION})
         return jsonify(ai_presentation_jobs.public_job(job)), 202
+
+    @app.post("/api/ai-presentations/align-script")
+    def presentation_align_script():
+        """Preview only: split an approved script across the given slides. Writes nothing."""
+        user = _actor(owner)
+        if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
+        denied = _capability(user, "presentation.edit", "目前角色不可編輯 AI PowerPoint。")
+        if denied: return denied
+        body = request.get_json(silent=True) or {}
+        script = media_script_repository.get_script(str(body.get("scriptId") or ""))
+        if not script or script.get("draftType") != "script" or script.get("status") != "approved":
+            return jsonify({"error":"請選擇已核准的講稿。"}), 409
+        denied = _scope(owner, str(script.get("group") or ""))
+        if denied: return denied
+        slides = body.get("slides")
+        if not isinstance(slides, list) or not slides or len(slides) > 60:
+            return jsonify({"error":"請提供 1–60 張要對應的投影片。"}), 400
+        safe_slides = [item for item in slides if isinstance(item, dict)]
+        outcome = script_alignment.align_script_to_slides(str(script.get("body") or ""), safe_slides)
+        limit = script_alignment.NOTES_LIMIT
+        outcome["truncated"] = sum(1 for text in outcome["segments"] if len(text) > limit)
+        outcome["segments"] = [text[:limit] for text in outcome["segments"]]
+        return jsonify(outcome)
 
     @app.get("/api/ai-presentations/jobs/<job_id>")
     def presentation_job(job_id):

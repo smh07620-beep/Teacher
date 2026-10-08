@@ -13,6 +13,7 @@ from teacher_app.materials import ai_presentation_repository as repository
 from teacher_app.materials import ai_presentation_quality as quality
 from teacher_app.materials.ai_presentation_storage import PresentationStorage
 from teacher_app.materials import media_script_repository
+from teacher_app.materials import script_alignment
 from teacher_app.materials import repository as material_repository
 
 try:
@@ -595,6 +596,16 @@ def generate_presentation(*, job: dict, progress_callback=None, storage: Present
         progress_callback(15, "解析投影片大綱", "套用 Phase 4 智慧版型與品質規則")
     supplied = dict(job.get("request") or {}).get("slides")
     slides = normalize_slides(supplied) if isinstance(supplied, list) else parse_slide_outline(str(draft.get("body") or ""), fallback_title=str(draft.get("title") or "AI 教學投影片"))
+    # 老師不必自己找切點：同一份教材若已有「已核准講稿」，且投影片還沒有任何講者備註，
+    # 就依內容把講稿自動分段，寫進每頁備註（AI 影片會逐頁念備註）。失敗不影響產檔。
+    try:
+        approved_script = script_alignment.latest_approved_script(media_script_repository.list_scripts(str(source.get("id") or "")))
+        if approved_script:
+            slides, notes_info = script_alignment.attach_script_notes(slides, str(approved_script.get("body") or ""))
+            if notes_info.get("applied") and progress_callback:
+                progress_callback(20, "依講稿自動分段", f"已把已核准講稿的 {notes_info['unitCount']} 個段落對應到 {notes_info['slideCount']} 張投影片備註")
+    except Exception:
+        pass
     started = time.perf_counter(); quality_report: dict[str, Any] = {}
     with tempfile.TemporaryDirectory(prefix="teacher-ppt-") as temp:
         root = Path(temp); template_path = None
