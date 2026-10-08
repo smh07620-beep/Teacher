@@ -11,7 +11,9 @@ class AnalyticsCollapseTests(unittest.TestCase):
     def test_summary_is_one_line_and_tiles_are_gone(self):
         self.assertIn('id="teacher-learners-summary-p2"', self.js)
         self.assertIn('id="teacher-analytics-line-p2"', self.js)
-        self.assertNotIn("grid grid-cols-2 sm:grid-cols-4 gap-2 text-center", self.js)
+        # the roster header no longer renders the four stat tiles
+        head = self.js[self.js.index("function render(section,data)"):self.js.index("teacher-competency-detail-p2")]
+        self.assertNotIn("text-center", head)
 
     def test_analytics_detail_is_collapsed_by_default_and_toggles(self):
         self.assertIn('id="teacher-teaching-analytics-p2" class="hidden', self.js)
