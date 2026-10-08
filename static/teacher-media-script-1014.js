@@ -48,14 +48,42 @@
         : 'text-xs text-slate-600';
   }
 
-  function setBusy(busy) {
+  let busyNow = false;
+
+  // 來源是否已備齊：有選檔案、或貼了足夠文字、或已選既有教材。貼的字數不足視為尚未備齊。
+  function sourcesReady() {
+    const fileCount = document.getElementById('teacher-script-source-file-1030')?.files?.length || 0;
+    const pasted = String(document.getElementById('teacher-script-paste-1030')?.value || '').trim();
+    if (pasted && pasted.length < 20) return false;
+    return Boolean(fileCount || pasted || currentMaterialId());
+  }
+
+  // 沒有來源或正在處理時鎖住按鈕，避免送出空工作讓 Worker 白跑一趟。
+  function updateGenerateState() {
     const generate = document.getElementById('teacher-script-generate-1014');
-    if (generate) generate.disabled = busy;
+    if (!generate) return;
+    const ready = sourcesReady();
+    generate.disabled = busyNow || !ready;
+    generate.title = ready ? '' : '請先選擇檔案或貼上至少 20 字的文字，才能產生講稿';
+  }
+
+  function onSourceInputsChanged() {
+    updateGenerateState();
+    if (busyNow) return;
+    status(sourcesReady()
+      ? '來源已備齊，請按「匯入並產生講稿」。'
+      : '請先選擇檔案或貼上至少 20 字的文字，「匯入並產生講稿」才會開放。');
+  }
+
+  function setBusy(busy) {
+    busyNow = Boolean(busy);
+    updateGenerateState();
     const select = document.getElementById('teacher-script-material-1014');
     if (select) select.disabled = busy;
-    ['teacher-script-source-upload-1030','teacher-script-paste-add-1030'].forEach(id => {
-      const button = document.getElementById(id);
-      if (button) button.disabled = busy;
+    ['teacher-script-source-file-1030', 'teacher-script-paste-1030', 'teacher-script-paste-title-1030',
+      'teacher-script-source-upload-1030', 'teacher-script-paste-add-1030'].forEach(id => {
+      const node = document.getElementById(id);
+      if (node) node.disabled = busy;
     });
   }
 
@@ -556,6 +584,7 @@
     const existing = document.getElementById('teacher-script-existing-source-1033');
     if (existing) existing.open = false;
     status('選好檔案（或貼上文字）後，直接按「匯入並產生講稿」即可開始。');
+    updateGenerateState();
     void loadSavedScripts();
   }
 
@@ -637,9 +666,12 @@
       authoringReferenceIds = authoringReferenceIds.filter(id => id !== button.dataset.removeScriptSource);
       renderAuthoringReferences();
     });
+    document.getElementById('teacher-script-source-file-1030')?.addEventListener('change', onSourceInputsChanged);
+    document.getElementById('teacher-script-paste-1030')?.addEventListener('input', onSourceInputsChanged);
     document.getElementById('teacher-script-material-1014')?.addEventListener('change', event => {
       // 只有教師親自換選教材才放棄剛上傳的主要來源；程式同步送出的 change 不算。
       if (event.isTrusted) primarySourceId = '';
+      updateGenerateState();
       activeScriptId = '';
       activeJobId = '';
       pollToken += 1;
@@ -653,6 +685,7 @@
       void syncNarrationOptions();
     });
     renderAuthoringReferences();
+    updateGenerateState();
     return true;
   }
 
@@ -665,6 +698,7 @@
 
   window.addEventListener('teacher-media-source-options-1014', event => {
     updateMaterialCache(event.detail?.materials);
+    updateGenerateState();
   });
 
   window.TeacherMediaScript1014 = Object.freeze({ currentMaterialId, generateScript, importAndGenerate, loadSavedScripts, resetFlow, discardDraft, discardAll, cleanupPrivateSources });

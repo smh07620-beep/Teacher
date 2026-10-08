@@ -40,6 +40,18 @@ class ScriptPrimarySourceTests(unittest.TestCase):
         self.assertIn("event.isTrusted", self.script)
         self.assertIn("primarySourceId = ''", self.script)
 
+    def test_generate_button_stays_disabled_until_a_source_is_ready(self):
+        self.assertIn("function sourcesReady()", self.script)
+        self.assertIn("function updateGenerateState()", self.script)
+        self.assertIn("generate.disabled = busyNow || !ready", self.script)
+        # Too-short pasted text does not count as a ready source.
+        self.assertIn("if (pasted && pasted.length < 20) return false;", self.script)
+        # Re-evaluated whenever the teacher changes a file, the pasted text or the picked material.
+        self.assertIn("'teacher-script-source-file-1030')?.addEventListener('change', onSourceInputsChanged)", self.script)
+        self.assertIn("'teacher-script-paste-1030')?.addEventListener('input', onSourceInputsChanged)", self.script)
+        # The old unconditional enable in setBusy is gone.
+        self.assertNotIn("if (generate) generate.disabled = busy;", self.script)
+
     def test_audio_step_reads_the_same_source(self):
         self.assertIn("currentMaterialId", self.script[self.script.index("window.TeacherMediaScript1014"):])
         self.assertIn("TeacherMediaScript1014?.currentMaterialId?.()", self.audio)
