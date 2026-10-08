@@ -108,7 +108,7 @@
     }
   }
 
-  async function fillNotesFromScript(){
+  async function fillNotesFromScript(auto){
     const note=$('teacher-ppt-editor-fill-status-f5');
     const button=$('teacher-ppt-editor-fill-f5');
     const scriptId=$('teacher-ppt-editor-script-f5')?.value;
@@ -128,7 +128,7 @@
       targets.forEach((slide,position)=>{slide.speakerNotes=String((outcome.segments||[])[position]||'');});
       render();
       const empty=(outcome.segments||[]).filter(text=>!text).length;
-      if(note)note.textContent='✅ 已依內容把講稿自動分到 '+targets.length+' 張投影片的備註。'
+      if(note)note.textContent=(auto===true?'✅ 已自動預填：':'✅ ')+'已依內容把講稿自動分到 '+targets.length+' 張投影片的備註。'
         +(empty?` 其中 ${empty} 張沒有分到內容（AI 影片會改念該頁的標題與重點）。`:'')
         +(outcome.truncated?` ${outcome.truncated} 張超過 4000 字已截斷，請檢查。`:'')
         +' 可直接微調，確認後按下方儲存。';
@@ -276,7 +276,11 @@
         slides:(Array.isArray(item.slides)?item.slides:[]).map(slide=>({...slide,blocks:Array.isArray(slide.blocks)?slide.blocks:[]})),
         materialId:String(item.materialId||'')
       };
-      void loadScripts(current.materialId);
+      void loadScripts(current.materialId).then(()=>{
+        // 備註全空而且有已核准講稿：自動預填（只是預覽，老師按儲存才會建立新版本）。
+        const enabled=current.slides.filter(slide=>slide.enabled!==false);
+        if(scripts.length&&enabled.length&&enabled.every(slide=>!String(slide.speakerNotes||'').trim()))void fillNotesFromScript(true);
+      });
       $('teacher-ppt-editor-title-f5').value=current.title;
       render();
       if(status)status.textContent='修改後會建立新 revision 並由 AI Worker 重新產生 PPTX。';

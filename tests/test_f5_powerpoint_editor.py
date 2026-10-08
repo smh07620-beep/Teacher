@@ -38,9 +38,20 @@ class F5PowerPointEditorTests(unittest.TestCase):
 
     def test_script_prompt_asks_for_paragraphs_and_normal_speaking_pace(self):
         source=ROOT.joinpath("teacher_app","materials","media_script_runtime.py").read_text(encoding="utf-8")
-        self.assertIn("每分鐘約 280 字",source)
+        self.assertIn("每分鐘約 {CHARS_PER_MINUTE} 字",source)
         self.assertIn("用空行把講稿分成多個段落",source)
 
+
+    def test_editor_prefills_notes_automatically_only_when_all_empty(self):
+        source=ROOT.joinpath("static","teacher-ai-presentation-editor-f5.js").read_text(encoding="utf-8")
+        self.assertIn("enabled.every(slide=>!String(slide.speakerNotes||'').trim())",source)
+        self.assertIn("fillNotesFromScript(true)",source)
+
+    def test_script_editor_shows_estimated_speaking_time_without_self_triggering_observer(self):
+        source=ROOT.joinpath("static","teacher-media-script-1014.js").read_text(encoding="utf-8")
+        self.assertIn("teacher-script-duration-1040",source)
+        self.assertIn("每分鐘約 280 字",source)
+        self.assertNotIn("new MutationObserver(() => updateScriptDuration1040",source)
 
 if __name__=="__main__":
     unittest.main()

@@ -26,3 +26,13 @@
 ## 新增 API
 `POST /api/ai-presentations/align-script`：body `{scriptId, slides:[{id,title,bullets,blocks}]}`，
 需 `presentation.edit` 與講稿所屬組別範圍；只回傳預覽，不寫入任何資料。
+
+## 優化（同日）
+- **逐張寫講稿**：同一份教材若已有「已核准的投影片大綱」，產生講稿時會自動把大綱附進提示詞，要求「剛好 N 段、第 k 段對應第 k 張」
+  （`media_script_jobs._approved_slide_outline`、`media_script_runtime._outline_rule`）。段落數若與張數不同，後面的自動對應仍會處理。
+  建議流程：先核准投影片大綱，再產生講稿。
+- **長度檢查**：講稿比目標長超過 25% 時，**只在使用雲端 AI 時**請 AI 縮短一次，並保留較接近目標的版本；本機模型（Ollama）不重試，
+  太短也不補（避免為湊長度編造內容）。重試失敗時保留第一版。結果會記錄 `estimatedMinutes`、`lengthRetried`、`slideOutlineCount`。
+- **額度**：以上不增加每次產生的 AI 呼叫次數，只有「過長」時多一次；自動分段不呼叫 AI。免費 AI 備援順序仍是 Groq → Gemini → 本機 Ollama。
+- **畫面**：講稿編輯區顯示預估念稿時間；投影片編輯器開啟時，若所有備註都是空的且有已核准講稿，會自動預填（需按儲存才生效）。
+- **尚未做**：字面相似度很低時改請 AI 判斷切點；瀏覽器端到端（Playwright）測試。

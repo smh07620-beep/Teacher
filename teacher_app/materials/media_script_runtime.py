@@ -13,6 +13,7 @@ import requests
 
 from teacher_app.assessments import ai_runtime, free_ai_fallback
 from teacher_app.common import privacy as ai_privacy
+from teacher_app.materials import script_alignment
 
 
 MAX_SCRIPT_SOURCE_CHARS = 22000
@@ -63,7 +64,7 @@ def _bounded_source_chunks(entry: dict, text: str, focus: str) -> list[dict]:
 
 
 def _draft_instruction(output_type: str, *, target_minutes: int) -> str:
-    target_chars = max(700, min(9000, int(target_minutes) * 280))
+    target_chars = target_chars_for(target_minutes)
     return {
         "handout": (
             "整理成可供學員閱讀的教學講義草稿。使用清楚標題、重點條列、必要步驟與警示；"
@@ -87,7 +88,7 @@ def _draft_instruction(output_type: str, *, target_minutes: int) -> str:
         ),
         "script": (
             f"整理成老師可再編修、可自然朗讀的繁體中文口語講稿草稿。目標約 {target_minutes} 分鐘，"
-            f"約 {target_chars} 個中文字上下（以每分鐘約 280 字的正常語速估算）；"
+            f"約 {target_chars} 個中文字上下（以每分鐘約 {CHARS_PER_MINUTE} 字的正常語速估算）；"
             "可依教材資訊量縮短，不可為湊長度而新增內容。"
             "請用空行把講稿分成多個段落，每段只講一個完整的教學重點，"
             "每段約 150–350 字（約半分鐘到一分多鐘），讓老師可以一段對應一張投影片；"
@@ -96,8 +97,39 @@ def _draft_instruction(output_type: str, *, target_minutes: int) -> str:
     }[output_type]
 
 
+CHARS_PER_MINUTE = script_alignment.CHARS_PER_MINUTE  # 正常語速：每分鐘約 280 個中文字
+LENGTH_RETRY_RATIO = 1.25  # 超過目標 25% 才請 AI 縮短；太短不補，避免為湊長度而編造內容
+
+
+def target_chars_for(target_minutes: int) -> int:
+    return max(700, min(9000, int(target_minutes) * CHARS_PER_MINUTE))
+
+
+def speakable_chars(body: str) -> int:
+    """Characters that will actually be spoken (no spaces, no closing review disclosure)."""
+    lines = [line for line in str(body or "").splitlines() if not line.strip().startswith("※")]
+    return len("".join("".join(lines).split()))
+
+
+def _outline_rule(slide_outline: list[dict[str, Any]] | None, *, target_minutes: int) -> str:
+    items = [item for item in (slide_outline or []) if isinstance(item, dict) and str(item.get("title") or "").strip()]
+    if not items:
+        return ""
+    per_slide = max(100, min(500, target_chars_for(target_minutes) // len(items)))
+    lines = []
+    for number, item in enumerate(items, 1):
+        bullets = "；".join(str(b).strip() for b in list(item.get("bullets") or [])[:6] if str(b).strip())
+        lines.append(f"{number}. {str(item.get('title')).strip()}" + (f"：{bullets}" if bullets else ""))
+    return (
+        f"\n【已核准的投影片大綱（共 {len(items)} 張）】\n" + "\n".join(lines) + "\n"
+        f"這份講稿要配合上面的投影片逐張講解（本規則優先於前面的分段字數建議）：請剛好輸出 {len(items)} 段，"
+        f"第 k 段對應第 k 張投影片，段與段之間只用一個空行分隔，每段約 {per_slide} 字；"
+        "不要加編號或「第幾張」標記。若某張的來源資訊不足，該段寫「【需教師補充】」，不要編造。\n"
+    )
+
+
 def _prompt(*, source_title: str, context: str, focus: str, tone: str, target_minutes: int,
-            output_type: str = "script") -> str:
+            output_type: str = "script", slide_outline: list[dict[str, Any]] | None = None) -> str:
     output_type = normalize_output_type(output_type)
     focus_line = ai_privacy.deidentify_external_text(focus).strip()
     tone = str(tone or "clinical").strip().lower()
@@ -107,6 +139,8 @@ def _prompt(*, source_title: str, context: str, focus: str, tone: str, target_mi
         "brief": "精簡直接，只保留核心概念、步驟、警示與結論。",
     }.get(tone, "專業、清楚、像臨床教師實際授課。")
     draft_rule = _draft_instruction(output_type, target_minutes=target_minutes)
+    if output_type == "script":
+        draft_rule += _outline_rule(slide_outline, target_minutes=target_minutes)
     final_note = (
         "※ 本講稿需由授課教師確認後方可用於正式教學影音。"
         if output_type == "script"
@@ -261,8 +295,42 @@ def _generate_body_with_fallback(settings, provider: str, prompt: str, progress_
     ) from last_error
 
 
+def _shorten_if_too_long(settings, prompt: str, body: str, provider_meta: dict[str, Any], *, target_minutes: int,
+                         progress_callback=None) -> tuple[str, dict[str, Any], bool]:
+    """Ask once for a shorter script when the first one is far over the target length.
+
+    Only when the answer came from a cloud provider: the slower local model is not retried so that
+    a quota fallback never doubles the wait. Too-short drafts are left alone (no invented filler).
+    Any failure keeps the first draft.
+    """
+    target = target_chars_for(target_minutes)
+    chars = speakable_chars(body)
+    if chars <= target * LENGTH_RETRY_RATIO or str(provider_meta.get("provider") or "") == "ollama":
+        return body, provider_meta, False
+    if progress_callback:
+        progress_callback(75, "調整講稿長度", f"講稿約 {chars} 字，超過目標約 {target} 字，請 AI 縮短一次")
+    retry_prompt = (
+        f"{prompt}\n【上一版太長】上一版約 {chars} 字（約 {round(chars / CHARS_PER_MINUTE, 1)} 分鐘），"
+        f"超過目標約 {target} 字。請重新輸出完整講稿並縮短到目標長度：優先保留數值、警示與關鍵步驟，"
+        "刪去重複與細枝末節；段落結構不變；不要新增來源沒有的內容。"
+    )
+    try:
+        new_body, new_meta = _generate_body_with_fallback(
+            settings, str(provider_meta.get("provider") or ""), retry_prompt, progress_callback=progress_callback,
+        )
+        new_body = ai_privacy.deidentify_external_text(new_body).strip()
+    except Exception:
+        return body, provider_meta, True
+    if len(new_body) >= 60 and abs(speakable_chars(new_body) - target) < abs(chars - target):
+        new_meta = dict(new_meta)
+        new_meta["fallbackUsed"] = bool(provider_meta.get("fallbackUsed")) or bool(new_meta.get("fallbackUsed"))
+        return new_body, new_meta, True
+    return body, provider_meta, True
+
+
 def generate_script(entry: dict, *, reference_entries: list[dict] | None = None, focus: str = "", tone: str = "clinical", target_minutes: int = 5,
-                    output_type: str = "script", progress_callback=None) -> dict[str, Any]:
+                    output_type: str = "script", progress_callback=None,
+                    slide_outline: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     output_type = normalize_output_type(output_type)
     label = output_type_label(output_type)
     settings = ai_runtime.ai_settings()
@@ -316,6 +384,7 @@ def generate_script(entry: dict, *, reference_entries: list[dict] | None = None,
         tone=tone,
         target_minutes=target_minutes,
         output_type=output_type,
+        slide_outline=slide_outline,
     )
 
     if progress_callback:
@@ -330,6 +399,11 @@ def generate_script(entry: dict, *, reference_entries: list[dict] | None = None,
     body = ai_privacy.deidentify_external_text(body).strip()
     if len(body) < 60:
         raise RuntimeError(f"AI 回傳的{label}內容過短，請調整教材或聚焦內容後再試。")
+    length_retried = False
+    if output_type == "script":
+        body, provider_meta, length_retried = _shorten_if_too_long(
+            settings, prompt, body, provider_meta, target_minutes=target_minutes, progress_callback=progress_callback,
+        )
     if progress_callback:
         progress_callback(90, "整理來源", "正在附上教材來源與教師確認標記")
 
@@ -358,6 +432,9 @@ def generate_script(entry: dict, *, reference_entries: list[dict] | None = None,
         "targetMinutes": int(target_minutes),
         "tone": tone,
         "requiresTeacherReview": True,
+        "slideOutlineCount": len([i for i in (slide_outline or []) if isinstance(i, dict)]) if output_type == "script" else 0,
+        "estimatedMinutes": round(speakable_chars(body) / CHARS_PER_MINUTE, 1) if output_type == "script" else 0,
+        "lengthRetried": length_retried,
     }
 
 

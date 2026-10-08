@@ -84,7 +84,9 @@ class ScriptAlignmentTests(unittest.TestCase):
 
     def test_pace_matches_generator_target(self):
         source = Path("teacher_app/materials/media_script_runtime.py").read_text(encoding="utf-8")
-        self.assertIn(f"每分鐘約 {sa.CHARS_PER_MINUTE} 字", source)
+        from teacher_app.materials import media_script_runtime as msr
+        self.assertEqual(msr.CHARS_PER_MINUTE, sa.CHARS_PER_MINUTE)
+        self.assertIn("每分鐘約 {CHARS_PER_MINUTE} 字", source)
 
 
 class GeneratePresentationAutoNotesTests(unittest.TestCase):

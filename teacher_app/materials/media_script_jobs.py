@@ -91,6 +91,20 @@ def enqueue(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
     return media_script_repository.create_job(values)
 
 
+def _approved_slide_outline(material_id: str) -> list[dict] | None:
+    """最新一份已核准的投影片大綱；有的話講稿就逐張對應，老師不必自己找切點。"""
+    try:
+        from teacher_app.materials import ai_presentation_runtime
+
+        for draft in media_script_repository.list_drafts(material_id):
+            if draft.get("draftType") == "slides" and draft.get("status") == "approved":
+                slides = ai_presentation_runtime.parse_slide_outline(str(draft.get("body") or ""))
+                return [{"title": item.get("title"), "bullets": item.get("bullets")} for item in slides] or None
+    except Exception:
+        logging.getLogger(__name__).warning("無法讀取已核准投影片大綱，講稿改用一般模式", exc_info=True)
+    return None
+
+
 def run_generation_sync(snapshot: Mapping[str, Any], *, progress_callback=None) -> dict:
     material_id = str(snapshot.get("materialId") or "")
     material = material_repository.get_material(material_id)
@@ -105,8 +119,10 @@ def run_generation_sync(snapshot: Mapping[str, Any], *, progress_callback=None) 
                 or str(reference.get("area") or "") != str(material.get("area") or "")):
             raise RuntimeError("原始資料必須位於相同訓練區與組別。")
         references.append(reference)
+    output_type = str(snapshot.get("outputType") or "script")
     return media_script_runtime.generate_script(
         material,
+        slide_outline=_approved_slide_outline(material_id) if output_type == "script" else None,
         reference_entries=references,
         focus=str(snapshot.get("focus") or "")[:500],
         tone=str(snapshot.get("tone") or "clinical")[:30],

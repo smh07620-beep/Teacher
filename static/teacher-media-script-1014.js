@@ -1,6 +1,25 @@
 /* Teacher 10/14 media script studio: source material -> AI draft -> teacher approval. */
 (async function () {
   'use strict';
+  // 預估念稿時間：與 AI 講稿提示詞、投影片備註使用同一個正常語速（每分鐘約 280 字）。
+  function updateScriptDuration1040() {
+    const body = document.getElementById('teacher-script-body-1014');
+    const label = document.getElementById('teacher-script-duration-1040');
+    if (!body || !label) return;
+    const text = String(body.value || '').split('\n').filter(line => !line.trim().startsWith('※')).join('');
+    const chars = text.replace(/\s+/g, '').length;
+    if (!chars) { label.textContent = ''; return; }
+    const seconds = Math.max(1, Math.round(chars * 60 / 280));
+    label.textContent = `約 ${chars} 字，正常語速（每分鐘約 280 字）約念 ${seconds >= 60 ? Math.floor(seconds / 60) + ' 分 ' + (seconds % 60) + ' 秒' : seconds + ' 秒'}。`;
+  }
+  document.addEventListener('input', event => { if (event.target?.id === 'teacher-script-body-1014') updateScriptDuration1040(); });
+  // 程式帶入講稿內容時不會觸發 input 事件，所以每秒只在內容改變時更新一次（不使用 MutationObserver，避免更新標籤又觸發自己）。
+  let lastScriptValue1040 = null;
+  setInterval(() => {
+    const value = document.getElementById('teacher-script-body-1014')?.value ?? null;
+    if (value !== lastScriptValue1040) { lastScriptValue1040 = value; updateScriptDuration1040(); }
+  }, 1000);
+
 
   const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));
   const roles = R.roles instanceof Set ? R.roles : new Set();
@@ -672,7 +691,7 @@
       <div class="flex flex-col sm:flex-row gap-2"><input id="teacher-script-focus-1014" class="learning-input flex-1" maxlength="500" placeholder="選填：特別聚焦，例如抗體鑑定判讀步驟、QC 異常處理"><button id="teacher-script-generate-1014" type="button" class="rounded-xl bg-indigo-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">✨ 匯入並產生講稿</button></div>
       <div id="teacher-script-status-1014" class="text-xs text-slate-600">選擇教材後即可產生講稿。</div>
       <div id="teacher-script-source-1014" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-slate-700"></div>
-      <div id="teacher-script-editor-1014" class="hidden space-y-3"><label class="block text-xs font-bold text-slate-600">講稿標題<input id="teacher-script-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-xs font-bold text-slate-600">講稿內容<textarea id="teacher-script-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-7" placeholder="AI 草稿會出現在這裡；請由老師逐段確認與修改。"></textarea></label><div class="flex flex-wrap items-center gap-2"><button id="teacher-script-approve-1014" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">✅ 教師核准講稿，繼續配音</button><button id="teacher-script-save-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">💾 儲存草稿</button><span class="text-[11px] text-slate-500">核准後才可作為下一階段 AI 語音／影片的正式來源。</span></div><div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2"><label class="block text-xs font-bold text-slate-600">不滿意？告訴 AI 怎麼修，直接重新產出（來源不用重新匯入）<input id="teacher-script-revision-1032" maxlength="400" class="learning-input mt-1" placeholder="例如：更精簡、加強 QC 異常處理"></label><div class="flex flex-wrap gap-2"><button id="teacher-script-regenerate-1032" type="button" class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-xs font-black text-cyan-800">↻ 依修改要求重新產出</button><button id="teacher-script-discard-1032" type="button" class="rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-black text-rose-700">🗑 放棄這份草稿</button></div></div></div></div>
+      <div id="teacher-script-editor-1014" class="hidden space-y-3"><label class="block text-xs font-bold text-slate-600">講稿標題<input id="teacher-script-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-xs font-bold text-slate-600">講稿內容<textarea id="teacher-script-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-7" placeholder="AI 草稿會出現在這裡；請由老師逐段確認與修改。"></textarea><span id="teacher-script-duration-1040" class="mt-1 block text-[11px] font-medium text-slate-500" aria-live="polite"></span></label><div class="flex flex-wrap items-center gap-2"><button id="teacher-script-approve-1014" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">✅ 教師核准講稿，繼續配音</button><button id="teacher-script-save-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">💾 儲存草稿</button><span class="text-[11px] text-slate-500">核准後才可作為下一階段 AI 語音／影片的正式來源。</span></div><div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2"><label class="block text-xs font-bold text-slate-600">不滿意？告訴 AI 怎麼修，直接重新產出（來源不用重新匯入）<input id="teacher-script-revision-1032" maxlength="400" class="learning-input mt-1" placeholder="例如：更精簡、加強 QC 異常處理"></label><div class="flex flex-wrap gap-2"><button id="teacher-script-regenerate-1032" type="button" class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-xs font-black text-cyan-800">↻ 依修改要求重新產出</button><button id="teacher-script-discard-1032" type="button" class="rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-black text-rose-700">🗑 放棄這份草稿</button></div></div></div></div>
       <div class="border-t border-slate-100 pt-4"><div class="flex items-center justify-between gap-2"><h5 class="text-sm font-black text-slate-900">已儲存講稿</h5><span class="text-[11px] text-slate-400">草稿／已核准</span></div><div id="teacher-script-saved-1014" class="mt-2 grid gap-2"><p class="text-xs text-slate-400">選擇教材後會顯示已儲存講稿。</p></div></div>`;
     media.prepend(section);
     ensureCompactScriptLayout(section);
