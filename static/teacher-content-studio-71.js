@@ -106,6 +106,8 @@
       alert(message);
       return false;
     }
+    // 離開工作畫面時清掉「編輯既有課程」狀態，下次開啟建立課程不會殘留上一門課。
+    window.courseWizard681StartNew?.();
     restoreAiPanel();
     restoreMediaMount();
     restoreCourseWizard();
@@ -560,7 +562,7 @@
 
   async function launch(action){
     if(action==='exam')return renderExamManager();
-    if(action==='course')return mountCourseWizardInStudio();
+    if(action==='course'){if(window.courseWizard681StartNew?.()===false)return false;return mountCourseWizardInStudio();}
     if(action==='materials-manager')return mountMaterialManagerInStudio();
     if(action==='material')return openMaterialUpload('standard');
     if(action==='video-material')return openMaterialUpload('video');
@@ -589,6 +591,7 @@
   async function openCourseCreateWorkspace(){
     if(!canCourse())return false;
     if(!await ensureWorkspacePage('course-materials'))return false;
+    if(window.courseWizard681StartNew?.()===false)return false;
     openStudio('course-materials','教材與課程｜建立課程','在完整工作畫面建立課程，並沿用既有課程、教材與考卷 canonical owner。');
     await mountCourseWizardInStudio();
     return true;
