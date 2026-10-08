@@ -111,3 +111,12 @@ powershell -ExecutionPolicy Bypass -File .\setup_teacher_worker.ps1 -InstallOpti
 - 程式位置：`teacher_app/materials/media_audio_routes.py` 的 `_evaluate_ai_worker`；測試：`tests/test_ai_worker_small_drift_20261008.py`。
 - **什麼時候要自己更新 Worker**：改了 `VERSION`；或改動影響網站與 Worker 之間的資料格式（API、佇列、heartbeat）。做法：Actions → Release Worker，再依第二、四節更新 Worker。
 - 若要恢復嚴格比對，把該段 `elif` 的 `and _web_version() and worker_version and worker_version != _web_version()` 條件拿掉即可，並更新上述測試。
+
+## 七、重要註記：Worker 用 SYSTEM 帳號時的 MEGAcmd（2026-10-08）
+
+**現象**：AI 講稿失敗，訊息「MEGA 尚未完成設定」或「MEGAcmd Server not running … Unable to execute: C:\Windows\system32\config\systemprofile\AppData\Local\MEGAcmd\MEGAcmdServer.exe」。
+**原因**：排程「Teacher AI Worker」用 SYSTEM 帳號執行（不需要知道 Windows 登入密碼）。MEGAcmd 若只裝在某個使用者的 `C:\Users\<名稱>\AppData\Local\MEGAcmd`，SYSTEM 看不到；而 MEGAcmd 啟動背景伺服器時是問 Windows 本機資料夾位置，不看環境變數。
+**已做的處理（在 Worker 電腦，一次性）**：
+1. `.local-worker.env` 設 `MEGACMD_EXTRA_DIRS=C:\Users\<名稱>\AppData\Local\MEGAcmd`（程式會加進搜尋路徑；實作在 `teacher_app/storage/worker_runtime.py`）。
+2. 把該資料夾複製一份到 `C:\Windows\System32\config\systemprofile\AppData\Local\MEGAcmd`（`robocopy 來源 目的地 /E`；`.megaCmd` 快取資料夾被占用的警告可忽略）。**重裝或升級使用者帳號底下的 MEGAcmd 後，要重複這個複製。**
+**重啟注意**：只執行 `Stop-ScheduledTask` 不一定會關掉舊的 python / PowerShell 子程序，會造成 AI Worker 同時跑兩份、工作卡在 15%。重啟請先關閉命令列含 `TeacherWorker` 的 python/powershell 程序再啟動排程（見 `docs/WORKER_BOOTSTRAP.md` 或請開發者提供指令）。
