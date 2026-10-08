@@ -282,6 +282,15 @@ class FreeAIFallbackTests(unittest.TestCase):
         self.assertIn("避免與已出題目重複", seen[1][1])
         self.assertEqual(sleep.call_count, 2)
 
+    def test_script_groq_skips_request_when_prompt_exceeds_minute_limit(self):
+        from teacher_app.materials import media_script_runtime
+        settings = self._settings()
+        with patch.object(media_script_runtime.requests, "post") as post:
+            with self.assertRaises(RuntimeError) as ctx:
+                media_script_runtime._groq(settings, "字" * 9000)
+        post.assert_not_called()
+        self.assertTrue(free_ai_fallback.is_retryable_provider_error(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,6 +7,8 @@ by a teacher before approval or publication.
 """
 from __future__ import annotations
 
+import os
+
 from typing import Any
 
 import requests
@@ -170,6 +172,16 @@ def _prompt(*, source_title: str, context: str, focus: str, tone: str, target_mi
 def _groq(settings, prompt: str) -> str:
     if not settings.groq_api_key:
         raise RuntimeError("Groq AI 尚未設定。")
+    # Groq 免費版每分鐘 token 很少（約 8K），而且會把 max_tokens 先算進去。
+    # 教材太長就不送（直接改用下一個備援），不要送出去才被拒絕、白白浪費一次呼叫。
+    system_text = "只根據提供的教材整理醫學檢驗教學內容，不得補造醫療內容。"
+    try:
+        tpm = max(2000, int(os.environ.get("GROQ_TOKENS_PER_MINUTE", "8000")))
+    except ValueError:
+        tpm = 8000
+    room = tpm - len(system_text) - len(prompt) - 300
+    if room < 1500:
+        raise RuntimeError("Groq provider unavailable：教材內容超過 Groq 免費版每分鐘上限，改用下一個備援。")
     try:
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -177,11 +189,11 @@ def _groq(settings, prompt: str) -> str:
             json={
                 "model": settings.groq_model,
                 "messages": [
-                    {"role": "system", "content": "只根據提供的教材整理醫學檢驗教學內容，不得補造醫療內容。"},
+                    {"role": "system", "content": system_text},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.2,
-                "max_tokens": 5000,
+                "max_tokens": min(5000, room),
             },
             timeout=180,
         )
