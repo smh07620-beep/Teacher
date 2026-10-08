@@ -269,8 +269,8 @@
   function quizCategoryCardHTML(c) {
       const teacherStatus=quizTeacherStatus78(c);
       return `
-          <article class="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden">
-              <div class="px-4 py-3 flex items-center justify-between gap-3 flex-wrap bg-gradient-to-r from-white to-slate-50" data-quiz-row-1030>
+          <article class="border border-slate-200 rounded-2xl bg-white shadow-sm">
+              <div class="px-4 py-3 flex items-center justify-between gap-3 flex-wrap rounded-t-2xl bg-gradient-to-r from-white to-slate-50" data-quiz-row-1030>
                   <div class="min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
                           <span class="font-black text-sm text-slate-900 break-all">${escapeHtml(c.title)}</span>
@@ -284,7 +284,7 @@
                       <details data-quiz-overflow-78 class="relative"><summary class="list-none cursor-pointer whitespace-nowrap text-xs bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold" aria-label="更多考卷操作">⋯</summary><div class="absolute right-0 mt-1 z-30 w-48 bg-white border border-slate-200 shadow-xl rounded-xl p-2"><button data-admin-role="exam-action" data-csp-click="adminEditQuizCategory('${c.id}')" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">⚙️ 考卷設定</button><button id="blind-toggle-${c.id}" data-csp-click="adminToggleBlindMode('${c.id}',${c.blindMode?'false':'true'})" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">🕶️ ${c.blindMode?'關閉':'開啟'}盲測</button><button data-csp-click="openQuizMaterialLinker('${c.id}')" class="w-full text-left text-xs hover:bg-cyan-50 text-cyan-700 px-3 py-2 rounded-lg">🔗 調整關聯教材</button><button data-csp-click="adminDeleteQuizCategory('${c.id}')" class="w-full text-left text-xs hover:bg-rose-50 text-rose-700 px-3 py-2 rounded-lg">🗑️ 刪除考卷</button></div></details>
                   </div>
               </div>
-              <div id="qpanel-${c.id}" class="hidden border-t border-slate-200 p-4 space-y-4 bg-slate-50/60">
+              <div id="qpanel-${c.id}" class="hidden border-t border-slate-200 p-4 space-y-4 rounded-b-2xl bg-slate-50/60">
                   <section id="qmaterial-link-${c.id}" class="hidden bg-cyan-50/60 rounded-xl border border-cyan-200 p-3 space-y-3">
                       <div class="flex items-start justify-between gap-3 flex-wrap"><div><p class="text-sm font-black text-cyan-950">🔗 重新關聯教材</p><p class="text-[11px] text-cyan-700 mt-1">勾選要綁定此考卷的教材。若教材原本綁定其他考卷，儲存後會改綁到目前考卷。</p></div><button data-csp-click="closeQuizMaterialLinker('${c.id}')" class="text-[11px] text-slate-500 hover:text-slate-800">收合</button></div>
                       <div class="flex gap-2"><input id="qmaterial-search-${c.id}" data-csp-input="filterQuizMaterialLinker('${c.id}')" placeholder="搜尋教材名稱…" class="flex-1 px-3 py-2 border border-cyan-200 rounded-xl text-xs bg-white"><button data-csp-click="saveQuizMaterialLinks('${c.id}')" class="bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold px-4 py-2 rounded-xl">💾 儲存關聯</button></div>
