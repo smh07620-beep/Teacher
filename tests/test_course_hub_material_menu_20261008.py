@@ -40,9 +40,17 @@ class CourseHubMaterialMenuTests(unittest.TestCase):
         self.assertIn("[data-material-audience]", audience)
         self.assertIn("editMaterialAudience(id, item)", audience)
 
-    def test_advanced_list_no_longer_pretends_to_be_the_daily_tool(self):
+    def test_the_duplicate_advanced_material_list_is_gone_but_nothing_breaks(self):
         html = read("static", "system.html")
-        self.assertIn("都已整合在上方各課程的「更多」", html)
+        self.assertNotIn('id="admin-material-advanced"', html)
+        self.assertNotIn('id="admin-materials-list"', html)
+        materials = read("static", "admin-materials.js")
+        # Callers still refresh the shared cache when the list panel is absent.
+        self.assertIn("await window.fetchAdminMaterials(force);\n      return;", materials)
+        # Atlas wizard and index rebuild work from the course overview.
+        self.assertIn("document.getElementById('admin-course-workspace')", materials)
+        self.assertIn("window.renderAdminCourseMaterialHub?.(true)", materials)
+        self.assertIn("已重建索引", materials)
 
 
 if __name__ == "__main__":

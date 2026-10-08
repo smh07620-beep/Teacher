@@ -87,7 +87,12 @@
 
   window.renderAdminMaterials = async function(force=false){
     const box = document.getElementById('admin-materials-list');
-    if (!box) return;
+    if (!box) {
+      // The full-list panel was removed; the course overview owns the UI. Still
+      // refresh the shared cache so every caller keeps seeing fresh data.
+      await window.fetchAdminMaterials(force);
+      return;
+    }
     const cached = Array.isArray(adminMaterialsCache.data) ? adminMaterialsCache.data : null;
     if (cached) paintAdminMaterials(cached, box);
     else box.innerHTML = '<p class="text-xs text-slate-400">讀取教材中…</p>';
@@ -148,14 +153,16 @@
       alert('DOCX → Atlas 工具尚未載入，請重新整理頁面後再試。');
       return;
     }
-    const list=document.getElementById('admin-materials-list');
-    if(!list)return;
+    // The wizard mounts at the top of the course overview (the full material list
+    // that used to host it has been removed).
+    const anchor=document.getElementById('admin-course-workspace');
+    if(!anchor)return;
     let host=document.getElementById('admin-material-atlas-import');
     if(!host){
       host=document.createElement('div');
       host.id='admin-material-atlas-import';
       host.className='mb-4';
-      list.parentElement?.insertBefore(host,list);
+      anchor.prepend(host);
     }
     host.classList.remove('hidden');
     await window.openAtlasDocxWizard('admin-material-atlas-import',materialId);
@@ -167,7 +174,9 @@
     const r=await fetch(`/api/material-search/${encodeURIComponent(id)}/index`,{method:'POST'});
     const d=await r.json();
     if(!r.ok) return alert(d.error||'重建失敗');
+    alert(d.searchable ? `✅ 已重建索引：${d.pages} 頁可搜尋。` : '已完成，但這份教材沒有可搜尋的文字（例如影片或掃描檔）。');
     await window.renderAdminMaterials(true);
+    await window.renderAdminCourseMaterialHub?.(true);
   };
 
   window.formatFileBytes = function(value){
