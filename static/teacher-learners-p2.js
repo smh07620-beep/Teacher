@@ -96,19 +96,19 @@
           </div>
           <p class="mt-1 text-xs text-slate-500">只顯示伺服器判定你可查看的學員；這裡不新增臨床簽核權限。</p>
         </div>
-        <div class="flex items-center gap-3"><button id="teacher-analytics-open-p2" type="button" class="text-[11px] font-bold text-teal-700">📊 教學分析</button><button id="teacher-learners-refresh-p2" type="button" class="text-[11px] font-bold text-indigo-700">↻ 更新</button></div>
+        <div class="flex items-center gap-3"><button id="teacher-analytics-open-p2" type="button" aria-expanded="false" class="text-[11px] font-bold text-teal-700">📊 展開教學分析</button><button id="teacher-learners-refresh-p2" type="button" class="text-[11px] font-bold text-indigo-700">↻ 更新</button></div>
       </div>
-      <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-        <div class="rounded-xl bg-slate-50 p-2"><b class="block text-lg text-slate-950">${Number(summary.learners||0)}</b><span class="text-[10px] text-slate-500">學員</span></div>
-        <div class="rounded-xl bg-indigo-50 p-2"><b class="block text-lg text-indigo-900">${Number(summary.awaitingTeacher||0)}</b><span class="text-[10px] text-indigo-600">待教師</span></div>
-        <div class="rounded-xl bg-amber-50 p-2"><b class="block text-lg text-amber-900">${Number(summary.awaitingLeader||0)}</b><span class="text-[10px] text-amber-700">待複核</span></div>
-        <div class="rounded-xl bg-rose-50 p-2"><b class="block text-lg text-rose-900">${Number(summary.overdueAssignments||0)}</b><span class="text-[10px] text-rose-700">逾期</span></div>
-      </div>
+      <p id="teacher-learners-summary-p2" class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold text-slate-600">
+        <span>學員 <b class="text-slate-950">${Number(summary.learners||0)}</b></span><span>待教師 <b class="text-indigo-900">${Number(summary.awaitingTeacher||0)}</b></span><span>待複核 <b class="text-amber-900">${Number(summary.awaitingLeader||0)}</b></span><span>逾期 <b class="text-rose-900">${Number(summary.overdueAssignments||0)}</b></span>
+        <span id="teacher-analytics-line-p2" class="text-slate-400">｜教學分析讀取中…</span>
+      </p>
       <div class="mt-3 space-y-2">${rows.length?rows.map(learnerRow).join(''):'<div class="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500">目前沒有伺服器指派給你的學員。</div>'}</div>
       <section id="teacher-competency-detail-p2" class="hidden mt-4 rounded-xl border border-teal-100 bg-teal-50/30 p-4"></section>
       <section id="teacher-teaching-analytics-p2" class="hidden mt-4 rounded-xl border border-sky-100 bg-sky-50/30 p-4"></section>`;
     section.querySelector('#teacher-learners-refresh-p2')?.addEventListener('click',()=>load(true));
-    section.querySelector('#teacher-analytics-open-p2')?.addEventListener('click',openTeachingAnalytics);
+    section.querySelector('#teacher-analytics-open-p2')?.addEventListener('click',toggleTeachingAnalytics);
+    fillAnalyticsLine();
+    if(analyticsOpen)openTeachingAnalytics();
     section.querySelectorAll('[data-p2-results]').forEach(button=>button.addEventListener('click',openResults));
     section.querySelectorAll('[data-p2-competency]').forEach(button=>button.addEventListener('click',openCompetency));
     section.querySelectorAll('[data-p2-clinical]').forEach(button=>button.addEventListener('click',openClinicalAssessment));
@@ -198,8 +198,32 @@
     const number=Number(value);return Number.isFinite(number)?number.toFixed(digits):'—';
   }
 
+  let analyticsOpen=false;
+
+  function setAnalyticsButton(open){
+    const button=document.getElementById('teacher-analytics-open-p2');if(!button)return;
+    button.textContent=open?'📊 收合教學分析':'📊 展開教學分析';
+    button.setAttribute('aria-expanded',open?'true':'false');
+  }
+
+  async function fillAnalyticsLine(){
+    const line=document.getElementById('teacher-analytics-line-p2');if(!line)return;
+    try{
+      const summary=(await loadAnalytics(false))?.summary||{};
+      line.className='text-slate-600';
+      line.innerHTML=`｜考試平均 <b class="text-indigo-900">${analyticNumber(summary.averageExamScore)}</b>　教材完成率 <b class="text-teal-900">${analyticNumber(summary.materialCompletionRate)}%</b>　待批改 <b class="text-amber-800">${Number(summary.examPendingReview||0)}</b>`;
+    }catch(_){line.textContent='';}
+  }
+
+  function toggleTeachingAnalytics(){
+    const panel=document.getElementById('teacher-teaching-analytics-p2');
+    if(panel&&!panel.classList.contains('hidden')){panel.classList.add('hidden');analyticsOpen=false;setAnalyticsButton(false);return;}
+    return openTeachingAnalytics();
+  }
+
   async function openTeachingAnalytics(){
     const panel=document.getElementById('teacher-teaching-analytics-p2');if(!panel)return;
+    analyticsOpen=true;setAnalyticsButton(true);
     panel.classList.remove('hidden');panel.innerHTML='<div class="text-xs text-slate-500">讀取目前教學範圍分析中…</div>';
     try{
       const data=await loadAnalytics(false),summary=data?.summary||{},rows=Array.isArray(data?.learners)?data.learners:[],timeline=(Array.isArray(data?.timeline)?data.timeline:[]).slice(-6);
@@ -208,7 +232,7 @@
       panel.innerHTML=`<div class="flex items-start justify-between gap-3"><div><h5 class="text-sm font-black text-slate-950">📊 教學分析</h5><p class="mt-1 text-[11px] text-slate-500">依目前伺服器 scope 的教材、考試、PGY 指派與正式評量紀錄呈現；只描述既有資料，不產生 AI 能力總分或預測。</p></div><button id="teacher-analytics-close-p2" type="button" class="text-[11px] font-bold text-slate-600">關閉</button></div>
         <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center"><div class="rounded-xl bg-white p-2"><b class="block text-base text-slate-950">${Number(summary.learners||0)}</b><span class="text-[10px] text-slate-500">學員</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-teal-900">${analyticNumber(summary.materialCompletionRate)}%</b><span class="text-[10px] text-slate-500">教材完成率</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-indigo-900">${analyticNumber(summary.averageExamScore)}</b><span class="text-[10px] text-slate-500">考試平均</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-amber-800">${Number(summary.examPendingReview||0)}</b><span class="text-[10px] text-slate-500">待批改考試</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-sky-900">${analyticNumber(summary.pgyCompletionRate)}%</b><span class="text-[10px] text-slate-500">PGY 完成率</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-emerald-900">${analyticNumber(summary.averagePgyAssessmentScore)}</b><span class="text-[10px] text-slate-500">正式評量平均</span></div></div>
         <div class="mt-3 space-y-2">${rowHtml||'<div class="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-xs text-slate-500">目前沒有可分析的學員紀錄。</div>'}</div><div class="mt-3"><div class="mb-2 text-[10px] font-black text-slate-500">近 6 個月活動</div><div class="grid sm:grid-cols-3 lg:grid-cols-6 gap-2">${timelineHtml||'<span class="text-xs text-slate-400">尚無近期活動。</span>'}</div></div>`;
-      panel.querySelector('#teacher-analytics-close-p2')?.addEventListener('click',()=>panel.classList.add('hidden'));panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+      panel.querySelector('#teacher-analytics-close-p2')?.addEventListener('click',()=>{panel.classList.add('hidden');analyticsOpen=false;setAnalyticsButton(false);});panel.scrollIntoView({behavior:'smooth',block:'nearest'});
     }catch(error){panel.innerHTML=`<div class="text-xs text-rose-700">❌ ${escapeHtml(error.message||'教學分析讀取失敗')}</div>`}
   }
 
@@ -340,5 +364,5 @@
   }
   window.addEventListener('pageshow',()=>mountWhenReady());
   window.AdminWorkspaceShell?.addAfterWorkspace?.(()=>refreshPlacement());
-  window.TeacherLearnersP2=Object.freeze({load,mount:mountWhenReady});
+  window.TeacherLearnersP2=Object.freeze({load,mount:mountWhenReady,openAnalytics:async()=>{if(!document.getElementById('teacher-teaching-analytics-p2'))await load(false);const panel=document.getElementById('teacher-teaching-analytics-p2');if(panel&&panel.classList.contains('hidden'))await openTeachingAnalytics();else panel?.scrollIntoView?.({behavior:'smooth',block:'nearest'});}});
 })();

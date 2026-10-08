@@ -515,6 +515,7 @@
           await window.TeacherAssessmentInline1031?.show('exams');
           setAssessmentTab('analytics');
           document.getElementById('teacher-learners-p2')?.scrollIntoView?.({block:'start', behavior:'smooth'});
+          await window.TeacherLearnersP2?.openAnalytics?.();
         }
       });
       document.addEventListener('teacher-assessment-pending-1030', event => {
