@@ -195,7 +195,8 @@
     restore:restoreMountedTool,
     openAi:openAiTool,
     openManual:openManualTool,
-    openQuestions:openQuestionManager
+    openQuestions:openQuestionManager,
+    returnToExam
   };
 
   function observeStudio(){

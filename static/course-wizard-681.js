@@ -1161,7 +1161,10 @@ async function publishAndOpenCourseWorkspace(){
     let readiness=await api('/api/courses/'+encodeURIComponent(courseId)+'/readiness');
     if(!readiness?.ready){
       const blocker=publicationBlockerText(readiness);
-      if(publicationBox)publicationBox.innerHTML=`<div class="rounded-lg border border-amber-200 bg-amber-50 p-2 font-bold text-amber-900">⚠️ 尚未能正式發布<br>${esc(blocker).replace(/\n/g,'<br>')}</div>`;
+      // 考卷還沒審核／發布時，直接給一個回到考卷的按鈕（考卷頁有「預覽→審核→發布」）。
+      const examBlocked=state.categoryId&&(Array.isArray(readiness?.blockers)?readiness.blockers:[]).some(item=>item?.code==='COURSE_EXAM_UNPUBLISHED');
+      const examButton=examBlocked?'<div class="mt-2"><button type="button" data-csp-click="courseWizard681OpenAssessmentAuthoring()" class="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-black text-white">👉 前往考卷完成審核／發布</button></div>':'';
+      if(publicationBox)publicationBox.innerHTML=`<div class="rounded-lg border border-amber-200 bg-amber-50 p-2 font-bold text-amber-900">⚠️ 尚未能正式發布<br>${esc(blocker).replace(/\n/g,'<br>')}${examButton}</div>`;
       alert('目前還不能發布：\n'+blocker);
       return;
     }

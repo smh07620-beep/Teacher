@@ -93,7 +93,11 @@ def publication_readiness(course_id: str) -> dict:
     if unpublished_exams:
         blockers.append({
             "code": "COURSE_EXAM_UNPUBLISHED",
-            "message": f"尚有 {len(unpublished_exams)} 份考卷未完成審核／發布。",
+            "message": (
+                f"尚有 {len(unpublished_exams)} 份考卷未完成審核／發布。"
+                "請到該考卷的「考卷總覽」，依序按「預覽」→「審核」→「發布」；"
+                "AI 產生的題目請先到「題目管理」檢查。"
+            ),
         })
 
     return {

@@ -34,11 +34,34 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
             self.assertIn(token, bank)
             self.assertIn(token, ai)
             self.assertIn(token, runtime)
-        self.assertIn('只出是非題', bank)
+        self.assertIn('<option value="true_false">是非題</option>', bank)
         self.assertIn("options:['是','否']", ai)
         self.assertIn('"true_false": "全部產生是非題', runtime)
         self.assertIn('"choice|multi|true_false|fill|essay"', runtime)
 
+
+    def test_ai_type_select_is_compact_and_still_backend_compatible(self):
+        bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
+        runtime = ROOT.joinpath('teacher_app/assessments/ai_runtime.py').read_text(encoding='utf-8')
+        start = bank.index('id="ai-type-${c.id}"')
+        select = bank[start:bank.index('</select>', start)]
+        values = [part.split('"', 1)[0] for part in select.split('<option value="')[1:]]
+        self.assertEqual(
+            values,
+            ['mixed_all', 'mixed_choice_multi', 'mixed', 'choice', 'multi', 'true_false', 'fill', 'essay', 'video_mixed'],
+        )
+        for value in values:
+            self.assertIn(f'"{value}"', runtime)
+
+    def test_ai_import_leaves_a_way_back_to_review_and_exam(self):
+        ai = ROOT.joinpath('static/admin-ai-questions.js').read_text(encoding='utf-8')
+        panels = ROOT.joinpath('static/teacher-content-tool-panels-710.js').read_text(encoding='utf-8')
+        csp = ROOT.joinpath('static/system-csp-actions.js').read_text(encoding='utf-8')
+        for action in ('aiGoReviewQuestions', 'aiGoBackToExam'):
+            self.assertIn(f'data-csp-click="{action}(', ai)
+            self.assertIn(f"window.{action}=", ai)
+            self.assertIn(f"'{action}'", csp)
+        self.assertIn('returnToExam\n  };', panels)
 
     def test_mobile_question_actions_are_collapsed(self):
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
