@@ -140,6 +140,19 @@ def create_category(base, data: Mapping[str, Any]) -> dict:
     if not title:
         raise _fail("ASSESSMENT_TITLE_REQUIRED", "請輸入頁籤名稱")
 
+    # Idempotent for course-bound drafts: a retry after a failed wizard step
+    # (or a reopened wizard) must reuse the unpublished draft it already made
+    # instead of piling up duplicates.
+    if course_id:
+        for existing in repository.list_categories(group, area, include_inactive=True):
+            if (
+                str(existing.get("courseId") or "") == course_id
+                and str(existing.get("title") or "").strip() == title
+                and not existing.get("active")
+                and str(existing.get("reviewStatus") or "draft").lower() == "draft"
+            ):
+                return existing
+
     category_id = f"cat-{uuid.uuid4().hex[:12]}"
     created = repository.create_category({
         "id": category_id,
