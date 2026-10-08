@@ -5155,7 +5155,18 @@ def api_ai_import_questions():
 @login_required()
 def api_list_quiz_categories():
     from teacher_app.assessments import service as canonical_assessments
-    return jsonify(canonical_assessments.list_categories(sys.modules[__name__], request.args.get("group", "") or None, request.args.get("area", DEFAULT_TRAINING_AREA), False))
+    from teacher_app.courses import visibility as course_visibility
+    group = request.args.get("group", "") or None
+    area = request.args.get("area", DEFAULT_TRAINING_AREA)
+    categories = canonical_assessments.list_categories(sys.modules[__name__], group, area, False)
+    if group:
+        # Exams of a course the person was individually assigned from another group.
+        categories = course_visibility.add_personally_assigned_exams(
+            _current_user(),
+            categories,
+            lambda: canonical_assessments.list_categories(sys.modules[__name__], None, area, False),
+        )
+    return jsonify(categories)
 
 
 @app.get("/api/quiz-categories/admin")
@@ -6115,7 +6126,9 @@ def api_courses():
     courses = canonical_courses.list_courses(sys.modules[__name__], area, group, False)
     # Same owner-group/audience rule as /api/slides: no empty course shells for
     # accounts that cannot see any of the course's materials.
-    return jsonify(course_visibility.filter_courses_for_user(_current_user(), courses))
+    user = _current_user()
+    visible = course_visibility.filter_courses_for_user(user, courses)
+    return jsonify(course_visibility.add_personally_assigned_courses(user, visible))
 
 @app.get("/api/courses/admin")
 def api_courses_admin():

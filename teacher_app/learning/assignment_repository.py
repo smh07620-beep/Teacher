@@ -99,19 +99,41 @@ def list_for_user(
                 WHERE active={_true(kind)}
                   AND (
                         (assignee_type='user' AND LOWER(assignee_key)={ph}
-                         AND training_area={ph} AND group_key={ph})
+                         AND training_area={ph})
                      OR (assignee_type='group' AND training_area={ph} AND group_key={ph})
                      OR (assignee_type='all' AND training_area={ph})
                   )
                 ORDER BY required DESC,due_at='',due_at,assigned_at,id
                 """,
-                (username, area, group, area, group, area),
+                (username, area, area, group, area),
             ).fetchall()
     except Exception as exc:
         if _missing_table(exc):
             return []
         raise
     return [assignment_to_dict(row) for row in rows]
+
+
+def list_personal_course_ids(*, username: str, area: str) -> list[str]:
+    """Courses an account was individually assigned (any owning group, same area)."""
+    username = str(username or "").strip().lower()
+    area = str(area or "").strip()
+    if not username:
+        return []
+    try:
+        with common_db.read_connection() as (conn, kind):
+            ph = common_db.placeholder(kind)
+            rows = conn.execute(
+                f"SELECT DISTINCT course_id FROM learning_assignments "
+                f"WHERE active={_true(kind)} AND assignee_type='user' "
+                f"AND LOWER(assignee_key)={ph} AND training_area={ph}",
+                (username, area),
+            ).fetchall()
+    except Exception as exc:
+        if _missing_table(exc):
+            return []
+        raise
+    return [str(dict(row).get("course_id") or "") for row in rows if dict(row).get("course_id")]
 
 
 def insert_assignment(values: Mapping[str, Any]) -> dict[str, Any]:

@@ -79,4 +79,58 @@ def filter_courses_for_user(
     return [c for c in courses if str(c.get("id") or "") in own_ids | shared_course_ids]
 
 
-__all__ = ["filter_courses_for_user"]
+def add_personally_assigned_courses(
+    user: Mapping[str, Any] | None,
+    courses: list[dict],
+    *,
+    course_loader: Callable[[str], dict | None] | None = None,
+) -> list[dict]:
+    """Append courses from other groups that this person was individually assigned.
+
+    The learner course list is requested per group, so a course owned by another
+    group would never show up even though an administrator assigned it to the
+    person.  Only ids in ``personal_course_grants`` (published, same area) are added.
+    """
+    if not user:
+        return list(courses)
+    grants = learning_access.personal_course_grants(user)
+    if not grants:
+        return list(courses)
+    if course_loader is None:
+        from teacher_app.courses import repository as course_repository
+
+        course_loader = course_repository.get_course
+    present = {str(c.get("id") or "") for c in courses}
+    extra = []
+    for course_id in sorted(grants - present):
+        course = course_loader(course_id)
+        if course:
+            extra.append({**course, "assignedFromGroup": course.get("group", "")})
+    return list(courses) + extra
+
+
+def add_personally_assigned_exams(
+    user: Mapping[str, Any] | None,
+    categories: list[dict],
+    all_categories_loader: Callable[[], list[dict]],
+) -> list[dict]:
+    """Append exams (quiz categories) linked to a course this person was individually assigned.
+
+    Same grant as ``add_personally_assigned_courses``: the exam must hang under a
+    granted course; nothing else from the other group becomes visible.
+    """
+    if not user:
+        return list(categories)
+    grants = learning_access.personal_course_grants(user)
+    if not grants:
+        return list(categories)
+    present = {str(c.get("id") or "") for c in categories}
+    extra = [
+        {**item, "assignedFromGroup": item.get("group", "")}
+        for item in all_categories_loader()
+        if str(item.get("courseId") or "") in grants and str(item.get("id") or "") not in present
+    ]
+    return list(categories) + extra
+
+
+__all__ = ["add_personally_assigned_courses", "add_personally_assigned_exams", "filter_courses_for_user"]
