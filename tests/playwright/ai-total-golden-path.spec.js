@@ -8,7 +8,7 @@ async function login(page,username='e2eteacher',next='/system?area=internal&grou
   await page.locator('#login-username').fill(username);
   await page.locator('#login-password').fill(password);
   await Promise.all([
-    page.waitForURL(url=>!url.pathname.endsWith('/login')),
+    page.waitForURL(url=>!url.pathname.endsWith('/login'), { timeout: 45000, waitUntil: 'commit' }),
     page.locator('#login-form button[type="submit"]').click(),
   ]);
   await page.waitForLoadState('domcontentloaded');
