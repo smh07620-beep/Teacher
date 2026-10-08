@@ -286,7 +286,7 @@ function stepFour(){
   const completionNote=state.created
     ? (canLeaveCourse()?'✅ 課程草稿、教材與選定評量已準備完成；這一步是唯一正式發布點。':'⏳ 新教材仍在背景處理；全部完成前不會讓學員看到課程。')
     : '按下發布時會先安全建立草稿 checkpoint；只有發布檢查通過後才會讓學員看見。';
-  return `<h5 class="font-black">4. 確認與發布</h5><div class="mt-3 rounded-xl border border-violet-100 bg-white p-4"><dl class="grid gap-3 text-sm md:grid-cols-2"><div><dt class="text-xs text-slate-500">課程</dt><dd class="font-bold">${esc(title||'（未填）')}</dd></div><div><dt class="text-xs text-slate-500">可見範圍</dt><dd>${esc(s.area)} · ${esc(el('wizard-group')?.selectedOptions?.[0]?.textContent||s.group)}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">說明</dt><dd>${esc(desc||'—')}</dd></div><div><dt class="text-xs text-slate-500">教材</dt><dd>新上傳 ${state.files.length} 份；既有關聯 ${state.existing.length} 份；AI 產物 ${aiCount} 份</dd></div><div><dt class="text-xs text-slate-500">評量／考卷</dt><dd class="font-bold">${esc(mode().label)}${exam?' · '+esc(exam):''}</dd></div><div><dt class="text-xs text-slate-500">學習指派</dt><dd>${esc(assignmentSummary())}</dd></div><div><dt class="text-xs text-slate-500">AI 製作</dt><dd class="font-bold">${esc(aiPlan().label)}${aiCount?' · 已加入 '+aiCount+' 份產物':''}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">既有教材</dt><dd>${state.existing.map(id=>esc((state.materials||[]).find(m=>String(m.id)===String(id))?.title||id)).join('、')||'—'}</dd></div></dl><p class="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs font-bold text-violet-800">${completionNote}</p></div>`;
+  return `<h5 class="font-black">4. 確認與發布</h5>${(()=>{const gaps=stepGaps(4);return gaps.length?`<div class="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900"><b>⚠️ 發布前請確認</b><ul class="mt-1 list-disc pl-5">${gaps.map(item=>`<li>${esc(item)}</li>`).join('')}</ul><p class="mt-2">可點上方步驟回去補齊。</p></div>`:'';})()}<div class="mt-3 rounded-xl border border-violet-100 bg-white p-4"><dl class="grid gap-3 text-sm md:grid-cols-2"><div><dt class="text-xs text-slate-500">課程</dt><dd class="font-bold">${esc(title||'（未填）')}</dd></div><div><dt class="text-xs text-slate-500">可見範圍</dt><dd>${esc(s.area)} · ${esc(el('wizard-group')?.selectedOptions?.[0]?.textContent||s.group)}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">說明</dt><dd>${esc(desc||'—')}</dd></div><div><dt class="text-xs text-slate-500">教材</dt><dd>新上傳 ${state.files.length} 份；既有關聯 ${state.existing.length} 份；AI 產物 ${aiCount} 份</dd></div><div><dt class="text-xs text-slate-500">評量／考卷</dt><dd class="font-bold">${esc(mode().label)}${exam?' · '+esc(exam):''}</dd></div><div><dt class="text-xs text-slate-500">學習指派</dt><dd>${esc(assignmentSummary())}</dd></div><div><dt class="text-xs text-slate-500">AI 製作</dt><dd class="font-bold">${esc(aiPlan().label)}${aiCount?' · 已加入 '+aiCount+' 份產物':''}</dd></div><div class="md:col-span-2"><dt class="text-xs text-slate-500">既有教材</dt><dd>${state.existing.map(id=>esc((state.materials||[]).find(m=>String(m.id)===String(id))?.title||id)).join('、')||'—'}</dd></div></dl><p class="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs font-bold text-violet-800">${completionNote}</p></div>`;
 }
 
 function fileMeta(index,file){return {title:file.name.replace(/\.[^.]+$/,''),materialType:'auto',...(state.fileMeta[index]||{})};}
@@ -323,6 +323,20 @@ function syncInputs(){
   if(state.step===3)syncExamInput();
 }
 
+function courseMaterialCount(){
+  if(state.created)return new Set([...(state.expectedMaterialIds||[]),...(state.queuedMaterialIds||[])].map(String).filter(Boolean)).size;
+  return (state.files||[]).length+(state.existing||[]).length;
+}
+
+// 回傳「目前這一步還缺什麼」的提醒文字；沒有缺漏時回傳空字串。
+function stepGaps(forStep){
+  const gaps=[];
+  if(forStep>=2&&courseMaterialCount()===0)gaps.push('這門課目前還沒有任何教材（沒有上傳檔案，也沒有選既有教材或 AI 產物），學員學不到內容，也無法發布。');
+  if(forStep===2&&state.aiPlan!=='none'&&courseMaterialCount()>0&&!(state.aiProducts||[]).length)gaps.push(`你選了「${aiPlan().label}」，但還沒有完成並加入任何 AI 產物。`);
+  if(forStep>=3&&state.examMode==='later'&&!state.categoryId)gaps.push('目前沒有建立考卷。沒有考卷也可以發布，但學員學完不會有測驗。');
+  return gaps;
+}
+
 async function next(){
   if(state.busy||(state.created&&!canLeaveCourse()))return;
   if(state.step===2&&!state.created){
@@ -336,6 +350,8 @@ async function next(){
     const ready=await ensureAssessmentDraft();
     if(!ready)return;
   }
+  const gaps=stepGaps(state.step===2?2:state.step===3?3:0);
+  if(gaps.length&&!confirm('⚠️ 提醒：\n\n'+gaps.map(item=>'• '+item).join('\n')+'\n\n仍要前往下一步嗎？\n（按「取消」留在這一步繼續補齊）'))return;
   state.step=Math.min(4,state.step+1);render();
   if(state.step===2)void loadMaterials();
 }
