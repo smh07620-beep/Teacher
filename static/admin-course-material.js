@@ -67,9 +67,24 @@
   }
 
   async function adminDeleteCourse(id){
-    if(!confirm('確定刪除這門課程嗎？\n\n只會刪除課程本身；教材與考卷都會保留，並移到「通用／未歸類」。之後可以重新關聯到其他課程，或另外刪除教材。')) return;
+    let mats=[],examCount=0,course='';
+    try{
+      const st=document.getElementById('admin-course-material-hub')?._adminCourseMaterialState||document.querySelector('.admin-course-dashboard')?.parentElement?._adminCourseMaterialState||{};
+      mats=(st.materials||[]).filter(m=>String(m.courseId||'')===String(id));
+      examCount=(st.cats||[]).filter(q=>String(q.courseId||'')===String(id)).length;
+      course=String((st.courses||[]).find(c=>String(c.id)===String(id))?.title||'');
+    }catch(e){}
+    const moved=(mats.length||examCount)?`\n\n⚠️ 這門課底下有 ${mats.length} 份教材、${examCount} 份考卷，不會跟著刪掉，會變成「未關聯」教材與未歸類考卷。`:'';
+    if(!confirm(`確定刪除${course?'「'+course+'」':'這門課程'}嗎？\n\n只會刪除課程本身；教材與考卷都會保留，並移到「通用／未歸類」。之後可以重新關聯到其他課程，或另外刪除教材。${moved}`)) return;
     const r=await fetch(`/api/courses/${id}`,{method:'DELETE',});
     if(!r.ok){ alert('刪除失敗'); return; }
+    if(mats.length&&confirm(`這門課原本有 ${mats.length} 份教材，現在變成「未關聯」。\n\n要順便把這 ${mats.length} 份教材一起刪除嗎？\n（適合建立失敗的草稿課程；按「取消」則保留教材。）`)){
+      let ok=0;
+      for(const m of mats){
+        try{const d=await fetch(`/api/slides/${encodeURIComponent(m.id)}`,{method:'DELETE',credentials:'same-origin'});if(d.ok)ok++;}catch(e){}
+      }
+      if(ok<mats.length)alert(`已刪除 ${ok} 份教材，另有 ${mats.length-ok} 份刪除失敗，請到教材頁面手動處理。`);
+    }
     await renderAdminCourses(true);
     renderAdminCourseMaterialHub(true);
   }
