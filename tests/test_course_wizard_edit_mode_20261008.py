@@ -30,6 +30,12 @@ class CourseWizardEditModeTests(unittest.TestCase):
     def test_reset_paths_clear_edit_flag(self):
         self.assertGreaterEqual(WIZARD.count("state.editing=false;"), 3)
 
+    def test_new_course_never_inherits_the_edited_course(self):
+        self.assertIn("window.courseWizard681StartNew=startNewCourse", WIZARD)
+        self.assertIn("function startNewCourse()", WIZARD)
+        # create entry points and closing the studio all reset edit mode
+        self.assertGreaterEqual(STUDIO.count("courseWizard681StartNew"), 3)
+
     def test_studio_opens_wizard_in_edit_mode(self):
         self.assertIn("window.openTeacherCourseEditWorkspace=openCourseEditWorkspace", STUDIO)
         self.assertIn("window.courseWizard681EditCourse?.(courseId,step)", STUDIO)

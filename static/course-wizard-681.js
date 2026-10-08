@@ -130,6 +130,7 @@ function mount(){
   window.courseWizard681SetMode=value=>{state.examMode=value;syncExamInput();render();};
   window.courseWizard681Create=create;
   window.courseWizard681EditCourse=editCourse;
+  window.courseWizard681StartNew=startNewCourse;
   window.courseWizard681AddFiles=addFilesToCourse;
   window.courseWizard681CreateAndPublish=createAndPublish;
   window.courseWizard681OpenAiAuthoring=openAiAuthoring;
@@ -871,6 +872,19 @@ async function editCourse(courseId,step=2){
     alert('無法開啟課程編輯：'+(error.message||'未知錯誤'));
     return false;
   }
+}
+
+// 離開編輯模式、回到乾淨的「建立新課程」：避免上一門被編輯的課程鎖住新課程的欄位。
+function startNewCourse(){
+  if(!state.editing)return true;
+  if(state.busy||!canLeaveCourse()){
+    alert('目前課程的教材仍在處理或上傳失敗，請先完成後再建立新課程。');
+    return false;
+  }
+  clearWizardState();
+  ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
+  render();void loadMaterials();
+  return true;
 }
 
 // 編輯模式：把新選的教材檔案上傳到這門既有課程。
