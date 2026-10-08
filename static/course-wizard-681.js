@@ -135,6 +135,24 @@ function mount(){
   window.courseWizard681CreateAndPublish=createAndPublish;
   window.courseWizard681OpenAiAuthoring=openAiAuthoring;
   window.courseWizard681OpenAssessmentAuthoring=openAssessmentAuthoring;
+window.courseWizard681QuickPublishExam=async function(){
+  const say=(t,bad)=>{const el=document.getElementById('cw681-exam-quick-status');if(el){el.textContent=t;el.className=`mt-1 text-[11px] font-bold ${bad?'text-rose-700':'text-emerald-700'}`;}};
+  const id=state.categoryId;if(!id)return say('找不到考卷，請按「前往考卷設定」。',true);
+  const opensAt=document.getElementById('cw681-exam-opens')?.value||'',closesAt=document.getElementById('cw681-exam-closes')?.value||'';
+  if(!opensAt||!closesAt||new Date(opensAt)>=new Date(closesAt))return say('請填開始時間，且最後考核日期要晚於開始時間。',true);
+  const call=async(url,method,body)=>{const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.issues?.length?`${d.error}：${d.issues.join('、')}`:(d.error||'操作失敗'));return d;};
+  try{
+    say('⏳ 處理中…');
+    const cat=await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'GET');
+    if(!String(cat.audience||'').trim())await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'PATCH',{audience:'所有符合課程資格人員'});
+    await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt,closesAt,reminderEnabled:true});
+    const fresh=await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'GET');
+    if(fresh.reviewStatus!=='approved')await call(`/api/quiz-categories/${encodeURIComponent(id)}/review`,'POST',{});
+    await call(`/api/quiz-categories/${encodeURIComponent(id)}/publish`,'POST',{});
+    say('✅ 考卷已發布，正在繼續發布課程…');
+    await publishAndOpenCourseWorkspace();
+  }catch(e){say(`❌ ${e.message}`,true);}
+};
   window.courseWizard681AttachAiProducts=attachAiProducts;
   window.courseWizard681ResumeStep=value=>{state.step=Math.max(1,Math.min(4,Number(value)||1));render();if(state.step===2)void loadMaterials();};
   window.courseWizard681RefreshMaterials=loadMaterials;
@@ -1163,7 +1181,8 @@ async function publishAndOpenCourseWorkspace(){
       const blocker=publicationBlockerText(readiness);
       // 考卷還沒審核／發布時，直接給一個回到考卷的按鈕（考卷頁有「預覽→審核→發布」）。
       const examBlocked=state.categoryId&&(Array.isArray(readiness?.blockers)?readiness.blockers:[]).some(item=>item?.code==='COURSE_EXAM_UNPUBLISHED');
-      const examButton=examBlocked?'<div class="mt-2"><button type="button" data-csp-click="courseWizard681OpenAssessmentAuthoring()" class="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-black text-white">👉 前往考卷完成審核／發布</button></div>':'';
+      const pad=n=>String(n).padStart(2,'0'),local=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,startDefault=local(new Date(Date.now()-60000)),endDefault=local(new Date(Date.now()+30*86400000));
+      const examButton=examBlocked?`<div class="mt-2 rounded-lg border border-amber-300 bg-white p-2 text-slate-800 font-normal"><p class="font-black text-xs">最後一步：設定考核期間並發布考卷</p><div class="mt-2 grid gap-2 sm:grid-cols-2"><label class="text-[11px] font-bold">開始時間<input id="cw681-exam-opens" type="datetime-local" value="${startDefault}" class="mt-1 w-full rounded border px-2 py-1 text-xs"></label><label class="text-[11px] font-bold">最後考核日期<input id="cw681-exam-closes" type="datetime-local" value="${endDefault}" class="mt-1 w-full rounded border px-2 py-1 text-xs"></label></div><p class="mt-1 text-[11px] text-slate-500">適用人員沿用「所有符合課程資格人員」；題目已審核會自動略過審核。日期可先用預設（30 天），之後可在考卷設定修改。</p><div class="mt-2 flex flex-wrap gap-2"><button type="button" data-csp-click="courseWizard681QuickPublishExam()" class="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white">✅ 發布考卷並繼續</button><button type="button" data-csp-click="courseWizard681OpenAssessmentAuthoring()" class="rounded-lg border border-indigo-300 bg-white px-3 py-2 text-xs font-black text-indigo-700">前往考卷設定</button></div><p id="cw681-exam-quick-status" class="mt-1 text-[11px] font-bold"></p></div>`:'';
       if(publicationBox)publicationBox.innerHTML=`<div class="rounded-lg border border-amber-200 bg-amber-50 p-2 font-bold text-amber-900">⚠️ 尚未能正式發布<br>${esc(blocker).replace(/\n/g,'<br>')}${examButton}</div>`;
       alert('目前還不能發布：\n'+blocker);
       return;

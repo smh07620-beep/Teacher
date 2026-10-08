@@ -295,7 +295,7 @@
                   </div>
                   <div class="flex gap-2 shrink-0 items-center whitespace-nowrap">
                        ${(Number(c?.questionCount||0)>0&&c?.reviewStatus!=='approved'&&!c?.active)?`<button type="button" data-admin-role="questions-action" data-csp-click="adminQuickReviewExam('${c.id}')" class="whitespace-nowrap shrink-0 text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-black">✅ 送審</button>`:''}
-                       <button data-admin-role="questions-action" data-quiz-primary-1030 data-csp-click="window.openTeacherContentExam?.('${c.id}') || toggleQuizQuestionsPanel('${c.id}')" class="whitespace-nowrap shrink-0 text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-black">${escapeHtml(teacherStatus.primary)}</button>
+                       <button data-admin-role="questions-action" data-quiz-primary-1030 data-csp-click="${teacherStatus.primary==='發布'?`adminOpenExamPublish('${c.id}')`:`window.openTeacherContentExam?.('${c.id}') || toggleQuizQuestionsPanel('${c.id}')`}" class="whitespace-nowrap shrink-0 text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-black">${escapeHtml(teacherStatus.primary)}</button>
                       <details data-quiz-overflow-78 class="relative"><summary class="list-none cursor-pointer whitespace-nowrap text-xs bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold" aria-label="更多考卷操作">⋯</summary><div class="absolute right-0 mt-1 z-50 flex w-48 flex-col gap-0.5 whitespace-normal bg-white border border-slate-200 shadow-xl rounded-xl p-2"><button data-admin-role="exam-action" data-csp-click="adminEditQuizCategory('${c.id}')" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">⚙️ 考卷設定</button><button id="blind-toggle-${c.id}" data-csp-click="adminToggleBlindMode('${c.id}',${c.blindMode?'false':'true'})" class="w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg">🕶️ ${c.blindMode?'關閉':'開啟'}盲測</button><button data-csp-click="openQuizMaterialLinker('${c.id}')" class="w-full text-left text-xs hover:bg-cyan-50 text-cyan-700 px-3 py-2 rounded-lg">🔗 調整關聯教材</button><button data-csp-click="adminDeleteQuizCategory('${c.id}')" class="w-full text-left text-xs hover:bg-rose-50 text-rose-700 px-3 py-2 rounded-lg">🗑️ 刪除考卷</button></div></details>
                   </div>
               </div>
@@ -347,8 +347,8 @@
                               <div><label class="block text-xs font-bold text-slate-600 mb-1">③ 難度</label><select id="ai-difficulty-${c.id}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"><option value="basic">基礎</option><option value="standard" selected>標準</option><option value="advanced">進階</option></select></div>
                               <div><label class="block text-xs font-bold text-slate-600 mb-1">④ 題數</label><select id="ai-count-${c.id}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"><option value="3">3 題</option><option value="5" selected>5 題</option><option value="10">10 題</option><option value="15">15 題</option></select></div>
                               <div><label class="block text-xs font-bold text-slate-600 mb-1">⑤ 題目使用範圍</label><select id="ai-audience-${c.id}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"><option value="group_only" selected>🔒 本組限定（預設）</option><option value="all_staff">🌐 全科共用</option></select></div>
-                              <div><label class="block text-xs font-bold text-slate-600 mb-1">⑤ 出題策略</label><select id="ai-strategy-${c.id}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"><option value="auto" selected>✨ 自動依教材判斷</option><option value="balanced">均衡涵蓋</option><option value="workflow">操作流程</option><option value="scenario">情境／故障排除</option><option value="safety">安全／品質／通報</option><option value="recognition">辨識／圖像判讀</option><option value="regulation">法規／SOP</option></select></div>
-                              <div class="lg:col-span-2"><label class="block text-xs font-bold text-slate-600 mb-1">⑥ 特別希望考哪些重點？（選填）</label><input id="ai-focus-${c.id}" type="text" maxlength="500" placeholder="例如：故障排除、QC 設定、法定傳染病通報；留白則由 AI 自動抓重點" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"></div>
+                              <div><label class="block text-xs font-bold text-slate-600 mb-1">⑥ 出題策略</label><select id="ai-strategy-${c.id}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"><option value="auto" selected>✨ 自動依教材判斷</option><option value="balanced">均衡涵蓋</option><option value="workflow">操作流程</option><option value="scenario">情境／故障排除</option><option value="safety">安全／品質／通報</option><option value="recognition">辨識／圖像判讀</option><option value="regulation">法規／SOP</option></select></div>
+                              <div class="lg:col-span-2"><label class="block text-xs font-bold text-slate-600 mb-1">⑦ 特別希望考哪些重點？（選填）</label><input id="ai-focus-${c.id}" type="text" maxlength="500" placeholder="例如：故障排除、QC 設定、法定傳染病通報；留白則由 AI 自動抓重點" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"></div>
                           </div>
                           <div class="flex items-center gap-3 flex-wrap"><button id="ai-generate-${c.id}" data-csp-click="adminGenerateAiQuestions('${c.id}')" class="bg-violet-700 hover:bg-violet-600 text-white px-4 py-2.5 rounded-xl text-sm font-black">✨ 產生候選題</button><span id="ai-progress-${c.id}" class="text-xs text-violet-700"></span></div>
                           <div id="ai-progress-wrap-${c.id}" class="hidden rounded-xl border border-violet-100 bg-violet-50/70 p-3">
@@ -408,6 +408,14 @@
     }
   },true);
 
+  window.adminOpenExamPublish=async function(catId){
+    // 「發布」直接進到該考卷的「設定與發布」，不用再多點一次。
+    try{
+      if(typeof window.openTeacherContentExam!=='function')return window.toggleQuizQuestionsPanel?.(catId);
+      await window.openTeacherContentExam(catId);
+      window.teacherContentStudioExamAction?.('settings',catId);
+    }catch(e){alert(`❌ ${e.message||'無法開啟考卷設定'}`);}
+  };
   window.adminQuickReviewExam=async function(catId){
     if(!confirm('確定送審這份考卷？系統會檢查所有啟用中的題目（題幹、選項、問答題評分參考）。通過後再按「發布」即可。'))return;
     try{

@@ -57,8 +57,9 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         ai = ROOT.joinpath('static/admin-ai-questions.js').read_text(encoding='utf-8')
         panels = ROOT.joinpath('static/teacher-content-tool-panels-710.js').read_text(encoding='utf-8')
         csp = ROOT.joinpath('static/system-csp-actions.js').read_text(encoding='utf-8')
+        self.assertIn('data-csp-click="aiGoBackToExam(', ai)
+        self.assertNotIn('data-csp-click="aiGoReviewQuestions(', ai)  # 只保留一個「返回考卷」
         for action in ('aiGoReviewQuestions', 'aiGoBackToExam'):
-            self.assertIn(f'data-csp-click="{action}(', ai)
             self.assertIn(f"window.{action}=", ai)
             self.assertIn(f"'{action}'", csp)
         self.assertIn('returnToExam\n  };', panels)
@@ -104,6 +105,8 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         csp = ROOT.joinpath('static/system-csp-actions.js').read_text(encoding='utf-8')
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
         self.assertIn('adminQuickReviewExam', bank)
+        self.assertIn('adminOpenExamPublish', bank)
+        self.assertIn("'adminOpenExamPublish'", csp)
         self.assertIn("'adminQuickReviewExam'", csp)
         self.assertIn("pk('qselected')", editor)
 
@@ -113,6 +116,14 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         self.assertIn('id="qform-${c.id}-audience"', bank)
         self.assertIn('qform-${catId}-audience', actions)
         self.assertIn('/api/content-audience/questions/', actions)
+
+    def test_question_edit_boxes_use_visible_copy(self):
+        editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
+        actions = ROOT.joinpath('static/admin-question-actions.js').read_text(encoding='utf-8')
+        self.assertIn('window.pickQuestionEditBox', editor)
+        self.assertNotIn('document.getElementById(`qedit-${qId}`)', editor)
+        self.assertIn('pickQuestionEditBox(qId)', actions)
+        self.assertIn("pickQuestionEl('qsticky-msg',catId)", actions)
 
     def test_mobile_question_actions_are_collapsed(self):
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')

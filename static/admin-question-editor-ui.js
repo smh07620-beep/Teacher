@@ -46,7 +46,7 @@
   };
 
   window.adminInlineQuestionTypeChanged = function(qId){
-    const box=document.getElementById(`qedit-${qId}`);
+    const box=window.pickQuestionEditBox(qId);
     if(!box) return;
     const type=box.querySelector('[data-field="questionType"]')?.value||'choice';
     const toggle=(role,show)=>box.querySelector(`[data-role="${role}"]`)?.classList.toggle('hidden',!show);
@@ -75,6 +75,13 @@
     </div>`;
   };
 
+  // 題庫面板可能有兩份（隱藏的＋搬進工作畫面的），編輯區也會重複；優先取在看得見的面板裡的那份。
+  window.pickQuestionEditBox = function(qId){
+    const list=document.querySelectorAll(`[id="qedit-${String(qId).replace(/"/g,'\\"')}"]`);
+    for(const el of list){ if(el.getClientRects().length||el.parentElement?.getClientRects().length) return el; }
+    return list[0]||null;
+  };
+
   window.adminSelectedQuestionIds = function(catId){
     return [...document.querySelectorAll(`.qselect-${catId}:checked`)].map(x=>x.dataset.qid).filter(Boolean);
   };
@@ -99,7 +106,7 @@
   };
 
   window.adminToggleInlineQuestionEditor = function(qId,catId,open=true){
-    const el=document.getElementById(`qedit-${qId}`);
+    const el=window.pickQuestionEditBox(qId);
     if(!el) return;
     el.classList.toggle('hidden',!open);
     if(open){
@@ -115,7 +122,7 @@
     if(!ids.length){alert('請先勾選要編輯的題目，或按「全選編輯」。');return;}
     if(ids.length>80&&!confirm(`即將一次展開 ${ids.length} 題，頁面可能較長，是否繼續？`)) return;
     ids.forEach(id=>window.adminToggleInlineQuestionEditor(id,catId,true));
-    document.getElementById(`qedit-${ids[0]}`)?.scrollIntoView({behavior:'smooth',block:'center'});
+    window.pickQuestionEditBox(ids[0])?.scrollIntoView({behavior:'smooth',block:'center'});
   };
 
   // 同一份考卷的題庫面板可能同時存在兩份（隱藏的原始面板＋搬進工作畫面的那份），id 會重複；

@@ -8,7 +8,7 @@
   const actionBusy=new Set();
   let bulkBusy=false;
 
-  function editor(qId){ return document.getElementById(`qedit-${qId}`); }
+  function editor(qId){ return (window.pickQuestionEditBox&&window.pickQuestionEditBox(qId))||document.getElementById(`qedit-${qId}`); }
   function field(qId,name){ return editor(qId)?.querySelector(`[data-field="${name}"]`); }
 
   window.adminBuildQuestionPayload = function(qId){
@@ -150,7 +150,7 @@
   };
 
   window.adminSaveExpandedQuestionEdits = async function(catId){
-    const say=(text,bad)=>{const m=document.getElementById(`qsticky-msg-${catId}`);if(m){m.textContent=text;m.className=`text-[11px] ${bad?'text-rose-600 font-bold':'text-slate-500'}`;}};
+    const say=(text,bad)=>{const m=(window.pickQuestionEl?window.pickQuestionEl('qsticky-msg',catId):null)||document.getElementById(`qsticky-msg-${catId}`);if(m){m.textContent=text;m.className=`text-[11px] ${bad?'text-rose-600 font-bold':'text-slate-500'}`;}};
     const open=[...document.querySelectorAll('[id^="qedit-"]')].filter(el=>el.getClientRects().length).map(el=>el.id.slice(6));
     const ids=[...new Set(open)].filter(id=>document.querySelector(`.qselect-${catId}[data-qid="${id}"]`));
     if(!ids.length){say('目前沒有正在編輯的題目：請先按某題右邊的「✏️ 編輯」，修改後再按儲存。',true);return;}
@@ -163,8 +163,9 @@
       return;
     }
     window.setQuestionBulkBusy(catId,true,`儲存 ${items.length} 題中…`);
-    const progress=document.getElementById(`qbulk-progress-${catId}`);
+    const progress=(window.pickQuestionEl?window.pickQuestionEl('qbulk-progress',catId):null)||document.getElementById(`qbulk-progress-${catId}`);
     if(progress)progress.textContent=`⏳ 儲存 ${items.length} 題中…`;
+    say(`⏳ 儲存 ${items.length} 題中…`,false);
     try{
       const r=await fetch('/api/quiz-questions/batch',{
         method:'PATCH',
