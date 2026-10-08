@@ -193,9 +193,9 @@ def run_with_fallback(
                 value = caller()
             except Exception as first_exc:
                 # 免費雲端常只是「每分鐘」上限：等一下重試同一家，通常就過了，
-                # 不必馬上換到很慢的本機 AI。只重試一次，且只針對 429 類錯誤。
+                # 不必馬上換到很慢的本機 AI。只重試一次，且只針對 429／5xx（服務忙碌）類錯誤。
                 wait = _rate_limit_retry_seconds()
-                if provider == "ollama" or wait <= 0 or describe_provider_error(first_exc) != "額度或速率限制（429）":
+                if provider == "ollama" or wait <= 0 or describe_provider_error(first_exc) not in {"額度或速率限制（429）", "服務暫時故障（5xx）"}:
                     raise
                 LOGGER.warning("AI provider rate limited; retrying once provider=%s wait=%s", provider, wait)
                 time.sleep(wait)
