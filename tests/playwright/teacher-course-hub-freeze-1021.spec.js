@@ -55,7 +55,7 @@ test('large internal course scope stays interactive without summary warnings', a
     await document.getElementById('admin-course-material-hub')._adminCourseMaterialRefresh;
   });
   await expect(page.locator('.admin-course-list > details')).toHaveCount(30);
-  await expect(page.locator('.admin-course-list > details').first().locator('[data-teacher-manage-course-1014]')).toHaveCount(1);
+  await expect(page.locator('.admin-course-list > details').first().locator('[data-teacher-course-actions-1014]')).toHaveCount(1);
   await expect(page.locator('.admin-course-list > details summary button')).toHaveCount(0);
   const initialNodeCount = await page.locator('#admin-course-material-hub *').count();
   await page.locator('#wizard-area').selectOption('internal');
@@ -63,10 +63,10 @@ test('large internal course scope stays interactive without summary warnings', a
   await expect(page.locator('.admin-course-list > details').first().locator('[data-learning-assign-course]')).toHaveAttribute('data-learning-assign-course', 'internal-0');
   await page.getByRole('button', { name: /顯示更多課程/ }).click();
   await expect(page.locator('.admin-course-list > details')).toHaveCount(60);
-  expect(await page.locator('.admin-course-list > details').evaluateAll(cards => cards.every(card => card.querySelectorAll('[data-teacher-manage-course-1014]').length === 1))).toBe(true);
+  expect(await page.locator('.admin-course-list > details').evaluateAll(cards => cards.every(card => card.querySelectorAll('[data-teacher-course-actions-1014]').length === 1))).toBe(true);
   for (const area of ['pgy', 'internal', 'pgy', 'internal']) {
     await page.locator('#wizard-area').selectOption(area);
-    await expect(page.locator('.admin-course-list > details').first().locator('[data-teacher-manage-course-1014]')).toHaveCount(1);
+    await expect(page.locator('.admin-course-list > details').first().locator('[data-teacher-course-actions-1014]')).toHaveCount(1);
   }
   await page.evaluate(async () => {
     await document.getElementById('admin-course-material-hub')._adminCourseMaterialRefresh;
@@ -77,8 +77,8 @@ test('large internal course scope stays interactive without summary warnings', a
   const firstCourse = page.locator('.admin-course-list > details').first();
   if (!(await firstCourse.getAttribute('open'))) await firstCourse.locator('summary').click();
   await expect(firstCourse).toHaveAttribute('open', '');
-  await firstCourse.locator('[data-teacher-manage-course-1014]').click();
-  await expect(firstCourse.locator('[data-teacher-course-tools-1014]')).toBeVisible();
+  await firstCourse.locator('[data-teacher-course-more-1014] > summary').click();
+  await expect(firstCourse.locator('[data-teacher-course-more-menu-1014]')).toBeVisible();
   await firstCourse.locator('[data-teacher-course-media-1014]').click();
   expect(await page.evaluate(() => window.mediaOpened)).toBe(true);
   await page.locator('#teacher-course-advanced-tools-1014 > summary').click();

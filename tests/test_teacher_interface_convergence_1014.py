@@ -56,27 +56,25 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
         self.assertNotIn("Word → 圖譜", UI)
         self.assertNotIn("TeacherWorkspace1014?.openPresentation", UI)
 
-    def test_course_card_has_single_management_entry(self):
-        self.assertIn("data-teacher-manage-course-1014", UI)
-        self.assertIn("管理課程", UI)
-        self.assertIn("內容編排", UI)
+    def test_course_card_has_compact_action_group(self):
+        self.assertIn("data-teacher-course-actions-1014", UI)
+        self.assertIn("data-teacher-course-more-1014", UI)
+        self.assertIn("編輯課程", UI)
         self.assertIn("學習指派", UI)
         self.assertIn("AI／影音製作", UI)
         self.assertIn("刪除課程", UI)
         self.assertIn("button.classList.add('hidden')", UI)
-        self.assertIn("setAttribute('data-teacher-manage-course-1014', '1')", UI)
+        self.assertIn("setAttribute('data-teacher-course-actions-1014', '1')", UI)
 
-    def test_course_tools_panel_keeps_numeric_suffix_separator_in_data_attribute(self):
-        self.assertIn("panel.setAttribute('data-teacher-course-tools-1014', '1')", UI)
-        self.assertNotIn("panel.dataset.teacherCourseTools1014 = '1'", UI)
+    def test_course_card_no_longer_has_duplicate_manage_panel(self):
+        self.assertNotIn("'管理課程'", UI)
+        self.assertNotIn("內容編排", UI)
+        self.assertNotIn("panel.setAttribute('data-teacher-course-tools-1014', '1')", UI)
+        self.assertNotIn("currentPanel.classList.toggle('hidden')", UI)
 
-    def test_course_manage_button_resolves_the_current_panel_after_rerender(self):
-        self.assertIn(
-            "const currentPanel = details.querySelector(':scope > div.grid.border-t > [data-teacher-course-tools-1014]')",
-            UI,
-        )
-        self.assertIn("currentPanel.classList.toggle('hidden')", UI)
-        self.assertNotIn("panel.classList.toggle('hidden');", UI)
+    def test_course_card_keeps_single_action_group_after_rerender(self):
+        self.assertIn("details.querySelectorAll('[data-teacher-course-actions-1014]')", UI)
+        self.assertIn("groups.forEach(node => node.remove())", UI)
 
     def test_course_card_reconciliation_is_not_deferred_to_animation_frame(self):
         observer = UI[UI.index("state.courseObserver = new MutationObserver"):UI.index("    // MutationObserver callbacks run")]
