@@ -18,6 +18,14 @@ test('media shell removes the legacy source placeholder across workspace hydrati
       hasPermission: permission => ['course.manage', 'material.manage'].includes(permission)
     });
     window.switchAdminWorkspace = async () => {};
+    // teacher-workspace-1014.js reads the shared route table at start-up and
+    // opens the media workspace through it, so this minimal page must provide it.
+    window.AppWorkspaceRoutes = {
+      DEFAULT_WORKSPACE: 'course-materials',
+      names: () => ['course-materials', 'teacher', 'assessment', 'results', 'system'],
+      isSystem: name => name === 'system',
+      show: async () => {}
+    };
     window.AdminWorkspaceShell = { addAfterWorkspace(callback) { window.afterWorkspace = callback; } };
   });
 
