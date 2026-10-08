@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+from pathlib import Path
 
 from flask import g, jsonify, request
 
@@ -54,6 +55,13 @@ def _kokoro_capability(capabilities: dict) -> bool | None:
             if key in tts:
                 return bool(tts.get(key))
     return None
+
+
+def _web_version() -> str:
+    try:
+        return Path(__file__).resolve().parents[2].joinpath("VERSION").read_text(encoding="utf-8").strip()[:32]
+    except OSError:
+        return ""
 
 
 def _default_ai_worker_status() -> dict:
@@ -160,13 +168,14 @@ def _evaluate_ai_worker(row: dict, capabilities: dict, latest_seen) -> dict:
             "請更新院內 Teacher 專案到目前 main 並重新啟動 Teacher AI Worker；"
             "新版 Worker 會回報 heartbeat contract 4 與 workerSha。"
         )
-    elif code_identity_match is False:
+    elif code_identity_match is False and _web_version() and worker_version and worker_version != _web_version():
+        # 大版本（VERSION）不同才擋；一般的小改動（commit 不同）只提醒，不阻擋。
         online = False
         diagnostic_code = "worker_code_mismatch"
         diagnostic_message = (
-            f"AI Worker 程式版本與目前 Render 不一致（Worker {worker_sha[:12] or 'unknown'} / "
-            f"Web {web_sha[:12] or 'unknown'}）。請先更新院內 Teacher 專案到目前 main，"
-            "再重新啟動 Teacher AI Worker；版本一致前不再送 Kokoro 工作。"
+            f"AI Worker 版本 {worker_version} 與網站版本 {_web_version()} 不同"
+            f"（Worker {worker_sha[:12] or 'unknown'} / Web {web_sha[:12] or 'unknown'}）。"
+            "請更新院內 Teacher 專案到目前 main，再重新啟動 Teacher AI Worker。"
         )
     elif kokoro_installed is False:
         diagnostic_code = "kokoro_unavailable"
@@ -179,6 +188,13 @@ def _evaluate_ai_worker(row: dict, capabilities: dict, latest_seen) -> dict:
         diagnostic_message = (
             "AI Worker 已回報，但沒有 Kokoro capability 資訊。"
             "請更新院內 Worker 程式與 AI dependencies 後重啟。"
+        )
+
+    if diagnostic_code == "worker_ready" and code_identity_match is False:
+        diagnostic_code = "worker_code_behind"
+        diagnostic_message = (
+            f"AI Worker 可使用，但程式比網站舊一點（Worker {worker_sha[:12]} / Web {web_sha[:12]}）。"
+            "不影響使用；方便時再更新 Worker 即可。"
         )
 
     status.update({
