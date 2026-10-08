@@ -167,6 +167,50 @@ def _provider_label(provider: str) -> str:
     return {"groq": "Groq", "gemini": "Gemini", "ollama": "本機 AI", "openai": "OpenAI"}.get(provider, "AI")
 
 
+_MEDIA_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".webp", ".gif",
+    ".mp4", ".webm", ".mov", ".m4v",
+    ".mp3", ".wav", ".m4a", ".ogg",
+}
+
+
+def entries_need_multimodal(entries, qtype: str = "") -> bool:
+    """True when the selected sources are standalone image/audio/video files.
+
+    PPT/PDF pictures are never sent to the model (only their text is), so a deck
+    full of screenshots does not count as multimodal input.
+    """
+    if str(qtype or "").startswith("video_"):
+        return True
+    for entry in entries or []:
+        if not isinstance(entry, Mapping):
+            continue
+        name = str(entry.get("filename") or entry.get("title") or "").lower()
+        if any(name.endswith(ext) for ext in _MEDIA_EXTENSIONS):
+            return True
+    return False
+
+
+def choose_auto_primary(entries, *, qtype: str, count, settings, local=None) -> str:
+    """Pick the first provider per request when AI_PROVIDER=auto.
+
+    - image/audio/video sources, or 10+ question batches -> Gemini (large context,
+      sees media) when it is configured.
+    - otherwise -> Groq (fast, plenty of daily requests) when configured.
+    """
+    gemini_ok = _cloud_provider_ready("gemini", settings)
+    groq_ok = _cloud_provider_ready("groq", settings)
+    try:
+        wanted = int(count)
+    except (TypeError, ValueError):
+        wanted = 5
+    if gemini_ok and (entries_need_multimodal(entries, qtype) or wanted > 5):
+        return "gemini"
+    if groq_ok:
+        return "groq"
+    return "gemini" if gemini_ok else "groq"
+
+
 def run_with_fallback(
     primary: str,
     *,
@@ -378,7 +422,16 @@ def install_question_runtime_fallback(runtime):
     def generate(entries, **kwargs):
         settings = ai_runtime.ai_settings()
         local = LocalFallbackSettings.from_env()
-        primary = str(original_provider() or settings.provider or "groq").lower()
+        native = str(original_provider() or settings.provider or "groq").lower()
+        primary = native
+        if str(settings.provider or "").lower() == "auto":
+            primary = choose_auto_primary(
+                entries,
+                qtype=str(kwargs.get("qtype") or ""),
+                count=kwargs.get("count", 5),
+                settings=settings,
+                local=local,
+            )
         progress_callback = kwargs.get("progress_callback")
         progress_id = str(kwargs.get("progress_id") or "")
 
@@ -392,7 +445,7 @@ def install_question_runtime_fallback(runtime):
                 progress_callback(progress_id, 58, "切換免費 AI 備援", f"嘗試順序：{path}{slow}。")
 
         def canonical(provider: str):
-            if provider == primary:
+            if provider == native:
                 return original_generate(entries, **kwargs)
             provider_settings = replace(settings, provider=provider)
             return ai_runtime.generate_ai_questions_from_materials(

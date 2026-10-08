@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -234,6 +235,23 @@ class FreeAIFallbackTests(unittest.TestCase):
         self.assertEqual(meta["provider"], "groq")
         self.assertFalse(meta["fallbackUsed"])
         sleep.assert_called_once_with(1)
+
+    def test_auto_routing_uses_gemini_for_media_or_big_batches_else_groq(self):
+        settings = self._settings()
+        with patch.object(free_ai_fallback.ai_runtime, "google_genai", object()), \
+                patch.object(free_ai_fallback.ai_runtime, "google_genai_types", object()), \
+                patch.object(free_ai_fallback.ai_privacy, "external_enabled", return_value=True):
+            pick = free_ai_fallback.choose_auto_primary
+            text = [{"filename": "課程.pptx"}]
+            self.assertEqual(pick(text, qtype="choice", count=5, settings=settings), "groq")
+            self.assertEqual(pick(text, qtype="choice", count=10, settings=settings), "gemini")
+            self.assertEqual(pick([{"filename": "影片.mp4"}], qtype="choice", count=5, settings=settings), "gemini")
+            self.assertEqual(pick([{"filename": "圖.png"}], qtype="choice", count=3, settings=settings), "gemini")
+            self.assertEqual(pick(text, qtype="video_mixed", count=3, settings=settings), "gemini")
+            # PPT 內的圖片不會送給模型，所以不算多模態。
+            self.assertFalse(free_ai_fallback.entries_need_multimodal(text, "choice"))
+            no_gemini = replace(settings, gemini_api_key="")
+            self.assertEqual(pick(text, qtype="choice", count=10, settings=no_gemini), "groq")
 
 
 if __name__ == "__main__":
