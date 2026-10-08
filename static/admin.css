@@ -1043,3 +1043,10 @@ body.notification-center-open-71 {
         justify-content: flex-end;
     }
 }
+
+/* Course overview cards: the 更多 menu of a material row hangs below the card, so
+ * the card must not clip it. Rounded corners are applied to the children instead. */
+details[data-course-id] > summary { border-radius: 1rem; }
+details[data-course-id][open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+details[data-course-id][open] > :last-child { border-bottom-left-radius: 1rem; border-bottom-right-radius: 1rem; }
+details[data-course-id] [data-material-more][open] { position: relative; z-index: 30; }

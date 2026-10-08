@@ -249,6 +249,19 @@
     };
   }
 
+  // The course overview menu (更多 → 設定可見範圍) uses the same editor as the
+  // full material list.
+  document.addEventListener('click', event => {
+    const trigger = event.target.closest?.('[data-material-audience]');
+    if (!trigger || !canMaterials) return;
+    event.preventDefault();
+    const id = trigger.dataset.materialAudience;
+    const cached = Array.isArray(adminMaterialsCache?.data) ? adminMaterialsCache.data : [];
+    const item = cached.find(entry => String(entry.id) === String(id));
+    trigger.closest('details')?.removeAttribute('open');
+    if (item) void editMaterialAudience(id, item);
+  });
+
   ensureUploadNotice();
   decorateMaterials();
   window.ContentAudience1014 = Object.freeze({
