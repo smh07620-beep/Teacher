@@ -665,8 +665,12 @@ function buildUploadForm(file,index,meta,{area,group,desc,courseId,categoryId,wo
   form.append('courseId',courseId);
   form.append('category',categoryId);
   form.append('materialType',meta.materialType||'auto');
-  form.append('bundleWorkflowId',workflowId);
-  form.append('bundleFileIndex',String(index));
+  // 只有「建立課程當下」的上傳才綁定已完成的建立流程；之後補傳到既有課程時沒有這個流程，
+  // 帶上新編號會被伺服器以 409「找不到已完成的課程建立流程」拒絕，所以改走一般上傳。
+  if(workflowId){
+    form.append('bundleWorkflowId',workflowId);
+    form.append('bundleFileIndex',String(index));
+  }
   form.append('bundleFileSize',String(file.size||0));
   form.append('bundleFileLastModified',String(file.lastModified||0));
   return form;
@@ -987,7 +991,7 @@ async function addFilesToCourse(){
   const {area,group}=scope(),desc=String(state.course.desc||'');
   const status=el('cw681-status');setBusy(true);
   try{
-    const result=await uploadEntries(entries,{area,group,desc,courseId:state.course.id,categoryId:state.categoryId,workflowId:newWorkflowId()},status);
+    const result=await uploadEntries(entries,{area,group,desc,courseId:state.course.id,categoryId:state.categoryId,workflowId:''},status);
     state.failedUploads=[...state.failedUploads,...result.errors];
     state.expectedJobs+=result.uploaded;
     state.queuedJobs.push(...result.jobs);
