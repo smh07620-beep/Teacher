@@ -1,7 +1,7 @@
 /* Teacher 10/14 interface convergence.
  * Keep existing capabilities intact while reducing top-level choices:
  * - Media production lives under 教材與課程 instead of a separate main nav entry.
- * - Each course exposes one 管理課程 entry, with editing/assignment/delete nested inside.
+ * - Each course card shows 編輯課程 / 學習指派 / 學習追蹤 and one 更多 menu (lifecycle, delete); media is reached from the course wizard.
  * - Kokoro voice IDs remain internal values for debugging but are not shown to teachers.
  */
 (function () {
@@ -108,6 +108,15 @@
     button.click();
   }
 
+  function makeCardButton(label, className, handler) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.textContent = label;
+    button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); handler(); });
+    return button;
+  }
+
   function convergeCourseCard(details) {
     const summary = details?.querySelector(':scope > summary');
     const body = details?.querySelector(':scope > div.grid.border-t');
@@ -122,102 +131,90 @@
     const actionHost = (edit || assignment || remove)?.parentElement;
     if (!actionHost) return;
 
+    // Legacy buttons stay in the DOM (they own the real handlers) but are
+    // hidden; the card shows one compact set instead of a second panel.
     [assignment, edit, remove].filter(Boolean).forEach(button => {
       button.classList.add('hidden');
       button.tabIndex = -1;
       button.setAttribute('aria-hidden', 'true');
     });
+    // The old 管理課程 toggle panel duplicated these same buttons.
+    body.querySelector(':scope > [data-teacher-course-tools-1014]')?.remove();
+    details.querySelectorAll('[data-teacher-manage-course-1014]').forEach(node => node.remove());
 
-    let panel = body.querySelector(':scope > [data-teacher-course-tools-1014]');
-    if (!panel) {
-      panel = document.createElement('section');
-      // dataset camel-casing would serialize this as data-teacher-course-tools1014.
-      // Keep the public selector contract explicit, including the separator
-      // before the numeric suffix.
-      panel.setAttribute('data-teacher-course-tools-1014', '1');
-      panel.className = 'hidden lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-4';
-      const title = document.createElement('div');
-      title.className = 'text-xs font-black text-slate-800';
-      title.textContent = '課程管理';
-      const actions = document.createElement('div');
-      actions.className = 'mt-3 flex flex-wrap gap-2';
-
+    // The card owns one compact action group. A legacy re-render can move the
+    // action host, so keep the first group, drop stale copies and re-home it.
+    const groups = [...details.querySelectorAll('[data-teacher-course-actions-1014]')];
+    let group = groups.shift();
+    groups.forEach(node => node.remove());
+    if (group && group.parentElement !== actionHost) actionHost.appendChild(group);
+    if (!group) {
+      group = document.createElement('div');
+      group.setAttribute('data-teacher-course-actions-1014', '1');
+      group.className = 'flex flex-wrap items-center gap-2';
       if (edit) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'rounded-xl bg-violet-700 px-3 py-2 text-xs font-black text-white';
-        button.textContent = '✏️ 內容編排';
-        button.addEventListener('click', event => { event.preventDefault(); invokeOriginal(edit); });
-        actions.appendChild(button);
+        const button = makeCardButton('編輯課程', 'teaching-primary', () => {
+          const courseId = String(details.dataset.courseId || '');
+          // 編輯課程 reopens the course wizard (single authoring path); the legacy
+          // plan dialog stays reachable from inside the wizard as a fallback.
+          if (courseId && typeof window.openTeacherCourseEditWorkspace === 'function') {
+            void window.openTeacherCourseEditWorkspace(courseId, 2);
+          } else {
+            invokeOriginal(edit);
+          }
+        });
+        button.setAttribute('data-teacher-edit-course-1014', '1');
+        group.appendChild(button);
       }
       if (assignment) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'rounded-xl bg-teal-700 px-3 py-2 text-xs font-black text-white';
-        button.textContent = '👥 學習指派';
-        button.addEventListener('click', event => { event.preventDefault(); invokeOriginal(assignment); });
-        actions.appendChild(button);
+        const button = makeCardButton('學習指派', 'rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-bold text-white', () => invokeOriginal(assignment));
+        button.setAttribute('data-teacher-assign-course-1014', '1');
+        group.appendChild(button);
       }
-      const mediaButton = document.createElement('button');
-      mediaButton.type = 'button';
-      mediaButton.setAttribute('data-teacher-course-media-1014', '1');
-      mediaButton.className = 'rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-black text-violet-700';
-      mediaButton.textContent = '✨ AI／影音製作';
-      mediaButton.addEventListener('click', async event => {
-        event.preventDefault();
-        await window.TeacherWorkspace1014?.openMedia?.();
-        convergeTeacherNavigation();
-        installVoicePrivacy();
-      });
-      actions.appendChild(mediaButton);
+
+      const more = document.createElement('details');
+      more.setAttribute('data-teacher-course-more-1014', '1');
+      more.className = 'relative';
+      const moreSummary = document.createElement('summary');
+      moreSummary.className = 'cursor-pointer list-none select-none rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700';
+      moreSummary.textContent = '⋯ 更多';
+      moreSummary.setAttribute('aria-label', '更多課程操作');
+      const menu = document.createElement('div');
+      menu.setAttribute('data-teacher-course-more-menu-1014', '1');
+      menu.className = 'absolute right-0 z-20 mt-1 flex w-44 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg';
+      const lifecycleSlot = document.createElement('div');
+      lifecycleSlot.setAttribute('data-teacher-course-lifecycle-slot-1014', '1');
+      lifecycleSlot.className = 'flex flex-col gap-1 [&_button]:w-full [&_button]:text-left';
+      menu.appendChild(lifecycleSlot);
       if (remove) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-700';
-        button.textContent = '刪除課程';
-        button.addEventListener('click', event => { event.preventDefault(); invokeOriginal(remove); });
-        actions.appendChild(button);
+        const divider = document.createElement('div');
+        divider.className = 'my-0.5 border-t border-slate-100';
+        menu.appendChild(divider);
+        menu.appendChild(makeCardButton('🗑️ 刪除課程', 'w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 font-bold text-rose-700', () => { more.open = false; invokeOriginal(remove); }));
       }
-
-      panel.append(title, actions);
-      body.insertBefore(panel, body.firstChild);
+      more.append(moreSummary, menu);
+      group.appendChild(more);
+      actionHost.appendChild(group);
     }
 
-    // A legacy re-render can move the action host while leaving our previous
-    // button behind in the card.  The card, not a transient host, owns this
-    // singleton.  Keep the first existing button (and its click listener),
-    // remove stale copies, then move it to the current host.
-    const manages = [...details.querySelectorAll('[data-teacher-manage-course-1014]')];
-    let manage = manages.shift();
-    manages.forEach(node => node.remove());
-    if (manage && manage.parentElement !== actionHost) actionHost.appendChild(manage);
-    if (!manage) {
-      manage = document.createElement('button');
-      manage.type = 'button';
-      // Keep the public selector stable. dataset camel-casing cannot express
-      // the separator before the numeric suffix in data-*-1014.
-      manage.setAttribute('data-teacher-manage-course-1014', '1');
-      manage.className = 'teaching-primary';
-      manage.textContent = '管理課程';
-      manage.addEventListener('click', event => {
-        event.preventDefault();
-        event.stopPropagation();
-        details.open = true;
-        // The course renderer can replace only the card body while keeping this
-        // management button alive. Resolve the panel from the current DOM on
-        // every click instead of closing over the panel created earlier.
-        const currentPanel = details.querySelector(':scope > div.grid.border-t > [data-teacher-course-tools-1014]');
-        if (!currentPanel) {
-          convergeCourseCard(details);
-          return;
-        }
-        currentPanel.classList.toggle('hidden');
-        manage.setAttribute('aria-expanded', currentPanel.classList.contains('hidden') ? 'false' : 'true');
-        if (!currentPanel.classList.contains('hidden')) currentPanel.scrollIntoView?.({block: 'nearest', behavior: 'smooth'});
-      });
-      manage.setAttribute('aria-expanded', 'false');
-      actionHost.appendChild(manage);
+    // Lifecycle: the next step of a draft/ready course (發布檢查／正式發布) stays
+    // visible; end/archive/reopen move into 更多.
+    const lifecycle = actionHost.querySelector('[data-course-lifecycle-actions]') || details.querySelector('[data-course-lifecycle-actions]');
+    const status = String(details.dataset.courseLifecycle || 'draft');
+    const slot = group.querySelector('[data-teacher-course-lifecycle-slot-1014]');
+    if (lifecycle && slot) {
+      const primaryStep = status === 'draft' || status === 'ready';
+      if (primaryStep) {
+        if (lifecycle.parentElement !== group) group.insertBefore(lifecycle, group.firstChild);
+      } else if (lifecycle.parentElement !== slot) {
+        slot.appendChild(lifecycle);
+      }
     }
+    // 學習追蹤 is added by teacher-course-tracking-f2.js into the bar; keep it
+    // next to the other primary actions, ahead of 更多.
+    const tracking = actionHost.querySelector('[data-course-tracking-f2]');
+    const moreNode = group.querySelector('[data-teacher-course-more-1014]');
+    if (tracking && moreNode && tracking.parentElement !== group) group.insertBefore(tracking, moreNode);
   }
 
   function convergeCourseSurface() {

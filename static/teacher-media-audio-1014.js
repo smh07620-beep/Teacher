@@ -220,6 +220,14 @@
       if (data.status === 'completed') {
         setBusy(false);
         showResult(data);
+        try {
+          const done = data?.result || {};
+          const doneMaterial = done.material || {};
+          window.dispatchEvent(new CustomEvent('teacher-ai-narration-published', {detail: {
+            materialId: String(done.materialId || doneMaterial.id || ''),
+            title: String(doneMaterial.title || doneMaterial.filename || 'AI 講稿配音'),
+          }}));
+        } catch (_) {}
         window.invalidateAdminMaterialsCache?.();
         void window.renderAdminCourseMaterialHub?.(true);
         void window.renderSlidesGrid?.();

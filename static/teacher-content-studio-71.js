@@ -594,6 +594,21 @@
     return true;
   }
 
+  async function openCourseEditWorkspace(courseId,step=2){
+    if(!canCourse()){window.teachingEditCourse?.(courseId);return false;}
+    if(!await ensureWorkspacePage('course-materials'))return false;
+    openStudio('course-materials','教材與課程｜編輯課程','從任一步修改這門課：教材、AI 製作、考卷、學習指派；完成後回到課程列表。');
+    await mountCourseWizardInStudio();
+    const opened=await window.courseWizard681EditCourse?.(courseId,step);
+    if(!opened){
+      // Nothing was loaded (e.g. an unfinished new course or a failed read): leave the studio
+      // instead of showing an empty "create course" wizard under an "edit" title.
+      window.teacherContentStudioClose?.(false);
+      return false;
+    }
+    return true;
+  }
+
   async function openMaterialCreateWorkspace(){
     if(!canMaterial())return false;
     if(!await ensureWorkspacePage('course-materials'))return false;
@@ -617,6 +632,7 @@
   };
   window.openTeacherAssessmentWorkspace=openAssessmentManagerWorkspace;
   window.openTeacherCourseCreateWorkspace=openCourseCreateWorkspace;
+  window.openTeacherCourseEditWorkspace=openCourseEditWorkspace;
   window.openTeacherCourseMediaAuthoring=openCourseMediaAuthoring;
   window.openTeacherCourseAssessmentAuthoring=openCourseAssessmentAuthoring;
   window.returnTeacherCourseAuthoringStep=returnToCourseAuthoring;

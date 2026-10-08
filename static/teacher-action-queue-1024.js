@@ -212,6 +212,10 @@
   async function openDraft(item) {
     await refreshCourseHub(item);
     const courseId = String(item.courseId || item.resourceId || item.id || '');
+    if (courseId && typeof window.openTeacherCourseEditWorkspace === 'function') {
+      await window.openTeacherCourseEditWorkspace(courseId, 2);
+      return;
+    }
     if (courseId && typeof window.teachingEditCourse === 'function') {
       window.teachingEditCourse(courseId);
       return;

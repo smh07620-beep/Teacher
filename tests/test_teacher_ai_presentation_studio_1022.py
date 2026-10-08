@@ -58,7 +58,7 @@ class TeacherAiPresentationStudio1022Tests(unittest.TestCase):
 
     def test_course_manage_button_reconciles_at_card_scope(self):
         source = (ROOT / "static" / "teacher-interface-convergence-1014.js").read_text(encoding="utf-8")
-        for marker in ("details.querySelectorAll('[data-teacher-manage-course-1014]')", "manages.forEach(node => node.remove())", "manage.parentElement !== actionHost"):
+        for marker in ("details.querySelectorAll('[data-teacher-course-actions-1014]')", "groups.forEach(node => node.remove())", "group.parentElement !== actionHost"):
             self.assertIn(marker, source)
 
     def test_media_loading_has_one_presentation_owner_and_bounded_requests(self):
