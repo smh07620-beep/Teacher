@@ -188,6 +188,27 @@ class FreeAIFallbackTests(unittest.TestCase):
         self.assertEqual(runtime.ai_model_name(), "gemini-model")
         self.assertEqual(len(original_calls), 1)
 
+    def test_fallback_notice_names_the_reason(self):
+        import requests
+        self.assertIn("429", free_ai_fallback.describe_provider_error(RuntimeError("HTTP 429 RESOURCE_EXHAUSTED")))
+        self.assertEqual(free_ai_fallback.describe_provider_error(requests.Timeout("x")), "連線逾時")
+        self.assertIn("5xx", free_ai_fallback.describe_provider_error(RuntimeError("503 Service Unavailable")))
+        seen = []
+
+        def fail():
+            raise RuntimeError("429 quota")
+
+        with patch.object(free_ai_fallback, "provider_chain", return_value=["gemini", "ollama"]):
+            free_ai_fallback.run_with_fallback(
+                "gemini",
+                cloud_callers={"gemini": fail},
+                local_caller=lambda: "ok",
+                settings=self._settings(),
+                local=SimpleNamespace(enabled=True, ollama_model="m"),
+                notify=lambda *args: seen.append(args),
+            )
+        self.assertEqual(seen, [("gemini", "ollama", "額度或速率限制（429）")])
+
 
 if __name__ == "__main__":
     unittest.main()

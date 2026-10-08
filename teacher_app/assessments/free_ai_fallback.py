@@ -128,6 +128,22 @@ def is_retryable_provider_error(exc: BaseException) -> bool:
     return bool(text and any(marker in text for marker in _RETRYABLE_MARKERS))
 
 
+def describe_provider_error(exc: BaseException) -> str:
+    """Short, non-secret reason shown to teachers when a provider is skipped."""
+    if isinstance(exc, requests.Timeout):
+        return "連線逾時"
+    if isinstance(exc, requests.ConnectionError):
+        return "連線失敗"
+    text = str(exc or "").lower()
+    if any(m in text for m in ("429", "too many requests", "rate limit", "rate_limit", "resource_exhausted", "quota", "額度", "速率")):
+        return "額度或速率限制（429）"
+    if any(m in text for m in ("502", "503", "504", "unavailable", "服務暫時")):
+        return "服務暫時故障（5xx）"
+    if any(m in text for m in ("timed out", "timeout", "deadline")):
+        return "回應逾時"
+    return "暫時無法使用"
+
+
 def provider_model(provider: str, *, settings=None, local: LocalFallbackSettings | None = None) -> str:
     settings = settings or ai_runtime.ai_settings()
     local = local or LocalFallbackSettings.from_env()
@@ -150,7 +166,7 @@ def run_with_fallback(
     local_caller: Callable[[], Any] | None = None,
     settings=None,
     local: LocalFallbackSettings | None = None,
-    notify: Callable[[str, str], Any] | None = None,
+    notify: Callable[..., Any] | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     settings = settings or ai_runtime.ai_settings()
     local = local or LocalFallbackSettings.from_env()
@@ -186,7 +202,7 @@ def run_with_fallback(
             if not retryable:
                 raise
             if next_provider and notify is not None:
-                notify(provider, next_provider)
+                notify(provider, next_provider, describe_provider_error(exc))
     raise RuntimeError(
         "免費 AI 目前暫時無法使用：雲端額度/速率或服務可用性已達限制，"
         "且已設定的本機備援未能完成工作。請稍後再試。"
@@ -348,11 +364,12 @@ def install_question_runtime_fallback(runtime):
         progress_callback = kwargs.get("progress_callback")
         progress_id = str(kwargs.get("progress_id") or "")
 
-        def notify(failed: str, next_provider: str) -> None:
+        def notify(failed: str, next_provider: str, reason: str = "") -> None:
             if progress_callback is not None and progress_id:
+                slow = "；本機 AI 速度較慢，可能需要數分鐘，請耐心等候" if next_provider == "ollama" else ""
                 progress_callback(
                     progress_id, 58, "切換免費 AI 備援",
-                    f"{_provider_label(failed)} 額度/速率或服務暫時不可用，改用 {_provider_label(next_provider)}。",
+                    f"{_provider_label(failed)} {reason or '額度/速率或服務暫時不可用'}，改用 {_provider_label(next_provider)}{slow}。",
                 )
 
         def canonical(provider: str):
