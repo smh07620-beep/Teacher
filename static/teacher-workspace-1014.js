@@ -497,16 +497,22 @@
         const button = event.target.closest?.('[data-assessment-tab-1030]');
         if (!button) return;
         const tab = button.dataset.assessmentTab1030;
+        const inline = window.TeacherAssessmentInline1031;
         if (tab === 'exams') {
           setAssessmentTab('exams');
+          if (inline) await inline.show('exams');
           document.getElementById('admin-quiz-workspace')?.scrollIntoView?.({block:'start', behavior:'smooth'});
-        } else if (tab === 'pending') {
-          await openReview();
-        } else if (tab === 'history') {
-          state.mode = 'assessment';
-          await window.AppWorkspaceRoutes.show('results', true);
-          markTeacherNav('assessment');
+        } else if (tab === 'pending' || tab === 'history') {
+          // 1031: 待批改／歷史紀錄在本頁內開啟；沒有載入內嵌模組時才退回舊的跳頁方式。
+          if (inline) await inline.show(tab);
+          else if (tab === 'pending') await openReview();
+          else {
+            state.mode = 'assessment';
+            await window.AppWorkspaceRoutes.show('results', true);
+            markTeacherNav('assessment');
+          }
         } else if (tab === 'analytics') {
+          await window.TeacherAssessmentInline1031?.show('exams');
           setAssessmentTab('analytics');
           document.getElementById('teacher-learners-p2')?.scrollIntoView?.({block:'start', behavior:'smooth'});
         }
