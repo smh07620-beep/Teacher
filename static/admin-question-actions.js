@@ -289,6 +289,13 @@
     const payload={quizCategoryId:catId,question,questionType,difficulty,imageUrl,options:questionType==='true_false'?['是','否']:(needsOptions?options:[]),correct:questionType==='true_false'?Number(document.getElementById(`qform-${catId}-truefalse-correct`)?.value||0):Number(document.getElementById(`qform-${catId}-correct`)?.value||0),answerConfig,tag:document.getElementById(`qform-${catId}-tag`)?.value.trim()||'',explanation:document.getElementById(`qform-${catId}-explain`)?.value.trim()||''};
     const r=await fetch('/api/quiz-questions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json().catch(()=>({})); if(!r.ok){alert(d.error||'新增失敗');return;}
+    const audience=document.getElementById(`qform-${catId}-audience`)?.value||'group_only';
+    if(audience!=='group_only'&&(d.id||d.question?.id)){
+      try{
+        const ar=await fetch(`/api/content-audience/questions/${encodeURIComponent(d.id||d.question.id)}`,{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({audienceScope:audience,audienceGroups:[]})});
+        if(!ar.ok)alert('題目已新增，但使用範圍未能改成全科共用（目前為本組限定），可在題目旁「設定範圍」再改。');
+      }catch(_e){alert('題目已新增，但使用範圍未能改成全科共用，可在題目旁「設定範圍」再改。');}
+    }
     ['question','opt0','opt1','opt2','opt3','tag','explain','fill-answers','media-url','pause-at'].forEach(f=>{const el=document.getElementById(`qform-${catId}-${f}`);if(el)el.value='';});
     [0,1,2,3].forEach(i=>{const el=document.getElementById(`qform-${catId}-multi${i}`);if(el)el.checked=false;});
     const img=document.getElementById(`qform-${catId}-image`);if(img)img.value='';

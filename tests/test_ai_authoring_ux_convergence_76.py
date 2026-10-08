@@ -107,6 +107,13 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
         self.assertIn("'adminQuickReviewExam'", csp)
         self.assertIn("pk('qselected')", editor)
 
+    def test_manual_question_form_has_same_audience_choice(self):
+        bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
+        actions = ROOT.joinpath('static/admin-question-actions.js').read_text(encoding='utf-8')
+        self.assertIn('id="qform-${c.id}-audience"', bank)
+        self.assertIn('qform-${catId}-audience', actions)
+        self.assertIn('/api/content-audience/questions/', actions)
+
     def test_mobile_question_actions_are_collapsed(self):
         editor = ROOT.joinpath('static/admin-question-editor-ui.js').read_text(encoding='utf-8')
         bank = ROOT.joinpath('static/admin-question-bank.js').read_text(encoding='utf-8')
