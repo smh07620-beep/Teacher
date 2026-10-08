@@ -236,7 +236,7 @@ class FreeAIFallbackTests(unittest.TestCase):
         self.assertFalse(meta["fallbackUsed"])
         sleep.assert_called_once_with(1)
 
-    def test_auto_routing_uses_gemini_for_media_or_big_batches_else_groq(self):
+    def test_auto_routing_uses_gemini_only_for_media_else_groq(self):
         settings = self._settings()
         with patch.object(free_ai_fallback.ai_runtime, "google_genai", object()), \
                 patch.object(free_ai_fallback.ai_runtime, "google_genai_types", object()), \
@@ -244,7 +244,8 @@ class FreeAIFallbackTests(unittest.TestCase):
             pick = free_ai_fallback.choose_auto_primary
             text = [{"filename": "課程.pptx"}]
             self.assertEqual(pick(text, qtype="choice", count=5, settings=settings), "groq")
-            self.assertEqual(pick(text, qtype="choice", count=10, settings=settings), "gemini")
+            # 一次出 10 題也先用 Groq（改為分批），不要消耗 Gemini 每天 20 次的額度。
+            self.assertEqual(pick(text, qtype="choice", count=10, settings=settings), "groq")
             self.assertEqual(pick([{"filename": "影片.mp4"}], qtype="choice", count=5, settings=settings), "gemini")
             self.assertEqual(pick([{"filename": "圖.png"}], qtype="choice", count=3, settings=settings), "gemini")
             self.assertEqual(pick(text, qtype="video_mixed", count=3, settings=settings), "gemini")
@@ -252,6 +253,34 @@ class FreeAIFallbackTests(unittest.TestCase):
             self.assertFalse(free_ai_fallback.entries_need_multimodal(text, "choice"))
             no_gemini = replace(settings, gemini_api_key="")
             self.assertEqual(pick(text, qtype="choice", count=10, settings=no_gemini), "groq")
+
+    def test_groq_splits_large_requests_into_batches_of_five(self):
+        settings = self._settings()
+        seen = []
+
+        def original_generate(entries, **kwargs):
+            seen.append((kwargs["count"], kwargs.get("focus", "")))
+            n = kwargs["count"]
+            return [{"question": f"題{len(seen)}-{i}"} for i in range(n)], "標題", ["text"]
+
+        runtime = SimpleNamespace(
+            generate_ai_questions_from_materials=original_generate,
+            active_ai_provider=lambda: "groq",
+            ai_model_name=lambda: "groq-model",
+            paths_provider=lambda: None,
+        )
+        free_ai_fallback.install_question_runtime_fallback(runtime)
+        with patch.object(free_ai_fallback.ai_runtime, "ai_settings", return_value=settings), \
+                patch.object(free_ai_fallback, "provider_chain", return_value=["groq"]), \
+                patch.object(free_ai_fallback.time, "sleep") as sleep:
+            questions, title, kinds = runtime.generate_ai_questions_from_materials(
+                [{"filename": "a.pptx"}], category_id="c", count=12, qtype="choice",
+                difficulty="standard", focus="", strategy="balanced",
+            )
+        self.assertEqual([c for c, _ in seen], [5, 5, 2])
+        self.assertEqual(len(questions), 12)
+        self.assertIn("避免與已出題目重複", seen[1][1])
+        self.assertEqual(sleep.call_count, 2)
 
 
 if __name__ == "__main__":

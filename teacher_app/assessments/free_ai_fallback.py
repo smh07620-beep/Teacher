@@ -167,6 +167,16 @@ def _provider_label(provider: str) -> str:
     return {"groq": "Groq", "gemini": "Gemini", "ollama": "本機 AI", "openai": "OpenAI"}.get(provider, "AI")
 
 
+_GROQ_BATCH_SIZE = 5
+
+
+def _groq_batch_gap_seconds() -> int:
+    try:
+        return max(0, min(120, int(os.environ.get("GROQ_BATCH_GAP_SECONDS", "40"))))
+    except ValueError:
+        return 40
+
+
 _MEDIA_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".webp", ".gif",
     ".mp4", ".webm", ".mov", ".m4v",
@@ -194,17 +204,13 @@ def entries_need_multimodal(entries, qtype: str = "") -> bool:
 def choose_auto_primary(entries, *, qtype: str, count, settings, local=None) -> str:
     """Pick the first provider per request when AI_PROVIDER=auto.
 
-    - image/audio/video sources, or 10+ question batches -> Gemini (large context,
-      sees media) when it is configured.
+    - image/audio/video sources (or video-interactive questions) -> Gemini (sees
+      media) when it is configured.
     - otherwise -> Groq (fast, plenty of daily requests) when configured.
     """
     gemini_ok = _cloud_provider_ready("gemini", settings)
     groq_ok = _cloud_provider_ready("groq", settings)
-    try:
-        wanted = int(count)
-    except (TypeError, ValueError):
-        wanted = 5
-    if gemini_ok and (entries_need_multimodal(entries, qtype) or wanted > 5):
+    if gemini_ok and entries_need_multimodal(entries, qtype):
         return "gemini"
     if groq_ok:
         return "groq"
@@ -444,25 +450,53 @@ def install_question_runtime_fallback(runtime):
                 path = " → ".join(trail + [_provider_label(next_provider)])
                 progress_callback(progress_id, 58, "切換免費 AI 備援", f"嘗試順序：{path}{slow}。")
 
-        def canonical(provider: str):
+        def canonical(provider: str, **override):
+            call_kwargs = {**kwargs, **override}
             if provider == native:
-                return original_generate(entries, **kwargs)
+                return original_generate(entries, **call_kwargs)
             provider_settings = replace(settings, provider=provider)
             return ai_runtime.generate_ai_questions_from_materials(
                 entries,
-                category_id=kwargs.get("category_id", ""),
-                count=kwargs.get("count", 5),
-                qtype=kwargs.get("qtype", "mixed"),
-                difficulty=kwargs.get("difficulty", "standard"),
-                focus=kwargs.get("focus", ""),
-                strategy=kwargs.get("strategy", "balanced"),
+                category_id=call_kwargs.get("category_id", ""),
+                count=call_kwargs.get("count", 5),
+                qtype=call_kwargs.get("qtype", "mixed"),
+                difficulty=call_kwargs.get("difficulty", "standard"),
+                focus=call_kwargs.get("focus", ""),
+                strategy=call_kwargs.get("strategy", "balanced"),
                 progress_id=progress_id,
                 progress_callback=progress_callback,
                 settings=provider_settings,
                 paths_provider=getattr(runtime, "paths_provider", storage_paths),
             )
 
-        callers = {"groq": lambda: canonical("groq"), "gemini": lambda: canonical("gemini")}
+        def groq_batched():
+            """Groq 免費版每分鐘 token 很少：一次出太多題時拆成每批 5 題，批與批之間等上限重置。"""
+            try:
+                total = int(kwargs.get("count", 5) or 5)
+            except (TypeError, ValueError):
+                total = 5
+            size = _GROQ_BATCH_SIZE
+            if total <= size:
+                return canonical("groq")
+            sizes = [size] * (total // size) + ([total % size] if total % size else [])
+            collected: list[dict] = []
+            title, kinds = "", []
+            base_focus = str(kwargs.get("focus") or "")
+            for index, batch_count in enumerate(sizes):
+                if index:
+                    if progress_callback is not None and progress_id:
+                        progress_callback(
+                            progress_id, 60, "Groq 分批出題",
+                            f"第 {index + 1}/{len(sizes)} 批，等待每分鐘額度重置後繼續",
+                        )
+                    time.sleep(_groq_batch_gap_seconds())
+                avoid = "；".join(str(q.get("question") or "")[:60] for q in collected[:20])
+                focus = base_focus + (f"\n（本批請避免與已出題目重複：{avoid}）" if avoid else "")
+                questions, title, kinds = canonical("groq", count=batch_count, focus=focus)
+                collected.extend(questions)
+            return collected[:total], title, kinds
+
+        callers = {"groq": groq_batched, "gemini": lambda: canonical("gemini")}
         if primary == "openai" and not bool(getattr(settings, "free_only_mode", True)):
             callers["openai"] = lambda: canonical("openai")
         result, meta = run_with_fallback(
