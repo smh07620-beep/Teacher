@@ -13,7 +13,9 @@
 
 目前那台電腦的 Worker 版本太舊，還沒有自動更新的功能，所以第一次必須手動更新。
 
-1. 在那台電腦按 Windows 鍵，輸入 `PowerShell`，對「Windows PowerShell」按右鍵，選「以系統管理員身分執行」。
+**開始之前，要先有 `worker-stable` 這個標籤。** 標籤只能由有權限的人建立（Claude 的工作階段沒有權限）。在你的開發電腦的 PowerShell 做第四節那三行，或到 GitHub 專案頁：右側點「Releases」→「Create a new release」→ 在「Choose a tag」輸入 `worker-stable` 並選「Create new tag」→ 目標選 `main` → 按「Publish release」。
+
+1. 在放 Worker 的那台電腦按 Windows 鍵，輸入 `PowerShell`，對「Windows PowerShell」按右鍵，選「以系統管理員身分執行」。
 2. 進入 Worker 資料夾（以實際位置為準，下面以 `C:\TeacherWorker` 為例），然後貼上這幾行，一行一行按 Enter：
 
 ```powershell
