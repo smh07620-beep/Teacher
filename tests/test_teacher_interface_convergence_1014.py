@@ -49,9 +49,9 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
     def test_media_is_contextual_to_each_course_not_a_top_level_tool_strip(self):
         self.assertIn("document.getElementById(\'teacher-nav-media-1014\')?.remove()", UI)
         self.assertIn("box?.querySelector(\'#teacher-course-media-entry-1014\')?.remove()", UI)
-        self.assertIn("data-teacher-course-media-1014", UI)
-        self.assertIn("✨ AI／影音製作", UI)
-        self.assertIn("TeacherWorkspace1014?.openMedia", UI)
+        # Media is reached from the course wizard (step 2), not from the card.
+        self.assertNotIn("data-teacher-course-media-1014", UI)
+        self.assertNotIn("✨ AI／影音製作", UI)
         self.assertNotIn("🧰 開啟教材媒體製作室", UI)
         self.assertNotIn("Word → 圖譜", UI)
         self.assertNotIn("TeacherWorkspace1014?.openPresentation", UI)
@@ -61,8 +61,8 @@ class TeacherInterfaceConvergence1014Tests(unittest.TestCase):
         self.assertIn("data-teacher-course-more-1014", UI)
         self.assertIn("編輯課程", UI)
         self.assertIn("學習指派", UI)
-        self.assertIn("AI／影音製作", UI)
         self.assertIn("刪除課程", UI)
+        self.assertIn("openTeacherCourseEditWorkspace", UI)
         self.assertIn("button.classList.add('hidden')", UI)
         self.assertIn("setAttribute('data-teacher-course-actions-1014', '1')", UI)
 

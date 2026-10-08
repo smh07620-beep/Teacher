@@ -37,7 +37,7 @@
     'adminUpdateQuestionSelection','adminUploadMaterials','atlasPointerMove','atlasReset','atlasZoom',
     'cancelMaterialJob','clearAllRecords','closeAdminUserEditor','closeAtlas','closeEssayReview',
     'closeExternalMaterialCreateDrawer','closeMediaViewer','closeQuizMaterialLinker','closeSlideViewer',
-    'courseWizard681Back','courseWizard681Continue','courseWizard681Create','courseWizard681FilesChanged',
+    'courseWizard681AddFiles','courseWizard681Back','courseWizard681Continue','courseWizard681Create','courseWizard681EditCourse','courseWizard681FilesChanged',
     'courseWizard681Next','courseWizard681OpenAtlasImport','courseWizard681OpenCourse','courseWizard681RefreshMaterials','courseWizard681Reset',
     'courseWizard681SelectExisting','courseWizard681SetFileMeta','courseWizard681SetMode','createAdminAnnouncement',
     'createAdminUserAccount','createExternalMaterialFromDrawer','deleteAdminAnnouncement','deleteAdminMaterial',

@@ -35,6 +35,7 @@ test('large internal course scope stays interactive without summary warnings', a
     window.TeacherWorkspace1014 = {
       openMedia: () => { window.mediaOpened = true; }
     };
+    window.openTeacherCourseEditWorkspace = id => { window.courseEditOpened = String(id); };
     window.fetch = async url => {
       if (String(url).startsWith('/api/courses/admin')) {
         const area = new URL(String(url), 'http://localhost').searchParams.get('area');
@@ -79,8 +80,9 @@ test('large internal course scope stays interactive without summary warnings', a
   await expect(firstCourse).toHaveAttribute('open', '');
   await firstCourse.locator('[data-teacher-course-more-1014] > summary').click();
   await expect(firstCourse.locator('[data-teacher-course-more-menu-1014]')).toBeVisible();
-  await firstCourse.locator('[data-teacher-course-media-1014]').click();
-  expect(await page.evaluate(() => window.mediaOpened)).toBe(true);
+  await expect(firstCourse.locator('[data-teacher-course-media-1014]')).toHaveCount(0);
+  await firstCourse.locator('[data-teacher-edit-course-1014]').click();
+  expect(await page.evaluate(() => window.courseEditOpened)).toMatch(/-0$/);
   await page.locator('#teacher-course-advanced-tools-1014 > summary').click();
   await page.getByRole('button', { name: '批次指派多門課程' }).click();
   await expect(page.locator('#teacher-batch-assignment-dialog-1014')).toHaveAttribute('open', '');

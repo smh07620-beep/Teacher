@@ -309,6 +309,14 @@
         });
         const materialVersion=Number(published.materialDerivative?.materialVersion||0);
         note(`✅ AI 影片已正式發布；publication receipt、來源 PPT checksum${materialVersion?'，以及教材 V'+materialVersion+' 衍生內容歷程':''}已保存。`);
+        try {
+          const pv = published.video || {};
+          window.dispatchEvent(new CustomEvent('teacher-ai-video-published', {detail: {
+            videoId: String(videoId),
+            materialId: String(published.materialDerivative?.materialId || pv.materialId || ''),
+            title: String(pv.title || 'AI 教學影片'),
+          }}));
+        } catch (_) {}
         await loadVideos();
       }
     } catch (error) {

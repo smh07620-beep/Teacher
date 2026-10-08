@@ -1,7 +1,7 @@
 /* Teacher 10/14 interface convergence.
  * Keep existing capabilities intact while reducing top-level choices:
  * - Media production lives under 教材與課程 instead of a separate main nav entry.
- * - Each course card shows 編輯課程 / 學習指派 / 學習追蹤 and one 更多 menu (lifecycle, media, delete).
+ * - Each course card shows 編輯課程 / 學習指派 / 學習追蹤 and one 更多 menu (lifecycle, delete); media is reached from the course wizard.
  * - Kokoro voice IDs remain internal values for debugging but are not shown to teachers.
  */
 (function () {
@@ -153,7 +153,16 @@
       group.setAttribute('data-teacher-course-actions-1014', '1');
       group.className = 'flex flex-wrap items-center gap-2';
       if (edit) {
-        const button = makeCardButton('編輯課程', 'teaching-primary', () => invokeOriginal(edit));
+        const button = makeCardButton('編輯課程', 'teaching-primary', () => {
+          const courseId = String(details.dataset.courseId || '');
+          // 編輯課程 reopens the course wizard (single authoring path); the legacy
+          // plan dialog stays reachable from inside the wizard as a fallback.
+          if (courseId && typeof window.openTeacherCourseEditWorkspace === 'function') {
+            void window.openTeacherCourseEditWorkspace(courseId, 2);
+          } else {
+            invokeOriginal(edit);
+          }
+        });
         button.setAttribute('data-teacher-edit-course-1014', '1');
         group.appendChild(button);
       }
@@ -173,15 +182,6 @@
       const menu = document.createElement('div');
       menu.setAttribute('data-teacher-course-more-menu-1014', '1');
       menu.className = 'absolute right-0 z-20 mt-1 flex w-44 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg';
-      const itemClass = 'w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100';
-      const mediaButton = makeCardButton('✨ AI／影音製作', itemClass, async () => {
-        more.open = false;
-        await window.TeacherWorkspace1014?.openMedia?.();
-        convergeTeacherNavigation();
-        installVoicePrivacy();
-      });
-      mediaButton.setAttribute('data-teacher-course-media-1014', '1');
-      menu.appendChild(mediaButton);
       const lifecycleSlot = document.createElement('div');
       lifecycleSlot.setAttribute('data-teacher-course-lifecycle-slot-1014', '1');
       lifecycleSlot.className = 'flex flex-col gap-1 [&_button]:w-full [&_button]:text-left';
