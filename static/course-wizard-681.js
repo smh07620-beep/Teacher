@@ -196,7 +196,8 @@ function stepOne(){
 
 function personLabel(person){
   const name=String(person?.name||person?.username||'').trim(),emp=String(person?.empId||'').trim();
-  return name+(emp?'｜'+emp:'');
+  const other=person?.crossGroup&&person?.groupLabel?`（${person.groupLabel}）`:'';
+  return name+(emp?'｜'+emp:'')+other;
 }
 
 function selectedAssigneeKeys(){
@@ -210,7 +211,7 @@ function paintAssigneeChecklist(people){
   if(!list)return;
   const chosen=new Set((state.assigneeKeys||[]).map(String));
   const enabled=Boolean(el('cw681-assignment-enabled')?.checked);
-  list.innerHTML=people.length?people.map(person=>{const id=String(person.username||'');return `<label class="flex items-center gap-2"><input type="checkbox" value="${esc(id)}" ${chosen.has(id)?'checked':''} ${enabled?'':'disabled'}> ${esc(personLabel(person))}</label>`;}).join(''):'<p class="text-[11px] text-slate-500">這個組別目前沒有可指派的人員。</p>';
+  list.innerHTML=(people.some(person=>person.crossGroup)?'<p class="mb-1 text-[11px] font-normal text-amber-700">標示組別的是其他組人員：指派後，只有他們本人能看到這門課。</p>':'')+(people.length?people.map(person=>{const id=String(person.username||'');return `<label class="flex items-center gap-2"><input type="checkbox" value="${esc(id)}" ${chosen.has(id)?'checked':''} ${enabled?'':'disabled'}> ${esc(personLabel(person))}</label>`;}).join(''):'<p class="text-[11px] text-slate-500">這個組別目前沒有可指派的人員。</p>');
   updateAssigneeCount();
 }
 

@@ -110,6 +110,8 @@ def _material_meta(ids: Iterable[str]) -> dict[str, dict[str, Any]]:
         has_scope = _column_exists(conn, kind, "materials", "audience_scope")
         has_groups = _column_exists(conn, kind, "materials", "audience_groups")
         columns = ["id", "group_key"]
+        if _column_exists(conn, kind, "materials", "course_id"):
+            columns.append("course_id")
         if has_scope:
             columns.append("audience_scope")
         if has_groups:
@@ -125,6 +127,7 @@ def _material_meta(ids: Iterable[str]) -> dict[str, dict[str, Any]]:
         owner_group = scope.normalize_group(data.get("group_key"))
         audience_scope = _normalize_audience_scope(data.get("audience_scope"))
         output[item_id] = {
+            "courseId": str(data.get("course_id") or ""),
             "ownerGroup": owner_group,
             "audienceScope": audience_scope,
             "audienceGroups": _normalize_groups(data.get("audience_groups"), owner_group, audience_scope),
@@ -141,7 +144,7 @@ def _question_meta(ids: Iterable[str]) -> dict[str, dict[str, Any]]:
         placeholders = ",".join([ph] * len(values))
         has_scope = _column_exists(conn, kind, "quiz_questions", "audience_scope")
         has_groups = _column_exists(conn, kind, "quiz_questions", "audience_groups")
-        columns = ["q.id", "c.group_key AS owner_group"]
+        columns = ["q.id", "c.group_key AS owner_group", "c.course_id AS course_id"]
         if has_scope:
             columns.append("q.audience_scope")
         if has_groups:
@@ -159,6 +162,7 @@ def _question_meta(ids: Iterable[str]) -> dict[str, dict[str, Any]]:
         owner_group = scope.normalize_group(data.get("owner_group"))
         audience_scope = _normalize_audience_scope(data.get("audience_scope"))
         output[item_id] = {
+            "courseId": str(data.get("course_id") or ""),
             "ownerGroup": owner_group,
             "audienceScope": audience_scope,
             "audienceGroups": _normalize_groups(data.get("audience_groups"), owner_group, audience_scope),
@@ -178,8 +182,13 @@ def visible_to_user(user: Mapping[str, Any] | None, meta: Mapping[str, Any]) -> 
     audience_scope = _normalize_audience_scope(meta.get("audienceScope"))
     if audience_scope == "all_staff":
         return True
-    if audience_scope == "multi_group" and user_group:
-        return user_group in _decode_groups(meta.get("audienceGroups"))
+    if audience_scope == "multi_group" and user_group and user_group in _decode_groups(meta.get("audienceGroups")):
+        return True
+    course_id = str(meta.get("courseId") or "")
+    if course_id:
+        from teacher_app.learning import access as learning_access
+
+        return course_id in learning_access.personal_course_grants(user)
     return False
 
 

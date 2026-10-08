@@ -98,6 +98,64 @@ def _audience_groups(item: Mapping[str, Any] | None) -> set[str]:
     return {str(value).strip() for value in raw if str(value).strip() in scope.GROUPS}
 
 
+def _username(user: Mapping[str, Any] | None) -> str:
+    return str((user or {}).get("username") or "").strip().lower()
+
+
+def personal_course_grants(user: Mapping[str, Any] | None) -> frozenset[str]:
+    """Course ids this account was individually assigned, even from another group.
+
+    An individual assignment is the explicit, audited grant that lets one person
+    see one course (and its materials) outside their own group.  Only published,
+    active courses in the person's own training area count.  Cached per request.
+    """
+    username = _username(user)
+    if not username:
+        return frozenset()
+    cache = None
+    try:
+        from flask import g, has_request_context
+
+        if has_request_context():
+            cache = g.__dict__.setdefault("_personal_course_grants", {})
+            if username in cache:
+                return cache[username]
+    except Exception:
+        cache = None
+    area, _group = preferred_learning_scope(user)
+    granted: set[str] = set()
+    try:
+        from teacher_app.courses import repository as course_repository
+        from teacher_app.learning import assignment_repository
+
+        for course_id in assignment_repository.list_personal_course_ids(username=username, area=area):
+            course = course_repository.get_course(course_id)
+            if not course or not course.get("active", True):
+                continue
+            if str(course.get("lifecycleStatus") or "published") != "published":
+                continue
+            if scope.normalize_area(course.get("area")) != area:
+                continue
+            granted.add(course_id)
+    except Exception:
+        return frozenset()
+    result = frozenset(granted)
+    if cache is not None:
+        cache[username] = result
+    return result
+
+
+def _item_course_id(item: Mapping[str, Any]) -> str:
+    for key in ("courseId", "course_id"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    # A course record itself (no courseId key, carries a lifecycle status).
+    if "lifecycleStatus" in item or "lifecycle_status" in item:
+        return str(item.get("id") or "").strip()
+    return ""
+
+
 def can_access_learning_item(
     user: Mapping[str, Any] | None,
     item: Mapping[str, Any] | None,
@@ -119,9 +177,10 @@ def can_access_learning_item(
     audience = _audience_scope(item)
     if audience == "all_staff":
         return True
-    if audience == "multi_group":
-        return user_group in _audience_groups(item)
-    return False
+    if audience == "multi_group" and user_group in _audience_groups(item):
+        return True
+    course_id = _item_course_id(item)
+    return bool(course_id) and course_id in personal_course_grants(user)
 
 
 def can_access_requested_scope(
@@ -146,5 +205,6 @@ __all__ = [
     "has_explicit_learning_scope",
     "has_global_learning_access",
     "item_learning_scope",
+    "personal_course_grants",
     "preferred_learning_scope",
 ]

@@ -59,7 +59,10 @@ def _active_account(username: str) -> dict[str, Any] | None:
     return None
 
 
-def _assert_individual_recipient_scope(assignment: Mapping[str, Any]) -> None:
+def _assert_individual_recipient_scope(
+    assignment: Mapping[str, Any],
+    actor: Mapping[str, Any] | None = None,
+) -> None:
     assignee_type = str(
         assignment.get("assigneeType") or assignment.get("assignee_type") or ""
     )
@@ -79,7 +82,10 @@ def _assert_individual_recipient_scope(assignment: Mapping[str, Any]) -> None:
     course_group = scope.normalize_group(
         assignment.get("group") or assignment.get("group_key")
     )
-    if target_area != course_area or target_group != course_group:
+    # Education/system administrators may individually assign a person from another
+    # group; that assignment is the explicit grant that opens this one course to them.
+    cross_group_ok = bool(actor) and _global_manager(actor)
+    if target_area != course_area or (target_group != course_group and not cross_group_ok):
         raise ApiError(
             "ASSIGNEE_SCOPE_MISMATCH",
             "指定人員目前不屬於此課程的訓練區／組別，請改選同組人員。",
@@ -88,7 +94,7 @@ def _assert_individual_recipient_scope(assignment: Mapping[str, Any]) -> None:
 
 
 def _assert_manager_scope(user: Mapping[str, Any], assignment: Mapping[str, Any]) -> None:
-    _assert_individual_recipient_scope(assignment)
+    _assert_individual_recipient_scope(assignment, user)
     if _global_manager(user):
         return
     if not has_role(user, "group_leader"):
@@ -346,7 +352,9 @@ def audience_options(
         # Only show accounts that can actually receive the currently scoped course.
         if wanted_area and account_area != wanted_area:
             continue
-        if wanted_group and account_group != wanted_group:
+        # Administrators may also pick people from other groups of the same area;
+        # group leaders stay inside their own group.
+        if wanted_group and account_group != wanted_group and not global_manager:
             continue
         username = str(account.get("username") or "").strip()
         if not username:
@@ -358,6 +366,7 @@ def audience_options(
             "preferredArea": account_area,
             "preferredGroup": account_group,
             "groupLabel": scope.GROUPS.get(account_group, account_group),
+            "crossGroup": bool(wanted_group) and account_group != wanted_group,
         })
     people.sort(key=lambda item: (
         0 if item.get("preferredGroup") == wanted_group else 1,

@@ -71,7 +71,7 @@ class RouteWiringTests(unittest.TestCase):
         source = Path(__file__).parents[1].joinpath("teacher_app", "legacy_host.py").read_text(encoding="utf-8")
         learner = source[source.index('@app.get("/api/courses")'):source.index('@app.get("/api/courses/admin")')]
         admin = source[source.index('@app.get("/api/courses/admin")'):source.index('@app.post("/api/courses")')]
-        self.assertIn("filter_courses_for_user(_current_user(), courses)", learner)
+        self.assertIn("filter_courses_for_user(user, courses)", learner)
         self.assertNotIn("filter_courses_for_user", admin)
 
 
