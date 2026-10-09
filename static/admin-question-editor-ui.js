@@ -26,12 +26,10 @@
     const typeOptions=[['choice','單選題'],['multi','複選題'],['true_false','是非題'],['essay','問答題'],['fill','填空題'],['image','圖片判讀題'],['video','影片題']];
     const optionType=['choice','multi','image','video'].includes(type);
     return `<div id="qedit-${q.id}" data-qid="${q.id}" data-has-media="${hasMedia?'1':'0'}" class="hidden mt-3 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 space-y-2.5">
-      <div class="flex items-center justify-between gap-2"><span class="text-xs font-black text-indigo-900">快速編輯題目</span><button data-csp-click="adminToggleInlineQuestionEditor('${q.id}','${catId}',false)" class="text-[11px] text-slate-500 hover:text-slate-800">收合</button></div>
+      <div class="flex items-center justify-between gap-2"><span class="text-xs font-black text-indigo-900">✏️ 快速編輯題目（其他題目在上下方，改完按「儲存此題」）</span><button data-csp-click="adminToggleInlineQuestionEditor('${q.id}','${catId}',false)" class="text-[11px] text-slate-500 hover:text-slate-800">收合</button></div>
       <textarea data-field="question" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white" placeholder="題目內容">${escapeHtml(q.question||'')}</textarea>
       <div class="grid sm:grid-cols-3 gap-2">
         <label><span class="text-[11px] font-bold text-slate-600">題目類型</span><select data-field="questionType" data-csp-change="adminInlineQuestionTypeChanged('${q.id}')" class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white">${typeOptions.map(([v,t])=>`<option value="${v}" ${type===v?'selected':''}>${t}</option>`).join('')}</select></label>
-        <label><span class="text-[11px] font-bold text-slate-600">難度</span><select data-field="difficulty" class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"><option value="basic" ${q.difficulty==='basic'?'selected':''}>基礎</option><option value="standard" ${(q.difficulty||'standard')==='standard'?'selected':''}>一般</option><option value="advanced" ${q.difficulty==='advanced'?'selected':''}>進階</option></select></label>
-        <label><span class="text-[11px] font-bold text-slate-600">題目分類</span><input data-field="tag" value="${escapeHtml(q.tag||'')}" placeholder="分類標籤" class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"></label>
       </div>
       <div data-role="optionFields" class="${optionType?'':'hidden'} grid sm:grid-cols-2 gap-2">${opts.map((v,i)=>`<input data-field="opt${i}" value="${escapeHtml(v)}" placeholder="選項 ${String.fromCharCode(65+i)}" class="px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white">`).join('')}</div>
       <div data-role="choiceCorrect" class="${['choice','image','video'].includes(type)?'':'hidden'} flex items-center gap-2"><label class="text-[11px] font-bold text-slate-600">正確答案</label><select data-field="correct" class="px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white">${opts.map((_,i)=>`<option value="${i}" ${Number(q.correct||0)===i?'selected':''}>${String.fromCharCode(65+i)}</option>`).join('')}</select></div>
@@ -39,9 +37,14 @@
       <div data-role="trueFalseConfig" class="${type==='true_false'?'':'hidden'}"><label class="text-[11px] font-bold text-slate-600">正確答案</label><select data-field="trueFalseCorrect" class="ml-2 px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"><option value="0" ${Number(q.correct||0)===0?'selected':''}>是</option><option value="1" ${Number(q.correct||0)===1?'selected':''}>否</option></select></div>
       <div data-role="fillConfig" class="${type==='fill'?'':'hidden'}"><label class="text-[11px] font-bold text-slate-600">可接受答案（以 | 分隔）</label><input data-field="fillAnswers" value="${escapeHtml((cfg.acceptedAnswers||[]).join(' | '))}" class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"></div>
       <div data-role="mediaConfig" class="${(type==='video'||hasMedia)?'':'hidden'} grid sm:grid-cols-2 gap-2"><input data-field="mediaUrl" value="${escapeHtml(cfg.mediaUrl||'')}" placeholder="影片 / 媒體網址" class="px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"><input data-field="pauseAt" type="number" min="0" step="1" value="${Number(cfg.pauseAt||0)}" placeholder="暫停秒數" class="px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"></div>
+      <details data-role="moreFields" class="rounded-lg border border-slate-200 bg-white/70 px-3 py-2"><summary class="cursor-pointer text-[11px] font-bold text-slate-600">更多（難度、分類、詳解、是否啟用）</summary><div class="mt-2 space-y-2.5"><div class="grid sm:grid-cols-2 gap-2">
+        <label><span class="text-[11px] font-bold text-slate-600">難度</span><select data-field="difficulty" class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"><option value="basic" ${q.difficulty==='basic'?'selected':''}>基礎</option><option value="standard" ${(q.difficulty||'standard')==='standard'?'selected':''}>一般</option><option value="advanced" ${q.difficulty==='advanced'?'selected':''}>進階</option></select></label>
+        <label><span class="text-[11px] font-bold text-slate-600">題目分類</span><input data-field="tag" value="${escapeHtml(q.tag||'')}" placeholder="分類標籤" class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"></label>
+      </div>
       <label class="inline-flex items-center gap-2 px-2.5 py-2 border border-slate-300 rounded-lg bg-white text-xs"><input data-field="active" type="checkbox" ${q.active===false?'':'checked'}> 啟用此題</label>
       <textarea data-field="explanation" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white" placeholder="${type==='essay'?'評分重點 / 參考答案':'詳解 / 答案依據'}">${escapeHtml(q.explanation||'')}</textarea>
-      <div class="flex gap-2"><button id="qsave-${q.id}" data-csp-click="adminSaveOneInlineQuestion('${q.id}','${catId}')" class="text-[11px] bg-indigo-700 hover:bg-indigo-600 disabled:bg-slate-400 disabled:cursor-wait text-white px-3 py-1.5 rounded-lg font-bold">💾 儲存此題</button></div>
+      </div></details>
+      <div class="flex gap-2 items-center"><button id="qsave-${q.id}" data-csp-click="adminSaveOneInlineQuestion('${q.id}','${catId}')" class="text-[11px] bg-indigo-700 hover:bg-indigo-600 disabled:bg-slate-400 disabled:cursor-wait text-white px-3 py-1.5 rounded-lg font-bold">💾 儲存此題</button><button type="button" data-csp-click="adminCancelInlineQuestionEditor('${q.id}','${catId}')" class="text-[11px] bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg font-bold">取消</button></div>
     </div>`;
   };
 
@@ -105,15 +108,68 @@
     window.adminUpdateQuestionSelection(catId);
   };
 
+  // 編輯一題時：其他已展開的編輯區先收起（不會越疊越長）、這題加上醒目外框並捲到定位，
+  // 底部固定列說明「正在編輯第幾題」。一次編輯多題請用上方「編輯已選」。
+  let bulkExpanding=false;
+  const visibleEditors=()=>[...document.querySelectorAll('[id^="qedit-"]')].filter(el=>el.getClientRects().length&&!el.classList.contains('hidden'));
+  const rowNumber=qId=>{
+    const text=document.getElementById(`qrow-${qId}`)?.querySelector('.font-bold')?.textContent||'';
+    const m=text.match(/^\s*(\d+)\./);
+    return m?Number(m[1]):0;
+  };
+  function paintEditingBar(catId){
+    const msg=(window.pickQuestionEl?window.pickQuestionEl('qsticky-msg',catId):null)||document.getElementById(`qsticky-msg-${catId}`);
+    const bar=(window.pickQuestionEl?window.pickQuestionEl('qsticky-save',catId):null)||document.getElementById(`qsticky-save-${catId}`);
+    const open=visibleEditors().map(el=>el.dataset.qid||el.id.slice(6));
+    const saveAll=bar?.querySelector('[data-csp-click^="adminSaveExpandedQuestionEdits"]');
+    if(saveAll) saveAll.classList.toggle('hidden',open.length===0);
+    if(!msg) return;
+    msg.className='text-[11px] text-slate-500';
+    if(!open.length) msg.textContent='先按題目右邊的「編輯」修改內容；其他題目不會消失，仍在上下方。';
+    else if(open.length===1) msg.textContent=`✏️ 正在編輯第 ${rowNumber(open[0])||'?'} 題；其他題目在上方與下方。改完按「儲存此題」，或按「取消」放棄。`;
+    else msg.textContent=`✏️ 正在編輯 ${open.length} 題；全部改完可按右邊「儲存全部修改」。`;
+  }
+  window.adminRefreshQuestionEditingBar=paintEditingBar;
+
   window.adminToggleInlineQuestionEditor = function(qId,catId,open=true){
     const el=window.pickQuestionEditBox(qId);
     if(!el) return;
+    if(open&&!bulkExpanding){
+      visibleEditors().forEach(other=>{ if(other!==el){ other.classList.add('hidden'); other.closest('[id^="qrow-"]')?.classList.remove('ring-2','ring-indigo-400'); } });
+    }
     el.classList.toggle('hidden',!open);
+    const row=el.closest('[id^="qrow-"]');
+    row?.classList.toggle('ring-2',!!open);
+    row?.classList.toggle('ring-indigo-400',!!open);
+    row?.classList.add('scroll-mt-24');
     if(open){
       const cb=document.querySelector(`.qselect-${catId}[data-qid="${qId}"]`);
       if(cb) cb.checked=true;
       window.adminUpdateQuestionSelection(catId);
+      if(!bulkExpanding) requestAnimationFrame(()=>row?.scrollIntoView({behavior:'smooth',block:'start'}));
     }
+    paintEditingBar(catId);
+  };
+
+  // 取消＝放棄這次修改：整份清單用快取資料重畫，編輯區關閉、未儲存的內容還原。
+  window.adminCancelInlineQuestionEditor = function(qId,catId){
+    window.renderFilteredQuestionList(catId);
+    requestAnimationFrame(()=>{
+      document.getElementById(`qrow-${qId}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+      paintEditingBar(catId);
+    });
+  };
+
+  // 存完後讓那一題短暫變綠，老師才知道「確實存好了」。
+  window.flashQuestionRow = function(qId,catId,text='✅ 已儲存'){
+    const row=document.getElementById(`qrow-${qId}`);
+    if(row){
+      row.classList.add('ring-2','ring-emerald-400','bg-emerald-50/60');
+      row.scrollIntoView({behavior:'smooth',block:'nearest'});
+      setTimeout(()=>row.classList.remove('ring-2','ring-emerald-400','bg-emerald-50/60'),1800);
+    }
+    const msg=(window.pickQuestionEl?window.pickQuestionEl('qsticky-msg',catId):null)||document.getElementById(`qsticky-msg-${catId}`);
+    if(msg){ msg.textContent=`${text}（第 ${rowNumber(qId)||'?'} 題）`; msg.className='text-[11px] text-emerald-700 font-bold'; }
   };
 
   window.adminEditSelectedQuestions = function(catId,selectAll=false){
@@ -121,7 +177,9 @@
     const ids=window.adminSelectedQuestionIds(catId);
     if(!ids.length){alert('請先勾選要編輯的題目，或按「全選編輯」。');return;}
     if(ids.length>80&&!confirm(`即將一次展開 ${ids.length} 題，頁面可能較長，是否繼續？`)) return;
-    ids.forEach(id=>window.adminToggleInlineQuestionEditor(id,catId,true));
+    bulkExpanding=true;
+    try{ ids.forEach(id=>window.adminToggleInlineQuestionEditor(id,catId,true)); } finally { bulkExpanding=false; }
+    paintEditingBar(catId);
     window.pickQuestionEditBox(ids[0])?.scrollIntoView({behavior:'smooth',block:'center'});
   };
 
@@ -153,5 +211,7 @@
     });
     box.innerHTML=list.length?list.map((q,i)=>window.adminQuestionRowHTML(q,i,catId)).join(''):`<p class="text-xs text-slate-400 py-4 text-center">${all.length?'沒有符合篩選條件的題目。':'目前尚無題目，可使用 AI、手動新增或公開連結匯入。'}</p>`;
     window.adminUpdateQuestionSelection(catId);
+    // 清單重畫後編輯區都已關閉，底部提示要同步回到預設。
+    if(typeof window.adminRefreshQuestionEditingBar==='function') window.adminRefreshQuestionEditingBar(catId);
   };
 })();
