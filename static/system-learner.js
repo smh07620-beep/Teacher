@@ -443,6 +443,7 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
 
     slideViewerState = { images, previewUrl, pageCount: total, mode, readerMode: normalizedReaderMode, index: teachingReadPage(materialId, total), title, zoom: 1, materialId };
     window.slideViewerState = slideViewerState;
+    slidePrefetched.clear();
 
     document.getElementById('slide-viewer-title').textContent = title;
 
@@ -618,7 +619,7 @@ function updateViewerNav(total){
 
     const active = document.querySelectorAll('.slide-thumb-card,.slide-page-btn')[index];
 
-    active?.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+    active?.scrollIntoView({behavior:'auto',inline:'center',block:'nearest'});
 
 }
 
@@ -658,12 +659,27 @@ function presentationPreviewPageUrl(page){
     return `/material-preview/${id}/page/${page}.png${slidePageRetryNonce?`?r=${slidePageRetryNonce}`:''}`;
 }
 
+const slidePrefetched=new Set();
+function prefetchImageUrl(url){
+    if(!url||slidePrefetched.has(url))return;
+    slidePrefetched.add(url);
+    if(slidePrefetched.size>60)slidePrefetched.delete(slidePrefetched.values().next().value);
+    const loader=new Image();
+    loader.decoding='async';
+    loader.src=url;
+}
+
 function prefetchPresentationPage(page){
     const total=Math.max(1,Number(slideViewerState.pageCount||1));
     if(page<1||page>total)return;
-    const loader=new Image();
-    loader.decoding='async';
-    loader.src=presentationPreviewPageUrl(page);
+    prefetchImageUrl(presentationPreviewPageUrl(page));
+}
+
+// 翻頁前先把前一頁、後兩頁備好，連續翻頁不用每頁都等伺服器轉圖。
+function prefetchAroundPresentationPage(page){
+    prefetchPresentationPage(page+1);
+    prefetchPresentationPage(page+2);
+    prefetchPresentationPage(page-1);
 }
 
 function updateSlideViewerPresentationPage(page,total){
@@ -689,8 +705,7 @@ function updateSlideViewerPresentationPage(page,total){
             };
             img.src=wanted;
             img.alt=slideViewerState.readerMode==='paged_document'?`Word 文件第 ${page} 頁`:`投影片第 ${page} 頁`;
-            prefetchPresentationPage(page+1);
-            prefetchPresentationPage(page-1);
+            prefetchAroundPresentationPage(page);
         };
         if(typeof loader.decode==='function'){
             loader.decode().catch(()=>{}).then(commit);
@@ -779,6 +794,8 @@ function updateSlideViewerImage() {
 
     img.src = slidePageRetryNonce ? `${images[index]}${images[index].includes('?')?'&':'?'}r=${slidePageRetryNonce}` : images[index];
 
+    [index+1,index+2,index-1].forEach(i=>{if(i>=0&&i<images.length)prefetchImageUrl(images[i]);});
+
     updateViewerNav(images.length);
 
     document.getElementById('slide-viewer-stage').scrollTo({top:0,left:0});
@@ -824,7 +841,8 @@ function goToSlidePage(i) {
     slidePageRetryNonce = 0;
     hideSlidePageError();
     window.slideViewerState = slideViewerState;
-    renderSlideThumbs();
+    // 縮圖／頁碼列只在開啟時建立一次；翻頁只切換 active（updateViewerNav 負責），
+    // 否則每翻一頁都要重建並重新載入所有縮圖，會卡。
     if(slideViewerState.mode==='pdf')updateSlideViewerPdf();else updateSlideViewerImage();
 }
 
