@@ -26,11 +26,12 @@
   }
   document.addEventListener('input', event => { if (event.target?.id?.startsWith('exam-quota-')) updateQuotaTotal(); });
 
-  async function openSettings(catId) {
+  async function openSettings(catId, {embedded = false} = {}) {
+    if (!embedded) window.TeacherContentStudio71?.restoreExamSettings?.();
     const group = document.getElementById('admin-quiz-group')?.value || currentGroupKey;
     const area = document.getElementById('admin-quiz-area')?.value || currentTrainingArea;
     if (status()) status().textContent = '讀取考卷設定中…';
-    await switchAdminSection('exam-settings', true); paintAdminWorkspaceNav('exams');
+    if (!embedded) { await switchAdminSection('exam-settings', true); paintAdminWorkspaceNav('exams'); }
     try {
       const [categoryResponse, courseResponse, windowResponse] = await Promise.all([
         fetch(`/api/quiz-categories/admin?group=${encodeURIComponent(group)}&area=${encodeURIComponent(area)}`, {}),

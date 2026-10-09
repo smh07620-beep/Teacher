@@ -76,9 +76,9 @@
     host.querySelector('[data-tool-return]')?.addEventListener('click',()=>returnToExam(catId));
   }
 
-  async function prepareCanonicalPanel(catId){
+  async function prepareCanonicalPanel(catId,{quiet=false}={}){
     const selected=scope();
-    showLoading('正在準備考卷工作區…','只載入這份考卷需要的功能，不展開其他工具。');
+    if(!quiet)showLoading('正在準備考卷工作區…','只載入這份考卷需要的功能，不展開其他工具。');
     if(typeof window.openAdminWorkspace==='function')await window.AppWorkspaceRoutes.open('assessment');
     const area=document.getElementById('admin-quiz-area');
     const group=document.getElementById('admin-quiz-group');
@@ -149,6 +149,26 @@
       restoreMountedTool();
       showError(catId,'questions',error);
     }
+  }
+
+  // 考卷單頁：題庫直接放在考卷頁的指定位置，不換頁。
+  async function mountQuestionsInline(catId,slot){
+    if(!catId||!slot)return false;
+    restoreMountedTool();
+    const panel=await prepareCanonicalPanel(catId,{quiet:true});
+    if(!slot.isConnected)return false;
+    const section=document.getElementById(`qlist-${catId}`)?.closest('section');
+    if(!section)return false;
+    const placeholder=document.createElement('div');
+    placeholder.hidden=true;
+    placeholder.dataset.teacher710ToolPlaceholder=`questions:${catId}`;
+    section.before(placeholder);
+    mountState.node=section; mountState.placeholder=placeholder; mountState.catId=String(catId); mountState.kind='questions';
+    slot.replaceChildren(section);
+    section.classList.remove('hidden');
+    panel.classList.add('hidden');
+    await Promise.resolve(typeof window.loadQuizQuestionsIntoPanel==='function'?window.loadQuizQuestionsIntoPanel(catId):null).catch(()=>null);
+    return true;
   }
 
   async function openManualTool(catId,preset='choice'){
@@ -222,6 +242,7 @@
     openAi:openAiTool,
     openManual:openManualTool,
     openQuestions:openQuestionManager,
+    mountQuestionsInline,
     returnToExam
   };
 
