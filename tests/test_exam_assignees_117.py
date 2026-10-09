@@ -78,5 +78,14 @@ class ExamAssigneeTests(unittest.TestCase):
         self.assertEqual(len(self.client.get("/api/quiz-categories?group=grpBio&area=internal").get_json()), 1)
 
 
+class ExamAssigneeMigrationOrderTests(unittest.TestCase):
+    def test_registered_migration_order_matches_release_contract(self):
+        import pgy_app  # noqa: F401  (loads every migration module)
+        import release_contract
+        from teacher_app.maintenance.migrations import MIGRATIONS
+
+        self.assertEqual(tuple(version for version, _fn in MIGRATIONS), release_contract.REQUIRED_MIGRATIONS)
+
+
 if __name__ == "__main__":
     unittest.main()

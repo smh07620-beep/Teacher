@@ -38,7 +38,6 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import saved_learning_items_migration as _saved_learning_items_migration  # noqa: F401
     from teacher_app.maintenance import completion_certificate_migration as _completion_certificate_migration  # noqa: F401
     from teacher_app.maintenance import account_email_migration as _account_email_migration  # noqa: F401
-    from teacher_app.maintenance import exam_assignee_migration as _exam_assignee_migration  # noqa: F401
     from teacher_app.maintenance import media_script_migration as _media_script_migration  # noqa: F401
     from teacher_app.maintenance import media_audio_migration as _media_audio_migration  # noqa: F401
     from teacher_app.maintenance import content_audience_migration as _content_audience_migration  # noqa: F401
@@ -60,6 +59,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import training_intervention_migration as _training_intervention_migration  # noqa: F401
     from teacher_app.maintenance import material_derivative_migration as _material_derivative_migration  # noqa: F401
     from teacher_app.maintenance import announcement_audience_migration as _announcement_audience_migration  # noqa: F401
+    from teacher_app.maintenance import exam_assignee_migration as _exam_assignee_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.auth import service as auth_service
