@@ -400,20 +400,19 @@ def publish_category(base, category_id: str, *, publisher: str = "") -> dict:
     exam_window = exam_windows.get_window(category_id)
     opens_at = str((exam_window or {}).get("opens_at") or "").strip()
     closes_at = str((exam_window or {}).get("closes_at") or "").strip()
-    if not opens_at or not closes_at:
-        raise _fail("ASSESSMENT_WINDOW_REQUIRED", "發布前必須設定開始時間與最後考核日期", 409)
+    # 時間留白＝不限時間；只有填了才檢查先後與是否已過期。
+    def _parse_window(raw: str):
+        value = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return value if value.tzinfo else value.replace(tzinfo=datetime.timezone.utc)
+
     try:
-        opens_dt = datetime.datetime.fromisoformat(opens_at.replace("Z", "+00:00"))
-        closes_dt = datetime.datetime.fromisoformat(closes_at.replace("Z", "+00:00"))
-        if opens_dt.tzinfo is None:
-            opens_dt = opens_dt.replace(tzinfo=datetime.timezone.utc)
-        if closes_dt.tzinfo is None:
-            closes_dt = closes_dt.replace(tzinfo=datetime.timezone.utc)
+        opens_dt = _parse_window(opens_at) if opens_at else None
+        closes_dt = _parse_window(closes_at) if closes_at else None
     except ValueError:
         raise _fail("ASSESSMENT_WINDOW_INVALID", "考核時間格式不正確，請重新設定", 409)
-    if opens_dt >= closes_dt:
+    if opens_dt and closes_dt and opens_dt >= closes_dt:
         raise _fail("ASSESSMENT_WINDOW_INVALID", "最後考核日期必須晚於開始時間", 409)
-    if closes_dt <= datetime.datetime.now(datetime.timezone.utc):
+    if closes_dt and closes_dt <= datetime.datetime.now(datetime.timezone.utc):
         raise _fail("ASSESSMENT_WINDOW_CLOSED", "最後考核日期必須晚於目前時間", 409)
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     publisher = str(publisher or _compat_actor_label(base)).strip()[:100]

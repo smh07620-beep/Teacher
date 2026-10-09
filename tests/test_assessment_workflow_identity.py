@@ -214,7 +214,7 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         self.assertEqual(values["request"]["materialIds"], ["mat-versioned"])
         self.assertEqual(material_repository.get_material("mat-versioned")["filename"], "v2.pdf")
 
-    def test_publish_fails_closed_when_exam_window_is_missing(self):
+    def test_publish_allows_blank_exam_window_as_unlimited_time(self):
         reviewed = self.client.post("/api/quiz-categories/cat-1/review")
         self.assertEqual(reviewed.status_code, 200, reviewed.get_data(as_text=True))
         conn, _ = self.connect()
@@ -223,9 +223,8 @@ class AssessmentWorkflowIdentityTests(unittest.TestCase):
         finally:
             conn.close()
         published = self.client.post("/api/quiz-categories/cat-1/publish")
-        self.assertEqual(published.status_code, 409, published.get_data(as_text=True))
-        self.assertEqual(published.get_json()["error"], "發布前必須設定開始時間與最後考核日期")
-        self.assertEqual(self.category()["active"], 0)
+        self.assertEqual(published.status_code, 200, published.get_data(as_text=True))
+        self.assertTrue(self.category()["active"])
 
     def test_publish_fails_closed_when_audience_is_missing(self):
         reviewed = self.client.post("/api/quiz-categories/cat-1/review")
