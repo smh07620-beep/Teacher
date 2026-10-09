@@ -368,7 +368,7 @@
                                           <button type="button" data-csp-click="recommendAiMaterials('${c.id}')" class="px-3 py-2 rounded-xl bg-white border border-violet-200 text-violet-700 text-xs font-bold hover:bg-violet-50">✨ 建議教材</button>
                                       </div>
                                       <div id="ai-selected-${c.id}" class="min-h-[34px] rounded-lg bg-white border border-violet-100 px-2.5 py-2 text-[11px] text-slate-500">尚未選擇教材</div>
-                                      <div id="ai-materials-${c.id}" data-group="${c.group}" data-area="${c.area}" class="space-y-1.5"><div class="text-xs text-slate-400">讀取本組教材中…</div></div>
+                                      <div id="ai-materials-${c.id}" data-group="${c.group}" data-area="${c.area}" data-course-id="${escapeHtml(c.courseId||'')}" data-title="${escapeHtml(c.title||'')}" class="space-y-1.5"><div class="text-xs text-slate-400">讀取本組教材中…</div></div>
                                       <div class="flex items-center justify-between gap-2"><span id="ai-material-count-${c.id}" class="text-[11px] text-slate-400"></span><button id="ai-material-more-${c.id}" type="button" data-csp-click="loadMoreAiMaterials('${c.id}')" class="hidden text-[11px] text-violet-700 font-bold hover:underline">顯示更多教材</button></div>
                                   </div>
                                   <div class="mt-2 text-[11px] text-slate-500">💡 圖片 / Atlas 會直接做視覺分析；影片會擷取代表畫面並結合語音逐字稿。也可把「影片＋字幕＋SOP/PDF」一起選做交叉出題。</div>
