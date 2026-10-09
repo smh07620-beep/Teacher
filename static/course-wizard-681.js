@@ -352,7 +352,7 @@ window.courseWizard681RemoveExternal=index=>{
 function stepTwo(){
   const products=(state.aiProducts||[]).map(item=>`<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"><div><b class="text-emerald-950">✅ ${esc(item.title||'AI 製作產物')}</b><div class="mt-0.5 text-[11px] text-emerald-700">${esc(item.kind||'AI')}｜${item.derived?'附於來源教材，已隨課程發布':item.linked?'已加入本課程':'等待加入本課程'}</div></div>${item.derived?'<span class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800">已發布</span>':`<button type="button" data-csp-click="courseWizard681AttachAiProducts()" class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800">${item.linked?'已加入':'加入本課程教材'}</button>`}</div>`).join('');
   return `<h5 class="font-black">2. 教材與 AI 製作</h5><p class="mt-1 text-xs text-slate-500">先匯入／選擇教材並確認系統判定；需要 AI 時，再從本步驟進入對應製作區，完成後回到這裡。</p>
-  <div class="mt-3 grid gap-4 lg:grid-cols-2"><div><label class="block text-xs font-bold">上傳新教材<input id="cw681-files" type="file" multiple ${state.created&&!state.editing?'disabled':''} class="mt-1 w-full text-sm disabled:opacity-50" data-csp-change="courseWizard681FilesChanged(this)"></label><div id="cw681-file-summary" class="mt-2 text-xs text-slate-500"></div>${state.editing?'<button type="button" data-csp-click="courseWizard681AddFiles()" class="mt-2 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white">上傳到本課程</button>':''}</div><div><div class="flex justify-between"><b class="text-xs">既有教材</b><button type="button" data-csp-click="courseWizard681RefreshMaterials()" class="text-xs text-violet-700">更新</button></div><div id="cw681-materials" class="mt-2 max-h-48 overflow-auto rounded border bg-white p-2 text-xs">讀取中…</div></div></div>
+  <div class="mt-3 grid gap-4 lg:grid-cols-2"><div><label class="block text-xs font-bold">上傳新教材<input id="cw681-files" type="file" multiple ${state.created&&!state.editing?'disabled':''} class="mt-1 w-full text-sm disabled:opacity-50" data-csp-change="courseWizard681FilesChanged(this)"></label><div id="cw681-file-summary" class="mt-2 text-xs text-slate-500"></div>${state.editing?'<button type="button" data-csp-click="courseWizard681AddFiles()" class="mt-2 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white">上傳到本課程</button>':!state.created?'<button type="button" data-csp-click="courseWizard681StartUpload()" class="mt-2 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white" data-cw681-start-upload>⬆️ 開始上傳（可一次選多個檔案）</button><p class="mt-1 text-[11px] text-slate-500">按下後立即開始上傳並轉檔；進度會顯示在下方，處理期間無法再加檔案，完成後可按「下一步」。</p>':''}</div><div><div class="flex justify-between"><b class="text-xs">既有教材</b><button type="button" data-csp-click="courseWizard681RefreshMaterials()" class="text-xs text-violet-700">更新</button></div><div id="cw681-materials" class="mt-2 max-h-48 overflow-auto rounded border bg-white p-2 text-xs">讀取中…</div></div></div>
   <details data-cw681-external class="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3" ${(state.externalLinks||[]).length?'open':''}><summary class="cursor-pointer list-none text-sm font-bold text-sky-950">🔗 加入外部影音連結（YouTube／Vimeo）${(state.externalLinks||[]).length?` · 已加入 ${(state.externalLinks||[]).length} 筆`:''} <span class="text-[11px] font-normal text-sky-700">點此展開</span></summary><p class="mt-2 text-[11px] text-sky-800">不用上傳檔案，貼上 https 網址即可。課程草稿建立後會自動掛進這門課；課程已建立則立刻掛入。</p>${(state.externalLinks||[]).map((item,i)=>`<div class="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border ${item.status==='failed'?'border-rose-200 bg-rose-50':'border-sky-200 bg-white'} px-3 py-2 text-xs"><div class="min-w-0"><b>${item.status==='done'?'✅':item.status==='failed'?'❌':'⏳'} ${esc(item.title)}</b><div class="break-all text-[11px] text-slate-500">${esc(item.url)}${item.status==='failed'?'｜'+esc(item.error||'建立失敗'):item.status==='pending'?'｜等待課程草稿建立後掛入':''}</div></div>${item.status==='done'?'':`<button type="button" data-csp-click="courseWizard681RemoveExternal(${i})" class="rounded-lg border border-slate-300 bg-white px-2 py-1 font-bold text-slate-700">移除</button>`}</div>`).join('')}<div class="mt-3 grid gap-2 sm:grid-cols-[1fr_2fr_auto]"><input id="cw681-ext-title" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="名稱，例如：儀器操作示範"><input id="cw681-ext-url" type="url" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="https://www.youtube.com/watch?v=..."><button type="button" data-csp-click="courseWizard681AddExternal()" class="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white">＋ 加入連結</button></div></details>
   ${state.editing?'<section id="cw681-course-materials" data-cw681-course-materials class="mt-4 rounded-xl border border-violet-200 bg-white p-3"><b class="text-sm text-violet-950">📚 本課程的教材（在這裡管理）</b><p class="mt-1 text-[11px] text-slate-500">停用後學員看不到但資料保留；移出課程會變成未歸類教材；刪除無法復原。</p><div data-cw681-course-materials-list class="mt-2 space-y-1.5 text-xs">讀取中…</div></section>':''}
   <p class="mt-3 text-xs text-violet-800">${state.editing?'編輯模式：選好檔案後按「上傳到本課程」，教材處理完成會自動掛入這門課；也可以用下方 AI 製作新增內容。':state.created?'✓ 原始教材已寫入課程草稿；如需新增內容，可使用下方 AI 製作。':'可以選檔案上傳，也可以在上方貼外部影音連結；兩者都會在建立課程草稿時一起掛入。'}</p>
@@ -603,6 +603,23 @@ async function next(){
   state.step=Math.min(4,state.step+1);render();
   if(state.step===2)void loadMaterials();
 }
+
+// 老師選好檔案、按「開始上傳」的瞬間就建立課程草稿並開始上傳／背景轉檔，
+// 不必等到按「下一步」。上傳中檔案選擇框會鎖住（created 後 disabled）。
+async function startUpload(){
+  if(state.busy||state.created)return;
+  const picked=[...(el('cw681-files')?.files||[])];
+  state.files=picked.length?picked:state.files;
+  state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);
+  if(!state.files.length&&!state.existing.length&&!(state.externalLinks||[]).length){
+    const status=el('cw681-status');if(status)status.innerHTML='<span class="font-bold text-amber-700">請先選擇要上傳的檔案。</span>';
+    return;
+  }
+  syncInputs();
+  const ok=await create();
+  if(ok&&state.created)render();
+}
+window.courseWizard681StartUpload=startUpload;
 
 function back(){
   if(state.busy)return;

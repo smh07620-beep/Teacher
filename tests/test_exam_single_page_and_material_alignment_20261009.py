@@ -190,7 +190,7 @@ class MaterialsManagedInsideEditCourseTests(unittest.TestCase):
     def test_going_back_does_not_wipe_chosen_files(self):
         wiz = read("course-wizard-681.js")
         self.assertNotIn("state.files=[...(el('cw681-files')?.files||state.files)]", wiz)
-        self.assertEqual(wiz.count("state.files=picked.length?picked:state.files;"), 2)
+        self.assertGreaterEqual(wiz.count("state.files=picked.length?picked:state.files;"), 2)
 
     def test_new_wizard_starts_blank_after_a_published_course(self):
         wiz = read("course-wizard-681.js")
@@ -206,6 +206,13 @@ class MaterialsManagedInsideEditCourseTests(unittest.TestCase):
         self.assertIn("state.pendingAdvance=true;announceWaitingForMaterials();return;", nxt)
         self.assertIn("const ok=await create();", nxt)
         self.assertIn("maybeAdvanceAfterMaterials();", wiz[wiz.index("await verifyCreatedCourseMaterials();"):][:400])
+
+    def test_new_course_can_start_uploading_right_away(self):
+        wiz = read("course-wizard-681.js")
+        self.assertIn("courseWizard681StartUpload()", wiz)
+        self.assertIn("async function startUpload()", wiz)
+        self.assertIn("window.courseWizard681StartUpload=startUpload", wiz)
+        self.assertIn("'courseWizard681StartUpload'", read("system-csp-actions.js"))
 
     def test_buttons_use_delegation_because_they_are_painted_after_loading(self):
         wiz = read("course-wizard-681.js")
