@@ -115,5 +115,31 @@ class ExamPublishConsolidationTests(unittest.TestCase):
         self.assertIn("'examPrimaryAction'", read("system-csp-actions.js"))
 
 
+class QuestionInlineEditTests(unittest.TestCase):
+    def setUp(self):
+        self.ui = read("admin-question-editor-ui.js")
+
+    def test_editing_one_question_closes_others_and_keeps_context(self):
+        # 一次只展開一題；其他題目仍在上下方，底部固定列說明正在編輯第幾題。
+        self.assertIn("if(open&&!bulkExpanding)", self.ui)
+        self.assertIn("正在編輯第 ${rowNumber(open[0])||'?'} 題", self.ui)
+        self.assertIn("其他題目在上方與下方", self.ui)
+        self.assertIn("scrollIntoView({behavior:'smooth',block:'start'})", self.ui)
+
+    def test_editor_is_compact_with_cancel_and_saved_feedback(self):
+        self.assertIn('data-role="moreFields"', self.ui)
+        more = self.ui[self.ui.index('data-role="moreFields"'):]
+        for field in ('data-field="difficulty"', 'data-field="tag"', 'data-field="explanation"', 'data-field="active"'):
+            self.assertIn(field, more)
+        self.assertIn("adminCancelInlineQuestionEditor", self.ui)
+        self.assertIn("window.flashQuestionRow", self.ui)
+        actions = read("admin-question-actions.js")
+        self.assertIn("window.flashQuestionRow?.(qId,catId,'✅ 已儲存')", actions)
+        self.assertIn("'adminCancelInlineQuestionEditor'", read("system-csp-actions.js"))
+
+    def test_bulk_edit_still_expands_many_at_once(self):
+        self.assertIn("bulkExpanding=true;", self.ui)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -122,6 +122,7 @@
       const d=await r.json().catch(()=>({}));
       if(!r.ok) throw new Error(d.error||'修改失敗');
       window.updateQuestionCacheAndPaint(catId,[{id:qId,...payload,...(d.question||{})}]);
+      window.flashQuestionRow?.(qId,catId,'✅ 已儲存');
     }catch(e){ alert(e.message); }
     finally{ actionBusy.delete(qId); window.setQuestionRowBusy(qId,false); }
   };
