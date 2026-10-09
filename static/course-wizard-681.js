@@ -15,7 +15,7 @@ const AI_PLAN_META={
   video:{label:'AI 教學影片',detail:'以教材、投影片或其他來源製作影片；完成後回到本頁確認。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={examSettings:{audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0},editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],externalLinks:[],resultHtml:'',watchToken:0};
+const state={examSettings:{audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0},editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:true,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],externalLinks:[],resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -202,8 +202,8 @@ function stepOne(){
   const editNote=state.editing?`<div class="md:col-span-2 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900"><b>✏️ 正在編輯既有課程</b><p class="mt-1">可直接點上方步驟跳到想修改的地方。課程名稱、訓練區與組別已鎖定；要調整名稱、學習目標、日期或教材順序，請按下方按鈕。</p><button type="button" data-csp-click="teachingEditCourse('${esc(state.course?.id||'')}')" class="mt-2 rounded-lg border border-violet-300 bg-white px-3 py-1.5 font-bold text-violet-800">調整課程安排（名稱、目標、日期、教材順序）</button></div>`:'';
   const checkpointNote=state.editing?editNote:state.created?'<div class="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800"><b>✓ 課程草稿 checkpoint 已建立</b><p class="mt-1">課程名稱、訓練區與組別已鎖定；學習對象、學習要求與期限仍可在發布前調整。</p></div>':'';
   const assignmentPanel=permissionPending?`<section class="md:col-span-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800"><b>學習對象與期限</b><p class="mt-1">正在確認你的學習指派權限…</p></section>`:canAssign?`<section class="md:col-span-2 rounded-xl border border-teal-100 bg-teal-50/50 p-3">
-    <label class="flex items-center gap-2 text-xs font-black text-teal-950"><input id="cw681-assignment-enabled" type="checkbox" ${state.assignmentEnabled?'checked':''}> 發布後立即建立學習指派</label>
-    <p class="mt-1 text-[11px] text-teal-800">課程可見範圍仍由上方訓練區／組別控制；這裡設定誰需要完成、學習要求與期限。</p>
+    <label class="flex items-center gap-2 text-xs font-black text-teal-950"><input id="cw681-assignment-enabled" type="checkbox" ${state.assignmentEnabled?'checked':''}> 發布後立即建立學習指派（課程、教材、考卷一起生效）</label>
+    <p class="mt-1 text-[11px] text-teal-800">這裡是<b>唯一的指派</b>：課程、課內教材、課內考卷都依這裡的對象，之後不必再到教材或考卷各設定一次。課程可見範圍仍由上方訓練區／組別控制。</p>
     <div class="mt-3 grid gap-3 md:grid-cols-4">
       <label class="text-xs font-bold">指派對象<select id="cw681-assignee-type" class="mt-1 w-full rounded border bg-white p-2"></select></label>
       <div class="text-xs font-bold"><label for="cw681-assignee-key">人員／組別</label><select id="cw681-assignee-key" class="mt-1 w-full rounded border bg-white p-2"></select><div id="cw681-assignee-people" class="mt-1 hidden rounded border bg-white p-2"><div class="mb-1 flex items-center justify-between gap-2 text-[11px] font-normal text-slate-500"><span id="cw681-assignee-count">已選 0 人</span><span><button type="button" id="cw681-assignee-all" class="rounded bg-teal-50 px-2 py-0.5 font-bold text-teal-800">全選</button> <button type="button" id="cw681-assignee-none" class="rounded bg-slate-100 px-2 py-0.5 font-bold text-slate-600">清除</button></span></div><div id="cw681-assignee-list" class="max-h-44 space-y-1 overflow-y-auto font-normal"></div></div></div>
@@ -401,6 +401,10 @@ async function refreshExamQuestionCount(){
 
 function mountExamWhoPicker(){
   const host=el('cw681-who-host');
+  if(host&&canAssignLearning()){
+    host.innerHTML='<p class="rounded-lg bg-teal-50 px-3 py-2 text-[11px] font-bold text-teal-900">👥 誰能考：和這門課的「學習指派」相同（第 1 步已設定），不用再指定一次。</p>';
+    return;
+  }
   if(!host||!window.ExamAssigneePicker)return;
   state.examWho=state.examWho||window.ExamAssigneePicker.newModel();
   const sc=scope();
@@ -1037,7 +1041,7 @@ async function openAssessmentAuthoringOnce(){
 
 function clearWizardState(){
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=true;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';
@@ -1067,7 +1071,7 @@ async function editCourse(courseId,step=2){
     const course=plan?.course||{};
     if(!course.id)throw new Error('找不到這門課程。');
     clearWizardState();
-    state.course=course;state.created=true;state.editing=true;
+    state.course=course;state.created=true;state.editing=true;state.assignmentEnabled=false;
     const areaSelect=el('wizard-area'),groupSelect=el('wizard-group');
     if(areaSelect)areaSelect.value=course.area||areaSelect.value;
     if(groupSelect){
@@ -1342,7 +1346,7 @@ async function openCourseWorkspace(){
   el('admin-course-material-hub')?.scrollIntoView({behavior:'smooth',block:'start'});
 
   // Do not leak a completed course into the next create-course flow.
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=true;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';
@@ -1354,7 +1358,7 @@ async function openCourseWorkspace(){
 function reset(){
   if(state.created&&!canLeaveCourse())return alert('目前教材尚未全部完成，請先等待或處理失敗工作。');
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';clearWorkflowId();
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=true;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }
