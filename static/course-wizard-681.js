@@ -387,12 +387,14 @@ async function saveWizardExamSettings(id){
   const v=state.examSettings||{};
   const call=async(url,method,body)=>{const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'考卷設定儲存失敗');return d;};
   const iso=x=>x?new Date(x).toISOString():'';
-  if(v.opensAt&&v.closesAt&&new Date(v.opensAt)>=new Date(v.closesAt))throw new Error('最後考核日期必須晚於開始時間');
-  await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'PATCH',{audience:String(v.audience||'').trim()||'所有符合課程資格人員',passingScore:Math.max(1,Math.min(100,Number(v.passingScore)||80)),blindMode:!!v.blind,drawCount:Math.max(0,Number(v.drawCount)||0)});
-  await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt:iso(v.opensAt),closesAt:iso(v.closesAt),reminderEnabled:true});
-  if(state.examWho&&window.ExamAssigneePicker)await window.ExamAssigneePicker.saveModel(id,state.examWho);
+  if(state.examSettingsDirty){
+    if(v.opensAt&&v.closesAt&&new Date(v.opensAt)>=new Date(v.closesAt))throw new Error('最後考核日期必須晚於開始時間');
+    await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'PATCH',{audience:String(v.audience||'').trim()||'所有符合課程資格人員',passingScore:Math.max(1,Math.min(100,Number(v.passingScore)||80)),blindMode:!!v.blind,drawCount:Math.max(0,Number(v.drawCount)||0)});
+    await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt:iso(v.opensAt),closesAt:iso(v.closesAt),reminderEnabled:true});
+  }
+  if(state.examWho?.touched&&window.ExamAssigneePicker)await window.ExamAssigneePicker.saveModel(id,state.examWho);
 }
-window.courseWizard681SetExamField=(field,value)=>{state.examSettings={...(state.examSettings||{}),[field]:value};};
+window.courseWizard681SetExamField=(field,value)=>{state.examSettings={...(state.examSettings||{}),[field]:value};state.examSettingsDirty=true;};
 
 function stepThree(){
   const primary=['later','bank','ai'];
@@ -1005,7 +1007,7 @@ async function openAssessmentAuthoring(){
 
 function clearWizardState(){
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';
@@ -1308,7 +1310,7 @@ async function openCourseWorkspace(){
   el('admin-course-material-hub')?.scrollIntoView({behavior:'smooth',block:'start'});
 
   // Do not leak a completed course into the next create-course flow.
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';
@@ -1320,7 +1322,7 @@ async function openCourseWorkspace(){
 function reset(){
   if(state.created&&!canLeaveCourse())return alert('目前教材尚未全部完成，請先等待或處理失敗工作。');
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';clearWorkflowId();
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }

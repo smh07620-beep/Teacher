@@ -158,7 +158,7 @@
     function bind(host) {
       if (host.dataset.whoBound) return; host.dataset.whoBound = '1';
       host.addEventListener('change', event => {
-        const model = models.get(host); if (!model) return; const target = event.target;
+        const model = models.get(host); if (!model) return; model.touched = true; const target = event.target;
         if (target.matches?.('input[type=radio]')) { model.mode = target.value === 'custom' ? 'custom' : 'all'; paint(host); return; }
         if (target.dataset?.whoGroup) { const key = target.dataset.whoGroup; model.groups = target.checked ? [...new Set([...model.groups, key])] : model.groups.filter(item => item !== key); paint(host); return; }
         if (target.dataset?.whoUser) { const key = target.dataset.whoUser.toLowerCase(); model.users = target.checked ? [...new Set([...model.users, key])] : model.users.filter(item => item !== key); paint(host); }
