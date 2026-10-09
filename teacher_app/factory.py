@@ -106,6 +106,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.materials.ai_video_routes import register_ai_video_routes
     from teacher_app.materials.media_audio_routes import register_media_audio_routes
     from teacher_app.materials.media_subtitle_routes import register_media_subtitle_routes
+    from teacher_app.materials.teacher_narration_routes import register_teacher_narration_routes
     from teacher_app.storage.admin_routes import register_storage_admin_routes
     from teacher_app.storage import r2_ledger
     from teacher_app.worker.routes import register_free_worker
@@ -131,6 +132,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_ai_video_routes(app)
     app = register_media_audio_routes(app)
     app = register_media_subtitle_routes(app)
+    app = register_teacher_narration_routes(app)
     app = register_doc_template_routes(
         app,
         paths=app.config["STORAGE_PATHS"],

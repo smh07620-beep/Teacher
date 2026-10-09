@@ -144,6 +144,7 @@ ASSET_MANIFEST = {
             "/teacher-learners-p2.js",
             "/learner-reading-progress-f2.js",
             "/learner-narration-1100.js",
+            "/teacher-slide-narration-1109.js",
             "/course-lifecycle-f2.js",
             "/teacher-course-tracking-f2.js",
             "/learner-study-exam-loop-1032.js",

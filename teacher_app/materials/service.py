@@ -109,7 +109,7 @@ def _attach_narrations(uploaded: list[dict]) -> list[dict]:
     for item in uploaded:
         meta = item.get("storageMeta") or {}
         source_id = str(meta.get("sourceMaterialId") or "")
-        if meta.get("mediaKind") != "ai_narration" or not source_id or source_id not in by_id:
+        if meta.get("mediaKind") not in {"ai_narration", "teacher_narration"} or not source_id or source_id not in by_id:
             continue
         previous = narrations.get(source_id)
         if previous is None or str(item.get("dateAdded") or "") > str(previous.get("dateAdded") or ""):
@@ -122,11 +122,23 @@ def _attach_narrations(uploaded: list[dict]) -> list[dict]:
             continue
         narration = narrations.get(item_id)
         if narration:
-            item = {**item, "narration": {
+            narration_meta = narration.get("storageMeta") or {}
+            payload = {
                 "id": narration.get("id"),
                 "title": narration.get("title") or "AI 配音",
                 "viewUrl": f"/view/{narration['id']}",
-            }}
+            }
+            if narration_meta.get("mediaKind") == "teacher_narration":
+                # 老師自己錄的旁白：附上翻頁時間表，學員端可隨旁白自動翻頁。
+                # 教材之後改版時時間表可能對不上頁面，標記 stale 讓前端只播聲音不翻頁。
+                payload.update({
+                    "kind": "teacher",
+                    "title": narration.get("title") or "老師旁白",
+                    "timeline": list(narration_meta.get("timeline") or []),
+                    "durationMs": int(narration_meta.get("durationMs") or 0),
+                    "stale": int(narration_meta.get("sourceVersion") or 1) != int(item.get("currentVersion") or 1),
+                })
+            item = {**item, "narration": payload}
         result.append(item)
     return result
 
