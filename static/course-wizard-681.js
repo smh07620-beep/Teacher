@@ -188,7 +188,7 @@ function render(){
   const box=el('cw681-step');
   if(state.step===1){box.innerHTML=stepOne();bindStepOneControls();}
   if(state.step===2){box.innerHTML=stepTwo();paintMaterials();renderFileSummary();bindStepTwoControls();}
-  if(state.step===3){box.innerHTML=stepThree();bindStepThreeControls();}
+  if(state.step===3){box.innerHTML=stepThree();bindStepThreeControls();mountExamWhoPicker();}
   if(state.step===4)box.innerHTML=stepFour();
   const status=el('cw681-status');if(status&&state.resultHtml)status.innerHTML=state.resultHtml;
   syncCompletionControls();
@@ -365,13 +365,21 @@ function examSettingsPanel(){
   const v=state.examSettings||{};
   return `<div class="mt-3 rounded-xl border border-slate-200 bg-white p-3"><p class="text-xs font-black text-slate-800">考卷設定（發布時一併套用，之後也能在考卷管理修改）</p>
   <div class="mt-2 grid gap-2 md:grid-cols-2">
-    <label class="text-[11px] font-bold">適用人員<input value="${esc(v.audience||'')}" list="cw681-audience-presets" data-csp-change="courseWizard681SetExamField('audience',this.value)" class="mt-1 w-full rounded border px-2 py-1.5 text-xs" placeholder="例如：值班醫檢師"><datalist id="cw681-audience-presets"><option value="所有符合課程資格人員"><option value="一般人員"><option value="組員"><option value="值班人員"><option value="值班醫檢師"><option value="新進人員"></datalist></label>
+    <div id="cw681-who-host" class="md:col-span-2"></div>
     <label class="text-[11px] font-bold">及格標準（分）<input type="number" min="1" max="100" value="${Number(v.passingScore||80)}" data-csp-change="courseWizard681SetExamField('passingScore',this.value)" class="mt-1 w-full rounded border px-2 py-1.5 text-xs"></label>
     <label class="text-[11px] font-bold">開始時間（留白＝不限）<input type="datetime-local" value="${esc(v.opensAt||'')}" data-csp-change="courseWizard681SetExamField('opensAt',this.value)" class="mt-1 w-full rounded border px-2 py-1.5 text-xs"></label>
     <label class="text-[11px] font-bold">最後考核日期（留白＝不限）<input type="datetime-local" value="${esc(v.closesAt||'')}" data-csp-change="courseWizard681SetExamField('closesAt',this.value)" class="mt-1 w-full rounded border px-2 py-1.5 text-xs"></label>
     <label class="text-[11px] font-bold">每次隨機抽幾題（0＝使用全部題目）<input type="number" min="0" value="${Number(v.drawCount||0)}" data-csp-change="courseWizard681SetExamField('drawCount',this.value)" class="mt-1 w-full rounded border px-2 py-1.5 text-xs"></label>
     <label class="flex items-center gap-2 text-[11px] font-bold md:mt-5"><input type="checkbox" ${v.blind?'checked':''} data-csp-change="courseWizard681SetExamField('blind',this.checked)"> 開啟盲測模式</label>
   </div><p class="mt-2 text-[11px] text-slate-500">審核者、批改者會自動使用你登入的帳號資料，不用另外填。</p></div>`;
+}
+
+function mountExamWhoPicker(){
+  const host=el('cw681-who-host');
+  if(!host||!window.ExamAssigneePicker)return;
+  state.examWho=state.examWho||window.ExamAssigneePicker.newModel();
+  const sc=scope();
+  void window.ExamAssigneePicker.mount(host,{model:state.examWho,area:state.course?.area||sc.area,group:state.course?.group||sc.group});
 }
 
 async function saveWizardExamSettings(id){
@@ -382,6 +390,7 @@ async function saveWizardExamSettings(id){
   if(v.opensAt&&v.closesAt&&new Date(v.opensAt)>=new Date(v.closesAt))throw new Error('最後考核日期必須晚於開始時間');
   await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'PATCH',{audience:String(v.audience||'').trim()||'所有符合課程資格人員',passingScore:Math.max(1,Math.min(100,Number(v.passingScore)||80)),blindMode:!!v.blind,drawCount:Math.max(0,Number(v.drawCount)||0)});
   await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt:iso(v.opensAt),closesAt:iso(v.closesAt),reminderEnabled:true});
+  if(state.examWho&&window.ExamAssigneePicker)await window.ExamAssigneePicker.saveModel(id,state.examWho);
 }
 window.courseWizard681SetExamField=(field,value)=>{state.examSettings={...(state.examSettings||{}),[field]:value};};
 

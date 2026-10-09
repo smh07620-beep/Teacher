@@ -214,3 +214,22 @@ class NoDuplicateStaticIdsTests(unittest.TestCase):
         ids = re.findall(r'\sid="([^"$]+)"', html)
         duplicates = [key for key, count in collections.Counter(ids).items() if count > 1]
         self.assertEqual(duplicates, [])
+
+
+class ExamWhoCanUseUiTests(unittest.TestCase):
+    @staticmethod
+    def _read(name):
+        from pathlib import Path
+        return (Path(__file__).resolve().parents[1] / "static" / name).read_text(encoding="utf-8")
+
+    def test_settings_page_and_wizard_share_one_assignee_picker(self):
+        settings = self._read("admin-exam-settings.js")
+        wizard = self._read("course-wizard-681.js")
+        html = self._read("system.html")
+        self.assertIn("window.ExamAssigneePicker", settings)
+        self.assertIn("/assignees", settings)
+        self.assertIn('id="exam-who-host"', html)
+        self.assertIn("cw681-who-host", wizard)
+        self.assertIn("ExamAssigneePicker.saveModel", wizard)
+        # 設定頁儲存時一併送出名單（伺服器強制檢查）。
+        self.assertIn("ExamAssigneePicker?.saveFor", settings)

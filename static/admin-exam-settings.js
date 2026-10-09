@@ -50,6 +50,7 @@
       document.getElementById('exam-settings-opens-at').value=localInput(examWindow.opens_at);
       document.getElementById('exam-settings-closes-at').value=localInput(examWindow.closes_at);
       editingMeta.examWindow=examWindow;
+      void window.ExamAssigneePicker?.mount(document.getElementById('exam-who-host'), {categoryId: catId, area, group});
       document.getElementById('exam-settings-passing-score').value = Number(category.passingScore || 80);
       document.getElementById('exam-settings-blind').checked = !!category.blindMode;
       const courseSelect = document.getElementById('exam-settings-course');
@@ -89,7 +90,7 @@
     const quotas = Object.fromEntries(types.map(type => [type, Math.max(0, parseInt(document.getElementById(`exam-quota-${type}`)?.value || '0', 10) || 0)]));
     if (quotaMode && Object.values(quotas).reduce((a,b) => a + b, 0) <= 0) { status().textContent = '❌ 題型配額至少要設定 1 題'; return; }
     const payload = {title, desc:document.getElementById('exam-settings-desc').value.trim(), audience:document.getElementById('exam-settings-audience').value.trim(), courseId:document.getElementById('exam-settings-course').value || '', drawCount:limited ? Math.max(1, parseInt(document.getElementById('exam-settings-draw-count').value || '1', 10) || 1) : 0, drawRules:quotaMode ? {mode:'type_quota', quotas} : {}, passingScore:Math.max(1, Math.min(100, parseInt(document.getElementById('exam-settings-passing-score').value || '80', 10) || 80)), blindMode:document.getElementById('exam-settings-blind').checked};
-    try { button.disabled = true; status().textContent = '⏳ 儲存設定中…'; const opensAt=document.getElementById('exam-settings-opens-at')?.value||''; const closesAt=document.getElementById('exam-settings-closes-at')?.value||''; if(opensAt&&closesAt&&new Date(opensAt)>=new Date(closesAt))throw new Error('最後考核日期必須晚於開始日期'); const response = await fetch(`/api/quiz-categories/${catId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '修改失敗'); const windowResponse=await fetch(`/api/exam-windows/${catId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({opensAt:toUtcIso(opensAt),closesAt:toUtcIso(closesAt),reminderEnabled:true})}); const windowData=await windowResponse.json().catch(() => ({})); if(!windowResponse.ok)throw new Error(windowData.error||'考核時間儲存失敗'); editingMeta = {...(editingMeta || {}), ...payload, examWindow:windowData.window||{}, reviewStatus:data.reviewStatus || 'draft', reviewerName:data.reviewerName || '', reviewedAt:data.reviewedAt || '', publishedAt:data.publishedAt || '', active:!!data.active}; invalidate(catId, editingMeta.group); clearExamDraft(catId); status().textContent = editingMeta.reviewStatus === 'draft' ? '✅ 設定已儲存；因內容已變更，考卷回到「待審核」狀態。' : '✅ 設定已儲存。'; updateWorkflow(editingMeta); } catch (error) { status().textContent = '❌ ' + error.message; } finally { button.disabled = false; }
+    try { button.disabled = true; status().textContent = '⏳ 儲存設定中…'; const opensAt=document.getElementById('exam-settings-opens-at')?.value||''; const closesAt=document.getElementById('exam-settings-closes-at')?.value||''; if(opensAt&&closesAt&&new Date(opensAt)>=new Date(closesAt))throw new Error('最後考核日期必須晚於開始日期'); const response = await fetch(`/api/quiz-categories/${catId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '修改失敗'); const windowResponse=await fetch(`/api/exam-windows/${catId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({opensAt:toUtcIso(opensAt),closesAt:toUtcIso(closesAt),reminderEnabled:true})}); const windowData=await windowResponse.json().catch(() => ({})); if(!windowResponse.ok)throw new Error(windowData.error||'考核時間儲存失敗'); await window.ExamAssigneePicker?.saveFor?.(document.getElementById('exam-who-host'), catId); editingMeta = {...(editingMeta || {}), ...payload, examWindow:windowData.window||{}, reviewStatus:data.reviewStatus || 'draft', reviewerName:data.reviewerName || '', reviewedAt:data.reviewedAt || '', publishedAt:data.publishedAt || '', active:!!data.active}; invalidate(catId, editingMeta.group); clearExamDraft(catId); status().textContent = editingMeta.reviewStatus === 'draft' ? '✅ 設定已儲存；因內容已變更，考卷回到「待審核」狀態。' : '✅ 設定已儲存。'; updateWorkflow(editingMeta); } catch (error) { status().textContent = '❌ ' + error.message; } finally { button.disabled = false; }
   }
 
   async function preview() {
@@ -129,6 +130,89 @@
 
   async function publish() { const catId = document.getElementById('exam-settings-id').value; if (!catId) return; const issues=publicationIssues(); if(issues.length){status().textContent='❌ 發布前請先完成：'+issues.join('、'); return;} if(!confirm('確認發布這份考卷？發布後學員會看到目前設定的正式版本。'))return; try { status().textContent = '⏳ 儲存設定中…'; await saveSettings(); if(String(status().textContent||'').startsWith('❌'))return; status().textContent = '⏳ 檢查題目並審核中…'; const reviewResponse = await fetch(`/api/quiz-categories/${catId}/review`, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}), reviewData = await reviewResponse.json().catch(() => ({})); if (!reviewResponse.ok) throw new Error(reviewData.issues?.length ? `${reviewData.error}：${reviewData.issues.join('、')}` : (reviewData.error || '審核失敗')); status().textContent = '⏳ 發布中…'; const response = await fetch(`/api/quiz-categories/${catId}/publish`, {method:'POST', }), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '發布失敗'); editingMeta = {...(editingMeta || {}), active:true, publishedAt:data.publishedAt, reviewStatus:'approved', publicationId:data.publicationId || '', publicationHash:data.publicationHash || '', publishedBy:data.publishedBy || ''}; status().textContent = `🚀 考卷已發布${data.publishedBy ? '（發布者：' + data.publishedBy + '）' : ''}；已保存 ${Number(data.snapshotQuestionCount || 0)} 題發布快照${data.publicationHash ? '（' + data.publicationHash.slice(0,10) + '…）' : ''}。`; updateWorkflow(editingMeta); adminQuizCategoriesCache.clear(); Object.keys(dynamicCategoriesCache).forEach(key => delete dynamicCategoriesCache[key]); } catch (error) { status().textContent = '❌ ' + error.message; } }
   async function toggleBlindMode(catId, enabled) { const button = document.getElementById(`blind-toggle-${catId}`); if (button) { button.disabled = true; button.textContent = '⏳ 更新盲測…'; } try { const response = await fetch(`/api/quiz-categories/${catId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({blindMode:!!enabled})}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '盲測設定失敗'); const area = document.getElementById('admin-quiz-area')?.value || currentTrainingArea, group = document.getElementById('admin-quiz-group')?.value || currentGroupKey; adminQuizCategoriesCache.delete(adminScopeKey(area, group)); await renderAdminQuizCategories(true); } catch (error) { alert(error.message); if (button) { button.disabled = false; button.textContent = '🕶️ 盲測設定'; } } }
+
+  // 「誰能使用」挑選器：不限（預設）／指定組別與個人。設定頁與課程精靈共用；伺服器強制檢查。
+  const ExamAssigneePicker = (() => {
+    const models = new WeakMap();
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const newModel = () => ({mode:'all', groups:[], users:[], options:null, filter:''});
+
+    function paint(host) {
+      const model = models.get(host); if (!model) return;
+      const options = model.options || {groups:[], people:[]};
+      const needle = model.filter.trim().toLowerCase();
+      const people = (options.people || []).filter(person => !needle || `${person.name} ${person.username} ${person.empId} ${person.groupLabel}`.toLowerCase().includes(needle));
+      host.innerHTML = `<div class="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
+        <p class="text-xs font-black text-indigo-900">👥 誰能使用這份考卷</p>
+        <div class="mt-2 flex flex-wrap gap-4 text-sm">
+          <label class="inline-flex items-center gap-1.5"><input type="radio" name="who-mode-${esc(host.id)}" value="all" ${model.mode === 'all' ? 'checked' : ''}> 不限制（符合課程資格的人都能考）</label>
+          <label class="inline-flex items-center gap-1.5"><input type="radio" name="who-mode-${esc(host.id)}" value="custom" ${model.mode === 'custom' ? 'checked' : ''}> 只限指定的組別／個人</label>
+        </div>
+        ${model.mode === 'custom' ? `<div class="mt-3 grid gap-3 md:grid-cols-2">
+          <div><p class="text-[11px] font-bold text-slate-600">組別</p><div class="mt-1 space-y-1">${(options.groups || []).map(group => `<label class="flex items-center gap-1.5 text-xs"><input type="checkbox" data-who-group="${esc(group.key)}" ${model.groups.includes(group.key) ? 'checked' : ''}> ${esc(group.label)}</label>`).join('') || '<p class="text-xs text-slate-400">沒有可選的組別</p>'}</div></div>
+          <div><p class="text-[11px] font-bold text-slate-600">個人（已選 ${model.users.length} 人）</p><input data-who-search value="${esc(model.filter)}" placeholder="搜尋姓名／帳號" class="mt-1 w-full rounded border px-2 py-1 text-xs"><div class="mt-1 max-h-40 overflow-auto rounded border bg-white p-1.5 space-y-1">${people.map(person => `<label class="flex items-center gap-1.5 text-xs"><input type="checkbox" data-who-user="${esc(person.username)}" ${model.users.includes(person.username.toLowerCase()) ? 'checked' : ''}> ${esc(person.name)}<span class="text-slate-400">${esc(person.groupLabel)}</span></label>`).join('') || '<p class="text-xs text-slate-400">找不到符合的人員</p>'}</div></div>
+        </div><p class="mt-2 text-[11px] text-slate-500">只有被選到的人看得到、也能開始作答；管理者不受影響。已開始作答的人可以做完。</p>` : '<p class="mt-2 text-[11px] text-slate-500">沒有名單時維持原本規則，不會有人突然看不到。</p>'}
+      </div>`;
+    }
+
+    function bind(host) {
+      if (host.dataset.whoBound) return; host.dataset.whoBound = '1';
+      host.addEventListener('change', event => {
+        const model = models.get(host); if (!model) return; const target = event.target;
+        if (target.matches?.('input[type=radio]')) { model.mode = target.value === 'custom' ? 'custom' : 'all'; paint(host); return; }
+        if (target.dataset?.whoGroup) { const key = target.dataset.whoGroup; model.groups = target.checked ? [...new Set([...model.groups, key])] : model.groups.filter(item => item !== key); paint(host); return; }
+        if (target.dataset?.whoUser) { const key = target.dataset.whoUser.toLowerCase(); model.users = target.checked ? [...new Set([...model.users, key])] : model.users.filter(item => item !== key); paint(host); }
+      });
+      host.addEventListener('input', event => {
+        const model = models.get(host);
+        if (model && event.target.matches?.('[data-who-search]')) { model.filter = event.target.value; const caret = event.target.selectionStart; paint(host); const box = host.querySelector('[data-who-search]'); box?.focus(); box?.setSelectionRange?.(caret, caret); }
+      });
+    }
+
+    async function load(host, area, group) {
+      const model = models.get(host);
+      try {
+        const response = await fetch(`/api/learning-assignments/audience-options?area=${encodeURIComponent(area || '')}&group=${encodeURIComponent(group || '')}`);
+        model.options = response.ok ? await response.json() : {groups:[], people:[]};
+      } catch (_error) { model.options = {groups:[], people:[]}; }
+      paint(host);
+    }
+
+    // model 可由呼叫端提供（精靈尚未建立考卷時先暫存選擇）。
+    async function mount(host, {categoryId = '', area = '', group = '', model = null} = {}) {
+      if (!host) return null;
+      const current = model || newModel(); current.options = current.options || null;
+      models.set(host, current); bind(host); paint(host);
+      if (categoryId) {
+        try {
+          const data = await (await fetch(`/api/quiz-categories/${encodeURIComponent(categoryId)}/assignees`)).json();
+          const rows = Array.isArray(data.assignees) ? data.assignees : [];
+          current.groups = rows.filter(row => row.type === 'group').map(row => row.key);
+          current.users = rows.filter(row => row.type === 'user').map(row => String(row.key).toLowerCase());
+          current.mode = rows.length && !rows.some(row => row.type === 'all') ? 'custom' : 'all';
+        } catch (_error) { /* 讀不到就維持不限制 */ }
+      }
+      await load(host, area, group);
+      return current;
+    }
+
+    function listFor(model) {
+      if (!model || model.mode !== 'custom') return [];
+      const list = [...model.groups.map(key => ({type:'group', key})), ...model.users.map(key => ({type:'user', key}))];
+      if (!list.length) throw new Error('已選「只限指定對象」，請至少選一個組別或一個人，或改回「不限制」。');
+      return list;
+    }
+
+    async function saveModel(categoryId, model) {
+      if (!categoryId || !model) return;
+      const response = await fetch(`/api/quiz-categories/${encodeURIComponent(categoryId)}/assignees`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({assignees:listFor(model)})});
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || '考卷對象儲存失敗');
+    }
+
+    return {mount, newModel, saveModel, saveFor: (host, categoryId) => saveModel(categoryId, models.get(host))};
+  })();
+  window.ExamAssigneePicker = ExamAssigneePicker;
 
   window.adminEditQuizCategory = catId => openSettings(catId);
   window.openExamSettings = openSettings;
