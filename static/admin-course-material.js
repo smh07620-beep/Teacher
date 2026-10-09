@@ -399,40 +399,6 @@
       });
   }
 
-  async function loadCourseFeedbackSummary(courseId,panel){
-      if(!panel||!courseId)return;
-      const output=panel.querySelector('[data-course-feedback-summary]');
-      if(output)output.classList.remove('hidden');
-      if(output)output.innerHTML='<span class="text-slate-400">讀取回饋彙總中…</span>';
-      try{
-          const res=await fetch(`/api/course-feedback/${encodeURIComponent(courseId)}/summary`,{credentials:'same-origin',cache:'no-store'});
-          const data=await res.json().catch(()=>({}));
-          if(!res.ok)throw new Error(data.error||'無法讀取回饋彙總');
-          const count=Number(data.responseCount||0),average=Number(data.averageRating||0),counts=data.ratingCounts||{};
-          if(output)output.innerHTML=`<div class="flex flex-wrap items-center gap-2"><span class="course-stat-chip">回覆 ${count} 份</span><span class="course-stat-chip">平均 ${count?average.toFixed(1):'—'} / 5</span></div><div class="mt-2 flex flex-wrap gap-2 text-[10px] text-slate-500">${[5,4,3,2,1].map(score=>`<span>${score} 分：${Number(counts[String(score)]||0)}</span>`).join('')}</div>`;
-      }catch(error){
-          if(output)output.innerHTML=`<span class="text-amber-700">${escapeHtml(error.message||'無法讀取回饋彙總')}</span>`;
-      }
-  }
-
-  function appendCourseFeedbackSummaryPanels(box,courses){
-      const details=Array.from(box.querySelectorAll('.admin-course-list > details'));
-      courses.forEach((course,index)=>{
-          const card=details[index],body=card?.querySelector(':scope > div.border-t');
-          if(!body)return;
-          const panel=document.createElement('div');
-          panel.className='rounded-xl border border-teal-100 bg-teal-50/50 px-3 py-1.5';
-          panel.innerHTML='<div class="flex items-center justify-between gap-3" title="只顯示匿名統計，不列出個別學員與留言。"><div class="min-w-0"><span class="text-xs font-black text-teal-900">💬 課程回饋彙總</span></div></div><div data-course-feedback-summary class="hidden mt-2 text-[11px] text-slate-500"></div>';
-          const button=document.createElement('button');
-          button.type='button';
-          button.className='shrink-0 rounded-lg border border-teal-200 bg-white px-3 py-1 text-[10px] font-bold text-teal-800';
-          button.textContent='查看回饋彙總';
-          button.addEventListener('click',()=>loadCourseFeedbackSummary(course.id,panel));
-          panel.firstElementChild?.appendChild(button);
-          body.appendChild(panel);
-      });
-  }
-
   async function jumpToAdminQuiz(quizId,area,group){
       const targetArea=String(area||currentTrainingArea||'internal');
       const targetGroup=String(group||currentGroupKey||'grpBio');
@@ -519,7 +485,6 @@
           });
           box.querySelector('.admin-course-list')?.appendChild(more);
       }
-      appendCourseFeedbackSummaryPanels(box,visibleCourses);
       box.dataset.ready='1';
       bindLearningAssignmentControls(box,state);
       // Consumers that decorate each card can settle synchronously after the

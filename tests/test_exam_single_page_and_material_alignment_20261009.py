@@ -141,5 +141,16 @@ class QuestionInlineEditTests(unittest.TestCase):
         self.assertIn("bulkExpanding=true;", self.ui)
 
 
+class CourseOutcomesMergedTests(unittest.TestCase):
+    def test_tracking_and_feedback_are_one_dialog_with_two_tabs(self):
+        js = read("teacher-course-tracking-f2.js")
+        self.assertIn("📊 學習成果", js)
+        self.assertIn('data-tracking-tab="progress"', js)
+        self.assertIn('data-tracking-tab="feedback"', js)
+        hub = read("admin-course-material.js")
+        self.assertNotIn("appendCourseFeedbackSummaryPanels", hub)
+        self.assertNotIn("查看回饋彙總", hub)
+
+
 if __name__ == "__main__":
     unittest.main()

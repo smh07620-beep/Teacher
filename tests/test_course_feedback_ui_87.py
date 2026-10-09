@@ -8,7 +8,7 @@ class CourseFeedbackUi87Tests(unittest.TestCase):
     def setUpClass(cls):
         cls.html = ROOT.joinpath("static", "system.html").read_text(encoding="utf-8")
         cls.learner = ROOT.joinpath("static", "system-learner.js").read_text(encoding="utf-8")
-        cls.admin = ROOT.joinpath("static", "admin-course-material.js").read_text(encoding="utf-8")
+        cls.admin = ROOT.joinpath("static", "teacher-course-tracking-f2.js").read_text(encoding="utf-8")
         cls.factory = ROOT.joinpath("teacher_app", "factory.py").read_text(encoding="utf-8")
 
     def test_feedback_dialog_is_named_and_has_programmatic_labels(self):
@@ -39,8 +39,8 @@ class CourseFeedbackUi87Tests(unittest.TestCase):
 
     def test_admin_workspace_shows_only_aggregate_feedback(self):
         for token in (
-            "/api/course-feedback/${encodeURIComponent(courseId)}/summary",
-            "課程回饋彙總",
+            "/api/course-feedback/'+encodeURIComponent(courseId)+'/summary",
+            "回饋彙總",
             "averageRating",
             "ratingCounts",
             "只顯示匿名統計",
