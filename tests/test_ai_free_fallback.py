@@ -310,6 +310,15 @@ class FreeAIFallbackTests(unittest.TestCase):
                 free_ai_fallback.ollama_chat("hi", json_mode=False, local=local)
         self.assertIn("沒有開啟", str(ctx.exception))
 
+    def test_ollama_disables_thinking_and_strips_think_tags(self):
+        local = SimpleNamespace(enabled=True, ollama_enabled=True, ollama_model="m",
+                                ollama_base_url="http://127.0.0.1:1", ollama_timeout_seconds=30)
+        response = SimpleNamespace(status_code=200, json=lambda: {"message": {"content": "<think>想很久</think>答案"}})
+        with patch.object(free_ai_fallback.requests, "post", return_value=response) as post:
+            text = free_ai_fallback.ollama_chat("hi", json_mode=False, local=local)
+        self.assertEqual(text, "答案")
+        self.assertIs(post.call_args.kwargs["json"]["think"], False)
+
     def test_ollama_timeout_is_not_reported_as_offline(self):
         local = SimpleNamespace(enabled=True, ollama_enabled=True, ollama_model="m",
                                 ollama_base_url="http://127.0.0.1:1", ollama_timeout_seconds=240)

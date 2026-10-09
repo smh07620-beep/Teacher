@@ -318,6 +318,8 @@ def ollama_chat(prompt: str, *, json_mode: bool, local: LocalFallbackSettings | 
         "model": local.ollama_model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
+        # qwen3 預設會先「想很久」再回答；關掉思考模式可大幅縮短等待時間。
+        "think": False,
         "options": {"temperature": 0.15},
     }
     if json_mode:
@@ -340,6 +342,8 @@ def ollama_chat(prompt: str, *, json_mode: bool, local: LocalFallbackSettings | 
     if response.status_code >= 400:
         raise RuntimeError(f"本機 Ollama 請求失敗 HTTP {response.status_code}。")
     text = str(((response.json().get("message") or {}).get("content") or "")).strip()
+    # 舊版 Ollama 不認得 think 參數時，思考內容會夾在 <think>…</think>，一律剝除。
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
     if not text:
         raise RuntimeError("本機 AI 沒有回傳內容。")
     return text
