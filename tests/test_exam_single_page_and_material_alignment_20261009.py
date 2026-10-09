@@ -200,6 +200,11 @@ class ExamDraftQueueScopeTests(unittest.TestCase):
         self.assertIn("areaSelect.value = area", js)
         self.assertIn("openExamDraft(String(item.examId), item.status === 'exam_ready', item)", js)
 
+    def test_opening_any_exam_aligns_scope_from_its_own_record(self):
+        js = read("teacher-content-studio-71.js")
+        self.assertIn("async function alignExamScope(catId)", js)
+        self.assertIn("await alignExamScope(catId);", js)
+
 
 if __name__ == "__main__":
     unittest.main()
