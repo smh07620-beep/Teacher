@@ -1,7 +1,7 @@
 /* Teacher 10/14 interface convergence.
  * Keep existing capabilities intact while reducing top-level choices:
  * - Media production lives under 教材與課程 instead of a separate main nav entry.
- * - Each course card shows 編輯課程 / 學習指派 / 學習成果 and one 更多 menu (lifecycle, delete); media is reached from the course wizard.
+ * - Each course card shows 編輯課程 / 學習成果 and one 更多 menu (lifecycle, delete); media is reached from the course wizard.
  * - Kokoro voice IDs remain internal values for debugging but are not shown to teachers.
  */
 (function () {
@@ -166,11 +166,6 @@
         button.setAttribute('data-teacher-edit-course-1014', '1');
         group.appendChild(button);
       }
-      if (assignment) {
-        const button = makeCardButton('學習指派', 'rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-bold text-white', () => invokeOriginal(assignment));
-        button.setAttribute('data-teacher-assign-course-1014', '1');
-        group.appendChild(button);
-      }
 
       const more = document.createElement('details');
       more.setAttribute('data-teacher-course-more-1014', '1');
@@ -185,6 +180,12 @@
       const lifecycleSlot = document.createElement('div');
       lifecycleSlot.setAttribute('data-teacher-course-lifecycle-slot-1014', '1');
       lifecycleSlot.className = 'flex flex-col gap-1 [&_button]:w-full [&_button]:text-left';
+      if (assignment) {
+        // 學習指派的主要入口是「編輯課程」第 1 步；舊課程補指派才用這裡。
+        const assignButton = makeCardButton('👥 補指派學員', 'w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border border-teal-200 bg-teal-50 font-bold text-teal-800', () => { more.open = false; invokeOriginal(assignment); });
+        assignButton.setAttribute('data-teacher-assign-course-1014', '1');
+        menu.appendChild(assignButton);
+      }
       menu.appendChild(lifecycleSlot);
       if (remove) {
         const divider = document.createElement('div');

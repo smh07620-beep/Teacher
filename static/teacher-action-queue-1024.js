@@ -244,15 +244,25 @@
   }
 
   // 老師未完成的考卷：已審核→直接進發布；否則回到出題。
-  async function openExamDraft(examId, ready) {
+  async function openExamDraft(examId, ready, item) {
+    // 待辦會列出所有範圍的草稿考卷；考卷頁只顯示目前的訓練區／組別，
+    // 所以先切到這份考卷所在的範圍，避免「待辦有、考卷頁找不到」。
+    const area = String(item?.area || ''), group = String(item?.group || '');
+    const areaSelect = document.getElementById('admin-quiz-area'), groupSelect = document.getElementById('admin-quiz-group');
+    if (areaSelect && area) {
+      areaSelect.value = area;
+      if (groupSelect && typeof window.groupOptionsForArea === 'function') groupSelect.innerHTML = window.groupOptionsForArea(area);
+    }
+    if (groupSelect && group && [...groupSelect.options].some(option => option.value === group)) groupSelect.value = group;
     await window.AppWorkspaceRoutes.show('assessment', true);
+    if (area || group) await Promise.resolve(window.renderAdminQuizCategories?.(true));
     if (ready && typeof window.adminOpenExamPublish === 'function') return window.adminOpenExamPublish(examId);
     if (typeof window.openTeacherContentExam === 'function') return window.openTeacherContentExam(examId);
   }
 
   async function openAction(item) {
     if (!item) return;
-    if (item.examId) return openExamDraft(String(item.examId), item.status === 'exam_ready');
+    if (item.examId) return openExamDraft(String(item.examId), item.status === 'exam_ready', item);
     if (item.kind === 'review') return openReview(item);
     if (item.kind === 'material_failure') return openMaterialFailure(item);
     if (item.kind === 'intervention') return openIntervention(item);

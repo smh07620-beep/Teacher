@@ -47,7 +47,8 @@ class MaterialAlignmentTests(unittest.TestCase):
         self.assertIn("👁 誰能看：👥 指定組別", self.js)
 
     def test_ai_authoring_enters_from_course(self):
-        self.assertIn("data-course-ai-authoring=", self.js)
+        # 卡片上不再有獨立的「AI 製作」鈕；AI 製作在編輯課程第 2 步。
+        self.assertNotIn("data-course-ai-authoring=", self.js)
         self.assertIn("openTeacherCourseEditWorkspace(courseId,2)", self.js)
 
     def test_narration_badge_and_remove(self):
@@ -182,8 +183,22 @@ class MaterialsManagedInsideEditCourseTests(unittest.TestCase):
 
     def test_course_hub_rows_point_to_edit_course_instead_of_own_menu(self):
         hub = read("admin-course-material.js")
-        self.assertIn("data-material-edit-course=", hub)
-        self.assertIn("到編輯課程管理", hub)
+        self.assertIn("data-material-manage-hint", hub)
+        self.assertNotIn("data-material-edit-course=\"", hub.split("function bindMaterialNarrationControls")[0] + hub.split("function paintAdminCourseMaterialHub")[1])
+        self.assertNotIn("✨ AI 製作</button>", hub)
+
+    def test_card_primary_buttons_are_edit_and_outcomes_only(self):
+        conv = read("teacher-interface-convergence-1014.js")
+        self.assertIn("👥 補指派學員", conv)
+        self.assertNotIn("makeCardButton('學習指派'", conv)
+
+
+class ExamDraftQueueScopeTests(unittest.TestCase):
+    def test_queue_switches_to_the_exam_scope_before_opening(self):
+        js = read("teacher-action-queue-1024.js")
+        self.assertIn("async function openExamDraft(examId, ready, item)", js)
+        self.assertIn("areaSelect.value = area", js)
+        self.assertIn("openExamDraft(String(item.examId), item.status === 'exam_ready', item)", js)
 
 
 if __name__ == "__main__":
