@@ -5104,7 +5104,19 @@ def api_ai_generate_questions():
             return jsonify({"error": f"找不到指定教材：{mid}"}), 404
         if mat.get("group") != cat.get("group") or mat.get("area") != cat.get("area"):
             return jsonify({"error": "所選教材與考卷不屬於同一訓練區/組別"}), 400
+        meta = mat.get("storageMeta") or {}
+        if meta.get("generated") and not data.get("allowAiDerivatives"):
+            # AI 語音/影片只是原教材的衍生品：預設回到原始教材出題，
+            # 避免文字教材被轉成音訊後改走多模態（較慢、較耗額度）。
+            origin = get_material(str(meta.get("sourceMaterialId") or "")) if meta.get("sourceMaterialId") else None
+            if not origin or not origin.get("active", True):
+                continue
+            mat = origin
+        if any(str(m.get("id")) == str(mat.get("id")) for m in mats):
+            continue
         mats.append(mat)
+    if not mats:
+        return jsonify({"error": "所選教材皆為 AI 產物且找不到原始教材，請改選原始教材"}), 400
     try:
         requested_strategy = str(data.get("strategy", "auto")).strip()[:30] or "auto"
         questions, source_title, source_kinds = generate_ai_questions_from_materials(

@@ -245,3 +245,14 @@ class WizardFinishAfterPublishTests(unittest.TestCase):
         self.assertIn("finish.classList.toggle('hidden',isPublished)", js)
         self.assertIn("function examAuthoringBox", js)
         self.assertIn("state.openingAuthoring", js)
+
+
+class AiDerivativeExcludedFromQuestionSourceTests(unittest.TestCase):
+    def test_picker_hides_ai_derivatives_and_server_maps_to_source(self):
+        from pathlib import Path
+        js = Path("static/admin-ai-questions.js").read_text(encoding="utf-8")
+        self.assertIn("isAiDerivative", js)
+        self.assertIn("!isAiDerivative(m)", js)
+        host = Path("teacher_app/legacy_host.py").read_text(encoding="utf-8")
+        self.assertIn("allowAiDerivatives", host)
+        self.assertIn('meta.get("sourceMaterialId")', host)
