@@ -8,6 +8,8 @@ legacy host.
 from __future__ import annotations
 
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import quote
 
@@ -25,6 +27,71 @@ except ImportError:  # pragma: no cover - deployment dependency is optional at i
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+# 單頁預覽圖第一次被要求時才轉檔，連續翻頁會一頁一頁等。
+# 轉完目前這頁後，在背景把後面兩頁也轉好（寫進同一個快取），下一頁幾乎立刻出現。
+_PAGE_RENDER_LOCK = threading.Lock()
+_PAGE_WARM_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="slide-page-warm")
+_PAGE_WARM_PENDING: set[str] = set()
+_PAGE_WARM_AHEAD = 2
+
+
+def _page_cache_target(cache_dir: Path, page_no: int, stamp: str) -> Path:
+    return cache_dir / f"page-{page_no:04d}-{stamp}.png"
+
+
+def _render_presentation_page(pdf_path: Path, page_no: int, target: Path) -> bool:
+    """Render one PDF page into the shared cache. Returns False when the page does not exist."""
+    with _PAGE_RENDER_LOCK:
+        if target.exists() and target.stat().st_size > 0:
+            return True
+        document = pymupdf.open(str(pdf_path))
+        try:
+            if page_no > int(document.page_count or 0):
+                return False
+            page = document.load_page(page_no - 1)
+            width = max(1.0, float(page.rect.width))
+            scale = max(1.5, min(3.0, 1600.0 / width))
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
+            tmp = target.parent / f".render-{page_no:04d}.png"
+            pixmap.save(str(tmp))
+            tmp.replace(target)
+        finally:
+            document.close()
+    for stale in target.parent.glob(f"page-{page_no:04d}-*.png"):
+        if stale != target:
+            try:
+                stale.unlink()
+            except OSError:
+                pass
+    return True
+
+
+def _warm_following_pages(pdf_path: Path, cache_dir: Path, stamp: str, page_no: int, total: int) -> None:
+    for ahead in range(1, _PAGE_WARM_AHEAD + 1):
+        nxt = page_no + ahead
+        if total and nxt > total:
+            return
+        target = _page_cache_target(cache_dir, nxt, stamp)
+        key = str(target)
+        if target.exists() or key in _PAGE_WARM_PENDING:
+            continue
+        _PAGE_WARM_PENDING.add(key)
+
+        def job(path=pdf_path, number=nxt, out=target, marker=key):
+            try:
+                _render_presentation_page(path, number, out)
+            except Exception as exc:  # warming is best-effort; the request path reports real errors
+                LOGGER.debug("slide page warm failed page=%s error_type=%s", number, type(exc).__name__)
+            finally:
+                _PAGE_WARM_PENDING.discard(marker)
+
+        try:
+            _PAGE_WARM_POOL.submit(job)
+        except RuntimeError:
+            _PAGE_WARM_PENDING.discard(key)
+            return
 
 
 def _login_required():
@@ -187,25 +254,11 @@ def register_material_delivery_routes(owner, *, paths, storage_runtime=None, mat
             cache_dir = Path(paths.preview_cache_dir) / "presentation-pages" / safe_id
             cache_dir.mkdir(parents=True, exist_ok=True)
             stamp = f"{stat.st_size}-{stat.st_mtime_ns}"
-            target = cache_dir / f"page-{page_no:04d}-{stamp}.png"
+            target = _page_cache_target(cache_dir, page_no, stamp)
             if not target.exists() or target.stat().st_size <= 0:
-                document = pymupdf.open(str(pdf_path))
-                try:
-                    if page_no > int(document.page_count or 0):
-                        abort(404)
-                    page = document.load_page(page_no - 1)
-                    width = max(1.0, float(page.rect.width))
-                    scale = max(1.5, min(3.0, 1600.0 / width))
-                    pixmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
-                    pixmap.save(str(target))
-                finally:
-                    document.close()
-                for stale in cache_dir.glob(f"page-{page_no:04d}-*.png"):
-                    if stale != target:
-                        try:
-                            stale.unlink()
-                        except OSError:
-                            pass
+                if not _render_presentation_page(pdf_path, page_no, target):
+                    abort(404)
+            _warm_following_pages(pdf_path, cache_dir, stamp, page_no, total)
             response = send_file(
                 target,
                 mimetype="image/png",

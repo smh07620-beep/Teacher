@@ -51,7 +51,9 @@ class MaterialReaderModes20261006Tests(unittest.TestCase):
         self.assertIn("frame.removeAttribute('src')", block)
         self.assertIn("scrollbar=1&view=FitH", block)
         paging = self.learner[self.learner.index("function goToSlidePage"):self.learner.index("function closeSlideViewer")]
-        self.assertIn("renderSlideThumbs();", paging)
+        # 縮圖只在開啟時建立一次；翻頁由 updateViewerNav 切換 active（不重建縮圖）。
+        self.assertNotIn("renderSlideThumbs();", paging)
+        self.assertIn("btn.classList.toggle('active', i === index)", self.learner)
 
     def test_legacy_single_pdf_presentation_has_cached_page_image_endpoint(self):
         self.assertIn('/material-preview/<material_id>/page/<int:page_no>.png', self.delivery)
