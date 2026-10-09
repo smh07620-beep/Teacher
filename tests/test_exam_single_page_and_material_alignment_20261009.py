@@ -67,5 +67,18 @@ class PgyLearnerPanelTests(unittest.TestCase):
         self.assertNotIn("只顯示伺服器判定你可查看的學員", js)
 
 
+class ReviewSourceEditorSimplifiedTests(unittest.TestCase):
+    def test_teacher_sees_material_name_and_hint_only_by_default(self):
+        js = read("review-links-66.js")
+        self.assertIn("function materialSelect(selectedId)", js)
+        self.assertIn("不指定教材", js)
+        # 定位細節收進預設收合的選填區，欄位仍在，儲存時照常讀取。
+        advanced = js[js.index('data-review-source-advanced-66="1"'):]
+        for field in ("reviewAnchorType", "reviewPage", "reviewTimeSeconds", "reviewRegionHint", "reviewSection"):
+            self.assertIn(f'data-field="{field}"', advanced)
+        self.assertNotIn("<details open", js)
+        self.assertNotIn("placeholder=\"選擇或輸入教材 ID\"", js)
+
+
 if __name__ == "__main__":
     unittest.main()

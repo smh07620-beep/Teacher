@@ -160,27 +160,27 @@
     }
 
 
-    function materialDatalist(id) {
-        const options =
-            materialList()
-                .map(material => {
-                    const label =
-                        material.title
-                        || material.filename
-                        || material.id;
-
-                    return (
-                        `<option value="${esc(material.id)}">`
-                        + `${esc(label)}`
-                        + `</option>`
-                    );
-                })
-                .join('');
-
+    // 教材選單：老師看到的是教材名稱，不是 upload-xxxx 這種內部代碼。
+    function materialSelect(selectedId) {
+        const list = materialList();
+        const known = list.some(
+            material => String(material.id) === String(selectedId || '')
+        );
+        const options = list
+            .map(material => {
+                const label = material.title || material.filename || material.id;
+                const selected = String(material.id) === String(selectedId || '') ? ' selected' : '';
+                return `<option value="${esc(material.id)}"${selected}>${esc(label)}</option>`;
+            })
+            .join('');
+        // 教材清單尚未載入或教材已被移除時，仍保留原本的值，避免儲存時被清掉。
+        const orphan = selectedId && !known
+            ? `<option value="${esc(selectedId)}" selected>（原指定教材）</option>`
+            : '';
         return (
-            `<datalist id="${esc(id)}">`
+            `<option value=""${selectedId ? '' : ' selected'}>不指定教材</option>`
+            + orphan
             + options
-            + `</datalist>`
         );
     }
 
@@ -194,9 +194,8 @@
                 source
             );
 
-        const listId =
-            `${prefix}-materials`;
-
+        // 老師平常只需要「教材」和「加強閱讀提示」；頁碼、秒數、區域、章節等
+        // 定位細節（多半由 AI 自動帶入）收進選填區，預設不展開，欄位值仍會一起儲存。
         return `
             <div
                 class="rounded-xl border border-teal-200 bg-teal-50/50 p-3 space-y-2"
@@ -208,7 +207,7 @@
                     </div>
 
                     <div class="text-[10px] text-teal-700 mt-0.5">
-                        此資訊只會在學員提交考卷後顯示。
+                        學員提交考卷後會看到這段提示，並可一鍵回到指定教材複習。
                     </div>
                 </div>
 
@@ -216,92 +215,13 @@
 
                     <label>
                         <span class="text-[11px] font-bold text-slate-600">
-                            定位方式
+                            複習教材
                         </span>
 
                         <select
-                            data-field="reviewAnchorType"
-                            class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
-                        >
-                            <option value="section" ${s.anchorType === 'section' ? 'selected' : ''}>章節／提示</option>
-                            <option value="page" ${s.anchorType === 'page' ? 'selected' : ''}>PPT / PDF 頁碼</option>
-                            <option value="time" ${s.anchorType === 'time' ? 'selected' : ''}>影片／音訊時間</option>
-                            <option value="region" ${s.anchorType === 'region' ? 'selected' : ''}>圖像／Atlas 區域</option>
-                        </select>
-                    </label>
-
-                    <label>
-                        <span class="text-[11px] font-bold text-slate-600">
-                            教材
-                        </span>
-
-                        <input
                             data-field="reviewMaterialId"
-                            list="${esc(listId)}"
-                            value="${esc(s.materialId)}"
-                            placeholder="選擇或輸入教材 ID"
                             class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
-                        >
-
-                        ${materialDatalist(listId)}
-                    </label>
-
-                    <label>
-                        <span class="text-[11px] font-bold text-slate-600">
-                            頁碼／投影片
-                        </span>
-
-                        <input
-                            data-field="reviewPage"
-                            type="number"
-                            min="1"
-                            step="1"
-                            value="${s.page || ''}"
-                            placeholder="例如 12"
-                            class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
-                        >
-                    </label>
-
-                    <label>
-                        <span class="text-[11px] font-bold text-slate-600">
-                            影片／音訊秒數
-                        </span>
-
-                        <input
-                            data-field="reviewTimeSeconds"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value="${s.timeSeconds || ''}"
-                            placeholder="例如 155 = 02:35"
-                            class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
-                        >
-                    </label>
-
-                    <label>
-                        <span class="text-[11px] font-bold text-slate-600">
-                            圖像重點區域
-                        </span>
-
-                        <input
-                            data-field="reviewRegionHint"
-                            value="${esc(s.regionHint)}"
-                            placeholder="例如：影像左下方細胞群"
-                            class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
-                        >
-                    </label>
-
-                    <label class="sm:col-span-2">
-                        <span class="text-[11px] font-bold text-slate-600">
-                            建議複習區塊
-                        </span>
-
-                        <input
-                            data-field="reviewSection"
-                            value="${esc(s.section)}"
-                            placeholder="例如：QC 異常排除流程／第 3 節"
-                            class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
-                        >
+                        >${materialSelect(s.materialId)}</select>
                     </label>
 
                     <label class="sm:col-span-2">
@@ -317,6 +237,89 @@
                         >${esc(s.reviewHint)}</textarea>
                     </label>
                 </div>
+
+                <details class="rounded-lg border border-teal-100 bg-white/70 px-3 py-2" data-review-source-advanced-66="1">
+                    <summary class="cursor-pointer text-[11px] font-bold text-teal-800">
+                        更多定位設定（選填，AI 出題會自動帶入）
+                    </summary>
+
+                    <div class="mt-2 grid sm:grid-cols-2 gap-2">
+
+                        <label>
+                            <span class="text-[11px] font-bold text-slate-600">
+                                定位方式
+                            </span>
+
+                            <select
+                                data-field="reviewAnchorType"
+                                class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
+                            >
+                                <option value="section" ${s.anchorType === 'section' ? 'selected' : ''}>章節／提示</option>
+                                <option value="page" ${s.anchorType === 'page' ? 'selected' : ''}>PPT / PDF 頁碼</option>
+                                <option value="time" ${s.anchorType === 'time' ? 'selected' : ''}>影片／音訊時間</option>
+                                <option value="region" ${s.anchorType === 'region' ? 'selected' : ''}>圖像／Atlas 區域</option>
+                            </select>
+                        </label>
+
+                        <label>
+                            <span class="text-[11px] font-bold text-slate-600">
+                                頁碼／投影片
+                            </span>
+
+                            <input
+                                data-field="reviewPage"
+                                type="number"
+                                min="1"
+                                step="1"
+                                value="${s.page || ''}"
+                                placeholder="例如 12"
+                                class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
+                            >
+                        </label>
+
+                        <label>
+                            <span class="text-[11px] font-bold text-slate-600">
+                                影片／音訊秒數
+                            </span>
+
+                            <input
+                                data-field="reviewTimeSeconds"
+                                type="number"
+                                min="0"
+                                step="1"
+                                value="${s.timeSeconds || ''}"
+                                placeholder="例如 155 = 02:35"
+                                class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
+                            >
+                        </label>
+
+                        <label>
+                            <span class="text-[11px] font-bold text-slate-600">
+                                圖像重點區域
+                            </span>
+
+                            <input
+                                data-field="reviewRegionHint"
+                                value="${esc(s.regionHint)}"
+                                placeholder="例如：影像左下方細胞群"
+                                class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
+                            >
+                        </label>
+
+                        <label class="sm:col-span-2">
+                            <span class="text-[11px] font-bold text-slate-600">
+                                建議複習區塊
+                            </span>
+
+                            <input
+                                data-field="reviewSection"
+                                value="${esc(s.section)}"
+                                placeholder="例如：QC 異常排除流程／第 3 節"
+                                class="mt-1 w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs bg-white"
+                            >
+                        </label>
+                    </div>
+                </details>
             </div>
         `;
     }
