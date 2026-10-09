@@ -15,7 +15,7 @@ const AI_PLAN_META={
   video:{label:'AI 教學影片',detail:'以教材、投影片或其他來源製作影片；完成後回到本頁確認。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],externalLinks:[],resultHtml:'',watchToken:0};
+const state={examSettings:{audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0},editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:false,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],externalLinks:[],resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -145,7 +145,7 @@ window.courseWizard681QuickPublishExam=async function(){
     say('⏳ 處理中…');
     const cat=await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'GET');
     if(!String(cat.audience||'').trim())await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'PATCH',{audience:'所有符合課程資格人員'});
-    await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt,closesAt,reminderEnabled:true});
+    await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt:new Date(opensAt).toISOString(),closesAt:new Date(closesAt).toISOString(),reminderEnabled:true});
     const fresh=await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'GET');
     if(fresh.reviewStatus!=='approved')await call(`/api/quiz-categories/${encodeURIComponent(id)}/review`,'POST',{});
     await call(`/api/quiz-categories/${encodeURIComponent(id)}/publish`,'POST',{});
@@ -361,11 +361,35 @@ function bindStepTwoControls(){
   }));
 }
 
+function examSettingsPanel(){
+  const v=state.examSettings||{};
+  return `<div class="mt-3 rounded-xl border border-slate-200 bg-white p-3"><p class="text-xs font-black text-slate-800">考卷設定（發布時一併套用，之後也能在考卷管理修改）</p>
+  <div class="mt-2 grid gap-2 md:grid-cols-2">
+    <label class="text-[11px] font-bold">適用人員<input value="${esc(v.audience||'')}" list="cw681-audience-presets" data-csp-change="courseWizard681SetExamField('audience',this.value)" class="mt-1 w-full rounded border px-2 py-1.5 text-xs" placeholder="例如：值班醫檢師"><datalist id="cw681-audience-presets"><option value="所有符合課程資格人員"><option value="一般人員"><option value="組員"><option value="值班人員"><option value="值班醫檢師"><option value="新進人員"></datalist></label>
+    <label class="text-[11px] font-bold">及格標準（分）<input type="number" min="1" max="100" value="${Number(v.passingScore||80)}" data-csp-change="courseWizard681SetExamField('passingScore',this.value)" class="mt-1 w-full rounded border px-2 py-1.5 text-xs"></label>
+    <label class="text-[11px] font-bold">開始時間（留白＝不限）<input type="datetime-local" value="${esc(v.opensAt||'')}" data-csp-change="courseWizard681SetExamField('opensAt',this.value)" class="mt-1 w-full rounded border px-2 py-1.5 text-xs"></label>
+    <label class="text-[11px] font-bold">最後考核日期（留白＝不限）<input type="datetime-local" value="${esc(v.closesAt||'')}" data-csp-change="courseWizard681SetExamField('closesAt',this.value)" class="mt-1 w-full rounded border px-2 py-1.5 text-xs"></label>
+    <label class="text-[11px] font-bold">每次隨機抽幾題（0＝使用全部題目）<input type="number" min="0" value="${Number(v.drawCount||0)}" data-csp-change="courseWizard681SetExamField('drawCount',this.value)" class="mt-1 w-full rounded border px-2 py-1.5 text-xs"></label>
+    <label class="flex items-center gap-2 text-[11px] font-bold md:mt-5"><input type="checkbox" ${v.blind?'checked':''} data-csp-change="courseWizard681SetExamField('blind',this.checked)"> 開啟盲測模式</label>
+  </div><p class="mt-2 text-[11px] text-slate-500">審核者、批改者會自動使用你登入的帳號資料，不用另外填。</p></div>`;
+}
+
+async function saveWizardExamSettings(id){
+  if(!id)return;
+  const v=state.examSettings||{};
+  const call=async(url,method,body)=>{const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'考卷設定儲存失敗');return d;};
+  const iso=x=>x?new Date(x).toISOString():'';
+  if(v.opensAt&&v.closesAt&&new Date(v.opensAt)>=new Date(v.closesAt))throw new Error('最後考核日期必須晚於開始時間');
+  await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'PATCH',{audience:String(v.audience||'').trim()||'所有符合課程資格人員',passingScore:Math.max(1,Math.min(100,Number(v.passingScore)||80)),blindMode:!!v.blind,drawCount:Math.max(0,Number(v.drawCount)||0)});
+  await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt:iso(v.opensAt),closesAt:iso(v.closesAt),reminderEnabled:true});
+}
+window.courseWizard681SetExamField=(field,value)=>{state.examSettings={...(state.examSettings||{}),[field]:value};};
+
 function stepThree(){
   const primary=['later','bank','ai'];
   return `<h5 class="font-black">3. 評量／考卷</h5><p class="mt-1 text-xs text-slate-500">這一步只處理考卷。可以稍後建立、自己出題，或讓 AI 協助產生候選題；Blueprint 收在進階設定。</p>
   <div class="mt-3 grid gap-2 md:grid-cols-3">${primary.map(id=>{const meta=MODE_META[id];return `<button type="button" data-csp-click="courseWizard681SetMode('${id}')" class="rounded-xl border p-3 text-left text-sm ${state.examMode===id?'border-violet-500 bg-violet-100':'bg-white'}"><b>${esc(meta.label)}</b><span class="mt-1 block text-xs text-slate-500">${esc(meta.next)}</span></button>`;}).join('')}</div>
-  ${state.examMode==='later'?'':`<label class="mt-3 block text-xs font-bold">考卷名稱（必填）<input id="cw681-exam" value="${esc(el('wizard-exam-title')?.value||'')}" class="mt-1 w-full rounded border p-2" placeholder="例如：課後評量"></label><div class="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 flex flex-wrap items-center justify-between gap-3"><p class="text-xs text-indigo-900">${state.categoryId?'✅ 考卷草稿已建立，可繼續編輯。':'系統會先建立這門課的考卷草稿，再開啟完整出題工作區。'}</p><button type="button" data-csp-click="courseWizard681OpenAssessmentAuthoring()" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-black text-white">${state.examMode==='ai'?'✨ 開啟 AI 出題':'✍️ 開啟自己出題'} →</button></div>`}
+  ${state.examMode==='later'?'':`<label class="mt-3 block text-xs font-bold">考卷名稱（必填）<input id="cw681-exam" value="${esc(el('wizard-exam-title')?.value||'')}" class="mt-1 w-full rounded border p-2" placeholder="例如：課後評量"></label>${examSettingsPanel()}<div class="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 flex flex-wrap items-center justify-between gap-3"><p class="text-xs text-indigo-900">${state.categoryId?'✅ 考卷草稿已建立，可繼續編輯。':'系統會先建立這門課的考卷草稿，再開啟完整出題工作區。'}</p><button type="button" data-csp-click="courseWizard681OpenAssessmentAuthoring()" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-black text-white">${state.examMode==='ai'?'✨ 開啟 AI 出題':'✍️ 開啟自己出題'} →</button></div>`}
   <details class="mt-4 rounded-xl border border-slate-200 bg-white p-3"><summary class="cursor-pointer text-xs font-bold text-slate-600">進階：Blueprint／題型配額</summary><p class="mt-2 text-xs text-slate-500">Blueprint 不列在主要流程；需要抽題規則與題型配額時，可在考卷工作區的進階設定中使用。</p></details>`;
 }
 
@@ -890,7 +914,7 @@ async function ensureAssessmentDraft(){
     try{
       const category=await api('/api/quiz-categories',{
         method:'POST',
-        body:JSON.stringify({area,group,courseId:state.course.id,title,desc:`${state.course?.title||''} 課後評量`,passingScore:80,drawCount:0})
+        body:JSON.stringify({area,group,courseId:state.course.id,title,desc:`${state.course?.title||''} 課後評量`,passingScore:Math.max(1,Math.min(100,Number(state.examSettings?.passingScore)||80)),drawCount:0})
       });
       state.categoryId=String(category?.id||'');
       if(!state.categoryId)throw new Error('考卷草稿建立結果不完整。');
@@ -961,6 +985,7 @@ async function openAiAuthoring(){
 async function openAssessmentAuthoring(){
   if(state.examMode==='later')return;
   if(!await ensureAssessmentDraft())return;
+  try{await saveWizardExamSettings(state.categoryId);}catch(error){alert('考卷設定未儲存：'+error.message);return;}
   if(typeof window.openTeacherCourseAssessmentAuthoring==='function'){
     await window.openTeacherCourseAssessmentAuthoring(state.categoryId,state.examMode);
     return;
@@ -1172,18 +1197,13 @@ async function autoPublishCourseExams(courseId,say){
   const all=await call('/api/quiz-categories/admin?'+q.toString(),'GET');
   const mine=(Array.isArray(all)?all:[]).filter(x=>String(x.courseId||'')===courseId&&!x.active);
   const failed=[];
+  if(state.categoryId&&mine.some(x=>String(x.id)===String(state.categoryId))){try{await saveWizardExamSettings(state.categoryId);}catch(e){failed.push('考卷設定：'+e.message);}}
   for(const exam of mine){
     const id=String(exam.id),title=String(exam.title||'未命名考卷');
     try{
       say?.(`⏳ 正在發布考卷「${title}」…`);
       const cat=await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'GET');
       if(!String(cat.audience||'').trim())await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'PATCH',{audience:'所有符合課程資格人員'});
-      const win=await call(`/api/exam-windows/${encodeURIComponent(id)}`,'GET').catch(()=>({}));
-      const w=win?.window||{},have=w.opens_at||w.opensAt,end=w.closes_at||w.closesAt;
-      if(!have||!end||new Date(end)<=new Date()){
-        const pad=n=>String(n).padStart(2,'0'),local=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt:local(new Date(Date.now()-60000)),closesAt:local(new Date(Date.now()+30*86400000)),reminderEnabled:true});
-      }
       const fresh=await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'GET');
       if(fresh.reviewStatus!=='approved')await call(`/api/quiz-categories/${encodeURIComponent(id)}/review`,'POST',{});
       await call(`/api/quiz-categories/${encodeURIComponent(id)}/publish`,'POST',{});

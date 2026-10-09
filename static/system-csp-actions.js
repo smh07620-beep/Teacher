@@ -39,7 +39,7 @@
     'closeExternalMaterialCreateDrawer','closeMediaViewer','closeQuizMaterialLinker','closeSlideViewer',
     'courseWizard681AddFiles','courseWizard681AddExternal','courseWizard681RemoveExternal','courseWizard681AttachAiProducts','courseWizard681Back','courseWizard681Continue','courseWizard681Create','courseWizard681CreateAndPublish','courseWizard681EditCourse','courseWizard681FilesChanged',
     'courseWizard681Next','courseWizard681OpenAiAuthoring','courseWizard681OpenAssessmentAuthoring','courseWizard681OpenAtlasImport','courseWizard681ChangeType','courseWizard681ConfirmType','courseWizard681OpenCourse','courseWizard681PublishAndOpen','courseWizard681RefreshMaterials','courseWizard681Reset',
-    'courseWizard681SelectExisting','courseWizard681SetFileMeta','courseWizard681SetMode','createAdminAnnouncement',
+    'courseWizard681SelectExisting','courseWizard681SetFileMeta','courseWizard681SetMode','courseWizard681SetExamField','createAdminAnnouncement',
     'createAdminUserAccount','createExternalMaterialFromDrawer','deleteAdminAnnouncement','deleteAdminMaterial',
     'deleteUploadedSlide','editAdminMaterial','exportCurrentPgyAssessmentWord','exportRecordToWord','exportToCSV',
     'filterAdminUserAccounts','filterAiMaterials','filterQuizMaterialLinker','goBackLearning','goToExamModule','goToSlidePage',

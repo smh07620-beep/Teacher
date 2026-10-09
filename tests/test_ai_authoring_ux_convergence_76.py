@@ -156,23 +156,32 @@ if __name__ == '__main__':
 
 
 class CoursePublishAutoExamTests(unittest.TestCase):
-    def test_course_publish_auto_publishes_linked_exams(self):
+    @staticmethod
+    def _read(name):
         from pathlib import Path
-        js = (Path(__file__).resolve().parents[1] / "static" / "course-wizard-681.js").read_text(encoding="utf-8")
+        return (Path(__file__).resolve().parents[1] / "static" / name).read_text(encoding="utf-8")
+
+    def test_course_publish_auto_publishes_linked_exams(self):
+        js = self._read("course-wizard-681.js")
         self.assertIn("async function autoPublishCourseExams", js)
         self.assertIn("COURSE_EXAM_UNPUBLISHED", js)
         self.assertIn("examOnlyBlocked", js)
         self.assertIn("/publish`,'POST'", js)
-        self.assertIn("w.opens_at", js)
+        # 本地時間必須先轉成 UTC，否則伺服器會當成 UTC 而差 8 小時。
+        self.assertIn("toISOString()", js)
 
-    def test_exam_settings_prefill_publish_defaults(self):
-        from pathlib import Path
-        js = (Path(__file__).resolve().parents[1] / "static" / "admin-exam-settings.js").read_text(encoding="utf-8")
-        self.assertIn("所有符合課程資格人員", js)
-        self.assertIn("30*86400000", js)
+    def test_wizard_step_three_holds_exam_settings(self):
+        js = self._read("course-wizard-681.js")
+        self.assertIn("function examSettingsPanel", js)
+        self.assertIn("saveWizardExamSettings", js)
+        self.assertIn("courseWizard681SetExamField", self._read("system-csp-actions.js"))
 
-    def test_blank_exam_start_time_is_filled_with_now_before_publish(self):
-        from pathlib import Path
-        js = (Path(__file__).resolve().parents[1] / "static" / "admin-exam-settings.js").read_text(encoding="utf-8")
-        self.assertIn("function ensureOpensAt", js)
-        self.assertGreaterEqual(js.count("ensureOpensAt()"), 2)
+    def test_exam_settings_page_is_simplified_and_blank_time_is_unlimited(self):
+        js = self._read("admin-exam-settings.js")
+        self.assertIn("function toUtcIso", js)
+        self.assertNotIn("開始時間未設定", js)
+        self.assertNotIn("最後考核日期未設定", js)
+        self.assertIn("/review`", js)  # 發布時自動審核
+        html = self._read("system.html")
+        self.assertIn('id="exam-reviewer-name" type="hidden"', html)
+        self.assertIn("留白＝不限制", html)
