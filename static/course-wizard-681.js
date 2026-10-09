@@ -15,7 +15,7 @@ const AI_PLAN_META={
   video:{label:'AI 教學影片',detail:'以教材、投影片或其他來源製作影片；完成後回到本頁確認。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={examSettings:{audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0},editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:true,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,pendingAdvance:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],externalLinks:[],resultHtml:'',watchToken:0};
+const state={examSettings:{audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0},editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:true,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,pendingAdvance:false,sourceOnlyBatch:false,audienceApplied:[],failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],externalLinks:[],resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -352,7 +352,7 @@ window.courseWizard681RemoveExternal=index=>{
 function stepTwo(){
   const products=(state.aiProducts||[]).map(item=>`<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"><div><b class="text-emerald-950">✅ ${esc(item.title||'AI 製作產物')}</b><div class="mt-0.5 text-[11px] text-emerald-700">${esc(item.kind||'AI')}｜${item.derived?'附於來源教材，已隨課程發布':item.linked?'已加入本課程':'等待加入本課程'}</div></div>${item.derived?'<span class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800">已發布</span>':`<button type="button" data-csp-click="courseWizard681AttachAiProducts()" class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800">${item.linked?'已加入':'加入本課程教材'}</button>`}</div>`).join('');
   return `<h5 class="font-black">2. 教材與 AI 製作</h5><p class="mt-1 text-xs text-slate-500">先匯入／選擇教材並確認系統判定；需要 AI 時，再從本步驟進入對應製作區，完成後回到這裡。</p>
-  <div class="mt-3 grid gap-4 lg:grid-cols-2"><div><label class="block text-xs font-bold">上傳新教材<input id="cw681-files" type="file" multiple ${state.created&&!state.editing?'disabled':''} class="mt-1 w-full text-sm disabled:opacity-50" data-csp-change="courseWizard681FilesChanged(this)"></label><div id="cw681-file-summary" class="mt-2 text-xs text-slate-500"></div>${state.editing?'<button type="button" data-csp-click="courseWizard681AddFiles()" class="mt-2 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white">上傳到本課程</button>':!state.created?'<button type="button" data-csp-click="courseWizard681StartUpload()" class="mt-2 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white" data-cw681-start-upload>⬆️ 開始上傳（可一次選多個檔案）</button><p class="mt-1 text-[11px] text-slate-500">按下後立即開始上傳並轉檔；進度會顯示在下方，處理期間無法再加檔案，完成後可按「下一步」。</p>':''}</div><div><div class="flex justify-between"><b class="text-xs">既有教材</b><button type="button" data-csp-click="courseWizard681RefreshMaterials()" class="text-xs text-violet-700">更新</button></div><div id="cw681-materials" class="mt-2 max-h-48 overflow-auto rounded border bg-white p-2 text-xs">讀取中…</div></div></div>
+  <div class="mt-3 grid gap-4 lg:grid-cols-2"><div><label class="block text-xs font-bold">上傳新教材<input id="cw681-files" type="file" multiple ${state.created&&!state.editing?'disabled':''} class="mt-1 w-full text-sm disabled:opacity-50" data-csp-change="courseWizard681FilesChanged(this)"></label><div id="cw681-file-summary" class="mt-2 text-xs text-slate-500"></div><label class="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-950"><input id="cw681-source-only" type="checkbox" class="mt-0.5" ${state.sourceOnlyBatch?'checked':''}><span><b>📎 只當 AI 出題／製作來源，不顯示給學員</b><span class="block text-[11px] font-normal text-amber-800">適合內含圖譜的 Word 或原始資料。學員看不到原始檔、也不列入完成條件；老師仍可用它做 AI 出題、投影片、影片。</span></span></label>${state.editing?'<button type="button" data-csp-click="courseWizard681AddFiles()" class="mt-2 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white">上傳到本課程</button>':!state.created?'<button type="button" data-csp-click="courseWizard681StartUpload()" class="mt-2 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-bold text-white" data-cw681-start-upload>⬆️ 開始上傳（可一次選多個檔案）</button><p class="mt-1 text-[11px] text-slate-500">按下後立即開始上傳並轉檔；進度會顯示在下方，處理期間無法再加檔案，完成後可按「下一步」。</p>':''}</div><div><div class="flex justify-between"><b class="text-xs">既有教材</b><button type="button" data-csp-click="courseWizard681RefreshMaterials()" class="text-xs text-violet-700">更新</button></div><div id="cw681-materials" class="mt-2 max-h-48 overflow-auto rounded border bg-white p-2 text-xs">讀取中…</div></div></div>
   <details data-cw681-external class="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3" ${(state.externalLinks||[]).length?'open':''}><summary class="cursor-pointer list-none text-sm font-bold text-sky-950">🔗 加入外部影音連結（YouTube／Vimeo）${(state.externalLinks||[]).length?` · 已加入 ${(state.externalLinks||[]).length} 筆`:''} <span class="text-[11px] font-normal text-sky-700">點此展開</span></summary><p class="mt-2 text-[11px] text-sky-800">不用上傳檔案，貼上 https 網址即可。課程草稿建立後會自動掛進這門課；課程已建立則立刻掛入。</p>${(state.externalLinks||[]).map((item,i)=>`<div class="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border ${item.status==='failed'?'border-rose-200 bg-rose-50':'border-sky-200 bg-white'} px-3 py-2 text-xs"><div class="min-w-0"><b>${item.status==='done'?'✅':item.status==='failed'?'❌':'⏳'} ${esc(item.title)}</b><div class="break-all text-[11px] text-slate-500">${esc(item.url)}${item.status==='failed'?'｜'+esc(item.error||'建立失敗'):item.status==='pending'?'｜等待課程草稿建立後掛入':''}</div></div>${item.status==='done'?'':`<button type="button" data-csp-click="courseWizard681RemoveExternal(${i})" class="rounded-lg border border-slate-300 bg-white px-2 py-1 font-bold text-slate-700">移除</button>`}</div>`).join('')}<div class="mt-3 grid gap-2 sm:grid-cols-[1fr_2fr_auto]"><input id="cw681-ext-title" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="名稱，例如：儀器操作示範"><input id="cw681-ext-url" type="url" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="https://www.youtube.com/watch?v=..."><button type="button" data-csp-click="courseWizard681AddExternal()" class="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white">＋ 加入連結</button></div></details>
   ${state.editing?'<section id="cw681-course-materials" data-cw681-course-materials class="mt-4 rounded-xl border border-violet-200 bg-white p-3"><b class="text-sm text-violet-950">📚 本課程的教材（在這裡管理）</b><p class="mt-1 text-[11px] text-slate-500">停用後學員看不到但資料保留；移出課程會變成未歸類教材；刪除無法復原。</p><div data-cw681-course-materials-list class="mt-2 space-y-1.5 text-xs">讀取中…</div></section>':''}
   <p class="mt-3 text-xs text-violet-800">${state.editing?'編輯模式：選好檔案後按「上傳到本課程」，教材處理完成會自動掛入這門課；也可以用下方 AI 製作新增內容。':state.created?'✓ 原始教材已寫入課程草稿；如需新增內容，可使用下方 AI 製作。':'可以選檔案上傳，也可以在上方貼外部影音連結；兩者都會在建立課程草稿時一起掛入。'}</p>
@@ -377,7 +377,7 @@ function paintCourseMaterials(){
   if(!rows.length){list.innerHTML='<p class="rounded-lg bg-slate-50 px-3 py-2 text-slate-500">這門課目前沒有教材。可在上方上傳，或用 AI 製作新增。</p>';return;}
   list.innerHTML=rows.map(m=>{
     const off=m.active===false,id=esc(m.id);
-    return `<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border ${off?'border-amber-200 bg-amber-50/60':'border-slate-100 bg-slate-50'} px-3 py-2"><div class="min-w-0"><b class="truncate text-slate-800">${esc(m.title||m.filename||'未命名教材')}</b><span class="ml-1 rounded-full border bg-white px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${Math.max(1,Number(m.currentVersion||1))}</span>${off?'<span class="ml-1 text-[10px] font-bold text-amber-700">已停用</span>':''}</div><div class="flex flex-wrap gap-1.5"><button type="button" data-cw-mat-action="toggle" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${off?'啟用':'停用'}</button><button type="button" data-cw-mat-action="unlink" data-cw-mat-id="${id}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-bold text-slate-700">移出課程</button><button type="button" data-cw-mat-action="delete" data-cw-mat-id="${id}" class="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 font-bold text-rose-700">🗑️ 刪除</button></div></div>`;
+    return `<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border ${off?'border-amber-200 bg-amber-50/60':'border-slate-100 bg-slate-50'} px-3 py-2"><div class="min-w-0"><b class="truncate text-slate-800">${esc(m.title||m.filename||'未命名教材')}</b><span class="ml-1 rounded-full border bg-white px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${Math.max(1,Number(m.currentVersion||1))}</span>${off?'<span class="ml-1 text-[10px] font-bold text-amber-700">已停用</span>':''}${m.audienceScope==='source_only'?'<span class="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">📎 僅供製作（學員看不到）</span>':''}</div><div class="flex flex-wrap gap-1.5"><button type="button" data-cw-mat-action="toggle" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${off?'啟用':'停用'}</button><button type="button" data-cw-mat-action="audience" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${m.audienceScope==='source_only'?'改成學員可見':'設為僅供製作'}</button><button type="button" data-cw-mat-action="unlink" data-cw-mat-id="${id}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-bold text-slate-700">移出課程</button><button type="button" data-cw-mat-action="delete" data-cw-mat-id="${id}" class="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 font-bold text-rose-700">🗑️ 刪除</button></div></div>`;
   }).join('');
 }
 
@@ -392,15 +392,20 @@ async function courseMaterialAction(action,id){
       if(!confirm('確定刪除這份教材嗎？此操作無法復原。'))return;
       res=await fetch('/api/slides/'+encodeURIComponent(id),{method:'DELETE',credentials:'same-origin'});
     }else{
-      const body=action==='toggle'?{active:material.active===false}:{courseId:''};
-      res=await fetch('/api/slides/'+encodeURIComponent(id),{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(action==='audience'){
+        const next=material.audienceScope==='source_only'?'all_staff':'source_only';
+        res=await fetch('/api/content-audience/materials/'+encodeURIComponent(id),{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({audienceScope:next})});
+      }else{
+        const body=action==='toggle'?{active:material.active===false}:{courseId:''};
+        res=await fetch('/api/slides/'+encodeURIComponent(id),{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      }
     }
     const data=await res.json().catch(()=>({}));
     if(!res.ok)throw new Error(data.error||'操作失敗');
     // 老師刻意停用／移出／刪除的教材，不能再留在「發布前要確認掛入課程」的清單裡，
     // 否則發布確認會找不到它，或把它重新啟用。
     const gone=String(id);
-    const stillWanted=action==='toggle'&&material.active===false;
+    const stillWanted=action==='audience'||(action==='toggle'&&material.active===false);
     const keep=value=>stillWanted||String(value)!==gone;
     state.expectedMaterialIds=(state.expectedMaterialIds||[]).filter(keep);
     state.queuedMaterialIds=(state.queuedMaterialIds||[]).filter(keep);
@@ -411,7 +416,26 @@ async function courseMaterialAction(action,id){
   }catch(error){note('❌ '+(error.message||'操作失敗'));}
 }
 
+function sourceOnlyChecked(){
+  const box=el('cw681-source-only');
+  if(box)state.sourceOnlyBatch=box.checked;
+  return Boolean(state.sourceOnlyBatch);
+}
+
+// 勾選「只當來源」的檔案處理完成後，把教材設為「僅供老師製作使用」（伺服器端會擋學員）。
+async function applySourceOnlyAudience(materialIds){
+  if(!state.sourceOnlyBatch)return;
+  const done=new Set((state.audienceApplied||[]).map(String));
+  for(const id of materialIds.map(String).filter(Boolean)){
+    if(done.has(id))continue;
+    await api('/api/content-audience/materials/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({audienceScope:'source_only'})});
+    done.add(id);
+  }
+  state.audienceApplied=[...done];
+}
+
 function bindStepTwoControls(){
+  el('cw681-source-only')?.addEventListener('change',()=>{sourceOnlyChecked();});
 
   document.querySelectorAll('[data-cw-ai-plan]').forEach(button=>button.addEventListener('click',()=>{
     state.aiPlan=button.dataset.cwAiPlan||'none';render();loadMaterials();
@@ -608,6 +632,7 @@ async function next(){
 // 不必等到按「下一步」。上傳中檔案選擇框會鎖住（created 後 disabled）。
 async function startUpload(){
   if(state.busy||state.created)return;
+  sourceOnlyChecked();
   const picked=[...(el('cw681-files')?.files||[])];
   state.files=picked.length?picked:state.files;
   state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);
@@ -874,6 +899,7 @@ async function watchQueuedJobs(jobIds){
       const completedMaterialIds=rows.map(row=>String(row.materialId||'')).filter(Boolean);
       state.expectedMaterialIds=[...new Set([...state.expectedMaterialIds,...completedMaterialIds])];
       try{
+        await applySourceOnlyAudience(completedMaterialIds);
         await verifyCreatedCourseMaterials();
         await refreshWorkspaceData();
         await hydrateCompletedMaterialInsights(completedMaterialIds);
@@ -970,6 +996,7 @@ async function retryFailedUploads(){
 
 async function create(){
   if(state.busy)return;
+  sourceOnlyChecked();
   if(state.created){if(state.failedUploads.length)await retryFailedUploads();return state.created;}
   syncInputs();
   const {area,group}=scope(),title=String(el('wizard-course-title')?.value||'').trim(),desc=String(el('wizard-course-desc')?.value||'').trim(),files=state.files;
@@ -1227,6 +1254,7 @@ function startNewCourse(){
 
 // 編輯模式：把新選的教材檔案上傳到這門既有課程。
 async function addFilesToCourse(){
+  sourceOnlyChecked();
   if(state.busy||!state.editing||!state.course?.id)return;
   const input=el('cw681-files'),picked=[...(input?.files||[])];
   if(!picked.length)return alert('請先選擇要上傳的教材檔案。');

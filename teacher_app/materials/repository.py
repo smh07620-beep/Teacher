@@ -188,7 +188,7 @@ def ensure_material_version_baseline_on_connection(conn, kind: str, entry: dict)
 # database column default stays ``group_only`` so rows created before this change
 # keep their restriction.  Teachers narrow a material with 設定範圍.
 DEFAULT_NEW_MATERIAL_AUDIENCE = "all_staff"
-_AUDIENCE_VALUES = {"group_only", "all_staff", "multi_group"}
+_AUDIENCE_VALUES = {"group_only", "all_staff", "multi_group", "source_only"}
 
 
 def _has_audience_column(conn, kind: str) -> bool:

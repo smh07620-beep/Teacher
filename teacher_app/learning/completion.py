@@ -49,6 +49,8 @@ def evaluate_course_completion(
         str(item.get("id") or ""): item
         for item in materials
         if str(item.get("id") or "")
+        # 僅供老師製作使用的教材學員看不到，不能列為完成條件。
+        and str(item.get("audienceScope") or item.get("audience_scope") or "").strip().lower() != "source_only"
     }
     exam_by_id = {
         str(item.get("id") or ""): item

@@ -16,7 +16,7 @@ import json
 from typing import Any, Mapping
 
 from teacher_app.common import scope
-from teacher_app.common.auth import has_role
+from teacher_app.common.auth import has_permission, has_role
 
 
 GLOBAL_LEARNING_ROLES = ("education_admin", "system_admin")
@@ -26,7 +26,7 @@ _SCOPE_KEYS = (
     "preferredGroup",
     "preferred_group",
 )
-_AUDIENCE_SCOPES = {"group_only", "all_staff", "multi_group"}
+_AUDIENCE_SCOPES = {"group_only", "all_staff", "multi_group", "source_only"}
 
 
 def has_global_learning_access(user: Mapping[str, Any] | None) -> bool:
@@ -162,6 +162,14 @@ def can_access_learning_item(
 ) -> bool:
     if not user or not item:
         return False
+    if _audience_scope(item) == "source_only":
+        # 僅供老師製作使用：學員一律不可見（先於其他放行規則）。
+        if has_global_learning_access(user):
+            return True
+        _area, owner = item_learning_scope(item)
+        _user_area, user_group = preferred_learning_scope(user)
+        authoring = any(has_permission(user, name) for name in ("material.manage", "question.manage", "course.manage"))
+        return authoring and owner == user_group
     if has_global_learning_access(user):
         return True
     if not has_explicit_learning_scope(user):
