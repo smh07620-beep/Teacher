@@ -413,7 +413,7 @@
       const scoped=materials.filter(m=>(m.area||'internal')===area&&(m.group||'grpBio')===group);
       const cards=[];
       for(const c of visibleCourses){
-          const mats=teachingOrderedMaterials(c,scoped.filter(m=>m.courseId===c.id&&!(m.storageMeta&&m.storageMeta.mediaKind==='ai_narration'&&m.storageMeta.sourceMaterialId)));
+          const mats=teachingOrderedMaterials(c,scoped.filter(m=>m.courseId===c.id&&!(m.storageMeta&&m.storageMeta.mediaKind==='ai_narration'&&m.storageMeta.sourceMaterialId&&materials.some(o=>o.id===m.storageMeta.sourceMaterialId))));
           const exams=cats.filter(q=>q.courseId===c.id);
           const qcount=exams.reduce((n,q)=>n+examBankCount(q),0);
           const assignments=(Array.isArray(state.assignments)?state.assignments:[]).filter(item=>item.courseId===c.id&&item.active!==false);
