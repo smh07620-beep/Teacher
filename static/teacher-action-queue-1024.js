@@ -243,8 +243,16 @@
     }, 160);
   }
 
+  // 老師未完成的考卷：已審核→直接進發布；否則回到出題。
+  async function openExamDraft(examId, ready) {
+    await window.AppWorkspaceRoutes.show('assessment', true);
+    if (ready && typeof window.adminOpenExamPublish === 'function') return window.adminOpenExamPublish(examId);
+    if (typeof window.openTeacherContentExam === 'function') return window.openTeacherContentExam(examId);
+  }
+
   async function openAction(item) {
     if (!item) return;
+    if (item.examId) return openExamDraft(String(item.examId), item.status === 'exam_ready');
     if (item.kind === 'review') return openReview(item);
     if (item.kind === 'material_failure') return openMaterialFailure(item);
     if (item.kind === 'intervention') return openIntervention(item);
@@ -333,6 +341,12 @@
     } finally {
       loading = false;
     }
+  }
+
+  // 通知中心的連結帶有 examId 時，進來後直接接回那份考卷。
+  const linkedExamId = new URLSearchParams(window.location.search).get('examId');
+  if (linkedExamId && new URLSearchParams(window.location.search).get('workspace') === 'assessment') {
+    setTimeout(() => { openExamDraft(linkedExamId, false).catch(() => {}); }, 1200);
   }
 
   refresh();

@@ -185,3 +185,32 @@ class CoursePublishAutoExamTests(unittest.TestCase):
         html = self._read("system.html")
         self.assertIn('id="exam-reviewer-name" type="hidden"', html)
         self.assertIn("留白＝不限制", html)
+
+
+class TeacherTodoLinksTests(unittest.TestCase):
+    def test_exam_drafts_appear_in_teacher_todo_with_exam_link(self):
+        from teacher_app.notifications import events
+
+        href = events._href({"examId": "cat-1", "area": "internal", "group": "grpBio", "persona": "teacher", "kind": "draft"})
+        self.assertIn("workspace=assessment", href)
+        self.assertIn("examId=cat-1", href)
+
+    def test_teacher_review_link_goes_to_teacher_workspace_not_learner_exam_page(self):
+        from teacher_app.notifications import events
+
+        href = events._href({"kind": "review", "persona": "teacher", "resourceId": "rec-9", "area": "internal", "group": "grpBio", "target": "assessment"})
+        self.assertIn("workspace=teacher", href)
+        self.assertNotIn("module=exam", href)
+        self.assertIn("recordId=rec-9", href)
+
+
+class NoDuplicateStaticIdsTests(unittest.TestCase):
+    def test_system_html_has_no_duplicate_ids(self):
+        import collections
+        import re
+        from pathlib import Path
+
+        html = (Path(__file__).resolve().parents[1] / "static" / "system.html").read_text(encoding="utf-8")
+        ids = re.findall(r'\sid="([^"$]+)"', html)
+        duplicates = [key for key, count in collections.Counter(ids).items() if count > 1]
+        self.assertEqual(duplicates, [])

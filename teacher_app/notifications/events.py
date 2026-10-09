@@ -58,6 +58,18 @@ def _href(item: Mapping[str, Any]) -> str:
         return workspace_url("worker", source="notification-center")
     if target == "pgy-workflow":
         return f"/system?area=pgy&group={group or 'grpNew'}&module=assessment&from=notification-center"
+    if item.get("examId"):
+        # 老師的未完成考卷：回到評量工作區，由前端用 examId 直接接回去。
+        return workspace_url(
+            "assessment", area=area, group=group, persona="teacher",
+            source="notification-center", params={"examId": str(item.get("examId"))},
+        )
+    if item.get("kind") == "review" and str(item.get("persona") or "") == "teacher":
+        # 待批改屬於老師端；module=exam 是學員的線上測驗頁，不能用。
+        return workspace_url(
+            "teacher", area=area, group=group, persona="teacher",
+            source="notification-center", params={"recordId": resource_id},
+        )
     if target == "exam" or item.get("kind") == "exam":
         suffix = f"&examId={resource_id}" if resource_id else ""
         return f"/system?area={area}&group={group}&module=exam&from=notification-center{suffix}"

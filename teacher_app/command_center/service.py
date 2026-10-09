@@ -14,6 +14,7 @@ from typing import Any, Mapping, Optional
 from teacher_app.command_center import audience, dashboard_service
 from teacher_app.common.auth import has_permission, normalize_role
 from teacher_app.common.errors import ApiError
+from teacher_app.assessments import repository as assessment_repository
 from teacher_app.courses import repository as course_repository
 from teacher_app.exams import records as exam_records
 from teacher_app.learning import access as learning_access
@@ -574,6 +575,46 @@ def _teacher_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
     return values
 
 
+def _teacher_exam_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Unfinished exams (draft / reviewed but not published) so teachers can resume."""
+    if not has_permission(user, "exam.manage"):
+        return []
+    try:
+        categories = assessment_repository.list_categories(None, None, True)
+    except Exception as exc:
+        LOGGER.warning("command center exam draft projection failed error_type=%s", type(exc).__name__)
+        return []
+    values = []
+    for category in categories:
+        if category.get("active"):
+            continue
+        if not _visible_to_teacher(user, category):
+            continue
+        exam_id = str(category.get("id") or "")
+        approved = str(category.get("reviewStatus") or "") == "approved"
+        values.append({
+            "id": exam_id,
+            "resourceId": exam_id,
+            "examId": exam_id,
+            "courseId": str(category.get("courseId") or ""),
+            "persona": "teacher",
+            "domain": "assessment",
+            "kind": "draft",
+            "title": f"考卷：{str(category.get('title') or '未命名考卷')}",
+            "status": "exam_ready" if approved else "exam_draft",
+            "statusLabel": "待發布" if approved else "草稿",
+            "group": str(category.get("group") or ""),
+            "area": str(category.get("area") or ""),
+            "dueAt": "",
+            "overdue": False,
+            "detail": "題目已審核，確認後即可發布。" if approved else "考卷還沒完成，可接著出題或發布。",
+            "action": "exam_draft",
+            "actionLabel": "發布考卷" if approved else "繼續出題",
+            "target": "assessment",
+        })
+    return values
+
+
 def _teacher_action_items(user: Mapping[str, Any], current: dt.datetime) -> list[dict[str, Any]]:
     if not any(has_permission(user, permission) for permission in (
         "course.manage", "material.manage", "evaluation.review", "learning.assign"
@@ -585,6 +626,7 @@ def _teacher_action_items(user: Mapping[str, Any], current: dt.datetime) -> list
     values.extend(_teacher_intervention_items(user))
     values.extend(_teacher_due_items(user, current))
     values.extend(_teacher_draft_items(user))
+    values.extend(_teacher_exam_draft_items(user))
     return values
 
 

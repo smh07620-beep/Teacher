@@ -5,6 +5,26 @@
   const quizListView78={all:[],query:'',status:'all',visible:20};
   let wizardAreaRefreshQueued = false;
 
+  // 「我的待辦」：把做一半（草稿／題目準備中）與待發布的考卷放在最上面，一鍵接回去。
+  function renderQuizTodoStrip(rows){
+    const summary=document.querySelector('#admin-quiz-workspace .admin-quiz-summary-line');
+    if(!summary)return;
+    let strip=document.getElementById('admin-quiz-todo-strip');
+    if(!strip){
+      strip=document.createElement('div');
+      strip.id='admin-quiz-todo-strip';
+      strip.className='mb-3';
+      summary.parentElement.insertBefore(strip,summary);
+    }
+    const todo=rows.filter(c=>!c.active).slice(0,5);
+    if(!todo.length){strip.innerHTML='';return;}
+    strip.innerHTML='<div class="rounded-xl border border-amber-200 bg-amber-50 p-3"><p class="text-xs font-black text-amber-900">📌 我的待辦（還沒完成的考卷）</p><div class="mt-2 flex flex-wrap gap-2">'+todo.map(c=>{
+      const st=quizTeacherStatus78(c);
+      const action=st.primary==='發布'?`adminOpenExamPublish('${c.id}')`:`openTeacherContentExam('${c.id}')`;
+      return `<button type="button" data-csp-click="${action}" class="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 hover:bg-amber-100">${escapeHtml(c.title)}<span class="ml-1 text-amber-700">· ${escapeHtml(st.label)} →</span></button>`;
+    }).join('')+'</div></div>';
+  }
+
   function renderQuizOverview78(list=quizListView78.all){
     const rows=Array.isArray(list)?list:[];
     const published=rows.filter(c=>c.active).length;
@@ -18,6 +38,7 @@
     };
     Object.entries(values).forEach(([id,value])=>{const node=document.getElementById(id);if(node)node.textContent=String(value);});
     document.querySelector('#admin-quiz-workspace .admin-quiz-summary-line')?.setAttribute('data-product-section','overview');
+    renderQuizTodoStrip(rows);
     const pending=rows.reduce((sum,c)=>sum+Number(c?.reviewSummary?.pending||0),0);
     window.__teacherAssessmentPending1030=pending;
     document.dispatchEvent(new CustomEvent('teacher-assessment-pending-1030',{detail:{pending}}));
@@ -280,6 +301,16 @@
       return {primary:'繼續編輯',label:'草稿',tone:'bg-amber-100 text-amber-800',next:'新增或 AI 產生題目'};
   }
 
+  // 出題 → 審核 → 發布 進度線：已完成的打勾、目前這步標色。
+  function quizStepperHTML(c){
+    const done=c?.active?3:(c?.reviewStatus==='approved'?2:(Number(c?.questionCount||0)>0?1:0));
+    return ['出題','審核','發布'].map((name,i)=>{
+      const finished=i<done,current=i===done&&done<3;
+      const tone=finished?'bg-emerald-100 text-emerald-800':(current?'bg-indigo-600 text-white':'bg-slate-100 text-slate-400');
+      return `<span class="text-[10px] px-1.5 py-0.5 rounded ${tone} font-bold">${finished?'✓ ':''}${name}</span>`;
+    }).join('<span class="text-[10px] text-slate-300">›</span>');
+  }
+
   function quizCategoryCardHTML(c) {
       const teacherStatus=quizTeacherStatus78(c);
       return `
@@ -289,7 +320,7 @@
                       <div class="flex items-center gap-2 flex-wrap">
                           <span class="font-black text-sm text-slate-900 break-all">${escapeHtml(c.title)}</span>
                           <span class="text-[11px] px-2 py-0.5 rounded-full ${teacherStatus.tone} font-bold">${teacherStatus.label}</span>${c.blindMode?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-slate-900 text-white font-bold">導師設定：盲測</span>':''}
-                          <span class="text-[10px] font-bold text-indigo-700">下一步：${escapeHtml(teacherStatus.next)}</span>
+                          ${quizStepperHTML(c)}<span class="text-[10px] font-bold text-indigo-700">下一步：${escapeHtml(teacherStatus.next)}</span>
                       </div>
                       <div class="flex flex-wrap gap-1.5 mt-1.5" title="${escapeHtml(c.desc || '尚未填寫考卷說明')}"><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">👤 ${escapeHtml(examAudienceLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">🧠 題庫 ${Number(c.questionCount||0)} 題</span><span class="text-[10px] px-2 py-1 rounded-full bg-teal-50 text-teal-700">📋 ${escapeHtml(examDrawLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">🎯 及格 ${Number(c.passingScore||80)} 分</span>${c.publicationHash?`<span class="text-[10px] px-2 py-1 rounded-full bg-violet-50 text-violet-700" title="發布快照 SHA-256：${escapeHtml(c.publicationHash)}">🔒 快照 ${escapeHtml(c.publicationHash.slice(0,10))}</span>`:''}</div>
                   </div>
