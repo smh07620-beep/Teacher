@@ -58,7 +58,12 @@
       const examOpen = event.target.closest('[data-exam-open]');
       if(examOpen){ renderExamContainer(examOpen.dataset.examOpen); return; }
       const examAction = event.target.closest('[data-exam-action]');
-      if(examAction){ dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId); return; }
+      if(examAction){
+        const inPage={questions:'[data-exam-questions-slot]',settings:'[data-exam-settings-slot]'}[examAction.dataset.examAction];
+        const target=inPage&&root.querySelector(inPage);
+        if(target&&target.querySelector('section,[id^="qlist-"]')){ target.scrollIntoView({behavior:'smooth',block:'start'}); return; }
+        dispatchExamAction(examAction.dataset.examAction, examAction.dataset.examId); return;
+      }
       if(event.target.closest('[data-course-studio-back]')){ closeStudio(); return; }
       if(event.target.closest('[data-course-authoring-abandon]')){
         if(!confirm('確定放棄這次製作嗎？尚未核准的草稿與臨時加入的來源會被清除。')) return;
@@ -119,6 +124,7 @@
     // 離開工作畫面時清掉「編輯既有課程」狀態，下次開啟建立課程不會殘留上一門課。
     window.courseWizard681StartNew?.();
     restoreAiPanel();
+    restoreExamSettings();
     restoreMediaMount();
     restoreCourseWizard();
     restoreMaterialHub();
@@ -182,7 +188,7 @@
 
   async function renderExamManager(message=''){
     studioState.openExamId=''; syncExamDeepLink('');
-    restoreAiPanel(); restoreCourseWizard();
+    restoreAiPanel(); restoreCourseWizard(); restoreExamSettings();
     const host=document.getElementById('teacher-content-studio-body-71'); if(!host)return;
     host.innerHTML='<p class="text-sm text-slate-500">正在讀取考卷…</p>';
     try{
@@ -191,20 +197,55 @@
     }catch(error){host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3"><button type="button" data-studio-action="exam" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">重新讀取</button></div></div>`;}
   }
 
+  // 考卷合併成一頁：題目與「設定與發布」直接放在同一個考卷頁，
+  // 不再分成「題目管理」「設定與發布」兩個子頁。設定表單沿用既有 canonical DOM（搬進來、離開時搬回）。
+  const settingsMount={node:null,placeholder:null};
+  function restoreExamSettings(){
+    const node=settingsMount.node; if(!node)return;
+    const placeholder=settingsMount.placeholder;
+    if(placeholder?.isConnected)placeholder.replaceWith(node);
+    else document.getElementById('admin-section-exam-settings')?.appendChild(node);
+    delete node.dataset.examEmbedded;
+    node.querySelectorAll('[data-exam-embedded-hide]').forEach(el=>{el.classList.remove('hidden');delete el.dataset.examEmbeddedHide;});
+    settingsMount.node=null; settingsMount.placeholder=null;
+  }
+  async function mountExamSettingsInline(catId,slot){
+    restoreExamSettings();
+    const node=document.querySelector('#admin-section-exam-settings > section');
+    if(!node||!slot){if(slot)slot.innerHTML='<p class="text-xs text-rose-600">考卷設定元件尚未載入，請重新整理。</p>';return false;}
+    const placeholder=document.createElement('div'); placeholder.hidden=true; placeholder.dataset.examSettingsPlaceholder='1';
+    node.before(placeholder);
+    settingsMount.node=node; settingsMount.placeholder=placeholder;
+    node.dataset.examEmbedded='1';
+    // 在同一頁裡不需要「返回考卷管理」「前往題庫管理」這兩個跳頁按鈕。
+    node.querySelectorAll('[data-csp-click="switchAdminWorkspace(\'assessment\',true)"],[data-csp-click="switchAdminWorkspace(\'questions\')"]').forEach(el=>{el.classList.add('hidden');el.dataset.examEmbeddedHide='1';});
+    slot.replaceChildren(node);
+    document.getElementById('exam-settings-actions')?.classList.remove('hidden');
+    await window.openExamSettings?.(catId,{embedded:true});
+    return true;
+  }
+
   async function renderExamContainer(catId){
     if(!catId)return renderExamManager();
     studioState.openExamId=String(catId); syncExamDeepLink(catId);
-    restoreAiPanel(); restoreCourseWizard();
+    restoreAiPanel(); restoreCourseWizard(); restoreExamSettings(); window.TeacherContentToolPanels710?.restore?.();
     const host=document.getElementById('teacher-content-studio-body-71'); if(!host)return;
     host.innerHTML='<p class="text-sm text-slate-500">正在開啟考卷…</p>';
     try{
       const exam=await loadCategory(catId);
-      host.innerHTML=`<div class="mx-auto max-w-5xl"><button type="button" data-studio-action="exam" class="text-sm font-bold text-slate-500">← 考卷清單</button><div class="mt-3 rounded-2xl border border-indigo-200 bg-white p-5"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-indigo-700">目前考卷</div><h4 class="mt-1 text-xl font-black text-slate-950">${esc(exam.title||catId)}</h4><p class="mt-1 text-xs text-slate-500">只分三件事：加入題目、AI 輔助、管理與發布。所有動作都固定在這份考卷。</p></div><span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">題庫 ${Number(exam.questionCount||0)} 題</span></div>
-      <div class="mt-5 grid gap-3 lg:grid-cols-3">
-        <section class="rounded-xl border border-slate-200 bg-slate-50/60 p-4"><b class="text-sm text-slate-900">1｜加入題目</b><p class="mt-1 text-xs text-slate-500">選題型後直接進編輯器，不再先進另一層選單。</p><div class="mt-3 grid gap-2"><button type="button" data-exam-action="question" data-exam-id="${esc(catId)}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-bold">✏️ 一般考題</button><button type="button" data-exam-action="image" data-exam-id="${esc(catId)}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-bold">🖼️ 圖片判讀題</button><button type="button" data-exam-action="video" data-exam-id="${esc(catId)}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-bold">🎬 影片互動題</button></div></section>
-        <button type="button" data-exam-action="ai" data-exam-id="${esc(catId)}" class="rounded-xl border border-violet-200 bg-violet-50/50 p-4 text-left"><b class="text-sm text-violet-950">2｜✨ AI 輔助出題</b><span class="mt-1 block text-xs leading-5 text-violet-700">讀取本考卷關聯教材 → 產生候選題 → 教師確認 → 加入本卷。</span></button>
-        <section class="rounded-xl border border-slate-200 bg-slate-50/60 p-4"><b class="text-sm text-slate-900">3｜管理與發布</b><p class="mt-1 text-xs text-slate-500">題目內容與考卷發布集中在最後一步。</p><div class="mt-3 grid gap-2"><button type="button" data-exam-action="questions" data-exam-id="${esc(catId)}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-bold">🧠 題目管理</button><button type="button" data-exam-action="settings" data-exam-id="${esc(catId)}" class="rounded-lg bg-slate-900 px-3 py-2 text-left text-xs font-bold text-white">⚙️ 設定與發布</button></div></section>
-      </div></div></div>`;
+      const id=esc(catId);
+      host.innerHTML=`<div class="mx-auto max-w-5xl" data-exam-page="${id}"><button type="button" data-studio-action="exam" class="text-sm font-bold text-slate-500">← 考卷清單</button>
+      <div class="mt-3 rounded-2xl border border-indigo-200 bg-white p-5"><div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black tracking-wide text-indigo-700">目前考卷</div><h4 class="mt-1 text-xl font-black text-slate-950">${esc(exam.title||catId)}</h4><p class="mt-1 text-xs text-slate-500">題目和設定都在這一頁：上面加題目，往下捲是題庫，最下面設定與發布。離開後從考卷卡片按「進入」就能接著做。</p></div><span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">題庫 ${Number(exam.questionCount||0)} 題</span></div>
+      <div class="mt-4 flex flex-wrap items-center gap-2" aria-label="加入題目"><span class="text-xs font-black text-slate-700">1｜加入題目：</span><button type="button" data-exam-action="question" data-exam-id="${id}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold">✏️ 一般考題</button><button type="button" data-exam-action="image" data-exam-id="${id}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold">🖼️ 圖片判讀題</button><button type="button" data-exam-action="video" data-exam-id="${id}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold">🎬 影片互動題</button><button type="button" data-exam-action="ai" data-exam-id="${id}" class="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-800">2｜✨ AI 輔助出題</button></div>
+      <div class="mt-3 flex flex-wrap gap-3 text-[11px] font-bold"><button type="button" data-exam-action="questions" data-exam-id="${id}" class="text-indigo-700">↓ 🧠 題目管理</button><button type="button" data-exam-action="settings" data-exam-id="${id}" class="text-indigo-700">↓ 3｜管理與發布：⚙️ 設定與發布</button></div></div>
+      <section data-exam-questions-slot class="mt-4 scroll-mt-4"><p class="text-xs text-slate-500">讀取題庫中…</p></section>
+      <section data-exam-settings-slot class="mt-4 scroll-mt-4"><p class="text-xs text-slate-500">讀取考卷設定中…</p></section></div>`;
+      const qSlot=host.querySelector('[data-exam-questions-slot]'), sSlot=host.querySelector('[data-exam-settings-slot]');
+      try{
+        const ok=await window.TeacherContentToolPanels710?.mountQuestionsInline?.(catId,qSlot);
+        if(!ok&&qSlot)qSlot.innerHTML='<p class="text-xs text-amber-700">題庫暫時無法載入，可按上方「題目管理」重試。</p>';
+      }catch(error){if(qSlot)qSlot.innerHTML=`<p class="text-xs text-rose-600">❌ 題庫載入失敗：${esc(error.message)}</p>`;}
+      if(studioState.openExamId===String(catId))await mountExamSettingsInline(catId,sSlot);
     }catch(error){host.innerHTML=`<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">❌ ${esc(error.message)}<div class="mt-3"><button type="button" data-studio-action="exam" class="rounded-lg bg-rose-700 px-3 py-2 font-bold text-white">返回考卷管理</button></div></div>`;}
   }
 
@@ -636,7 +677,7 @@
   }
 
   window.teacherContentStudioExamAction=(action,catId)=>dispatchExamAction(action,catId);
-  window.TeacherContentStudio71=Object.freeze({registerExamActions});
+  window.TeacherContentStudio71=Object.freeze({registerExamActions,restoreExamSettings});
   window.openTeacherContentExam=async function(catId){
     if(!canQuestion())return false;
     if(!await ensureWorkspacePage('assessment'))return false;

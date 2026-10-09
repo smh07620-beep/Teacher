@@ -127,7 +127,8 @@
   function syncSectionChrome(name) {
     state.section = name || '';
     const actions = document.getElementById('exam-settings-actions');
-    if (actions) actions.classList.toggle('hidden', name !== 'exam-settings');
+    // 考卷單頁會把設定表單搬進考卷頁；那時儲存／預覽按鈕要一直顯示。
+    if (actions) actions.classList.toggle('hidden', name !== 'exam-settings' && !actions.closest('[data-exam-embedded]'));
     const teacherNav = document.getElementById('admin-teacher-subnav');
     if (teacherNav) teacherNav.classList.toggle('hidden', state.workspace !== 'teacher');
     const modal = document.getElementById('admin-modal');

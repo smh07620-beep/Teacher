@@ -32,7 +32,7 @@
       section=document.createElement('section');
       section.id=ID;
       section.dataset.productSection='current-work';
-      section.className='rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm';
+      section.className='rounded-2xl border border-indigo-100 bg-white p-3 shadow-sm';
       section.innerHTML='<div class="text-sm text-slate-500">讀取負責學員中…</div>';
     }
     const queue=document.getElementById('teacher-action-queue-1024');
@@ -87,26 +87,35 @@
     latest=data||{learners:[],summary:{},scope:{}};
     const rows=Array.isArray(latest.learners)?latest.learners:[];
     const summary=latest.summary||{};
-    section.innerHTML=`
+    // 這一塊只讀「PGY 指派」：內部教育訓練的學員不會出現在這裡，標題直接寫清楚。
+    // 沒有學員時整塊縮成一行；有學員時只顯示不是 0 的統計。
+    const actions='<div class="flex items-center gap-3 shrink-0"><button id="teacher-analytics-open-p2" type="button" class="text-[11px] font-bold text-teal-700">📊 教學分析</button><button id="teacher-learners-refresh-p2" type="button" class="text-[11px] font-bold text-indigo-700">↻ 更新</button></div>';
+    const details='<section id="teacher-competency-detail-p2" class="hidden mt-4 rounded-xl border border-teal-100 bg-teal-50/30 p-4"></section><section id="teacher-teaching-analytics-p2" class="hidden mt-4 rounded-xl border border-sky-100 bg-sky-50/30 p-4"></section>';
+    const title=`<h4 class="text-sm font-black text-slate-950">👥 我的學員<span class="ml-1 text-xs font-bold text-indigo-700">（PGY 指派）</span></h4><span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">${escapeHtml(scopeLabel(latest.scope))}</span>`;
+    if(!rows.length){
+      section.dataset.p2Empty='1';
+      section.innerHTML=`<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"><div class="flex items-center gap-2 flex-wrap">${title}<span class="text-xs text-slate-500">目前沒有 PGY 指派給你的學員。內部教育訓練的學員請到「教材與課程」看各課程的指派。</span></div>${actions}</div>${details}`;
+    }else{
+      delete section.dataset.p2Empty;
+      const tiles=[
+        ['learners','學員','bg-slate-50','text-slate-950','text-slate-500',true],
+        ['awaitingTeacher','待教師','bg-indigo-50','text-indigo-900','text-indigo-600'],
+        ['awaitingLeader','待複核','bg-amber-50','text-amber-900','text-amber-700'],
+        ['overdueAssignments','逾期','bg-rose-50','text-rose-900','text-rose-700'],
+      ].filter(([key,,,,,always])=>always||Number(summary[key]||0)>0)
+        .map(([key,label,bg,strong,small])=>`<div class="rounded-xl ${bg} px-3 py-1.5 text-center"><b class="block text-base ${strong}">${Number(summary[key]||0)}</b><span class="text-[10px] ${small}">${label}</span></div>`).join('');
+      section.innerHTML=`
       <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <div class="flex items-center gap-2 flex-wrap">
-            <h4 class="text-base font-black text-slate-950">👥 我的學員</h4>
-            <span class="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700">${escapeHtml(scopeLabel(latest.scope))}</span>
-          </div>
-          <p class="mt-1 text-xs text-slate-500">只顯示伺服器判定你可查看的學員；這裡不新增臨床簽核權限。</p>
+          <div class="flex items-center gap-2 flex-wrap">${title}</div>
+          <p class="mt-1 text-[11px] text-slate-500">只列 PGY 指派給你的學員；內部教育訓練學員不在這裡。</p>
         </div>
-        <div class="flex items-center gap-3"><button id="teacher-analytics-open-p2" type="button" class="text-[11px] font-bold text-teal-700">📊 教學分析</button><button id="teacher-learners-refresh-p2" type="button" class="text-[11px] font-bold text-indigo-700">↻ 更新</button></div>
+        ${actions}
       </div>
-      <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-        <div class="rounded-xl bg-slate-50 p-2"><b class="block text-lg text-slate-950">${Number(summary.learners||0)}</b><span class="text-[10px] text-slate-500">學員</span></div>
-        <div class="rounded-xl bg-indigo-50 p-2"><b class="block text-lg text-indigo-900">${Number(summary.awaitingTeacher||0)}</b><span class="text-[10px] text-indigo-600">待教師</span></div>
-        <div class="rounded-xl bg-amber-50 p-2"><b class="block text-lg text-amber-900">${Number(summary.awaitingLeader||0)}</b><span class="text-[10px] text-amber-700">待複核</span></div>
-        <div class="rounded-xl bg-rose-50 p-2"><b class="block text-lg text-rose-900">${Number(summary.overdueAssignments||0)}</b><span class="text-[10px] text-rose-700">逾期</span></div>
-      </div>
-      <div class="mt-3 space-y-2">${rows.length?rows.map(learnerRow).join(''):'<div class="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500">目前沒有伺服器指派給你的學員。</div>'}</div>
-      <section id="teacher-competency-detail-p2" class="hidden mt-4 rounded-xl border border-teal-100 bg-teal-50/30 p-4"></section>
-      <section id="teacher-teaching-analytics-p2" class="hidden mt-4 rounded-xl border border-sky-100 bg-sky-50/30 p-4"></section>`;
+      <div class="mt-3 flex flex-wrap gap-2">${tiles}</div>
+      <div class="mt-3 space-y-2">${rows.map(learnerRow).join('')}</div>
+      ${details}`;
+    }
     section.querySelector('#teacher-learners-refresh-p2')?.addEventListener('click',()=>load(true));
     section.querySelector('#teacher-analytics-open-p2')?.addEventListener('click',openTeachingAnalytics);
     section.querySelectorAll('[data-p2-results]').forEach(button=>button.addEventListener('click',openResults));
