@@ -93,7 +93,42 @@ def list_materials(base_or_area=None, requested_area: str | None = None) -> list
                 ),
             }
         )
-    return builtin + uploaded
+    return builtin + _attach_narrations(uploaded)
+
+
+def _attach_narrations(uploaded: list[dict]) -> list[dict]:
+    """Fold AI narration into its source material for learners.
+
+    The narration stays a stored material row, but learners see one material
+    with a ``narration`` companion (auto-played by the viewer) instead of a
+    second, separate "AI 語音" entry.
+    """
+    by_id = {str(item.get("id")): item for item in uploaded}
+    narrations: dict[str, dict] = {}
+    folded: set[str] = set()
+    for item in uploaded:
+        meta = item.get("storageMeta") or {}
+        source_id = str(meta.get("sourceMaterialId") or "")
+        if meta.get("mediaKind") != "ai_narration" or not source_id or source_id not in by_id:
+            continue
+        previous = narrations.get(source_id)
+        if previous is None or str(item.get("dateAdded") or "") > str(previous.get("dateAdded") or ""):
+            narrations[source_id] = item
+        folded.add(str(item.get("id")))
+    result = []
+    for item in uploaded:
+        item_id = str(item.get("id"))
+        if item_id in folded:
+            continue
+        narration = narrations.get(item_id)
+        if narration:
+            item = {**item, "narration": {
+                "id": narration.get("id"),
+                "title": narration.get("title") or "AI 配音",
+                "viewUrl": f"/view/{narration['id']}",
+            }}
+        result.append(item)
+    return result
 
 
 def list_admin_materials(_legacy_base=None) -> list[dict]:

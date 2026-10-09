@@ -256,3 +256,23 @@ class AiDerivativeExcludedFromQuestionSourceTests(unittest.TestCase):
         host = Path("teacher_app/legacy_host.py").read_text(encoding="utf-8")
         self.assertIn("allowAiDerivatives", host)
         self.assertIn('meta.get("sourceMaterialId")', host)
+
+
+class NarrationFoldedIntoSourceTests(unittest.TestCase):
+    def test_learner_list_folds_narration_into_source(self):
+        from teacher_app.materials import service
+        src = {"id": "m1", "title": "原教材", "storageMeta": {}}
+        nar = {"id": "mat-ai-audio-x", "title": "原教材｜AI 語音", "dateAdded": "2026-10-09",
+               "storageMeta": {"mediaKind": "ai_narration", "sourceMaterialId": "m1"}}
+        orphan = {"id": "o1", "title": "孤兒配音", "storageMeta": {"mediaKind": "ai_narration", "sourceMaterialId": "gone"}}
+        out = service._attach_narrations([src, nar, orphan])
+        ids = [m["id"] for m in out]
+        self.assertEqual(ids, ["m1", "o1"])
+        self.assertEqual(out[0]["narration"]["viewUrl"], "/view/mat-ai-audio-x")
+
+    def test_viewer_script_autoplays_and_can_mute(self):
+        js = Path("static/learner-narration-1100.js").read_text(encoding="utf-8")
+        self.assertIn("audio.play()", js)
+        self.assertIn("teacher.narration.muted", js)
+        assets = Path("teacher_app/frontend/assets.py").read_text(encoding="utf-8")
+        self.assertIn("/learner-narration-1100.js", assets)

@@ -11,7 +11,7 @@ This map records the remaining compatibility wrapper chains that intentionally r
 | `fetchAdminRecords` | `static/admin-results-data.js` | `static/admin-results-workspace.js` | Filter canonical records for the active results/teacher mode. |
 | `renderAdminTable` | `static/admin-results-data.js` | `static/admin-results-workspace.js` | Add mode-aware presentation around the canonical results table. |
 | `renderResultsAnalytics` | `static/admin-results-data.js` | `static/admin-results-workspace.js` | Add mode-aware analytics projection only. |
-| `openMaterial` | `static/system-learner.js` | `static/smart-learning-67.js` → `static/teacher-media-subtitle-1014.js` | Smart Learning adds progress/external-media reader behavior, then subtitle integration attaches an approved track; both preserve the previous implementation. |
+| `openMaterial` | `static/system-learner.js` | `static/smart-learning-67.js` → `static/teacher-media-subtitle-1014.js` → `static/learner-narration-1100.js` | Smart Learning adds progress/external-media reader behavior, then subtitle integration attaches an approved track, then narration auto-plays the material's AI voice companion; all preserve the previous implementation. |
 | `toggleQuizQuestionsPanel` | `static/admin-question-panel.js` | `static/teacher-content-tool-panels-710.js` | Preserve canonical panel opening and remove obsolete close controls afterward. |
 | `renderAdminMaterials` | `static/admin-materials.js` | `static/content-audience-1014.js` | Add audience/scope presentation after the canonical material renderer. |
 | `renderFilteredQuestionList` | `static/admin-question-editor-ui.js` | `static/content-audience-1014.js` | Decorate already-rendered question rows with audience presentation. |
