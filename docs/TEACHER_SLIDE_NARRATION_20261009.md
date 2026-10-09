@@ -6,8 +6,12 @@ the voice, the viewer turns pages in step, and teacher-approved captions are sho
 
 ## Flow
 
-1. Teacher opens a slide material (reader mode `presentation` or `paged_document`) in the
-   viewer and presses **開始錄製旁白** (`static/teacher-slide-narration-1109.js`).
+1. Entry points exist **only in the material lists** (編輯課程 step 2 「本課程的教材」 and
+   教材與課程總覽): the 「🎙 錄旁白／重錄旁白」 button calls
+   `TeacherSlideNarration1109.open(material)`, which opens the viewer and arms the recorder
+   (`static/teacher-slide-narration-1109.js`). Nothing is shown to learners or in the viewer
+   otherwise. The same lists show a 「🎙 老師旁白」 badge and 「移除旁白」. The teacher then
+   presses **開始錄製旁白** (reader mode `presentation` or `paged_document`).
    Only roles `clinical_teacher` / `group_leader` / `education_admin` with
    `material.manage` see it. A privacy reminder is confirmed before recording starts.
 2. While recording, page changes are detected by polling `window.slideViewerState.index`

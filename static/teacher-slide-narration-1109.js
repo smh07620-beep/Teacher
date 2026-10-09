@@ -1,7 +1,9 @@
 /* Teacher slide narration recorder.
  *
- * A teacher opens a slide material in the normal viewer, presses 「錄製旁白」, talks while
- * paging through the slides, and presses stop.  The voice is uploaded through the existing
+ * The only entry point is TeacherSlideNarration1109.open(material), called from the material
+ * management lists (編輯課程 → 教材 and the material hub).  It opens the slide material in the
+ * normal viewer with the recorder armed; the teacher talks while paging through the slides and
+ * presses stop.  Merely viewing a material anywhere else never shows the recorder.  The voice is uploaded through the existing
  * Browser -> R2 -> Worker lane as an audio material (no media bytes touch the Render Web
  * process) and then bound to the slide material together with a page timeline, so learners
  * hear the voice and the viewer turns pages in step (see learner-narration-1100.js).
@@ -28,6 +30,7 @@
   ];
 
   let state = 'idle'; // idle | recording | paused | review | saving | bound
+  let armed = false; // true only after open(); the viewer is showing the material to narrate
   let material = null;
   let recorder = null;
   let stream = null;
@@ -61,6 +64,7 @@
     if (!PAGE_MODES.has(String(current.readerMode || ''))) return null;
     const found = slideMaterials().find(item => item && String(item.id) === String(current.materialId || ''));
     if (!found || found.isBuiltin) return null;
+    if (!armed || !material || String(found.id) !== String(material.id)) return null;
     if (!['slides', 'preview_pdf'].includes(String(found.viewerMode || ''))) return null;
     return found;
   }
@@ -147,7 +151,7 @@
     if (state === 'idle') {
       ui.title.textContent = '🎙️ 老師旁白';
       say('一邊播放投影片一邊講解，系統會記下每一頁的時間，學員開啟教材時會自動跟著翻頁。', 'normal');
-      setActions(button('🎙 開始錄製旁白', 'primary', () => void start()));
+      setActions(button('🎙 開始錄製旁白', 'primary', () => void start()), button('✕ 不錄了', 'plain', disarm));
     } else if (state === 'recording') {
       ui.title.textContent = '🔴 錄音中';
       say('請照常翻頁講解（按鈕、縮圖、方向鍵都可以）。講完按「停止」。');
@@ -172,6 +176,7 @@
   function showPanelIfNeeded() {
     buildPanel();
     const busy = state !== 'idle' && state !== 'bound';
+    if (armed && state === 'idle' && !viewerOpen()) disarm();
     const eligible = !!eligibleMaterial();
     panel.style.display = (eligible || busy || state === 'bound') ? 'block' : 'none';
   }
@@ -413,23 +418,78 @@
     }
   }
 
+  // Leave authoring mode: hide the panel and let the learner player behave normally again.
+  function disarm() {
+    if (state !== 'idle' && state !== 'bound') return;
+    armed = false;
+    material = null;
+    window.__teacherNarrationRecording = false;
+    render();
+    showPanelIfNeeded();
+  }
+
+  async function findMaterial(ref) {
+    const id = String((ref && ref.id) || ref || '');
+    if (!id || !Array.isArray(window.cachedSlidesList)) return null;
+    let found = window.cachedSlidesList.find(item => item && String(item.id) === id);
+    if (!found) {
+      // The shared list is filled when the learner portal loads; teachers may not have opened it yet.
+      // Mutate it in place: the viewer scripts keep their own reference to the same array.
+      try {
+        const area = encodeURIComponent(String((ref && ref.area) || 'internal'));
+        const response = await fetch(`/api/slides?area=${area}`, { credentials: 'same-origin', cache: 'no-store' });
+        const rows = response.ok ? await response.json() : [];
+        found = (Array.isArray(rows) ? rows : []).find(item => item && String(item.id) === id) || null;
+        if (found) window.cachedSlidesList.push(found);
+      } catch (_) { found = null; }
+    }
+    return found;
+  }
+
+  // Entry point for the material management lists.  Returns true when the viewer was opened.
+  async function open(ref) {
+    if (state !== 'idle' && state !== 'bound') {
+      window.alert('目前有一段旁白正在錄製或儲存中，請先完成或取消。');
+      return false;
+    }
+    const found = await findMaterial(ref);
+    if (!found || found.isBuiltin) { window.alert('找不到這份教材，請重新整理頁面後再試。'); return false; }
+    if (!['slides', 'preview_pdf'].includes(String(found.viewerMode || ''))) {
+      window.alert('只有投影片、PDF 或 Word 文件這類「會翻頁」的教材可以錄旁白。');
+      return false;
+    }
+    clearRecording();
+    state = 'idle';
+    material = found;
+    armed = true;
+    window.__teacherNarrationRecording = true; // keep the existing narration quiet while preparing
+    render();
+    if (typeof window.openMaterial !== 'function') { disarm(); window.alert('教材檢視器尚未載入，請重新整理頁面。'); return false; }
+    await window.openMaterial(found.id);
+    // Some readers (continuous PDF scrolling) have no page turns; tell the teacher instead of failing silently.
+    setTimeout(() => {
+      if (armed && state === 'idle' && viewerOpen() && !eligibleMaterial()) {
+        window.alert('這份教材目前是連續捲動的閱讀模式，沒有「翻頁」可以同步，無法錄製旁白。');
+        disarm();
+      }
+    }, 1500);
+    showPanelIfNeeded();
+    return true;
+  }
+
   function boot() {
     buildPanel();
     render();
-    setInterval(() => {
-      if (state === 'idle' || state === 'bound') {
-        const current = eligibleMaterial();
-        if (current && material && String(current.id) !== String(material.id)) material = current;
-      }
-      showPanelIfNeeded();
-    }, 700);
+    setInterval(showPanelIfNeeded, 700);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 
   window.TeacherSlideNarration1109 = Object.freeze({
+    open,
     state: () => state,
+    isArmed: () => armed,
     eligibleMaterial,
   });
 })();

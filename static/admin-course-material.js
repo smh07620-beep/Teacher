@@ -110,6 +110,7 @@
 
   // 教材對齊：每份教材都寫清楚「屬於哪門課、誰能看」，不再只放一個 🔒。
   const hubContext={courses:new Map(),narrations:new Map()};
+  const NARRATION_KINDS=['ai_narration','teacher_narration'];
   function adminMaterialAudienceNote(m){
       if(m.isBuiltin)return '';
       // 已歸入課程的教材沒有自己的「誰能看」：依課程的學習指派（建立課程第 1 步）。
@@ -132,7 +133,7 @@
       for(const item of materials){
           const meta=item?.storageMeta||{};
           const source=String(meta.sourceMaterialId||'');
-          if(meta.mediaKind!=='ai_narration'||!source)continue;
+          if(!NARRATION_KINDS.includes(meta.mediaKind)||!source)continue;
           const previous=index.get(source);
           if(!previous||String(item.dateAdded||'')>String(previous.dateAdded||''))index.set(source,item);
       }
@@ -141,16 +142,29 @@
   function adminMaterialNarrationBadge(m){
       const narration=hubContext.narrations.get(String(m.id||''));
       if(!narration)return '';
+      if(narration.storageMeta&&narration.storageMeta.mediaKind==='teacher_narration')
+          return `<span class="rounded-full border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[9px] font-black text-cyan-800" data-material-narration="${escapeHtml(narration.id||'')}" title="學員打開這份教材時會聽到老師旁白並自動翻頁（可關喇叭）">🎙 老師旁白</span>`;
       return `<span class="rounded-full border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[9px] font-black text-cyan-800" data-material-narration="${escapeHtml(narration.id||'')}" title="學員打開這份教材時會自動播放 AI 配音（可關喇叭）">🎧 附配音</span>`;
+  }
+  // 老師旁白的錄製入口：只在教材管理清單，且只有「會翻頁」的教材才有。
+  function adminMaterialNarrateButton(m){
+      if(m.isBuiltin||!['slides','preview_pdf'].includes(String(m.viewerMode||'')))return '';
+      const existing=hubContext.narrations.get(String(m.id||''));
+      const has=!!(existing&&existing.storageMeta&&existing.storageMeta.mediaKind==='teacher_narration');
+      return `<button type="button" data-material-narrate="${escapeHtml(m.id||'')}" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-cyan-300 bg-cyan-50 text-cyan-900 font-bold">🎙 ${has?'重錄旁白':'錄旁白'}</button>`;
   }
   function adminMaterialNarrationRemove(m){
       const narration=hubContext.narrations.get(String(m.id||''));
       if(!narration)return '';
-      return `<button type="button" data-material-narration-remove="${escapeHtml(narration.id||'')}" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-cyan-200 bg-white text-cyan-800">移除配音</button>`;
+      const teacher=!!(narration.storageMeta&&narration.storageMeta.mediaKind==='teacher_narration');
+      return `<button type="button" data-material-narration-remove="${escapeHtml(narration.id||'')}" data-narration-kind="${teacher?'teacher':'ai'}" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-cyan-200 bg-white text-cyan-800">${teacher?'移除旁白':'移除配音'}</button>`;
   }
-  async function removeMaterialNarration(narrationId){
+  async function removeMaterialNarration(narrationId,kind){
       if(!narrationId)return;
-      if(!confirm('移除這份教材的 AI 配音？\n\n教材本身會保留；學員打開教材時不再自動播放配音。之後需要可以再從課程的「AI 製作」重新產生。'))return;
+      const message=kind==='teacher'
+          ?'移除這份教材的老師旁白？\n\n教材本身會保留；學員打開教材時不再播放旁白與字幕。之後可以再錄一份。'
+          :'移除這份教材的 AI 配音？\n\n教材本身會保留；學員打開教材時不再自動播放配音。之後需要可以再從課程的「AI 製作」重新產生。';
+      if(!confirm(message))return;
       const res=await fetch(`/api/slides/${encodeURIComponent(narrationId)}`,{method:'DELETE',credentials:'same-origin'});
       const data=await res.json().catch(()=>({}));
       if(!res.ok){alert(data.error||'移除配音失敗');return;}
@@ -177,16 +191,26 @@
               else window.teachingEditCourse?.(courseId);
               return;
           }
+          const narrate=event.target.closest?.('[data-material-narrate]');
+          if(narrate&&box.contains(narrate)){
+              event.preventDefault();event.stopPropagation();
+              const recorder=window.TeacherSlideNarration1109;
+              const id=narrate.dataset.materialNarrate;
+              const material=(Array.isArray(state.materials)?state.materials:[]).find(item=>String(item.id)===String(id))||{id};
+              if(recorder&&typeof recorder.open==='function')void recorder.open(material);
+              else alert('此帳號沒有錄製旁白的權限，或錄製功能尚未載入，請重新整理頁面。');
+              return;
+          }
           const button=event.target.closest?.('[data-material-narration-remove]');
           if(!button||!box.contains(button))return;
           event.preventDefault();event.stopPropagation();
-          void removeMaterialNarration(button.dataset.materialNarrationRemove);
+          void removeMaterialNarration(button.dataset.materialNarrationRemove,button.dataset.narrationKind);
       });
   }
 
   function adminHubMaterialRow(m){
       const version=Math.max(1,Number(m.currentVersion||1));
-      return `<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.title||m.filename||'未命名教材')}</div><span class="rounded-full bg-white border border-slate-200 px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${version}</span>${adminMaterialNarrationBadge(m)}</div><div class="text-[10px] text-slate-500 mt-1">${adminMaterialCourseNote(m)}${adminMaterialTypeBadge(m)}${m.categoryLabel?' · 對應：'+escapeHtml(m.categoryLabel):''}${m.active===false?' · 已停用':''}${adminMaterialAudienceNote(m)}</div></div>${m.isBuiltin?'':m.courseId?`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrationRemove(m)}<span class="text-[10px] text-slate-400" data-material-manage-hint>要停用／移出／刪除：按上方「編輯課程」</span></div>`:`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrationRemove(m)}<button data-csp-click="editAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white">管理教材</button><details class="relative" data-material-more><summary class="cursor-pointer list-none select-none text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700">更多 ▾</summary><div class="absolute right-0 z-20 mt-1 flex w-40 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"><button data-csp-click="prepareMaterialVersionUpload('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">上傳新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">版本紀錄</button>${m.courseId?'':`<button type="button" data-material-audience="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-emerald-800 hover:bg-emerald-50">設定可見範圍</button>`}<button data-csp-click="rebuildMaterialIndex('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">重建搜尋索引</button>${/\.docx$/i.test(String(m.filename||m.storageFilename||''))?`<button data-csp-click="openAdminMaterialAtlasImport('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-teal-800 hover:bg-teal-50">擷取 Word 圖片 → Atlas</button>`:''}<button data-csp-click="toggleAdminMaterial('${m.id}',${m.active?'false':'true'})" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-amber-700 hover:bg-amber-50">${m.active?'停用':'啟用'}</button><button type="button" data-material-course-link="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">${m.courseId?'更換課程':'歸入課程'}</button><div class="my-0.5 border-t border-slate-100"></div><button data-csp-click="deleteAdminMaterial('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 font-bold text-rose-700">🗑️ 刪除教材</button>${canSystemPurgeMaterial()?`<button type="button" data-material-purge-check="${escapeHtml(m.id||'')}" title="系統管理員用：清除無任何引用的實體儲存" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100">系統永久清除…</button>`:''}</div></details></div>`}</div>`;
+      return `<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.title||m.filename||'未命名教材')}</div><span class="rounded-full bg-white border border-slate-200 px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${version}</span>${adminMaterialNarrationBadge(m)}</div><div class="text-[10px] text-slate-500 mt-1">${adminMaterialCourseNote(m)}${adminMaterialTypeBadge(m)}${m.categoryLabel?' · 對應：'+escapeHtml(m.categoryLabel):''}${m.active===false?' · 已停用':''}${adminMaterialAudienceNote(m)}</div></div>${m.isBuiltin?'':m.courseId?`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrateButton(m)}${adminMaterialNarrationRemove(m)}<span class="text-[10px] text-slate-400" data-material-manage-hint>要停用／移出／刪除：按上方「編輯課程」</span></div>`:`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrateButton(m)}${adminMaterialNarrationRemove(m)}<button data-csp-click="editAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white">管理教材</button><details class="relative" data-material-more><summary class="cursor-pointer list-none select-none text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700">更多 ▾</summary><div class="absolute right-0 z-20 mt-1 flex w-40 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"><button data-csp-click="prepareMaterialVersionUpload('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">上傳新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">版本紀錄</button>${m.courseId?'':`<button type="button" data-material-audience="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-emerald-800 hover:bg-emerald-50">設定可見範圍</button>`}<button data-csp-click="rebuildMaterialIndex('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">重建搜尋索引</button>${/\.docx$/i.test(String(m.filename||m.storageFilename||''))?`<button data-csp-click="openAdminMaterialAtlasImport('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-teal-800 hover:bg-teal-50">擷取 Word 圖片 → Atlas</button>`:''}<button data-csp-click="toggleAdminMaterial('${m.id}',${m.active?'false':'true'})" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-amber-700 hover:bg-amber-50">${m.active?'停用':'啟用'}</button><button type="button" data-material-course-link="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">${m.courseId?'更換課程':'歸入課程'}</button><div class="my-0.5 border-t border-slate-100"></div><button data-csp-click="deleteAdminMaterial('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 font-bold text-rose-700">🗑️ 刪除教材</button>${canSystemPurgeMaterial()?`<button type="button" data-material-purge-check="${escapeHtml(m.id||'')}" title="系統管理員用：清除無任何引用的實體儲存" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100">系統永久清除…</button>`:''}</div></details></div>`}</div>`;
   }
 
   function ensureMaterialPurgeDialog(){
@@ -450,7 +474,7 @@
       bindMaterialNarrationControls(box);
       const cards=[];
       for(const c of visibleCourses){
-          const mats=teachingOrderedMaterials(c,scoped.filter(m=>m.courseId===c.id&&!(m.storageMeta&&m.storageMeta.mediaKind==='ai_narration'&&m.storageMeta.sourceMaterialId&&materials.some(o=>o.id===m.storageMeta.sourceMaterialId))));
+          const mats=teachingOrderedMaterials(c,scoped.filter(m=>m.courseId===c.id&&!(m.storageMeta&&NARRATION_KINDS.includes(m.storageMeta.mediaKind)&&m.storageMeta.sourceMaterialId&&materials.some(o=>o.id===m.storageMeta.sourceMaterialId))));
           const exams=cats.filter(q=>q.courseId===c.id);
           const qcount=exams.reduce((n,q)=>n+examBankCount(q),0);
           const assignments=(Array.isArray(state.assignments)?state.assignments:[]).filter(item=>item.courseId===c.id&&item.active!==false);

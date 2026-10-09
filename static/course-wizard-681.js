@@ -359,6 +359,18 @@ function stepTwo(){
   <section class="mt-5 border-t border-violet-100 pt-4"><div><b class="text-sm text-slate-900">需要 AI 協助製作嗎？</b><p class="mt-1 text-xs text-slate-500">AI 是教材製作工具，不是發布條件；選「不需要」即可直接下一步。</p></div><div class="mt-3 grid gap-2 md:grid-cols-2">${Object.entries(AI_PLAN_META).map(([id,meta])=>`<button type="button" data-cw-ai-plan="${id}" class="rounded-xl border p-3 text-left text-sm ${state.aiPlan===id?'border-teal-500 bg-teal-50':'bg-white'}"><b>${esc(meta.label)}</b><span class="mt-1 block text-xs text-slate-500">${esc(meta.detail)}</span></button>`).join('')}</div>${state.aiPlan!=='none'?`<div class="mt-3 flex items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 p-3"><p class="text-xs text-teal-900">選擇「${esc(aiPlan().label)}」後，可先建立安全草稿 checkpoint，再在同一個全頁 Studio 開啟製作區。</p><button type="button" data-csp-click="courseWizard681OpenAiAuthoring()" class="shrink-0 rounded-xl bg-teal-700 px-4 py-2 text-xs font-black text-white">開啟 ${esc(aiPlan().label)} →</button></div>`:''}${products?`<div class="mt-3 space-y-2"><b class="text-xs text-slate-700">本次 AI 製作產物</b>${products}</div>`:''}</section>`;
 }
 
+// 老師旁白：只有「會翻頁」的教材（投影片／PDF／Word）才能錄；入口只在教材管理清單內。
+function canNarrate(m){return !m.isBuiltin&&['slides','preview_pdf'].includes(String(m.viewerMode||''));}
+function narrationBadge(m){
+  const n=m.narration;
+  return n&&n.kind==='teacher'?'<span class="ml-1 rounded-full border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[10px] font-bold text-cyan-800" title="學員打開這份教材時會聽到老師旁白並自動翻頁">🎙 老師旁白</span>':'';
+}
+function narrationButtons(m){
+  if(!canNarrate(m))return '';
+  const id=esc(m.id),has=m.narration&&m.narration.kind==='teacher';
+  return `<button type="button" data-cw-mat-action="narrate" data-cw-mat-id="${id}" class="rounded-lg border border-cyan-300 bg-cyan-50 px-2.5 py-1 font-bold text-cyan-900">🎙 ${has?'重錄旁白':'錄旁白'}</button>${has?`<button type="button" data-cw-mat-action="narration-remove" data-cw-mat-id="${id}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-bold text-slate-700">移除旁白</button>`:''}`;
+}
+
 function paintCourseMaterials(){
   const list=document.querySelector('[data-cw681-course-materials-list]');
   if(!list)return;
@@ -377,7 +389,7 @@ function paintCourseMaterials(){
   if(!rows.length){list.innerHTML='<p class="rounded-lg bg-slate-50 px-3 py-2 text-slate-500">這門課目前沒有教材。可在上方上傳，或用 AI 製作新增。</p>';return;}
   list.innerHTML=rows.map(m=>{
     const off=m.active===false,id=esc(m.id);
-    return `<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border ${off?'border-amber-200 bg-amber-50/60':'border-slate-100 bg-slate-50'} px-3 py-2"><div class="min-w-0"><b class="truncate text-slate-800">${esc(m.title||m.filename||'未命名教材')}</b><span class="ml-1 rounded-full border bg-white px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${Math.max(1,Number(m.currentVersion||1))}</span>${off?'<span class="ml-1 text-[10px] font-bold text-amber-700">已停用</span>':''}${m.audienceScope==='source_only'?'<span class="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">📎 僅供製作（學員看不到）</span>':''}</div><div class="flex flex-wrap gap-1.5"><button type="button" data-cw-mat-action="toggle" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${off?'啟用':'停用'}</button><button type="button" data-cw-mat-action="audience" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${m.audienceScope==='source_only'?'改成學員可見':'設為僅供製作'}</button><button type="button" data-cw-mat-action="unlink" data-cw-mat-id="${id}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-bold text-slate-700">移出課程</button><button type="button" data-cw-mat-action="delete" data-cw-mat-id="${id}" class="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 font-bold text-rose-700">🗑️ 刪除</button></div></div>`;
+    return `<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border ${off?'border-amber-200 bg-amber-50/60':'border-slate-100 bg-slate-50'} px-3 py-2"><div class="min-w-0"><b class="truncate text-slate-800">${esc(m.title||m.filename||'未命名教材')}</b><span class="ml-1 rounded-full border bg-white px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${Math.max(1,Number(m.currentVersion||1))}</span>${narrationBadge(m)}${off?'<span class="ml-1 text-[10px] font-bold text-amber-700">已停用</span>':''}${m.audienceScope==='source_only'?'<span class="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">📎 僅供製作（學員看不到）</span>':''}</div><div class="flex flex-wrap gap-1.5">${narrationButtons(m)}<button type="button" data-cw-mat-action="toggle" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${off?'啟用':'停用'}</button><button type="button" data-cw-mat-action="audience" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${m.audienceScope==='source_only'?'改成學員可見':'設為僅供製作'}</button><button type="button" data-cw-mat-action="unlink" data-cw-mat-id="${id}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-bold text-slate-700">移出課程</button><button type="button" data-cw-mat-action="delete" data-cw-mat-id="${id}" class="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 font-bold text-rose-700">🗑️ 刪除</button></div></div>`;
   }).join('');
 }
 
@@ -386,8 +398,25 @@ async function courseMaterialAction(action,id){
   if(!material)return;
   const list=document.querySelector('[data-cw681-course-materials-list]');
   const note=text=>{if(list)list.insertAdjacentHTML('afterbegin',`<p class="rounded-lg bg-slate-100 px-3 py-1.5 text-slate-600" data-cw-mat-note>${esc(text)}</p>`);};
+  if(action==='narrate'){
+    const recorder=window.TeacherSlideNarration1109;
+    if(!recorder||typeof recorder.open!=='function'){note('此帳號沒有錄製旁白的權限，或錄製功能尚未載入，請重新整理頁面。');return;}
+    await recorder.open(material);
+    return;
+  }
   try{
     let res;
+    if(action==='narration-remove'){
+      const narrationId=material.narration&&material.narration.id;
+      if(!narrationId)return;
+      if(!confirm('移除這份教材的老師旁白？\n\n教材本身會保留；學員打開教材時不再播放旁白與字幕。之後可以再錄一份。'))return;
+      res=await fetch('/api/slides/'+encodeURIComponent(narrationId),{method:'DELETE',credentials:'same-origin'});
+      const removed=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(removed.error||'移除旁白失敗');
+      window.invalidateAdminMaterialsCache?.();
+      await loadMaterials();
+      return;
+    }
     if(action==='delete'){
       if(!confirm('確定刪除這份教材嗎？此操作無法復原。'))return;
       res=await fetch('/api/slides/'+encodeURIComponent(id),{method:'DELETE',credentials:'same-origin'});

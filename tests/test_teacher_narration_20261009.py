@@ -227,6 +227,27 @@ class FrontendWiringTests(unittest.TestCase):
         # Only the teacher-approved subtitle endpoint is used; never the draft list.
         self.assertNotIn("/api/media-subtitles?", self.player)
 
+    def test_entry_is_only_in_material_lists_and_recorder_is_armed_by_open(self):
+        static = ROOT / "static"
+        wizard = (static / "course-wizard-681.js").read_text(encoding="utf-8")
+        overview = (static / "admin-course-material.js").read_text(encoding="utf-8")
+        questions = (static / "admin-ai-questions.js").read_text(encoding="utf-8")
+        self.assertIn("TeacherSlideNarration1109", wizard)
+        self.assertIn("recorder.open", wizard)
+        self.assertIn('data-cw-mat-action="narrate"', wizard)
+        self.assertIn("TeacherSlideNarration1109", overview)
+        self.assertIn("recorder.open", overview)
+        self.assertIn("data-material-narrate", overview)
+        self.assertIn("teacher_narration", overview)
+        self.assertIn("teacher_narration", questions)
+        self.assertIn("armed", self.recorder)
+        self.assertIn("open", self.recorder)
+        # No other script may call the recorder.
+        for path in static.glob("*.js"):
+            if path.name in {"course-wizard-681.js", "admin-course-material.js", "teacher-slide-narration-1109.js"}:
+                continue
+            self.assertNotIn("TeacherSlideNarration1109", path.read_text(encoding="utf-8", errors="ignore"), path.name)
+
 
 if __name__ == "__main__":
     unittest.main()
