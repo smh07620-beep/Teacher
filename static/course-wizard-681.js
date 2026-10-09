@@ -1163,6 +1163,35 @@ async function createWizardAssignment(courseId){
   return postWizardAssignment(courseId,assigneeType,assigneeKey);
 }
 
+// 教師在「發布課程」時，該課程底下已完成出題的考卷一併發布（審核→設定對象與期間→發布）。
+async function autoPublishCourseExams(courseId,say){
+  const call=async(url,method,body)=>{const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.issues?.length?`${d.error}：${d.issues.join('、')}`:(d.error||'操作失敗'));return d;};
+  const sc=(typeof scope==='function'?scope():{})||{};
+  const group=String(state.course?.group||sc.group||''),area=String(state.course?.area||sc.area||'');
+  const q=new URLSearchParams();if(group)q.set('group',group);if(area)q.set('area',area);
+  const all=await call('/api/quiz-categories/admin?'+q.toString(),'GET');
+  const mine=(Array.isArray(all)?all:[]).filter(x=>String(x.courseId||'')===courseId&&!x.active);
+  const failed=[];
+  for(const exam of mine){
+    const id=String(exam.id),title=String(exam.title||'未命名考卷');
+    try{
+      say?.(`⏳ 正在發布考卷「${title}」…`);
+      const cat=await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'GET');
+      if(!String(cat.audience||'').trim())await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'PATCH',{audience:'所有符合課程資格人員'});
+      const win=await call(`/api/exam-windows/${encodeURIComponent(id)}`,'GET').catch(()=>({}));
+      const w=win?.window||{},have=w.opens_at||w.opensAt,end=w.closes_at||w.closesAt;
+      if(!have||!end||new Date(end)<=new Date()){
+        const pad=n=>String(n).padStart(2,'0'),local=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt:local(new Date(Date.now()-60000)),closesAt:local(new Date(Date.now()+30*86400000)),reminderEnabled:true});
+      }
+      const fresh=await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'GET');
+      if(fresh.reviewStatus!=='approved')await call(`/api/quiz-categories/${encodeURIComponent(id)}/review`,'POST',{});
+      await call(`/api/quiz-categories/${encodeURIComponent(id)}/publish`,'POST',{});
+    }catch(e){failed.push(`「${title}」：${e.message}`);}
+  }
+  return {total:mine.length,failed};
+}
+
 async function publishAndOpenCourseWorkspace(){
   if(state.publicationBusy)return;
   if(!canLeaveCourse())return alert('教材尚未正式完成。請等到所有教材完成並確認已掛入課程後再發布。');
@@ -1177,6 +1206,12 @@ async function publishAndOpenCourseWorkspace(){
   try{
     await verifyCreatedCourseMaterials();
     let readiness=await api('/api/courses/'+encodeURIComponent(courseId)+'/readiness');
+    const examOnlyBlocked=!readiness?.ready&&(readiness?.blockers||[]).length>0&&(readiness.blockers||[]).every(item=>item?.code==='COURSE_EXAM_UNPUBLISHED');
+    if(examOnlyBlocked){
+      const auto=await autoPublishCourseExams(courseId,text=>{if(publicationBox)publicationBox.innerHTML=`<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-2 font-bold text-emerald-800">${esc(text)}</div>`;});
+      readiness=await api('/api/courses/'+encodeURIComponent(courseId)+'/readiness');
+      if(auto.failed.length&&!readiness?.ready)readiness={...readiness,blockers:[...(readiness.blockers||[]),{code:'COURSE_EXAM_AUTO_FAILED',message:'自動發布考卷失敗：'+auto.failed.join('；')}]};
+    }
     if(!readiness?.ready){
       const blocker=publicationBlockerText(readiness);
       // 考卷還沒審核／發布時，直接給一個回到考卷的按鈕（考卷頁有「預覽→審核→發布」）。

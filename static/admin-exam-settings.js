@@ -44,11 +44,13 @@
       document.getElementById('exam-settings-heading').textContent = `📋 ${category.title || '考卷'}｜設定`;
       document.getElementById('exam-settings-title').value = category.title || '';
       document.getElementById('exam-settings-desc').value = category.desc || '';
-      document.getElementById('exam-settings-audience').value = category.audience || '';
+      document.getElementById('exam-settings-audience').value = category.audience || (category.active ? '' : '所有符合課程資格人員');
       const examWindow=windowData.window||{};
       const localInput=value=>{if(!value)return ''; const date=new Date(value); if(Number.isNaN(date.getTime()))return ''; const pad=n=>String(n).padStart(2,'0'); return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;};
       document.getElementById('exam-settings-opens-at').value=localInput(examWindow.opens_at);
       document.getElementById('exam-settings-closes-at').value=localInput(examWindow.closes_at);
+      // 尚未發布且沒設定過期間時，先帶入預設（現在起 30 天），教師可直接按「發布考卷」，也可自行改日期。
+      if(!category.active){ if(!document.getElementById('exam-settings-opens-at').value) document.getElementById('exam-settings-opens-at').value=localInput(new Date(Date.now()-60000).toISOString()); if(!document.getElementById('exam-settings-closes-at').value) document.getElementById('exam-settings-closes-at').value=localInput(new Date(Date.now()+30*86400000).toISOString()); }
       editingMeta.examWindow=examWindow;
       document.getElementById('exam-settings-passing-score').value = Number(category.passingScore || 80);
       document.getElementById('exam-settings-blind').checked = !!category.blindMode;

@@ -153,3 +153,20 @@ class AiAuthoringUxConvergence76Tests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CoursePublishAutoExamTests(unittest.TestCase):
+    def test_course_publish_auto_publishes_linked_exams(self):
+        from pathlib import Path
+        js = (Path(__file__).resolve().parents[1] / "static" / "course-wizard-681.js").read_text(encoding="utf-8")
+        self.assertIn("async function autoPublishCourseExams", js)
+        self.assertIn("COURSE_EXAM_UNPUBLISHED", js)
+        self.assertIn("examOnlyBlocked", js)
+        self.assertIn("/publish`,'POST'", js)
+        self.assertIn("w.opens_at", js)
+
+    def test_exam_settings_prefill_publish_defaults(self):
+        from pathlib import Path
+        js = (Path(__file__).resolve().parents[1] / "static" / "admin-exam-settings.js").read_text(encoding="utf-8")
+        self.assertIn("所有符合課程資格人員", js)
+        self.assertIn("30*86400000", js)
