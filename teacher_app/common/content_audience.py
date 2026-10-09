@@ -6,6 +6,7 @@ may consume the item without transferring ownership:
 - ``group_only``: owning group only (safe default)
 - ``all_staff``: every authenticated staff/learner
 - ``multi_group``: owning group plus explicit additional groups
+- ``source_only``: AI/出題/製作用的原始來源；學員不可見，只有負責組別的教師與跨組管理者可用
 
 Cross-group education/system managers may inspect every item for governance,
 but ordinary teachers still manage only their own group.
@@ -23,11 +24,12 @@ from teacher_app.common import audit, db as common_db, scope
 from teacher_app.common.auth import has_permission, has_role
 
 
-AUDIENCE_SCOPES = {"group_only", "all_staff", "multi_group"}
+AUDIENCE_SCOPES = {"group_only", "all_staff", "multi_group", "source_only"}
 AUDIENCE_LABELS = {
     "group_only": "本組限定",
     "all_staff": "全科共用",
     "multi_group": "指定組別",
+    "source_only": "僅供老師製作使用",
 }
 
 
@@ -170,9 +172,21 @@ def _question_meta(ids: Iterable[str]) -> dict[str, dict[str, Any]]:
     return output
 
 
+def can_author_with_source(user: Mapping[str, Any] | None, owner_group: str) -> bool:
+    """``source_only`` 教材只給負責組別的教師／跨組管理者（不含學員）。"""
+    if not user:
+        return False
+    if _cross_group_manager(user):
+        return True
+    authoring = any(has_permission(user, name) for name in ("material.manage", "question.manage", "course.manage"))
+    return authoring and _preferred_group(user) == owner_group
+
+
 def visible_to_user(user: Mapping[str, Any] | None, meta: Mapping[str, Any]) -> bool:
     if not user:
         return False
+    if _normalize_audience_scope(meta.get("audienceScope")) == "source_only":
+        return can_author_with_source(user, str(meta.get("ownerGroup") or ""))
     if _cross_group_manager(user):
         return True
     owner_group = str(meta.get("ownerGroup") or "")
@@ -274,6 +288,8 @@ def register_content_audience(owner):
             audience_scope, groups = _update_payload(meta["ownerGroup"])
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        if audience_scope == "source_only":
+            return jsonify({"error": "題目不支援「僅供老師製作使用」。"}), 400
         before = dict(meta)
         _write_audience("quiz_questions", str(question_id), audience_scope, groups)
         after = {**meta, "audienceScope": audience_scope, "audienceGroups": groups}

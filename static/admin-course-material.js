@@ -113,6 +113,7 @@
   function adminMaterialAudienceNote(m){
       if(m.isBuiltin)return '';
       // 已歸入課程的教材沒有自己的「誰能看」：依課程的學習指派（建立課程第 1 步）。
+      if(m.audienceScope==='source_only')return ' · <span class="font-bold text-amber-700" data-material-audience-label="source_only" title="只有老師和 AI 製作能用，學員看不到">👁 誰能看：📎 僅供老師製作使用</span>';
       if(m.courseId)return ' · <span class="font-bold text-teal-700" data-material-audience-label="by_course" title="這份教材跟著課程：誰要學由課程的學習指派決定，不用再設定一次">👁 誰能看：依課程指派</span>';
       const scope=m.audienceScope||'group_only';
       if(scope==='all_staff')return ' · <span class="font-bold text-emerald-700" data-material-audience-label="all_staff">👁 誰能看：🌐 全科共用</span>';
