@@ -8,10 +8,33 @@
     dialog=document.createElement('dialog');
     dialog.id='teacher-course-tracking-f2';
     dialog.className='rounded-2xl border border-slate-200 p-0 shadow-2xl backdrop:bg-slate-900/40 w-[min(980px,94vw)]';
-    dialog.innerHTML='<div class="p-5"><div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-black text-slate-900" data-tracking-title>課程學習追蹤</h3><p class="text-xs text-slate-500 mt-1">只顯示既有指派、閱讀進度與考試紀錄，不產生推測分數。</p></div><button type="button" data-tracking-close class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs">關閉</button></div><div data-tracking-body class="mt-4"></div></div>';
+    dialog.innerHTML='<div class="p-5"><div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-black text-slate-900" data-tracking-title>課程學習成果</h3><p class="text-xs text-slate-500 mt-1">只顯示既有指派、閱讀進度、考試紀錄與匿名回饋統計，不產生推測分數。</p></div><button type="button" data-tracking-close class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs">關閉</button></div><div class="mt-3 flex gap-1 border-b border-slate-200" role="tablist"><button type="button" role="tab" data-tracking-tab="progress" class="px-3 py-1.5 text-xs font-bold border-b-2 border-teal-600 text-teal-800">📊 學員進度</button><button type="button" role="tab" data-tracking-tab="feedback" class="px-3 py-1.5 text-xs font-bold border-b-2 border-transparent text-slate-500">💬 回饋彙總</button></div><div data-tracking-body class="mt-4"></div><div data-tracking-feedback class="mt-4 hidden"></div></div>';
+    dialog.querySelectorAll('[data-tracking-tab]').forEach(tab=>tab.addEventListener('click',()=>showTab(dialog,tab.dataset.trackingTab)));
     dialog.querySelector('[data-tracking-close]')?.addEventListener('click',()=>dialog.close());
     document.body.appendChild(dialog);
     return dialog;
+  }
+  function showTab(dialog,name){
+    dialog.querySelectorAll('[data-tracking-tab]').forEach(tab=>{
+      const on=tab.dataset.trackingTab===name;
+      tab.classList.toggle('border-teal-600',on);tab.classList.toggle('text-teal-800',on);
+      tab.classList.toggle('border-transparent',!on);tab.classList.toggle('text-slate-500',!on);
+    });
+    dialog.querySelector('[data-tracking-body]').classList.toggle('hidden',name!=='progress');
+    dialog.querySelector('[data-tracking-feedback]').classList.toggle('hidden',name!=='feedback');
+  }
+  async function loadFeedback(dialog,courseId){
+    const out=dialog.querySelector('[data-tracking-feedback]');
+    out.innerHTML='<div class="p-6 text-center text-sm text-slate-500">讀取回饋彙總中…</div>';
+    try{
+      const res=await fetch('/api/course-feedback/'+encodeURIComponent(courseId)+'/summary',{credentials:'same-origin',cache:'no-store'});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(data.error||'無法讀取回饋彙總');
+      const count=Number(data.responseCount||0),average=Number(data.averageRating||0),counts=data.ratingCounts||{};
+      out.innerHTML='<div class="flex flex-wrap items-center gap-2 text-sm"><span class="rounded-lg bg-slate-100 px-3 py-1 font-bold">回覆 '+count+' 份</span><span class="rounded-lg bg-slate-100 px-3 py-1 font-bold">平均 '+(count?average.toFixed(1):'—')+' / 5</span></div><div class="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">'+[5,4,3,2,1].map(n=>'<span>'+n+' 分：'+Number(counts[String(n)]||0)+'</span>').join('')+'</div><p class="mt-3 text-[11px] text-slate-400">只顯示匿名統計，不列出個別學員與留言。</p>';
+    }catch(error){
+      out.innerHTML='<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">'+esc(error.message||'無法讀取回饋彙總')+'</div>';
+    }
   }
   const statusLabel=status=>({notStarted:'未開始',inProgress:'進行中',completed:'已完成'})[status]||status;
   function render(data,courseId){
@@ -22,7 +45,7 @@
       body.innerHTML='<div class="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">此課程目前沒有有效學習指派。</div>';
       return;
     }
-    dialog.querySelector('[data-tracking-title]').textContent=(course.title||'課程')+'｜學習追蹤';
+    dialog.querySelector('[data-tracking-title]').textContent=(course.title||'課程')+'｜學習成果';
     const s=course.summary||{};
     const rows=(course.learners||[]).map(row=>{
       const needs=row.overdue||row.examNotPassed;
@@ -36,6 +59,8 @@
     const dialog=ensureDialog();
     const body=dialog.querySelector('[data-tracking-body]');
     body.innerHTML='<div class="p-6 text-center text-sm text-slate-500">正在讀取學習追蹤…</div>';
+    showTab(dialog,'progress');
+    void loadFeedback(dialog,courseId);
     if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();
     try{
       const response=await fetch('/api/training-command-center/course-tracking?courseId='+encodeURIComponent(courseId),{credentials:'same-origin',cache:'no-store'});
@@ -56,7 +81,7 @@
       button.type='button';
       button.dataset.courseTrackingF2=courseId;
       button.className='text-[10px] rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 font-bold text-sky-800';
-      button.textContent='學習追蹤';
+      button.textContent='📊 學習成果';
       button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();void open(courseId);});
       bar.appendChild(button);
     });

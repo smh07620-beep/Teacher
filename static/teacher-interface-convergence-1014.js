@@ -1,7 +1,7 @@
 /* Teacher 10/14 interface convergence.
  * Keep existing capabilities intact while reducing top-level choices:
  * - Media production lives under 教材與課程 instead of a separate main nav entry.
- * - Each course card shows 編輯課程 / 學習指派 / 學習追蹤 and one 更多 menu (lifecycle, delete); media is reached from the course wizard.
+ * - Each course card shows 編輯課程 / 學習指派 / 學習成果 and one 更多 menu (lifecycle, delete); media is reached from the course wizard.
  * - Kokoro voice IDs remain internal values for debugging but are not shown to teachers.
  */
 (function () {
