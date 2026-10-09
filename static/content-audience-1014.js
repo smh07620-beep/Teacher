@@ -104,6 +104,23 @@
     return host;
   }
 
+  // 題目列：預設（本組限定）什麼都不顯示；只有「已分享」才出現標籤，點標籤可修改。
+  // 想改成共用的人，從題目右邊的「⋯」→「設定共用範圍」，不再每題都放一顆「設定範圍」。
+  function questionAudienceControl(item, onClick) {
+    const host = document.createElement('span');
+    host.className = 'inline-flex items-center gap-1.5';
+    if ((item?.audienceScope || 'group_only') !== 'group_only') {
+      const badge = document.createElement('button');
+      badge.type = 'button';
+      badge.className = `text-[10px] px-2 py-0.5 rounded-full font-bold ${metaFor(item).cls}`;
+      badge.textContent = audienceTitle(item);
+      badge.title = '點一下修改共用範圍';
+      badge.addEventListener('click', onClick);
+      host.append(badge);
+    }
+    return host;
+  }
+
   async function editMaterialAudience(id, item) {
     try {
       const data = await patchAudience('materials', id, item);
@@ -168,9 +185,20 @@
       if (!row || row.querySelector('[data-content-audience-question]')) return;
       const info = row.querySelector('.flex.items-center.gap-2.flex-wrap');
       if (!info) return;
-      const host = audienceControl(item, () => editQuestionAudience(item.id, catId, item));
+      const open = () => editQuestionAudience(item.id, catId, item);
+      const host = questionAudienceControl(item, open);
       host.dataset.contentAudienceQuestion = String(item.id);
       info.appendChild(host);
+      const menu = row.querySelector('details.relative > div');
+      if (menu && !menu.querySelector('[data-question-audience-menu]')) {
+        const entry = document.createElement('button');
+        entry.type = 'button';
+        entry.dataset.questionAudienceMenu = '1';
+        entry.className = 'w-full text-left text-[11px] hover:bg-slate-50 text-slate-700 px-2 py-1.5 rounded-lg';
+        entry.textContent = '🌐 設定共用範圍';
+        entry.addEventListener('click', open);
+        menu.appendChild(entry);
+      }
     });
     ensureSharedQuestionButton(catId);
   }

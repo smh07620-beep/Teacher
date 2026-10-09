@@ -34,13 +34,16 @@ class GuidanceActionDensity1033Tests(unittest.TestCase):
         self.assertIn("steps.map((step,index)=>`<span", self.media_studio)
         self.assertNotIn("steps.map((step,index)=>`<button", self.media_studio)
 
-    def test_assessment_workflow_stepper_is_status_not_navigation(self):
+    def test_assessment_status_is_a_label_not_a_five_step_navigation(self):
+        # 考卷已合成一頁：不再顯示「選考卷→發布」五步流程條，只留一個狀態標籤和一顆主按鈕。
         marker = 'id="exam-workflow-card"'
         start = self.system_html.index(marker)
-        block = self.system_html[start:start + 1200]
-        self.assertIn('id="exam-workflow-steps"', block)
-        self.assertIn('<span data-stage="select">1 選考卷</span>', block)
-        self.assertNotIn('data-stage="select"><button', block)
+        block = self.system_html[start:start + 700]
+        self.assertIn('id="exam-workflow-status"', block)
+        self.assertNotIn('data-stage=', block)
+        self.assertNotIn('id="exam-workflow-steps"', self.system_html)
+        self.assertIn('data-csp-click="examPrimaryAction()"', self.system_html)
+        self.assertNotIn('data-csp-click="reviewCurrentExam()"', self.system_html)
 
 
 if __name__ == "__main__":

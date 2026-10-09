@@ -47,7 +47,7 @@
     'markMaterialComplete','migrateLocalMaterialsToR2','onAdminMaterialGroupChange',
     'onAdminQuizGroupChange','openAdminMaterialAtlasImport','openAdminUserEditor','openAtlas','openAtlasCreate','openAtlasDocxWizard','openCourseExam',
     'openEssayReview','openExternalMaterialCreateDrawer','openMaterial','openQuestionImage','openQuizMaterialLinker',
-    'openTeacherContentExam','openTeachingMaterials','previewCurrentExam','publishCurrentExam','readerMaterialSearch',
+    'openTeacherContentExam','openTeachingMaterials','previewCurrentExam','publishCurrentExam','examPrimaryAction','readerMaterialSearch',
     'prepareMaterialVersionUpload','publishMaterialVersion','rebuildMaterialIndex','recommendAiMaterials','renderAdminAnnouncements','renderAdminCourseMaterialHub',
     'renderAdminMaterials','renderAdminPeople','renderAdminPgyAssessments','renderAdminQuizCategories','renderAdminSystemStatus',
     'renderAdminTable','renderAdminUserAccounts','renderCourseOverview','renderFilteredQuestionList','renderFormalAtlas',

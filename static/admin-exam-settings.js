@@ -4,7 +4,26 @@
 
   let editingMeta = null;
   const types = ['choice','multi','true_false','fill','essay','image','video'];
-  const status = () => document.getElementById('exam-settings-status');
+  // 訊息改成頁面上方固定的橫幅：成功（綠）、失敗（紅）、處理中（藍），不再只是按鈕旁的一行小字。
+  const BANNER_TONES = {
+    ok: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+    error: 'border-rose-300 bg-rose-50 text-rose-900',
+    busy: 'border-indigo-200 bg-indigo-50 text-indigo-900',
+  };
+  const status = () => {
+    const element = document.getElementById('exam-settings-status');
+    if (!element) return null;
+    return {
+      get textContent() { return element.textContent; },
+      set textContent(text) {
+        const value = String(text || '');
+        element.textContent = value;
+        if (!value) { element.className = 'hidden'; return; }
+        const tone = /^(❌|⚠️)/.test(value) ? 'error' : /^(✅|🚀)/.test(value) ? 'ok' : 'busy';
+        element.className = `sticky top-2 z-30 rounded-xl border px-4 py-3 text-sm font-bold shadow-md ${BANNER_TONES[tone]}`;
+      },
+    };
+  };
   const invalidate = (catId, group) => {
     Object.keys(dynamicCategoriesCache).filter(k => k.endsWith(':' + (group || currentGroupKey))).forEach(k => delete dynamicCategoriesCache[k]);
     delete allQuizData[catId];
@@ -73,16 +92,27 @@
     meta = meta || editingMeta || {};
     const now=Date.now(), opens=meta.examWindow?.opens_at ? new Date(meta.examWindow.opens_at).getTime() : 0, closes=meta.examWindow?.closes_at ? new Date(meta.examWindow.closes_at).getTime() : 0;
     const lifecycle=meta.active ? (opens&&now<opens?'scheduled':(closes&&now>closes?'closed':'open')) : '';
-    const current = meta.active ? 'publish' : (meta.reviewStatus === 'approved' ? 'review' : 'settings');
-    const order = {select:1, method:2, settings:3, review:4, publish:5};
-    document.querySelectorAll('#exam-workflow-steps [data-stage]').forEach(element => { element.classList.toggle('is-done', order[element.dataset.stage] < (order[current] || 3)); element.classList.toggle('is-current', element.dataset.stage === current); });
     const workflowStatus = document.getElementById('exam-workflow-status');
     if (workflowStatus) workflowStatus.textContent = meta.active ? (lifecycle==='scheduled' ? '🕒 已發布・尚未開始' : lifecycle==='closed' ? '⏰ 已截止・等待批改／完成' : '🟢 進行中') + (meta.publicationHash ? '・快照 ' + meta.publicationHash.slice(0,10) : '') : (meta.reviewStatus === 'approved' ? `✅ 已由 ${meta.reviewerName || '審核者'} 審核，待發布` : '📝 草稿／設定中，完成預覽後請審核');
-    const publish = document.getElementById('exam-publish-btn'); if (publish) publish.disabled = meta.reviewStatus !== 'approved' || !!meta.active;
+    // 只留一顆主按鈕：草稿＝「發布考卷」，已發布＝「儲存變更」；審核在發布時自動完成。
+    const publish = document.getElementById('exam-publish-btn');
+    const saveDraft = document.getElementById('exam-settings-save-btn');
+    const chip = document.getElementById('exam-state-chip');
+    const published = !!meta.active;
+    if (publish) { publish.textContent = published ? '💾 儲存變更' : '🚀 發布考卷'; publish.className = `ml-auto disabled:opacity-60 disabled:cursor-wait text-white font-black text-sm px-6 py-2.5 rounded-xl ${published ? 'bg-indigo-700 hover:bg-indigo-600' : 'bg-emerald-700 hover:bg-emerald-600'}`; publish.disabled = false; }
+    if (saveDraft) saveDraft.classList.toggle('hidden', published);
+    if (chip) { chip.textContent = published ? (lifecycle === 'closed' ? '⏰ 已截止' : lifecycle === 'scheduled' ? '🕒 已發布・未開始' : '🟢 已發布・進行中') : '📝 草稿'; chip.className = `text-xs font-black px-3 py-1.5 rounded-full ${published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`; }
   }
 
   // datetime-local 是電腦本地時間；伺服器把沒有時區的字串當 UTC，所以送出前先轉成 UTC。
   function toUtcIso(value){if(!value)return '';const d=new Date(value);return Number.isNaN(d.getTime())?'':d.toISOString();}
+  // 「對象說明」不再要求老師另外填：留白時依「誰能使用」自動帶入。
+  function audienceText() {
+    const typed = (document.getElementById('exam-settings-audience')?.value || '').trim();
+    if (typed) return typed;
+    const custom = document.querySelector('#exam-who-host input[type=radio][value=custom]')?.checked;
+    return custom ? '指定組別／人員' : '所有符合課程資格人員';
+  }
   async function saveSettings() {
     const catId = document.getElementById('exam-settings-id').value; if (!catId) return;
     const button = document.getElementById('exam-settings-save-btn'), title = document.getElementById('exam-settings-title').value.trim();
@@ -90,8 +120,9 @@
     const limited = document.getElementById('exam-draw-limited').checked, quotaMode = document.getElementById('exam-draw-quota').checked;
     const quotas = Object.fromEntries(types.map(type => [type, Math.max(0, parseInt(document.getElementById(`exam-quota-${type}`)?.value || '0', 10) || 0)]));
     if (quotaMode && Object.values(quotas).reduce((a,b) => a + b, 0) <= 0) { status().textContent = '❌ 題型配額至少要設定 1 題'; return; }
-    const payload = {title, desc:document.getElementById('exam-settings-desc').value.trim(), audience:document.getElementById('exam-settings-audience').value.trim(), courseId:document.getElementById('exam-settings-course').value || '', drawCount:limited ? Math.max(1, parseInt(document.getElementById('exam-settings-draw-count').value || '1', 10) || 1) : 0, drawRules:quotaMode ? {mode:'type_quota', quotas} : {}, passingScore:Math.max(1, Math.min(100, parseInt(document.getElementById('exam-settings-passing-score').value || '80', 10) || 80)), blindMode:document.getElementById('exam-settings-blind').checked};
-    try { button.disabled = true; status().textContent = '⏳ 儲存設定中…'; const opensAt=document.getElementById('exam-settings-opens-at')?.value||''; const closesAt=document.getElementById('exam-settings-closes-at')?.value||''; if(opensAt&&closesAt&&new Date(opensAt)>=new Date(closesAt))throw new Error('最後考核日期必須晚於開始日期'); const response = await fetch(`/api/quiz-categories/${catId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '修改失敗'); const windowResponse=await fetch(`/api/exam-windows/${catId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({opensAt:toUtcIso(opensAt),closesAt:toUtcIso(closesAt),reminderEnabled:true})}); const windowData=await windowResponse.json().catch(() => ({})); if(!windowResponse.ok)throw new Error(windowData.error||'考核時間儲存失敗'); await window.ExamAssigneePicker?.saveFor?.(document.getElementById('exam-who-host'), catId); editingMeta = {...(editingMeta || {}), ...payload, examWindow:windowData.window||{}, reviewStatus:data.reviewStatus || 'draft', reviewerName:data.reviewerName || '', reviewedAt:data.reviewedAt || '', publishedAt:data.publishedAt || '', active:!!data.active}; invalidate(catId, editingMeta.group); clearExamDraft(catId); status().textContent = editingMeta.reviewStatus === 'draft' ? '✅ 設定已儲存；因內容已變更，考卷回到「待審核」狀態。' : '✅ 設定已儲存。'; updateWorkflow(editingMeta); } catch (error) { status().textContent = '❌ ' + error.message; } finally { button.disabled = false; }
+    const wasActive = !!editingMeta?.active;
+    const payload = {title, desc:document.getElementById('exam-settings-desc').value.trim(), audience:audienceText(), courseId:document.getElementById('exam-settings-course').value || '', drawCount:limited ? Math.max(1, parseInt(document.getElementById('exam-settings-draw-count').value || '1', 10) || 1) : 0, drawRules:quotaMode ? {mode:'type_quota', quotas} : {}, passingScore:Math.max(1, Math.min(100, parseInt(document.getElementById('exam-settings-passing-score').value || '80', 10) || 80)), blindMode:document.getElementById('exam-settings-blind').checked};
+    try { button.disabled = true; status().textContent = '⏳ 儲存設定中…'; const opensAt=document.getElementById('exam-settings-opens-at')?.value||''; const closesAt=document.getElementById('exam-settings-closes-at')?.value||''; if(opensAt&&closesAt&&new Date(opensAt)>=new Date(closesAt))throw new Error('最後考核日期必須晚於開始日期'); const response = await fetch(`/api/quiz-categories/${catId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '修改失敗'); const windowResponse=await fetch(`/api/exam-windows/${catId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({opensAt:toUtcIso(opensAt),closesAt:toUtcIso(closesAt),reminderEnabled:true})}); const windowData=await windowResponse.json().catch(() => ({})); if(!windowResponse.ok)throw new Error(windowData.error||'考核時間儲存失敗'); await window.ExamAssigneePicker?.saveFor?.(document.getElementById('exam-who-host'), catId); editingMeta = {...(editingMeta || {}), ...payload, examWindow:windowData.window||{}, reviewStatus:data.reviewStatus || 'draft', reviewerName:data.reviewerName || '', reviewedAt:data.reviewedAt || '', publishedAt:data.publishedAt || '', active:!!data.active}; invalidate(catId, editingMeta.group); clearExamDraft(catId); status().textContent = editingMeta.reviewStatus === 'draft' ? (wasActive ? '✅ 已儲存。因為內容有變更，這份考卷回到草稿；請再按「發布考卷」，學員才會看到新版。' : '✅ 草稿已儲存。準備好後按「發布考卷」。') : '✅ 已儲存。'; updateWorkflow(editingMeta); } catch (error) { status().textContent = '❌ ' + error.message; } finally { button.disabled = false; }
   }
 
   async function preview() {
@@ -108,10 +139,8 @@
   function publicationIssues() {
     const issues=[];
     const title=document.getElementById('exam-settings-title')?.value.trim();
-    const audience=document.getElementById('exam-settings-audience')?.value.trim();
     const questionCount=Math.max(0,Number(editingMeta?.questionCount||0));
     if(!title)issues.push('考卷名稱未設定');
-    if(!audience)issues.push('適用人員未設定');
     if(questionCount<=0)issues.push('沒有可發布的題目');
     const opensAt=document.getElementById('exam-settings-opens-at')?.value||'';
     const closesAt=document.getElementById('exam-settings-closes-at')?.value||'';
@@ -129,7 +158,7 @@
     return issues;
   }
 
-  async function publish() { const catId = document.getElementById('exam-settings-id').value; if (!catId) return; const issues=publicationIssues(); if(issues.length){status().textContent='❌ 發布前請先完成：'+issues.join('、'); return;} if(!confirm('確認發布這份考卷？發布後學員會看到目前設定的正式版本。'))return; try { status().textContent = '⏳ 儲存設定中…'; await saveSettings(); if(String(status().textContent||'').startsWith('❌'))return; status().textContent = '⏳ 檢查題目並審核中…'; const reviewResponse = await fetch(`/api/quiz-categories/${catId}/review`, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}), reviewData = await reviewResponse.json().catch(() => ({})); if (!reviewResponse.ok) throw new Error(reviewData.issues?.length ? `${reviewData.error}：${reviewData.issues.join('、')}` : (reviewData.error || '審核失敗')); status().textContent = '⏳ 發布中…'; const response = await fetch(`/api/quiz-categories/${catId}/publish`, {method:'POST', }), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '發布失敗'); editingMeta = {...(editingMeta || {}), active:true, publishedAt:data.publishedAt, reviewStatus:'approved', publicationId:data.publicationId || '', publicationHash:data.publicationHash || '', publishedBy:data.publishedBy || ''}; status().textContent = `🚀 考卷已發布${data.publishedBy ? '（發布者：' + data.publishedBy + '）' : ''}；已保存 ${Number(data.snapshotQuestionCount || 0)} 題發布快照${data.publicationHash ? '（' + data.publicationHash.slice(0,10) + '…）' : ''}。`; updateWorkflow(editingMeta); adminQuizCategoriesCache.clear(); Object.keys(dynamicCategoriesCache).forEach(key => delete dynamicCategoriesCache[key]); } catch (error) { status().textContent = '❌ ' + error.message; } }
+  async function publish() { const catId = document.getElementById('exam-settings-id').value; if (!catId) return; const issues=publicationIssues(); if(issues.length){status().textContent='❌ 發布前請先完成：'+issues.join('、'); return;} if(!confirm('確認發布這份考卷？發布後學員會看到目前設定的正式版本。'))return; try { status().textContent = '⏳ 儲存設定中…'; await saveSettings(); if(String(status().textContent||'').startsWith('❌'))return; status().textContent = '⏳ 檢查題目並審核中…'; const reviewResponse = await fetch(`/api/quiz-categories/${catId}/review`, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}), reviewData = await reviewResponse.json().catch(() => ({})); if (!reviewResponse.ok) throw new Error(reviewData.issues?.length ? `${reviewData.error}：${reviewData.issues.join('、')}` : (reviewData.error || '審核失敗')); status().textContent = '⏳ 發布中…'; const response = await fetch(`/api/quiz-categories/${catId}/publish`, {method:'POST', }), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '發布失敗'); editingMeta = {...(editingMeta || {}), active:true, publishedAt:data.publishedAt, reviewStatus:'approved', publicationId:data.publicationId || '', publicationHash:data.publicationHash || '', publishedBy:data.publishedBy || ''}; status().textContent = `🚀 已發布！學員現在看得到這份考卷（共 ${Number(data.snapshotQuestionCount || 0)} 題）${data.publishedBy ? '，發布者：' + data.publishedBy : ''}。要修改請改完後按「儲存變更」。`; updateWorkflow(editingMeta); adminQuizCategoriesCache.clear(); Object.keys(dynamicCategoriesCache).forEach(key => delete dynamicCategoriesCache[key]); } catch (error) { status().textContent = '❌ ' + error.message; } }
   async function toggleBlindMode(catId, enabled) { const button = document.getElementById(`blind-toggle-${catId}`); if (button) { button.disabled = true; button.textContent = '⏳ 更新盲測…'; } try { const response = await fetch(`/api/quiz-categories/${catId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({blindMode:!!enabled})}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '盲測設定失敗'); const area = document.getElementById('admin-quiz-area')?.value || currentTrainingArea, group = document.getElementById('admin-quiz-group')?.value || currentGroupKey; adminQuizCategoriesCache.delete(adminScopeKey(area, group)); await renderAdminQuizCategories(true); } catch (error) { alert(error.message); if (button) { button.disabled = false; button.textContent = '🕶️ 盲測設定'; } } }
 
   // 「誰能使用」挑選器：不限（預設）／指定組別與個人。設定頁與課程精靈共用；伺服器強制檢查。
@@ -223,6 +252,16 @@
   window.updateExamWorkflowUI = updateWorkflow;
   window.previewCurrentExam = preview;
   window.reviewCurrentExam = review;
+  // 主按鈕：草稿時發布，已發布時儲存變更；處理中顯示忙碌並避免連按。
+  async function primaryAction() {
+    const button = document.getElementById('exam-publish-btn');
+    if (!button || button.disabled) return;
+    const label = button.textContent;
+    button.disabled = true; button.textContent = '⏳ 處理中…';
+    try { await (editingMeta?.active ? saveSettings() : publish()); }
+    finally { button.disabled = false; if (button.textContent === '⏳ 處理中…') button.textContent = label; updateWorkflow(editingMeta); }
+  }
+  window.examPrimaryAction = primaryAction;
   window.publishCurrentExam = publish;
   window.adminToggleBlindMode = toggleBlindMode;
 
