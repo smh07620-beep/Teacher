@@ -397,6 +397,15 @@ async function courseMaterialAction(action,id){
     }
     const data=await res.json().catch(()=>({}));
     if(!res.ok)throw new Error(data.error||'操作失敗');
+    // 老師刻意停用／移出／刪除的教材，不能再留在「發布前要確認掛入課程」的清單裡，
+    // 否則發布確認會找不到它，或把它重新啟用。
+    const gone=String(id);
+    const stillWanted=action==='toggle'&&material.active===false;
+    const keep=value=>stillWanted||String(value)!==gone;
+    state.expectedMaterialIds=(state.expectedMaterialIds||[]).filter(keep);
+    state.queuedMaterialIds=(state.queuedMaterialIds||[]).filter(keep);
+    state.existing=(state.existing||[]).filter(keep);
+    if(stillWanted)state.expectedMaterialIds=[...new Set([...(state.expectedMaterialIds||[]),gone])];
     await loadMaterials();
     await refreshWorkspaceData();
   }catch(error){note('❌ '+(error.message||'操作失敗'));}

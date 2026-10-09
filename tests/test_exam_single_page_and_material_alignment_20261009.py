@@ -181,6 +181,12 @@ class MaterialsManagedInsideEditCourseTests(unittest.TestCase):
             self.assertIn(f'data-cw-mat-action="{action}"', wiz)
         self.assertIn("function paintCourseMaterials()", wiz)
 
+    def test_removed_material_is_dropped_from_the_publish_verification_list(self):
+        wiz = read("course-wizard-681.js")
+        action = wiz[wiz.index("async function courseMaterialAction"):wiz.index("function bindStepTwoControls()")]
+        self.assertIn("state.expectedMaterialIds=(state.expectedMaterialIds||[]).filter(keep)", action)
+        self.assertIn("state.queuedMaterialIds=(state.queuedMaterialIds||[]).filter(keep)", action)
+
     def test_buttons_use_delegation_because_they_are_painted_after_loading(self):
         wiz = read("course-wizard-681.js")
         paint = wiz[wiz.index("function paintCourseMaterials()"):wiz.index("async function courseMaterialAction")]
