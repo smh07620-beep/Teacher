@@ -187,6 +187,26 @@ class MaterialsManagedInsideEditCourseTests(unittest.TestCase):
         self.assertIn("state.expectedMaterialIds=(state.expectedMaterialIds||[]).filter(keep)", action)
         self.assertIn("state.queuedMaterialIds=(state.queuedMaterialIds||[]).filter(keep)", action)
 
+    def test_going_back_does_not_wipe_chosen_files(self):
+        wiz = read("course-wizard-681.js")
+        self.assertNotIn("state.files=[...(el('cw681-files')?.files||state.files)]", wiz)
+        self.assertEqual(wiz.count("state.files=picked.length?picked:state.files;"), 2)
+
+    def test_new_wizard_starts_blank_after_a_published_course(self):
+        wiz = read("course-wizard-681.js")
+        start = wiz[wiz.index("function startNewCourse()"):wiz.index("async function addFilesToCourse")]
+        self.assertIn("if(!state.editing&&!state.created)return true;", start)
+        self.assertIn("clearWizardState();", start)
+
+    def test_step_two_waits_for_materials_then_advances_itself(self):
+        wiz = read("course-wizard-681.js")
+        self.assertIn("function maybeAdvanceAfterMaterials()", wiz)
+        self.assertIn("全部完成後會自動前往「評量 / 考卷」", wiz)
+        nxt = wiz[wiz.index("async function next()"):wiz.index("function back()")]
+        self.assertIn("state.pendingAdvance=true;announceWaitingForMaterials();return;", nxt)
+        self.assertIn("const ok=await create();", nxt)
+        self.assertIn("maybeAdvanceAfterMaterials();", wiz[wiz.index("await verifyCreatedCourseMaterials();"):][:400])
+
     def test_buttons_use_delegation_because_they_are_painted_after_loading(self):
         wiz = read("course-wizard-681.js")
         paint = wiz[wiz.index("function paintCourseMaterials()"):wiz.index("async function courseMaterialAction")]
