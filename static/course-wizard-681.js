@@ -557,7 +557,10 @@ function stepGaps(forStep){
 async function next(){
   if(state.busy||(state.created&&!canLeaveCourse()))return;
   if(state.step===2&&!state.created){
-    state.files=[...(el('cw681-files')?.files||state.files)];
+    // 返回上一步再回來時，檔案選擇框是全新的空框（FileList 空但不是 null），
+    // 不能拿它蓋掉已選好的檔案，否則會誤報「沒有任何教材」。
+    const picked=[...(el('cw681-files')?.files||[])];
+    state.files=picked.length?picked:state.files;
     state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);
   }
   syncInputs();
@@ -974,7 +977,8 @@ async function create(){
 
 async function ensureCourseDraft(){
   if(state.step===2&&!state.created){
-    state.files=[...(el('cw681-files')?.files||state.files)];
+    const picked=[...(el('cw681-files')?.files||[])];
+    state.files=picked.length?picked:state.files;
     state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);
   }
   if(!state.created){
