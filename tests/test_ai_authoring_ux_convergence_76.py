@@ -170,3 +170,9 @@ class CoursePublishAutoExamTests(unittest.TestCase):
         js = (Path(__file__).resolve().parents[1] / "static" / "admin-exam-settings.js").read_text(encoding="utf-8")
         self.assertIn("所有符合課程資格人員", js)
         self.assertIn("30*86400000", js)
+
+    def test_blank_exam_start_time_is_filled_with_now_before_publish(self):
+        from pathlib import Path
+        js = (Path(__file__).resolve().parents[1] / "static" / "admin-exam-settings.js").read_text(encoding="utf-8")
+        self.assertIn("function ensureOpensAt", js)
+        self.assertGreaterEqual(js.count("ensureOpensAt()"), 2)
