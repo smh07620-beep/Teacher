@@ -18,6 +18,9 @@ try:
 except ImportError:  # pragma: no cover
     pymupdf = None
 
+needs_pptx = unittest.skipIf(runtime.Presentation is None, "python-pptx is installed only on the AI Worker")
+needs_pdf = unittest.skipIf(pymupdf is None, "PyMuPDF not installed")
+
 
 def _png_bytes(color, size=(320, 240)) -> bytes:
     image = Image.new("RGB", size, color)
@@ -123,6 +126,7 @@ class ExtractTests(unittest.TestCase):
         self.assertIn("推片", rows[0][1])
         self.assertIn("尿液", rows[1][1])
 
+    @needs_pptx
     def test_pptx_pictures_with_slide_text_and_repeated_logo_skipped(self):
         logo = _png_bytes((1, 2, 3), size=(300, 300))
         path = _pptx(self.tmp / "a.pptx", [(SMEAR, _png_bytes((200, 40, 40))), (URINE, _png_bytes((40, 200, 40)))], logo=logo)
@@ -130,7 +134,7 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(len(rows), 2, "the logo repeated on every slide must not become a candidate")
         self.assertIn("推片", rows[0][1])
 
-    @unittest.skipIf(pymupdf is None, "PyMuPDF not installed")
+    @needs_pdf
     def test_pdf_pictures_with_page_text(self):
         path = _pdf(self.tmp / "a.pdf", [(SMEAR, _png_bytes((200, 40, 40))), (URINE, _png_bytes((40, 200, 40)))])
         rows = pics.extract_from_file(path, {})
@@ -198,12 +202,13 @@ class MatchTests(unittest.TestCase):
         self.assertTrue(pics.slide_accepts_picture(_slide("ok", "抹片製作", ["推片角度"])))
 
 
+@needs_pdf
 class AttachTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.docx = _docx(self.tmp / "main.docx", [(SMEAR, _png_bytes((200, 40, 40)))])
-        self.pptx = _pptx(self.tmp / "ref.pptx", [(URINE, _png_bytes((40, 200, 40)))])
+        self.pdf = _pdf(self.tmp / "ref.pdf", [(URINE, _png_bytes((40, 200, 40)))])
         self.stored = []
 
     def _fetch(self, material):
@@ -211,7 +216,7 @@ class AttachTests(unittest.TestCase):
             raise RuntimeError("storage offline")
         root = Path(tempfile.mkdtemp(dir=self.tmp))
         target = root / ("source" + Path(material["filename"]).suffix)
-        shutil.copy2({"main": self.docx, "ref": self.pptx}[material["id"]], target)
+        shutil.copy2({"main": self.docx, "ref": self.pdf}[material["id"]], target)
         return root, target
 
     def _store(self, path, sha, mime):
@@ -222,8 +227,8 @@ class AttachTests(unittest.TestCase):
         slides = [_slide("s1", "抹片製作", ["推片角度三十到四十五度"]), _slide("s2", "尿液沉渣", ["草酸鈣結晶與尿酸結晶"]),
                   _slide("s3", "總結", ["重點回顧"], layout="summary")]
         materials = [{"id": "main", "title": "血液學講義", "filename": "main.docx"},
-                     {"id": "ref", "title": "尿液簡報", "filename": "ref.pptx"},
-                     {"id": "broken", "title": "壞檔", "filename": "x.pdf"}]
+                     {"id": "ref", "title": "尿液簡報", "filename": "ref.pdf"},
+                     {"id": "broken", "title": "壞檔", "filename": "x.docx"}]
         result, info = pics.attach_pictures(slides, materials, workdir=self.tmp / "work", fetch_source=self._fetch, store_image=self._store)
         self.assertEqual(info["applied"], 2)
         self.assertEqual([b["sourceLabel"] for s in result for b in s["blocks"]], ["血液學講義", "尿液簡報"])
@@ -255,6 +260,7 @@ class AttachTests(unittest.TestCase):
         self.assertEqual(info["applied"], 0)
 
 
+@needs_pptx
 class RenderLayoutTests(unittest.TestCase):
     def test_bullets_stay_left_and_picture_goes_right(self):
         from pptx.enum.shapes import MSO_SHAPE_TYPE
