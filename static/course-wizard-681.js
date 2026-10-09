@@ -15,7 +15,7 @@ const AI_PLAN_META={
   video:{label:'AI 教學影片',detail:'以教材、投影片或其他來源製作影片；完成後回到本頁確認。'}
 };
 const WORKFLOW_STORAGE_KEY='teacher.courseWizard.bundleWorkflow.v1';
-const state={examSettings:{audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0},editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:true,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],externalLinks:[],resultHtml:'',watchToken:0};
+const state={examSettings:{audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0},editing:false,step:1,files:[],fileMeta:{},existing:[],examMode:'later',aiPlan:'none',assignPermission:null,assignmentEnabled:true,assigneeType:'group',assigneeKey:'',assigneeKeys:[],assignmentRequired:true,dueAt:'',audienceOptions:null,course:null,categoryId:'',materials:[],busy:false,publicationBusy:false,workflowId:'',workflowFingerprint:'',created:false,pendingAdvance:false,failedUploads:[],queuedJobs:[],queuedMaterialIds:[],expectedMaterialIds:[],linksVerified:false,expectedJobs:0,jobRows:[],jobEstimateSeconds:0,workerProtocolBlocked:false,completedMaterials:[],atlasCandidates:{},aiProducts:[],externalLinks:[],resultHtml:'',watchToken:0};
 const esc=v=>(window.escapeHtml?window.escapeHtml(String(v??'')):String(v??''));
 const el=id=>document.getElementById(id);
 
@@ -554,15 +554,43 @@ function stepGaps(forStep){
   return gaps;
 }
 
+// 第 2 步按「下一步」時，先把教材送上去並等處理完成，畫面停在這一步顯示進度；
+// 全部完成後才自動前往第 3 步，不再讓老師先進考卷步驟才被擋下。
+function announceWaitingForMaterials(){
+  const failed=state.failedUploads.length>0;
+  state.resultHtml=failed
+    ?'<span class="font-bold text-rose-700">⚠️ 有教材上傳失敗，請先重試未完成的教材，才能前往下一步。</span>'
+    :'<span class="font-bold text-sky-700">⏳ 教材處理中（Worker）。全部完成後會自動前往「評量 / 考卷」，請先不要離開。</span>';
+  const status=el('cw681-status');if(status)status.innerHTML=state.resultHtml;
+}
+
+function maybeAdvanceAfterMaterials(){
+  if(!state.pendingAdvance||state.step!==2||!canLeaveCourse())return;
+  state.pendingAdvance=false;
+  state.resultHtml='';
+  state.step=3;render();
+}
+
 async function next(){
-  if(state.busy||(state.created&&!canLeaveCourse()))return;
+  if(state.busy)return;
+  if(state.created&&!canLeaveCourse()){
+    if(state.step===2){state.pendingAdvance=true;announceWaitingForMaterials();}
+    return;
+  }
   if(state.step===2&&!state.created){
     // 返回上一步再回來時，檔案選擇框是全新的空框（FileList 空但不是 null），
     // 不能拿它蓋掉已選好的檔案，否則會誤報「沒有任何教材」。
     const picked=[...(el('cw681-files')?.files||[])];
     state.files=picked.length?picked:state.files;
     state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);
+    if(state.files.length||state.existing.length||(state.externalLinks||[]).length){
+      syncInputs();
+      const ok=await create();
+      if(!ok||!state.created)return;
+      if(!canLeaveCourse()){state.pendingAdvance=true;announceWaitingForMaterials();return;}
+    }
   }
+  state.pendingAdvance=false;
   syncInputs();
   if(state.step===1&&!String(el('wizard-course-title')?.value||'').trim())return alert('請輸入課程名稱');
   if(state.step===3&&state.examMode!=='later'){
@@ -578,6 +606,7 @@ async function next(){
 
 function back(){
   if(state.busy)return;
+  state.pendingAdvance=false;
   syncInputs();
   state.step=Math.max(1,state.step-1);render();
   if(state.step===2)void loadMaterials();
@@ -831,6 +860,7 @@ async function watchQueuedJobs(jobIds){
         await verifyCreatedCourseMaterials();
         await refreshWorkspaceData();
         await hydrateCompletedMaterialInsights(completedMaterialIds);
+        maybeAdvanceAfterMaterials();
       }catch(error){
         state.linksVerified=false;
         const host=el('cw681-background-jobs');
@@ -1165,7 +1195,9 @@ async function editCourse(courseId,step=2){
 
 // 離開編輯模式、回到乾淨的「建立新課程」：避免上一門被編輯的課程鎖住新課程的欄位。
 function startNewCourse(){
-  if(!state.editing)return true;
+  // 上一門已建立（含已成功發布）或正在編輯時，新的精靈都要從空白開始，
+  // 否則會帶著上一門課的名稱／說明並鎖住欄位。尚未建立的草稿填寫則保留。
+  if(!state.editing&&!state.created)return true;
   if(state.busy||!canLeaveCourse()){
     alert('目前課程的教材仍在處理或上傳失敗，請先完成後再建立新課程。');
     return false;
