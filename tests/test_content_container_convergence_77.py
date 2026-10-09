@@ -52,7 +52,7 @@ class ContentContainerConvergence77Tests(unittest.TestCase):
         self.assertIn('data-ai-advanced-77',self.studio)
 
     def test_ai_auto_selects_up_to_four_linked_materials(self):
-        self.assertIn("mats.filter(m=>m.category===id)",self.ai)
+        self.assertIn("mats.filter(m=>ownMaterial(id,m))",self.ai)
         self.assertIn("auto.slice(0,4)",self.ai)
         self.assertIn("!['video','audio'].includes(kind(m)[0])",self.ai)
 
