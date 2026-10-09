@@ -152,5 +152,24 @@ class CourseOutcomesMergedTests(unittest.TestCase):
         self.assertNotIn("查看回饋彙總", hub)
 
 
+class SingleAssignmentTests(unittest.TestCase):
+    def test_wizard_assignment_is_the_only_one_and_on_by_default(self):
+        wiz = read("course-wizard-681.js")
+        self.assertIn("assignmentEnabled:true", wiz)
+        self.assertIn("唯一的指派", wiz)
+        self.assertIn("誰能考：和這門課的「學習指派」相同", wiz)
+        self.assertNotIn("state.assignmentEnabled=false;state.assigneeType", wiz)
+
+    def test_course_materials_do_not_carry_their_own_audience(self):
+        js = read("admin-course-material.js")
+        self.assertIn("誰能看：依課程指派", js)
+        self.assertIn("m.courseId?''", js)
+
+    def test_course_exam_hides_its_own_picker(self):
+        js = read("admin-exam-settings.js")
+        self.assertIn("function applyExamWhoMode(courseId, catId, area, group)", js)
+        self.assertIn("data-exam-who-by-course", js)
+
+
 if __name__ == "__main__":
     unittest.main()

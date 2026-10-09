@@ -70,7 +70,7 @@
       document.getElementById('exam-settings-opens-at').value=localInput(examWindow.opens_at);
       document.getElementById('exam-settings-closes-at').value=localInput(examWindow.closes_at);
       editingMeta.examWindow=examWindow;
-      void window.ExamAssigneePicker?.mount(document.getElementById('exam-who-host'), {categoryId: catId, area, group});
+      applyExamWhoMode(category.courseId || '', catId, area, group);
       document.getElementById('exam-settings-passing-score').value = Number(category.passingScore || 80);
       document.getElementById('exam-settings-blind').checked = !!category.blindMode;
       const courseSelect = document.getElementById('exam-settings-course');
@@ -162,6 +162,12 @@
   async function toggleBlindMode(catId, enabled) { const button = document.getElementById(`blind-toggle-${catId}`); if (button) { button.disabled = true; button.textContent = '⏳ 更新盲測…'; } try { const response = await fetch(`/api/quiz-categories/${catId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({blindMode:!!enabled})}), data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || '盲測設定失敗'); const area = document.getElementById('admin-quiz-area')?.value || currentTrainingArea, group = document.getElementById('admin-quiz-group')?.value || currentGroupKey; adminQuizCategoriesCache.delete(adminScopeKey(area, group)); await renderAdminQuizCategories(true); } catch (error) { alert(error.message); if (button) { button.disabled = false; button.textContent = '🕶️ 盲測設定'; } } }
 
   // 「誰能使用」挑選器：不限（預設）／指定組別與個人。設定頁與課程精靈共用；伺服器強制檢查。
+  // 考卷屬於課程時，「誰能考」跟著課程的學習指派；只有未歸課的通用考卷才需要自己指定。
+  function applyExamWhoMode(courseId, catId, area, group) {
+    let host = document.getElementById('exam-who-host'); if (!host) return;
+    if (courseId) { const fresh = host.cloneNode(false); host.replaceWith(fresh); host = fresh; /* 換新節點，避免沿用上一份考卷的對象設定 */ host.innerHTML = '<p class="rounded-lg bg-teal-50 px-3 py-2 text-xs font-bold text-teal-900" data-exam-who-by-course>👥 誰能考：依所屬課程的學習指派（建立課程第 1 步設定），不用在這裡再指定一次。</p>'; return; }
+    void window.ExamAssigneePicker?.mount(host, {categoryId: catId, area, group});
+  }
   const ExamAssigneePicker = (() => {
     const models = new WeakMap();
     const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
