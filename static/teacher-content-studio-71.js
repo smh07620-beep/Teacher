@@ -678,9 +678,26 @@
 
   window.teacherContentStudioExamAction=(action,catId)=>dispatchExamAction(action,catId);
   window.TeacherContentStudio71=Object.freeze({registerExamActions,restoreExamSettings});
+  // 考卷頁的清單只認目前選的訓練區／組別；從「需要我處理」等入口進來時，
+  // 先依這份考卷「實際所屬」的範圍切換，才不會出現「找不到指定考卷」。
+  async function alignExamScope(catId){
+    try{
+      const res=await fetch('/api/quiz-categories/'+encodeURIComponent(catId),{credentials:'same-origin',cache:'no-store'});
+      if(!res.ok)return;
+      const cat=await res.json().catch(()=>({}));
+      const areaSelect=document.getElementById('admin-quiz-area'),groupSelect=document.getElementById('admin-quiz-group');
+      const area=String(cat.area||''),group=String(cat.group||'');
+      if(areaSelect&&area&&areaSelect.value!==area){
+        areaSelect.value=area;
+        if(groupSelect&&typeof window.groupOptionsForArea==='function')groupSelect.innerHTML=window.groupOptionsForArea(area);
+      }
+      if(groupSelect&&group&&[...groupSelect.options].some(option=>option.value===group))groupSelect.value=group;
+    }catch(_error){/* 讀不到就維持目前範圍 */}
+  }
   window.openTeacherContentExam=async function(catId){
     if(!canQuestion())return false;
     if(!await ensureWorkspacePage('assessment'))return false;
+    await alignExamScope(catId);
     openStudio('assessment','評量與出題｜考卷工作畫面','目前考卷的手動出題、圖片／影片題、AI、題庫與設定集中在這個全頁工作畫面。');
     await renderExamContainer(catId);
     return true;
