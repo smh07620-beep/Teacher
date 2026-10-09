@@ -181,6 +181,14 @@ class MaterialsManagedInsideEditCourseTests(unittest.TestCase):
             self.assertIn(f'data-cw-mat-action="{action}"', wiz)
         self.assertIn("function paintCourseMaterials()", wiz)
 
+    def test_buttons_use_delegation_because_they_are_painted_after_loading(self):
+        wiz = read("course-wizard-681.js")
+        paint = wiz[wiz.index("function paintCourseMaterials()"):wiz.index("async function courseMaterialAction")]
+        self.assertIn("list.addEventListener('click'", paint)
+        self.assertIn("event.target.closest?.('[data-cw-mat-action]')", paint)
+        step_two_binder = wiz[wiz.index("function bindStepTwoControls()"):wiz.index("function examSettingsPanel()")]
+        self.assertNotIn("data-cw-mat-action", step_two_binder)
+
     def test_course_hub_rows_point_to_edit_course_instead_of_own_menu(self):
         hub = read("admin-course-material.js")
         self.assertIn("data-material-manage-hint", hub)
