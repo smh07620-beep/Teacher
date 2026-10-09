@@ -171,5 +171,20 @@ class SingleAssignmentTests(unittest.TestCase):
         self.assertIn("data-exam-who-by-course", js)
 
 
+class MaterialsManagedInsideEditCourseTests(unittest.TestCase):
+    def test_edit_course_step_two_lists_course_materials_with_actions(self):
+        wiz = read("course-wizard-681.js")
+        self.assertIn("data-cw681-course-materials", wiz)
+        self.assertIn("本課程的教材（在這裡管理）", wiz)
+        for action in ("toggle", "unlink", "delete"):
+            self.assertIn(f'data-cw-mat-action="{action}"', wiz)
+        self.assertIn("function paintCourseMaterials()", wiz)
+
+    def test_course_hub_rows_point_to_edit_course_instead_of_own_menu(self):
+        hub = read("admin-course-material.js")
+        self.assertIn("data-material-edit-course=", hub)
+        self.assertIn("到編輯課程管理", hub)
+
+
 if __name__ == "__main__":
     unittest.main()
