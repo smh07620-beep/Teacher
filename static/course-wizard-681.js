@@ -69,8 +69,11 @@ function canLeaveCourse(){
 function syncCompletionControls(){
   const ready=canLeaveCourse();
   const finish=el('cw681-finish');
+  const isPublished=String(state.course?.lifecycleStatus||'')==='published'&&state.course?.active===true;
   if(finish){
-    finish.disabled=!ready||state.publicationBusy;
+    // 已正式發布就不需要「儲存草稿」，隱藏避免老師誤按。
+    finish.classList.toggle('hidden',isPublished);
+    finish.disabled=!ready||state.publicationBusy||isPublished;
     finish.textContent=ready?'儲存草稿並離開':state.failedUploads.length?'⚠️ 先完成教材上傳':'⏳ 等待教材正式完成後才能離開';
   }
   const publish=el('cw681-publish');
@@ -188,7 +191,7 @@ function render(){
   const box=el('cw681-step');
   if(state.step===1){box.innerHTML=stepOne();bindStepOneControls();}
   if(state.step===2){box.innerHTML=stepTwo();paintMaterials();renderFileSummary();bindStepTwoControls();}
-  if(state.step===3){box.innerHTML=stepThree();bindStepThreeControls();mountExamWhoPicker();}
+  if(state.step===3){box.innerHTML=stepThree();bindStepThreeControls();mountExamWhoPicker();void refreshExamQuestionCount();}
   if(state.step===4)box.innerHTML=stepFour();
   const status=el('cw681-status');if(status&&state.resultHtml)status.innerHTML=state.resultHtml;
   syncCompletionControls();
@@ -374,6 +377,28 @@ function examSettingsPanel(){
   </div><p class="mt-2 text-[11px] text-slate-500">審核者、批改者會自動使用你登入的帳號資料，不用另外填。</p></div>`;
 }
 
+// 考卷已經有題目時，「開啟 AI 出題」降為次要按鈕，並明講「可直接按下一步」，避免老師回來後一直重按。
+function examAuthoringBox(){
+  const count=Number(state.examQuestionCount||0);
+  const label=state.examMode==='ai'?'✨ 開啟 AI 出題':'✍️ 開啟自己出題';
+  if(state.categoryId&&count>0){
+    return `<div class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex flex-wrap items-center justify-between gap-3"><p class="text-xs text-emerald-900">✅ 考卷已有 <b>${count}</b> 題，可以直接按下方「下一步」。要補題再點右邊。</p><button type="button" ${state.openingAuthoring?'disabled':''} data-csp-click="courseWizard681OpenAssessmentAuthoring()" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">${state.examMode==='ai'?'➕ 再用 AI 補題':'➕ 再補幾題'}</button></div>`;
+  }
+  return `<div class="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 flex flex-wrap items-center justify-between gap-3"><p class="text-xs text-indigo-900">${state.categoryId?'✅ 考卷草稿已建立，可繼續編輯。':'系統會先建立這門課的考卷草稿，再開啟完整出題工作區。'}</p><button type="button" ${state.openingAuthoring?'disabled':''} data-csp-click="courseWizard681OpenAssessmentAuthoring()" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-black text-white disabled:opacity-50">${label} →</button></div>`;
+}
+
+async function refreshExamQuestionCount(){
+  if(!state.categoryId)return;
+  try{
+    const r=await fetch('/api/quiz-categories/'+encodeURIComponent(state.categoryId));
+    if(!r.ok)return;
+    const d=await r.json().catch(()=>({}));
+    const n=Math.max(0,Number(d.questionCount||0));
+    if(n!==Number(state.examQuestionCount||0)&&state.step===3){state.examQuestionCount=n;render();}
+    else state.examQuestionCount=n;
+  }catch(_error){/* 讀不到就維持原畫面 */}
+}
+
 function mountExamWhoPicker(){
   const host=el('cw681-who-host');
   if(!host||!window.ExamAssigneePicker)return;
@@ -400,7 +425,7 @@ function stepThree(){
   const primary=['later','bank','ai'];
   return `<h5 class="font-black">3. 評量／考卷</h5><p class="mt-1 text-xs text-slate-500">這一步只處理考卷。可以稍後建立、自己出題，或讓 AI 協助產生候選題；Blueprint 收在進階設定。</p>
   <div class="mt-3 grid gap-2 md:grid-cols-3">${primary.map(id=>{const meta=MODE_META[id];return `<button type="button" data-csp-click="courseWizard681SetMode('${id}')" class="rounded-xl border p-3 text-left text-sm ${state.examMode===id?'border-violet-500 bg-violet-100':'bg-white'}"><b>${esc(meta.label)}</b><span class="mt-1 block text-xs text-slate-500">${esc(meta.next)}</span></button>`;}).join('')}</div>
-  ${state.examMode==='later'?'':`<label class="mt-3 block text-xs font-bold">考卷名稱（必填）<input id="cw681-exam" value="${esc(el('wizard-exam-title')?.value||'')}" class="mt-1 w-full rounded border p-2" placeholder="例如：課後評量"></label>${examSettingsPanel()}<div class="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 flex flex-wrap items-center justify-between gap-3"><p class="text-xs text-indigo-900">${state.categoryId?'✅ 考卷草稿已建立，可繼續編輯。':'系統會先建立這門課的考卷草稿，再開啟完整出題工作區。'}</p><button type="button" data-csp-click="courseWizard681OpenAssessmentAuthoring()" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-black text-white">${state.examMode==='ai'?'✨ 開啟 AI 出題':'✍️ 開啟自己出題'} →</button></div>`}
+  ${state.examMode==='later'?'':`<label class="mt-3 block text-xs font-bold">考卷名稱（必填）<input id="cw681-exam" value="${esc(el('wizard-exam-title')?.value||'')}" class="mt-1 w-full rounded border p-2" placeholder="例如：課後評量"></label>${examSettingsPanel()}${examAuthoringBox()}`}
   <details class="mt-4 rounded-xl border border-slate-200 bg-white p-3"><summary class="cursor-pointer text-xs font-bold text-slate-600">進階：Blueprint／題型配額</summary><p class="mt-2 text-xs text-slate-500">Blueprint 不列在主要流程；需要抽題規則與題型配額時，可在考卷工作區的進階設定中使用。</p></details>`;
 }
 
@@ -994,7 +1019,12 @@ async function openAiAuthoring(){
 }
 
 async function openAssessmentAuthoring(){
-  if(state.examMode==='later')return;
+  if(state.examMode==='later'||state.openingAuthoring)return;
+  state.openingAuthoring=true;
+  try{await openAssessmentAuthoringOnce();}finally{state.openingAuthoring=false;}
+}
+
+async function openAssessmentAuthoringOnce(){
   if(!await ensureAssessmentDraft())return;
   try{await saveWizardExamSettings(state.categoryId);}catch(error){alert('考卷設定未儲存：'+error.message);return;}
   if(typeof window.openTeacherCourseAssessmentAuthoring==='function'){
@@ -1007,7 +1037,7 @@ async function openAssessmentAuthoring(){
 
 function clearWizardState(){
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';
@@ -1287,6 +1317,8 @@ async function publishAndOpenCourseWorkspace(){
     const assignmentNote=assignmentResult.total>1?`；已指派 ${assignmentResult.total} 人（新增 ${assignmentResult.createdCount}、既有 ${assignmentResult.reusedCount}）`:assignmentResult.created?'；學習指派已建立':assignmentResult.reused?'；既有學習指派已沿用':'';
     if(publicationBox)publicationBox.innerHTML=`<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-2 font-bold text-emerald-800">✅ 課程已正式發布${assignmentNote}。</div>`;
     await refreshWorkspaceData();
+    // openCourseWorkspace 會因為 publicationBusy 直接返回；先放開，發布成功後才能真的離開精靈。
+    state.publicationBusy=false;
     await openCourseWorkspace();
   }catch(error){
     if(publicationBox)publicationBox.innerHTML=`<div class="rounded-lg border border-rose-200 bg-rose-50 p-2 font-bold text-rose-700">❌ ${esc(error.message||'課程發布失敗')}</div>`;
@@ -1310,7 +1342,7 @@ async function openCourseWorkspace(){
   el('admin-course-material-hub')?.scrollIntoView({behavior:'smooth',block:'start'});
 
   // Do not leak a completed course into the next create-course flow.
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';
@@ -1322,7 +1354,7 @@ async function openCourseWorkspace(){
 function reset(){
   if(state.created&&!canLeaveCourse())return alert('目前教材尚未全部完成，請先等待或處理失敗工作。');
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';clearWorkflowId();
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=false;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }

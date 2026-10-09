@@ -233,3 +233,15 @@ class ExamWhoCanUseUiTests(unittest.TestCase):
         self.assertIn("ExamAssigneePicker.saveModel", wizard)
         # 設定頁儲存時一併送出名單（伺服器強制檢查）。
         self.assertIn("ExamAssigneePicker?.saveFor", settings)
+
+
+class WizardFinishAfterPublishTests(unittest.TestCase):
+    def test_wizard_leaves_after_publish_and_hides_save_draft(self):
+        from pathlib import Path
+
+        js = (Path(__file__).resolve().parents[1] / "static" / "course-wizard-681.js").read_text(encoding="utf-8")
+        # publicationBusy 必須在離開精靈前放開，否則 openCourseWorkspace 會直接返回。
+        self.assertIn("state.publicationBusy=false;\n    await openCourseWorkspace();", js)
+        self.assertIn("finish.classList.toggle('hidden',isPublished)", js)
+        self.assertIn("function examAuthoringBox", js)
+        self.assertIn("state.openingAuthoring", js)
