@@ -328,6 +328,11 @@ def ollama_chat(prompt: str, *, json_mode: bool, local: LocalFallbackSettings | 
             json=payload,
             timeout=local.ollama_timeout_seconds,
         )
+    except requests.Timeout as exc:
+        raise RuntimeError(
+            f"本機 AI（Ollama）已連上，但超過 {local.ollama_timeout_seconds} 秒仍未完成（這台電腦算得太慢）。"
+            "可把 OLLAMA_TIMEOUT_SECONDS 調大（例如 600），或改用較小的題數／教材。"
+        ) from exc
     except requests.RequestException as exc:
         raise RuntimeError("本機 AI（Ollama）沒有開啟或無法連線：請先在這台電腦啟動 Ollama 程式，或把 OLLAMA_ENABLED 改成 false。") from exc
     if response.status_code >= 500:

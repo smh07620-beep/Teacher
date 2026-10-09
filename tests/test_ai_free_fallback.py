@@ -310,6 +310,15 @@ class FreeAIFallbackTests(unittest.TestCase):
                 free_ai_fallback.ollama_chat("hi", json_mode=False, local=local)
         self.assertIn("沒有開啟", str(ctx.exception))
 
+    def test_ollama_timeout_is_not_reported_as_offline(self):
+        local = SimpleNamespace(enabled=True, ollama_enabled=True, ollama_model="m",
+                                ollama_base_url="http://127.0.0.1:1", ollama_timeout_seconds=240)
+        with patch.object(free_ai_fallback.requests, "post", side_effect=free_ai_fallback.requests.Timeout("slow")):
+            with self.assertRaises(RuntimeError) as ctx:
+                free_ai_fallback.ollama_chat("hi", json_mode=False, local=local)
+        self.assertNotIn("沒有開啟", str(ctx.exception))
+        self.assertIn("240", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
