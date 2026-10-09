@@ -1,0 +1,133 @@
+/* 首頁優化 2026-10-10
+ * 目標：乾淨、明亮、像院內好用的系統；不是科技展示頁。
+ * 範圍：只作用在首頁 (body.home-dashboard-page)，載入於 portal.css 之後。
+ * 要還原：把 index.html 裡這一行 <link> 刪掉即可。
+ *
+ * 原則
+ *  1. 字級下限：內文 14px、輔助文字 12px（舊版有 8–10px 的字）
+ *  2. 去裝飾：不用漸層、毛玻璃、厚陰影、懸停上浮、裝飾圓點
+ *  3. 圓角收斂為 10–12px，像表單與文件，不像行銷頁
+ *  4. 圖示統一為同一套線條風格、單一主色
+ */
+
+body.portal-v56.home-dashboard-page{background:#f5f8f9;color:#17384a}
+
+/* ---------- 頁首 ---------- */
+body.home-dashboard-page .v56-header{background:#fff;border-bottom:1px solid #dbe6ea;box-shadow:none;backdrop-filter:none}
+body.home-dashboard-page .v56-nav a,
+body.home-dashboard-page .v56-nav button{font-size:15px}
+body.home-dashboard-page .v56-brand-copy span{font-size:12px;letter-spacing:.04em;color:#5f7886}
+body.home-dashboard-page .v56-user-copy strong{font-size:14px}
+body.home-dashboard-page .v56-user-copy span{font-size:12px;color:#5f7886}
+body.home-dashboard-page .v56-avatar{background:#e8f2f2;border-color:#d3e3e5}
+
+/* ---------- 主視覺 ---------- */
+body.home-dashboard-page .phase3-home .phase3-home-hero-681{border-radius:12px;border-color:#d6e5e8;background:#eef6f6;box-shadow:none}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681:before{display:none}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy h1{font-size:clamp(30px,2.9vw,40px);line-height:1.3;letter-spacing:0;font-weight:800;color:#113d52}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy>p:not(.phase3-hero-eyebrow){font-size:15px;line-height:1.8;font-weight:500;color:#4d6a78}
+/* 主按鈕：舊版文字色偏暗（深色字壓在深青綠底），統一改白字 */
+body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary{min-width:0;min-height:48px;padding:0 22px;border-radius:10px;background:#0a6f7d;box-shadow:none;font-size:15px;color:#fff!important}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary>span{color:#fff!important;font-size:15px}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary:hover{background:#085c68;transform:none;box-shadow:none}
+/* 照片：改成有留白的圓角矩形，不再整塊滿版加漸層淡出 */
+body.home-dashboard-page .phase3-hero-art-frame{inset:16px 16px 16px 0;border-radius:10px;box-shadow:none}
+body.home-dashboard-page .phase3-hero-art-frame:before{display:none}
+body.home-dashboard-page .phase3-home .phase3-home-hero-art img{filter:none;transform:none}
+
+@media(min-width:1001px){
+  body.home-dashboard-page .phase3-home .phase3-home-hero-681{min-height:250px;height:auto}
+  body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy{padding:34px 30px 34px 44px}
+  body.home-dashboard-page .phase3-home .phase3-home-hero-681>.phase3-home-hero-art{min-height:250px}
+}
+/* 摘要卡不再浮在主視覺上方 */
+body.home-dashboard-page .phase3-home .phase3-stats{margin-top:16px}
+
+/* ---------- 三張摘要卡 ---------- */
+body.home-dashboard-page .phase3-home .phase3-stat{min-height:112px;border-radius:10px;background:#fff;box-shadow:none;transition:border-color .15s ease}
+body.home-dashboard-page .phase3-home .phase3-stat:after{display:none}
+body.home-dashboard-page .phase3-home .phase3-stat:hover{transform:none;box-shadow:none;border-color:#7fb9ba}
+body.home-dashboard-page .phase3-home .phase3-stat-icon{border-radius:10px;background:#e5f2f2;color:#0a6f7d}
+body.home-dashboard-page .phase3-home .phase3-stat b{font-size:15px}
+body.home-dashboard-page .phase3-home .phase3-stat strong{font-size:32px}
+body.home-dashboard-page .phase3-home .phase3-stat strong small{font-size:14px;color:#5f7886}
+body.home-dashboard-page .phase3-home .phase3-stat-note{font-size:13px;color:#5f7886}
+body.home-dashboard-page .phase3-home .phase3-stat em{font-size:13px;font-style:normal;font-weight:700;color:#0a6f7d}
+body.home-dashboard-page .phase3-home .phase3-stat i{height:8px}
+body.home-dashboard-page .phase3-home .phase3-stat i span{background:#0d8f92}
+
+/* ---------- 公告列 ---------- */
+body.home-dashboard-page .phase3-announcement-strip{border-radius:10px;background:#f1f8f7}
+body.home-dashboard-page .phase3-announcement-mark{border-radius:8px;background:#dff0ee}
+body.home-dashboard-page .phase3-announcement-strip b{font-size:13px;letter-spacing:0}
+body.home-dashboard-page .phase3-announcement-strip strong{font-size:14px}
+body.home-dashboard-page .phase3-announcement-strip small{font-size:12px}
+body.home-dashboard-page .phase3-announcement-strip button{font-size:13px}
+
+/* ---------- 區塊標題與切換 ---------- */
+body.home-dashboard-page .phase3-home .phase3-heading h2{font-size:24px;letter-spacing:0}
+body.home-dashboard-page .phase3-home .phase3-heading p{font-size:14px;color:#5f7886}
+body.home-dashboard-page .phase3-heading a{font-size:14px}
+body.home-dashboard-page .phase3-home .phase3-area-switch{border-radius:10px}
+body.home-dashboard-page .phase3-home .phase3-area-switch button{font-size:14px;border-radius:7px}
+body.home-dashboard-page .phase3-home .phase3-area-switch button[aria-pressed="true"]{background:#0a6f7d;box-shadow:none}
+
+/* ---------- 專業組別卡片（圖示改為統一線條風格） ---------- */
+body.home-dashboard-page .phase3-home .phase3-groups{gap:12px}
+body.home-dashboard-page .phase3-home .phase3-groups>a{align-items:flex-start;min-height:0;padding:16px 16px 14px;border-radius:10px;background:#fff;box-shadow:none;text-align:left;transition:border-color .15s ease,background-color .15s ease}
+body.home-dashboard-page .phase3-home .phase3-groups>a:hover{transform:none;box-shadow:none;border-color:#7fb9ba;background:#fafdfd}
+/* 舊版用 CSS 背景圖（!important）疊上去的 3D 插圖，改成統一線條圖示 */
+body.home-dashboard-page .phase3-home .phase3-groups a>span:first-child{width:56px!important;height:56px!important;flex:0 0 auto;display:grid;place-items:center;overflow:visible;border-radius:10px!important;background:#e8f3f3!important;background-image:none!important}
+body.home-dashboard-page .phase3-home .phase3-groups>a>span:before,
+body.home-dashboard-page .phase3-home .phase3-groups>a>span:after{display:none}
+body.home-dashboard-page .phase3-groups .group-icon{width:40px!important;height:40px!important;max-width:none;fill:none;stroke:#0a6f7d;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+body.home-dashboard-page .phase3-home .phase3-groups small{display:none}
+body.home-dashboard-page .phase3-home .phase3-groups h3{margin:12px 0 4px;font-size:18px}
+body.home-dashboard-page .phase3-home .phase3-groups p{font-size:13px;line-height:1.5;color:#5f7886}
+body.home-dashboard-page .phase3-home .phase3-groups b{justify-content:flex-start;gap:6px;margin:auto 0 0;padding-top:14px;font-size:13px;font-weight:700;color:#0a6f7d}
+body.home-dashboard-page .phase3-home .phase3-groups b i{width:auto;height:auto;background:transparent}
+
+/* ---------- 最近更新 / 我的待辦 ---------- */
+body.home-dashboard-page .phase3-home .phase3-content-panel{min-height:200px;border-radius:10px;box-shadow:none}
+body.home-dashboard-page .phase3-home .phase3-content-panel .v56-panel-head{height:52px}
+body.home-dashboard-page .phase3-home .phase3-content-panel .v56-panel-head small{display:none}
+body.home-dashboard-page .phase3-home .phase3-content-panel .v56-panel-head strong{font-size:16px}
+body.home-dashboard-page .phase3-home .phase3-content-panel .v56-panel-head a{font-size:13px}
+body.home-dashboard-page .phase3-home .v56-list-row{min-height:54px;padding:9px 18px}
+body.home-dashboard-page .phase3-home .v56-list-title strong{font-size:14px}
+body.home-dashboard-page .phase3-home .v56-list-title span{font-size:12px;color:#5f7886}
+body.home-dashboard-page .phase3-home .v56-list-row b{font-size:16px}
+body.home-dashboard-page .phase3-home .v56-file-pill{min-width:38px;height:22px;border-radius:5px;font-size:11px}
+body.home-dashboard-page .phase3-home .v56-assessment-badge{padding:4px 9px;border-radius:5px;font-size:12px}
+body.home-dashboard-page .phase3-home .phase3-content-panel .phase3-home-task-row>span:nth-child(2)>strong{font-size:14px}
+body.home-dashboard-page .phase3-home .phase3-content-panel .phase3-home-task-row>span:nth-child(2)>span{font-size:12px;color:#5f7886}
+body.home-dashboard-page .phase3-home .phase3-content-panel .phase3-home-task-row>b{font-size:18px}
+body.home-dashboard-page .phase3-home .v56-empty{padding:34px 16px;font-size:14px;color:#5f7886}
+
+/* ---------- 頁尾 ---------- */
+body.home-dashboard-page .v56-footer{background:#fff;border-top:1px solid #dbe6ea}
+body.home-dashboard-page .v56-footer-brand span{font-size:12px}
+body.home-dashboard-page .v56-footer-cell{font-size:13px;letter-spacing:.02em;color:#5f7886}
+
+/* ---------- 手機底部導覽（改用一致的線條圖示） ---------- */
+body.home-dashboard-page .v56-bottom-nav{height:62px;border-top:1px solid #dbe6ea;background:#fff;box-shadow:none;backdrop-filter:none}
+body.home-dashboard-page .v56-bottom-nav a{gap:3px;font-size:12px;font-weight:700;color:#5f7886}
+body.home-dashboard-page .v56-bottom-nav a.active{color:#0a6f7d}
+body.home-dashboard-page .v56-bottom-nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- 手機 ---------- */
+@media(max-width:620px){
+  body.home-dashboard-page .v56-brand-copy span{font-size:11px}
+  body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy h1{font-size:28px}
+  body.home-dashboard-page .phase3-home .phase3-groups>a{padding:13px 12px 12px}
+  body.home-dashboard-page .phase3-home .phase3-groups>a>span{width:48px;height:48px}
+  body.home-dashboard-page .phase3-groups .group-icon{width:34px!important;height:34px!important}
+  body.home-dashboard-page .phase3-home .phase3-groups h3{font-size:16px}
+  body.home-dashboard-page .phase3-home .phase3-groups p{font-size:12px}
+  body.home-dashboard-page .phase3-home .phase3-groups b{font-size:12px}
+}
+
+/* 偏好減少動態的使用者：關閉所有過場 */
+@media(prefers-reduced-motion:reduce){
+  body.home-dashboard-page *{transition:none!important}
+}
