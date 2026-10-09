@@ -26,7 +26,7 @@
     const s=course.summary||{};
     const rows=(course.learners||[]).map(row=>{
       const needs=row.overdue||row.examNotPassed;
-      return '<tr class="'+(needs?'bg-amber-50/60':'')+'"><td class="px-3 py-2"><div class="font-bold text-slate-800">'+esc(row.name||row.username)+'</div><div class="text-[10px] text-slate-400">'+esc(row.empId||'')+'</div></td><td class="px-3 py-2 text-xs">'+esc(statusLabel(row.status))+'</td><td class="px-3 py-2 text-xs">'+Number(row.materialProgress||0).toFixed(0)+'% ('+Number(row.materialsCompleted||0)+'/'+Number(row.materialsTotal||0)+')</td><td class="px-3 py-2 text-xs">'+(row.examNotPassed?'⚠️ 未通過':row.examPassed?'✓ 已通過':row.examAttempts?'待完成':'尚未作答')+'</td><td class="px-3 py-2 text-xs">'+(row.overdue?'⚠️ 已逾期':esc(row.dueAt||'—'))+'</td></tr>';
+      return '<tr class="'+(needs?'bg-amber-50/60':'')+'"><td class="px-3 py-2"><div class="font-bold text-slate-800">'+esc(row.name||row.username)+'</div><div class="text-[10px] text-slate-400">'+esc(row.empId||'')+'</div></td><td class="px-3 py-2 text-xs">'+esc(statusLabel(row.status))+'</td><td class="px-3 py-2 text-xs">'+Number(row.materialProgress||0).toFixed(0)+'% ('+Number(row.materialsCompleted||0)+'/'+Number(row.materialsTotal||0)+')</td><td class="px-3 py-2 text-xs">'+(row.examRequired===false?'— 本課程沒有考試':row.examNotPassed?'⚠️ 未通過':row.examPassed?'✓ 已通過':row.examAttempts?'待完成':'尚未作答')+'</td><td class="px-3 py-2 text-xs">'+(row.overdue?'⚠️ 已逾期':esc(row.dueAt||'—'))+'</td></tr>';
     }).join('');
     body.innerHTML='<div class="grid grid-cols-2 md:grid-cols-6 gap-2">'+[
       ['指派',s.assigned],['未開始',s.notStarted],['進行中',s.inProgress],['完成',s.completed],['逾期',s.overdue],['考試未通過',s.examNotPassed]
