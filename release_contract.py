@@ -75,6 +75,7 @@ REQUIRED_MIGRATIONS = (
     "0114-training-interventions",
     "0115-material-derivative-publications",
     "0116-announcement-audience",
+    "0117-exam-assignees",
 )
 
 # Backward-compatible singular name used by older release checks.  It now

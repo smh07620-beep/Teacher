@@ -59,7 +59,7 @@ class AnnouncementWorkspace116Tests(unittest.TestCase):
     def test_migration_and_permissions_are_explicit(self):
         versions = [version for version, _fn in schema_migrations.MIGRATIONS]
         self.assertEqual(versions.count("0116-announcement-audience"), 1)
-        self.assertEqual(release_contract.REQUIRED_MIGRATIONS[-1], "0116-announcement-audience")
+        self.assertIn("0116-announcement-audience", release_contract.REQUIRED_MIGRATIONS)
         for role in ("clinical_teacher", "group_leader", "education_admin", "system_admin"):
             self.assertIn("announcement.manage", ROLE_PERMISSIONS[role])
         self.assertNotIn("announcement.manage", ROLE_PERMISSIONS["student"])

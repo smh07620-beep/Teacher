@@ -95,6 +95,9 @@ def dashboard_summary(
         for item in assessment_repository.list_categories(None, None, False)
         if item.get("active", True)
     ]
+    from teacher_app.assessments import assignees as exam_assignees
+
+    all_quizzes = exam_assignees.filter_for_user(user, all_quizzes)
     all_courses = course_repository.list_courses(None, None, False)
     legacy_completed_ids, legacy_stale_ids = versioning.valid_completed_material_ids(
         all_materials,

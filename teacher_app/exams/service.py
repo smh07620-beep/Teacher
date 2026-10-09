@@ -118,6 +118,9 @@ def start_attempt(base_or_user, user_or_data, data: Mapping[str, Any] | None = N
     category = assessment_repository.get_category_full(category_id)
     if not category or not category.get("active", True):
         raise ApiError("CATEGORY_NOT_FOUND", "找不到可使用的考卷。", 404)
+    from teacher_app.assessments import assignees as exam_assignees
+
+    exam_assignees.assert_can_take(actor, category_id)
     questions = _draw_questions(category)
     if not questions:
         raise ApiError("NO_ACTIVE_QUESTIONS", "此考卷目前沒有可作答的啟用題目。", 409)

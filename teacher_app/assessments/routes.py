@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from flask import g, jsonify, request
 
+from teacher_app.assessments import assignees as exam_assignees
 from teacher_app.assessments import repository, service
 from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.common import audit, scope, scope_filter
@@ -65,11 +66,14 @@ def register_assessment_routes(owner):
         denied = _login_required()
         if denied:
             return denied
-        return jsonify(service.list_categories(
-            app,
-            request.args.get("group", "") or None,
-            request.args.get("area", scope.DEFAULT_TRAINING_AREA),
-            False,
+        return jsonify(exam_assignees.filter_for_user(
+            getattr(g, "teacher_user", None),
+            service.list_categories(
+                app,
+                request.args.get("group", "") or None,
+                request.args.get("area", scope.DEFAULT_TRAINING_AREA),
+                False,
+            ),
         ))
 
     def api_admin_list_quiz_categories():
@@ -101,6 +105,51 @@ def register_assessment_routes(owner):
         category = dict(category)
         category["questionCount"] = len(repository.list_questions(category_id, include_inactive=False))
         return jsonify(category)
+
+    def _assignee_scope(category_id):
+        category = repository.get_category_full(category_id)
+        if not category:
+            return None, (jsonify({"error": "找不到此考卷"}), 404)
+        _user, scope_denied = scope_filter.scoped_groups(
+            app, "question.manage", {str(category.get("group") or "").strip()}
+        )
+        return category, scope_denied
+
+    def api_get_quiz_assignees(category_id):
+        denied = require_admin()
+        if denied:
+            return denied
+        category, scope_denied = _assignee_scope(category_id)
+        if scope_denied:
+            return scope_denied
+        return jsonify({"assignees": exam_assignees.list_assignees(category_id)})
+
+    def api_put_quiz_assignees(category_id):
+        denied = require_admin()
+        if denied:
+            return denied
+        category, scope_denied = _assignee_scope(category_id)
+        if scope_denied:
+            return scope_denied
+        data = request.get_json(silent=True) or {}
+        items = data.get("assignees")
+        if not isinstance(items, list):
+            return jsonify({"error": "assignees 必須是清單"}), 400
+        before = exam_assignees.list_assignees(category_id)
+        try:
+            after = exam_assignees.replace_assignees(category_id, items, actor())
+        except ApiError as exc:
+            return _legacy_error(exc)
+        audit.record_event(
+            actor=actor(),
+            action="assessment.assignees.update",
+            target_type="assessment",
+            target_id=category_id,
+            group=str(category.get("group") or ""),
+            before={"assignees": [(x["type"], x["key"]) for x in before]},
+            after={"assignees": [(x["type"], x["key"]) for x in after]},
+        )
+        return jsonify({"ok": True, "assignees": after})
 
     def guarded(handler, *args, **kwargs):
         denied = require_admin()
@@ -213,6 +262,8 @@ def register_assessment_routes(owner):
         ("/api/quiz-categories/admin", "api_admin_list_quiz_categories", api_admin_list_quiz_categories, ["GET"]),
         ("/api/quiz-categories/<category_id>", "api_get_quiz_category", api_get_quiz_category, ["GET"]),
         ("/api/quiz-categories", "api_create_quiz_category", api_create_quiz_category, ["POST"]),
+        ("/api/quiz-categories/<category_id>/assignees", "api_get_quiz_assignees", api_get_quiz_assignees, ["GET"]),
+        ("/api/quiz-categories/<category_id>/assignees", "api_put_quiz_assignees", api_put_quiz_assignees, ["PUT"]),
         ("/api/quiz-categories/<category_id>", "api_update_quiz_category", api_update_quiz_category, ["PATCH"]),
         ("/api/quiz-categories/<category_id>/review", "api_review_quiz_category", api_review_quiz_category, ["POST"]),
         ("/api/quiz-categories/<category_id>/publications", "api_quiz_publications", api_quiz_publications, ["GET"]),

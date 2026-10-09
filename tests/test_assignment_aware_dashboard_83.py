@@ -30,6 +30,8 @@ class AssignmentAwareDashboardTests(unittest.TestCase):
                     return SimpleNamespace(fetchall=lambda: [])
                 if "FROM pgy_assessments" in sql:
                     return SimpleNamespace(fetchall=lambda: [])
+                if "FROM exam_assignees" in sql:
+                    return SimpleNamespace(fetchall=lambda: [])
                 raise AssertionError(sql)
 
         @contextmanager

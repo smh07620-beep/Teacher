@@ -117,6 +117,8 @@ class DashboardScopeTests(unittest.TestCase):
                     ])
                 if "FROM pgy_assessments" in sql:
                     return SimpleNamespace(fetchall=lambda: [])
+                if "FROM exam_assignees" in sql:
+                    return SimpleNamespace(fetchall=lambda: [])
                 raise AssertionError(sql)
 
         @contextmanager
