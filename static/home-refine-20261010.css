@@ -10,7 +10,7 @@
  *  4. 圖示統一為同一套線條風格、單一主色
  */
 
-body.portal-v56.home-dashboard-page{background:#f5f8f9;color:#17384a}
+body.portal-v56.home-dashboard-page{background:#f7fafb;color:#17384a}
 
 /* ---------- 頁首 ---------- */
 body.home-dashboard-page .v56-header{background:#fff;border-bottom:1px solid #dbe6ea;box-shadow:none;backdrop-filter:none}
@@ -195,4 +195,22 @@ body.home-dashboard-page .phase3-home-task-row:active{background:#f1f8f8}
 }
 @media(max-width:620px){
   body.home-dashboard-page .v56-header{gap:4px;padding-left:12px!important;padding-right:6px!important}
+}
+
+/* ---------- 透光質感（只用在三處，其餘維持實心白底以利閱讀） ----------
+ * 1) 頁首  2) 三張統計卡  3) 手機底部導覽
+ * 不支援 backdrop-filter 的瀏覽器 → 自動維持上方的實心白底。 */
+@supports((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  body.home-dashboard-page .v56-header{background:rgba(255,255,255,.78)!important;-webkit-backdrop-filter:saturate(1.4) blur(12px);backdrop-filter:saturate(1.4) blur(12px);border-bottom-color:rgba(205,222,228,.7)}
+  body.home-dashboard-page .phase3-home .phase3-stat{background:rgba(255,255,255,.72)!important;-webkit-backdrop-filter:saturate(1.3) blur(10px);backdrop-filter:saturate(1.3) blur(10px);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(17,61,82,.10),inset 0 1px 0 rgba(255,255,255,.9)}
+  body.home-dashboard-page .v56-bottom-nav{background:rgba(255,255,255,.82)!important;-webkit-backdrop-filter:saturate(1.3) blur(12px);backdrop-filter:saturate(1.3) blur(12px)}
+}
+/* 統計卡上緣壓進主視覺底部，讓顯微鏡照片的光透出來 */
+@media(min-width:1001px){
+  body.home-dashboard-page .phase3-home .phase3-hero-681,
+  body.home-dashboard-page .phase3-home .phase3-home-hero-681{padding-bottom:36px}
+  body.home-dashboard-page .phase3-home .phase3-stats{margin-top:-52px!important;position:relative;z-index:3}
+}
+@media(max-width:1000px){
+  body.home-dashboard-page .phase3-home .phase3-stats{position:relative;z-index:3}
 }

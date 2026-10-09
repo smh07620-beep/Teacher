@@ -1,0 +1,99 @@
+/* 內頁優化 2026-10-10（院內課程／PGY／登入／帳號／重設密碼）
+ * 與首頁同一套原則：字級下限 12/14px、去裝飾英文標語、陰影收斂、
+ * 頁首透光、手機點擊順暢（44px 點擊區、無點擊延遲）。載入於 portal.css 之後。
+ * 要還原：刪掉各頁的這一行 <link> 即可。 */
+body.portal-v56:not(.home-dashboard-page){background:#f7fafb;color:#17384a}
+
+/* 去掉僅作裝飾的英文標語與手寫字 */
+body.portal-v56:not(.home-dashboard-page) .v580-eyebrow,
+body.portal-v56:not(.home-dashboard-page) .v682-area-note{display:none!important}
+
+/* 版面：與首頁一致，上方滿版 */
+body.portal-v56:not(.home-dashboard-page) .v56-shell{width:100%;max-width:none;margin:0;border:0;border-radius:0;box-shadow:none;overflow:visible}
+
+/* 頁首：白底、細線、輕微透光 */
+body.portal-v56:not(.home-dashboard-page) .v56-header{background:#fff;border-bottom:1px solid #dbe6ea;box-shadow:none}
+@supports((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  body.portal-v56:not(.home-dashboard-page) .v56-header{background:rgba(255,255,255,.78);-webkit-backdrop-filter:saturate(1.4) blur(12px);backdrop-filter:saturate(1.4) blur(12px)}
+  body.portal-v56:not(.home-dashboard-page) .v56-bottom-nav{background:rgba(255,255,255,.82);-webkit-backdrop-filter:saturate(1.3) blur(12px);backdrop-filter:saturate(1.3) blur(12px)}
+}
+body.portal-v56:not(.home-dashboard-page) .v56-nav a,
+body.portal-v56:not(.home-dashboard-page) .v56-nav button{font-size:15px}
+body.portal-v56:not(.home-dashboard-page) .v56-brand-copy span{font-size:12px;color:#5f7886}
+body.portal-v56:not(.home-dashboard-page) .v56-user-copy strong{font-size:14px}
+body.portal-v56:not(.home-dashboard-page) .v56-user-copy span{font-size:12px;color:#5f7886}
+body.portal-v56:not(.home-dashboard-page) .v56-bottom-nav a,
+body.portal-v56:not(.home-dashboard-page) .v56-bottom-nav button{font-size:12px;font-weight:700}
+
+/* 卡片：收斂陰影與懸停上浮 */
+body.portal-v56:not(.home-dashboard-page) .v580-group-card,
+body.portal-v56:not(.home-dashboard-page) .v681-feature-chip{border-radius:12px;box-shadow:none;border:1px solid #dbe6ea;background:#fff;transition:border-color .15s ease}
+body.portal-v56:not(.home-dashboard-page) .v580-group-card:hover,
+body.portal-v56:not(.home-dashboard-page) .v681-feature-chip:hover{transform:none;box-shadow:none;border-color:#7fb9ba}
+body.portal-v56:not(.home-dashboard-page) .v580-group-card:active{background:#f1f8f8}
+body.portal-v56:not(.home-dashboard-page) .v580-group-card p,
+body.portal-v56:not(.home-dashboard-page) .v580-section-heading p,
+body.portal-v56:not(.home-dashboard-page) .v681-feature-chip small{font-size:13px;line-height:1.6;color:#5f7886}
+body.portal-v56:not(.home-dashboard-page) .v580-section-heading h2{font-size:24px}
+body.portal-v56:not(.home-dashboard-page) .v56-footer{font-size:13px}
+body.portal-v56:not(.home-dashboard-page) .v56-footer small,
+body.portal-v56:not(.home-dashboard-page) .v56-footer span{font-size:12px}
+
+/* 登入／帳號／重設密碼 */
+body.portal-v56:not(.home-dashboard-page) .v580-login-card{box-shadow:0 10px 30px rgba(17,61,82,.08)}
+body.portal-v56:not(.home-dashboard-page) .v580-login-shell{border-radius:16px;box-shadow:0 10px 30px rgba(17,61,82,.08)}
+body.portal-v56:not(.home-dashboard-page) .v580-login-benefits span{font-size:12px}
+body.portal-v56:not(.home-dashboard-page) .v580-login-help,
+body.portal-v56:not(.home-dashboard-page) .v580-login-help a{font-size:13px}
+body.portal-v56:not(.home-dashboard-page) .v580-login-card label>span{font-size:14px}
+body.portal-v56:not(.home-dashboard-page) .v580-login-card input:not([type=checkbox]){font-size:16px;min-height:48px}
+/* 「忘記密碼？」是次要動作，不該和「登入」一樣是深色主按鈕 */
+body.portal-v56:not(.home-dashboard-page) #forgot-password-toggle{background:#fff!important;color:#0a6f7d!important;border:1px solid #b9d6d8!important;box-shadow:none!important}
+body.portal-v56:not(.home-dashboard-page) #forgot-password-toggle:active{background:#f1f8f8!important}
+
+/* 手機點擊順暢 */
+body.portal-v56:not(.home-dashboard-page) a,
+body.portal-v56:not(.home-dashboard-page) button,
+body.portal-v56:not(.home-dashboard-page) [role="button"]{touch-action:manipulation;-webkit-tap-highlight-color:rgba(10,111,125,.14)}
+@media(max-width:1000px),(pointer:coarse){
+  body.portal-v56:not(.home-dashboard-page) .v56-user-actions{display:flex!important;align-items:center;gap:2px}
+  body.portal-v56:not(.home-dashboard-page) .v56-icon-button{width:44px;height:44px}
+  body.portal-v56:not(.home-dashboard-page) .v56-user{min-width:44px;min-height:44px;justify-content:center}
+  body.portal-v56:not(.home-dashboard-page) .v56-backtop{width:44px;height:44px}
+  body.portal-v56:not(.home-dashboard-page) .v580-login-help a{display:inline-flex;align-items:center;min-height:44px}
+}
+@media(max-width:620px){
+  body.portal-v56:not(.home-dashboard-page) .v56-header{gap:4px;padding-left:12px;padding-right:6px}
+}
+
+/* 院內課程：組別卡圖片改用首頁同一套 HD 圖（修正偏移的白邊） */
+body.internal-training-page .v580-group-card .v580-group-art{aspect-ratio:4/3;height:auto;background-size:cover!important;background-position:center!important;background-color:#eef6f7!important;border-radius:8px}
+body.internal-training-page .v580-card-top small{display:none}
+body.portal-v56.internal-training-page .v580-group-card:nth-child(1) .v580-group-art{background-image:url('/assets/v1010/card-bio.webp')!important}
+body.portal-v56.internal-training-page .v580-group-card:nth-child(2) .v580-group-art{background-image:url('/assets/v1010/card-micro.webp')!important}
+body.portal-v56.internal-training-page .v580-group-card:nth-child(3) .v580-group-art{background-image:url('/assets/v1010/card-sero.webp')!important}
+body.portal-v56.internal-training-page .v580-group-card:nth-child(4) .v580-group-art{background-image:url('/assets/v1010/card-bb.webp')!important}
+body.portal-v56.internal-training-page .v580-group-card:nth-child(5) .v580-group-art{background-image:url('/assets/v1010/card-bact.webp')!important}
+body.portal-v56.internal-training-page .v580-group-card:nth-child(6) .v580-group-art{background-image:url('/assets/v1010/card-hema.webp')!important}
+
+/* 手機：圖片高度回到合理範圍；標題區加淡色底，避免文字壓在照片上 */
+@media(max-width:620px){
+  body.internal-training-page .v580-group-card .v580-group-art{aspect-ratio:auto;height:150px}
+}
+@media(max-width:1000px){
+  body.portal-v56:not(.home-dashboard-page) .v681-internal-hero,
+  body.portal-v56:not(.home-dashboard-page) .v681-pgy-hero{background-color:#eef6f7}
+  body.portal-v56:not(.home-dashboard-page) .v681-internal-copy,
+  body.portal-v56:not(.home-dashboard-page) .v681-pgy-copy{background:rgba(247,250,251,.88);border-radius:12px;padding:14px 14px 4px}
+}
+/* PGY：過小的字提高到 12–13px */
+body.pgy-training-page .v682-pgy-card small,
+body.pgy-training-page .v682-pgy-card span:not(.v682-pgy-photo),
+body.pgy-training-page .v687-pgy-feature small,
+body.pgy-training-page .v681-pgy-copy small{font-size:12px!important;line-height:1.5}
+body.pgy-training-page .v682-pgy-card p{font-size:13px}
+body.pgy-training-page .v682-pgy-card{border-radius:12px;box-shadow:none;transition:border-color .15s ease}
+body.pgy-training-page .v682-pgy-card:hover{transform:none;box-shadow:none;border-color:#7fb9ba}
+body.pgy-training-page .v682-pgy-card:active{background:#f1f8f8}
+body.portal-v56:not(.home-dashboard-page) .v56-footer-cell,body.portal-v56:not(.home-dashboard-page) .v56-footer-cell a{font-size:13px}
+body.pgy-training-page .v682-pgy-card :is(i,em,b,strong):not(h3){font-size:12px}
