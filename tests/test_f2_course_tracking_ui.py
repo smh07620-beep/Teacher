@@ -13,6 +13,12 @@ class F2CourseTrackingUiTests(unittest.TestCase):
             self.assertIn(marker,source)
         self.assertIn("data-course-card-actions",source)
 
+    def test_course_without_exam_says_so_instead_of_passed(self):
+        source=ROOT.joinpath("static","teacher-course-tracking-f2.js").read_text(encoding="utf-8")
+        self.assertIn("row.examRequired===false?'— 本課程沒有考試'",source)
+        # 沒考試的判斷必須排在「已通過」之前，否則所有人都會顯示已通過。
+        self.assertLess(source.index("row.examRequired===false"),source.index("row.examPassed?'✓ 已通過'"))
+
     def test_asset_is_registered(self):
         source=ROOT.joinpath("teacher_app","frontend","assets.py").read_text(encoding="utf-8")
         self.assertIn('"/teacher-course-tracking-f2.js"',source)

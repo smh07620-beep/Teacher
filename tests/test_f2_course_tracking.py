@@ -35,6 +35,8 @@ class F2CourseTrackingTests(unittest.TestCase):
         self.assertEqual(data["summary"]["notStarted"],1)
         self.assertEqual(data["summary"]["overdue"],1)
         self.assertEqual(data["courses"][0]["learners"][0]["status"],"notStarted")
+        # 課程沒有考卷時，不能讓所有人都顯示「已通過」：回傳 examRequired=False，畫面改顯示「本課程沒有考試」。
+        self.assertFalse(data["courses"][0]["learners"][0]["examRequired"])
 
 
 if __name__=="__main__":

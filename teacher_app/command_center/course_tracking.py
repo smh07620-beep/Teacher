@@ -246,6 +246,7 @@ def build_course_tracking(
                 "materialProgress":material_progress,
                 "materialsCompleted":len(completed_material_ids),
                 "materialsTotal":len(course_materials),
+                "examRequired":bool(course_completion.get("examRequired")),
                 "examPassed":bool(course_completion.get("examPassed")),
                 "examAttempts":len(learner_exams),
                 "examNotPassed":exam_not_passed,
