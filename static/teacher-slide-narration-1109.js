@@ -45,6 +45,9 @@
   let durationMs = 0;
   let recordedFile = null;
   let previewUrl = '';
+  let wantSubtitle = true; // 儲存後是否順便產生字幕草稿（預設勾選，老師可取消）
+  let boundAudioId = '';
+  let subtitleQueued = false;
   let pendingBind = null; // { audioId } kept so a failed bind can be retried without re-uploading
   let tickId = 0;
   let stopping = false;
@@ -125,11 +128,20 @@
     ui.audio = document.createElement('audio');
     ui.audio.controls = true;
     ui.audio.style.cssText = 'width:100%;margin-bottom:8px;display:none';
+    ui.option = document.createElement('label');
+    ui.option.style.cssText = 'display:none;align-items:flex-start;gap:6px;font-size:12px;line-height:1.5;color:#e2e8f0;margin-bottom:8px;cursor:pointer';
+    ui.optionBox = document.createElement('input');
+    ui.optionBox.type = 'checkbox';
+    ui.optionBox.checked = true;
+    ui.optionBox.addEventListener('change', () => { wantSubtitle = ui.optionBox.checked; });
+    const optionText = document.createElement('span');
+    optionText.textContent = '儲存後順便產生字幕草稿（免費，由醫院電腦處理；不會自動公開，核准後學員才看得到）。不需要可取消勾選，之後仍可補做。';
+    ui.option.append(ui.optionBox, optionText);
     ui.status = document.createElement('div');
     ui.status.style.cssText = 'font-size:11px;margin-bottom:8px;max-height:140px;overflow:auto;color:#0f172a;background:#fff;border-radius:10px;display:none';
     ui.actions = document.createElement('div');
     ui.actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
-    panel.append(ui.title, ui.message, ui.timer, ui.audio, ui.status, ui.actions);
+    panel.append(ui.title, ui.message, ui.timer, ui.audio, ui.option, ui.status, ui.actions);
     document.body.appendChild(panel);
   }
 
@@ -148,6 +160,8 @@
     ui.audio.style.display = showAudio ? 'block' : 'none';
     if (state !== 'saving') ui.status.style.display = ui.status.dataset.keep === '1' ? 'block' : 'none';
     ui.timer.style.display = state === 'idle' ? 'none' : 'block';
+    ui.option.style.display = state === 'review' ? 'flex' : 'none';
+    if (ui.optionBox) ui.optionBox.checked = wantSubtitle;
     if (state === 'idle') {
       ui.title.textContent = '🎙️ 老師旁白';
       say('一邊播放投影片一邊講解，系統會記下每一頁的時間，學員開啟教材時會自動跟著翻頁。', 'normal');
@@ -169,7 +183,10 @@
       setActions();
     } else if (state === 'bound') {
       ui.title.textContent = '🎉 旁白已掛上';
-      setActions(button('完成', 'primary', finish));
+      setActions(
+        ...(subtitleQueued || !boundAudioId ? [] : [button('📝 產生字幕草稿', 'plain', () => void queueSubtitle(boundAudioId))]),
+        button('完成', 'primary', finish),
+      );
     }
   }
 
@@ -319,6 +336,8 @@
   }
 
   function finish() {
+    boundAudioId = '';
+    subtitleQueued = false;
     state = 'idle';
     clearRecording();
     render();
@@ -349,21 +368,30 @@
     state = 'bound';
     render();
     say('旁白已掛到這份教材，學員下次開啟就會聽到並自動翻頁。', 'success');
-    if (window.confirm('要順便產生字幕草稿嗎？\n\n字幕不會自動公開；產生後要到「教材製作 → AI 字幕」選取這份旁白，確認文字並按核准，學員才看得到。')) {
-      try {
-        const response = await fetch('/api/media-subtitles/generate', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ materialId: audioId, language: 'zh-TW', label: '繁體中文字幕' }),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || '無法建立字幕工作');
-        say('字幕工作已送出（由醫院那台電腦處理）。完成後請到「教材製作 → AI 字幕」核准。', 'success');
-      } catch (error) {
-        say(`旁白已掛上，但字幕工作沒有建立成功：${error.message}\n之後可到「教材製作 → AI 字幕」自行產生。`, 'error');
-      }
+    boundAudioId = audioId;
+    subtitleQueued = false;
+    if (wantSubtitle) await queueSubtitle(audioId);
+    else say('旁白已掛上。沒有產生字幕；需要時按下方「產生字幕草稿」，或到「教材製作 → AI 字幕」。', 'success');
+    render();
+  }
+
+  async function queueSubtitle(audioId) {
+    say('字幕草稿送出中…');
+    try {
+      const response = await fetch('/api/media-subtitles/generate', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materialId: audioId, language: 'zh-TW', label: '繁體中文字幕' }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || '無法建立字幕工作');
+      subtitleQueued = true;
+      say('旁白已掛上，字幕草稿已送出（醫院電腦處理，免費）。完成後請到「教材製作 → AI 字幕」確認文字並核准，學員才看得到。', 'success');
+    } catch (error) {
+      say(`旁白已掛上，但字幕草稿沒有建立成功：${error.message}\n可按「產生字幕草稿」重試，或之後到「教材製作 → AI 字幕」。`, 'error');
     }
+    render();
   }
 
   async function save() {

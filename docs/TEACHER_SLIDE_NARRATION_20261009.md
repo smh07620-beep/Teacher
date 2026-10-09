@@ -21,8 +21,9 @@ the voice, the viewer turns pages in step, and teacher-approved captions are sho
    through the Render Web process) and becomes an ordinary audio material.
 4. `POST /api/materials/<source_id>/teacher-narration` binds it
    (`teacher_app/materials/teacher_narration_routes.py`).
-5. Optionally the teacher queues an AI subtitle draft for the audio material through the
-   existing `POST /api/media-subtitles/generate`; review and approval stay in
+5. The review panel has a checkbox 「儲存後順便產生字幕草稿」 (default on). If on, the draft is
+   queued right after binding; if off, a 「產生字幕草稿」 button stays in the panel and the
+   AI 字幕 page remains available. Queued through the existing `POST /api/media-subtitles/generate`; review and approval stay in
    「教材製作 → AI 字幕」. Learners only ever receive the **approved** version.
 6. Learners: `learner-narration-1100.js` plays the voice when the material opens, follows
    the timeline (stops following when the learner turns a page by hand; a button resumes

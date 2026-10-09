@@ -218,6 +218,12 @@ class FrontendWiringTests(unittest.TestCase):
         self.assertIn("__teacherNarrationRecording", self.player)
         self.assertIn("病歷號", self.recorder)
 
+    def test_subtitle_draft_is_opt_out_checkbox_with_retry_button(self):
+        self.assertIn("wantSubtitle", self.recorder)
+        self.assertIn("queueSubtitle", self.recorder)
+        self.assertIn("/api/media-subtitles/generate", self.recorder)
+        self.assertNotIn("window.confirm('要順便產生字幕", self.recorder)
+
     def test_recorder_cannot_recurse_between_tick_and_stop(self):
         self.assertIn("stopping", self.recorder)
 
