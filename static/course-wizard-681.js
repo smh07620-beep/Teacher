@@ -362,6 +362,17 @@ function stepTwo(){
 function paintCourseMaterials(){
   const list=document.querySelector('[data-cw681-course-materials-list]');
   if(!list)return;
+  // 清單內容是讀完教材後才畫出來的，按鈕當時還不存在；用事件委派綁在清單本身，
+  // 之後重畫多少次按鈕都有效。
+  if(list.dataset.cwMatBound!=='1'){
+    list.dataset.cwMatBound='1';
+    list.addEventListener('click',event=>{
+      const button=event.target.closest?.('[data-cw-mat-action]');
+      if(!button||!list.contains(button))return;
+      event.preventDefault();
+      void courseMaterialAction(button.dataset.cwMatAction,button.dataset.cwMatId);
+    });
+  }
   const rows=state.courseMaterials||[];
   if(!rows.length){list.innerHTML='<p class="rounded-lg bg-slate-50 px-3 py-2 text-slate-500">這門課目前沒有教材。可在上方上傳，或用 AI 製作新增。</p>';return;}
   list.innerHTML=rows.map(m=>{
@@ -392,7 +403,7 @@ async function courseMaterialAction(action,id){
 }
 
 function bindStepTwoControls(){
-  document.querySelectorAll('[data-cw-mat-action]').forEach(button=>button.addEventListener('click',()=>{void courseMaterialAction(button.dataset.cwMatAction,button.dataset.cwMatId);}));
+
   document.querySelectorAll('[data-cw-ai-plan]').forEach(button=>button.addEventListener('click',()=>{
     state.aiPlan=button.dataset.cwAiPlan||'none';render();loadMaterials();
   }));
