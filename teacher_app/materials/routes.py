@@ -271,10 +271,50 @@ def register_material_catalog_routes(owner, *, paths=None, storage_runtime=None)
         )
         return jsonify(payload), 201
 
+    AI_NARRATIONS_KEPT = 2
+
+    def api_prune_ai_narrations(slide_id):
+        """Keep only the newest AI voices of one source material; delete older ones.
+
+        Called by the teacher UI right after a new AI voice finishes so teachers never
+        have to clean up piles of old voices (they only see/remove the newest one).
+        """
+        denied = require_admin()
+        if denied:
+            return denied
+        source = repository.get_material(slide_id)
+        if not source:
+            return jsonify({"error": "找不到來源教材"}), 404
+        voices = [
+            item for item in repository.list_uploaded_materials(include_inactive=True)
+            if str((item.get("storageMeta") or {}).get("mediaKind") or "") == "ai_narration"
+            and str((item.get("storageMeta") or {}).get("sourceMaterialId") or "") == str(slide_id)
+        ]
+        voices.sort(key=lambda item: (str(item.get("dateAdded") or ""), str(item.get("id") or "")), reverse=True)
+        deleted, failed = [], []
+        for old in voices[AI_NARRATIONS_KEPT:]:
+            old_id = str(old.get("id") or "")
+            try:
+                service.delete_material(old_id, paths=paths, storage_runtime=runtime)
+            except Exception:  # keep going; one stuck file must not block the rest
+                failed.append(old_id)
+                continue
+            deleted.append(old_id)
+            audit.record_event(
+                actor=actor(),
+                action="material.ai_narration.prune",
+                target_type="material",
+                target_id=old_id,
+                group=str(old.get("group") or ""),
+                before=snapshot(old),
+            )
+        return jsonify({"ok": True, "kept": [str(v.get("id") or "") for v in voices[:AI_NARRATIONS_KEPT]], "deleted": deleted, "failed": failed})
+
     app.add_url_rule("/api/slides", endpoint="api_list_slides", view_func=api_list_slides, methods=["GET"])
     app.add_url_rule("/api/slides/admin", endpoint="api_admin_slides", view_func=api_admin_slides, methods=["GET"])
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_update_slide", view_func=api_update_slide, methods=["PATCH"])
     app.add_url_rule("/api/slides/<slide_id>", endpoint="api_delete_slide", view_func=api_delete_slide, methods=["DELETE"])
+    app.add_url_rule("/api/slides/<slide_id>/prune-ai-narrations", endpoint="api_prune_ai_narrations", view_func=api_prune_ai_narrations, methods=["POST"])
     app.add_url_rule("/api/slides/<slide_id>/purge-readiness", endpoint="api_material_purge_readiness", view_func=api_material_purge_readiness, methods=["GET"])
     app.add_url_rule("/api/slides/<slide_id>/purge", endpoint="api_material_purge", view_func=api_material_purge, methods=["POST"])
     app.add_url_rule("/api/slides/<slide_id>/versions", endpoint="api_list_material_versions", view_func=api_list_material_versions, methods=["GET"])

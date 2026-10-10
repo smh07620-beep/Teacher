@@ -272,6 +272,12 @@
             title: String(doneMaterial.title || doneMaterial.filename || 'AI 講稿配音'),
           }}));
         } catch (_) {}
+        try {
+          const sourceId = String(data?.result?.material?.storageMeta?.sourceMaterialId || data.materialId || '');
+          if (sourceId) await fetch(`/api/slides/${encodeURIComponent(sourceId)}/prune-ai-narrations`, {
+            method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:'{}',
+          });
+        } catch (_) {}
         window.invalidateAdminMaterialsCache?.();
         void window.renderAdminCourseMaterialHub?.(true);
         void window.renderSlidesGrid?.();
