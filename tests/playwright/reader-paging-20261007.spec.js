@@ -76,7 +76,8 @@ test('a failed page image shows a visible retry that recovers without losing the
   await expect(page.locator('#slide-page-error')).toBeHidden();
 
   await page.locator('#slide-next-btn').click();
-  await expect(page.locator('#slide-page-error')).toBeVisible();
+  // The reader quietly auto-retries a failed page (0.7 s + 1.6 s + 3.2 s) before showing the error.
+  await expect(page.locator('#slide-page-error')).toBeVisible({ timeout: 15000 });
   await expect(page.locator('#slide-page-error')).toContainText('重新載入此頁');
   // The reader still knows which page the learner is on.
   await expect(page.locator('#slide-viewer-page-info')).toContainText('第 2 / 5 頁');
