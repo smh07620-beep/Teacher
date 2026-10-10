@@ -123,7 +123,10 @@ def register_teacher_narration_routes(owner):
             return jsonify({"error": "旁白錄音必須是音訊教材。"}), 400
         audio_meta = dict(audio.get("storageMeta") or {})
         bound_to = str(audio_meta.get("sourceMaterialId") or "")
-        if audio_meta.get("mediaKind") and audio_meta.get("mediaKind") != MEDIA_KIND:
+        # The Worker stamps every transcoded upload with the generic kind "audio"/"video";
+        # only a specific other purpose (e.g. ai_narration) makes the file unavailable here.
+        existing_kind = str(audio_meta.get("mediaKind") or "").strip().lower()
+        if existing_kind and existing_kind not in {MEDIA_KIND, "audio", "video"}:
             return jsonify({"error": "這份音訊教材已被其他功能使用，不能當作老師旁白。"}), 409
         if bound_to and bound_to != source_id:
             return jsonify({"error": "這份錄音已掛在另一份教材上。"}), 409

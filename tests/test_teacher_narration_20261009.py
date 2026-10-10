@@ -175,6 +175,11 @@ class BindRouteTests(unittest.TestCase):
         self.materials["audio-1"] = _audio(storageMeta={"mediaKind": "teacher_narration", "sourceMaterialId": "slide-9"})
         self.assertEqual(self._post().status_code, 409)
 
+    def test_worker_transcoded_audio_with_generic_kind_can_be_bound(self):
+        # The Worker stamps uploads with mediaKind "audio"; that must not block the bind.
+        self.materials["audio-1"] = _audio(storageMeta={"mediaKind": "audio"})
+        self.assertEqual(self._post().status_code, 200)
+
     def test_rebinding_same_pair_is_allowed_to_replace_timeline(self):
         self.materials["audio-1"] = _audio(storageMeta={"mediaKind": "teacher_narration", "sourceMaterialId": "slide-1"})
         self.assertEqual(self._post().status_code, 200)
