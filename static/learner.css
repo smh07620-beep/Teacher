@@ -478,3 +478,23 @@ body{
 @media(max-width:720px){
   .course-material-row>div.min-w-0.flex-1{min-width:calc(100% - 3rem)}
 }
+
+/* 2026-10-10 course accordion clarity: obvious expand/collapse label, status badge,
+ * one open unit at a time (teaching.js), and a sticky title for the open unit. */
+#course-overview .course-learning-card{overflow:clip;scroll-margin-top:calc(var(--course-sticky-top,72px) + 8px)}
+#course-overview .course-learning-summary{transition:background-color .15s ease}
+#course-overview .course-learning-summary:hover{background:#eef8f6}
+#course-overview .course-learning-summary:focus-visible{outline:3px solid #c18a29;outline-offset:-3px}
+#course-overview .course-learning-toggle{flex:none;display:inline-flex;align-items:center;gap:.4rem;color:#006b64;font-size:.78rem;font-weight:800;white-space:nowrap}
+#course-overview .course-learning-toggle .when-open{display:none}
+#course-overview .course-learning-card[open] .course-learning-toggle .when-closed{display:none}
+#course-overview .course-learning-card[open] .course-learning-toggle .when-open{display:inline}
+#course-overview .course-learning-toggle .course-learning-chevron{width:2rem;height:2rem;background:#d9efec;border:1px solid #9fd0ca}
+#course-overview .course-learning-card[open]>.course-learning-summary{position:sticky;top:var(--course-sticky-top,72px);z-index:4;background:linear-gradient(135deg,#f3fbfa,#e9f6f4);border-bottom:1px solid #cfe6e2;box-shadow:0 4px 10px rgba(15,51,66,.07)}
+.course-state{display:inline-flex;align-items:center;flex:none;border:1px solid transparent;border-radius:999px;padding:.1rem .55rem;font-size:.68rem;font-weight:800;line-height:1.5;white-space:nowrap}
+.course-state-todo{background:#f1f5f9;color:#475569;border-color:#dbe4e8}
+.course-state-doing{background:#e0f2fe;color:#075985;border-color:#bae0f5}
+.course-state-done{background:#dcfce7;color:#166534;border-color:#b7e8c8}
+.course-continue-bar .teaching-primary{width:100%;text-align:left}
+@media(min-width:640px){.course-continue-bar .teaching-primary{width:auto;max-width:100%}}
+@media(max-width:640px){#course-overview .course-learning-toggle .when-closed,#course-overview .course-learning-toggle .when-open{font-size:.72rem}}
