@@ -50,6 +50,9 @@
   let subtitleQueued = false;
   let pendingBind = null; // { audioId } kept so a failed bind can be retried without re-uploading
   let tickId = 0;
+  let armedAt = 0; // when open() armed the recorder
+  let viewerSeen = false; // the viewer has actually been seen open since arming
+  let preload = { done: 0, total: 0, ready: false, imgs: [], token: 0 };
   let stopping = false;
   let panel = null;
   const ui = {};
@@ -165,7 +168,16 @@
     if (state === 'idle') {
       ui.title.textContent = '🎙️ 老師旁白';
       say('一邊播放投影片一邊講解，系統會記下每一頁的時間，學員開啟教材時會自動跟著翻頁。', 'normal');
-      setActions(button('🎙 開始錄製旁白', 'primary', () => void start()), button('✕ 不錄了', 'plain', disarm));
+      const waiting = !eligibleMaterial();
+      const loading = preload.total > 0 && !preload.ready;
+      const startBtn = button(waiting ? '教材載入中…' : loading ? `準備投影片 ${preload.done}/${preload.total}…` : '🎙 開始錄製旁白', 'primary', () => void start());
+      if (waiting || loading) { startBtn.disabled = true; startBtn.style.opacity = '.55'; }
+      const nodes = [startBtn];
+      if (loading) nodes.push(button('不等了，直接錄', 'plain', () => void start()));
+      nodes.push(button('✕ 不錄了', 'plain', disarm));
+      setActions(...nodes);
+      if (waiting) say('正在開啟教材，請稍候…', 'normal');
+      else if (loading) say('正在先把每一頁載入，錄音時翻頁才不會卡住。', 'normal');
     } else if (state === 'recording') {
       ui.title.textContent = '🔴 錄音中';
       say('請照常翻頁講解（按鈕、縮圖、方向鍵都可以）。講完按「停止」。');
@@ -193,9 +205,49 @@
   function showPanelIfNeeded() {
     buildPanel();
     const busy = state !== 'idle' && state !== 'bound';
-    if (armed && state === 'idle' && !viewerOpen()) disarm();
-    const eligible = !!eligibleMaterial();
-    panel.style.display = (eligible || busy || state === 'bound') ? 'block' : 'none';
+    if (viewerOpen()) viewerSeen = true;
+    if (armed && state === 'idle') {
+      // Only give up when the viewer was open and then closed, or never opened within 12 s.
+      if ((viewerSeen && !viewerOpen()) || (!viewerSeen && performance.now() - armedAt > 12000)) { disarm(); return; }
+      const ready = !!eligibleMaterial();
+      if (ready && preload.token === 0) startPreload();
+      if (ui.actions && ui.actions.dataset.ready !== String(ready) + preload.ready + preload.done) {
+        ui.actions.dataset.ready = String(ready) + preload.ready + preload.done;
+        render();
+      }
+    }
+    panel.style.display = (armed || busy || state === 'bound') ? 'block' : 'none';
+  }
+
+  // Load every page image once before recording so page turns are instant while talking.
+  function startPreload() {
+    const current = viewerState();
+    const total = Number(current.pageCount || (current.images || []).length || 0);
+    const token = ++preload.token;
+    preload = { done: 0, total, ready: total === 0, imgs: [], token };
+    if (!total) return;
+    const urlFor = i => current.mode === 'pdf' && typeof window.presentationPreviewPageUrl === 'function'
+      ? window.presentationPreviewPageUrl(i + 1)
+      : (current.images || [])[i];
+    let next = 0;
+    const worker = async () => {
+      while (next < total && preload.token === token) {
+        const url = urlFor(next++);
+        if (url) {
+          await new Promise(resolve => {
+            const img = new Image();
+            preload.imgs.push(img);
+            img.onload = img.onerror = () => resolve();
+            img.src = url;
+            setTimeout(resolve, 20000);
+          });
+        }
+        if (preload.token !== token) return;
+        preload.done += 1;
+        if (preload.done >= total) preload.ready = true;
+      }
+    };
+    void Promise.all([worker(), worker(), worker()]).then(() => { if (preload.token === token) { preload.ready = true; showPanelIfNeeded(); } });
   }
 
   function releaseStream() {
@@ -451,6 +503,8 @@
     if (state !== 'idle' && state !== 'bound') return;
     armed = false;
     material = null;
+    viewerSeen = false;
+    preload = { done: 0, total: 0, ready: false, imgs: [], token: 0 };
     window.__teacherNarrationRecording = false;
     render();
     showPanelIfNeeded();
@@ -490,10 +544,16 @@
     state = 'idle';
     material = found;
     armed = true;
+    armedAt = performance.now();
+    viewerSeen = false;
+    preload = { done: 0, total: 0, ready: false, imgs: [], token: 0 };
     window.__teacherNarrationRecording = true; // keep the existing narration quiet while preparing
     render();
     if (typeof window.openMaterial !== 'function') { disarm(); window.alert('教材檢視器尚未載入，請重新整理頁面。'); return false; }
     await window.openMaterial(found.id);
+    // openMaterial may resolve before the viewer is on screen; wait for it (up to 8 s).
+    for (let waited = 0; waited < 8000 && !viewerOpen(); waited += 100) await new Promise(r => setTimeout(r, 100));
+    viewerSeen = viewerOpen();
     // A plain PDF opens in continuous-scroll mode, which has no page turns to record.  For narration
     // we re-open the same file page by page (the viewer already renders Word PDFs this way).
     const opened = viewerState();
@@ -507,13 +567,12 @@
         readerMode: 'paged_document',
       });
     }
-    // Some readers (continuous PDF scrolling) have no page turns; tell the teacher instead of failing silently.
-    setTimeout(() => {
-      if (armed && state === 'idle' && viewerOpen() && !eligibleMaterial()) {
-        window.alert('這份教材目前是連續捲動的閱讀模式，沒有「翻頁」可以同步，無法錄製旁白。');
-        disarm();
-      }
-    }, 1500);
+    if (!viewerOpen()) { disarm(); window.alert('教材沒有成功開啟，請再按一次「錄旁白」。'); return false; }
+    if (!PAGE_MODES.has(String(viewerState().readerMode || ''))) {
+      window.alert('這份教材目前是連續捲動的閱讀模式，沒有「翻頁」可以同步，無法錄製旁白。');
+      disarm();
+      return false;
+    }
     showPanelIfNeeded();
     return true;
   }
