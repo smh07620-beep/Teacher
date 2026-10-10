@@ -19,7 +19,7 @@ import wave
 from typing import Any, Callable
 
 from teacher_app.materials import repository as material_repository
-from teacher_app.materials import tts_text
+from teacher_app.materials import script_alignment, tts_text
 from teacher_app.storage import providers, r2_budget, r2_ledger
 
 
@@ -470,35 +470,61 @@ def _max_chars() -> int:
     return max(1000, min(50000, int(os.environ.get("KOKORO_TTS_MAX_CHARS", "12000") or 12000)))
 
 
-def _segment_plan(script: dict, source: dict) -> list[str] | None:
-    """Per-slide paragraphs when the script lines up one-to-one with the slides.
-
-    The script generator is told "paragraph k = slide k".  Only when the number
-    of paragraphs equals the material's page count is the narration split per
-    slide; otherwise (hand-edited script, non-slide material, AI miscount) the
-    narration stays one continuous track exactly as before.
-    """
-    segments = tts_text.split_script_segments(str(script.get("body") or ""))
+def _page_count(source: dict) -> int:
     try:
-        page_count = int(source.get("pageCount") or 0)
+        return int(source.get("pageCount") or 0)
     except (TypeError, ValueError):
-        page_count = 0
-    if page_count >= 1 and len(segments) == page_count and any(segments):
+        return 0
+
+
+def _page_slides(source: dict, page_count: int) -> list[dict]:
+    """Per-page text from the search index (if built) so alignment can follow content."""
+    texts = [""] * page_count
+    try:
+        from teacher_app.learning import repository as learning_repository
+
+        for row in learning_repository.get_material_text_rows(str(source.get("id") or ""), limit=max(100, page_count + 5)):
+            index = int(row.get("page_no") or 0) - 1
+            if 0 <= index < page_count:
+                texts[index] = f"{row.get('title') or ''} {row.get('text') or ''}".strip()
+    except Exception:
+        pass
+    return [{"title": text} for text in texts]
+
+
+def _segment_plan(script: dict, source: dict) -> list[str] | None:
+    """One spoken segment per slide whenever the material has pages.
+
+    The script generator is told "paragraph k = slide k".  When the teacher has
+    edited the script so the paragraph count no longer equals the page count, the
+    paragraphs are re-assigned to slides in order (by content similarity with the
+    slide text when it is indexed, otherwise evenly by length) so that the
+    narration still follows the slide the learner is looking at.
+    """
+    body = str(script.get("body") or "")
+    segments = tts_text.split_script_segments(body)
+    page_count = _page_count(source)
+    if page_count < 1 or not any(segments):
+        return None
+    if len(segments) == page_count:
         return segments
-    return None
+    spoken_body = "\n\n".join(text for text in segments if text)
+    aligned = script_alignment.align_script_to_slides(spoken_body, _page_slides(source, page_count))
+    plan = [str(text or "").replace("\n", " ").strip() for text in aligned.get("segments") or []]
+    return plan if len(plan) == page_count and any(plan) else None
 
 
 def _segment_note(script: dict, source: dict) -> str:
-    """Why the narration is one continuous track (empty when it was split per slide)."""
+    """Teacher-facing remark about how the script was mapped to slides (empty when 1:1)."""
     segments = tts_text.split_script_segments(str(script.get("body") or ""))
-    try:
-        page_count = int(source.get("pageCount") or 0)
-    except (TypeError, ValueError):
-        page_count = 0
-    if page_count >= 1 and segments and len(segments) != page_count:
-        return f"講稿有 {len(segments)} 段、教材有 {page_count} 張，數量不同，語音維持整段播放（不會逐張停住）。請回講稿，用「空白行」把每一張投影片的講解分成一段，修改後儲存、重新核准，再重新產生語音。"
+    page_count = _page_count(source)
     if page_count < 1:
         return "來源教材不是投影片或頁數未知，語音維持整段播放。"
+    if segments and len(segments) != page_count:
+        return (
+            f"講稿有 {len(segments)} 段、教材有 {page_count} 張，數量不同；系統已依內容自動把講稿分配到各張。"
+            "請抽查幾張是否對得上；要精準控制，請用「空白行」把每一張投影片的講解分成一段，儲存、重新核准後再產生語音。"
+        )
     return ""
 
 
@@ -913,7 +939,7 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
         "replayed": False,
         "segmented": bool(segments),
         "segmentCount": len(segments),
-        "segmentNote": "" if segments else _segment_note(script, source),
+        "segmentNote": _segment_note(script, source),
     }
 
 

@@ -115,7 +115,9 @@ class SegmentPlanTests(unittest.TestCase):
     def test_split_per_slide_only_when_paragraphs_match_page_count(self):
         script = {"body": "甲。\n\n乙。\n\n丙。"}
         self.assertEqual(runtime._segment_plan(script, {"pageCount": 3}), ["甲。", "乙。", "丙。"])
-        self.assertIsNone(runtime._segment_plan(script, {"pageCount": 4}))
+        aligned = runtime._segment_plan(script, {"pageCount": 4})  # mismatch → auto-aligned, still 4 slides
+        self.assertEqual(len(aligned), 4)
+        self.assertEqual(" ".join(aligned).replace("  ", " ").count("。"), 3)
         self.assertIsNone(runtime._segment_plan(script, {"pageCount": 0}))
         self.assertIsNone(runtime._segment_plan(script, {}))
 
@@ -177,13 +179,13 @@ class GenerateAudioIntegrationTests(unittest.TestCase):
         with wave.open(io.BytesIO(wav_bytes), "rb") as wav:
             self.assertAlmostEqual(wav.getnframes() / wav.getframerate(), 2.4, places=2)
 
-    def test_mismatching_script_stays_one_continuous_track(self):
-        result, entry, _wav, spoken = self._run("甲。\n\n乙。\n\n丙。", 5)
-        self.assertFalse(result["segmented"])
+    def test_mismatching_script_is_auto_aligned_to_every_slide(self):
+        result, entry, _wav, spoken = self._run("甲甲甲。\n\n乙乙乙。\n\n丙丙丙。", 5)
+        self.assertTrue(result["segmented"])
+        self.assertEqual(result["segmentCount"], 5)
         self.assertIn("5", result["segmentNote"])
         meta = json.loads(entry["storage_meta"])
-        self.assertNotIn("segments", meta)
-        self.assertEqual(len(spoken), 1)
+        self.assertEqual([seg["page"] for seg in meta["segments"]], [0, 1, 2, 3, 4])
 
 
 class LearnerPayloadTests(unittest.TestCase):
