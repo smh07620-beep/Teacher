@@ -704,11 +704,11 @@ function prefetchAroundPresentationPage(page){
     prefetchPresentationPage(page-1);
 }
 
-function updateSlideViewerPresentationPage(page,total){
+function updateSlideViewerPresentationPage(page,total,attempt=0){
     const img=document.getElementById('slide-viewer-image');
     if(!img)return;
     const serial=++slidePresentationImageSerial;
-    const wanted=presentationPreviewPageUrl(page);
+    const wanted=presentationPreviewPageUrl(page)+(attempt?(presentationPreviewPageUrl(page).includes('?')?'&':'?')+'t='+attempt:'');
     const loader=new Image();
     loader.decoding='async';
     loader.onload=()=>{
@@ -737,6 +737,13 @@ function updateSlideViewerPresentationPage(page,total){
     };
     loader.onerror=()=>{
         if(serial!==slidePresentationImageSerial)return;
+        // Page renders occasionally fail with a transient 502; retry quietly before showing an error.
+        if(attempt<3){
+            const hint=document.getElementById('reader-learning-context');
+            if(hint)hint.textContent='頁面載入較慢，正在自動重試…';
+            setTimeout(()=>{ if(serial===slidePresentationImageSerial&&slideViewerState.index+1===page){ slidePresentationImageSerial=serial-1; updateSlideViewerPresentationPage(page,total,attempt+1); } },[700,1600,3200][attempt]);
+            return;
+        }
         const hint=document.getElementById('reader-learning-context');
         if(hint)hint.textContent=slideViewerState.readerMode==='paged_document'?'Word 文件頁面載入失敗，仍保留目前頁面，可再試一次。':'投影片頁面載入失敗，仍保留目前頁面，可再試一次。';
         showSlidePageError(`第 ${page} 頁載入失敗，畫面仍停在上一頁。請重試；若持續失敗，請通知教師確認教材轉檔狀態。`);

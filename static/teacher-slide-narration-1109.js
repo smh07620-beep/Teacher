@@ -234,13 +234,18 @@
       while (next < total && preload.token === token) {
         const url = urlFor(next++);
         if (url) {
-          await new Promise(resolve => {
-            const img = new Image();
-            preload.imgs.push(img);
-            img.onload = img.onerror = () => resolve();
-            img.src = url;
-            setTimeout(resolve, 20000);
-          });
+          for (let attempt = 0; attempt < 3 && preload.token === token; attempt += 1) {
+            const ok = await new Promise(resolve => {
+              const img = new Image();
+              preload.imgs.push(img);
+              img.onload = () => resolve(true);
+              img.onerror = () => resolve(false);
+              img.src = url; // same URL on retry so the browser cache serves the viewer later
+              setTimeout(() => resolve(false), 20000);
+            });
+            if (ok) break;
+            await new Promise(r => setTimeout(r, 800 * (attempt + 1))); // transient 502 from the page renderer
+          }
         }
         if (preload.token !== token) return;
         preload.done += 1;
