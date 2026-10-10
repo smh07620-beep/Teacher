@@ -196,7 +196,8 @@
               event.preventDefault();event.stopPropagation();
               const recorder=window.TeacherSlideNarration1109;
               const id=narrate.dataset.materialNarrate;
-              const material=(Array.isArray(state.materials)?state.materials:[]).find(item=>String(item.id)===String(id))||{id};
+              const hubState=box._adminCourseMaterialState||{};
+              const material=(Array.isArray(hubState.materials)?hubState.materials:[]).find(item=>String(item.id)===String(id))||{id};
               if(recorder&&typeof recorder.open==='function')void recorder.open(material);
               else alert('此帳號沒有錄製旁白的權限，或錄製功能尚未載入，請重新整理頁面。');
               return;
