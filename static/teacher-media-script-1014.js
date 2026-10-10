@@ -21,6 +21,62 @@
   }, 1000);
 
 
+  // 講稿 ↔ 投影片頁碼對照：講稿用「空白行」分段，第 k 段對應第 k 張。老師看得到每段屬於哪一頁，
+  // 游標點到哪一段就顯示「目前在第幾頁」。段數與頁數不同時明確警告（語音會自動分配，但可能對不準）。
+  function scriptParagraphs1040(text) {
+    return String(text || '').replace(/\r\n?/g, '\n').split(/\n\s*\n/)
+      .map(block => block.split('\n').filter(line => line.trim() && !line.trim().startsWith('※')).join(' ').trim())
+      .filter((value, index, list) => value || index < list.length);
+  }
+  function scriptPageCount1040() {
+    const id = typeof currentMaterialId === 'function' ? currentMaterialId() : '';
+    const list = typeof materials !== 'undefined' && Array.isArray(materials) ? materials : [];
+    const item = list.find(entry => String(entry.id) === String(id));
+    const count = Number(item && item.pageCount);
+    return Number.isInteger(count) && count > 0 ? count : 0;
+  }
+  function paintPageMap1040() {
+    const area = document.getElementById('teacher-script-body-1014');
+    const host = document.getElementById('teacher-script-pagemap-1040');
+    if (!area || !host) return;
+    const text = String(area.value || '');
+    const blocks = text.replace(/\r\n?/g, '\n').split(/\n\s*\n/).filter(block => block.split('\n').some(line => line.trim() && !line.trim().startsWith('※')));
+    const total = scriptPageCount1040();
+    if (!blocks.length) { host.classList.add('hidden'); return; }
+    host.classList.remove('hidden');
+    // 游標所在段落
+    const caret = Number(area.selectionStart || 0);
+    let cursorIndex = 0, offset = 0;
+    const pieces = text.replace(/\r\n?/g, '\n').split(/\n\s*\n/);
+    const kept = [];
+    pieces.forEach(piece => {
+      const start = text.indexOf(piece, offset);
+      offset = start + piece.length;
+      if (piece.split('\n').some(line => line.trim() && !line.trim().startsWith('※'))) kept.push({start, end: offset});
+    });
+    kept.forEach((range, index) => { if (caret >= range.start) cursorIndex = index; });
+    const matches = total > 0 && blocks.length === total;
+    const head = total
+      ? (matches
+        ? `✅ 講稿 ${blocks.length} 段 = 教材 ${total} 頁，一頁一段。`
+        : `⚠️ 講稿 ${blocks.length} 段，但教材有 ${total} 頁。語音會自動分配到各頁，可能對不準；建議用「空白行」把每一頁的講解分成一段。`)
+      : `講稿共 ${blocks.length} 段（此教材沒有頁數資料，語音會整段播放）。`;
+    const rows = blocks.map((block, index) => {
+      const label = String(block.split('\n').filter(line => line.trim()).join(' ').trim());
+      const short = label.length > 34 ? label.slice(0, 34) + '…' : label;
+      const over = total && index >= total;
+      const active = index === cursorIndex;
+      return `<li class="flex gap-2 rounded-lg px-2 py-1 ${active ? 'bg-indigo-100 font-bold' : ''} ${over ? 'text-rose-700' : ''}"><span class="shrink-0 rounded-full bg-white border border-slate-200 px-2 text-[10px] font-black">${over ? '多出' : '第 ' + (index + 1) + ' 頁'}</span><span class="truncate">${escapeHtml(short)}</span></li>`;
+    }).join('');
+    const empty = total && blocks.length < total ? `<li class="px-2 py-1 text-amber-800">第 ${blocks.length + 1}${blocks.length + 1 < total ? '～' + total : ''} 頁沒有對應講稿（會是靜音）。</li>` : '';
+    const where = total ? `游標目前在：第 ${Math.min(cursorIndex + 1, total)} 頁的講稿` : `游標目前在：第 ${cursorIndex + 1} 段`;
+    host.innerHTML = `<div class="text-[11px] font-bold ${matches ? 'text-emerald-800' : 'text-amber-900'}">${escapeHtml(head)}</div><div class="mt-1 text-[11px] font-black text-indigo-800">${escapeHtml(where)}</div><ol class="mt-1 max-h-48 space-y-0.5 overflow-auto text-[11px] text-slate-700">${rows}${empty}</ol>`;
+  }
+  ['input', 'click', 'keyup', 'focusin'].forEach(type => document.addEventListener(type, event => {
+    if (event.target && event.target.id === 'teacher-script-body-1014') { try { paintPageMap1040(); } catch (_) {} }
+  }));
+  setInterval(() => { try { paintPageMap1040(); } catch (_) {} }, 1500);
+
   const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));
   const roles = R.roles instanceof Set ? R.roles : new Set();
   const has = permission => typeof R.hasPermission === 'function' && R.hasPermission(permission);
@@ -691,7 +747,7 @@
       <div class="flex flex-col sm:flex-row gap-2"><input id="teacher-script-focus-1014" class="learning-input flex-1" maxlength="500" placeholder="選填：特別聚焦，例如抗體鑑定判讀步驟、QC 異常處理"><button id="teacher-script-generate-1014" type="button" class="rounded-xl bg-indigo-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">✨ 匯入並產生講稿</button></div>
       <div id="teacher-script-status-1014" class="text-xs text-slate-600">選擇教材後即可產生講稿。</div>
       <div id="teacher-script-source-1014" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-slate-700"></div>
-      <div id="teacher-script-editor-1014" class="hidden space-y-3"><label class="block text-xs font-bold text-slate-600">講稿標題<input id="teacher-script-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-xs font-bold text-slate-600">講稿內容<textarea id="teacher-script-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-7" placeholder="AI 草稿會出現在這裡；請由老師逐段確認與修改。"></textarea><span id="teacher-script-duration-1040" class="mt-1 block text-[11px] font-medium text-slate-500" aria-live="polite"></span></label><div class="flex flex-wrap items-center gap-2"><button id="teacher-script-approve-1014" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">✅ 教師核准講稿，繼續配音</button><button id="teacher-script-save-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">💾 儲存草稿</button><span class="text-[11px] text-slate-500">核准後才可作為下一階段 AI 語音／影片的正式來源。</span></div><div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2"><label class="block text-xs font-bold text-slate-600">不滿意？告訴 AI 怎麼修，直接重新產出（來源不用重新匯入）<input id="teacher-script-revision-1032" maxlength="400" class="learning-input mt-1" placeholder="例如：更精簡、加強 QC 異常處理"></label><div class="flex flex-wrap gap-2"><button id="teacher-script-regenerate-1032" type="button" class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-xs font-black text-cyan-800">↻ 依修改要求重新產出</button><button id="teacher-script-discard-1032" type="button" class="rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-black text-rose-700">🗑 放棄這份草稿</button></div></div></div></div>
+      <div id="teacher-script-editor-1014" class="hidden space-y-3"><label class="block text-xs font-bold text-slate-600">講稿標題<input id="teacher-script-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-xs font-bold text-slate-600">講稿內容<textarea id="teacher-script-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-7" placeholder="AI 草稿會出現在這裡；請由老師逐段確認與修改。"></textarea><span id="teacher-script-duration-1040" class="mt-1 block text-[11px] font-medium text-slate-500" aria-live="polite"></span></label><div id="teacher-script-pagemap-1040" class="hidden rounded-xl border border-indigo-100 bg-indigo-50/60 p-3" aria-live="polite"></div><div class="flex flex-wrap items-center gap-2"><button id="teacher-script-approve-1014" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">✅ 教師核准講稿，繼續配音</button><button id="teacher-script-save-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">💾 儲存草稿</button><span class="text-[11px] text-slate-500">核准後才可作為下一階段 AI 語音／影片的正式來源。</span></div><div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2"><label class="block text-xs font-bold text-slate-600">不滿意？告訴 AI 怎麼修，直接重新產出（來源不用重新匯入）<input id="teacher-script-revision-1032" maxlength="400" class="learning-input mt-1" placeholder="例如：更精簡、加強 QC 異常處理"></label><div class="flex flex-wrap gap-2"><button id="teacher-script-regenerate-1032" type="button" class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-xs font-black text-cyan-800">↻ 依修改要求重新產出</button><button id="teacher-script-discard-1032" type="button" class="rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-black text-rose-700">🗑 放棄這份草稿</button></div></div></div></div>
       <div class="border-t border-slate-100 pt-4"><div class="flex items-center justify-between gap-2"><h5 class="text-sm font-black text-slate-900">已儲存講稿</h5><span class="text-[11px] text-slate-400">草稿／已核准</span></div><div id="teacher-script-saved-1014" class="mt-2 grid gap-2"><p class="text-xs text-slate-400">選擇教材後會顯示已儲存講稿。</p></div></div>`;
     media.prepend(section);
     ensureCompactScriptLayout(section);
