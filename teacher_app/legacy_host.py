@@ -1231,7 +1231,11 @@ def set_browser_cache_policy(response):
     path = request.path.lower()
     if path.startswith("/api/") or path in {"/", "/internal", "/pgy", "/login", "/system"}:
         response.headers["Cache-Control"] = "no-store"
-    elif path.endswith((".css", ".js", ".png", ".jpg", ".jpeg", ".webp", ".svg")):
+    elif path.endswith((".css", ".js")):
+        # Script/style URLs are unversioned: always revalidate (cheap 304) so fixes reach
+        # users immediately instead of running yesterday's cached code for up to a day.
+        response.headers["Cache-Control"] = "no-cache"
+    elif path.endswith((".png", ".jpg", ".jpeg", ".webp", ".svg")):
         response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
     return response
 

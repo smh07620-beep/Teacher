@@ -53,7 +53,7 @@ class ProtectedMediaCachePolicyTests(unittest.TestCase):
         self.assertEqual(self.client.get("/view/m1").headers["Cache-Control"], "no-store")
 
     def test_versioned_static_assets_and_api_policy_is_unchanged(self):
-        self.assertIn("max-age=86400", self.client.get("/app.js").headers["Cache-Control"])
+        self.assertEqual("no-cache", self.client.get("/app.js").headers["Cache-Control"])
         self.assertIn("max-age=86400", self.client.get("/static-art.png").headers["Cache-Control"])
         self.assertEqual(self.client.get("/api/me").headers["Cache-Control"], "no-store")
 

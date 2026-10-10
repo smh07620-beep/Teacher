@@ -31,7 +31,11 @@ def register_browser_cache_policy(app):
             # learner's own browser. Errors and redirects to signed URLs are not.
             ok = response.status_code == 200 or response.status_code == 206
             response.headers["Cache-Control"] = PROTECTED_MEDIA_CACHE_CONTROL if ok else "no-store"
-        elif path.endswith((".css", ".js", ".png", ".jpg", ".jpeg", ".webp", ".svg")):
+        elif path.endswith((".css", ".js")):
+            # Script/style URLs are unversioned: always revalidate (cheap 304) so fixes reach
+            # users immediately instead of running yesterday's cached code for up to a day.
+            response.headers["Cache-Control"] = "no-cache"
+        elif path.endswith((".png", ".jpg", ".jpeg", ".webp", ".svg")):
             response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
         return response
 
