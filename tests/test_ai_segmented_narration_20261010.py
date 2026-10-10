@@ -301,5 +301,20 @@ class LearnerPlayerBehaviourTests(unittest.TestCase):
             self.assertTrue(ok, f"{name} failed: {outcome}")
 
 
+
+
+class HeavyCharPronunciationTests(unittest.TestCase):
+    def test_chong_words_use_first_tone_homophone(self):
+        from teacher_app.materials import tts_text
+        tts_text._compiled_table.cache_clear()
+        for word in ("重採", "重抽", "重新", "重來", "重做", "重複", "重測"):
+            self.assertEqual(tts_text.apply_pronunciation(word), "蟲" + word[1:], word)
+
+    def test_zhong_words_are_unchanged(self):
+        from teacher_app.materials import tts_text
+        for word in ("重要", "嚴重", "體重", "重量", "重點", "比重", "重視", "尊重"):
+            self.assertEqual(tts_text.apply_pronunciation(word), word, word)
+
+
 if __name__ == "__main__":
     unittest.main()
