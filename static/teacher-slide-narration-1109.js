@@ -494,6 +494,19 @@
     render();
     if (typeof window.openMaterial !== 'function') { disarm(); window.alert('教材檢視器尚未載入，請重新整理頁面。'); return false; }
     await window.openMaterial(found.id);
+    // A plain PDF opens in continuous-scroll mode, which has no page turns to record.  For narration
+    // we re-open the same file page by page (the viewer already renders Word PDFs this way).
+    const opened = viewerState();
+    if (viewerOpen() && opened.mode === 'pdf' && opened.readerMode === 'document'
+        && typeof window.openSlideViewer === 'function') {
+      window.openSlideViewer({
+        previewUrl: opened.previewUrl,
+        pageCount: opened.pageCount,
+        title: opened.title,
+        materialId: opened.materialId,
+        readerMode: 'paged_document',
+      });
+    }
     // Some readers (continuous PDF scrolling) have no page turns; tell the teacher instead of failing silently.
     setTimeout(() => {
       if (armed && state === 'idle' && viewerOpen() && !eligibleMaterial()) {
