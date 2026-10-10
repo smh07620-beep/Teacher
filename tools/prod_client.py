@@ -14,7 +14,7 @@ import time
 from http.cookiejar import CookieJar
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 USER_AGENT = "TeacherProductionMonitor/1.0"
@@ -52,6 +52,14 @@ class ProductionClient:
         """Return ``(status, headers, body)``; HTTP error statuses are returned, not raised."""
         url = path_or_url if path_or_url.startswith("http") else urljoin(self.base_url + "/", path_or_url.lstrip("/"))
         merged = {"Accept": "application/json,*/*;q=0.8", "User-Agent": USER_AGENT, "Cache-Control": "no-cache"}
+        if method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+            # The site rejects state-changing /api/ calls that carry neither an
+            # Origin nor a Referer header (CSRF origin check, HTTP 403).  A
+            # browser always sends one; this client must behave the same way or
+            # even a correct monitoring login is refused.
+            parts = urlsplit(url)
+            merged["Origin"] = f"{parts.scheme}://{parts.netloc}"
+            merged["Referer"] = f"{parts.scheme}://{parts.netloc}/"
         body = data
         if json_body is not None:
             body = json.dumps(json_body).encode("utf-8")
@@ -101,8 +109,15 @@ class ProductionClient:
         try:
             data = self.json("POST", "/api/auth/login", json_body={"username": username, "password": password})
         except ApiError as exc:
-            if exc.status in {401, 403}:
+            if exc.status == 401:
                 raise ApiError("監控帳號登入失敗：帳號或密碼不正確（請更新 GitHub secrets）。", status=exc.status) from None
+            if exc.status == 403:
+                raise ApiError(
+                    "監控帳號登入被網站安全檢查拒絕（HTTP 403，非帳密錯誤；請確認請求帶有 Origin/Referer）。",
+                    status=exc.status,
+                ) from None
+            if exc.status == 429:
+                raise ApiError("監控帳號登入被暫時鎖定（失敗次數過多），請稍後再試。", status=exc.status) from None
             raise
         if not data.get("ok"):
             raise ApiError("監控帳號登入失敗。")
