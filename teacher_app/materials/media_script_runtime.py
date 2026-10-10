@@ -15,7 +15,7 @@ import requests
 
 from teacher_app.assessments import ai_runtime, free_ai_fallback
 from teacher_app.common import privacy as ai_privacy
-from teacher_app.materials import script_alignment
+from teacher_app.materials import script_alignment, tts_text
 
 
 MAX_SCRIPT_SOURCE_CHARS = 22000
@@ -158,6 +158,7 @@ def _prompt(*, source_title: str, context: str, focus: str, tone: str, target_mi
 5. 這只是草稿，結尾加入「{final_note}」
 6. 不要輸出 JSON，不要使用 markdown code fence。
 7. 可使用短標題、條列與自然段落，讓老師容易直接修改。
+8. 用字採臺灣醫事檢驗現場慣用的繁體中文與詞彙（例如：品質管制或品管、資訊、軟體、網路、預設、檢體、校正、抽血、能力試驗），不要使用中國大陸用語（例如：質控、信息、軟件、網絡、默認、校準、採血、室間質評）；英文縮寫、藥品與試劑名稱、數值與單位維持教材原樣。
 
 產出要求：{draft_rule}
 教材名稱：{source_title}
@@ -408,7 +409,7 @@ def generate_script(entry: dict, *, reference_entries: list[dict] | None = None,
         progress_callback=progress_callback,
     )
 
-    body = ai_privacy.deidentify_external_text(body).strip()
+    body = tts_text.apply_taiwan_terms(ai_privacy.deidentify_external_text(body).strip())
     if len(body) < 60:
         raise RuntimeError(f"AI 回傳的{label}內容過短，請調整教材或聚焦內容後再試。")
     length_retried = False

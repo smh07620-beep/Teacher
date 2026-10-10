@@ -16,9 +16,10 @@ import sys
 import threading
 import time
 import wave
-from typing import Any
+from typing import Any, Callable
 
 from teacher_app.materials import repository as material_repository
+from teacher_app.materials import tts_text
 from teacher_app.storage import providers, r2_budget, r2_ledger
 
 
@@ -29,6 +30,10 @@ DEFAULT_MODEL = "Kokoro-82M-v1.1-zh"
 DEFAULT_REPO_ID = "hexgrad/Kokoro-82M-v1.1-zh"
 DEFAULT_VOICE = "zf_001"
 DEFAULT_SAMPLE_RATE = 24000
+# Silence between two slide segments inside the single narration WAV.  The learner
+# player pauses at each segment's endMs, so this must stay longer than its
+# polling interval to guarantee the next slide's first word is never played early.
+SEGMENT_GAP_MS = 400
 ALLOWED_VOICES = {
     "zf_001",
     "zf_002",
@@ -374,7 +379,8 @@ def _safe_name(value: str) -> str:
     return " ".join(text.split())[:80] or "AI語音教材"
 
 
-def _entry(*, job_id: str, script: dict, source: dict, voice: str, model: str, object_key: str, object_bytes: int) -> dict:
+def _entry(*, job_id: str, script: dict, source: dict, voice: str, model: str, object_key: str, object_bytes: int,
+           segments: list[dict] | None = None) -> dict:
     material_id = _material_id(job_id)
     filename = f"{_safe_name(script.get('title') or source.get('title') or 'AI語音教材')}-AI語音.wav"
     stamp = dt.datetime.now(dt.timezone.utc).isoformat()
@@ -394,7 +400,17 @@ def _entry(*, job_id: str, script: dict, source: dict, voice: str, model: str, o
         "ttsModel": model,
         "ttsVoice": voice,
         "objectBytes": int(object_bytes or 0),
+        # Used by the learner player to detect a slide deck that changed after the
+        # narration was made (then it plays the voice without per-slide stops).
+        "sourceVersion": max(1, int(source.get("currentVersion") or 1)),
     }
+    if segments:
+        storage_meta["segmented"] = True
+        storage_meta["segments"] = [
+            {"page": int(item["page"]), "startMs": int(item["startMs"]), "endMs": int(item["endMs"])}
+            for item in segments
+        ]
+        storage_meta["durationMs"] = int(segments[-1]["endMs"])
     return {
         "id": material_id,
         "filename": filename,
@@ -450,13 +466,128 @@ def _tensor_to_numpy(audio):
     return value
 
 
+def _max_chars() -> int:
+    return max(1000, min(50000, int(os.environ.get("KOKORO_TTS_MAX_CHARS", "12000") or 12000)))
+
+
+def _segment_plan(script: dict, source: dict) -> list[str] | None:
+    """Per-slide paragraphs when the script lines up one-to-one with the slides.
+
+    The script generator is told "paragraph k = slide k".  Only when the number
+    of paragraphs equals the material's page count is the narration split per
+    slide; otherwise (hand-edited script, non-slide material, AI miscount) the
+    narration stays one continuous track exactly as before.
+    """
+    segments = tts_text.split_script_segments(str(script.get("body") or ""))
+    try:
+        page_count = int(source.get("pageCount") or 0)
+    except (TypeError, ValueError):
+        page_count = 0
+    if page_count >= 1 and len(segments) == page_count and any(segments):
+        return segments
+    return None
+
+
+def _segment_note(script: dict, source: dict) -> str:
+    """Why the narration is one continuous track (empty when it was split per slide)."""
+    segments = tts_text.split_script_segments(str(script.get("body") or ""))
+    try:
+        page_count = int(source.get("pageCount") or 0)
+    except (TypeError, ValueError):
+        page_count = 0
+    if page_count >= 1 and segments and len(segments) != page_count:
+        return f"講稿有 {len(segments)} 段、教材有 {page_count} 張，數量不同，語音維持整段播放（不會逐張停住）。"
+    if page_count < 1:
+        return "來源教材不是投影片或頁數未知，語音維持整段播放。"
+    return ""
+
+
+def build_segmented_wav(
+    texts: list[str],
+    synthesize: Callable[[str], bytes],
+    *,
+    gap_ms: int = SEGMENT_GAP_MS,
+    progress: Callable[[int, int], None] | None = None,
+) -> tuple[bytes, list[dict[str, int]]]:
+    """Synthesize each paragraph and join them into one WAV plus a slide timeline.
+
+    Returns ``(wav_bytes, segments)`` where ``segments`` is
+    ``[{"page": 0, "startMs": 0, "endMs": 8200}, ...]`` (0-based page, speech only,
+    without the silence gap).  Empty paragraphs keep their page with start == end.
+    """
+    params: tuple[int, int, int] | None = None
+    frames = bytearray()
+    segments: list[dict[str, int]] = []
+    for index, text in enumerate(texts):
+        if progress:
+            progress(index, len(texts))
+        rate = params[2] if params else DEFAULT_SAMPLE_RATE
+        cursor_ms = round(len(frames) / (params[0] * params[1]) / rate * 1000) if params else 0
+        if not str(text or "").strip():
+            segments.append({"page": index, "startMs": cursor_ms, "endMs": cursor_ms})
+            continue
+        with wave.open(io.BytesIO(synthesize(text)), "rb") as piece:
+            piece_params = (piece.getnchannels(), piece.getsampwidth(), piece.getframerate())
+            piece_frames = piece.readframes(piece.getnframes())
+        if params is None:
+            params = piece_params
+        elif piece_params != params:
+            raise RuntimeError("各張投影片的語音格式不一致，無法合併。")
+        channels, width, rate = params
+        bytes_per_second = channels * width * rate
+        if frames and gap_ms > 0:
+            gap_frames = int(rate * gap_ms / 1000)
+            frames.extend(b"\x00" * (gap_frames * channels * width))
+        start_ms = round(len(frames) / bytes_per_second * 1000)
+        frames.extend(piece_frames)
+        end_ms = round(len(frames) / bytes_per_second * 1000)
+        segments.append({"page": index, "startMs": start_ms, "endMs": end_ms})
+    if params is None:
+        raise RuntimeError("講稿沒有可朗讀的內容。")
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(params[0])
+        wav.setsampwidth(params[1])
+        wav.setframerate(params[2])
+        wav.writeframes(bytes(frames))
+    return buffer.getvalue(), segments
+
+
+def _synthesize_segmented(
+    texts: list[str], *, voice: str, instructions: str, progress_callback=None
+) -> tuple[bytes, str, list[dict[str, int]]]:
+    spoken = [tts_text.apply_pronunciation(text) for text in texts]
+    total = sum(len(text) for text in spoken)
+    if total > _max_chars():
+        raise RuntimeError(
+            f"已核准講稿共 {total} 字，超過目前本機語音單次上限 {_max_chars()} 字；請先縮短或拆成兩份講稿。"
+        )
+    model_holder: dict[str, str] = {}
+
+    def synth(text: str) -> bytes:
+        audio, model = _synthesize(text, voice=voice, instructions=instructions)
+        model_holder["model"] = model
+        return audio
+
+    def progress(done: int, count: int) -> None:
+        if progress_callback:
+            progress_callback(
+                30 + int(40 * done / max(1, count)),
+                "逐張產生 AI 語音",
+                f"本機 AI Worker 正在合成第 {done + 1} / {count} 張投影片的講解；沒改過的段落會直接使用快取",
+            )
+
+    audio, segments = build_segmented_wav(spoken, synth, progress=progress)
+    return audio, model_holder.get("model") or DEFAULT_MODEL, segments
+
+
 def _synthesize(text: str, *, voice: str, instructions: str) -> tuple[bytes, str]:
     del instructions  # Kokoro currently uses the approved text + configured speed/voice only.
     # Normalize again at the lowest boundary so stale jobs/env cannot reach
     # KPipeline with a removed v1.0 voice name.
     voice = _voice(voice)
 
-    max_chars = max(1000, min(50000, int(os.environ.get("KOKORO_TTS_MAX_CHARS", "12000") or 12000)))
+    max_chars = _max_chars()
     if len(text) > max_chars:
         raise RuntimeError(
             f"已核准講稿共 {len(text)} 字，超過目前本機語音單次上限 {max_chars} 字；請先縮短或拆成兩份講稿。"
@@ -691,9 +822,17 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
             "disclosure": AI_DISCLOSURE, "replayed": True,
         }
 
-    if progress_callback:
-        progress_callback(30, "產生免費 AI 語音", "本機 AI Worker 正在使用 Kokoro 將已核准講稿轉成 WAV")
-    audio, model = _synthesize(str(script.get("body") or "").strip(), voice=voice, instructions=instructions)
+    plan = _segment_plan(script, source)
+    segments: list[dict[str, int]] = []
+    if plan:
+        audio, model, segments = _synthesize_segmented(
+            plan, voice=voice, instructions=instructions, progress_callback=progress_callback
+        )
+    else:
+        if progress_callback:
+            progress_callback(30, "產生免費 AI 語音", "本機 AI Worker 正在使用 Kokoro 將已核准講稿轉成 WAV")
+        spoken = tts_text.apply_pronunciation(str(script.get("body") or "").strip())
+        audio, model = _synthesize(spoken, voice=voice, instructions=instructions)
 
     if progress_callback:
         progress_callback(70, "保存 AI 語音", "正在將 WAV 直接寫入 Cloudflare R2")
@@ -713,7 +852,7 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
         r2_ledger.record_object(object_key, len(audio), estimated_operations=1, is_staging=False)
         entry = _entry(
             job_id=job_id, script=script, source=source, voice=voice, model=model,
-            object_key=object_key, object_bytes=len(audio),
+            object_key=object_key, object_bytes=len(audio), segments=segments,
         )
         material = _insert_material_if_missing(entry)
         r2_budget.release_reservation(job_id, "published")
@@ -730,6 +869,9 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
         "model": model,
         "disclosure": AI_DISCLOSURE,
         "replayed": False,
+        "segmented": bool(segments),
+        "segmentCount": len(segments),
+        "segmentNote": "" if segments else _segment_note(script, source),
     }
 
 
@@ -737,6 +879,7 @@ __all__ = [
     "AI_DISCLOSURE",
     "ALLOWED_VOICES",
     "VOICE_PREVIEW_TEXT",
+    "build_segmented_wav",
     "configured",
     "generate_audio",
     "generate_voice_preview",

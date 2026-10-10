@@ -160,7 +160,8 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `MATERIAL_WORKER_ID` |  | `ai_question_worker.py`, `material_worker.py` | yes |  |
 | `MATERIAL_WORKER_POLL_SECONDS` | `2` | `material_worker.py` | yes |  |
 | `MATERIAL_WORKER_TOKEN` |  | `material_worker.py`, `teacher_app/config.py`, `teacher_app/legacy_host.py` (+2) | yes | yes |
-| `MATERIAL_WORKER_UPDATE_INTERVAL_HOURS` | `6` | `material_worker.py` | yes |  |
+| `MATERIAL_WORKER_UPDATE_INTERVAL_HOURS` |  | `material_worker.py` |  |  |
+| `MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES` |  | `material_worker.py` | yes |  |
 | `MATERIAL_WORKER_UPDATE_STATE_PATH` |  | `material_worker.py` |  |  |
 | `MATERIAL_WORKER_URL_TTL_SECONDS` | `900` | `teacher_app/legacy_host.py`, `teacher_app/worker/web_runtime.py` |  |  |
 | `MAX_DOC_TEMPLATE_MB` | `20` | `teacher_app/legacy_host.py`, `teacher_app/materials/template_runtime.py` |  | yes |

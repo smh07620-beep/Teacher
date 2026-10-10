@@ -127,13 +127,23 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
     def test_idle_check_respects_minimum_interval_and_requests_restart_after_update(self):
         state = Path(self.temp.name) / "state.json"
         runner = Mock(return_value=0)
-        with patch.dict(os.environ, {"MATERIAL_WORKER_AUTO_UPDATE": "true", "MATERIAL_WORKER_UPDATE_INTERVAL_HOURS": "0", "MATERIAL_WORKER_UPDATE_STATE_PATH": str(state)}, clear=False), patch.object(material_worker, "worker_metadata", side_effect=[{"workerSha": "aaaaaaa"}, {"workerSha": "bbbbbbb"}]):
+        with patch.dict(os.environ, {"MATERIAL_WORKER_AUTO_UPDATE": "true", "MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES": "0", "MATERIAL_WORKER_UPDATE_STATE_PATH": str(state)}, clear=False), patch.object(material_worker, "worker_metadata", side_effect=[{"workerSha": "aaaaaaa"}, {"workerSha": "bbbbbbb"}]):
             controller = material_worker.AutoUpdateController(root=self.temp.name, runner=runner, now=lambda: "2026-09-15T12:00:00+00:00")
-            self.assertEqual(controller.interval_seconds, 3600)
+            self.assertEqual(controller.interval_seconds, 300)
             self.assertTrue(controller.check_when_idle())
         runner.assert_called_once()
         self.assertTrue(controller.update_available)
         self.assertIn("lastUpdateCheckAt", state.read_text(encoding="utf-8"))
+
+    def test_update_interval_defaults_and_overrides(self):
+        calc = material_worker._update_interval_seconds
+        self.assertEqual(calc({}), 900)
+        self.assertEqual(calc({"MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES": "10"}), 600)
+        self.assertEqual(calc({"MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES": "1"}), 300)
+        self.assertEqual(calc({"MATERIAL_WORKER_UPDATE_INTERVAL_HOURS": "1"}), 3600)
+        self.assertEqual(calc({"MATERIAL_WORKER_UPDATE_INTERVAL_HOURS": "0.25"}), 900)
+        self.assertEqual(calc({"MATERIAL_WORKER_UPDATE_INTERVAL_HOURS": "1", "MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES": "10"}), 600)
+        self.assertEqual(calc({"MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES": "abc"}), 900)
 
     def test_auto_update_is_disabled_until_explicitly_enabled(self):
         with patch.dict(os.environ, {}, clear=True):
@@ -195,7 +205,7 @@ class LocalWorkerAutoUpdateTests(unittest.TestCase):
             "MATERIAL_WORKER_TOKEN=REPLACE_WITH_RENDER_WORKER_TOKEN",
             "MATERIAL_WORKER_HEARTBEAT_SECONDS=30",
             "MATERIAL_WORKER_AUTO_UPDATE=false",
-            "MATERIAL_WORKER_UPDATE_INTERVAL_HOURS=6",
+            "MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES=15",
             "MATERIAL_WORKER_RELEASE_REF=v6.8.1",
             "MATERIAL_WORKER_RELEASE_COMMIT=",
             "MATERIAL_WORKER_REQUIRE_SIGNED_TAG=true",

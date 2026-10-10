@@ -5,7 +5,7 @@
 ## 一、運作方式（先看這段就好）
 
 - 教材 Worker 和 AI Worker 放在**同一個程式資料夾**，所以只要更新這一個資料夾就行。
-- **教材 Worker** 每隔一段時間（預設 6 小時，下面設成 1 小時）檢查 GitHub 上名為 `worker-stable` 的「核准標籤」。標籤往前移動了，就更新程式資料夾，然後自己重新啟動。
+- **教材 Worker** 每隔一段時間（預設 15 分鐘，最短 5 分鐘；舊設定 `MATERIAL_WORKER_UPDATE_INTERVAL_HOURS` 仍可用，但以 `MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES` 優先）檢查 GitHub 上名為 `worker-stable` 的「核准標籤」。標籤往前移動了，就更新程式資料夾，然後自己重新啟動。
 - **AI Worker** 不自己跑任何 git 指令。它每分鐘看一次程式資料夾的版本，發現被更新了，會在**沒有工作在跑的時候**自己重新啟動，載入新版。
 - Worker 不會自己追蹤 `main`。要讓新程式到 Worker，必須有人把 `worker-stable` 標籤移到想發布的版本（見第四節）。這道關卡是刻意保留的：Worker 在院內，不應該一有人改 `main` 就自動執行。
 
@@ -30,7 +30,7 @@ git fetch origin tag worker-stable
 
 ```text
 MATERIAL_WORKER_AUTO_UPDATE=true
-MATERIAL_WORKER_UPDATE_INTERVAL_HOURS=1
+MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES=15
 MATERIAL_WORKER_RELEASE_REF=worker-stable
 MATERIAL_WORKER_REQUIRE_SIGNED_TAG=false
 AI_WORKER_RESTART_ON_UPDATE=true
@@ -84,7 +84,7 @@ powershell -ExecutionPolicy Bypass -File .\setup_teacher_worker.ps1 -InstallOpti
 3. 右邊點「Run workflow」，確認分支是 `main`，再按綠色的「Run workflow」。
 4. 約 10 到 20 秒後出現綠色勾勾，就表示 `worker-stable` 標籤已移到 `main` 目前的最新版本。
 
-之後最多 1 小時（第二節設定的檢查間隔），教材 Worker 就會更新並重新啟動，AI Worker 約 1 分鐘內跟著重新啟動。
+之後最多 15 分鐘（第二節設定的檢查間隔），教材 Worker 就會更新並重新啟動，AI Worker 約 1 分鐘內跟著重新啟動。
 
 如果之前已經從 Releases 頁面建立過 `worker-stable`，按上面的按鈕會直接把它換成註解標籤，不用先刪除。想整理的話，可以把 Releases 頁面上那筆 `worker-stable` 的 Release 刪掉（只刪 Release，不要刪標籤）。
 

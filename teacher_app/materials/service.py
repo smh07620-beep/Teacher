@@ -138,6 +138,19 @@ def _attach_narrations(uploaded: list[dict]) -> list[dict]:
                     "durationMs": int(narration_meta.get("durationMs") or 0),
                     "stale": int(narration_meta.get("sourceVersion") or 1) != int(item.get("currentVersion") or 1),
                 })
+            elif narration_meta.get("segmented") and isinstance(narration_meta.get("segments"), list):
+                # AI 語音逐張投影片合成：附上每張的起訖時間，學員端講完一張就停，
+                # 翻到下一張才播下一段。教材之後改版時 stale=True，前端改回整段播放。
+                payload.update({
+                    "kind": "ai",
+                    "segments": [
+                        {"page": int(seg.get("page", 0)), "startMs": int(seg.get("startMs", 0)), "endMs": int(seg.get("endMs", 0))}
+                        for seg in narration_meta["segments"]
+                        if isinstance(seg, dict)
+                    ],
+                    "durationMs": int(narration_meta.get("durationMs") or 0),
+                    "stale": int(narration_meta.get("sourceVersion") or 1) != int(item.get("currentVersion") or 1),
+                })
             item = {**item, "narration": payload}
         result.append(item)
     return result

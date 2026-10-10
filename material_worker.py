@@ -107,14 +107,36 @@ def worker_metadata():
     _code, branch=_run_git("branch","--show-current")
     return {"workerVersion":version,"workerSha":sha[:40],"workerBranch":branch[:80]}
 
+UPDATE_INTERVAL_MIN_SECONDS = 300      # never poll the release tag more often than every 5 minutes
+UPDATE_INTERVAL_DEFAULT_SECONDS = 900  # default: every 15 minutes (one cheap `git fetch` of one tag)
+
+def _update_interval_seconds(environ=None):
+    """Seconds between safe-update checks.
+
+    ``MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES`` wins over the older
+    ``MATERIAL_WORKER_UPDATE_INTERVAL_HOURS``; both are floored at 5 minutes.
+    The check only runs while the Worker is idle and only fetches the approved
+    release tag, so a short interval is cheap and does not change who decides
+    what gets released.
+    """
+    env = os.environ if environ is None else environ
+    # Literal names (not a loop) so tools/env_reference.py lists both variables.
+    for raw, unit in (
+        (str(env.get("MATERIAL_WORKER_UPDATE_INTERVAL_MINUTES", "")).strip(), 60),
+        (str(env.get("MATERIAL_WORKER_UPDATE_INTERVAL_HOURS", "")).strip(), 3600),
+    ):
+        if not raw: continue
+        try: requested = float(raw)
+        except ValueError: continue
+        return max(float(UPDATE_INTERVAL_MIN_SECONDS), requested*unit)
+    return float(UPDATE_INTERVAL_DEFAULT_SECONDS)
+
 class AutoUpdateController:
     """Run the fixed local updater only between jobs; never hot-reload Python."""
     def __init__(self, root=ROOT, runner=None, now=None):
         self.root=Path(root); self.runner=runner or self._run_updater; self.now=now or _utc_now
         self.enabled=_env_true("MATERIAL_WORKER_AUTO_UPDATE", False)
-        try: requested=float(os.environ.get("MATERIAL_WORKER_UPDATE_INTERVAL_HOURS","6"))
-        except ValueError: requested=6
-        self.interval_seconds=max(1.0, requested)*3600
+        self.interval_seconds=_update_interval_seconds()
         self.state_path=Path(os.environ.get("MATERIAL_WORKER_UPDATE_STATE_PATH", str(self.root/".worker-update-state.json")))
         self.last_check_at=""; self.update_available=False; self._load_state()
 
