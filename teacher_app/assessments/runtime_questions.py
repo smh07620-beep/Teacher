@@ -10,17 +10,17 @@ import json
 import uuid
 from typing import Any, Mapping
 
-from teacher_app.assessments import hotspot, repository
+from teacher_app.assessments import hotspot, repository, scenario
 from teacher_app.common import db as common_db
 from teacher_app.materials import external_media as external_media_service
 
 
-QUESTION_TYPES = {"choice", "essay", "multi", "fill", "image", "video", "true_false", hotspot.HOTSPOT_TYPE}
+QUESTION_TYPES = {"choice", "essay", "multi", "fill", "image", "video", "true_false", hotspot.HOTSPOT_TYPE, scenario.SCENARIO_TYPE}
 OPTION_TYPES = {"choice", "multi", "image", "video", "true_false"}
 # Bulk import / AI import cannot build a hotspot (it needs a drawn Atlas mark),
 # so an imported row claiming that type falls back to a normal choice question
 # instead of creating an ungradable one.
-IMPORTABLE_TYPES = QUESTION_TYPES - {hotspot.HOTSPOT_TYPE}
+IMPORTABLE_TYPES = QUESTION_TYPES - {hotspot.HOTSPOT_TYPE, scenario.SCENARIO_TYPE}
 
 
 def mark_category_draft(category_id: str, conn=None, kind: str | None = None) -> None:
@@ -144,6 +144,19 @@ def _normalized_common(
     else:
         for stale in ("atlasItemId", "correctMarkId", "correctRegion", "markLabel"):
             answer_config.pop(stale, None)
+    if question_type == scenario.SCENARIO_TYPE:
+        options = []
+        was_scenario = existing.get("questionType") == scenario.SCENARIO_TYPE
+        incoming = data.get("answerConfig") if isinstance(data.get("answerConfig"), dict) else {}
+        # Same rule as hotspot: only re-validate when steps are (re)defined, so
+        # the inline editor (which sends no steps) cannot wipe a saved case.
+        if not was_scenario or "steps" in incoming:
+            answer_config = scenario.prepare_config(incoming)
+        else:
+            answer_config = dict(existing.get("answerConfig") or {})
+        image_url = str(data.get("imageUrl", existing.get("imageUrl", ""))).strip()[:1000]
+    else:
+        answer_config.pop("steps", None)
 
     tag = str(data.get("tag", existing.get("tag", ""))).strip()[:100] or "一般"
     difficulty = str(data.get("difficulty", existing.get("difficulty", "standard")) or "standard").lower()
@@ -194,7 +207,7 @@ def create_question(data: Mapping[str, Any], *, allow_hosts=()) -> dict:
     if question_type not in QUESTION_TYPES:
         question_type = "choice"
     raw_options = data.get("options", [])
-    if question_type in {"essay", "fill", hotspot.HOTSPOT_TYPE}:
+    if question_type in {"essay", "fill", hotspot.HOTSPOT_TYPE, scenario.SCENARIO_TYPE}:
         raw_options = []
     if question_type == "true_false":
         raw_options = ["是", "否"]

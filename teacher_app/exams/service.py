@@ -17,7 +17,7 @@ from teacher_app.exams import repository as repo
 from teacher_app.exams.windows import assert_exam_not_closed, assert_exam_open
 from teacher_app.materials import repository as material_repository
 
-QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video", "atlas_hotspot")
+QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video", "atlas_hotspot", "scenario")
 ATTEMPT_TTL_HOURS = 24
 
 

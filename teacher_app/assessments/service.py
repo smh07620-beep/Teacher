@@ -20,7 +20,7 @@ from teacher_app.exams import records as exam_records
 from teacher_app.assessments import repository
 
 
-QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video", "atlas_hotspot")
+QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video", "atlas_hotspot", "scenario")
 
 # Render currently runs one Gunicorn worker with multiple threads.  Opening the
 # Teacher Content Studio first reads the public exam list and then the admin

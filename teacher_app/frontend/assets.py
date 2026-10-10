@@ -125,6 +125,8 @@ ASSET_MANIFEST = {
             "/atlas-annotations-1010.js",
             "/learner-hotspot-question-1010.js",
             "/admin-hotspot-question-1010.js",
+            "/learner-scenario-question-1011.js",
+            "/admin-scenario-question-1011.js",
             "/learner-result-chart.js",
             "/teacher-content-studio-71.js",
             "/teacher-content-tool-panels-710.js",

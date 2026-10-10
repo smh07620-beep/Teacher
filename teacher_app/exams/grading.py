@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from teacher_app.assessments import scenario
 from teacher_app.atlas import annotations
 
 
@@ -36,6 +37,8 @@ ANSWER_SECRET_FIELDS = {
     "correctMarkId",
     "markLabel",
     "atlasItemId",
+    # Scenario questions: each step's right option stays on the server.
+    "correctIndex",
 }
 
 
@@ -286,6 +289,8 @@ def score_question(question: Mapping[str, Any], answer: Any) -> bool | None:
         return None
     if question_type == "atlas_hotspot":
         return annotations.point_in_region(answer, config.get("correctRegion"))
+    if question_type == "scenario":
+        return scenario.is_correct(config, answer)
     if question_type == "multi":
         return normalize_indices(config.get("correctIndices", [])) == normalize_indices(answer)
     if question_type == "fill":
@@ -320,6 +325,8 @@ def display_answer(question: Mapping[str, Any], answer: Any) -> str:
             return f"點選位置 ({float(answer['x']) * 100:.0f}%, {float(answer['y']) * 100:.0f}%)"
         except (KeyError, TypeError, ValueError):
             return "未答"
+    if question_type == "scenario":
+        return scenario.display_answer(answer)
     if question_type == "multi":
         return "、".join(letters[i] if 0 <= i < len(letters) else str(i + 1) for i in normalize_indices(answer))
     try:
