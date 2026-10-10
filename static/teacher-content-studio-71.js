@@ -590,27 +590,7 @@
     await window.toggleAdminModal?.(false);
     window.switchLearningModule?.('atlas');
     if(typeof window.renderFormalAtlas === 'function') await window.renderFormalAtlas();
-    setTimeout(() => window.openAtlasCreate?.(), 150);
   }
-  async function openTeacherAtlasDocxWorkspace(){
-    if(!canMaterial())return false;
-    if(!await ensureWorkspacePage('course-materials'))return false;
-    openStudio(
-      'course-materials',
-      '教材與課程｜Word → 圖譜',
-      '選擇已上傳的 DOCX 教材，解析內嵌圖片後建立 Atlas 草稿；學員端不提供匯入工具。'
-    );
-    const host=document.getElementById('teacher-content-studio-body-71');
-    if(!host)return false;
-    host.innerHTML='<div class="mx-auto max-w-5xl"><div class="mb-4"><button type="button" data-studio-back class="text-sm font-bold text-slate-500">← 返回教材與課程</button><h4 class="mt-2 text-xl font-black text-slate-950">🔬 Word → 圖譜</h4><p class="mt-1 text-xs text-slate-500">只列出 DOCX 教材；先預覽內嵌圖片與周圍文字，再由教師確認建立 Atlas 草稿。</p></div><div id="teacher-atlas-docx-manager-1014"></div></div>';
-    if(typeof window.openAtlasDocxWizard!=='function'){
-      host.querySelector('#teacher-atlas-docx-manager-1014').innerHTML='<div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">DOCX 圖譜匯入元件尚未載入，請重新整理後再試。</div>';
-      return false;
-    }
-    await window.openAtlasDocxWizard('teacher-atlas-docx-manager-1014');
-    return true;
-  }
-
 
   async function launch(action){
     if(action==='exam')return renderExamManager();
@@ -620,7 +600,6 @@
     if(action==='video-material')return openMaterialUpload('video');
     if(action==='external')return launch('course');// 外部影音連結統一在課程精靈第 2 步加入，不再跳到舊抽屜
     if(action==='atlas')return openAtlas();
-    if(action==='atlas-docx')return openTeacherAtlasDocxWorkspace();
   }
 
   async function ensureWorkspacePage(workspace){
@@ -734,7 +713,6 @@
     window.addEventListener('load',installAuthoringNavigationLock,{once:true});
   }
   window.openTeacherMaterialCreateWorkspace=openMaterialCreateWorkspace;
-  window.openTeacherAtlasDocxWorkspace=openTeacherAtlasDocxWorkspace;
 
   function hideMaterialExecutorNode(node){
     if(!node) return;

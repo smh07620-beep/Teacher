@@ -192,9 +192,75 @@
         alert(data.error||'建立失敗');
         return;
       }
-      alert('已建立 '+data.created.length+' 筆 Atlas 草稿');
-      box.classList.add('hidden');
-      window.renderFormalAtlas?.();
+      framingStep(Array.isArray(data.created)?data.created:[]);
+    });
+  }
+
+  // 5/5: right after the import, the teacher can frame cells on each new draft
+  // (optional).  The drafts stay unpublished; learners see nothing until the
+  // teacher publishes them in the Atlas area.
+  async function framingStep(ids){
+    const box=root();
+    if(!box)return;
+    const items=[];
+    for(const id of ids){
+      try{
+        const response=await fetch('/api/atlas/'+encodeURIComponent(id),{credentials:'same-origin'});
+        const data=await response.json().catch(()=>({}));
+        if(response.ok&&data.item)items.push(data.item);
+      }catch(_error){}
+    }
+    const finish=()=>{box.classList.add('hidden');window.renderFormalAtlas?.();};
+    box.innerHTML=`
+      <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
+        <b>DOCX → Atlas · 5/5 已建立 ${ids.length} 筆草稿，要順便框選細胞嗎？（選填）</b>
+        <p class="text-xs text-slate-500">框選後，學員點圖就能放大看到你寫的介紹，也能拿來出「點選圖片題」。可以現在做，也可以之後到「圖譜」頁編輯。草稿發布前學員都看不到。</p>
+        <ul class="space-y-2">${items.map(item=>`
+          <li class="flex flex-wrap items-center gap-2 rounded-lg border p-2" data-atlas-frame-item="${esc(item.id)}">
+            <img src="${esc(item.thumbnailUrl||item.imageUrl)}" alt="" class="h-14 w-14 rounded object-cover">
+            <span class="min-w-0 flex-1 truncate text-sm font-bold">${esc(item.title)}</span>
+            <span class="text-[11px] text-slate-500" data-frame-status></span>
+            <button type="button" data-frame-open class="rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-800">框選細胞</button>
+          </li>`).join('')}</ul>
+        <div id="atlas-docx-frame-editor"></div>
+        <button id="atlas-docx-frame-done" type="button" class="rounded-lg bg-teal-700 px-3 py-2 font-bold text-white">完成</button>
+      </section>`;
+    box.querySelector('#atlas-docx-frame-done')?.addEventListener('click',finish);
+    box.querySelectorAll('[data-frame-open]').forEach(button=>{
+      button.addEventListener('click',()=>{
+        const row=button.closest('[data-atlas-frame-item]');
+        const item=items.find(candidate=>candidate.id===row?.dataset.atlasFrameItem);
+        if(item)openFrameEditor(box,item,row);
+      });
+    });
+  }
+
+  function openFrameEditor(box,item,row){
+    const host=box.querySelector('#atlas-docx-frame-editor');
+    if(!host||!window.AtlasAnnotations?.attachEditor)return;
+    host.innerHTML=`<form class="space-y-2 rounded-xl border border-indigo-200 p-3"><b class="text-sm">${esc(item.title)}</b>
+      <div class="flex gap-2"><button type="submit" class="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white">儲存標記</button>
+      <button type="button" data-frame-cancel class="rounded-lg border px-3 py-1.5 text-xs font-bold">取消</button></div></form>`;
+    const form=host.querySelector('form');
+    window.AtlasAnnotations.attachEditor(form,item);
+    form.querySelector('[data-frame-cancel]')?.addEventListener('click',()=>{host.innerHTML='';});
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const marks=window.AtlasAnnotations.collect(form);
+      if(marks===null)return;
+      const response=await fetch('/api/atlas/'+encodeURIComponent(item.id),{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body:JSON.stringify({annotationJson:marks||{}})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok){alert(data.error||'儲存標記失敗');return;}
+      const count=marks&&marks.marks?marks.marks.length:0;
+      item.annotationJson=marks||{};
+      const status=row?.querySelector('[data-frame-status]');
+      if(status)status.textContent=count?`✓ 已標記 ${count} 個`:'未標記';
+      host.innerHTML='';
     });
   }
 })();

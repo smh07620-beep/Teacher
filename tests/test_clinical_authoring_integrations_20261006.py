@@ -25,9 +25,10 @@ class ClinicalAuthoringIntegration20261006Tests(unittest.TestCase):
         self.assertIn("box.querySelector('#atlas-docx-source')", self.atlas_js)
 
     def test_word_atlas_import_lives_in_teacher_workspace_not_learner_header(self):
-        self.assertIn("openTeacherAtlasDocxWorkspace", self.teacher)
-        self.assertIn("teacher-atlas-docx-manager-1014", self.teacher)
-        self.assertIn("Word → 圖譜", self.teacher)
+        # Single entry point: the course wizard.  The studio no longer hosts its own Word -> Atlas workspace.
+        self.assertNotIn("openTeacherAtlasDocxWorkspace", self.teacher)
+        self.assertNotIn("atlas-docx", self.teacher)
+        self.assertNotIn("openAtlasCreate", self.teacher)
         self.assertNotIn("Word → 圖譜", self.interface)
         self.assertNotIn('id="atlas-create-action"', self.system_html)
         self.assertNotIn('id="atlas-import-action"', self.system_html)

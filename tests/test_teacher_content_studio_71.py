@@ -40,7 +40,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
         for marker in (
             'openAdminWorkspace', 'renderAdminQuizCategories', 'toggleQuizQuestionsPanel',
             'updateManualQuestionType', 'openExternalMaterialCreateDrawer', 'switchLearningModule',
-            'renderFormalAtlas', 'openAtlasCreate',
+            'renderFormalAtlas',
         ):
             self.assertIn(marker, self.source)
         self.assertIn('/api/quiz-categories/admin?', self.source)

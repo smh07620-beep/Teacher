@@ -188,6 +188,20 @@ class MaterialReadAccess68Tests(unittest.TestCase):
         self.login("auditor-user")
         self.assertEqual(self.client.patch(f"/api/atlas/{published_id}", json={"title":"Nope"}, headers={"Origin": "http://localhost"}).status_code, 403)
 
+    def test_direct_atlas_upload_is_admin_only(self):
+        # Teachers bring images in through the course wizard (Word -> Atlas);
+        # the single-image upload endpoints stay with administrators.
+        headers = {"Origin": "http://localhost"}
+        for username in ("clinical-teacher", "group-leader"):
+            self.login(username)
+            created = self.client.post("/api/atlas", json={"group": "grpHema", "category": "blood_cell", "title": "X"}, headers=headers)
+            self.assertEqual(created.status_code, 403, username)
+            self.assertIn("課程精靈", created.get_json()["error"])
+            uploaded = self.client.post("/api/atlas/images", data={"group": "grpHema"}, headers=headers)
+            self.assertEqual(uploaded.status_code, 403, username)
+        self.login("education-admin")
+        self.assertEqual(self.client.post("/api/atlas", json={"group": "grpHema", "category": "blood_cell", "title": "Ok"}, headers=headers).status_code, 201)
+
     def test_atlas_is_presented_as_formal_resource_ui(self):
         self.assertIn("/api/teaching-resource-search", ROOT.joinpath("teacher_app/atlas/routes.py").read_text(encoding="utf-8"))
         self.assertIn("搜尋本教材內容", ROOT.joinpath("static/system.html").read_text(encoding="utf-8"))

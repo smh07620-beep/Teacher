@@ -47,6 +47,19 @@ def readable_groups(user: Mapping[str, Any]) -> Optional[set[str]]:
     return {group} if group else set()
 
 
+def can_upload_directly(user: Mapping[str, Any]) -> bool:
+    """Single-image Atlas upload is an administrator tool.
+
+    Teachers bring images in through the course wizard (Word -> Atlas), which
+    keeps one auditable entry point.  They still edit/annotate/publish the
+    items that import created via PATCH (``can_manage``).
+    """
+    return is_system_admin(user) or has_role(user, "education_admin")
+
+
+DIRECT_UPLOAD_DENIED = "單張圖譜上傳僅限教學管理者。老師請在「課程精靈」上傳 Word 教材後，勾選要放進圖譜的圖片。"
+
+
 def can_read(user: Mapping[str, Any]) -> bool:
     return has_permission(user, "material.read") or has_role(user, "auditor")
 

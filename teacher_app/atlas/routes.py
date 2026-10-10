@@ -59,6 +59,8 @@ def register_atlas_70(
         user, denied = user_or_denied()
         if denied:
             return denied
+        if not atlas_service.can_upload_directly(user):
+            return jsonify({"error": atlas_service.DIRECT_UPLOAD_DENIED}), 403
         group = str(request.form.get("group") or "").strip()
         if not atlas_service.can_manage(user, group):
             return jsonify({"error": "無權管理此組圖譜。"}), 403
@@ -184,6 +186,8 @@ def register_atlas_70(
         user, denied = user_or_denied()
         if denied:
             return denied
+        if not atlas_service.can_upload_directly(user):
+            return jsonify({"error": atlas_service.DIRECT_UPLOAD_DENIED}), 403
         body = request.get_json(silent=True) or {}
         try:
             item_id = atlas_service.create_item(user, body)

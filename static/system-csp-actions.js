@@ -45,7 +45,7 @@
     'filterAdminUserAccounts','filterAiMaterials','filterQuizMaterialLinker','goBackLearning','goToExamModule','goToSlidePage',
     'handleGlobalLearningSearchKey','jumpToAdminQuiz','loadMoreAiMaterials','loadMyPgyAssessments',
     'markMaterialComplete','migrateLocalMaterialsToR2','onAdminMaterialGroupChange',
-    'onAdminQuizGroupChange','openAdminMaterialAtlasImport','openAdminUserEditor','openAtlas','openAtlasCreate','openAtlasDocxWizard','openCourseExam',
+    'onAdminQuizGroupChange','openAdminUserEditor','openAtlas','openAtlasCreate','openAtlasDocxWizard','openCourseExam',
     'openEssayReview','openExternalMaterialCreateDrawer','openMaterial','openQuestionImage','openQuizMaterialLinker',
     'openTeacherContentExam','openTeachingMaterials','previewCurrentExam','publishCurrentExam','examPrimaryAction','adminCancelInlineQuestionEditor','readerMaterialSearch',
     'prepareMaterialVersionUpload','publishMaterialVersion','rebuildMaterialIndex','recommendAiMaterials','renderAdminAnnouncements','renderAdminCourseMaterialHub',

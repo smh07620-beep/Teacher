@@ -28,15 +28,14 @@ class Phase3AdminMaterialsTests(unittest.TestCase):
         self.assertIn('/api/material-search/${encodeURIComponent(m.id)}/status', source)
         self.assertIn('/api/material-search/${encodeURIComponent(id)}/index', source)
 
-    def test_teacher_material_list_exposes_docx_to_atlas_action(self):
+    def test_teacher_material_list_no_longer_has_a_second_atlas_import_entry(self):
         source = ROOT.joinpath('static/admin-materials.js').read_text(encoding='utf-8')
         csp = ROOT.joinpath('static/system-csp-actions.js').read_text(encoding='utf-8')
-        self.assertIn("openAdminMaterialAtlasImport", source)
-        self.assertIn("擷取 Word 圖片 → Atlas", source)
-        self.assertIn("openAtlasDocxWizard('admin-material-atlas-import',materialId)", source)
+        self.assertNotIn("openAdminMaterialAtlasImport", source)
+        self.assertNotIn("擷取 Word 圖片 → Atlas", source)
         self.assertIn("materialClassification", source)
         self.assertIn("自動分類", source)
-        self.assertIn("'openAdminMaterialAtlasImport'", csp)
+        self.assertNotIn("openAdminMaterialAtlasImport", csp)
 
     def test_material_list_ignores_stale_concurrent_responses(self):
         materials = ROOT.joinpath('static/admin-materials.js').read_text(encoding='utf-8')

@@ -17,7 +17,6 @@ class CourseHubMaterialMenuTests(unittest.TestCase):
         for marker in (
             'data-material-audience="',
             "rebuildMaterialIndex('${m.id}')",
-            "openAdminMaterialAtlasImport('${m.id}')",
             "viewMaterialVersions('${m.id}')",
             "deleteAdminMaterial('${m.id}')",
         ):
@@ -47,8 +46,10 @@ class CourseHubMaterialMenuTests(unittest.TestCase):
         materials = read("static", "admin-materials.js")
         # Callers still refresh the shared cache when the list panel is absent.
         self.assertIn("await window.fetchAdminMaterials(force);\n      return;", materials)
-        # Atlas wizard and index rebuild work from the course overview.
-        self.assertIn("document.getElementById('admin-course-workspace')", materials)
+        # Word -> Atlas has a single entry point (the course wizard); the
+        # material list and hub menu no longer offer a second one.
+        self.assertNotIn("openAdminMaterialAtlasImport", materials)
+        self.assertNotIn("openAdminMaterialAtlasImport", read("static", "admin-course-material.js"))
         self.assertIn("window.renderAdminCourseMaterialHub?.(true)", materials)
         self.assertIn("已重建索引", materials)
 
