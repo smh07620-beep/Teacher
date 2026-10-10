@@ -217,6 +217,36 @@
     });
   }
 
+  // Server sends "預估還需約 N 秒／M 分 SS 秒" inside the detail text; count it down
+  // locally every second so the number keeps moving between polls.
+  let etaTimer = 0;
+  function parseEtaSeconds(detail) {
+    const m = String(detail || '').match(/預估還需約\s*(?:(\d+)\s*分\s*)?(\d+)\s*秒/);
+    return m ? Number(m[1] || 0) * 60 + Number(m[2] || 0) : null;
+  }
+  function formatEta(seconds) {
+    if (seconds < 60) return `預估還需約 ${seconds} 秒`;
+    return `預估還需約 ${Math.floor(seconds / 60)} 分 ${String(seconds % 60).padStart(2, '0')} 秒`;
+  }
+  function stopEtaTimer() { if (etaTimer) { clearInterval(etaTimer); etaTimer = 0; } }
+  function paintProgress(progress, status) {
+    stopEtaTimer();
+    const stage = progress.stage || 'AI 語音處理中';
+    const percent = Math.round(Number(progress.percent || 0));
+    const detail = String(progress.detail || '');
+    const eta = status === 'completed' || status === 'failed' ? null : parseEtaSeconds(detail);
+    const render = (left) => {
+      const text = left === null ? detail : detail.replace(/預估還需約[^）)]*/, left > 0 ? formatEta(left) : '快好了，請稍候');
+      setStatus(`${stage}｜${percent}%${text ? `｜${text}` : ''}`);
+    };
+    render(eta);
+    if (eta === null) return;
+    const started = Date.now();
+    etaTimer = setInterval(() => {
+      render(Math.max(0, eta - Math.floor((Date.now() - started) / 1000)));
+    }, 1000);
+  }
+
   async function pollJob(jobId, token) {
     while (token === pollToken && activeJobId === jobId) {
       const response = await fetch(`/api/media-audio/jobs/${encodeURIComponent(jobId)}`, {
@@ -225,8 +255,9 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || '無法讀取 AI 語音工作進度');
       const progress = data.progress || {};
-      setStatus(`${progress.stage || 'AI 語音處理中'}｜${Math.round(Number(progress.percent || 0))}%${progress.detail ? `｜${progress.detail}` : ''}`);
+      paintProgress(progress, data.status);
       if (data.status === 'completed') {
+        stopEtaTimer();
         setBusy(false);
         showResult(data);
         try {
@@ -244,6 +275,7 @@
         return;
       }
       if (data.status === 'failed') {
+        stopEtaTimer();
         setBusy(false);
         throw new Error(data.error || 'AI 語音產生失敗');
       }

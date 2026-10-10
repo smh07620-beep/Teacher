@@ -502,6 +502,31 @@ def _segment_note(script: dict, source: dict) -> str:
     return ""
 
 
+# --- Estimated remaining time shown to the teacher while the voice is rendered ---
+DEFAULT_SECONDS_PER_CHAR = 0.25
+_LEARNED_RATE: dict[str, float] = {}
+
+
+def _seconds_per_char() -> float:
+    """Seconds of synthesis per spoken character (learned from earlier jobs on this PC)."""
+    learned = _LEARNED_RATE.get("rate")
+    if learned:
+        return learned
+    try:
+        value = float(os.environ.get("AI_VOICE_SECONDS_PER_CHAR") or DEFAULT_SECONDS_PER_CHAR)
+    except ValueError:
+        value = DEFAULT_SECONDS_PER_CHAR
+    return min(5.0, max(0.02, value))
+
+
+def format_eta(seconds: float) -> str:
+    seconds = max(1, int(round(seconds)))
+    if seconds < 60:
+        return f"預估還需約 {seconds} 秒"
+    minutes, rest = divmod(seconds, 60)
+    return f"預估還需約 {minutes} 分 {rest:02d} 秒"
+
+
 def build_segmented_wav(
     texts: list[str],
     synthesize: Callable[[str], bytes],
@@ -563,18 +588,27 @@ def _synthesize_segmented(
             f"已核准講稿共 {total} 字，超過目前本機語音單次上限 {_max_chars()} 字；請先縮短或拆成兩份講稿。"
         )
     model_holder: dict[str, str] = {}
+    stats = {"seconds": 0.0, "chars": 0}
 
     def synth(text: str) -> bytes:
+        started = time.monotonic()
         audio, model = _synthesize(text, voice=voice, instructions=instructions)
+        elapsed = time.monotonic() - started
         model_holder["model"] = model
+        # Cache hits return almost instantly; only real synthesis teaches the rate.
+        if elapsed >= 0.5 and text:
+            stats["seconds"] += elapsed
+            stats["chars"] += len(text)
+            _LEARNED_RATE["rate"] = stats["seconds"] / stats["chars"]
         return audio
 
     def progress(done: int, count: int) -> None:
         if progress_callback:
+            remaining = sum(len(text) for text in spoken[done:])
             progress_callback(
                 30 + int(40 * done / max(1, count)),
                 "逐張產生 AI 語音",
-                f"本機 AI Worker 正在合成第 {done + 1} / {count} 張投影片的講解；沒改過的段落會直接使用快取",
+                f"本機 AI Worker 正在合成第 {done + 1} / {count} 張投影片的講解（{format_eta(remaining * _seconds_per_char())}）；沒改過的段落會直接使用快取",
             )
 
     audio, segments = build_segmented_wav(spoken, synth, progress=progress)
@@ -829,10 +863,18 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
             plan, voice=voice, instructions=instructions, progress_callback=progress_callback
         )
     else:
-        if progress_callback:
-            progress_callback(30, "產生免費 AI 語音", "本機 AI Worker 正在使用 Kokoro 將已核准講稿轉成 WAV")
         spoken = tts_text.apply_pronunciation(str(script.get("body") or "").strip())
+        if progress_callback:
+            progress_callback(
+                30,
+                "產生免費 AI 語音",
+                f"本機 AI Worker 正在使用 Kokoro 將已核准講稿轉成 WAV（{format_eta(len(spoken) * _seconds_per_char())}）",
+            )
+        started = time.monotonic()
         audio, model = _synthesize(spoken, voice=voice, instructions=instructions)
+        elapsed = time.monotonic() - started
+        if elapsed >= 0.5 and spoken:
+            _LEARNED_RATE["rate"] = elapsed / len(spoken)
 
     if progress_callback:
         progress_callback(70, "保存 AI 語音", "正在將 WAV 直接寫入 Cloudflare R2")
@@ -880,6 +922,7 @@ __all__ = [
     "ALLOWED_VOICES",
     "VOICE_PREVIEW_TEXT",
     "build_segmented_wav",
+    "format_eta",
     "configured",
     "generate_audio",
     "generate_voice_preview",

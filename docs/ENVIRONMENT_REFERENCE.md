@@ -55,6 +55,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `AI_VIDEO_POWERPOINT_COM_TIMEOUT_SECONDS` | `45` | `teacher_app/materials/ai_video_renderer.py` | yes |  |
 | `AI_VIDEO_QSV_ENABLED` | `false` | `teacher_app/materials/ai_video_runtime.py` |  |  |
 | `AI_VIDEO_STORAGE_BACKEND` |  | `teacher_app/materials/ai_video_storage.py` | yes |  |
+| `AI_VOICE_SECONDS_PER_CHAR` |  | `teacher_app/materials/media_audio_runtime.py` |  |  |
 | `AI_WEB_MEDIA_FFMPEG_FALLBACK` | `False` | `teacher_app/assessments/ai_runtime.py` |  |  |
 | `AI_WORKER_ALLOW_INSECURE_LOCAL_HTTP` |  | `teacher_app/worker/ai_remote.py` |  |  |
 | `AI_WORKER_HEARTBEAT_FAILURE_LIMIT` | `5` | `ai_question_worker.py` |  |  |

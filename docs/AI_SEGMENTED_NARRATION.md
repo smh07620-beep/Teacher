@@ -51,3 +51,9 @@ AI Worker 產生語音時，把已核准講稿依「空白行」切成段落，*
 
 `tests/test_ai_segmented_narration_20261010.py`（含用 Node 模擬學員播放器的行為）、
 `tests/test_local_worker_auto_update_681.py`。
+
+## 進度列的「預估還需約 N 秒」
+
+AI 語音產生時，進度文字會附上「預估還需約 N 秒（或 M 分 SS 秒）」，網頁每秒自動倒數。
+預估 = 剩餘字數 × 每字秒數。預設每字 0.25 秒（環境變數 `AI_VOICE_SECONDS_PER_CHAR` 可改）；
+Worker 實際合成後會依本機速度自動學習，同一次開機內之後的預估會越來越準。使用快取的段落幾乎不花時間，所以實際可能比預估更快。
