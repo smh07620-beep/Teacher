@@ -141,7 +141,7 @@
       nextBox.innerHTML = '<div class="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">✓ 目前沒有下一個必做項目。</div>';
     }
 
-    const rows = learnerItems.slice(0, 12).map(item => {
+    const rows = learnerItems.slice(0, 12).filter(item => !(nextAction && (item === nextAction || (item?.id && item.id === nextAction.id)))).map(item => {
       const href = taskHref(item);
       const badge = item?.statusLabel || '待處理';
       const meta = [dueLabel(item), item?.detail || ''].filter(Boolean).join(' · ');
@@ -157,12 +157,29 @@
     list.innerHTML = rows.length
       ? rows.slice(0, VISIBLE_ROWS).join('') + (rows.length > VISIBLE_ROWS
         ? `<div id="training-command-extra-71" class="space-y-2" hidden>${rows.slice(VISIBLE_ROWS).join('')}</div>` : '')
-      : '<div class="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-700">✓ 目前沒有待處理的線上學習工作。</div>';
+      : learnerItems.length ? '' : '<div class="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-700">✓ 目前沒有待處理的線上學習工作。</div>';
     if (toggle) {
       toggle.classList.toggle('hidden', rows.length <= VISIBLE_ROWS);
       toggle.textContent = `查看全部 ${rows.length} 項 ▾`;
       toggle.dataset.total = String(rows.length);
       toggle.setAttribute('aria-expanded', 'false');
+    }
+    // Task links go to the course card on this page (no page reload) instead of opening the reader directly.
+    const section = document.getElementById(ID);
+    if (section && !section.dataset.courseJump71) {
+      section.dataset.courseJump71 = '1';
+      section.addEventListener('click', event => {
+        const link = event.target.closest?.('a[href*="courseId="]');
+        if (!link || !section.contains(link)) return;
+        let courseId = '';
+        try { courseId = new URL(link.href, location.origin).searchParams.get('courseId') || ''; } catch (_) { return; }
+        const card = courseId && [...document.querySelectorAll('details.course-learning-card')].find(el => el.dataset.course === courseId);
+        if (!card) return; // fall back to normal navigation
+        event.preventDefault();
+        document.querySelectorAll('details.course-learning-card[open]').forEach(other => { if (other !== card) other.open = false; });
+        card.open = true;
+        setTimeout(() => card.scrollIntoView({behavior: 'smooth', block: 'start'}), 60);
+      });
     }
     // Course rows use the same canonical list for deadlines and the recommended unit.
     window.Teacher71LearnerTasks = Object.freeze({items: learnerItems, nextAction});

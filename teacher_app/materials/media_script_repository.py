@@ -317,8 +317,75 @@ def delete_script(script_id: str) -> bool:
         return bool(int(getattr(cursor, "rowcount", 0) or 0))
 
 
+# Approved lecture scripts kept per material: the one in use plus the version before it.
+# Older approved versions are removed automatically when a newer one is approved.
+APPROVED_VERSIONS_KEPT = 2
+
+
+def enforce_approval_retention(material_id: str, newest_id: str | None = None, *,
+                               keep: int = APPROVED_VERSIONS_KEPT) -> dict:
+    """Keep the in-use approved script and the previous one; remove anything older.
+
+    ``newest_id`` is the script that was just approved (default: the most recently
+    approved one).  Order of kept versions: newest stays ``approved``, the next becomes
+    ``superseded`` (read-only history), everything older is deleted.  A script that a
+    queued/processing narration job still needs is never deleted (``protected``); a later
+    approval or cleanup removes it once that job is done.  Drafts are never touched.
+    """
+    keep = max(1, int(keep))
+    result = {"current": "", "superseded": [], "deleted": [], "protected": []}
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        rows = [dict(row) for row in conn.execute(
+            "SELECT id,title,status,approved_by,approved_at FROM media_scripts "
+            f"WHERE material_id={ph} AND draft_type={ph} AND status IN ({ph},{ph}) "
+            "ORDER BY approved_at DESC, updated_at DESC",
+            (material_id, "script", "approved", "superseded"),
+        ).fetchall()]
+        if newest_id is None:
+            newest_id = next((row["id"] for row in rows if row["status"] == "approved"), "")
+        if not newest_id or all(row["id"] != newest_id for row in rows):
+            return result
+        rows.sort(key=lambda row: row["id"] != newest_id)  # stable: newest first
+        result["current"] = newest_id
+        for index, row in enumerate(rows):
+            info = {key: row.get(key) for key in ("id", "title", "status", "approved_by", "approved_at")}
+            if index == 0:
+                if row["status"] != "approved":
+                    conn.execute(f"UPDATE media_scripts SET status={ph} WHERE id={ph}", ("approved", row["id"]))
+            elif index < keep:
+                if row["status"] != "superseded":
+                    conn.execute(f"UPDATE media_scripts SET status={ph} WHERE id={ph}", ("superseded", row["id"]))
+                    result["superseded"].append(info)
+            else:
+                busy = conn.execute(
+                    f"SELECT 1 FROM media_audio_jobs WHERE script_id={ph} AND status IN ({ph},{ph}) LIMIT 1",
+                    (row["id"], "queued", "processing"),
+                ).fetchone()
+                if busy:
+                    result["protected"].append(info)
+                    continue
+                conn.execute(f"DELETE FROM media_scripts WHERE id={ph}", (row["id"],))
+                result["deleted"].append(info)
+    return result
+
+
+def cleanup_own_drafts(material_id: str, username: str, *, except_id: str = "") -> list[dict]:
+    """Delete the caller's own unapproved script drafts for one material; returns what was removed."""
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        rows = [dict(row) for row in conn.execute(
+            f"SELECT id,title,status FROM media_scripts WHERE material_id={ph} AND draft_type={ph} "
+            f"AND status={ph} AND created_by={ph} AND id<>{ph}",
+            (material_id, "script", "draft", username, except_id or ""),
+        ).fetchall()]
+        for row in rows:
+            conn.execute(f"DELETE FROM media_scripts WHERE id={ph}", (row["id"],))
+    return rows
+
+
 __all__ = [
-    "ACTIVE_STATUSES", "DRAFT_TYPES", "SCRIPT_STATUSES", "active_count_for_actor", "claim", "complete", "create_job",
+    "ACTIVE_STATUSES", "APPROVED_VERSIONS_KEPT", "cleanup_own_drafts", "enforce_approval_retention", "DRAFT_TYPES", "SCRIPT_STATUSES", "active_count_for_actor", "claim", "complete", "create_job",
     "create_script", "delete_script", "fail", "get_job", "get_script", "list_drafts", "list_queued", "list_scripts", "now",
     "recent_count_for_actor", "requeue_stale_processing", "set_progress", "total_active_count", "update_script",
 ]

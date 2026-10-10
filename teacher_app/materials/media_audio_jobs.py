@@ -202,7 +202,9 @@ class MediaAudioJobProcessor:
                 script = media_script_repository.get_script(str(job.get("scriptId") or request.get("scriptId") or ""))
                 if not script:
                     raise RuntimeError("講稿已不存在")
-                if str(script.get("draftType") or "script") != "script" or str(script.get("status") or "") != "approved":
+                # A script superseded by a newer approval after this job was queued is still a
+                # teacher-approved script, so an in-flight job may finish with it.
+                if str(script.get("draftType") or "script") != "script" or str(script.get("status") or "") not in {"approved", "superseded"}:
                     raise RuntimeError("AI 語音來源必須是已核准教學講稿")
                 source = material_repository.get_material(str(job.get("materialId") or script.get("materialId") or ""))
                 if not source:

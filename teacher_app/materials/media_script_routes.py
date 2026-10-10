@@ -36,6 +36,35 @@ def _public_script(script: dict) -> dict:
     }
 
 
+def _retention_summary(retention: dict) -> dict:
+    return {
+        "kept": media_script_repository.APPROVED_VERSIONS_KEPT,
+        "superseded": len(retention.get("superseded") or []),
+        "deleted": len(retention.get("deleted") or []),
+        "protected": len(retention.get("protected") or []),
+    }
+
+
+def _audit_retention(user, context: dict, retention: dict) -> None:
+    """Every automatic status change or removal of an approved script is auditable."""
+    group = str(context.get("group") or "")
+    for key, action in (("superseded", "media.script.supersede"), ("deleted", "media.script.retention_delete")):
+        for item in retention.get(key) or []:
+            audit.record_event(
+                actor=user,
+                action=action,
+                target_type="media_script",
+                target_id=str(item.get("id") or ""),
+                group=group,
+                before={
+                    "title": item.get("title"), "status": item.get("status"),
+                    "approvedBy": item.get("approved_by"), "approvedAt": item.get("approved_at"),
+                },
+                detail={"keptApprovedVersions": media_script_repository.APPROVED_VERSIONS_KEPT,
+                        "replacedBy": retention.get("current")},
+            )
+
+
 def register_media_script_routes(owner):
     app = getattr(owner, "app", owner)
     if app.extensions.get("teacher_media_script_routes_registered"):
@@ -190,6 +219,8 @@ def register_media_script_routes(owner):
         denied = _scope(owner, str(current.get("group") or ""))
         if denied:
             return denied
+        if str(current.get("status") or "") == "superseded":
+            return jsonify({"error": "這是已被新版取代的歷史版本，僅供查閱，無法修改。"}), 409
         body = request.get_json(silent=True) or {}
         title = str(body.get("title", current.get("title") or "教學講稿")).strip()[:255]
         script_body = str(body.get("body", current.get("body") or "")).strip()
@@ -213,7 +244,51 @@ def register_media_script_routes(owner):
             after={"title": (updated or {}).get("title"), "status": (updated or {}).get("status")},
             detail={"teacherConfirmed": status == "approved"},
         )
-        return jsonify({"ok": True, "script": _public_script(updated or {})})
+        retention = None
+        if status == "approved":
+            retention = media_script_repository.enforce_approval_retention(
+                str(current.get("materialId") or ""), str(script_id)
+            )
+            _audit_retention(user, current, retention)
+        payload = {"ok": True, "script": _public_script(updated or {})}
+        if retention is not None:
+            payload["retention"] = _retention_summary(retention)
+        return jsonify(payload)
+
+    @app.post("/api/media-scripts/cleanup")
+    def media_script_cleanup():
+        user = _actor(owner)
+        if not user:
+            return jsonify({"error": "請先登入。", "loginRequired": True}), 401
+        body = request.get_json(silent=True) or {}
+        material_id = str(body.get("materialId") or "").strip()
+        material = material_repository.get_material(material_id) if material_id else None
+        if not material:
+            return jsonify({"error": "找不到教材"}), 404
+        denied = _scope(owner, str(material.get("group") or ""))
+        if denied:
+            return denied
+        mode = str(body.get("mode") or "").strip().lower()
+        if mode == "versions":
+            retention = media_script_repository.enforce_approval_retention(material_id)
+            _audit_retention(user, {"materialId": material_id, "group": material.get("group")}, retention)
+            return jsonify({"ok": True, "retention": _retention_summary(retention)})
+        if mode == "drafts":
+            removed = media_script_repository.cleanup_own_drafts(
+                material_id, str(user.get("username") or ""), except_id=str(body.get("exceptId") or "")
+            )
+            for item in removed:
+                audit.record_event(
+                    actor=user,
+                    action="media.script.discard",
+                    target_type="media_script",
+                    target_id=str(item.get("id") or ""),
+                    group=str(material.get("group") or ""),
+                    before={"title": item.get("title"), "status": item.get("status")},
+                    detail={"reason": "cleanup_own_drafts"},
+                )
+            return jsonify({"ok": True, "deletedDrafts": len(removed)})
+        return jsonify({"error": "不支援的整理方式。"}), 400
 
     @app.delete("/api/media-scripts/<script_id>")
     def media_script_discard(script_id):

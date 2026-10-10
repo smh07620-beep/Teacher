@@ -170,10 +170,12 @@
       if (generation !== approvedScriptsGeneration || approvedScriptsMaterialId !== materialId) return;
       scripts = (Array.isArray(data) ? data : []).filter(item => item.status === 'approved');
       select.replaceChildren(new Option(scripts.length ? '選擇已核准講稿…' : '這份教材尚無已核准講稿', ''));
-      scripts.forEach(script => {
+      scripts.sort((a, b) => String(b.approvedAt || b.updatedAt || '').localeCompare(String(a.approvedAt || a.updatedAt || '')));
+      scripts.forEach((script, index) => {
         const option = document.createElement('option');
         option.value = script.id || '';
-        option.textContent = `${script.title || '教學講稿'}${script.approvedBy ? `｜核准：${script.approvedBy}` : ''}`;
+        const when = String(script.approvedAt || script.updatedAt || '').replace('T', ' ').slice(0, 16);
+        option.textContent = `${index === 0 ? '【最新核准】' : '【前一版】'}${script.title || '教學講稿'}${script.approvedBy ? `｜${script.approvedBy} 核准` : ''}${when ? `｜${when}` : ''}`;
         select.appendChild(option);
       });
       if (!scripts.length) {

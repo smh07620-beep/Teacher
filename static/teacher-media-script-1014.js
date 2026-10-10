@@ -478,7 +478,7 @@
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || '講稿更新失敗');
-    return data.script || {};
+    return Object.assign({}, data.script || {}, data.retention ? {retention: data.retention} : {});
   }
 
   function goToAudioStep() {
@@ -498,7 +498,9 @@
         if (!saved) throw new Error('講稿尚未儲存成功，請修正後再核准。');
       }
       const script = await updateSavedScript('approved');
-      status(`✅ 講稿已由 ${script.approvedBy || '目前教師'} 核准。已直接銜接下一步 AI 配音。`, 'success');
+      const kept = script.retention || {};
+      const cleaned = Number(kept.deleted || 0);
+      status(`✅ 講稿已由 ${script.approvedBy || '目前教師'} 核准。已直接銜接下一步 AI 配音。${cleaned ? `\n為避免堆疊，系統只保留最新 2 份核准版本，已自動清除 ${cleaned} 份更舊版本。` : ''}`, 'success');
       await loadSavedScripts();
       await syncNarrationOptions();
       window.dispatchEvent(new CustomEvent('teacher-media-script-approved-1027', {
@@ -545,9 +547,53 @@
       const response = await fetch(`/api/media-scripts?materialId=${encodeURIComponent(materialId)}`, {credentials:'same-origin', cache:'no-store'});
       const list = await response.json().catch(() => []);
       if (!response.ok) throw new Error(list.error || '無法讀取已儲存講稿');
-      host.innerHTML = Array.isArray(list) && list.length
-        ? list.map(script => `<button type="button" data-script-id="${escapeHtml(script.id)}" class="w-full text-left rounded-xl border ${script.status==='approved'?'border-emerald-200 bg-emerald-50/60':'border-slate-200 bg-white'} p-3"><div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-900">${escapeHtml(script.title)}</b><span class="text-[10px] font-bold ${script.status==='approved'?'text-emerald-700':'text-amber-700'}">${script.status==='approved'?'已核准':'草稿'}</span></div><p class="mt-1 text-[11px] text-slate-500">更新：${escapeHtml(script.updatedAt || '')}${script.approvedBy?`｜核准：${escapeHtml(script.approvedBy)}`:''}</p></button>`).join('')
-        : '<p class="text-xs text-slate-400">這份教材尚未儲存任何講稿。</p>';
+      const rows = Array.isArray(list) ? list : [];
+      const approved = rows.filter(item => item.status === 'approved')
+        .sort((a, b) => String(b.approvedAt || b.updatedAt || '').localeCompare(String(a.approvedAt || a.updatedAt || '')));
+      const drafts = rows.filter(item => item.status === 'draft');
+      const history = rows.filter(item => item.status === 'superseded');
+      const card = (script, badge, tone) => `<button type="button" data-script-id="${escapeHtml(script.id)}" class="w-full text-left rounded-xl border ${tone} p-3"><div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-900">${escapeHtml(script.title)}</b><span class="text-[10px] font-bold">${badge}</span></div><p class="mt-1 text-[11px] text-slate-500">更新：${escapeHtml(script.updatedAt || '')}${script.approvedBy?`｜核准：${escapeHtml(script.approvedBy)}`:''}</p></button>`;
+      const heading = text => `<div class="pt-1 text-[11px] font-black text-slate-600">${text}</div>`;
+      const parts = [];
+      if (approved.length) {
+        parts.push(heading('使用中（教師已核准，最多保留 2 份）'));
+        approved.forEach((script, index) => parts.push(card(script, index === 0 ? '<span class="text-emerald-700">使用中・最新</span>' : '<span class="text-emerald-700">已核准・前一版</span>', 'border-emerald-200 bg-emerald-50/60')));
+      }
+      if (drafts.length) {
+        parts.push(heading(`草稿（${drafts.length}）`));
+        drafts.forEach(script => parts.push(card(script, '<span class="text-amber-700">草稿</span>', 'border-slate-200 bg-white')));
+      }
+      if (history.length) {
+        parts.push(`<details><summary class="cursor-pointer text-[11px] font-black text-slate-500">歷史版本（${history.length}，僅供查閱）</summary><div class="mt-1 space-y-1.5">${history.map(script => card(script, '<span class="text-slate-500">歷史版本・唯讀</span>', 'border-slate-200 bg-slate-50')).join('')}</div></details>`);
+      }
+      const actions = [];
+      if (approved.length > 2 || history.length) actions.push('<button type="button" data-script-cleanup="versions" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700">整理舊版本</button>');
+      if (drafts.length >= 2) actions.push('<button type="button" data-script-cleanup="drafts" class="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-800">清除我的舊草稿</button>');
+      if (drafts.length >= 2) parts.push('<p class="text-[11px] text-amber-700">這份教材已有多份草稿，核准其中一份後，建議把其餘草稿清除。</p>');
+      if (actions.length) parts.push(`<div class="flex flex-wrap gap-2 pt-1">${actions.join('')}</div>`);
+      host.innerHTML = parts.length ? parts.join('') : '<p class="text-xs text-slate-400">這份教材尚未儲存任何講稿。</p>';
+      host.querySelectorAll('[data-script-cleanup]').forEach(btn => btn.addEventListener('click', async () => {
+        const mode = btn.dataset.scriptCleanup;
+        const msg = mode === 'drafts'
+          ? '要清除你自己在這份教材的其他草稿嗎？（目前編輯中的草稿與已核准講稿不會被刪除，無法復原）'
+          : '要整理舊版本嗎？系統只保留最新 2 份核准版本，更舊的會被刪除（無法復原，操作會留下稽核紀錄）。';
+        if (!confirm(msg)) return;
+        btn.disabled = true;
+        try {
+          const resp = await fetch('/api/media-scripts/cleanup', {
+            method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({materialId, mode, exceptId: activeScriptId || ''}),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(data.error || '整理失敗');
+          status(mode === 'drafts' ? `已清除 ${data.deletedDrafts || 0} 份舊草稿。` : `已整理舊版本：刪除 ${data.retention?.deleted || 0} 份、轉為歷史版本 ${data.retention?.superseded || 0} 份。`, 'success');
+          await loadSavedScripts();
+          await syncNarrationOptions();
+        } catch (error) {
+          btn.disabled = false;
+          status(`整理失敗：${error.message}`, 'error');
+        }
+      }));
       host.querySelectorAll('[data-script-id]').forEach(button => button.addEventListener('click', () => {
         const script = list.find(item => item.id === button.dataset.scriptId);
         if (!script) return;
@@ -558,9 +604,11 @@
         document.getElementById('teacher-script-editor-1014')?.classList.remove('hidden');
         document.getElementById('teacher-script-save-1014')?.removeAttribute('disabled');
         const approve = document.getElementById('teacher-script-approve-1014');
-        if (approve) approve.disabled = script.status === 'approved';
+        if (approve) approve.disabled = script.status === 'approved' || script.status === 'superseded';
+        const saveBtn = document.getElementById('teacher-script-save-1014');
+        if (saveBtn) saveBtn.disabled = script.status === 'superseded';
         showSource({sourceTitle:(materials.find(item=>item.id===materialId)||{}).title || '', sourceChunks:script.sourceChunks || []});
-        status(script.status === 'approved' ? '此講稿目前已核准；如修改並儲存，會回到草稿狀態。' : '已載入既有草稿，可繼續編修。');
+        status(script.status === 'superseded' ? '這是已被新版取代的歷史版本，僅供查閱，無法修改。' : script.status === 'approved' ? '此講稿目前已核准；如修改並儲存，會回到草稿狀態。' : '已載入既有草稿，可繼續編修。');
       }));
     } catch (error) {
       host.innerHTML = `<p class="text-xs text-rose-600">${escapeHtml(error.message)}</p>`;
