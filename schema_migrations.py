@@ -31,6 +31,7 @@ from teacher_app.maintenance import training_intervention_migration as _training
 from teacher_app.maintenance import material_derivative_migration as _material_derivative_migration  # noqa: F401
 from teacher_app.maintenance import announcement_audience_migration as _announcement_audience_migration  # noqa: F401
 from teacher_app.maintenance import exam_assignee_migration as _exam_assignee_migration  # noqa: F401
+from teacher_app.maintenance import slide_checkpoint_migration as _slide_checkpoint_migration  # noqa: F401
 
 
 sys.modules[__name__] = _migrations

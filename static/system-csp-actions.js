@@ -62,7 +62,7 @@
     'teachingEditCourse','teachingFinishReading','teachingNextMaterial','teachingSaveCourse','toggleAdminAnnouncement',
     'toggleAdminMaterial','toggleAdminModal','toggleAdminUserAccount','toggleAiMaterialSelection','loadAiMaterialOptions','toggleAtlasFullscreen','viewMaterialVersions',
     'toggleFlag','toggleMediaFullscreen','toggleQuizQuestionsPanel','toggleSlideFullscreen','updateAdminMaterialTypeFields',
-    'updateManualQuestionType','atlasHotspotPick','atlasHotspotZoom','scenarioPick'
+    'updateManualQuestionType','atlasHotspotPick','atlasHotspotZoom','scenarioPick','openSlideCheckpointEditor'
   ]);
 
   function migrateElement(element) {

@@ -60,8 +60,10 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import material_derivative_migration as _material_derivative_migration  # noqa: F401
     from teacher_app.maintenance import announcement_audience_migration as _announcement_audience_migration  # noqa: F401
     from teacher_app.maintenance import exam_assignee_migration as _exam_assignee_migration  # noqa: F401
+    from teacher_app.maintenance import slide_checkpoint_migration as _slide_checkpoint_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
+    from teacher_app.checkpoints.routes import register_slide_checkpoints
     from teacher_app.auth import service as auth_service
     from teacher_app.auth.account_routes import register_multi_role_66
     from teacher_app.auth.self_service import register_account_self_service
@@ -214,6 +216,10 @@ def _register_production(app: Flask) -> Flask:
         app,
         paths=atlas_paths,
         paths_provider=lambda: app.config["STORAGE_PATHS"],
+        material_getter=lambda material_id: material_repository.get_material(material_id),
+    )
+    app = register_slide_checkpoints(
+        app,
         material_getter=lambda material_id: material_repository.get_material(material_id),
     )
     app = register_sensitive_elevation(app)
