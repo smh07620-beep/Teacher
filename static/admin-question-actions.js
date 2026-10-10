@@ -287,6 +287,7 @@
       answerConfig.pauseAt=Number(document.getElementById(`qform-${catId}-pause-at`)?.value||0);
       if(!answerConfig.mediaUrl){alert('影片題請填入影片教材播放網址');return;}
     }
+    if(questionType==='atlas_hotspot'){const hotspot=window.AdminHotspotQuestion?.collect(catId);if(!hotspot)return;Object.assign(answerConfig,hotspot);}
     const needsOptions=['choice','multi','image','true_false'].includes(questionType);
     const payload={quizCategoryId:catId,question,questionType,difficulty,imageUrl,options:questionType==='true_false'?['是','否']:(needsOptions?options:[]),correct:questionType==='true_false'?Number(document.getElementById(`qform-${catId}-truefalse-correct`)?.value||0):Number(document.getElementById(`qform-${catId}-correct`)?.value||0),answerConfig,tag:document.getElementById(`qform-${catId}-tag`)?.value.trim()||'',explanation:document.getElementById(`qform-${catId}-explain`)?.value.trim()||''};
     const r=await fetch('/api/quiz-questions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});

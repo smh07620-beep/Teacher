@@ -7,6 +7,7 @@ import random
 import uuid
 from typing import Any, Mapping
 
+from teacher_app.assessments import hotspot
 from teacher_app.assessments import repository as assessment_repository
 from teacher_app.common.auth import normalize_role
 from teacher_app.common.errors import ApiError
@@ -16,7 +17,7 @@ from teacher_app.exams import repository as repo
 from teacher_app.exams.windows import assert_exam_not_closed, assert_exam_open
 from teacher_app.materials import repository as material_repository
 
-QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video")
+QUESTION_TYPES = ("choice", "multi", "true_false", "fill", "essay", "image", "video", "atlas_hotspot")
 ATTEMPT_TTL_HOURS = 24
 
 
@@ -52,6 +53,9 @@ def _draw_questions(category: Mapping[str, Any]) -> list[dict[str, Any]]:
     for question in questions:
         question["version"] = max(1, int(question.get("version", 1) or 1))
         question["questionHash"] = assessment_repository.question_content_hash(question)
+    # Atlas hotspot questions take their scoring box from the Atlas as it is now;
+    # the attempt then keeps this snapshot even if the Atlas is edited later.
+    questions = [hotspot.resolve_for_attempt(question) for question in questions]
     draw_rules = category.get("drawRules") if isinstance(category.get("drawRules"), dict) else {}
     if draw_rules.get("mode") == "type_quota":
         quotas = draw_rules.get("quotas") if isinstance(draw_rules.get("quotas"), dict) else {}

@@ -8,6 +8,7 @@
   window.adminAnswerSummary = function(q){
     const type=q.questionType||'choice';
     if(type==='essay') return `人工批改 · 評分參考：${escapeHtml(q.explanation||'未設定')}`;
+    if(type==='atlas_hotspot') return `正解：點選「${escapeHtml(q.answerConfig?.markLabel||'未設定')}」（標記來自圖譜）`;
     if(type==='fill') return `可接受答案：${escapeHtml((q.answerConfig?.acceptedAnswers||[]).join(' / ')||'未設定')}`;
     if(type==='multi'){
       const letters=(q.answerConfig?.correctIndices||[]).map(i=>String.fromCharCode(65+Number(i))).join('、');
@@ -24,6 +25,7 @@
     const correctSet=new Set((cfg.correctIndices||[]).map(Number));
     const hasMedia=!!cfg.mediaUrl;
     const typeOptions=[['choice','單選題'],['multi','複選題'],['true_false','是非題'],['essay','問答題'],['fill','填空題'],['image','圖片判讀題'],['video','影片題']];
+    if(type==='atlas_hotspot') typeOptions.push(['atlas_hotspot','圖片點選題（標記由圖譜決定）']);
     const optionType=['choice','multi','image','video'].includes(type);
     return `<div id="qedit-${q.id}" data-qid="${q.id}" data-has-media="${hasMedia?'1':'0'}" class="hidden mt-3 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 space-y-2.5">
       <div class="flex items-center justify-between gap-2"><span class="text-xs font-black text-indigo-900">✏️ 快速編輯題目（其他題目在上下方，改完按「儲存此題」）</span><button data-csp-click="adminToggleInlineQuestionEditor('${q.id}','${catId}',false)" class="text-[11px] text-slate-500 hover:text-slate-800">收合</button></div>

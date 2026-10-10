@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from teacher_app.atlas import annotations
+
 
 def text(value: Any, limit: int) -> str:
     return str(value or "").strip()[:limit]
@@ -28,6 +30,12 @@ ANSWER_SECRET_FIELDS = {
     "scoringSecret",
     "gradingKey",
     "gradingSecret",
+    # Atlas hotspot ("click the structure") questions: which box is correct and
+    # what it is called must never reach the learner before submission.
+    "correctRegion",
+    "correctMarkId",
+    "markLabel",
+    "atlasItemId",
 }
 
 
@@ -276,6 +284,8 @@ def score_question(question: Mapping[str, Any], answer: Any) -> bool | None:
     config = question.get("answerConfig") if isinstance(question.get("answerConfig"), dict) else {}
     if question_type == "essay":
         return None
+    if question_type == "atlas_hotspot":
+        return annotations.point_in_region(answer, config.get("correctRegion"))
     if question_type == "multi":
         return normalize_indices(config.get("correctIndices", [])) == normalize_indices(answer)
     if question_type == "fill":
@@ -305,6 +315,11 @@ def display_answer(question: Mapping[str, Any], answer: Any) -> str:
         return "未答"
     if question_type in {"essay", "fill"}:
         return text(answer, 12000)
+    if question_type == "atlas_hotspot":
+        try:
+            return f"點選位置 ({float(answer['x']) * 100:.0f}%, {float(answer['y']) * 100:.0f}%)"
+        except (KeyError, TypeError, ValueError):
+            return "未答"
     if question_type == "multi":
         return "、".join(letters[i] if 0 <= i < len(letters) else str(i + 1) for i in normalize_indices(answer))
     try:

@@ -17,6 +17,7 @@
     document.getElementById(`qform-${catId}-truefalse-config`)?.classList.toggle('hidden',type!=='true_false');
     document.getElementById(`qform-${catId}-fill-config`)?.classList.toggle('hidden',type!=='fill');
     document.getElementById(`qform-${catId}-video-config`)?.classList.toggle('hidden',!isVideo);
+    window.AdminHotspotQuestion?.syncForm(catId,type);
     const exp=document.getElementById(`qform-${catId}-explain`);
     if(exp) exp.placeholder=type==='essay'?'評分重點／參考答案（選填）':(type==='true_false'?'答案依據／解析（選填）':(type==='fill'?'答案解析（選填）':'詳解（選填，作答後顯示）'));
   };

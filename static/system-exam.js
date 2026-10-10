@@ -236,9 +236,10 @@ function updateQuickJumpButtons() {
 }
 
 // --- Render All Questions for Active Category ---
-function questionTypeLabel(t){return ({choice:'單選題',multi:'複選題',true_false:'是非題',fill:'填空題',essay:'問答題',image:'圖片判讀題',video:'影片題'})[t||'choice']||'單選題';}
+function questionTypeLabel(t){return ({choice:'單選題',multi:'複選題',true_false:'是非題',fill:'填空題',essay:'問答題',image:'圖片判讀題',video:'影片題',atlas_hotspot:'圖片點選題'})[t||'choice']||'單選題';}
 function answerHasValue(v){return Array.isArray(v)?v.length>0:(v!==null&&v!==''&&v!==undefined);}
 function renderQuestionMedia(q,i,submitted=false){
+    if(q.questionType==='atlas_hotspot')return window.AtlasHotspotQuestion?window.AtlasHotspotQuestion.render(q,i,submitted,userAnswersMap[currentCatKey]?.[i]):'';
     if(q.imageUrl)return `<div class="question-media"><button type="button" data-csp-click="openQuestionImage('${escapeHtml(q.imageUrl)}','${escapeHtml(q.question)}')" class="w-full"><img src="${escapeHtml(q.imageUrl)}" alt="題目影像" loading="lazy" decoding="async"><span class="block text-[11px] text-white/70 bg-black/50 py-1">🔍 點擊放大影像，支援局部縮放</span></button></div>`;
     const u=q.answerConfig?.mediaUrl||'';const sec=Number(q.answerConfig?.pauseAt||0);
     if(u)return `<div class="question-media"><video id="question-video-${i}" src="${escapeHtml(u)}" controls playsinline preload="metadata" ${(!submitted&&sec>0)?`data-question-pause-at="${sec}" data-question-index="${i}"`:''}></video>${sec>0?`<div id="video-cue-${i}" class="px-3 py-2 bg-slate-900 text-white/80 text-xs">⏱️ 互動影片題：播放至 ${formatSeconds(sec)} 時會自動暫停並開放作答。</div>`:''}</div>`;
@@ -315,6 +316,7 @@ function installQuestionTimingObserver(){
 }
 function openQuestionImage(url,title){const f={id:'question-image',title:title||'題目影像',filename:'image',viewUrl:url,viewerMode:'image',desc:'題目影像判讀'};cachedSlidesList.push(f);openAtlas('question-image');setTimeout(()=>{cachedSlidesList=cachedSlidesList.filter(x=>x!==f)},10);}
 function selectMulti(i,j,checked){if(isSubmittedMap[currentCatKey])return;let a=Array.isArray(userAnswersMap[currentCatKey][i])?[...userAnswersMap[currentCatKey][i]]:[];if(checked&&!a.includes(j))a.push(j);if(!checked)a=a.filter(x=>x!==j);userAnswersMap[currentCatKey][i]=a;saveExamDraft();updateProgressStats();updateQuickJumpButtons();updateAnswerStatus(i);}
+function setHotspotAnswer(i,point){if(isSubmittedMap[currentCatKey])return;userAnswersMap[currentCatKey][i]=point;saveExamDraft();updateProgressStats();updateQuickJumpButtons();updateAnswerStatus(i);}
 function selectFill(i,v){if(isSubmittedMap[currentCatKey])return;userAnswersMap[currentCatKey][i]=v;saveExamDraft();updateProgressStats();updateQuickJumpButtons();updateAnswerStatus(i);}
 
 function selectOption(qIndex, optIndex) {

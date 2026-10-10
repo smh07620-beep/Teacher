@@ -7,7 +7,7 @@ import re
 import uuid
 from typing import Any, Mapping, Optional
 
-from teacher_app.atlas import repository
+from teacher_app.atlas import annotations, repository
 from teacher_app.common.auth import has_permission, has_role, is_system_admin
 from teacher_app.common.errors import ApiError
 
@@ -172,7 +172,7 @@ def create_item(user: Mapping[str, Any], body: Mapping[str, Any]) -> str:
         "source_docx": str(body.get("sourceDocx") or "")[:255],
         "sort_order": int(body.get("sortOrder") or 0),
         "annotation_json": json.dumps(
-            body.get("annotationJson") if isinstance(body.get("annotationJson"), dict) else {},
+            annotations.normalise(body.get("annotationJson")),
             ensure_ascii=False,
         ),
         "created_at": timestamp,
@@ -223,7 +223,7 @@ def update_item(user: Mapping[str, Any], item_id: str, body: Mapping[str, Any]) 
         changes["tags"] = json.dumps(tags(body["tags"]), ensure_ascii=False)
     if "annotationJson" in body:
         changes["annotation_json"] = json.dumps(
-            body["annotationJson"] if isinstance(body["annotationJson"], dict) else {},
+            annotations.normalise(body["annotationJson"]),
             ensure_ascii=False,
         )
     repository.update_item(

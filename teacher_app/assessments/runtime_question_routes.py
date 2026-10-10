@@ -209,7 +209,7 @@ def register_runtime_question_routes(owner, *, runtime: QuestionRuntime | None =
         draw_rules = category.get("drawRules", {}) if isinstance(category.get("drawRules", {}), dict) else {}
         if draw_rules.get("mode") == "type_quota":
             quotas = draw_rules.get("quotas", {}) if isinstance(draw_rules.get("quotas", {}), dict) else {}
-            types = ("choice", "multi", "true_false", "fill", "essay", "image", "video")
+            types = ("choice", "multi", "true_false", "fill", "essay", "image", "video", "atlas_hotspot")
             target_total = sum(max(0, int(quotas.get(qtype, 0) or 0)) for qtype in types)
             selected = []
             selected_ids = set()

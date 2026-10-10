@@ -10,13 +10,17 @@ import json
 import uuid
 from typing import Any, Mapping
 
-from teacher_app.assessments import repository
+from teacher_app.assessments import hotspot, repository
 from teacher_app.common import db as common_db
 from teacher_app.materials import external_media as external_media_service
 
 
-QUESTION_TYPES = {"choice", "essay", "multi", "fill", "image", "video", "true_false"}
+QUESTION_TYPES = {"choice", "essay", "multi", "fill", "image", "video", "true_false", hotspot.HOTSPOT_TYPE}
 OPTION_TYPES = {"choice", "multi", "image", "video", "true_false"}
+# Bulk import / AI import cannot build a hotspot (it needs a drawn Atlas mark),
+# so an imported row claiming that type falls back to a normal choice question
+# instead of creating an ungradable one.
+IMPORTABLE_TYPES = QUESTION_TYPES - {hotspot.HOTSPOT_TYPE}
 
 
 def mark_category_draft(category_id: str, conn=None, kind: str | None = None) -> None:
@@ -124,6 +128,22 @@ def _normalized_common(
             answer_config["pauseAt"] = max(0, float(answer_config.get("pauseAt", 0) or 0))
         except Exception:
             answer_config["pauseAt"] = 0
+    if question_type == hotspot.HOTSPOT_TYPE:
+        options = []
+        was_hotspot = existing.get("questionType") == hotspot.HOTSPOT_TYPE
+        incoming = data.get("answerConfig") if isinstance(data.get("answerConfig"), dict) else {}
+        # Re-validate only when the teacher is (re)defining the hotspot.  Plain
+        # edits (reword, retag, disable, inline editor that sends no mark) keep
+        # the stored definition and still work if the Atlas changed meanwhile.
+        if not was_hotspot or "atlasItemId" in incoming or "correctMarkId" in incoming:
+            base_config = dict(existing.get("answerConfig") or {}) if was_hotspot else {}
+            answer_config, image_url = hotspot.prepare_config({**base_config, **incoming})
+        else:
+            answer_config = dict(existing.get("answerConfig") or {})
+            image_url = str(existing.get("imageUrl") or image_url)
+    else:
+        for stale in ("atlasItemId", "correctMarkId", "correctRegion", "markLabel"):
+            answer_config.pop(stale, None)
 
     tag = str(data.get("tag", existing.get("tag", ""))).strip()[:100] or "一般"
     difficulty = str(data.get("difficulty", existing.get("difficulty", "standard")) or "standard").lower()
@@ -174,7 +194,7 @@ def create_question(data: Mapping[str, Any], *, allow_hosts=()) -> dict:
     if question_type not in QUESTION_TYPES:
         question_type = "choice"
     raw_options = data.get("options", [])
-    if question_type in {"essay", "fill"}:
+    if question_type in {"essay", "fill", hotspot.HOTSPOT_TYPE}:
         raw_options = []
     if question_type == "true_false":
         raw_options = ["是", "否"]
@@ -336,7 +356,7 @@ def normalize_payload(payload: Mapping[str, Any], *, allow_hosts=()) -> dict:
     """
     qtext = str(payload.get("question", "")).strip()
     qtype = str(payload.get("questionType", "choice")).lower()
-    if qtype not in QUESTION_TYPES:
+    if qtype not in IMPORTABLE_TYPES:
         qtype = "choice"
     config = dict(payload.get("answerConfig")) if isinstance(payload.get("answerConfig"), dict) else {}
     options = [str(value).strip() for value in (payload.get("options") or []) if str(value).strip()][:6]
@@ -449,7 +469,7 @@ def insert_payloads_bulk(
             raise ValueError("題目格式錯誤")
         qtext = str(payload.get("question", "")).strip()
         qtype = str(payload.get("questionType", "choice")).lower()
-        if qtype not in QUESTION_TYPES:
+        if qtype not in IMPORTABLE_TYPES:
             qtype = "choice"
         config = dict(payload.get("answerConfig")) if isinstance(payload.get("answerConfig"), dict) else {}
         raw_options = payload.get("options") or []

@@ -149,15 +149,15 @@ function openAtlas(id){const m=cachedSlidesList.find(x=>x.id===id);if(!m)return;
 
 function applyAtlasZoom(){const z=Math.max(.5,Math.min(5,atlasState.zoom||1));atlasState.zoom=z;const img=document.getElementById('atlas-modal-image');img.style.transform=`scale(${z})`;document.getElementById('atlas-zoom-text').textContent=`${Math.round(z*100)}%`;}
 
-function atlasZoom(d){atlasState.zoom=(atlasState.zoom||1)+d;applyAtlasZoom();}
+function atlasZoom(d){if(window.AtlasAnnotations?.active()&&window.AtlasAnnotations.zoomBy(d))return;atlasState.zoom=(atlasState.zoom||1)+d;applyAtlasZoom();}
 
-function atlasReset(){atlasState.zoom=1;const img=document.getElementById('atlas-modal-image');img.style.transformOrigin='center';applyAtlasZoom();const st=document.getElementById('atlas-stage');if(st)st.scrollTo({top:0,left:0});}
+function atlasReset(){if(window.AtlasAnnotations?.active()&&window.AtlasAnnotations.reset())return;atlasState.zoom=1;const img=document.getElementById('atlas-modal-image');img.style.transformOrigin='center';applyAtlasZoom();const st=document.getElementById('atlas-stage');if(st)st.scrollTo({top:0,left:0});}
 
 function atlasPointerMove(ev){if((atlasState.zoom||1)<=1)return;const r=ev.currentTarget.getBoundingClientRect();const x=Math.max(0,Math.min(100,(ev.clientX-r.left)/r.width*100));const y=Math.max(0,Math.min(100,(ev.clientY-r.top)/r.height*100));document.getElementById('atlas-modal-image').style.transformOrigin=`${x}% ${y}%`;}
 
 async function toggleAtlasFullscreen(){const m=document.getElementById('atlas-modal');try{if(!document.fullscreenElement)await m.requestFullscreen?.();else await document.exitFullscreen?.();}catch(_){}}
 
-function closeAtlas(){const m=document.getElementById('atlas-modal');m.classList.add('hidden');m.classList.remove('flex');document.body.style.overflow='';if(document.fullscreenElement)document.exitFullscreen?.();}
+function closeAtlas(){window.AtlasAnnotations?.detachViewer();const m=document.getElementById('atlas-modal');m.classList.add('hidden');m.classList.remove('flex');document.body.style.overflow='';if(document.fullscreenElement)document.exitFullscreen?.();}
 
 
 
