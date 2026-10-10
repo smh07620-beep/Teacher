@@ -497,6 +497,31 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
 
 
 
+// Fit the page to the real visible reading area (header, search bar and footer heights differ per
+// screen and per material), instead of guessing with a fixed offset that crops tall slides.
+function slideFitHeightPx() {
+    const stage = document.getElementById('slide-viewer-stage');
+    const canvas = document.getElementById('slide-viewer-canvas');
+    if (!stage || !stage.clientHeight) return Math.max(200, window.innerHeight - 330);
+    const css = canvas ? getComputedStyle(canvas) : null;
+    const pad = css ? (parseFloat(css.paddingTop) || 0) + (parseFloat(css.paddingBottom) || 0) : 24;
+    return Math.max(160, Math.floor(stage.clientHeight - pad - 4));
+}
+(function watchSlideFit() {
+    const refit = () => {
+        const modal = document.getElementById('slide-viewer-modal');
+        if (!modal || modal.classList.contains('hidden')) return;
+        if ((slideViewerState.zoom || 1) < 1.01) applySlideZoom();
+    };
+    window.addEventListener('resize', refit);
+    document.addEventListener('fullscreenchange', () => setTimeout(refit, 80));
+    const attach = () => {
+        const stage = document.getElementById('slide-viewer-stage');
+        if (stage && window.ResizeObserver) new ResizeObserver(refit).observe(stage);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+})();
+
 function applySlideZoom() {
 
     if(slideViewerState.mode==='pdf'&&slideViewerState.readerMode==='document') return;
@@ -511,7 +536,7 @@ function applySlideZoom() {
 
         img.style.width = 'auto'; img.style.maxWidth = '100%';
 
-        img.style.maxHeight = 'calc(100dvh - 145px)';
+        img.style.maxHeight = slideFitHeightPx() + 'px';
 
     } else {
 
