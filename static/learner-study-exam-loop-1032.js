@@ -100,6 +100,8 @@
     if (s.pending) return '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">⏳ 待人工批改</span>';
     return `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">❌ 未通過（最近 ${esc(s.latest?.score ?? 0)} 分）</span>`;
   }
+  // Read-only view of the learner's per-exam result for course status badges (teaching.js).
+  window.LearnerExamStatus = Object.freeze({get: examId => examStatus.get(String(examId || '')) || null});
   function failHint(examId) {
     const s = examStatus.get(String(examId || ''));
     if (!s || s.passed || s.pending) return '';

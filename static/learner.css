@@ -495,6 +495,8 @@ body{
 .course-state-todo{background:#f1f5f9;color:#475569;border-color:#dbe4e8}
 .course-state-doing{background:#e0f2fe;color:#075985;border-color:#bae0f5}
 .course-state-done{background:#dcfce7;color:#166534;border-color:#b7e8c8}
+.course-state-review{background:#fef3c7;color:#92400e;border-color:#f3d98a}
+.course-state-fail{background:#ffe4e6;color:#9f1239;border-color:#fbb6c2}
 .course-continue-bar .teaching-primary{width:100%;text-align:left}
 @media(min-width:640px){.course-continue-bar .teaching-primary{width:auto;max-width:100%}}
 @media(max-width:640px){#course-overview .course-learning-toggle .when-closed,#course-overview .course-learning-toggle .when-open{font-size:.72rem}}

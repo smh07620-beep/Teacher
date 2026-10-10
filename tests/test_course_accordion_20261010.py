@@ -16,15 +16,22 @@ class CourseAccordionContract(unittest.TestCase):
         for marker in (
             'class="when-closed">展開',
             'class="when-open">收合',
-            "course-state-todo",
-            "course-state-doing",
-            "course-state-done",
+            "badge(done ? 'doing' : 'todo'",
+            "course-state-${tone}",
             "未開始",
             "學習中",
             "教材已完成",
+            "待評核",
+            "未通過需補訓",
         ):
             self.assertIn(marker, self.teaching)
         self.assertIn("course-learning-chevron", self.teaching)
+
+    def test_state_badge_uses_exam_result(self):
+        loop = (ROOT / "static/learner-study-exam-loop-1032.js").read_text(encoding="utf-8")
+        self.assertIn("window.LearnerExamStatus = Object.freeze", loop)
+        self.assertIn("window.LearnerExamStatus?.get?.(exam.id)", self.teaching)
+        self.assertIn("function teachingCourseStateBadge(", self.teaching)
 
     def test_only_one_unit_open_and_first_unfinished_is_default(self):
         self.assertIn("function collapseOthers(card)", self.teaching)
