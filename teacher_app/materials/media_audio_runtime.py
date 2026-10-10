@@ -496,7 +496,7 @@ def _segment_note(script: dict, source: dict) -> str:
     except (TypeError, ValueError):
         page_count = 0
     if page_count >= 1 and segments and len(segments) != page_count:
-        return f"講稿有 {len(segments)} 段、教材有 {page_count} 張，數量不同，語音維持整段播放（不會逐張停住）。"
+        return f"講稿有 {len(segments)} 段、教材有 {page_count} 張，數量不同，語音維持整段播放（不會逐張停住）。請回講稿，用「空白行」把每一張投影片的講解分成一段，修改後儲存、重新核准，再重新產生語音。"
     if page_count < 1:
         return "來源教材不是投影片或頁數未知，語音維持整段播放。"
     return ""
