@@ -497,6 +497,8 @@ body{
 .course-state-done{background:#dcfce7;color:#166534;border-color:#b7e8c8}
 .course-state-review{background:#fef3c7;color:#92400e;border-color:#f3d98a}
 .course-state-fail{background:#ffe4e6;color:#9f1239;border-color:#fbb6c2}
-.course-continue-bar .teaching-primary{width:100%;text-align:left}
-@media(min-width:640px){.course-continue-bar .teaching-primary{width:auto;max-width:100%}}
+.course-due{display:inline-flex;align-items:center;font-weight:800;color:#92400e}
+.course-due-overdue{color:#9f1239}
+/* Header counts are reference information, not actions: keep them quiet. */
+#course-overview>.edu-card .course-stat-chip{background:transparent;border-color:transparent;color:#64748b;font-weight:600;padding-inline:.25rem}
 @media(max-width:640px){#course-overview .course-learning-toggle .when-closed,#course-overview .course-learning-toggle .when-open{font-size:.72rem}}

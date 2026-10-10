@@ -149,8 +149,15 @@ function renderTeachingCourseOverview() {
     const all = [...courses];
     if (unassigned.length || unassignedExams.length) all.push({id:'__general__', title:'補充學習資源', desc:'依需要選讀的教材與評量。'});
     const matsOf = course => teachingOrderedMaterials(course, course.id === '__general__' ? unassigned : materials.filter(m => m.courseId === course.id));
+    const learnerTasks = window.Teacher71LearnerTasks;
+    const nextCourseId = String(learnerTasks?.nextAction?.courseId || '');
     const firstTodo = courses.find(course => matsOf(course).some(m => !myCompletedMaterials[m.id]));
-    const recommendedId = firstTodo ? firstTodo.id : '';
+    // The unit highlighted here is the same one the "我的待辦" next step points to.
+    const recommendedId = courses.some(course => course.id === nextCourseId) ? nextCourseId : (firstTodo ? firstTodo.id : '');
+    const dueByCourse = new Map();
+    (learnerTasks?.items || []).forEach(task => {
+        if (task.kind === 'course' && task.courseId && task.dueAt) dueByCourse.set(String(task.courseId), task);
+    });
     let autoOpenId = '';
     const isOpen = (id, shownCount) => {
         if (!followRecommended) return openIds.has(id);
@@ -172,7 +179,11 @@ function renderTeachingCourseOverview() {
         const objectives = (course.learningObjectives || '').split('\n').map(s => s.trim()).filter(Boolean);
         const pct = mats.length ? Math.round(done / mats.length * 100) : 0;
         const stateBadge = teachingCourseStateBadge(mats, exams, done, complete);
-        return `<details class="course-learning-card" data-course="${escapeHtml(course.id)}" ${isOpen(course.id, shown) ? 'open' : ''}><summary class="course-learning-summary"><div class="min-w-0 flex-1"><div class="teaching-course-header"><span class="teaching-course-number">${general ? '+' : String(index + 1).padStart(2,'0')}</span><h3 class="text-lg font-black">${escapeHtml(course.title)}</h3>${stateBadge}</div><div class="teaching-meta"><span>教材完成 ${done}／${mats.length}</span>${course.estimatedMinutes ? `<span>建議 ${course.estimatedMinutes} 分鐘</span>` : ''}${course.startDate || course.endDate ? `<span>建議學習期間：${escapeHtml(course.startDate || '不限')} ～ ${escapeHtml(course.endDate || '不限')}</span>` : ''}<span>課後評量 ${exams.length} 份</span></div>${mats.length ? `<div class="course-progress-mini mt-3" role="progressbar" aria-label="教材完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>` : ''}</div><span class="course-learning-toggle" aria-hidden="true"><span class="when-closed">展開</span><span class="when-open">收合</span><span class="course-learning-chevron"><svg viewBox="0 0 20 20" width="16" height="16" focusable="false"><path d="M5 7.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span></summary><div class="teaching-plan"><div>${course.desc ? `<p>${escapeHtml(course.desc)}</p>` : ''}${objectives.length ? `<h4 class="mt-3">學完這堂課，你將能夠</h4><ul>${objectives.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : '<p class="teaching-help">依下方順序閱讀教材，再進行課後評量。</p>'}</div><div>${next ? `<button class="teaching-primary" data-material-open="${escapeHtml(next.id)}">${done ? '繼續下一份教材' : '開始學習'} →</button>` : `<p class="teaching-help">${complete ? '教材已完成，可複習或進行課後評量。' : '教師正在準備教材。'}</p>`}</div></div><div class="course-material-group"><h4 class="teaching-section-title">${general ? '選讀教材' : '學習路徑 · 請依序閱讀'}</h4>${mats.map(teachingMaterialRow).join('') || '<p class="teaching-help">尚無教材。</p>'}${exams.length ? `<div class="mt-5"><h4 class="teaching-section-title">課後評量</h4><p class="teaching-help">看完教材即可直接考核，不需先按完成標記；考核未通過可隨時回教材複習後重考。</p>${exams.map(buildCourseExamRow).join('')}</div>` : ''}</div></details>`;
+        const dueTask = dueByCourse.get(String(course.id));
+        const dueChip = dueTask
+            ? `<span class="course-due${dueTask.overdue ? ' course-due-overdue' : ''}">${dueTask.overdue ? '已逾期' : '截止'} ${escapeHtml(String(dueTask.dueAt).slice(0, 10).replace(/-/g, '/'))}</span>`
+            : '';
+        return `<details class="course-learning-card" data-course="${escapeHtml(course.id)}" ${isOpen(course.id, shown) ? 'open' : ''}><summary class="course-learning-summary"><div class="min-w-0 flex-1"><div class="teaching-course-header"><span class="teaching-course-number">${general ? '+' : String(index + 1).padStart(2,'0')}</span><h3 class="text-lg font-black">${escapeHtml(course.title)}</h3>${stateBadge}</div><div class="teaching-meta"><span>教材完成 ${done}／${mats.length}</span>${dueChip}${course.estimatedMinutes ? `<span>建議 ${course.estimatedMinutes} 分鐘</span>` : ''}${course.startDate || course.endDate ? `<span>建議學習期間：${escapeHtml(course.startDate || '不限')} ～ ${escapeHtml(course.endDate || '不限')}</span>` : ''}<span>課後評量 ${exams.length} 份</span></div>${mats.length ? `<div class="course-progress-mini mt-3" role="progressbar" aria-label="教材完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>` : ''}</div><span class="course-learning-toggle" aria-hidden="true"><span class="when-closed">展開</span><span class="when-open">收合</span><span class="course-learning-chevron"><svg viewBox="0 0 20 20" width="16" height="16" focusable="false"><path d="M5 7.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span></summary><div class="teaching-plan"><div>${course.desc ? `<p>${escapeHtml(course.desc)}</p>` : ''}${objectives.length ? `<h4 class="mt-3">學完這堂課，你將能夠</h4><ul>${objectives.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : '<p class="teaching-help">依下方順序閱讀教材，再進行課後評量。</p>'}</div><div>${next ? `<button class="teaching-primary" data-material-open="${escapeHtml(next.id)}">${done ? '繼續下一份教材' : '開始學習'} →</button>` : `<p class="teaching-help">${complete ? '教材已完成，可複習或進行課後評量。' : '教師正在準備教材。'}</p>`}</div></div><div class="course-material-group"><h4 class="teaching-section-title">${general ? '選讀教材' : '學習路徑 · 請依序閱讀'}</h4>${mats.map(teachingMaterialRow).join('') || '<p class="teaching-help">尚無教材。</p>'}${exams.length ? `<div class="mt-5"><h4 class="teaching-section-title">課後評量</h4><p class="teaching-help">看完教材即可直接考核，不需先按完成標記；考核未通過可隨時回教材複習後重考。</p>${exams.map(buildCourseExamRow).join('')}</div>` : ''}</div></details>`;
     }).join('') || '<div class="course-empty-row">沒有符合條件的課程。請更換關鍵字或閱讀狀態；尚無課程時請聯絡教師。</div>';
     document.getElementById('learning-result-count').textContent = `顯示 ${shown} 個課程／資源區`;
     document.getElementById('course-overview-course-count').textContent = `課程 ${courses.length}`;
@@ -180,7 +191,6 @@ function renderTeachingCourseOverview() {
     document.getElementById('course-overview-exam-count').textContent = `考卷 ${quizzes.length}`;
     grid.dataset.autoOpenId = autoOpenId;
     teachingSyncStickyOffset();
-    teachingUpdateContinueButton(firstTodo, firstTodo ? matsOf(firstTodo) : []);
     window.LearnerCourseOverview?.finalize?.(grid, courses);
 }
 
@@ -197,18 +207,6 @@ function teachingSyncStickyOffset() {
     const header = document.querySelector('.v573-system-header, .official-main-header');
     const height = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
     box.style.setProperty('--course-sticky-top', `${height}px`);
-}
-function teachingUpdateContinueButton(course, mats) {
-    const bar = document.getElementById('course-continue-bar');
-    const btn = document.getElementById('course-continue-btn');
-    if (!bar || !btn) return;
-    const next = course ? mats.find(m => !myCompletedMaterials[m.id]) : null;
-    if (!course || !next) { bar.classList.add('hidden'); return; }
-    const started = mats.some(m => myCompletedMaterials[m.id]);
-    btn.dataset.course = course.id;
-    btn.dataset.material = next.id;
-    btn.textContent = `▶ ${started ? '繼續學習' : '開始學習'}：${course.title || ''}`;
-    bar.classList.remove('hidden');
 }
 (function teachingCourseAccordion() {
     const GRID = '#course-overview-grid';
@@ -239,31 +237,6 @@ function teachingUpdateContinueButton(course, mats) {
             });
             return;
         }
-        const go = event.target.closest?.('#course-continue-btn');
-        if (!go) return;
-        const grid = document.querySelector(GRID);
-        const card = grid && [...grid.querySelectorAll('details.course-learning-card')]
-            .find(node => node.dataset.course === go.dataset.course);
-        if (!card) {
-            // The reading-status filter may be hiding the unit: show all, then retry once.
-            const filter = document.getElementById('learning-filter');
-            if (filter && filter.value !== 'all') {
-                filter.value = 'all';
-                if (typeof renderCourseOverview === 'function') renderCourseOverview();
-                setTimeout(() => go.click(), 0);
-            }
-            return;
-        }
-        grid.dataset.userTouched = '1';
-        collapseOthers(card);
-        card.open = true;
-        requestAnimationFrame(() => {
-            scrollToCard(card);
-            const target = [...card.querySelectorAll('[data-csp-click]')]
-                .find(node => node.getAttribute('data-csp-click') === `openMaterial('${go.dataset.material}')`)
-                || card.querySelector('[data-material-open]');
-            target?.focus?.({preventScroll: true});
-        });
     });
     // <details> "toggle" does not bubble, so listen in the capture phase. This also
     // keeps one unit open when another script (e.g. returning from an exam) opens a card.
@@ -276,6 +249,9 @@ function teachingUpdateContinueButton(course, mats) {
         if (card.open) collapseOthers(card);
     }, true);
     window.addEventListener('resize', teachingSyncStickyOffset);
+    window.addEventListener('teacher71:learner-tasks', () => {
+        if (document.getElementById('course-overview-grid')?.children.length && typeof renderCourseOverview === 'function') renderCourseOverview();
+    });
 })();
 
 function teachingEnsureDialog() {

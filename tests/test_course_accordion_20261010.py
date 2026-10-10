@@ -44,12 +44,21 @@ class CourseAccordionContract(unittest.TestCase):
         self.assertIn("scrollIntoView({behavior: reduceMotion() ? 'auto' : 'smooth'", self.teaching)
         self.assertIn("prefers-reduced-motion", self.teaching)
 
-    def test_continue_button_is_wired_without_inline_handlers(self):
-        self.assertIn('id="course-continue-btn"', self.html)
-        self.assertIn('id="course-continue-bar"', self.html)
-        button = self.html[self.html.index('id="course-continue-btn"'):][:120]
-        self.assertNotIn("onclick", button)
-        self.assertIn("teachingUpdateContinueButton(firstTodo", self.teaching)
+    def test_next_step_lives_in_my_todo_not_a_second_button(self):
+        self.assertNotIn("course-continue", self.html)
+        self.assertNotIn("teachingUpdateContinueButton", self.teaching)
+        self.assertIn("window.Teacher71LearnerTasks", self.teaching)
+        self.assertIn("teacher71:learner-tasks", self.teaching)
+        command = (ROOT / "static/training-command-center-71.js").read_text(encoding="utf-8")
+        self.assertIn("window.Teacher71LearnerTasks = Object.freeze", command)
+        self.assertIn("📌 我的待辦", command)
+        self.assertIn('id="training-command-toggle-71"', command)
+
+    def test_unit_rows_show_deadline_and_shelves_follow_the_course_list(self):
+        self.assertIn("course-due-overdue", self.teaching)
+        grid = self.html.index('id="course-overview-grid"')
+        self.assertLess(grid, self.html.index('id="saved-learning-items"'))
+        self.assertLess(grid, self.html.index('id="completion-certificates"'))
 
     def test_open_unit_title_is_sticky(self):
         self.assertIn(".course-learning-card[open]>.course-learning-summary{position:sticky", self.css)

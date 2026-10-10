@@ -28,9 +28,6 @@ let myCompletedMaterials = {};
 let savedLearningItems = new Map();
 let savedLearningLoaded = false;
 let savedLearningLoading = null;
-let learningCalendarEvents = [];
-let learningCalendarLoaded = false;
-let learningCalendarLoading = null;
 let completionCertificates = [];
 let completionCertificatesLoaded = false;
 let completionCertificatesLoading = null;
@@ -918,50 +915,6 @@ function goToExamModule(categoryKey, groupKey) {
 
 
 
-async function loadLearningCalendar(force=false){
-    if(learningCalendarLoading)return learningCalendarLoading;
-    if(learningCalendarLoaded&&!force){renderLearningCalendar();return learningCalendarEvents;}
-    learningCalendarLoading=(async()=>{
-        try{
-            const res=await fetch('/api/learning-calendar?days=90',{credentials:'same-origin',cache:'no-store'});
-            const data=await res.json().catch(()=>({}));
-            if(!res.ok)throw new Error(data.error||'無法讀取學習行事曆');
-            learningCalendarEvents=Array.isArray(data.events)?data.events:[];
-        }catch(_){learningCalendarEvents=[];}
-        finally{
-            learningCalendarLoaded=true;
-            learningCalendarLoading=null;
-            renderCourseOverview();
-        }
-        return learningCalendarEvents;
-    })();
-    return learningCalendarLoading;
-}
-
-function learningCalendarKindLabel(kind){
-    return {course_due:'必修截止',course_start:'課程開始',course_end:'建議完成',pgy_due:'PGY 截止'}[kind]||'學習行程';
-}
-
-function openLearningCalendarEvent(eventId){
-    const item=learningCalendarEvents.find(event=>event.id===eventId);if(!item)return;
-    if(item.target==='pgy-workflow'){
-        if(typeof window.switchLearningModule==='function')window.switchLearningModule('assessment');
-        window.setTimeout(()=>(document.getElementById('pgy-workflow-center')||document.getElementById('panel-assessment'))?.scrollIntoView?.({behavior:'smooth',block:'start'}),120);
-        return;
-    }
-    const card=Array.from(document.querySelectorAll('#course-overview-grid > details')).find(node=>node.dataset.courseLearningId===item.courseId);
-    if(card){card.open=true;card.scrollIntoView({behavior:'smooth',block:'start'});}
-}
-
-function renderLearningCalendar(){
-    const section=document.getElementById('learning-calendar'),list=document.getElementById('learning-calendar-list'),count=document.getElementById('learning-calendar-count');
-    if(!section||!list)return;
-    const items=learningCalendarEvents.slice(0,10);
-    section.classList.toggle('hidden',!items.length);if(count)count.textContent=`${items.length} 項`;
-    list.innerHTML=items.map(item=>{const when=new Date(item.at),date=Number.isNaN(when.getTime())?escapeHtml(item.date||''):when.toLocaleDateString('zh-TW',{month:'2-digit',day:'2-digit'});return `<div class="flex items-center gap-3 rounded-xl border ${item.overdue?'border-rose-200 bg-rose-50':'border-indigo-100 bg-white'} px-3 py-2"><div class="w-12 shrink-0 text-center"><div class="text-xs font-black ${item.overdue?'text-rose-700':'text-indigo-700'}">${date}</div></div><div class="min-w-0 flex-1"><div class="truncate text-xs font-bold text-slate-800">${escapeHtml(item.title||'學習行程')}</div><div class="mt-0.5 text-[10px] text-slate-400">${escapeHtml(learningCalendarKindLabel(item.kind))}${item.overdue?' · 已逾期':''}</div></div><button type="button" data-calendar-event-id="${escapeHtml(item.id)}" class="shrink-0 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[10px] font-bold text-indigo-700">前往</button></div>`;}).join('');
-    list.querySelectorAll('[data-calendar-event-id]').forEach(button=>button.addEventListener('click',()=>openLearningCalendarEvent(button.dataset.calendarEventId||'')));
-}
-
 async function loadCompletionCertificates(force=false){
     if(completionCertificatesLoading)return completionCertificatesLoading;
     if(completionCertificatesLoaded&&!force){renderCompletionCertificateShelf();return completionCertificates;}
@@ -1112,7 +1065,6 @@ async function openCourseExam(catId){
 
 function ensureCourseOverviewSupportData(){
     if(!savedLearningLoaded&&!savedLearningLoading)void loadSavedLearningItems();
-    if(!learningCalendarLoaded&&!learningCalendarLoading)void loadLearningCalendar();
     if(!completionCertificatesLoaded&&!completionCertificatesLoading)void loadCompletionCertificates();
 }
 
@@ -1145,7 +1097,6 @@ function finalizeCourseOverview(grid,courses){
         row.appendChild(actions);
         group.appendChild(row);
     });
-    renderLearningCalendar();
     renderSavedLearningShelf();
     renderCompletionCertificateShelf();
     bindSavedLearningButtons(grid);

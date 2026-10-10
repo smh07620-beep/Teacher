@@ -79,21 +79,33 @@
     if (section) return section;
     const course = document.getElementById('course-overview');
     if (!course) return null;
-    section = document.createElement('details');
+    // 2026-10-10: the to-do list and the next step are always visible; notifications,
+    // learning summary and training progress stay folded in one detail block below.
+    section = document.createElement('section');
     section.id = ID;
     section.className = 'rounded-2xl border border-indigo-100 bg-white px-4 py-3 shadow-sm';
     section.innerHTML = `
-      <summary class="cursor-pointer list-none flex items-center justify-between gap-3">
-        <span class="flex items-center gap-2 min-w-0"><b class="text-sm text-slate-900">📊 學習狀態</b><span id="training-command-summary-71" class="text-[11px] text-slate-500 truncate">讀取中…</span></span>
-        <span class="text-[11px] font-bold text-indigo-700">展開 ▾</span>
-      </summary>
-      <div id="learning-status-detail-71" class="mt-3 space-y-4 border-t border-slate-100 pt-3">
-        <section id="training-command-tasks-71">
-          <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-800">📌 我的待辦</b><span id="training-command-status-71" class="text-[10px] text-slate-400">讀取中…</span></div>
-          <div id="training-command-next-71" class="mt-2"></div>
-          <div id="training-command-list-71" class="space-y-2 mt-2"></div>
-        </section>
-      </div>`;
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <span class="flex items-center gap-2 min-w-0"><b class="text-sm text-slate-900">📌 我的待辦</b><span id="training-command-summary-71" class="text-[11px] text-slate-500 truncate">讀取中…</span></span>
+        <span id="training-command-status-71" class="text-[10px] text-slate-400">讀取中…</span>
+      </div>
+      <section id="training-command-tasks-71" class="mt-3">
+        <div id="training-command-next-71"></div>
+        <div id="training-command-list-71" class="space-y-2 mt-2"></div>
+        <button id="training-command-toggle-71" type="button" class="mt-2 hidden text-[11px] font-bold text-indigo-700 hover:text-indigo-900"></button>
+      </section>
+      <details id="learning-status-more-71" class="mt-3 border-t border-slate-100 pt-2 hidden">
+        <summary class="cursor-pointer list-none flex items-center justify-between gap-3">
+          <span class="flex items-center gap-2 min-w-0"><b class="text-xs text-slate-800">📊 學習狀態詳情</b><span class="text-[11px] text-slate-500 truncate">通知、學習摘要、訓練進度</span></span>
+          <span class="text-[11px] font-bold text-indigo-700">展開 ▾</span>
+        </summary>
+        <div id="learning-status-detail-71" class="mt-3 space-y-4 border-t border-slate-100 pt-3"></div>
+      </details>`;
+    // Other modules append their sections asynchronously; only show the detail block when it has content.
+    const detail = section.querySelector('#learning-status-detail-71');
+    const more = section.querySelector('#learning-status-more-71');
+    new MutationObserver(() => { more.classList.toggle('hidden', !detail.children.length); })
+      .observe(detail, {childList: true});
     const header = course.querySelector(':scope > .edu-card');
     if (header) header.after(section); else course.prepend(section);
     return section;
@@ -140,9 +152,21 @@
       return `<a href="${href}" class="block rounded-xl border ${cls} px-3 py-2 hover:border-teal-300"><div class="flex items-center justify-between gap-2"><span class="min-w-0"><span class="text-[10px] font-black ${item?.overdue ? 'text-rose-700' : item?.kind === 'retraining' ? 'text-amber-700' : 'text-teal-700'}">${escapeHtml(badge)}</span><b class="block text-xs text-slate-800 truncate mt-0.5">${escapeHtml(item.title || '待辦')}</b></span><span class="text-[10px] font-bold text-teal-700 shrink-0">${escapeHtml(item.actionLabel || '前往處理')} →</span></div>${meta ? `<div class="text-[10px] text-slate-500 mt-1">${escapeHtml(meta)}</div>` : ''}</a>`;
     });
 
+    const VISIBLE_ROWS = 3;
+    const toggle = document.getElementById('training-command-toggle-71');
     list.innerHTML = rows.length
-      ? rows.join('')
+      ? rows.slice(0, VISIBLE_ROWS).join('') + (rows.length > VISIBLE_ROWS
+        ? `<div id="training-command-extra-71" class="space-y-2" hidden>${rows.slice(VISIBLE_ROWS).join('')}</div>` : '')
       : '<div class="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-700">✓ 目前沒有待處理的線上學習工作。</div>';
+    if (toggle) {
+      toggle.classList.toggle('hidden', rows.length <= VISIBLE_ROWS);
+      toggle.textContent = `查看全部 ${rows.length} 項 ▾`;
+      toggle.dataset.total = String(rows.length);
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+    // Course rows use the same canonical list for deadlines and the recommended unit.
+    window.Teacher71LearnerTasks = Object.freeze({items: learnerItems, nextAction});
+    window.dispatchEvent(new CustomEvent('teacher71:learner-tasks'));
     list.querySelectorAll('[data-pgy-command]').forEach(button => button.addEventListener('click', openPGY));
     nextBox.querySelector('[data-next-pgy]')?.addEventListener('click', openPGY);
   }
@@ -163,6 +187,17 @@
       if (status) status.textContent = `❌ ${error.message || '無法讀取待辦'}`;
     }
   }
+
+  document.addEventListener('click', event => {
+    const button = event.target.closest?.('#training-command-toggle-71');
+    if (!button) return;
+    const extra = document.getElementById('training-command-extra-71');
+    if (!extra) return;
+    const open = extra.hidden;
+    extra.hidden = !open;
+    button.setAttribute('aria-expanded', String(open));
+    button.textContent = open ? '只看前 3 項 ▴' : `查看全部 ${button.dataset.total || ''} 項 ▾`;
+  });
 
   function init() { if (mount()) load(false); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true});
