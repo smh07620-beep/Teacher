@@ -13,5 +13,13 @@ class ScriptPageMapTest(unittest.TestCase):
         self.assertIn("沒有對應講稿", JS)
 
 
+
+
+class SourceListExcludesDerivativesTest(unittest.TestCase):
+    def test_narration_materials_not_offered_as_script_source(self):
+        self.assertIn("'ai_narration', 'teacher_narration'", JS)
+        self.assertIn("storageMeta.generated", JS)
+
+
 if __name__ == "__main__":
     unittest.main()

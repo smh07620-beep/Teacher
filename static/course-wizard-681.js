@@ -518,19 +518,62 @@ function mountExamWhoPicker(){
   void window.ExamAssigneePicker.mount(host,{model:state.examWho,area:state.course?.area||sc.area,group:state.course?.group||sc.group});
 }
 
+// 編輯既有課程時，把已儲存的考試時間／及格分數讀回畫面；否則畫面會是空白預設值，
+// 老師一動任何欄位就會把原本的開始時間等設定覆蓋成空白。
+function toLocalInputValue(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime()))return '';
+  const p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+async function loadExistingExamSettings(category){
+  state.examSettingsLoaded=false;
+  try{
+    const r=await fetch('/api/exam-windows/'+encodeURIComponent(state.categoryId),{credentials:'same-origin'});
+    const d=r.ok?await r.json().catch(()=>({})):{};
+    const w=d.window||{};
+    state.examSettings={
+      ...(state.examSettings||{}),
+      audience:String(category.audience||state.examSettings?.audience||'所有符合課程資格人員'),
+      passingScore:Number(category.passingScore)||80,
+      blind:!!category.blindMode,
+      drawCount:Math.max(0,Number(category.drawCount)||0),
+      opensAt:toLocalInputValue(w.opens_at),
+      closesAt:toLocalInputValue(w.closes_at),
+    };
+    state.examSettingsLoaded=r.ok;
+  }catch(error){console.warn('Course wizard edit: exam settings not loaded',error);}
+}
+
 async function saveWizardExamSettings(id){
   if(!id)return;
   const v=state.examSettings||{};
   const call=async(url,method,body)=>{const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'考卷設定儲存失敗');return d;};
   const iso=x=>x?new Date(x).toISOString():'';
   if(state.examSettingsDirty){
-    if(v.opensAt&&v.closesAt&&new Date(v.opensAt)>=new Date(v.closesAt))throw new Error('最後考核日期必須晚於開始時間');
-    await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'PATCH',{audience:String(v.audience||'').trim()||'所有符合課程資格人員',passingScore:Math.max(1,Math.min(100,Number(v.passingScore)||80)),blindMode:!!v.blind,drawCount:Math.max(0,Number(v.drawCount)||0)});
-    await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt:iso(v.opensAt),closesAt:iso(v.closesAt),reminderEnabled:true});
+    const touched=state.examTouchedFields||new Set();
+    const categoryBody={};
+    // 只送老師真的動過的欄位，避免用預設值覆蓋掉已儲存的資料。
+    if(touched.has('audience'))categoryBody.audience=String(v.audience||'').trim()||'所有符合課程資格人員';
+    if(touched.has('passingScore'))categoryBody.passingScore=Math.max(1,Math.min(100,Number(v.passingScore)||80));
+    if(touched.has('blind'))categoryBody.blindMode=!!v.blind;
+    if(touched.has('drawCount'))categoryBody.drawCount=Math.max(0,Number(v.drawCount)||0);
+    let opens=v.opensAt,closes=v.closesAt;
+    if(!state.examSettingsLoaded){
+      const r=await fetch('/api/exam-windows/'+encodeURIComponent(id),{credentials:'same-origin'});
+      const d=r.ok?await r.json().catch(()=>({})):{};
+      const w=d.window||{};
+      if(!touched.has('opensAt'))opens=toLocalInputValue(w.opens_at);
+      if(!touched.has('closesAt'))closes=toLocalInputValue(w.closes_at);
+    }
+    if(opens&&closes&&new Date(opens)>=new Date(closes))throw new Error('最後考核日期必須晚於開始時間');
+    if(Object.keys(categoryBody).length)await call(`/api/quiz-categories/${encodeURIComponent(id)}`,'PATCH',categoryBody);
+    await call(`/api/exam-windows/${encodeURIComponent(id)}`,'PUT',{opensAt:iso(opens),closesAt:iso(closes),reminderEnabled:true});
   }
   if(state.examWho?.touched&&window.ExamAssigneePicker)await window.ExamAssigneePicker.saveModel(id,state.examWho);
 }
-window.courseWizard681SetExamField=(field,value)=>{state.examSettings={...(state.examSettings||{}),[field]:value};state.examSettingsDirty=true;};
+window.courseWizard681SetExamField=(field,value)=>{state.examSettings={...(state.examSettings||{}),[field]:value};state.examSettingsDirty=true;(state.examTouchedFields=state.examTouchedFields||new Set()).add(field);};
 
 function stepThree(){
   const primary=['later','bank','ai'];
@@ -1204,7 +1247,7 @@ async function openAssessmentAuthoringOnce(){
 
 function clearWizardState(){
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=true;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examTouchedFields=new Set();state.examSettingsLoaded=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=true;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';
@@ -1253,6 +1296,7 @@ async function editCourse(courseId,step=2){
         state.categoryId=String(category.id||'');
         state.examMode='bank';
         if(el('wizard-exam-title'))el('wizard-exam-title').value=category.title||'';
+        await loadExistingExamSettings(category);
       }
     }catch(error){console.warn('Course wizard edit: exam lookup skipped',error);}
     await verifyCreatedCourseMaterials();
@@ -1512,7 +1556,7 @@ async function openCourseWorkspace(){
   el('admin-course-material-hub')?.scrollIntoView({behavior:'smooth',block:'start'});
 
   // Do not leak a completed course into the next create-course flow.
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=true;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examTouchedFields=new Set();state.examSettingsLoaded=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=true;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;
   state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;
   state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];
   state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';
@@ -1524,7 +1568,7 @@ async function openCourseWorkspace(){
 function reset(){
   if(state.created&&!canLeaveCourse())return alert('目前教材尚未全部完成，請先等待或處理失敗工作。');
   state.watchToken++;
-  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=true;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';clearWorkflowId();
+  state.editing=false;state.step=1;state.files=[];state.fileMeta={};state.existing=[];state.examMode='later';state.examSettingsDirty=false;state.examTouchedFields=new Set();state.examSettingsLoaded=false;state.examQuestionCount=0;state.examWho=null;state.examSettings={audience:'所有符合課程資格人員',opensAt:'',closesAt:'',passingScore:80,blind:false,drawCount:0};state.aiPlan='none';state.assignmentEnabled=true;state.assigneeType='group';state.assigneeKey='';state.assigneeKeys=[];state.assignmentRequired=true;state.dueAt='';state.audienceOptions=null;state.course=null;state.categoryId='';state.materials=[];state.busy=false;state.publicationBusy=false;state.created=false;state.failedUploads=[];state.queuedJobs=[];state.queuedMaterialIds=[];state.expectedMaterialIds=[];state.linksVerified=false;state.expectedJobs=0;state.jobRows=[];state.jobEstimateSeconds=0;state.workerProtocolBlocked=false;state.completedMaterials=[];state.atlasCandidates={};state.aiProducts=[];state.externalLinks=[];state.resultHtml='';clearWorkflowId();
   ['wizard-course-title','wizard-course-desc','wizard-exam-title'].forEach(id=>{if(el(id))el(id).value='';});
   render();loadMaterials();
 }

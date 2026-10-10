@@ -197,6 +197,8 @@
     const byId = new Map();
     (Array.isArray(rows) ? rows : [])
       .filter(item => item && item.id && !item.isBuiltin)
+      // AI 語音／老師旁白／AI 產生的衍生檔不是講稿來源；留在選單裡只會越產生越多筆，還會選錯。
+      .filter(item => !(item.storageMeta && (item.storageMeta.generated || ['ai_narration', 'teacher_narration'].includes(item.storageMeta.mediaKind))))
       .filter(item => (!group || !item.group || String(item.group) === String(group))
         && (!area || !item.area || String(item.area) === String(area)))
       .forEach(item => byId.set(String(item.id), item));
