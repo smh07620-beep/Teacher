@@ -202,6 +202,77 @@ def register_smart_learning(
             return None
         return material
 
+    NARRATION_KINDS = {"ai_narration", "teacher_narration"}
+    NARRATED_VIEWER_MODES = {"slides", "preview_pdf"}
+
+    def required_narration(user, material):
+        """Narration audio the learner must listen to before this slide material counts as done.
+
+        Only a current (not stale after a new version), active narration the learner can open
+        is required; anything else leaves the ordinary document rule untouched.
+        """
+        if str((material or {}).get("viewerMode") or "") not in NARRATED_VIEWER_MODES:
+            return None
+        source_id = str(material.get("id") or "")
+        latest = None
+        try:
+            rows = material_repository.list_uploaded_materials(include_inactive=False)
+        except Exception:
+            return None
+        for item in rows:
+            meta = item.get("storageMeta") or {}
+            if meta.get("mediaKind") not in NARRATION_KINDS or str(meta.get("sourceMaterialId") or "") != source_id:
+                continue
+            if int(meta.get("sourceVersion") or 1) != int(material.get("currentVersion") or 1):
+                continue
+            if latest is None or str(item.get("dateAdded") or "") > str(latest.get("dateAdded") or ""):
+                latest = item
+        if latest is None or not learning_access.can_access_learning_item(user, latest):
+            return None
+        return latest
+
+    def narration_heard(username, audio_id):
+        row = repository.get_progress(str(audio_id), username)
+        if not row:
+            return False
+        try:
+            watched = json.loads(row.get("watched_buckets") or "[]")
+        except Exception:
+            watched = []
+        if not isinstance(watched, list):
+            return False
+        return content.media_completion(float(row.get("duration") or 0), watched, 0.9)
+
+    def complete_source_after_narration(user, audio_material):
+        """When the narration reaches 90%, finish the slide material if all pages were read."""
+        meta = audio_material.get("storageMeta") or {}
+        if meta.get("mediaKind") not in NARRATION_KINDS:
+            return None
+        source_id = str(meta.get("sourceMaterialId") or "")
+        source = visible_material(user, source_id) if source_id else None
+        if not source or int(meta.get("sourceVersion") or 1) != int(source.get("currentVersion") or 1):
+            return None
+        username = str(user["username"])
+        row = repository.get_progress(source_id, username)
+        if not row or not narration_heard(username, audio_material.get("id")):
+            return None
+        existing = progress_payload(source_id, source, row)
+        if existing.get("completed"):
+            return None
+        position = existing.get("position") or {}
+        total = int(position.get("totalPages") or 0)
+        document = content.document_completion(total, position.get("visitedPages") or [], 0.9)
+        if not document["completed"]:
+            return None
+        now = _now()
+        version = versioning.current_version(source)
+        repository.upsert_progress(
+            source_id, username, position=position, progress=float(existing.get("progress") or 0),
+            completed=True, last_viewed_at=now, completed_at=now,
+        )
+        repository.set_completed_version(source_id, username, version)
+        return source_id
+
     def progress_payload(material_id, material, data):
         current_version = versioning.current_version(material)
         if not data:
@@ -332,6 +403,7 @@ def register_smart_learning(
             return jsonify({"error": "watchedBuckets 格式錯誤"}), 400
 
         threshold = 0.9
+        narration_pending = False
         media_request = duration > 0 or "watchedBuckets" in body or "lastPositionSeconds" in body
         position = dict(requested_position)
 
@@ -376,7 +448,10 @@ def register_smart_learning(
                     "version": current_version,
                 }
                 progress = float(document["progress"])
-                completed = completion_already_current or bool(document["completed"])
+                narration = required_narration(user, material)
+                narration_ok = narration is None or narration_heard(str(user["username"]), narration.get("id"))
+                narration_pending = bool(document["completed"]) and not narration_ok
+                completed = completion_already_current or (bool(document["completed"]) and narration_ok)
             else:
                 try:
                     progress = max(0, min(100, float(body.get("progress", 0))))
@@ -410,8 +485,11 @@ def register_smart_learning(
                 user["username"],
                 current_version,
             )
+        source_completed = complete_source_after_narration(user, material) if media_request else None
 
         return jsonify({
+            "narrationPending": narration_pending,
+            "sourceCompleted": source_completed or "",
             "ok": True,
             "materialId": material_id,
             "position": position,

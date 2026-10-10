@@ -14,6 +14,7 @@
   var KEY='teacher.narration.muted', CC_KEY='teacher.narration.captions';
   var bar=null, audio=null, timer=0, syncTimer=0, capEl=null, cues=[], following=true, autoPage=-1, current=null, sourceId='';
   var segMode=false, segTimer=0, segPage=-1, stopAt=-1, segDone=false;
+  var heard=null, heardDirty=false, flushTimer=0, heardBtnEl=null;
   function readFlag(key, fallback){ try{ var v=localStorage.getItem(key); return v===null?fallback:v==='1'; }catch(e){ return fallback; } }
   function writeFlag(key, v){ try{ localStorage.setItem(key, v?'1':'0'); }catch(e){} }
   function getMuted(){ return readFlag(KEY,false); }
@@ -33,6 +34,9 @@
   }
   function reachedEnd(currentSeconds, endMs){ return currentSeconds*1000 >= Number(endMs)-30; }
   function stop(){
+    flushHeard(true);
+    if(flushTimer){ clearInterval(flushTimer); flushTimer=0; }
+    heard=null; heardDirty=false; heardBtnEl=null;
     if(segTimer){ clearInterval(segTimer); segTimer=0; }
     segMode=false; segPage=-1; stopAt=-1; segDone=false;
     if(timer){ clearInterval(timer); timer=0; }
@@ -66,7 +70,7 @@
     if(shown<0 || typeof window.goToSlidePage!=='function') return;
     if(following){
       // 學員在上一個 tick 之後自己換了頁 → 不再硬拉回來
-      if(autoPage>=0 && shown!==autoPage){ following=false; refreshFollowButton(); return; }
+      if(autoPage>=0 && shown!==autoPage){ seekToPage(shown); return; }
       var target=pageAt(Math.round(audio.currentTime*1000));
       if(target>=0 && target!==shown){ autoPage=target; window.goToSlidePage(target); }
       else autoPage=shown;
@@ -76,15 +80,77 @@
   function refreshFollowButton(){
     if(!followBtn) return;
     followBtn.style.display=timeline().length?'':'none';
-    followBtn.textContent=following?'📖 跟著旁白翻頁':'⏯ 從本頁開始聽';
+    followBtn.textContent=following?'📖 跟著旁白（點此改自行閱讀）':'⏯ 回到跟著旁白聽';
+  }
+  function pageStartMs(page){
+    var list=timeline();
+    for(var i=0;i<list.length;i++){ if(Number(list[i].page)===page) return Number(list[i].startMs); }
+    return null;
+  }
+  // 學員自己翻頁 → 旁白跳到那一頁的起點繼續講，聲音永遠對得上畫面。
+  function seekToPage(page){
+    var startMs=pageStartMs(page);
+    autoPage=page;
+    if(startMs===null) return;               // 這一頁沒有旁白段落：不動
+    audio.currentTime=startMs/1000;
+    if(!getMuted()) audio.play().catch(function(){});
   }
   function listenFromHere(){
-    var shown=viewerIndex(), list=timeline(), startMs=null;
-    for(var i=0;i<list.length;i++){ if(Number(list[i].page)===shown){ startMs=Number(list[i].startMs); break; } }
-    if(startMs===null){ following=true; autoPage=shown; refreshFollowButton(); return; }
-    audio.currentTime=startMs/1000; following=true; autoPage=shown;
-    if(!getMuted()) audio.play().catch(function(){});
+    following=true;
+    seekToPage(viewerIndex());
     refreshFollowButton();
+  }
+  // 自行閱讀：旁白暫停，翻頁不再帶動；但有旁白的教材仍需聽完約 90% 才算完成。
+  function readFreely(){
+    following=false; autoPage=-1;
+    try{ audio.pause(); }catch(e){}
+    refreshFollowButton();
+  }
+
+  // ---- 已聽進度：以 10 秒為單位記錄，由伺服器判定是否達 90% ----
+  function markHeard(){
+    if(!audio || !heard || audio.paused || audio.muted || audio.seeking || window.__teacherNarrationRecording) return;
+    var b=Math.floor(audio.currentTime/10);
+    if(b>=0 && !heard[b]){ heard[b]=1; heardDirty=true; paintHeard(); }
+  }
+  function heardPercent(){
+    if(!audio || !heard || !isFinite(audio.duration) || audio.duration<=0) return null;
+    var covered=0;
+    Object.keys(heard).forEach(function(k){ covered+=Math.min(10, Math.max(0, audio.duration-Number(k)*10)); });
+    return Math.min(100, Math.round(covered/audio.duration*100));
+  }
+  function paintHeard(){
+    if(!heardBtnEl) return;
+    var pct=heardPercent();
+    if(pct===null){ heardBtnEl.textContent=''; return; }
+    heardBtnEl.textContent=pct>=90?'✅ 旁白已聽完':'🎧 旁白已聽 '+pct+'%（需 90%）';
+  }
+  function flushHeard(sync){
+    if(!audio || !heard || !heardDirty || !current || !current.id) return;
+    var duration=isFinite(audio.duration)?audio.duration:0;
+    if(duration<=0) return;
+    heardDirty=false;
+    var body={duration:duration, lastPositionSeconds:Math.min(duration, audio.currentTime||0),
+      watchedBuckets:Object.keys(heard).map(Number)};
+    try{
+      fetch('/api/learning-progress/'+encodeURIComponent(current.id),{
+        method:'PUT', credentials:'same-origin', keepalive:!!sync,
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+      }).then(function(r){ return r.ok?r.json():null; }).then(function(data){
+        if(data && data.sourceCompleted) window.dispatchEvent(new CustomEvent('smartLearning67:progress',{detail:data}));
+      }).catch(function(){ heardDirty=true; });
+    }catch(e){ heardDirty=true; }
+  }
+  function loadHeard(){
+    var token=current && current.id;
+    heard={};
+    fetch('/api/learning-progress/'+encodeURIComponent(token),{credentials:'same-origin',cache:'no-store'})
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(data){
+        if(!data || !current || current.id!==token || !heard) return;
+        (data.watchedBuckets||[]).forEach(function(b){ heard[Number(b)]=1; });
+        paintHeard();
+      }).catch(function(){});
   }
 
   // ---- 字幕（只取教師核准版） ----
@@ -205,14 +271,22 @@
     });
     audio.addEventListener('play', function(){ paint(btn); });
     audio.addEventListener('pause', function(){ paint(btn); });
-    audio.addEventListener('ended', function(){ paint(btn); });
+    audio.addEventListener('ended', function(){ paint(btn); flushHeard(false); });
+    audio.addEventListener('pause', function(){ flushHeard(false); });
+    audio.addEventListener('timeupdate', markHeard);
+    audio.addEventListener('loadedmetadata', paintHeard);
     bar.appendChild(btn);
+    heardBtnEl=document.createElement('span');
+    heardBtnEl.setAttribute('data-narration-heard','1');
+    heardBtnEl.style.cssText='font-weight:700;opacity:.9';
+    bar.appendChild(heardBtnEl);
+    loadHeard();
+    flushTimer=setInterval(function(){ flushHeard(false); }, 15000);
     if(narration.kind==='teacher' && !narration.stale && Array.isArray(narration.timeline) && narration.timeline.length){
       followBtn=document.createElement('button'); followBtn.type='button';
       followBtn.style.cssText='background:transparent;color:inherit;border:0;cursor:pointer;font-weight:700';
       followBtn.addEventListener('click', function(){
-        if(following){ following=false; } else { listenFromHere(); }
-        refreshFollowButton();
+        if(following){ readFreely(); } else { listenFromHere(); }
       });
       bar.appendChild(followBtn); refreshFollowButton();
     }
