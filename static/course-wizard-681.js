@@ -759,7 +759,12 @@ async function loadMaterials(){
   try{
     const {area,group}=scope(),rows=await api(`/api/slides?area=${encodeURIComponent(area)}`);
     const inGroup=(Array.isArray(rows)?rows:[]).filter(m=>String(m.group)===String(group)&&!m.isBuiltin);
-    state.courseMaterials=inGroup.filter(m=>state.course?.id&&String(m.courseId||'')===String(state.course.id));
+    // 學員版清單 /api/slides 不含已停用教材；本課程的教材要連停用的一起列出，才找得到並能再按「啟用」。
+    let courseRows=inGroup;
+    if(state.course?.id){
+      try{const all=await api('/api/slides/admin');courseRows=(Array.isArray(all)?all:[]).filter(m=>!m.isBuiltin&&String(m.group)===String(group));}catch(_e){}
+    }
+    state.courseMaterials=courseRows.filter(m=>state.course?.id&&String(m.courseId||'')===String(state.course.id));
     state.materials=inGroup.filter(m=>m.active!==false);
     state.existing=state.existing.filter(id=>state.materials.some(m=>String(m.id)===String(id)));
     paintMaterials();paintCourseMaterials();

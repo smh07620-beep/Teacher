@@ -25,5 +25,16 @@ class NextButtonSyncTests(unittest.TestCase):
         self.assertIn("state.busy||(state.created&&!canLeaveCourse())", body("syncNextButton"))
 
 
+
+class DisabledMaterialsVisibleTests(unittest.TestCase):
+    def test_course_material_list_uses_admin_endpoint_so_disabled_ones_show(self):
+        text = SRC.replace("\r\n", "\n")
+        start = text.index("async function loadMaterials()")
+        block = text[start:start + 1500]
+        self.assertIn("/api/slides/admin", block)
+        # learner-facing list for the "link existing materials" picker stays active-only
+        self.assertIn("state.materials=inGroup.filter(m=>m.active!==false)", block)
+
+
 if __name__ == "__main__":
     unittest.main()
