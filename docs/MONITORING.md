@@ -18,6 +18,7 @@
 | 壓力測試 | 手動 | [LOAD_TEST.md](LOAD_TEST.md) |
 | Lighthouse 網頁品質檢測 | 每週＋手動 | [LIGHTHOUSE.md](LIGHTHOUSE.md) |
 | 程式錯誤通知（Sentry） | 啟用後即時 | 見第三節，**預設關閉** |
+| 流量提醒（Render 流量用量） | 即時統計，達門檻寄信 | [TRAFFIC_METER.md](TRAFFIC_METER.md)；需設定 `TRAFFIC_ALERT_EMAIL` |
 
 > 上述自動檢查若失敗，是以 GitHub Actions 的失敗通知呈現（通常寄給排程檔最近一次的修改者）。請確認該 GitHub 帳號的通知設定有開啟 Actions 通知。目前**只有 Worker 異常會另外寄 Email**；網站本身掛掉時，沒有獨立於 GitHub 的即時通知，這是第二節要補的缺口。
 

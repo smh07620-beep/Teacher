@@ -130,6 +130,14 @@
       }
       const g=s.gdriveConfigured?(s.gdriveConnected?'✅ Google Drive 備援已連線':((s.activeBackend||s.configuredMode)==='gdrive'?'⚠️ Google Drive 目前使用中，但連線尚未驗證':'ℹ️ Google Drive 備援已設定，尚未執行連線測試（不影響目前主要儲存）')):'○ Google Drive 備援未設定';
       storage.innerHTML=`<div class="font-black text-slate-900">教材儲存策略</div><div class="mt-2">主要：<b>${escapeHtml(s.activeBackend||s.configuredMode||'')}</b>　｜　備援：<b>${escapeHtml(s.fallbackBackend||'')}</b>　｜　免費模式：<b>${s.megaFreeOnly?'是':'否'}</b></div><div class="mt-2">${g}</div><div class="mt-2 text-xs text-slate-500">MEGA ${s.materials?.mega||0} 份、Google Drive ${s.materials?.gdrive||0} 份、R2 ${s.materials?.r2||0} 份、本機 ${s.materials?.local||0} 份</div>${s.error?`<div class="mt-2 text-rose-600">${escapeHtml(s.error)}</div>`:''}`;
+      try{
+        const tr=await fetch('/api/admin/traffic-usage',{credentials:'same-origin',cache:'no-store'});
+        if(tr.ok){
+          const t=await tr.json();
+          const top=(t.buckets||[]).slice(0,3).map(x=>`${escapeHtml(x.bucket)} ${(Number(x.bytes||0)/1048576).toFixed(0)} MB`).join('、');
+          storage.insertAdjacentHTML('beforeend',`<div class="mt-2 text-xs text-slate-600">本月網站已送出約 <b>${escapeHtml(String(t.totalGb))}</b> GB（估計，實際以 Render 後台為準）${top?`｜用量最多：${top}`:''}｜${t.emailConfigured?'超過門檻會寄信提醒':'尚未設定提醒信箱'}</div>`);
+        }
+      }catch(_e){}
     }catch(e){
       cards.innerHTML=systemStatusCard('⚠️','系統狀態','檢查失敗',e.message,'rose');
       storage.textContent='無法讀取儲存狀態';

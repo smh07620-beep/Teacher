@@ -45,8 +45,12 @@ class SlideCheckpointWiringTests(unittest.TestCase):
         self.assertIn("'openSlideCheckpointEditor'", read("system-csp-actions.js"))
         self.assertIn("root.openSlideCheckpointEditor =", read("admin-slide-checkpoints-1011.js"))
 
-    def test_migration_is_registered_last_and_in_contract(self):
-        self.assertEqual(release_contract.REQUIRED_MIGRATIONS[-1], "0118-slide-checkpoints")
+    def test_migration_is_registered_in_contract_after_its_predecessor(self):
+        migrations = release_contract.REQUIRED_MIGRATIONS
+        self.assertEqual(
+            migrations.index("0118-slide-checkpoints"),
+            migrations.index("0117-exam-assignees") + 1,
+        )
 
 
 if __name__ == "__main__":

@@ -61,6 +61,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.maintenance import announcement_audience_migration as _announcement_audience_migration  # noqa: F401
     from teacher_app.maintenance import exam_assignee_migration as _exam_assignee_migration  # noqa: F401
     from teacher_app.maintenance import slide_checkpoint_migration as _slide_checkpoint_migration  # noqa: F401
+    from teacher_app.maintenance import traffic_meter_migration as _traffic_meter_migration  # noqa: F401
 
     from teacher_app.atlas.routes import register_atlas_70
     from teacher_app.checkpoints.routes import register_slide_checkpoints
@@ -81,6 +82,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.frontend.assets import register_pgy_frontend
     from teacher_app.frontend.cache_policy import register_browser_cache_policy
     from teacher_app.frontend.compression import register_response_compression
+    from teacher_app.maintenance.traffic_meter import register_traffic_meter
     from teacher_app.frontend.pages import register_page_routes
     from teacher_app.learning.routes import register_smart_learning
     from teacher_app.learning.progress_routes import register_progress_routes
@@ -175,6 +177,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_production_hardening(app, current_user=current_user)
     app = register_upload_hardening(app)
     app = register_browser_cache_policy(app)
+    app = register_traffic_meter(app)
     app = register_response_compression(app)
     app = register_ai_privacy(
         app,
