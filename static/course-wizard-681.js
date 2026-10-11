@@ -85,7 +85,14 @@ function canLeaveCourse(){
   const byId=new Map((state.jobRows||[]).map(row=>[String(row.id||''),row]));
   return ids.every(id=>byId.get(id)?.status==='completed');
 }
+// 「下一步」按鈕的 disabled 只在 render() 時決定；上傳完成或 busy 結束時沒有重畫，
+// 會讓按鈕卡在停用狀態，所以狀態改變時要就地同步。
+function syncNextButton(){
+  const node=el('cw681-next');
+  if(node)node.disabled=Boolean(state.busy||(state.created&&!canLeaveCourse()));
+}
 function syncCompletionControls(){
+  syncNextButton();
   const ready=canLeaveCourse();
   const finish=el('cw681-finish');
   const isPublished=String(state.course?.lifecycleStatus||'')==='published'&&state.course?.active===true;
@@ -104,6 +111,7 @@ function syncCompletionControls(){
 }
 function setBusy(value){
   state.busy=!!value;
+  syncNextButton();
   const button=el('cw681-create');
   if(button){
     button.disabled=state.busy;
@@ -194,7 +202,7 @@ window.courseWizard681QuickPublishExam=async function(){
 function actionFooter(){
   if(state.step<4){
     const blocked=state.busy||(state.created&&!canLeaveCourse());
-    return `<button ${blocked?'disabled':''} data-csp-click="courseWizard681Next()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">${state.created?'下一步':'下一步'}</button>`;
+    return `<button id="cw681-next" ${blocked?'disabled':''} data-csp-click="courseWizard681Next()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">${state.created?'下一步':'下一步'}</button>`;
   }
   if(!state.created)return `<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681CreateAndPublish()" class="rounded bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">${state.busy?'⏳ 建立中…':'🟢 建立並發布課程'}</button>`;
   const retry=state.failedUploads.length?`<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681Create()" class="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800 disabled:opacity-50">${state.busy?'⏳ 重試上傳中…':'重試未完成教材'}</button>`:'';
