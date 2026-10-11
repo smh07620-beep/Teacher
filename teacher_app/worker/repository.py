@@ -5,12 +5,18 @@ not own schema DDL, HTTP routes, executor behavior, or storage adapters.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
+import logging
+import os
+import time
 from contextlib import contextmanager
 from typing import Any, Callable, Iterable, Iterator, Mapping, Sequence
 
 from teacher_app.common import db as common_db
 
+
+LOGGER = logging.getLogger(__name__)
 
 ConnectionFactory = Callable[[], tuple[Any, str]]
 
@@ -734,7 +740,7 @@ def _write_heartbeat(
         )
 
 
-def upsert_heartbeat(
+def _upsert_heartbeat_row(
     worker_id: str,
     *,
     last_seen: str,
@@ -742,7 +748,7 @@ def upsert_heartbeat(
     current_job_id: str = "",
     connection_factory: ConnectionFactory | None = None,
 ) -> None:
-    """Persist one worker heartbeat through one canonical SQL owner."""
+    """Write exactly one heartbeat row (no housekeeping)."""
     raw = json.dumps(dict(capabilities), ensure_ascii=False)
     if connection_factory is not None:
         conn, kind = connection_factory()
@@ -768,6 +774,134 @@ def upsert_heartbeat(
             capabilities_json=raw,
             current_job_id=current_job_id,
         )
+
+
+# GitHub fallback Workers register a brand-new worker id on every scheduled run
+# (``github-fallback-<run_id>``, about 96 runs a day).  Those one-shot rows used
+# to accumulate forever and every claim/status call re-read all of them from
+# Supabase, which became the largest source of database egress.  Housekeeping
+# keeps the table at "live workers + a short history".
+FALLBACK_WORKER_PREFIX = "github-fallback-"
+_HEARTBEAT_PRUNE_INTERVAL_SECONDS = 600.0
+_last_heartbeat_prune = time.monotonic()
+
+
+def _heartbeat_retention_hours(name: str, default: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(1, min(720, value))
+
+
+def prune_stale_heartbeats(
+    *,
+    keep_worker_id: str = "",
+    now: dt.datetime | None = None,
+    connection_factory: ConnectionFactory | None = None,
+) -> int:
+    """Delete heartbeat rows that are past their retention window.
+
+    One-shot GitHub fallback Workers are kept for
+    ``MATERIAL_WORKER_FALLBACK_HEARTBEAT_RETENTION_HOURS`` (default 2); every
+    other Worker follows ``MATERIAL_WORKER_HEARTBEAT_RETENTION_HOURS`` (default
+    24, the same window Worker status already uses).  ``keep_worker_id`` is
+    never deleted.  Returns the number of rows removed.
+    """
+    current = now or dt.datetime.now(dt.timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=dt.timezone.utc)
+    current = current.astimezone(dt.timezone.utc)
+    general_hours = _heartbeat_retention_hours("MATERIAL_WORKER_HEARTBEAT_RETENTION_HOURS", 24)
+    fallback_hours = min(
+        general_hours,
+        _heartbeat_retention_hours("MATERIAL_WORKER_FALLBACK_HEARTBEAT_RETENTION_HOURS", 2),
+    )
+    general_cutoff = (current - dt.timedelta(hours=general_hours)).isoformat()
+    fallback_cutoff = (current - dt.timedelta(hours=fallback_hours)).isoformat()
+    keep = str(keep_worker_id or "")
+    removed = 0
+    with _transaction(connection_factory) as (conn, kind):
+        ph = common_db.placeholder(kind)
+        statements = (
+            (
+                "DELETE FROM material_worker_heartbeats "
+                f"WHERE worker_id LIKE {ph} AND worker_id<>{ph} AND last_seen<{ph}",
+                (FALLBACK_WORKER_PREFIX + "%", keep, fallback_cutoff),
+            ),
+            (
+                "DELETE FROM material_worker_heartbeats "
+                f"WHERE worker_id<>{ph} AND last_seen<{ph}",
+                (keep, general_cutoff),
+            ),
+        )
+        for sql, params in statements:
+            cursor = conn.execute(sql, params)
+            removed += max(0, int(getattr(cursor, "rowcount", 0) or 0))
+    return removed
+
+
+def _maybe_prune_heartbeats(
+    worker_id: str,
+    connection_factory: ConnectionFactory | None,
+) -> None:
+    """Throttled, best-effort housekeeping; it must never break a heartbeat."""
+    global _last_heartbeat_prune
+    moment = time.monotonic()
+    if moment - _last_heartbeat_prune < _HEARTBEAT_PRUNE_INTERVAL_SECONDS:
+        return
+    _last_heartbeat_prune = moment
+    try:
+        prune_stale_heartbeats(
+            keep_worker_id=worker_id,
+            connection_factory=connection_factory,
+        )
+    except Exception as exc:  # pragma: no cover - defensive housekeeping
+        LOGGER.warning(
+            "worker heartbeat prune skipped error_type=%s", type(exc).__name__
+        )
+
+
+def upsert_heartbeat(
+    worker_id: str,
+    *,
+    last_seen: str,
+    capabilities: Mapping[str, Any],
+    current_job_id: str = "",
+    connection_factory: ConnectionFactory | None = None,
+) -> None:
+    """Persist one worker heartbeat through one canonical SQL owner."""
+    _upsert_heartbeat_row(
+        worker_id,
+        last_seen=last_seen,
+        capabilities=capabilities,
+        current_job_id=current_job_id,
+        connection_factory=connection_factory,
+    )
+    _maybe_prune_heartbeats(worker_id, connection_factory)
+
+
+def get_heartbeat(
+    worker_id: str,
+    *,
+    connection_factory: ConnectionFactory | None = None,
+) -> dict[str, Any] | None:
+    """Read ONE worker's heartbeat row instead of scanning the whole table."""
+    wanted = str(worker_id or "")
+    if not wanted:
+        return None
+    with _read_connection(connection_factory) as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(
+            "SELECT worker_id,last_seen,capabilities,current_job_id "
+            f"FROM material_worker_heartbeats WHERE worker_id={ph}",
+            (wanted,),
+        ).fetchone()
+    if not row:
+        return None
+    item = dict(row)
+    item["capabilities"] = _json_decode(item.get("capabilities"), {})
+    return item
 
 
 def list_heartbeats(

@@ -93,12 +93,12 @@ def install_web_guards() -> None:
         ):
             heartbeat = None
             try:
-                for item in repository.list_heartbeats(
-                    50, connection_factory=connection_factory
-                ):
-                    if str(item.get("worker_id") or item.get("workerId") or "") == str(worker_id):
-                        heartbeat = item
-                        break
+                # Read only this Worker's own row.  Scanning the whole
+                # heartbeat table on every 2-second claim was the largest
+                # source of Supabase egress.
+                heartbeat = repository.get_heartbeat(
+                    str(worker_id), connection_factory=connection_factory
+                )
             except Exception as exc:
                 # A status lookup failure must not create a second queue outage.
                 LOGGER.warning(
