@@ -533,9 +533,46 @@ DEFAULT_SECONDS_PER_CHAR = 0.25
 _LEARNED_RATE: dict[str, float] = {}
 
 
+def _tts_cache_file(text: str, voice: str) -> Path:
+    """Where the synthesized WAV for this exact text/voice/speed lives (same key as _synthesize)."""
+    model_voice = _voice(voice)
+    return _tts_cache_root() / f"{tts_cache_key(_normalized_text(text), repo_id=_repo_id(), voice=model_voice, speed=_tts_speed())}.wav"
+
+
+def _is_tts_cached(text: str, voice: str) -> bool:
+    try:
+        path = _tts_cache_file(text, voice)
+        return path.is_file() and path.stat().st_size >= 1024
+    except Exception:
+        return False
+
+
+def _rate_file() -> Path:
+    return _tts_cache_root() / "seconds-per-char.json"
+
+
+def _load_saved_rate() -> float | None:
+    """The synthesis speed learned on this PC survives a Worker restart (no wild first estimate)."""
+    try:
+        value = float(json.loads(_rate_file().read_text(encoding="utf-8")).get("rate") or 0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+    return min(5.0, max(0.02, value)) if value > 0 else None
+
+
+def _remember_rate(rate: float) -> None:
+    _LEARNED_RATE["rate"] = rate
+    try:
+        root = _tts_cache_root()
+        root.mkdir(parents=True, exist_ok=True)
+        _rate_file().write_text(json.dumps({"rate": round(rate, 5)}), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def _seconds_per_char() -> float:
     """Seconds of synthesis per spoken character (learned from earlier jobs on this PC)."""
-    learned = _LEARNED_RATE.get("rate")
+    learned = _LEARNED_RATE.get("rate") or _load_saved_rate()
     if learned:
         return learned
     try:
@@ -625,12 +662,15 @@ def _synthesize_segmented(
         if elapsed >= 0.5 and text:
             stats["seconds"] += elapsed
             stats["chars"] += len(text)
-            _LEARNED_RATE["rate"] = stats["seconds"] / stats["chars"]
+            _remember_rate(stats["seconds"] / stats["chars"])
         return audio
+
+    # Segments already in the cache come back instantly, so they must not inflate the countdown.
+    cached = [(not text.strip()) or _is_tts_cached(text, voice) for text in spoken]
 
     def progress(done: int, count: int) -> None:
         if progress_callback:
-            remaining = sum(len(text) for text in spoken[done:])
+            remaining = sum(len(text) for text, hit in zip(spoken[done:], cached[done:]) if not hit)
             progress_callback(
                 30 + int(40 * done / max(1, count)),
                 "逐張產生 AI 語音",
@@ -900,7 +940,7 @@ def generate_audio(*, job_id: str, script: dict, source: dict, voice: str, instr
         audio, model = _synthesize(spoken, voice=voice, instructions=instructions)
         elapsed = time.monotonic() - started
         if elapsed >= 0.5 and spoken:
-            _LEARNED_RATE["rate"] = elapsed / len(spoken)
+            _remember_rate(elapsed / len(spoken))
 
     if progress_callback:
         progress_callback(70, "保存 AI 語音", "正在將 WAV 直接寫入 Cloudflare R2")
