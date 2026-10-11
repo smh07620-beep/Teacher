@@ -174,6 +174,7 @@
       if (waiting || loading) { startBtn.disabled = true; startBtn.style.opacity = '.55'; }
       const nodes = [startBtn];
       if (loading) nodes.push(button('不等了，直接錄', 'plain', () => void start()));
+      if (!waiting) nodes.push(button('📎 沿用舊教材的旁白', 'plain', showMovePicker));
       nodes.push(button('✕ 不錄了', 'plain', disarm));
       setActions(...nodes);
       if (waiting) say('正在開啟教材，請稍候…', 'normal');
@@ -399,6 +400,54 @@
     clearRecording();
     render();
     showPanelIfNeeded();
+  }
+
+  // 重新上傳教材後，把舊教材上的老師旁白（錄音與翻頁時間表）移到這份新教材；頁數必須相同。
+  function showMovePicker() {
+    if (!material) return;
+    const options = slideMaterials().filter(item => item && item.id !== material.id
+      && item.narration && item.narration.kind === 'teacher');
+    if (!options.length) {
+      say('找不到其他已掛有老師旁白的教材可以沿用。', 'error');
+      return;
+    }
+    const select = document.createElement('select');
+    select.style.cssText = 'width:100%;border-radius:8px;padding:6px;font-size:12px;color:#0f172a';
+    options.forEach(item => {
+      const option = document.createElement('option');
+      option.value = String(item.id);
+      option.textContent = `${item.title || item.id}（${item.pageCount || '?'} 頁）`;
+      select.appendChild(option);
+    });
+    say(`選出要沿用旁白的舊教材。旁白會「移到」這份教材（共 ${material.pageCount || '?'} 頁），頁數必須和舊教材相同。`);
+    setActions(select,
+      button('確認移過來', 'primary', () => void moveNarration(select.value)),
+      button('取消', 'plain', () => render()));
+  }
+
+  async function moveNarration(fromId) {
+    if (!material || !fromId) return;
+    say('移動旁白中…');
+    try {
+      const response = await fetch(`/api/materials/${encodeURIComponent(material.id)}/teacher-narration/move`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromSourceId: fromId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `移動失敗（HTTP ${response.status}）`);
+      window.invalidateAdminMaterialsCache?.();
+      try { await Promise.resolve(window.renderSlidesGrid?.()); } catch (_) { /* list refresh is best-effort */ }
+      state = 'bound';
+      boundAudioId = '';
+      subtitleQueued = true;
+      render();
+      say(`已把 ${data.moved || 1} 份旁白移到這份教材，學員下次開啟就會聽到並自動翻頁。`, 'success');
+    } catch (error) {
+      render();
+      say(error.message || '移動失敗', 'error');
+    }
   }
 
   function showStatusNode() {

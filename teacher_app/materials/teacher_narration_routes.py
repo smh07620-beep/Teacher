@@ -179,6 +179,93 @@ def register_teacher_narration_routes(owner):
             }
         )
 
+    @app.post("/api/materials/<target_id>/teacher-narration/move")
+    def move_teacher_narration(target_id):
+        """Re-point teacher narration from an older slide material to a re-uploaded one.
+
+        Used when a deck is uploaded again (for example to move storage): the recorded
+        voice and its page timeline are kept, only the owning material changes.  The page
+        count must match, otherwise the timeline would turn pages at the wrong places.
+        """
+        user = _actor(owner)
+        if not user:
+            return jsonify({"error": "請先登入。", "loginRequired": True}), 401
+        body = request.get_json(silent=True) or {}
+        target_id = str(target_id or "").strip()
+        from_id = str(body.get("fromSourceId") or "").strip()
+        if not target_id or not from_id or target_id == from_id:
+            return jsonify({"error": "請選擇另一份要沿用旁白的教材。"}), 400
+        target = material_repository.get_material(target_id)
+        origin = material_repository.get_material(from_id)
+        if not target:
+            return jsonify({"error": "找不到要接收旁白的新教材。"}), 404
+        if not origin:
+            return jsonify({"error": "找不到原本掛旁白的教材。"}), 404
+        for entry in (target, origin):
+            _user, denied = scope_filter.scoped_groups(
+                owner, "material.manage", {str(entry.get("group") or "").strip()}
+            )
+            if denied:
+                return denied
+        if (target.get("group"), target.get("area")) != (origin.get("group"), origin.get("area")):
+            return jsonify({"error": "兩份教材必須在同一組別與訓練區。"}), 400
+        if str(target.get("viewerMode") or "") not in SLIDE_VIEWER_MODES:
+            return jsonify({"error": "只有投影片或文件預覽類教材可以掛旁白。"}), 400
+        target_pages = int(target.get("pageCount") or 0)
+        origin_pages = int(origin.get("pageCount") or 0)
+        if target_pages <= 0 or origin_pages <= 0 or target_pages != origin_pages:
+            return jsonify({
+                "error": f"頁數不同（舊教材 {origin_pages} 頁、新教材 {target_pages} 頁），旁白的翻頁時間會對不上，已停止。"
+            }), 409
+        narrations = [
+            item
+            for item in material_repository.list_uploaded_materials(include_inactive=True)
+            if (item.get("storageMeta") or {}).get("mediaKind") == MEDIA_KIND
+            and str((item.get("storageMeta") or {}).get("sourceMaterialId") or "") == from_id
+        ]
+        if not narrations:
+            return jsonify({"error": "原本的教材上沒有老師旁白可以移動。"}), 404
+        already = [
+            item
+            for item in material_repository.list_uploaded_materials(include_inactive=False)
+            if (item.get("storageMeta") or {}).get("mediaKind") == MEDIA_KIND
+            and str((item.get("storageMeta") or {}).get("sourceMaterialId") or "") == target_id
+        ]
+        if already:
+            return jsonify({"error": "新教材已經有老師旁白，請先處理後再移動，避免覆蓋。"}), 409
+        username = str(user.get("username") or "") if isinstance(user, Mapping) else ""
+        moved_ids = []
+        for item in narrations:
+            meta = dict(item.get("storageMeta") or {})
+            meta.update(
+                {
+                    "sourceMaterialId": target_id,
+                    "sourceVersion": int(target.get("currentVersion") or 1),
+                    "movedFromMaterialId": from_id,
+                    "movedBy": username,
+                    "movedAt": _now(),
+                }
+            )
+            material_repository.update_material_storage(
+                str(item["id"]),
+                backend=str(item.get("storageBackend") or "local"),
+                storage_key=str(item.get("storageKey") or ""),
+                slides_prefix=str(item.get("slidesPrefix") or ""),
+                storage_meta_json=json.dumps(meta, ensure_ascii=False, separators=(",", ":")),
+            )
+            moved_ids.append(str(item["id"]))
+        audit.record_event(
+            actor=user,
+            action="material.teacher_narration.move",
+            target_type="material",
+            target_id=target_id,
+            group=str(target.get("group") or ""),
+            before={"sourceMaterialId": from_id},
+            after={"sourceMaterialId": target_id},
+            detail={"audioMaterialIds": moved_ids, "pages": target_pages},
+        )
+        return jsonify({"ok": True, "moved": len(moved_ids), "audioMaterialIds": moved_ids})
+
     app.extensions["teacher_narration_routes_registered"] = True
     return app
 
