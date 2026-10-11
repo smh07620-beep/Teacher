@@ -198,7 +198,7 @@ services:
       - key: AI_SOURCE_MAX_CHARS
         value: "50000"
       - key: AI_MAX_QUESTIONS
-        value: "15"
+        value: "5"
       - key: AI_MEDIA_MAX_MB
         value: "250"
       - key: AI_MAX_MATERIALS
