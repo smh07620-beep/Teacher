@@ -1,0 +1,122 @@
+name: Load test (manual)
+
+# 手動觸發的壓力測試（k6）。只做讀取，不會寫入正式站資料。
+# 刻意「只能手動執行」：不排程、不隨 push 執行，所以不會參與 Render 的 checksPass
+# 部署閘門，也不會在上班時段自己對正式站加壓。
+#
+# 使用方式：GitHub 專案 → Actions → Load test (manual) → Run workflow。
+# 登入帳號：優先用 TEACHER_LOAD_USERNAME / TEACHER_LOAD_PASSWORD（建議專用學員帳號），
+# 沒有時沿用既有監控帳號 TEACHER_SMOKE_USERNAME / TEACHER_SMOKE_PASSWORD；
+# 兩者都沒有時只測試公開頁面。詳見 docs/LOAD_TEST.md。
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "測試強度：smoke=1 人 30 秒；staff10=約 10 人同時；peak30=約 30 人同時"
+        type: choice
+        default: smoke
+        options:
+          - smoke
+          - staff10
+          - peak30
+      target_url:
+        description: "要測的網址（留空＝正式站）"
+        type: string
+        required: false
+      confirm_production:
+        description: "對正式站執行 staff10 / peak30 前，請勾選確認（建議在非上班時段，避免影響同仁使用）"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teacher-load-test
+  cancel-in-progress: false
+
+env:
+  K6_VERSION: "1.4.0"
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PRODUCTION_URL: ${{ vars.TEACHER_PRODUCTION_URL || 'https://teacher-j3id.onrender.com' }}
+      TARGET_URL: ${{ inputs.target_url || vars.TEACHER_PRODUCTION_URL || 'https://teacher-j3id.onrender.com' }}
+      PROFILE: ${{ inputs.profile }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard heavy runs against production
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${TARGET_URL%/}"
+          prod="${PRODUCTION_URL%/}"
+          if [ "$target" = "$prod" ] && [ "$PROFILE" != "smoke" ] && [ "${{ inputs.confirm_production }}" != "true" ]; then
+            echo "::error::要對正式站執行 $PROFILE，請重新執行並勾選 confirm_production（建議在非上班時段）。"
+            exit 1
+          fi
+
+      - name: Install k6 (checksum verified)
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://github.com/grafana/k6/releases/download/v${K6_VERSION}"
+          archive="k6-v${K6_VERSION}-linux-amd64.tar.gz"
+          curl -fsSL -o "$archive" "$base/$archive"
+          curl -fsSL -o checksums.txt "$base/k6-v${K6_VERSION}-checksums.txt"
+          grep " ${archive}\$" checksums.txt | sha256sum -c -
+          tar -xzf "$archive"
+          sudo install -m 0755 "k6-v${K6_VERSION}-linux-amd64/k6" /usr/local/bin/k6
+          k6 version
+
+      - name: Wake the service (Render free plan may be asleep)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 12); do
+            if curl -fsS --max-time 30 "${TARGET_URL%/}/live" >/dev/null; then
+              echo "service is awake"
+              exit 0
+            fi
+            echo "waiting for service ($i/12)..."
+            sleep 10
+          done
+          echo "::error::網站沒有回應，無法進行壓力測試。"
+          exit 1
+
+      - name: Run k6
+        env:
+          BASE_URL: ${{ env.TARGET_URL }}
+          # 優先使用壓力測試專用的學員帳號；沒有設定時沿用既有監控帳號。
+          TEACHER_LOAD_USERNAME: ${{ secrets.TEACHER_LOAD_USERNAME || secrets.TEACHER_SMOKE_USERNAME }}
+          TEACHER_LOAD_PASSWORD: ${{ secrets.TEACHER_LOAD_PASSWORD || secrets.TEACHER_SMOKE_PASSWORD }}
+          K6_EXTRA_PATHS: ${{ vars.LOAD_TEST_EXTRA_PATHS }}
+        run: k6 run --quiet tests/load/teacher-load.js
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f load-test-summary.txt ]; then
+            {
+              echo '### Teacher 壓力測試結果'
+              echo '```'
+              cat load-test-summary.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload load test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-${{ github.run_id }}
+          path: |
+            load-test-summary.json
+            load-test-summary.txt
+          if-no-files-found: warn
+          retention-days: 14
