@@ -83,6 +83,7 @@ def _register_production(app: Flask) -> Flask:
     from teacher_app.frontend.cache_policy import register_browser_cache_policy
     from teacher_app.frontend.compression import register_response_compression
     from teacher_app.maintenance.traffic_meter import register_traffic_meter
+    from teacher_app.storage.row_audit import register_storage_row_audit
     from teacher_app.frontend.pages import register_page_routes
     from teacher_app.learning.routes import register_smart_learning
     from teacher_app.learning.progress_routes import register_progress_routes
@@ -178,6 +179,7 @@ def _register_production(app: Flask) -> Flask:
     app = register_upload_hardening(app)
     app = register_browser_cache_policy(app)
     app = register_traffic_meter(app)
+    app = register_storage_row_audit(app)
     app = register_response_compression(app)
     app = register_ai_privacy(
         app,

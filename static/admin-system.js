@@ -138,10 +138,75 @@
           storage.insertAdjacentHTML('beforeend',`<div class="mt-2 text-xs text-slate-600">本月網站已送出約 <b>${escapeHtml(String(t.totalGb))}</b> GB（估計，實際以 Render 後台為準）${top?`｜用量最多：${top}`:''}｜${t.emailConfigured?'超過門檻會寄信提醒':'尚未設定提醒信箱'}</div>`);
         }
       }catch(_e){}
+      appendStorageRowsPanel(storage);
     }catch(e){
       cards.innerHTML=systemStatusCard('⚠️','系統狀態','檢查失敗',e.message,'rose');
       storage.textContent='無法讀取儲存狀態';
     }
+  }
+
+
+  // 儲存明細：列出每一筆教材紀錄（含被教材清單隱藏的旁白音檔、孤兒紀錄），
+  // 讓「MEGA 還有 2 份」這種數字能對得到實際的紀錄。只讀；刪除走既有的教材刪除 API。
+  function appendStorageRowsPanel(host){
+    if(!host||host.querySelector('[data-storage-rows]'))return;
+    const panel=document.createElement('div');
+    panel.setAttribute('data-storage-rows','1');
+    panel.className='mt-3 border-t border-slate-200 pt-3';
+    const button=document.createElement('button');
+    button.type='button';
+    button.className='rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700';
+    button.textContent='🔎 查看儲存明細（找出多出來的檔案）';
+    const out=document.createElement('div');
+    out.className='mt-2 space-y-1.5 text-xs';
+    panel.append(button,out);
+    host.appendChild(panel);
+    async function load(){
+      out.textContent='讀取中…';
+      try{
+        const res=await fetch('/api/admin/storage/rows',{credentials:'same-origin',cache:'no-store'});
+        const data=await res.json().catch(()=>({}));
+        if(!res.ok){out.textContent=data.error||`讀取失敗（HTTP ${res.status}）`;return;}
+        out.replaceChildren();
+        const head=document.createElement('div');
+        head.className='font-bold text-slate-700';
+        head.textContent=`共 ${data.total} 筆紀錄，其中 ${data.attention} 筆需要注意（黃底）。`;
+        out.appendChild(head);
+        (data.rows||[]).forEach(row=>{
+          const line=document.createElement('div');
+          line.className='flex flex-wrap items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 '+(row.needsAttention?'border-amber-200 bg-amber-50':'border-slate-100 bg-slate-50');
+          const text=document.createElement('div');
+          text.className='min-w-0';
+          const title=document.createElement('b');
+          title.className='text-slate-800';
+          title.textContent=row.title;
+          const meta=document.createElement('span');
+          meta.className='ml-1 text-slate-500';
+          meta.textContent=`［${String(row.backend).toUpperCase()}］${row.statusLabel}${row.sourceTitle?'：'+row.sourceTitle:''}`;
+          text.append(title,meta);
+          line.appendChild(text);
+          if(row.needsAttention){
+            const del=document.createElement('button');
+            del.type='button';
+            del.className='shrink-0 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 font-bold text-rose-700';
+            del.textContent='🗑️ 刪除這筆';
+            del.addEventListener('click',async()=>{
+              if(!confirm(`確定刪除這筆嗎？\n\n${row.title}\n${row.statusLabel}\n\n會一併清除它存放的檔案，無法復原。`))return;
+              del.disabled=true;
+              try{
+                const r=await fetch(`/api/slides/${encodeURIComponent(row.id)}`,{method:'DELETE',credentials:'same-origin'});
+                const d=await r.json().catch(()=>({}));
+                if(!r.ok){alert(d.error||'刪除失敗');del.disabled=false;return;}
+              }catch(err){alert(err.message||'刪除失敗');del.disabled=false;return;}
+              await load();
+            });
+            line.appendChild(del);
+          }
+          out.appendChild(line);
+        });
+      }catch(err){out.textContent='讀取失敗：'+(err.message||'');}
+    }
+    button.addEventListener('click',load);
   }
 
   window.systemStatusCard=systemStatusCard;
