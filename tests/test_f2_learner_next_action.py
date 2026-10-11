@@ -30,7 +30,7 @@ class F2LearnerNextActionTests(unittest.TestCase):
         item=data["nextAction"]
         self.assertEqual(item["kind"],"course")
         self.assertEqual(item["materialId"],"m2")
-        self.assertEqual(item["actionLabel"],"繼續閱讀 42%")
+        self.assertEqual(item["actionLabel"],"繼續閱讀")
         self.assertEqual(item["target"],"materials")
         self.assertEqual(data["items"][0],item)
 

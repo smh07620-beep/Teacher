@@ -42,7 +42,7 @@
     const text = String(area.value || '');
     const blocks = text.replace(/\r\n?/g, '\n').split(/\n\s*\n/).filter(block => block.split('\n').some(line => line.trim() && !line.trim().startsWith('※')));
     const total = scriptPageCount1040();
-    if (!blocks.length) { host.classList.add('hidden'); return; }
+    if (!blocks.length) { host.classList.add('hidden'); document.getElementById('teacher-script-peek-1041')?.classList.add('hidden'); return; }
     host.classList.remove('hidden');
     // 游標所在段落
     const caret = Number(area.selectionStart || 0);
@@ -71,6 +71,93 @@
     const empty = total && blocks.length < total ? `<li class="px-2 py-1 text-amber-800">第 ${blocks.length + 1}${blocks.length + 1 < total ? '～' + total : ''} 頁沒有對應講稿（會是靜音）。</li>` : '';
     const where = total ? `游標目前在：第 ${Math.min(cursorIndex + 1, total)} 頁的講稿` : `游標目前在：第 ${cursorIndex + 1} 段`;
     host.innerHTML = `<div class="text-[11px] font-bold ${matches ? 'text-emerald-800' : 'text-amber-900'}">${escapeHtml(head)}</div><div class="mt-1 text-[11px] font-black text-indigo-800">${escapeHtml(where)}</div><ol class="mt-1 max-h-48 space-y-0.5 overflow-auto text-[11px] text-slate-700">${rows}${empty}</ol>`;
+    try { paintPeek1041(cursorIndex, total, blocks.length); } catch (_) { /* preview is optional */ }
+  }
+
+  // 講稿旁的投影片預覽：游標在第 k 段，就顯示第 k 頁；縮圖列可直接點選，講稿游標會跳到該段。
+  const peekState1041 = {key: '', page: -1, retries: 0};
+  function peekMaterial1041() {
+    const id = typeof currentMaterialId === 'function' ? currentMaterialId() : '';
+    const list = typeof materials !== 'undefined' && Array.isArray(materials) ? materials : [];
+    return list.find(entry => String(entry.id) === String(id)) || null;
+  }
+  function peekUrl1041(item, page) {
+    if (!item || !item.id) return '';
+    if (item.viewerMode === 'preview_pdf') return `/material-preview/${encodeURIComponent(item.id)}/page/${page}.png`;
+    if (item.viewerMode === 'slides') {
+      const folder = item.imageFolder || (item.folder ? `uploaded-slides/${item.folder}` : '');
+      const fmt = String(item.slideFormat || (item.storageMeta && item.storageMeta.slideFormat) || 'png').toLowerCase();
+      return folder ? `/${folder}/slide-${String(page).padStart(2, '0')}.${fmt}` : '';
+    }
+    return '';
+  }
+  function peekLoad1041(img, url) {
+    // 頁面圖偶爾因 502 失敗：安靜重試兩次再放棄。
+    let attempts = 0;
+    img.onerror = () => {
+      if (attempts >= 2) { img.removeAttribute('src'); return; }
+      attempts += 1;
+      setTimeout(() => { img.src = url + (url.includes('?') ? '&' : '?') + 't=' + attempts; }, 700 * attempts);
+    };
+    img.src = url;
+  }
+  function jumpToParagraph1041(index) {
+    const area = document.getElementById('teacher-script-body-1014');
+    if (!area) return;
+    const text = String(area.value || '').replace(/\r\n?/g, '\n');
+    const pieces = text.split(/\n\s*\n/);
+    let offset = 0, count = 0, target = 0;
+    for (const piece of pieces) {
+      const start = text.indexOf(piece, offset);
+      offset = start + piece.length;
+      if (piece.split('\n').some(line => line.trim() && !line.trim().startsWith('※'))) {
+        if (count === index) { target = start; break; }
+        count += 1;
+      }
+    }
+    area.focus({preventScroll: true});
+    area.setSelectionRange(target, target);
+    paintPageMap1040();
+  }
+  function paintPeek1041(cursorIndex, total, blocks) {
+    const aside = document.getElementById('teacher-script-peek-1041');
+    if (!aside) return;
+    const item = peekMaterial1041();
+    if (!item || !total || !peekUrl1041(item, 1)) { aside.classList.add('hidden'); return; }
+    aside.classList.remove('hidden');
+    const page = Math.min(cursorIndex + 1, total);
+    const key = `${item.id}:${total}`;
+    const strip = document.getElementById('teacher-script-peek-strip-1041');
+    if (peekState1041.key !== key && strip) {
+      peekState1041.key = key;
+      strip.innerHTML = Array.from({length: total}, (_, i) => `<button type="button" data-peek-page="${i}" class="relative h-12 w-20 shrink-0 overflow-hidden rounded border border-slate-200 bg-slate-50" aria-label="第 ${i + 1} 頁"><img loading="lazy" decoding="async" alt="" class="h-full w-full object-cover" src="${peekUrl1041(item, i + 1)}"><span class="absolute bottom-0 right-0 bg-slate-900/70 px-1 text-[9px] font-black text-white">${i + 1}</span></button>`).join('');
+      strip.onclick = event => {
+        const button = event.target.closest('[data-peek-page]');
+        if (button) jumpToParagraph1041(Number(button.dataset.peekPage));
+      };
+      aside.querySelectorAll('[data-peek-step]').forEach(btn => {
+        btn.onclick = () => jumpToParagraph1041(Math.max(0, Math.min(total - 1, peekState1041.page - 1 + Number(btn.dataset.peekStep))));
+      });
+    }
+    if (peekState1041.page !== page) {
+      peekState1041.page = page;
+      const img = document.getElementById('teacher-script-peek-img-1041');
+      if (img) peekLoad1041(img, peekUrl1041(item, page));
+      if (strip) {
+        strip.querySelectorAll('[data-peek-page]').forEach(btn => {
+          const active = Number(btn.dataset.peekPage) === page - 1;
+          btn.classList.toggle('ring-2', active);
+          btn.classList.toggle('ring-indigo-500', active);
+          if (active) btn.scrollIntoView?.({block: 'nearest', inline: 'center'});
+        });
+      }
+    }
+    const title = document.getElementById('teacher-script-peek-title-1041');
+    if (title) title.textContent = `對應投影片：第 ${page}／${total} 頁`;
+    const note = document.getElementById('teacher-script-peek-note-1041');
+    if (note) note.textContent = blocks > total && cursorIndex >= total
+      ? '這一段超出教材頁數，沒有對應的投影片。'
+      : '用空白行分段，第 k 段對應第 k 頁；點下方縮圖可跳到該頁的講稿。';
   }
   ['input', 'click', 'keyup', 'focusin'].forEach(type => document.addEventListener(type, event => {
     if (event.target && event.target.id === 'teacher-script-body-1014') { try { paintPageMap1040(); } catch (_) {} }
@@ -797,7 +884,7 @@
       <div class="flex flex-col sm:flex-row gap-2"><input id="teacher-script-focus-1014" class="learning-input flex-1" maxlength="500" placeholder="選填：特別聚焦，例如抗體鑑定判讀步驟、QC 異常處理"><button id="teacher-script-generate-1014" type="button" class="rounded-xl bg-indigo-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">✨ 匯入並產生講稿</button></div>
       <div id="teacher-script-status-1014" class="text-xs text-slate-600">選擇教材後即可產生講稿。</div>
       <div id="teacher-script-source-1014" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-slate-700"></div>
-      <div id="teacher-script-editor-1014" class="hidden space-y-3"><label class="block text-xs font-bold text-slate-600">講稿標題<input id="teacher-script-title-1014" class="learning-input mt-1" maxlength="255"></label><label class="block text-xs font-bold text-slate-600">講稿內容<textarea id="teacher-script-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-7" placeholder="AI 草稿會出現在這裡；請由老師逐段確認與修改。"></textarea><span id="teacher-script-duration-1040" class="mt-1 block text-[11px] font-medium text-slate-500" aria-live="polite"></span></label><div id="teacher-script-pagemap-1040" class="hidden rounded-xl border border-indigo-100 bg-indigo-50/60 p-3" aria-live="polite"></div><div class="flex flex-wrap items-center gap-2"><button id="teacher-script-approve-1014" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">✅ 教師核准講稿，繼續配音</button><button id="teacher-script-save-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">💾 儲存草稿</button><span class="text-[11px] text-slate-500">核准後才可作為下一階段 AI 語音／影片的正式來源。</span></div><div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2"><label class="block text-xs font-bold text-slate-600">不滿意？告訴 AI 怎麼修，直接重新產出（來源不用重新匯入）<input id="teacher-script-revision-1032" maxlength="400" class="learning-input mt-1" placeholder="例如：更精簡、加強 QC 異常處理"></label><div class="flex flex-wrap gap-2"><button id="teacher-script-regenerate-1032" type="button" class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-xs font-black text-cyan-800">↻ 依修改要求重新產出</button><button id="teacher-script-discard-1032" type="button" class="rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-black text-rose-700">🗑 放棄這份草稿</button></div></div></div></div>
+      <div id="teacher-script-editor-1014" class="hidden space-y-3"><label class="block text-xs font-bold text-slate-600">講稿標題<input id="teacher-script-title-1014" class="learning-input mt-1" maxlength="255"></label><div id="teacher-script-split-1041" class="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_320px]"><label class="block text-xs font-bold text-slate-600">講稿內容<textarea id="teacher-script-body-1014" rows="18" maxlength="40000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm leading-7" placeholder="AI 草稿會出現在這裡；請由老師逐段確認與修改。"></textarea><span id="teacher-script-duration-1040" class="mt-1 block text-[11px] font-medium text-slate-500" aria-live="polite"></span></label><aside id="teacher-script-peek-1041" class="hidden rounded-xl border border-indigo-100 bg-white p-2 lg:sticky lg:top-24" aria-label="對應的投影片"><div class="flex items-center justify-between gap-2"><span id="teacher-script-peek-title-1041" class="text-[11px] font-black text-indigo-800"></span><span class="flex gap-1"><button type="button" data-peek-step="-1" class="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs font-black text-slate-700" aria-label="上一頁">‹</button><button type="button" data-peek-step="1" class="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs font-black text-slate-700" aria-label="下一頁">›</button></span></div><div class="mt-1 flex aspect-video items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50"><img id="teacher-script-peek-img-1041" alt="" class="max-h-full max-w-full object-contain" draggable="false"></div><p id="teacher-script-peek-note-1041" class="mt-1 text-[10px] text-slate-500"></p><div id="teacher-script-peek-strip-1041" class="mt-2 flex gap-1.5 overflow-x-auto pb-1"></div></aside></div><div id="teacher-script-pagemap-1040" class="hidden rounded-xl border border-indigo-100 bg-indigo-50/60 p-3" aria-live="polite"></div><div class="flex flex-wrap items-center gap-2"><button id="teacher-script-approve-1014" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">✅ 教師核准講稿，繼續配音</button><button id="teacher-script-save-1014" type="button" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700">💾 儲存草稿</button><span class="text-[11px] text-slate-500">核准後才可作為下一階段 AI 語音／影片的正式來源。</span></div><div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2"><label class="block text-xs font-bold text-slate-600">不滿意？告訴 AI 怎麼修，直接重新產出（來源不用重新匯入）<input id="teacher-script-revision-1032" maxlength="400" class="learning-input mt-1" placeholder="例如：更精簡、加強 QC 異常處理"></label><div class="flex flex-wrap gap-2"><button id="teacher-script-regenerate-1032" type="button" class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-xs font-black text-cyan-800">↻ 依修改要求重新產出</button><button id="teacher-script-discard-1032" type="button" class="rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-black text-rose-700">🗑 放棄這份草稿</button></div></div></div></div>
       <div class="border-t border-slate-100 pt-4"><div class="flex items-center justify-between gap-2"><h5 class="text-sm font-black text-slate-900">已儲存講稿</h5><span class="text-[11px] text-slate-400">草稿／已核准</span></div><div id="teacher-script-saved-1014" class="mt-2 grid gap-2"><p class="text-xs text-slate-400">選擇教材後會顯示已儲存講稿。</p></div></div>`;
     media.prepend(section);
     ensureCompactScriptLayout(section);

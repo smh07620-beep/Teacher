@@ -9,18 +9,28 @@
     const match=raw.match(/'([^']+)'/);
     return match?match[1]:'';
   }
+  const isMedia=material=>['video','audio'].includes(material&&material.viewerMode);
+  // Documents/slides report pages read ("已讀 9／12 頁"); video/audio keep a watched percentage.
+  function pagesRead(material,state){
+    const position=(state&&state.position)||{};
+    const total=Number(position.totalPages||(material&&material.pageCount)||0);
+    const visited=Array.isArray(position.visitedPages)?position.visitedPages.length:0;
+    return {read:Math.min(visited,total||visited),total};
+  }
   function labelFor(material,state){
     if(state&&state.retrainingRequired)return '需要重新閱讀';
     if(state&&state.completed)return '已完成';
     const pct=Math.max(0,Math.min(100,Number(state&&state.progress||0)));
-    if(pct>0)return '繼續閱讀 · '+Math.round(pct)+'%';
-    return ['video','audio'].includes(material&&material.viewerMode)?'開始播放':'開始閱讀';
+    if(isMedia(material))return pct>0?'繼續播放':'開始播放';
+    return pct>0?'繼續閱讀':'開始閱讀';
   }
   function statusFor(material,state){
     if(state&&state.retrainingRequired)return '⚠️ 教材已更新，請完成目前要求版本';
     if(state&&state.completed)return '✓ 已完成';
     const pct=Math.max(0,Math.min(100,Number(state&&state.progress||0)));
-    if(pct>0)return '已完成 '+Math.round(pct)+'%';
+    if(isMedia(material))return pct>0?'已看 '+Math.round(pct)+'%':(autoTracked(material)?'系統會自動記錄觀看進度':'完成後請人工確認');
+    const pages=pagesRead(material,state);
+    if(pages.read>0&&pages.total>0)return '已讀 '+pages.read+'／'+pages.total+' 頁';
     return autoTracked(material)?'系統會自動記錄閱讀進度':'完成後請人工確認';
   }
   function paint(){

@@ -136,7 +136,7 @@ def _learner_action_items(user: Mapping[str, Any], current: dt.datetime) -> list
         if next_kind == "retraining":
             action_label = "重新閱讀新版"
         elif next_kind == "material" and resume_progress > 0:
-            action_label = f"繼續閱讀 {resume_progress}%"
+            action_label = "繼續閱讀"
         elif next_kind == "material":
             action_label = "開始閱讀"
         elif target == "exam":
@@ -202,11 +202,7 @@ def _learner_action_items(user: Mapping[str, Any], current: dt.datetime) -> list
             "actionLabel": (
                 "重新學習"
                 if retraining
-                else (
-                    f"繼續閱讀 {int(float(material.get('progress') or 0))}%"
-                    if float(material.get("progress") or 0) > 0
-                    else "開始閱讀"
-                )
+                else ("繼續閱讀" if float(material.get("progress") or 0) > 0 else "開始閱讀")
             ),
             "target": "materials",
         })
