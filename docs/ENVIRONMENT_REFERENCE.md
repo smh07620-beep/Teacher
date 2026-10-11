@@ -226,6 +226,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `RENDER` | `false` | `teacher_app/common/security.py`, `teacher_app/config.py`, `teacher_app/maintenance/health.py` |  |  |
 | `RENDER_GIT_BRANCH` |  | `teacher_app/maintenance/health.py` |  |  |
 | `RENDER_GIT_COMMIT` |  | `teacher_app/frontend/assets.py`, `teacher_app/maintenance/health.py`, `teacher_app/materials/media_audio_routes.py` |  |  |
+| `RESPONSE_COMPRESSION` | `true` | `teacher_app/frontend/compression.py` |  |  |
 | `SECRET_KEY` |  | `teacher_app/common/security.py`, `teacher_app/config.py`, `teacher_app/legacy_host.py` |  | yes |
 | `SENTRY_DSN` |  | `teacher_app/maintenance/error_reporting.py` |  | yes |
 | `SENTRY_ENVIRONMENT` |  | `teacher_app/maintenance/error_reporting.py` |  | yes |
