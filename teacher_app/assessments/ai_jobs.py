@@ -11,6 +11,7 @@ from typing import Any, Callable, Mapping
 from teacher_app.assessments import ai_job_repository, answer_balance, repository
 from teacher_app.common import privacy as ai_privacy
 from teacher_app.materials import repository as material_repository
+from teacher_app.testing import deterministic_ai_provider
 
 
 LOGGER = logging.getLogger(__name__)
@@ -135,11 +136,13 @@ def run_generation_sync(
     )
     applied_strategy = runtime.infer_ai_strategy(materials) if requested_strategy == "auto" else requested_strategy
     provider = runtime.active_ai_provider()
-    try:
-        # Models put the right answer at "B" far too often; spread the positions out.
-        answer_balance.balance_answer_positions(questions)
-    except Exception:
-        LOGGER.warning("answer position balancing skipped", exc_info=True)
+    # The isolated browser E2E (double opt-in) relies on its stub's fixed answer position.
+    if not deterministic_ai_provider.enabled():
+        try:
+            # Models put the right answer at "B" far too often; spread the positions out.
+            answer_balance.balance_answer_positions(questions)
+        except Exception:
+            LOGGER.warning("answer position balancing skipped", exc_info=True)
     requested = _requested_count(snapshot)
     return {
         "ok": True,

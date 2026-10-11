@@ -235,6 +235,24 @@ class ShortfallNoteTests(unittest.TestCase):
         self.assertEqual(sorted(q["correct"] for q in result["questions"]), [0, 1, 2, 3])
 
 
+    def test_balancing_is_skipped_only_in_the_isolated_e2e_stub_mode(self):
+        questions = [_choice("獨立題目說明一二三", ["甲", "乙", "丙", "丁"], 0) for _ in range(4)]
+        runtime = SimpleNamespace(
+            generate_ai_questions_from_materials=lambda materials, **kw: (questions, "標題", ["text"]),
+            infer_ai_strategy=lambda m: "balanced", active_ai_provider=lambda: "groq",
+            ai_model_name=lambda: "model",
+        )
+        material = {"id": "m1", "active": True, "filename": "a.pptx"}
+        env = {"TEACHER_E2E_TEST_MODE": "1", "TEACHER_E2E_DETERMINISTIC_STUBS": "1"}
+        with patch.dict("os.environ", env), \
+                patch.object(ai_jobs.ai_privacy, "external_enabled", return_value=True), \
+                patch.object(ai_jobs.material_repository, "get_material", return_value=material):
+            result = ai_jobs.run_generation_sync(
+                runtime, {"materialIds": ["m1"], "count": 4, "quizCategoryId": "c", "questionType": "mixed"}
+            )
+        self.assertEqual([q["correct"] for q in result["questions"]], [0, 0, 0, 0])
+
+
 class PageCitationTests(unittest.TestCase):
     CHUNKS = [{
         "materialId": "m1", "chunkId": "m1:chunk-0001", "materialTitle": "t", "section": "投影片 12",
