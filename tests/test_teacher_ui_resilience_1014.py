@@ -55,3 +55,37 @@ class TeacherUiResilience1014Tests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AssessmentGroupSelectKeepsUserChoiceTests(unittest.TestCase):
+    """Choosing another group must not be reset to the default group on re-render."""
+
+    def test_sync_keeps_the_group_the_user_picked(self):
+        import json
+        import shutil
+        import subprocess
+
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node is not available")
+        source = ROOT.joinpath("static", "teacher-ui-resilience-1014.js").read_text(encoding="utf-8")
+        start = source.index("  function assessmentScope() {")
+        end = source.index("  const canonicalQuizRender")
+        script = """
+const options = values => values.map(value => ({ value }));
+const area = { value: 'internal', options: options(['internal', 'pgy']) };
+const group = { value: 'grpMicro', options: options(['grpBio', 'grpMicro', 'grpSero']) };
+const elements = { 'admin-quiz-area': area, 'admin-quiz-group': group };
+const document = { getElementById: id => elements[id] || null };
+const window = { location: { search: '' }, currentTrainingArea: 'internal', currentGroupKey: 'grpBio' };
+%s
+const first = syncAssessmentScope();
+group.value = '';
+const second = syncAssessmentScope();
+console.log(JSON.stringify({ first, second, finalGroup: group.value }));
+""" % source[start:end]
+        result = subprocess.run([node, "-e", script], capture_output=True, text=True, check=True)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["first"]["group"], "grpMicro")
+        # 選單尚未有值（例如剛重建）時才退回預設組別
+        self.assertEqual(data["second"]["group"], "grpBio")

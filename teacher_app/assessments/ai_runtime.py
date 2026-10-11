@@ -10,6 +10,7 @@ Document text extraction reuses :mod:`teacher_app.materials.classification`.
 from __future__ import annotations
 
 import base64
+import difflib
 import json
 import mimetypes
 import os
@@ -21,7 +22,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 import requests
 
@@ -577,10 +578,117 @@ def format_retrieval_context(chunks: list[dict]) -> str:
     return "\n\n".join(sections)
 
 
+_PAGE_MARKER = re.compile(r"\[(投影片|第)\s*(\d+)\s*(?:頁)?\]")
+_PAGE_CITATION = {
+    "投影片": re.compile(r"(投影片\s*)(\d+)"),
+    "第": re.compile(r"(第\s*)(\d+)(\s*頁)"),
+}
+_PAGE_CITATION_FIELDS = ("question", "explanation", "sourceHint", "sourceEvidence")
+
+
+def _page_label(kind: str, number: int) -> str:
+    return f"投影片 {number}" if kind == "投影片" else f"第 {number} 頁"
+
+
+def _page_units(chunks: list[dict]) -> dict[str, dict[int, str]]:
+    """Split retrieval chunks back into per-slide / per-page texts keyed by marker."""
+    units: dict[str, dict[int, str]] = {}
+    for chunk in chunks:
+        text = str(chunk.get("text") or "")
+        marks = list(_PAGE_MARKER.finditer(text))
+        for index, mark in enumerate(marks):
+            end = marks[index + 1].start() if index + 1 < len(marks) else len(text)
+            bucket = units.setdefault(mark.group(1), {})
+            number = int(mark.group(2))
+            bucket[number] = bucket.get(number, "") + "\n" + text[mark.end():end]
+    return units
+
+
+def _unit_scores(basis: str, texts: dict[int, str]) -> dict[int, float]:
+    """Rare-term-weighted overlap between ``basis`` and each page's text."""
+    unit_terms = {number: _rag_terms(text) for number, text in texts.items()}
+    frequency: dict[str, int] = {}
+    for terms in unit_terms.values():
+        for term in terms:
+            frequency[term] = frequency.get(term, 0) + 1
+    wanted = _rag_terms(basis)
+    return {
+        number: sum(1.0 / frequency[term] for term in wanted & terms)
+        for number, terms in unit_terms.items()
+    }
+
+
+def _question_basis(question: dict) -> str:
+    parts = [str(question.get(key) or "") for key in ("question", "explanation", "sourceEvidence")]
+    options = question.get("options") or []
+    config = question.get("answerConfig") if isinstance(question.get("answerConfig"), dict) else {}
+    indices = config.get("correctIndices") or [question.get("correct", 0)]
+    for index in indices:
+        if isinstance(index, int) and 0 <= index < len(options):
+            parts.append(str(options[index]))
+    parts.extend(str(value) for value in config.get("acceptedAnswers") or [])
+    text = " ".join(parts)
+    for pattern in _PAGE_CITATION.values():
+        text = pattern.sub(" ", text)
+    return text
+
+
+def correct_page_references(question: dict, units: dict[str, dict[int, str]]) -> bool:
+    """Fix a slide/page number the model mis-cited, judged against the source text.
+
+    Only acts when the question cites exactly one page of a kind and another page of
+    the same material matches the question's wording clearly better; ambiguous
+    citations are left alone.  Returns True when a number was changed.
+    """
+    changed = False
+    basis = _question_basis(question)
+    for kind, pattern in _PAGE_CITATION.items():
+        texts = units.get(kind) or {}
+        if not texts:
+            continue
+        cited = {
+            int(match.group(2))
+            for key in _PAGE_CITATION_FIELDS
+            for match in pattern.finditer(str(question.get(key) or ""))
+        }
+        if len(cited) != 1:
+            continue
+        number = next(iter(cited))
+        scores = _unit_scores(basis, texts)
+        best = max(scores, key=lambda value: (scores[value], -abs(value - number)))
+        best_score, cited_score = scores[best], scores.get(number, 0.0)
+        if best == number or best_score < 1.5 or best_score < cited_score * 2 or best_score - cited_score < 1.5:
+            continue
+        for key in _PAGE_CITATION_FIELDS:
+            value = str(question.get(key) or "")
+            if value:
+                question[key] = pattern.sub(
+                    lambda match: match.group(0)
+                    if int(match.group(2)) != number
+                    else match.group(0).replace(match.group(2), str(best), 1),
+                    value,
+                )
+        note = f"頁碼已依教材原文自動核對更正（AI 原標 {number}）"
+        question["sourceHint"] = (str(question.get("sourceHint") or "") + "；" + note).lstrip("；")[:300]
+        changed = True
+    return changed
+
+
+def _best_page_label(question: dict, units: dict[str, dict[int, str]]) -> str:
+    basis = _question_basis(question)
+    best_label, best_score = "", 0.0
+    for kind, texts in units.items():
+        for number, score in _unit_scores(basis, texts).items():
+            if score > best_score:
+                best_label, best_score = _page_label(kind, number), score
+    return best_label
+
+
 def attach_question_provenance(questions: list[dict], chunks: list[dict]) -> list[dict]:
     """Validate/derive candidate provenance and persist it in reviewSource."""
     if not chunks:
         return questions
+    units = _page_units(chunks)
     by_key = {
         (str(chunk.get("materialId") or ""), str(chunk.get("chunkId") or "")): chunk
         for chunk in chunks
@@ -600,7 +708,16 @@ def attach_question_provenance(questions: list[dict], chunks: list[dict]) -> lis
         evidence = str(question.get("sourceEvidence") or "").strip()
         if not evidence:
             evidence = re.sub(r"\s+", " ", str(chosen.get("text") or "")).strip()[:300]
-        hint = str(question.get("sourceHint") or chosen.get("section") or chosen.get("chunkId") or "")[:300]
+        correct_page_references(question, units)
+        # A chunk spans several slides, so its first marker is a poor default; point at
+        # the page whose text best matches the question instead.
+        hint = str(
+            question.get("sourceHint")
+            or _best_page_label(question, units)
+            or chosen.get("section")
+            or chosen.get("chunkId")
+            or ""
+        )[:300]
         question["sourceMaterialId"] = str(chosen.get("materialId") or "")[:200]
         question["chunkId"] = str(chosen.get("chunkId") or "")[:240]
         question["sourceHint"] = hint
@@ -686,6 +803,60 @@ def question_prompt_parts(
     return count, system_prompt, prompt
 
 
+class QuestionBatch(list):
+    """Candidate questions plus a plain-language account of what went missing.
+
+    Behaves exactly like a list; ``dropped`` lists why the AI's own questions were
+    rejected and ``notes`` carries other shortfall explanations (e.g. a failed
+    top-up round), so the teacher can be told why fewer questions came back.
+    """
+
+    def __init__(self, items=(), *, dropped=None, notes=None):
+        super().__init__(items)
+        self.dropped: list[str] = list(dropped or [])
+        self.notes: list[str] = list(notes or [])
+
+
+# Only whitespace and punctuation are ignored: comparison signs, digits and units such as
+# ">", "≤", "10%" or "1/3" are exactly what tells two similar QC questions apart.
+_STEM_NOISE = re.compile(r"[\s，。？！、；：「」『』（）()\[\]【】,.?!;:\"'‘’“”…—–-]+")
+
+
+_STEM_DECISIVE = re.compile(r"[0-9<>≤≥=±%/]")
+
+
+def question_stem_key(text: object) -> str:
+    return _STEM_NOISE.sub("", str(text or "")).lower()
+
+
+def is_duplicate_stem(stem: object, others: Iterable[object], threshold: float = 0.9) -> bool:
+    """True when ``stem`` is (nearly) the same question as one of ``others``."""
+    key = question_stem_key(stem)
+    if not key:
+        return False
+    for other in others:
+        other_key = question_stem_key(other)
+        if not other_key:
+            continue
+        if key == other_key:
+            return True
+        # Same wording but different numbers / comparison signs is a different question.
+        if sorted(_STEM_DECISIVE.findall(key)) != sorted(_STEM_DECISIVE.findall(other_key)):
+            continue
+        if difflib.SequenceMatcher(None, key, other_key).ratio() >= threshold:
+            return True
+    return False
+
+
+def merge_unique_questions(existing: list[dict], new: Iterable[dict]) -> list[dict]:
+    """Append ``new`` to ``existing`` skipping questions whose stem repeats an earlier one."""
+    merged = list(existing)
+    for question in new:
+        if not is_duplicate_stem(question.get("question"), [item.get("question") for item in merged]):
+            merged.append(question)
+    return merged
+
+
 def normalize_ai_questions(
     parsed: Any,
     count: int,
@@ -693,18 +864,25 @@ def normalize_ai_questions(
     provenance_chunks: list[dict] | None = None,
 ) -> list[dict]:
     result: list[dict] = []
-    for question in _coerce_ai_question_list(parsed)[:count]:
+    dropped: list[str] = []
+    # Validate every question the model returned and stop once ``count`` good ones are
+    # collected, so a few malformed leading items cannot crowd out valid ones behind them.
+    for number, question in enumerate(_coerce_ai_question_list(parsed), 1):
+        if len(result) >= count:
+            break
         qtype = str(question.get("questionType") or "choice").lower()
         if qtype not in {"choice", "multi", "true_false", "fill", "essay"}:
             qtype = "choice"
         text = str(question.get("question", "")).strip()
         if not text:
+            dropped.append(f"第 {number} 題題幹空白")
             continue
         config = question.get("answerConfig") if isinstance(question.get("answerConfig"), dict) else {}
         options = [str(value).strip() for value in (question.get("options") or []) if str(value).strip()][:4]
         correct = 0
         if qtype in {"choice", "multi"}:
             if len(options) != 4:
+                dropped.append(f"第 {number} 題選項不是 4 個")
                 continue
             try:
                 correct = max(0, min(3, int(question.get("correct", 0) or 0)))
@@ -741,6 +919,7 @@ def normalize_ai_questions(
                 if fallback:
                     answers = [fallback]
             if not answers:
+                dropped.append(f"第 {number} 題填空題沒有可接受答案")
                 continue
             config["acceptedAnswers"] = answers
             config["caseSensitive"] = False
@@ -772,7 +951,8 @@ def normalize_ai_questions(
         })
     if not result:
         raise RuntimeError("AI 回傳的題目未通過格式檢查，請重新產生。")
-    return attach_question_provenance(result, provenance_chunks or [])
+    batch = QuestionBatch(result, dropped=dropped)
+    return attach_question_provenance(batch, provenance_chunks or [])
 
 
 def _groq_error(response) -> str:
@@ -1281,10 +1461,12 @@ def generate_groq_multisource_candidates(
         ai_privacy.deidentify_external_text(value).strip()
         for value in (existing_questions or [])
         if str(value).strip()
-    ][:80]
+    ][:40]
     prompt = base_prompt + "\n" + ai_strategy_rule(strategy, entries) + "\n每題請提供 sourceHint 與 sourceEvidence，指出答案依據；不可使用教材外知識。"
     if existing:
-        prompt += "\n【現有正式題庫】\n" + "\n".join("- " + value[:220] for value in existing) + "\n避免重複題。"
+        # Groq's free tier counts the prompt against a tiny per-minute budget, and the room
+        # left over caps how many questions can be written, so keep this list short.
+        prompt += "\n【現有正式題庫】\n" + "\n".join("- " + value[:100] for value in existing) + "\n避免重複題。"
     content = [{"type": "text", "text": system_prompt + "\n\n" + prompt}]
     temp_roots: list[Path] = []
     text_sections: list[str] = []

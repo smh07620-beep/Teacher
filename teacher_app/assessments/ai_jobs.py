@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from teacher_app.assessments import ai_job_repository, repository
+from teacher_app.assessments import ai_job_repository, answer_balance, repository
 from teacher_app.common import privacy as ai_privacy
 from teacher_app.materials import repository as material_repository
 
@@ -135,9 +135,18 @@ def run_generation_sync(
     )
     applied_strategy = runtime.infer_ai_strategy(materials) if requested_strategy == "auto" else requested_strategy
     provider = runtime.active_ai_provider()
+    try:
+        # Models put the right answer at "B" far too often; spread the positions out.
+        answer_balance.balance_answer_positions(questions)
+    except Exception:
+        LOGGER.warning("answer position balancing skipped", exc_info=True)
+    requested = _requested_count(snapshot)
     return {
         "ok": True,
         "questions": questions,
+        "requestedCount": requested,
+        "returnedCount": len(questions),
+        "shortfallNote": shortfall_note(requested, questions),
         "sourceTitle": source_title,
         "sourceCount": len(materials),
         "sourceKinds": source_kinds,
@@ -147,6 +156,33 @@ def run_generation_sync(
         "strategyRequested": requested_strategy,
         "strategyApplied": applied_strategy,
     }
+
+
+def _requested_count(snapshot: Mapping[str, Any]) -> int:
+    try:
+        return max(0, int(snapshot.get("count") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def shortfall_note(requested: int, questions) -> str:
+    """Plain-language explanation shown to the teacher when fewer questions came back."""
+    returned = len(questions)
+    if not requested or returned >= requested:
+        return ""
+    reasons: list[str] = []
+    dropped = list(getattr(questions, "dropped", []) or [])
+    if dropped:
+        kinds = []
+        for text in dropped:
+            kind = text.split(" 題", 1)[-1].strip() if " 題" in text else text
+            if kind not in kinds:
+                kinds.append(kind)
+        reasons.append(f"AI 產生的題目中有 {len(dropped)} 題格式不完整被排除（{'、'.join(kinds[:3])}）")
+    reasons.extend(str(note) for note in (getattr(questions, "notes", []) or []))
+    if not reasons:
+        reasons.append("AI 這次只回傳了這些題目；可能是教材可出題的內容不夠，或 AI 回覆被截斷")
+    return f"你要求 {requested} 題，實際取得 {returned} 題。" + "；".join(reasons) + "。可以再按一次產生補足。"
 
 
 class AiQuestionJobProcessor:
@@ -224,4 +260,5 @@ __all__ = [
     "prepare_request",
     "public_job",
     "run_generation_sync",
+    "shortfall_note",
 ]

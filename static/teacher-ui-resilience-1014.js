@@ -85,12 +85,21 @@
   }
 
   function syncAssessmentScope() {
-    window.populateAdminGroupSelects?.();
-    const wanted = assessmentScope();
     const area = document.getElementById('admin-quiz-area');
     const group = document.getElementById('admin-quiz-group');
-    if (area && [...area.options].some(option => option.value === wanted.area)) area.value = wanted.area;
-    if (group && [...group.options].some(option => option.value === wanted.group)) group.value = wanted.group;
+    // 使用者已經選好的訓練區／組別要保留：這個函式每次重畫考卷清單都會被呼叫，
+    // 若一律改回網址或預設組別，切換組別時選單會立刻跳回生化組。
+    const chosen = { area: area?.value || '', group: group?.value || '' };
+    window.populateAdminGroupSelects?.();
+    const wanted = assessmentScope();
+    const pick = (select, keep, fallback) => {
+      if (!select) return;
+      const has = value => [...select.options].some(option => option.value === value);
+      if (keep && has(keep)) select.value = keep;
+      else if (has(fallback)) select.value = fallback;
+    };
+    pick(area, chosen.area, wanted.area);
+    pick(group, chosen.group, wanted.group);
     return {
       area: area?.value || wanted.area,
       group: group?.value || wanted.group

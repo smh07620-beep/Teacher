@@ -85,6 +85,31 @@ def extract_pdf_text(path: Path) -> str:
     return "\n\n".join(out)
 
 
+def _pptx_presentation_order(archive: zipfile.ZipFile, names: list[str]) -> list[str]:
+    """Order slide parts the way the deck shows them.
+
+    File names (slide1.xml, slide2.xml ...) stop matching the slide order once a
+    slide is moved or inserted in PowerPoint, which made "投影片 N" labels disagree
+    with the page the teacher sees.  Fall back to the file-name order if the
+    presentation part cannot be read.
+    """
+    try:
+        ns_p = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+        ns_r = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+        presentation = ET.fromstring(archive.read("ppt/presentation.xml"))
+        rels = ET.fromstring(archive.read("ppt/_rels/presentation.xml.rels"))
+        targets = {rel.get("Id"): rel.get("Target") or "" for rel in rels}
+        ordered: list[str] = []
+        for slide_id in presentation.iter(f"{ns_p}sldId"):
+            target = targets.get(slide_id.get(f"{ns_r}id"), "")
+            name = target.lstrip("/") if target.startswith("/") else "ppt/" + target
+            if name in names and name not in ordered:
+                ordered.append(name)
+        return ordered + [name for name in names if name not in ordered] if ordered else names
+    except Exception:
+        return names
+
+
 def extract_pptx_text(path: Path) -> str:
     out = []
     with zipfile.ZipFile(path) as archive:
@@ -94,6 +119,7 @@ def extract_pptx_text(path: Path) -> str:
             if re.fullmatch(r"ppt/slides/slide\d+\.xml", name)
         ]
         names.sort(key=lambda name: int(re.search(r"slide(\d+)\.xml", name).group(1)))
+        names = _pptx_presentation_order(archive, names)
         namespace = {"a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
         for index, name in enumerate(names, 1):
             root = ET.fromstring(archive.read(name))

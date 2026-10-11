@@ -201,6 +201,8 @@ def _provider_label(provider: str) -> str:
 
 
 _GROQ_BATCH_SIZE = 5
+# 題數不足時最多再補幾輪（每輪都會用掉一次 Groq 額度）。
+_GROQ_TOPUP_ROUNDS = 2
 
 
 def _groq_batch_gap_seconds() -> int:
@@ -519,31 +521,57 @@ def install_question_runtime_fallback(runtime):
             )
 
         def groq_batched():
-            """Groq 免費版每分鐘 token 很少：一次出太多題時拆成每批 5 題，批與批之間等上限重置。"""
+            """Groq 免費版每分鐘 token 很少：一次出太多題時拆成每批 5 題，批與批之間等上限重置。
+
+            AI 回傳的題目格式不完整會被系統排除，所以題數不足時再補出缺少的題數
+            （最多額外 _GROQ_TOPUP_ROUNDS 輪）。補題失敗不會丟掉已經出好的題目。
+            """
             try:
                 total = int(kwargs.get("count", 5) or 5)
             except (TypeError, ValueError):
                 total = 5
             size = _GROQ_BATCH_SIZE
-            if total <= size:
-                return canonical("groq")
-            sizes = [size] * (total // size) + ([total % size] if total % size else [])
+            main_rounds = max(1, -(-total // size))
             collected: list[dict] = []
+            dropped: list[str] = []
+            notes: list[str] = []
+            repeated = 0
             title, kinds = "", []
             base_focus = str(kwargs.get("focus") or "")
-            for index, batch_count in enumerate(sizes):
-                if index:
+            for round_no in range(main_rounds + _GROQ_TOPUP_ROUNDS):
+                need = total - len(collected)
+                if need <= 0:
+                    break
+                topping_up = round_no >= main_rounds
+                if round_no:
                     if progress_callback is not None and progress_id:
                         progress_callback(
-                            progress_id, 60, "Groq 分批出題",
-                            f"第 {index + 1}/{len(sizes)} 批，等待每分鐘額度重置後繼續",
+                            progress_id, 60,
+                            "補足缺少的題目" if topping_up else "Groq 分批出題",
+                            f"目前 {len(collected)}/{total} 題，等待每分鐘額度重置後繼續",
                         )
                     time.sleep(_groq_batch_gap_seconds())
                 avoid = "；".join(str(q.get("question") or "")[:60] for q in collected[:20])
                 focus = base_focus + (f"\n（本批請避免與已出題目重複：{avoid}）" if avoid else "")
-                questions, title, kinds = canonical("groq", count=batch_count, focus=focus)
-                collected.extend(questions)
-            return collected[:total], title, kinds
+                try:
+                    if round_no == 0 and total <= size:
+                        questions, title, kinds = canonical("groq")
+                    else:
+                        questions, title, kinds = canonical("groq", count=min(size, need), focus=focus)
+                except Exception as exc:
+                    if not topping_up:
+                        raise
+                    notes.append(f"補題時發生問題：{str(exc)[:120]}")
+                    break
+                dropped.extend(getattr(questions, "dropped", []))
+                before = len(collected)
+                collected = ai_runtime.merge_unique_questions(collected, questions)
+                repeated += len(questions) - (len(collected) - before)
+                if topping_up and len(collected) == before:
+                    break
+            if repeated:
+                notes.append(f"{repeated} 題與已出的題目重複而略過")
+            return ai_runtime.QuestionBatch(collected[:total], dropped=dropped, notes=notes), title, kinds
 
         callers = {"groq": groq_batched, "gemini": lambda: canonical("gemini")}
         if primary == "openai" and not bool(getattr(settings, "free_only_mode", True)):
