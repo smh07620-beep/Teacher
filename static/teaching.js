@@ -309,6 +309,10 @@ async function teachingSaveCourse() {
         adminCoursesCache.clear();
         status.textContent = '✓ 課程安排已儲存，學員重新載入教材頁即可看到。';
         await Promise.allSettled([renderAdminCourses(true),renderAdminCourseMaterialHub(true)]);
+        // 儲存成功後稍待片刻讓使用者看到「已儲存」，再自動關閉視窗
+        await new Promise(resolve => setTimeout(resolve, 900));
+        const dlg = document.getElementById('teaching-dialog');
+        if (dlg?.open && teachingEditor && !teachingEditor.dirty) { dlg.close(); teachingEditor = null; }
     } catch (err) {status.classList.add('error');status.textContent='尚未儲存：'+err.message+'。表單內容已保留。';}
     finally {teachingEditorBusy=false;document.getElementById('teaching-fields').disabled=false;document.getElementById('plan-save').disabled=false;}
 }
