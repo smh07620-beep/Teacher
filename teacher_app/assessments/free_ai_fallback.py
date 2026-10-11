@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import time
 import re
 import shutil
@@ -516,6 +517,7 @@ def install_question_runtime_fallback(runtime):
                 strategy=call_kwargs.get("strategy", "balanced"),
                 progress_id=progress_id,
                 progress_callback=progress_callback,
+                coverage=call_kwargs.get("coverage"),
                 settings=provider_settings,
                 paths_provider=getattr(runtime, "paths_provider", storage_paths),
             )
@@ -538,6 +540,8 @@ def install_question_runtime_fallback(runtime):
             repeated = 0
             title, kinds = "", []
             base_focus = str(kwargs.get("focus") or "")
+            # 教材太長、一次讀不完時，每一批讀不同段落；老師有指定出題重點時照重點挑段落。
+            coverage_seed = random.getrandbits(16)
             for round_no in range(main_rounds + _GROQ_TOPUP_ROUNDS):
                 need = total - len(collected)
                 if need <= 0:
@@ -553,11 +557,12 @@ def install_question_runtime_fallback(runtime):
                     time.sleep(_groq_batch_gap_seconds())
                 avoid = "；".join(str(q.get("question") or "")[:60] for q in collected[:20])
                 focus = base_focus + (f"\n（本批請避免與已出題目重複：{avoid}）" if avoid else "")
+                coverage = {} if base_focus.strip() else {"coverage": (round_no, main_rounds, coverage_seed)}
                 try:
                     if round_no == 0 and total <= size:
-                        questions, title, kinds = canonical("groq")
+                        questions, title, kinds = canonical("groq", **coverage)
                     else:
-                        questions, title, kinds = canonical("groq", count=min(size, need), focus=focus)
+                        questions, title, kinds = canonical("groq", count=min(size, need), focus=focus, **coverage)
                 except Exception as exc:
                     if not topping_up:
                         raise

@@ -520,6 +520,49 @@ def build_retrieval_chunks(
     return chunks
 
 
+def coverage_slice_index(round_no: int, rounds: int, slices: int, seed: int = 0) -> int:
+    """Pick which section of a long material a given generation round should read.
+
+    Rounds are spread across the sections (2 rounds over 3 sections read the first and
+    the last), rounds beyond the planned count (top-ups) take the sections not yet used,
+    and ``seed`` rotates the starting point so asking again reads different sections.
+    """
+    if slices <= 1:
+        return 0
+    rounds = max(1, rounds)
+    primary: list[int] = []
+    for number in range(rounds):
+        index = min(slices - 1, int((number + 0.5) * slices / rounds))
+        if index not in primary:
+            primary.append(index)
+    order = primary + [index for index in range(slices) if index not in primary]
+    return (order[round_no % len(order)] + seed) % slices
+
+
+def coverage_pool(chunks: list[dict], coverage: tuple[int, int, int], budget: int) -> list[dict]:
+    """Restrict ``chunks`` to the section this round should read.
+
+    Sections are consecutive chunks that together fit ``budget`` characters, i.e. what one
+    request can actually carry.  Material that already fits in one request is returned whole.
+    """
+    round_no, rounds, seed = coverage
+    sections: list[list[dict]] = []
+    current: list[dict] = []
+    used = 0
+    for chunk in chunks:
+        cost = len(str(chunk.get("text") or "")) + 100  # + the 【RAG來源 …】 header
+        if current and used + cost > budget:
+            sections.append(current)
+            current, used = [], 0
+        current.append(chunk)
+        used += cost
+    if current:
+        sections.append(current)
+    if len(sections) <= 1:
+        return chunks
+    return sections[coverage_slice_index(round_no, rounds, len(sections), seed)]
+
+
 def select_retrieval_chunks(
     chunks: list[dict],
     query: object,
@@ -1440,7 +1483,10 @@ def generate_groq_multisource_candidates(
     progress_callback: Callable[..., Any] | None = None,
     settings: AISettings | None = None,
     paths_provider: Callable[[], Any] = storage_paths,
+    coverage: tuple[int, int, int] | None = None,
 ) -> list[dict]:
+    """``coverage`` = (round_no, planned_rounds, seed): read a different section of a long
+    material in each round instead of always the same ~6000 characters."""
     settings = settings or ai_settings()
     if not settings.groq_api_key:
         raise RuntimeError("Groq Free AI 尚未設定。請在 Render Environment 新增 GROQ_API_KEY。")
@@ -1587,6 +1633,8 @@ def generate_groq_multisource_candidates(
                 progress(28 + (index / max(1, len(entries))) * 18, "音訊轉文字", f"Groq Whisper 正在轉錄：{title}", current=index, total=len(entries))
                 transcript = groq_transcribe(source, settings=settings)
                 rag_chunks.extend(build_retrieval_chunks(entry, transcript))
+        if coverage:
+            rag_chunks = coverage_pool(rag_chunks, coverage, settings.source_max_chars)
         selected_chunks = select_retrieval_chunks(
             rag_chunks,
             " ".join([source_title, focus, strategy, *existing[:12]]),
@@ -1796,6 +1844,7 @@ def generate_ai_questions_from_materials(
     progress_callback: Callable[..., Any] | None = None,
     settings: AISettings | None = None,
     paths_provider: Callable[[], Any] = storage_paths,
+    coverage: tuple[int, int, int] | None = None,
 ) -> tuple[list[dict], str, list[str]]:
     settings = settings or ai_settings()
     if not entries:
@@ -1826,6 +1875,7 @@ def generate_ai_questions_from_materials(
             progress_callback=progress_callback,
             settings=settings,
             paths_provider=paths_provider,
+            coverage=coverage,
         )
         return questions, title, kinds
     if provider == "gemini":
@@ -1876,6 +1926,8 @@ __all__ = [
     "active_ai_provider",
     "attach_question_provenance",
     "ai_model_name",
+    "coverage_pool",
+    "coverage_slice_index",
     "ai_question_is_configured",
     "ai_settings",
     "ai_strategy_rule",

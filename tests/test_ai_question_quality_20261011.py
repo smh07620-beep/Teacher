@@ -112,7 +112,9 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(len(merged), 2)
 
 
-class GroqTopUpTests(unittest.TestCase):
+class _GroqHarness(unittest.TestCase):
+    """Shared fixture only; has no tests of its own."""
+
     def setUp(self):
         patcher = patch.dict("os.environ", {"AI_RATE_LIMIT_RETRY_SECONDS": "0"})
         patcher.start()
@@ -124,6 +126,8 @@ class GroqTopUpTests(unittest.TestCase):
             video_frame_count=3, free_only_mode=True,
         )
 
+
+class GroqTopUpTests(_GroqHarness):
     def _run(self, original_generate, count=10):
         runtime = SimpleNamespace(
             generate_ai_questions_from_materials=original_generate,
@@ -195,6 +199,123 @@ class GroqTopUpTests(unittest.TestCase):
         (questions, _t, _k), _sleep = self._run(generate, count=4)
         self.assertEqual(len(questions), 2)
         self.assertTrue(any("重複" in note for note in questions.notes))
+
+
+class CoverageSliceTests(unittest.TestCase):
+    @staticmethod
+    def _chunks(count, size=1500):
+        return [{"materialId": "m", "chunkId": f"m:chunk-{i:04d}", "section": "", "terms": set(),
+                 "text": f"[投影片 {i + 1}]\n" + f"第{i}段內容" * (size // 6)} for i in range(count)]
+
+    def test_rounds_are_spread_across_sections_and_top_ups_take_unused_ones(self):
+        picks = [ai_runtime.coverage_slice_index(r, 2, 3) for r in range(3)]
+        self.assertEqual(picks, [0, 2, 1])
+        self.assertEqual(sorted(picks), [0, 1, 2])
+        self.assertEqual({ai_runtime.coverage_slice_index(r, 3, 3) for r in range(3)}, {0, 1, 2})
+        self.assertEqual(ai_runtime.coverage_slice_index(5, 2, 1), 0)
+
+    def test_seed_rotates_the_starting_section_but_keeps_rounds_distinct(self):
+        for seed in range(6):
+            picks = [ai_runtime.coverage_slice_index(r, 2, 4, seed) for r in range(2)]
+            self.assertEqual(len(set(picks)), 2)
+        self.assertNotEqual(
+            [ai_runtime.coverage_slice_index(r, 2, 4, 0) for r in range(2)],
+            [ai_runtime.coverage_slice_index(r, 2, 4, 1) for r in range(2)],
+        )
+
+    def test_short_material_is_never_sliced(self):
+        chunks = self._chunks(3, size=1500)
+        self.assertEqual(ai_runtime.coverage_pool(chunks, (1, 2, 7), 6000), chunks)
+
+    def test_long_material_is_cut_into_budget_sized_sections_that_cover_everything(self):
+        chunks = self._chunks(9, size=1500)
+        pools = [ai_runtime.coverage_pool(chunks, (r, 3, 0), 6000) for r in range(3)]
+        for pool in pools:
+            self.assertLessEqual(sum(len(c["text"]) + 100 for c in pool), 6000)
+        seen = [c["chunkId"] for pool in pools for c in pool]
+        self.assertEqual(sorted(seen), sorted(c["chunkId"] for c in chunks))
+
+    def test_each_groq_round_reads_a_different_part_of_a_long_deck(self):
+        text = "\n\n".join(f"[投影片 {n}]\n" + f"主題{n:02d}的說明內容。" * 40 for n in range(1, 31))
+        prompts = []
+
+        def fake_post(*_args, **kwargs):
+            prompts.append(kwargs["json"]["messages"][0]["content"][0]["text"])
+            return _FakeGroqResponse()
+
+        settings = replace(_runtime_settings(), source_max_chars=6000)
+        for round_no in range(2):
+            with patch.object(ai_runtime, "extract_material_text_for_ai", return_value=(text, len(text))), \
+                    patch.object(ai_runtime, "material_source_to_temp", side_effect=RuntimeError("no preview")), \
+                    patch.object(ai_runtime.requests, "post", side_effect=fake_post):
+                ai_runtime.generate_groq_multisource_candidates(
+                    [{"id": "m1", "filename": "deck.txt", "title": "教材"}], count=2, qtype="choice",
+                    difficulty="standard", focus="", source_title="教材", strategy="auto",
+                    settings=settings, coverage=(round_no, 2, 0),
+                )
+        topics = [{int(t) for t in __import__("re").findall(r"主題(\d\d)", prompt)} for prompt in prompts]
+        self.assertTrue(topics[0] and topics[1])
+        self.assertLess(max(topics[0]), min(topics[1]))  # 第二批讀的是後面的段落
+        self.assertTrue(all(len(prompt) < 9000 for prompt in prompts))
+
+
+class _FakeGroqResponse:
+    status_code = 200
+
+    @staticmethod
+    def json():
+        import json as _json
+        return {"choices": [{"message": {"content": _json.dumps({"questions": [_raw_choice(1), _raw_choice(2)]}, ensure_ascii=False)}}]}
+
+
+def _runtime_settings():
+    return ai_runtime.AISettings(
+        provider="groq", groq_api_key="g", groq_model="m", groq_transcribe_model="w",
+        gemini_api_key="", gemini_model="g", openai_api_key="", openai_model="o",
+        source_max_chars=6000, max_questions=15, media_max_mb=300, max_materials=4,
+        video_frame_count=3, free_only_mode=True,
+    )
+
+
+class GroqCoveragePlumbingTests(_GroqHarness):
+    def _record(self, **run_kwargs):
+        seen = []
+
+        def generate(entries, **kwargs):
+            seen.append(kwargs)
+            n = kwargs["count"]
+            serial = len(seen) * 10
+            return ai_runtime.QuestionBatch([_raw_choice(serial + i) for i in range(n)]), "標題", ["text"]
+
+        self._run_with_focus(generate, **run_kwargs)
+        return seen
+
+    def _run_with_focus(self, original_generate, focus="", count=10):
+        runtime = SimpleNamespace(
+            generate_ai_questions_from_materials=original_generate,
+            active_ai_provider=lambda: "groq", ai_model_name=lambda: "groq-model",
+            paths_provider=lambda: None,
+        )
+        free_ai_fallback.install_question_runtime_fallback(runtime)
+        with patch.object(free_ai_fallback.ai_runtime, "ai_settings", return_value=self.settings), \
+                patch.object(free_ai_fallback, "provider_chain", return_value=["groq"]), \
+                patch.object(free_ai_fallback.time, "sleep"):
+            return runtime.generate_ai_questions_from_materials(
+                [{"filename": "a.pptx"}], category_id="c", count=count, qtype="mixed_all",
+                difficulty="standard", focus=focus, strategy="balanced",
+            )
+
+    def test_every_batch_gets_its_own_coverage_round_when_no_focus_is_given(self):
+        seen = self._record()
+        coverages = [call["coverage"] for call in seen]
+        self.assertEqual([c[0] for c in coverages], [0, 1])
+        self.assertEqual({c[1] for c in coverages}, {2})
+        self.assertEqual(len({c[2] for c in coverages}), 1)  # 同一次工作共用一個 seed
+
+    def test_teacher_focus_keeps_relevance_based_selection(self):
+        seen = self._record(focus="QC 設定")
+        self.assertTrue(seen)
+        self.assertTrue(all("coverage" not in call for call in seen))
 
 
 class ShortfallNoteTests(unittest.TestCase):
