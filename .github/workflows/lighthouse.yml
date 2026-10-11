@@ -1,0 +1,110 @@
+name: Lighthouse performance audit
+
+# 每週一次（也可手動執行）檢測正式站頁面的速度、無障礙與最佳實務，
+# 同時量「電腦版」與「手機版」，結果整理在該次執行的 Summary，完整報告在 Artifacts。
+#
+# 所有標準都是「警告」：用來持續追蹤、及早發現退步，不會讓流程變紅。
+# 刻意只用排程／手動執行：不隨 push 執行，所以不參與 Render 的 checksPass 部署閘門。
+#
+# 登入帳號：優先 TEACHER_LOAD_USERNAME / TEACHER_LOAD_PASSWORD（建議專用學員帳號），
+# 沒有時沿用 TEACHER_SMOKE_USERNAME / TEACHER_SMOKE_PASSWORD；兩者都沒有時只檢測公開頁面。
+# 登入後要檢測的頁面可用 repository variable LIGHTHOUSE_PATHS 調整（逗號分隔）。
+# 詳見 docs/LIGHTHOUSE.md。
+on:
+  schedule:
+    # 每週一台灣時間 03:37（UTC 週日 19:37），避開上班與一般排程高峰。
+    - cron: "37 19 * * 0"
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "要檢測的網址（留空＝正式站）"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teacher-lighthouse
+  cancel-in-progress: false
+
+jobs:
+  lighthouse:
+    name: Lighthouse (${{ matrix.preset }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [desktop, mobile]
+    env:
+      TARGET_URL: ${{ inputs.target_url || vars.TEACHER_PRODUCTION_URL || 'https://teacher-j3id.onrender.com' }}
+      LH_PRESET: ${{ matrix.preset }}
+      LH_USERNAME: ${{ secrets.TEACHER_LOAD_USERNAME || secrets.TEACHER_SMOKE_USERNAME }}
+      LH_PASSWORD: ${{ secrets.TEACHER_LOAD_PASSWORD || secrets.TEACHER_SMOKE_PASSWORD }}
+      LIGHTHOUSE_PATHS: ${{ vars.LIGHTHOUSE_PATHS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Lighthouse CI
+        run: npm install --no-save @lhci/cli@0.15.1 puppeteer-core@24
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "true"
+
+      - name: Wake the service (Render free plan may be asleep)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 12); do
+            if curl -fsS --max-time 30 "${TARGET_URL%/}/live" >/dev/null; then
+              echo "service is awake"
+              exit 0
+            fi
+            echo "waiting for service ($i/12)..."
+            sleep 10
+          done
+          echo "::error::網站沒有回應，無法進行檢測。"
+          exit 1
+
+      - name: Run Lighthouse CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${TARGET_URL%/}"
+          if [ -n "${LH_USERNAME:-}" ] && [ -n "${LH_PASSWORD:-}" ]; then
+            paths="${LIGHTHOUSE_PATHS:-/,/internal,/pgy}"
+            echo "mode=已登入" >> "$GITHUB_ENV"
+          else
+            paths="/login,/"
+            echo "mode=未登入（只測公開頁面）" >> "$GITHUB_ENV"
+          fi
+          args=()
+          IFS=',' read -ra items <<< "$paths"
+          for item in "${items[@]}"; do
+            item="$(echo "$item" | xargs)"
+            [ -n "$item" ] && args+=("--collect.url=${base}${item}")
+          done
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium-browser || command -v chromium)"
+          npx lhci autorun --config=tests/lighthouse/lighthouserc.js "${args[@]}"
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          python3 tools/lighthouse_summary.py \
+            --reports-dir .lighthouseci/reports \
+            --title "Lighthouse：${{ matrix.preset == 'desktop' && '電腦版' || '手機版' }}（${mode:-未知}）" \
+            --base-url "${TARGET_URL%/}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-${{ matrix.preset }}-${{ github.run_id }}
+          path: .lighthouseci/reports
+          if-no-files-found: warn
+          retention-days: 30
