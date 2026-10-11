@@ -254,6 +254,10 @@ def _register_canonical_blueprints(app: Flask) -> Flask:
 
 def create_app() -> Flask:
     from teacher_app.maintenance.bootstrap import run_bootstrap
+    from teacher_app.maintenance.error_reporting import init_error_reporting
+
+    # 選用的錯誤通知：沒設定 SENTRY_DSN 時完全不動作。需在建立 Flask 應用程式前初始化。
+    init_error_reporting()
 
     app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
     configure_app(app)

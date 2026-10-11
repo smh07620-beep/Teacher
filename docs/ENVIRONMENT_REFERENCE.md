@@ -227,6 +227,9 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `RENDER_GIT_BRANCH` |  | `teacher_app/maintenance/health.py` |  |  |
 | `RENDER_GIT_COMMIT` |  | `teacher_app/frontend/assets.py`, `teacher_app/maintenance/health.py`, `teacher_app/materials/media_audio_routes.py` |  |  |
 | `SECRET_KEY` |  | `teacher_app/common/security.py`, `teacher_app/config.py`, `teacher_app/legacy_host.py` |  | yes |
+| `SENTRY_DSN` |  | `teacher_app/maintenance/error_reporting.py` |  | yes |
+| `SENTRY_ENVIRONMENT` |  | `teacher_app/maintenance/error_reporting.py` |  | yes |
+| `SENTRY_SAMPLE_RATE` |  | `teacher_app/maintenance/error_reporting.py` |  |  |
 | `SESSION_COOKIE_SECURE` | `false` | `teacher_app/common/security.py`, `teacher_app/config.py`, `teacher_app/legacy_host.py` |  | yes |
 | `SESSION_HOURS` | `12` | `teacher_app/common/security.py` |  | yes |
 | `SMOKE_REQUIRE_WORKERS` |  | `tools/production_worker_check.py` |  |  |

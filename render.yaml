@@ -217,3 +217,8 @@ services:
         value: "14000"
       - key: MATERIAL_STORAGE
         value: /tmp/teacher-materials
+      # 選用：程式出錯時的錯誤通知（Sentry）。留空＝完全不啟用；設定方式見 docs/MONITORING.md。
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
