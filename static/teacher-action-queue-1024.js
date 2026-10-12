@@ -114,6 +114,30 @@
     return `<button type="button" data-teacher-action-index="${index}" data-teacher-action-kind="${escapeHtml(item.kind || '')}" data-teacher-action-id="${escapeHtml(item.id || '')}" class="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60">${escapeHtml(item.actionLabel || '前往處理')}</button>`;
   }
 
+  // 草稿（課程／考卷）可以直接從待辦刪除；伺服器仍會檢查權限與範圍。
+  function deleteDraftButton(item, index) {
+    if (item.kind !== 'draft') return '';
+    return `<button type="button" data-teacher-draft-delete-index="${index}" class="shrink-0 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-700 hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60">刪除草稿</button>`;
+  }
+
+  async function deleteDraft(item) {
+    const isExam = Boolean(item.examId);
+    const id = String(isExam ? item.examId : (item.courseId || item.resourceId || item.id || ''));
+    if (!id) return false;
+    const label = String(item.title || (isExam ? '這份考卷' : '這門課程')).replace(/^考卷：/, '');
+    const note = isExam
+      ? '會刪除這份草稿考卷與它的題目。'
+      : '只會刪除課程本身；底下的教材與考卷會保留，變成「未關聯」。';
+    if (!window.confirm(`確定刪除草稿「${label}」嗎？\n\n${note}\n刪除後無法復原。`)) return false;
+    const url = isExam ? `/api/quiz-categories/${encodeURIComponent(id)}` : `/api/courses/${encodeURIComponent(id)}`;
+    const response = await fetch(url, {method: 'DELETE', credentials: 'same-origin'});
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || '刪除失敗');
+    }
+    return true;
+  }
+
   function itemCard(item, index) {
     const [icon, fallbackLabel, classes] = kindMeta(item.kind);
     const due = item.dueAt ? `<div class="mt-1 text-[11px] ${item.overdue ? 'font-bold text-rose-700' : 'text-slate-500'}">${item.overdue ? '已逾期：' : '截止：'}${escapeHtml(formatWhen(item.dueAt))}</div>` : '';
@@ -127,7 +151,7 @@
         ${item.detail ? `<p class="mt-1 text-xs text-slate-600 break-words">${escapeHtml(item.detail)}</p>` : ''}
         ${due}${retained}
       </div>
-      ${actionButton(item, index)}
+      <div class="flex shrink-0 flex-wrap items-center gap-2">${actionButton(item, index)}${deleteDraftButton(item, index)}</div>
     </article>`;
   }
 
@@ -279,6 +303,22 @@
   }
 
   function bindActions(section) {
+    section.querySelectorAll('[data-teacher-draft-delete-index]').forEach(button => {
+      button.addEventListener('click', async () => {
+        const item = latestItems[Number(button.dataset.teacherDraftDeleteIndex)];
+        if (!item || button.disabled) return;
+        button.disabled = true;
+        try {
+          if (await deleteDraft(item)) {
+            await refresh();
+            return;
+          }
+        } catch (error) {
+          window.alert('刪除失敗：' + (error.message || '請稍後再試'));
+        }
+        button.disabled = false;
+      });
+    });
     section.querySelectorAll('[data-teacher-action-index]').forEach(button => {
       button.addEventListener('click', async () => {
         const item = latestItems[Number(button.dataset.teacherActionIndex)];

@@ -139,3 +139,13 @@ class DraftLocationLabelTests(unittest.TestCase):
         self.assertEqual(service._location_suffix({"area": "internal", "group": "grpMicro"}), "（內部教育訓練區・2 鏡檢組）")
         self.assertEqual(service._location_suffix({"area": "pgy", "group": "grpBio"}), "（PGY訓練區・1 生化組）")
         self.assertEqual(service._location_suffix({}), "")
+
+
+class DraftDeleteButtonTests(unittest.TestCase):
+    def test_queue_offers_direct_delete_for_draft_cards_via_existing_server_endpoints(self):
+        from pathlib import Path
+        js = (Path(__file__).resolve().parents[1] / "static" / "teacher-action-queue-1024.js").read_text(encoding="utf-8")
+        self.assertIn("data-teacher-draft-delete-index", js)
+        self.assertIn("/api/quiz-categories/${encodeURIComponent(id)}", js)
+        self.assertIn("/api/courses/${encodeURIComponent(id)}", js)
+        self.assertIn("window.confirm(", js)
