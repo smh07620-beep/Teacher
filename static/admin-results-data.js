@@ -17,7 +17,7 @@
     const avg=completed.length?completed.reduce((s,r)=>s+Number(r.score||0),0)/completed.length:0;
     const passed=completed.filter(r=>(r.status||'')==='合格').length;
     const rate=completed.length?Math.round(passed/completed.length*100):0;
-    cards.innerHTML=`<div class="rounded-xl bg-slate-50 border p-4"><span class="text-xs text-slate-500">總考核次數</span><b class="block text-2xl mt-1">${rows.length}</b></div><div class="rounded-xl bg-teal-50 border border-teal-100 p-4"><span class="text-xs text-teal-700">平均分</span><b class="block text-2xl mt-1 text-teal-950">${avg.toFixed(1)}</b></div><div class="rounded-xl bg-emerald-50 border border-emerald-100 p-4"><span class="text-xs text-emerald-700">通過率</span><b class="block text-2xl mt-1 text-emerald-950">${rate}%</b></div><div class="rounded-xl bg-amber-50 border border-amber-100 p-4"><span class="text-xs text-amber-700">待人工批改</span><b class="block text-2xl mt-1 text-amber-950">${pending}</b></div>`;
+    cards.innerHTML=`<div class="rounded-xl bg-slate-50 border px-3 py-2"><span class="text-xs text-slate-500">總考核次數</span><b class="block text-lg">${rows.length}</b></div><div class="rounded-xl bg-teal-50 border border-teal-100 px-3 py-2"><span class="text-xs text-teal-700">平均分</span><b class="block text-lg text-teal-950">${avg.toFixed(1)}</b></div><div class="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2"><span class="text-xs text-emerald-700">通過率</span><b class="block text-lg text-emerald-950">${rate}%</b></div><div class="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2"><span class="text-xs text-amber-700">待人工批改</span><b class="block text-lg text-amber-950">${pending}</b></div>`;
     const map=new Map();
     for(const r of rows){
       for(const a of r.answersDetail||[]){
@@ -29,8 +29,8 @@
         map.set(k,x);
       }
     }
-    const list=[...map.values()].map(x=>({...x,rate:x.total?Math.round(x.correct/x.total*100):0})).sort((a,b)=>a.rate-b.rate||b.total-a.total).slice(0,12);
-    qbox.innerHTML=list.length?list.map(x=>`<div class="rounded-xl border ${x.rate<60?'border-rose-200 bg-rose-50/40':'border-slate-200 bg-white'} p-3 flex items-center justify-between gap-3"><div class="min-w-0"><div class="text-xs font-bold text-slate-800 line-clamp-2">${escapeHtml(x.text)}</div><div class="text-[11px] text-slate-500 mt-1">作答 ${x.total} 次・答對 ${x.correct} 次</div></div><div class="shrink-0 text-sm font-black ${x.rate<60?'text-rose-700':'text-teal-700'}">${x.rate}%</div></div>`).join(''):'<p class="text-xs text-slate-400">目前沒有足夠的客觀題作答紀錄可分析。</p>';
+    const list=[...map.values()].map(x=>({...x,rate:x.total?Math.round(x.correct/x.total*100):0})).sort((a,b)=>a.rate-b.rate||b.total-a.total).filter(x=>x.rate<80).slice(0,5);
+    qbox.innerHTML=list.length?list.map(x=>`<div class="rounded-xl border ${x.rate<60?'border-rose-200 bg-rose-50/40':'border-slate-200 bg-white'} p-3 flex items-center justify-between gap-3"><div class="min-w-0"><div class="text-xs font-bold text-slate-800 line-clamp-2">${escapeHtml(x.text)}</div><div class="text-[11px] text-slate-500 mt-1">作答 ${x.total} 次・答對 ${x.correct} 次</div></div><div class="shrink-0 text-sm font-black ${x.rate<60?'text-rose-700':'text-teal-700'}">${x.rate}%</div></div>`).join(''):'<p class="text-xs text-slate-400">目前沒有答對率偏低（低於 80%）的題目。</p>';
   };
 
   window.fetchAdminRecords = async function(){
@@ -178,6 +178,9 @@
       adminRecords=[];
       page=1;
       await window.renderAdminTable();
+      document.dispatchEvent(new CustomEvent('teacher-records-cleared'));
+      window.TeacherActionQueue1024?.refresh?.();
+      alert('已清空全部歷史考核紀錄。');
     }catch(error){
       alert(`清空失敗：${error.message}`);
     }

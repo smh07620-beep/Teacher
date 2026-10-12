@@ -32,3 +32,16 @@ class HistoryResultsLinkAndPillTest(unittest.TestCase):
         src = (ROOT / "static/learner-study-exam-loop-1032.js").read_text(encoding="utf-8")
         self.assertIn("persona=teacher", src)
         self.assertIn("getClientRects().length > 0", src)
+
+
+class AnalyticsTabInlineTest(unittest.TestCase):
+    def test_analytics_tab_is_inline_and_clear_refreshes(self):
+        inline = (ROOT / "static/teacher-assessment-inline-1031.js").read_text(encoding="utf-8")
+        wk = (ROOT / "static/teacher-workspace-1014.js").read_text(encoding="utf-8")
+        data = (ROOT / "static/admin-results-data.js").read_text(encoding="utf-8")
+        css = (ROOT / "static/teacher-workspace-1014.css").read_text(encoding="utf-8")
+        self.assertIn("renderAnalytics", inline)
+        self.assertIn("show('analytics')", wk)
+        self.assertIn("teacher-records-cleared", inline)
+        self.assertIn("teacher-records-cleared", data)
+        self.assertIn('data-assess-tab="analytics"', css)

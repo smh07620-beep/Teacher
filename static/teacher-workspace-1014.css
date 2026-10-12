@@ -283,9 +283,10 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
 
 /* 1031: the assessment tabs switch panes inside the page. */
 #admin-section-quiz[data-assess-tab="pending"] > :not(#teacher-assessment-flow-1014):not(#teacher-assess-pending-1031),
-#admin-section-quiz[data-assess-tab="history"] > :not(#teacher-assessment-flow-1014):not(#teacher-assess-history-1031) {
+#admin-section-quiz[data-assess-tab="history"] > :not(#teacher-assessment-flow-1014):not(#teacher-assess-history-1031),
+#admin-section-quiz[data-assess-tab="analytics"] > :not(#teacher-assessment-flow-1014):not(#teacher-assess-analytics-1031) {
   display: none !important;
 }
-#admin-section-quiz:not([data-assess-tab="pending"]):not([data-assess-tab="history"]) > .teacher-assess-pane-1031 {
+#admin-section-quiz:not([data-assess-tab="pending"]):not([data-assess-tab="history"]):not([data-assess-tab="analytics"]) > .teacher-assess-pane-1031 {
   display: none;
 }

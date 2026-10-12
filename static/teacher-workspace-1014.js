@@ -512,9 +512,8 @@
             markTeacherNav('assessment');
           }
         } else if (tab === 'analytics') {
-          await window.TeacherAssessmentInline1031?.show('exams');
+          await window.TeacherAssessmentInline1031?.show('analytics');
           setAssessmentTab('analytics');
-          document.getElementById('teacher-learners-p2')?.scrollIntoView?.({block:'start', behavior:'smooth'});
         }
       });
       document.addEventListener('teacher-assessment-pending-1030', event => {

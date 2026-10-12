@@ -172,7 +172,38 @@
     if (input) { input.focus(); try { input.setSelectionRange(input.value.length, input.value.length); } catch (_) { /* ignore */ } }
   }
 
-  function render(name) { (name === 'pending' ? renderPending : renderHistory)(); }
+  function renderAnalytics() {
+    const pane = ensurePane('analytics', '教學分析');
+    if (!pane) return;
+    if (!state.loaded) { pane.innerHTML = `<p class="text-sm text-slate-500">${state.error ? '❌ ' + esc(state.error) : '讀取統計中…'}</p>`; return; }
+    const rows = state.records;
+    const done = rows.filter(r => !isPending(r) && Number.isFinite(Number(r.score)));
+    const passed = done.filter(r => r.status === '合格').length;
+    const avg = done.length ? done.reduce((sum, r) => sum + Number(r.score || 0), 0) / done.length : 0;
+    const chip = (label, value) => `<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center"><b class="block text-lg text-slate-900">${value}</b><span class="text-[11px] text-slate-500">${label}</span></div>`;
+    const byExam = new Map();
+    rows.forEach(r => {
+      const key = r.quizTitle || '（未命名考卷）';
+      const x = byExam.get(key) || {title: key, n: 0, sum: 0, scored: 0, pass: 0};
+      x.n++;
+      if (!isPending(r) && Number.isFinite(Number(r.score))) { x.scored++; x.sum += Number(r.score); if (r.status === '合格') x.pass++; }
+      byExam.set(key, x);
+    });
+    const examRows = [...byExam.values()].map(x => `<li class="flex items-center justify-between gap-3 py-1.5 text-sm"><span class="min-w-0 truncate text-slate-800">${esc(x.title)}</span><span class="shrink-0 text-xs text-slate-600">${x.n} 人次・平均 ${x.scored ? (x.sum / x.scored).toFixed(1) : '—'}・通過 ${x.scored ? Math.round(x.pass / x.scored * 100) : 0}%</span></li>`).join('');
+    const qmap = new Map();
+    rows.forEach(r => (r.answersDetail || []).forEach(a => {
+      if (a?.questionType === 'essay' || a?.isCorrect === null || a?.isCorrect === undefined) return;
+      const k = a.questionText || `第 ${a.num || ''} 題`;
+      const x = qmap.get(k) || {text: k, total: 0, ok: 0};
+      x.total++; if (a.isCorrect === true) x.ok++;
+      qmap.set(k, x);
+    }));
+    const weak = [...qmap.values()].map(x => ({...x, rate: Math.round(x.ok / x.total * 100)})).filter(x => x.rate < 80).sort((a, b) => a.rate - b.rate).slice(0, 5);
+    const weakHtml = weak.length ? weak.map(x => `<li class="flex items-start justify-between gap-3 py-1.5 text-xs"><span class="min-w-0 text-slate-700">${esc(x.text)}</span><b class="shrink-0 text-rose-700">${x.rate}%（${x.ok}/${x.total}）</b></li>`).join('') : '<li class="py-1.5 text-xs text-slate-500">目前沒有答對率偏低（低於 80%）的題目。</li>';
+    pane.innerHTML = `<div class="max-w-3xl space-y-3"><h4 class="text-sm font-black text-slate-900">教學分析（簡易統計）</h4><div class="grid grid-cols-2 gap-2 sm:grid-cols-4">${chip('考核人次', rows.length)}${chip('平均分', avg.toFixed(1))}${chip('通過率', (done.length ? Math.round(passed / done.length * 100) : 0) + '%')}${chip('待批改', rows.filter(isPending).length)}</div><div><div class="text-xs font-black text-slate-600">各考卷</div><ul class="divide-y divide-slate-100">${examRows || '<li class="py-2 text-xs text-slate-500">目前沒有考核紀錄。</li>'}</ul></div><div><div class="text-xs font-black text-slate-600">答對率偏低的題目（最多 5 題）</div><ul class="divide-y divide-slate-100">${weakHtml}</ul></div></div>`;
+  }
+
+  function render(name) { (name === 'pending' ? renderPending : name === 'analytics' ? renderAnalytics : renderHistory)(); }
 
   function currentList(name) { return name === 'pending' ? pendingList() : historyList(); }
 
@@ -256,15 +287,15 @@
   async function show(tab) {
     const host = panel();
     if (!host) return false;
-    state.tab = ['pending', 'history'].includes(tab) ? tab : 'exams';
+    state.tab = ['pending', 'history', 'analytics'].includes(tab) ? tab : 'exams';
     host.dataset.assessTab = state.tab;
     document.getElementById('teacher-assessment-flow-1014')?.querySelectorAll('[data-assessment-tab-1030]').forEach(button => {
-      const active = button.getAttribute('data-assessment-tab-1030') === (tab === 'analytics' ? 'analytics' : state.tab);
+      const active = button.getAttribute('data-assessment-tab-1030') === state.tab;
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-selected', active ? 'true' : 'false');
     });
     if (state.tab === 'exams') return true;
-    ensurePane('pending', '待批改'); ensurePane('history', '歷史紀錄');
+    ensurePane('pending', '待批改'); ensurePane('history', '歷史紀錄'); ensurePane('analytics', '教學分析');
     render(state.tab);
     await load(true);
     render(state.tab);
@@ -278,6 +309,11 @@
     await show('pending');
     return !!state.records.find(r => String(r.id) === state.view.pending.openId && isPending(r));
   }
+
+  document.addEventListener('teacher-records-cleared', () => {
+    state.records = []; state.loaded = false;
+    load(true).then(() => { updateBadge(); if (state.tab !== 'exams') render(state.tab); });
+  });
 
   window.TeacherAssessmentInline1031 = Object.freeze({show, openRecord, refresh: () => load(true).then(() => { if (state.tab !== 'exams') render(state.tab); })});
 })();
