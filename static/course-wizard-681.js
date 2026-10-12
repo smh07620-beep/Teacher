@@ -905,8 +905,10 @@ function renderCompletedMaterialInsights(){
     const review=needsReview
       ? `<p class="mt-1 text-[11px] font-bold text-amber-700">待確認：系統不太確定這份教材的類型。<button type="button" data-csp-click="courseWizard681ConfirmType('${id}')" class="ml-1 rounded bg-amber-100 px-2 py-0.5 font-black">沒錯</button></p>`
       : '';
+    const scanFailed=analysis?.imageScanSource==='doc-converted'&&analysis?.imageScanError;
+    const docHint=scanFailed?'<p class="mt-1 text-[11px] font-bold text-amber-700">舊版 .doc 無法自動偵測圖片；請用 Word「另存新檔」成 .docx 後重新上傳。</p>':'';
     const fix=`<details class="mt-1 text-[11px] text-slate-500"><summary class="cursor-pointer">更正類型</summary><select data-csp-change="courseWizard681ChangeType('${id}',this.value)" class="mt-1 rounded border p-1" aria-label="更正教材類型">${typeOptions(type)}</select></details>`;
-    return `<div class="rounded-lg border ${needsReview?'border-amber-200':'border-emerald-100'} bg-white p-2"><div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(item.title||item.filename||item.id)}</b><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700">${esc(chip)}</span></div>${review}${fix}</div>`;
+    return `<div class="rounded-lg border ${needsReview?'border-amber-200':'border-emerald-100'} bg-white p-2"><div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(item.title||item.filename||item.id)}</b><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700">${esc(chip)}</span></div>${review}${docHint}${fix}</div>`;
   }).join('');
   const atlasRows=atlasEntries.map(([materialId,info])=>`<div class="rounded-lg border border-teal-200 bg-teal-50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><div><b class="text-teal-950">🔬 Word 內偵測到 ${Number(info.count||0)} 張可獨立整理的圖片</b><p class="mt-1 text-[11px] text-teal-800">${esc(info.title||materialId)}｜原 Word 會保留；只會把你勾選的圖片另外建立 Atlas 草稿。</p></div><button type="button" data-csp-click="courseWizard681OpenAtlasImport('${esc(materialId)}')" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">檢視並建立 Atlas 草稿</button></div></div>`).join('');
   host.innerHTML=`<div class="mt-3 space-y-2"><div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><b class="text-emerald-900">✅ 教材自動歸類結果</b><div class="mt-2 grid gap-2 md:grid-cols-2">${classificationRows}</div></div>${atlasRows}</div>`;
@@ -1003,16 +1005,23 @@ async function watchQueuedJobs(jobIds){
     if(rows.length===unique.length&&rows.every(row=>row.status==='completed')){
       const completedMaterialIds=rows.map(row=>String(row.materialId||'')).filter(Boolean);
       state.expectedMaterialIds=[...new Set([...state.expectedMaterialIds,...completedMaterialIds])];
+      let finishStep='';
       try{
+        finishStep='設定教材可見範圍';
         await applySourceOnlyAudience(completedMaterialIds);
+        finishStep='確認教材已掛入課程';
         await verifyCreatedCourseMaterials();
+        finishStep='重新整理教材清單';
         await refreshWorkspaceData();
+        finishStep='';
         await hydrateCompletedMaterialInsights(completedMaterialIds);
         maybeAdvanceAfterMaterials();
       }catch(error){
         state.linksVerified=false;
+        // 圖片偵測結果不依賴前面的收尾步驟：收尾出錯時仍要顯示，老師才看得到「內含 N 張圖」。
+        void hydrateCompletedMaterialInsights(completedMaterialIds).catch(()=>{});
         const host=el('cw681-background-jobs');
-        if(host)host.insertAdjacentHTML('beforeend',`<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs font-bold text-rose-700">❌ ${esc(error.message)}</div>`);
+        if(host)host.insertAdjacentHTML('beforeend',`<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs font-bold text-rose-700">❌ ${finishStep?esc('「'+finishStep+'」失敗：'):''}${esc(error.message)}</div>`);
       }
       syncCompletionControls();
       break;
@@ -1091,7 +1100,7 @@ async function retryFailedUploads(){
     state.expectedMaterialIds=[...new Set([...state.expectedMaterialIds,...(result.materials||[])])];
     state.linksVerified=false;
     const retryText=state.failedUploads.length?`仍有 ${state.failedUploads.length} 份教材上傳失敗。`:'未完成教材已重新送入背景佇列；請等到 Worker 正式完成。';
-    state.resultHtml=`<span class="font-bold ${state.failedUploads.length?'text-amber-700':'text-sky-700'}">${state.failedUploads.length?'⚠️':'⏳'} ${esc(retryText)}</span><div id="cw681-background-jobs"></div><button id="cw681-reset-next" type="button" disabled data-csp-click="courseWizard681Reset()" class="mt-2 text-slate-500 underline disabled:cursor-not-allowed disabled:opacity-40">建立下一門課</button>`;
+    state.resultHtml=`<span class="font-bold ${state.failedUploads.length?'text-amber-700':'text-sky-700'}">${state.failedUploads.length?'⚠️':'⏳'} ${esc(retryText)}</span><div id="cw681-background-jobs"></div><div id="cw681-material-insights"></div><div id="cw681-atlas-import" class="hidden"></div><button id="cw681-reset-next" type="button" disabled data-csp-click="courseWizard681Reset()" class="mt-2 text-slate-500 underline disabled:cursor-not-allowed disabled:opacity-40">建立下一門課</button>`;
     render();
     watchQueuedJobs(queuedIds());
   }catch(error){
@@ -1364,9 +1373,9 @@ async function addFilesToCourse(){
   if(state.busy||!state.editing||!state.course?.id)return;
   const input=el('cw681-files'),picked=[...(input?.files||[])];
   if(!picked.length)return alert('請先選擇要上傳的教材檔案。');
-  const base=state.files.length;
-  state.files=[...state.files,...picked];
-  const entries=picked.map((file,offset)=>({file,index:base+offset}));
+  // 選檔時 FilesChanged 已把這些檔案放進清單；這裡只補上清單裡還沒有的，避免同一份檔案被列兩次。
+  picked.forEach(file=>{if(!state.files.includes(file))state.files.push(file);});
+  const entries=picked.map(file=>({file,index:state.files.indexOf(file)}));
   const {area,group}=scope(),desc=String(state.course.desc||'');
   const status=el('cw681-status');setBusy(true);
   try{
@@ -1378,7 +1387,7 @@ async function addFilesToCourse(){
     state.expectedMaterialIds=[...new Set([...state.expectedMaterialIds,...(result.materials||[])])];
     state.linksVerified=false;
     const note=state.failedUploads.length?`有 ${state.failedUploads.length} 份教材上傳失敗：${state.failedUploads.slice(0,2).map(item=>`${item.fileName}（${item.reason}）`).join('；')}。請確認後重新選擇檔案再按「上傳到本課程」。`:`已排入背景處理 ${result.uploaded} 份教材；請等到全部完成再前往下一步。`;
-    state.resultHtml=`<span class="font-bold ${state.failedUploads.length?'text-amber-700':'text-sky-700'}">${state.failedUploads.length?'⚠️':'⏳'} ${esc(note)}</span><div id="cw681-background-jobs"></div>`;
+    state.resultHtml=`<span class="font-bold ${state.failedUploads.length?'text-amber-700':'text-sky-700'}">${state.failedUploads.length?'⚠️':'⏳'} ${esc(note)}</span><div id="cw681-background-jobs"></div><div id="cw681-material-insights"></div><div id="cw681-atlas-import" class="hidden"></div>`;
     render();
     watchQueuedJobs(queuedIds());
   }catch(error){

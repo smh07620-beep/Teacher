@@ -81,6 +81,29 @@ class UploadAnalysisTests(unittest.TestCase):
         self.assertEqual(result["imageCount"], 0)
         self.assertIn("imageScanError", result)
 
+    def test_legacy_doc_is_converted_then_scanned(self):
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            docx = self._docx(tmp, images=3)
+            legacy = Path(tmp) / "old.doc"
+            legacy.write_bytes(b"\xd0\xcf\x11\xe0 legacy")
+            with mock.patch.object(upload_analysis, "_convert_doc_to_docx", return_value=docx):
+                result = upload_analysis.build_analysis(
+                    legacy, extension=".doc", resolved_type="atlas", method="內容規則判斷")
+        self.assertEqual(result["imageCount"], 3)
+        self.assertEqual(result["imageScanSource"], "doc-converted")
+        self.assertNotIn("imageScanError", result)
+
+    def test_legacy_doc_conversion_failure_never_fails_the_upload(self):
+        from unittest import mock
+
+        with mock.patch.object(upload_analysis, "_convert_doc_to_docx", side_effect=FileNotFoundError("soffice")):
+            result = upload_analysis.build_analysis(
+                Path("old.doc"), extension=".doc", resolved_type="standard", method="預設分類")
+        self.assertEqual(result["imageCount"], 0)
+        self.assertEqual(result["imageScanError"], "FileNotFoundError")
+
     def test_worker_stores_analysis_in_storage_meta(self):
         worker = ROOT.joinpath("material_worker.py").read_text(encoding="utf-8")
         self.assertIn('media_meta["uploadAnalysis"]', worker)

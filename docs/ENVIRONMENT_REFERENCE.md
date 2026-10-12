@@ -243,7 +243,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `SMTP_PORT` | `587` | `teacher_app/auth/self_service.py` |  | yes |
 | `SMTP_STARTTLS` | `true` | `teacher_app/auth/self_service.py` |  | yes |
 | `SMTP_USERNAME` |  | `teacher_app/auth/self_service.py` |  | yes |
-| `SOFFICE_PATH` | `soffice` | `teacher_app/legacy_host.py`, `teacher_app/materials/classification.py`, `teacher_app/storage/worker_runtime.py` |  |  |
+| `SOFFICE_PATH` | `soffice` | `teacher_app/legacy_host.py`, `teacher_app/materials/classification.py`, `teacher_app/materials/upload_analysis.py` (+1) |  |  |
 | `STORAGE_FAILOVER_ON_FULL` | `false` | `teacher_app/config.py`, `teacher_app/legacy_host.py`, `teacher_app/materials/staging_runtime.py` (+3) |  | yes |
 | `STORAGE_FALLBACK_BACKEND` |  | `teacher_app/config.py`, `teacher_app/legacy_host.py`, `teacher_app/materials/staging_runtime.py` (+3) |  | yes |
 | `STORAGE_STATUS_CACHE_SECONDS` | `30` | `teacher_app/legacy_host.py`, `teacher_app/storage/admin_service.py` |  |  |

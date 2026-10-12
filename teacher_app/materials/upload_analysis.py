@@ -9,6 +9,10 @@ pictures.  Image bytes are never stored here; thumbnails are produced on demand.
 from __future__ import annotations
 
 import logging
+import os
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +22,35 @@ LOGGER = logging.getLogger(__name__)
 # matched, so the teacher should be asked once.
 _CONFIDENT_METHODS = {"人工指定", "副檔名判斷", "檔名判斷", "內容規則判斷", "Groq AI 內容判斷"}
 IMAGE_SCAN_EXTENSIONS = {".docx"}
+# Legacy Word 97-2003 files are converted to a throw-away .docx just to count
+# pictures; the stored original is never touched.
+LEGACY_WORD_EXTENSIONS = {".doc"}
+LEGACY_CONVERT_TIMEOUT_SECONDS = 90
+
+
+def _convert_doc_to_docx(path: Path, out_dir: Path) -> Path:
+    """Convert a legacy .doc to .docx with headless LibreOffice (temp copy only)."""
+    binary = os.environ.get("SOFFICE_PATH") or shutil.which("soffice") or shutil.which("libreoffice")
+    if not binary:
+        raise FileNotFoundError("soffice")
+    source = out_dir / "source.doc"
+    shutil.copyfile(path, source)
+    profile = out_dir / "profile"
+    subprocess.run(
+        [
+            binary,
+            f"-env:UserInstallation=file://{profile.as_posix()}",
+            "--headless", "--norestore", "--convert-to", "docx:MS Word 2007 XML",
+            "--outdir", str(out_dir), str(source),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=LEGACY_CONVERT_TIMEOUT_SECONDS,
+    )
+    converted = out_dir / "source.docx"
+    if not converted.is_file():
+        raise RuntimeError("convert-no-output")
+    return converted
 
 
 def build_analysis(
@@ -39,11 +72,17 @@ def build_analysis(
         "imageCount": 0,
         "images": [],
     }
-    if str(extension or "").lower() in IMAGE_SCAN_EXTENSIONS:
+    ext = str(extension or "").lower()
+    if ext in IMAGE_SCAN_EXTENSIONS or ext in LEGACY_WORD_EXTENSIONS:
         try:
             from teacher_app.atlas.importer import summarize_docx_images
 
-            summary = summarize_docx_images(Path(path))
+            if ext in LEGACY_WORD_EXTENSIONS:
+                analysis["imageScanSource"] = "doc-converted"
+                with tempfile.TemporaryDirectory(prefix="doc-scan-") as tmp:
+                    summary = summarize_docx_images(_convert_doc_to_docx(Path(path), Path(tmp)))
+            else:
+                summary = summarize_docx_images(Path(path))
             analysis["imageCount"] = int(summary.get("imageCount") or 0)
             analysis["images"] = list(summary.get("images") or [])
             if summary.get("truncated"):

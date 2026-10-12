@@ -1,0 +1,35 @@
+"""Edit-mode upload: result hosts exist, files are not listed twice, errors name their step."""
+import re
+import unittest
+from pathlib import Path
+
+SRC = (Path(__file__).resolve().parents[1] / "static" / "course-wizard-681.js").read_text(encoding="utf-8")
+HOST = 'id="cw681-material-insights"'
+
+
+class EditModeUploadTests(unittest.TestCase):
+    def test_every_result_block_with_background_jobs_has_insight_hosts(self):
+        blocks = [line for line in SRC.splitlines() if "state.resultHtml=" in line and 'id="cw681-background-jobs"' in line]
+        self.assertGreaterEqual(len(blocks), 3)  # create, retry, add-to-course
+        for line in blocks:
+            self.assertIn(HOST, line)
+            self.assertIn('id="cw681-atlas-import"', line)
+
+    def test_add_files_to_course_does_not_append_the_same_file_twice(self):
+        body = SRC[SRC.index("async function addFilesToCourse"):]
+        body = body[: body.index("async function createAndPublish")]
+        self.assertNotIn("state.files=[...state.files,...picked]", body)
+        self.assertIn("state.files.includes(file)", body)
+
+    def test_insights_still_shown_when_finishing_steps_fail(self):
+        self.assertIn("finishStep", SRC)
+        catch = SRC[SRC.index("let finishStep"):]
+        catch = catch[: catch.index("syncCompletionControls();")]
+        self.assertIn("hydrateCompletedMaterialInsights(completedMaterialIds)", catch.split("}catch(error){", 1)[1])
+
+    def test_legacy_doc_hint_is_rendered(self):
+        self.assertIn("${review}${docHint}${fix}", SRC)
+
+
+if __name__ == "__main__":
+    unittest.main()
