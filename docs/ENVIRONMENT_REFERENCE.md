@@ -257,7 +257,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `TEACHER_SYNTHETIC_USERNAME` |  | `tools/production_synthetic.py` |  |  |
 | `TEACHER_SYNTHETIC_VOICE` | `zf_001` | `tools/production_synthetic.py` |  |  |
 | `TEACHING_USAGE_NOTICE` | `教學專用・不得轉發、轉載、販售` | `teacher_app/config.py` |  |  |
-| `TRAFFIC_ALERT_EMAIL` |  | `teacher_app/maintenance/traffic_meter.py` |  |  |
+| `TRAFFIC_ALERT_EMAIL` |  | `scripts/send_traffic_alert.py`, `teacher_app/maintenance/traffic_meter.py` |  |  |
 | `TRAFFIC_METER` | `true` | `teacher_app/maintenance/traffic_meter.py` |  |  |
 | `UPLOAD_ZIP_MAX_EXPANDED_MB` | `1024` | `teacher_app/materials/validation.py` |  | yes |
 | `UPLOAD_ZIP_MAX_FILES` | `2000` | `teacher_app/materials/validation.py` |  | yes |

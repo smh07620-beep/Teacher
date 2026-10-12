@@ -1,0 +1,51 @@
+name: Traffic usage alert
+
+on:
+  schedule:
+    # GitHub Actions cron is UTC: 11:43 and 17:43 Asia/Taipei.
+    - cron: "43 3,9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teacher-traffic-alert
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    name: Mail when monthly traffic crosses a threshold
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: "587"
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      SMTP_STARTTLS: "true"
+      TRAFFIC_ALERT_EMAIL: ${{ secrets.TRAFFIC_ALERT_EMAIL || secrets.SMTP_USERNAME }}
+      # The meter counts roughly 70% of Render's real figure, so warn early.
+      TRAFFIC_ALERT_GB: "1.5,2.5,3.5"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install application dependencies
+        run: pip install -r requirements.txt
+      - name: Validate secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in DATABASE_URL SMTP_USERNAME SMTP_PASSWORD SMTP_FROM; do
+            if [ -z "${!key:-}" ]; then
+              echo "::error::Missing required GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+      - name: Check usage and send alerts
+        run: python -u scripts/send_traffic_alert.py

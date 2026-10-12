@@ -30,6 +30,16 @@
 
 在 Render 後台新增 `TRAFFIC_METER=false`。
 
+## 寄信改由 GitHub 執行（2026-10-12）
+
+Render 免費服務封鎖寄信連接埠，網站自己寄的提醒信可能寄不出去。因此新增 GitHub 排程 `Traffic usage alert`（`.github/workflows/traffic-alert.yml`，每天 11:43、17:43 台灣時間），直接讀資料庫的 `traffic_usage` 並用既有 SMTP secrets 寄信，門檻為 1.5／2.5／3.5 GB（與網站共用 `traffic_alerts`，同門檻每月只寄一次）。
+
+設定：GitHub → Settings → Secrets and variables → Actions → New repository secret，名稱 `TRAFFIC_ALERT_EMAIL`，值填收信信箱（沒設時改寄給 `SMTP_USERNAME`）。可在 Actions 頁手動 Run workflow 測試。
+
+## 圖片大小預算
+
+首頁與學習中心的 PNG 已改 WebP（約 3.7 MB → 0.4 MB）。`tests/test_traffic_alert_and_image_budget_20261012.py` 會擋下被引用且超過 450 KB 的圖片，或超過 150 KB 的 PNG。
+
 ## 技術資訊（給維護者）
 
 - 程式：`teacher_app/maintenance/traffic_meter.py`；資料表 `traffic_usage`（日／類別／位元組／次數）與 `traffic_alerts`（已寄出的提醒），由 migration `0119-traffic-meter` 建立（僅新增，SQLite 與 PostgreSQL 皆可）。
