@@ -203,14 +203,20 @@ while ($true) {
     exit 31
   }
 
+  # See run_material_worker_autostart.ps1: stderr lines must not abort the supervisor.
+  $previousErrorPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   try {
     & $python -u $entry
     $workerExit = $LASTEXITCODE
   } catch {
-    Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3104 -Message "AI Worker process launch failed; supervisor stopped."
-    Write-Warning "AI Worker process launch failed; supervisor stopped."
-    exit 32
+    Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3104 -Message "AI Worker process launch failed; supervisor will retry."
+    Write-Warning "AI Worker process launch failed; the supervisor will retry."
+    $workerExit = 32
+  } finally {
+    $ErrorActionPreference = $previousErrorPreference
   }
+  if ($null -eq $workerExit) { $workerExit = 32 }
 
   if ($workerExit -eq 0) { exit 0 }
   if ($workerExit -eq 75) {

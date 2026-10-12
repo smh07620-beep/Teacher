@@ -187,14 +187,24 @@ while ($true) {
     Write-Warning "Worker environment or launch prerequisite is unavailable; supervisor stopped."
     exit 31
   }
+  # Windows PowerShell 5.1 turns any line a native program writes to stderr into a
+  # terminating error while $ErrorActionPreference is "Stop". The Worker logs to
+  # stderr, so right after an approved update it was misread as "launch failed" and the
+  # supervisor quit for good (2026-10-11 22:55 and 2026-10-12 14:57). Only the exit code
+  # decides now, and a real launch failure is retried like any other crash.
+  $previousErrorPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   try {
     & $python -u -m teacher_app.worker.material_worker_entry
     $workerExit = $LASTEXITCODE
   } catch {
-    Write-TeacherWorkerEvent -EntryType "Error" -EventId 3003 -Message "Worker process launch failed; supervisor stopped."
-    Write-Warning "Worker process launch failed; supervisor stopped."
-    exit 32
+    Write-TeacherWorkerEvent -EntryType "Error" -EventId 3003 -Message "Worker process launch failed; supervisor will retry."
+    Write-Warning "Worker process launch failed; the supervisor will retry."
+    $workerExit = 32
+  } finally {
+    $ErrorActionPreference = $previousErrorPreference
   }
+  if ($null -eq $workerExit) { $workerExit = 32 }
   if ($workerExit -eq 75) {
     Write-TeacherWorkerEvent -EntryType "Information" -EventId 1010 -Message "Worker requested an approved post-update restart."
     Write-Host "Worker requested safe post-update restart."
