@@ -81,5 +81,26 @@ class DocxPreviewTests(unittest.TestCase):
         self.assertIn("item.thumbnail", src)
 
 
+
+class PlainLanguageWizardTests(unittest.TestCase):
+    """Teachers are not engineers: no raw codes or developer words in the wizard."""
+
+    SRC = (Path(__file__).resolve().parents[1] / "static" / "atlas-docx-wizard-70.js").read_text(encoding="utf-8")
+
+    def test_no_developer_words_in_teacher_text(self):
+        for word in ("圖片 metadata", "共用 metadata", "覆寫", "DOCX → Atlas", "inline", "SmartArt", "OLE", "Atlas 草稿"):
+            with self.subTest(word=word):
+                self.assertNotIn(word, self.SRC)
+
+    def test_every_field_has_a_visible_label_not_only_a_placeholder(self):
+        for text in ("圖片名稱", "圖片類型", "難易度", "排列順序", "關鍵字", "圖片說明", "辨別重點", "教學提醒"):
+            with self.subTest(text=text):
+                self.assertIn(text, self.SRC)
+        self.assertNotIn("placeholder=", self.SRC)
+
+    def test_group_key_is_not_shown_to_teachers(self):
+        self.assertIn('type="hidden" name="${prefix}group"', self.SRC)
+
+
 if __name__ == "__main__":
     unittest.main()

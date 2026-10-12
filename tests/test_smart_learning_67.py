@@ -47,7 +47,7 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('atlas_importer.preview_import',atlas)
         self.assertNotIn('from smart_learning_67 import preview_docx_atlas',atlas)
         self.assertNotIn('/api/docx-atlas-preview/',smart)
-        self.assertIn('SmartArt',importer)
+        self.assertIn('文繞圖',importer)
     def test_media_pipeline_is_not_an_http_thread_transcode(self):
         source=ROOT.joinpath('media_processing_67.py').read_text(encoding='utf-8')
         self.assertIn('subprocess.run([path',source)
@@ -89,8 +89,8 @@ class SmartLearning67Tests(unittest.TestCase):
         self.assertIn('relationshipId', wizard)
         self.assertIn('suggestedTitle', wizard)
         self.assertIn('suggestedDescription', wizard)
-        self.assertIn('前後附近文字帶入描述', wizard)
-        self.assertIn('原 Word 教材仍會保留', wizard)
+        self.assertIn('已先把圖片旁邊的文字填進名稱和說明', wizard)
+        self.assertIn('原本的 Word 教材不會被改動或刪除', wizard)
         self.assertIn('去識別化', wizard)
 
 if __name__=='__main__': unittest.main()

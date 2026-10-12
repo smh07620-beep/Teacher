@@ -72,7 +72,7 @@ class CourseWizardBackgroundUpload72Tests(unittest.TestCase):
             'uploadAnalysis',
             '教材自動歸類結果',
             '/api/atlas/import-docx/',
-            '檢視並建立 Atlas 草稿',
+            '檢視並建立圖譜草稿',
             "openAtlasDocxWizard('cw681-atlas-import',id)",
         ):
             self.assertIn(marker, source)

@@ -875,10 +875,10 @@ async function verifyCreatedCourseMaterials(){
 
 const MATERIAL_TYPE_LABELS={
   standard:'一般教材',
-  atlas:'Atlas 圖譜教材',
+  atlas:'圖譜教材',
   infographic:'資訊圖表／流程圖',
   video:'影音教材',
-  troubleshooting:'Troubleshooting',
+  troubleshooting:'故障排除',
   case:'案例分析',
   sop:'SOP'
 };
@@ -918,7 +918,7 @@ function renderCompletedMaterialInsights(){
     const fix=`<details class="mt-1 text-[11px] text-slate-500"><summary class="cursor-pointer">更正類型</summary><select data-csp-change="courseWizard681ChangeType('${id}',this.value)" class="mt-1 rounded border p-1" aria-label="更正教材類型">${typeOptions(type)}</select></details>`;
     return `<div class="rounded-lg border ${needsReview?'border-amber-200':'border-emerald-100'} bg-white p-2"><div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(item.title||item.filename||item.id)}</b><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700">${esc(chip)}</span></div>${review}${docHint}${fix}</div>`;
   }).join('');
-  const atlasRows=atlasEntries.map(([materialId,info])=>`<div class="rounded-lg border border-teal-200 bg-teal-50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><div><b class="text-teal-950">🔬 Word 內偵測到 ${Number(info.count||0)} 張可獨立整理的圖片</b><p class="mt-1 text-[11px] text-teal-800">${esc(info.title||materialId)}｜原 Word 會保留；只會把你勾選的圖片另外建立 Atlas 草稿。</p></div><button type="button" data-csp-click="courseWizard681OpenAtlasImport('${esc(materialId)}')" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">檢視並建立 Atlas 草稿</button></div></div>`).join('');
+  const atlasRows=atlasEntries.map(([materialId,info])=>`<div class="rounded-lg border border-teal-200 bg-teal-50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><div><b class="text-teal-950">🔬 這份 Word 裡有 ${Number(info.count||0)} 張圖片，可以做成圖譜</b><p class="mt-1 text-[11px] text-teal-800">${esc(info.title||materialId)}｜原本的 Word 會保留；只有你打勾的圖片會另外做成圖譜草稿。</p></div><button type="button" data-csp-click="courseWizard681OpenAtlasImport('${esc(materialId)}')" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">檢視並建立圖譜草稿</button></div></div>`).join('');
   host.innerHTML=`<div class="mt-3 space-y-2"><div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><b class="text-emerald-900">✅ 教材自動歸類結果</b><div class="mt-2 grid gap-2 md:grid-cols-2">${classificationRows}</div></div>${atlasRows}</div>`;
 }
 
@@ -988,8 +988,8 @@ async function openCourseAtlasImport(materialId){
     const anchor=document.querySelector('[data-cw681-course-materials]');
     if(anchor){anchor.insertAdjacentHTML('afterend','<div id="cw681-atlas-import" class="mt-3 hidden"></div>');host=el('cw681-atlas-import');}
   }
-  if(!host)return alert('Atlas 匯入區尚未載入，請重新整理後再試。');
-  if(typeof window.openAtlasDocxWizard!=='function')return alert('DOCX → Atlas 工具尚未載入，請重新整理後再試。');
+  if(!host)return alert('圖譜匯入區還沒載入完成，請重新整理頁面後再試。');
+  if(typeof window.openAtlasDocxWizard!=='function')return alert('圖譜工具還沒載入完成，請重新整理頁面後再試。');
   host.classList.remove('hidden');
   await window.openAtlasDocxWizard('cw681-atlas-import',id);
   host.scrollIntoView({behavior:'smooth',block:'start'});

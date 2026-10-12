@@ -23,9 +23,9 @@ from teacher_app.materials import repository as material_repository
 
 
 PREVIEW_WARNING = (
-    "只會匯入可驗證的內嵌圖片；浮動圖、SmartArt、圖表、群組物件、OLE 與損壞 relationship 不會自動建立圖譜。"
+    "只會取出與文字排在同一行的 JPG、PNG、WEBP 圖片；「文繞圖」（浮動）的圖片、圖表、群組圖形與損壞的圖片不會被取出。"
 )
-EMPTY_IMPORT_WARNING = "請確認 DOCX 使用支援的 inline JPG/PNG/WEBP 圖片。"
+EMPTY_IMPORT_WARNING = "請確認 Word 裡的圖片是 JPG、PNG 或 WEBP，並設成「與文字排列在一起」。"
 
 
 def docx_source(
@@ -304,7 +304,7 @@ def preview_docx_atlas(path: Path) -> dict:
     warnings = []
     if not images:
         warnings.append(
-            "沒有找到可安全抽出的 inline/table JPG、PNG 或 WEBP；浮動圖、SmartArt、圖表、群組物件與 OLE 不會自動建立圖譜。"
+            "沒有找到可以取出的圖片（需為 JPG、PNG 或 WEBP，且與文字排在同一行或放在表格裡）；「文繞圖」（浮動）的圖片與圖表不會被取出。"
         )
     thumbnails = _docx_thumbnails(path, images)
     for item in images:

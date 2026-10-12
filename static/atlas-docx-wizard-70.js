@@ -8,30 +8,28 @@
 
   const root=()=>document.getElementById(activeRootId)||document.getElementById('atlas-manager');
 
+  const CATEGORY_LABELS={microscope:'顯微鏡照片',blood_cell:'血球圖片',urine_sediment:'尿液沉渣圖片',colony:'菌落圖片'};
+  const label=(text,hint,control,wide)=>`<label class="block text-xs font-bold text-slate-700${wide?' sm:col-span-2':''}">${text}${hint?`<span class="ml-1 font-normal text-slate-500">${hint}</span>`:''}<span class="mt-1 block font-normal">${control}</span></label>`;
   const fields=(prefix='',value={})=>{
     const category=String(value.category||'microscope');
     const difficulty=String(value.difficulty||'general');
+    const input='class="w-full border rounded-lg p-2 text-sm"';
     return `
+      <input type="hidden" name="${prefix}group" value="${esc(value.group||'')}">
       <div class="grid gap-2 sm:grid-cols-2">
-        <input name="${prefix}title" value="${esc(value.title||'')}" placeholder="名稱（留空以圖片檔名）" class="border rounded-lg p-2 text-sm">
-        <select name="${prefix}category" class="border rounded-lg p-2 text-sm">
-          <option value="microscope" ${category==='microscope'?'selected':''}>顯微鏡圖譜</option>
-          <option value="blood_cell" ${category==='blood_cell'?'selected':''}>血球圖譜</option>
-          <option value="urine_sediment" ${category==='urine_sediment'?'selected':''}>尿液沉渣圖譜</option>
-          <option value="colony" ${category==='colony'?'selected':''}>菌落圖譜</option>
-        </select>
-        <input name="${prefix}group" value="${esc(value.group||'')}" placeholder="組別" class="border rounded-lg p-2 text-sm">
-        <select name="${prefix}difficulty" class="border rounded-lg p-2 text-sm">
+        ${label('圖片名稱','（留空會直接用檔名）',`<input name="${prefix}title" value="${esc(value.title||'')}" ${input}>`)}
+        ${label('圖片類型','',`<select name="${prefix}category" ${input}>${Object.entries(CATEGORY_LABELS).map(([key,text])=>`<option value="${key}" ${category===key?'selected':''}>${text}</option>`).join('')}</select>`)}
+        ${label('難易度','',`<select name="${prefix}difficulty" ${input}>
           <option value="general" ${difficulty==='general'?'selected':''}>一般</option>
-          <option value="basic" ${difficulty==='basic'?'selected':''}>基礎</option>
+          <option value="basic" ${difficulty==='basic'?'selected':''}>入門</option>
           <option value="advanced" ${difficulty==='advanced'?'selected':''}>進階</option>
-        </select>
-        <input name="${prefix}sortOrder" value="${esc(value.sortOrder||0)}" type="number" placeholder="排序" class="border rounded-lg p-2 text-sm">
-        <input name="${prefix}tags" value="${esc((value.tags||[]).join(', '))}" placeholder="標籤（逗號分隔）" class="border rounded-lg p-2 text-sm">
+        </select>`)}
+        ${label('排列順序','（數字小的排前面，不確定就保持 0）',`<input name="${prefix}sortOrder" value="${esc(value.sortOrder||0)}" type="number" ${input}>`)}
+        ${label('關鍵字','（用逗號分開，之後方便搜尋，例如：尿液, 上皮細胞）',`<input name="${prefix}tags" value="${esc((value.tags||[]).join(', '))}" ${input}>`,true)}
       </div>
-      <textarea name="${prefix}description" placeholder="描述" class="w-full border rounded-lg p-2 text-sm">${esc(value.description||'')}</textarea>
-      <textarea name="${prefix}differentialPoints" placeholder="鑑別重點" class="w-full border rounded-lg p-2 text-sm">${esc(value.differentialPoints||'')}</textarea>
-      <textarea name="${prefix}teachingNotes" placeholder="教學提示" class="w-full border rounded-lg p-2 text-sm">${esc(value.teachingNotes||'')}</textarea>`;
+      ${label('圖片說明','（例如：這是什麼細胞、在哪裡看到）',`<textarea name="${prefix}description" rows="2" ${input}>${esc(value.description||'')}</textarea>`)}
+      ${label('辨別重點','（容易和哪些細胞搞混？怎麼分辨？）',`<textarea name="${prefix}differentialPoints" rows="2" ${input}>${esc(value.differentialPoints||'')}</textarea>`)}
+      ${label('教學提醒','（教學時想特別提醒學員的地方）',`<textarea name="${prefix}teachingNotes" rows="2" ${input}>${esc(value.teachingNotes||'')}</textarea>`)}`;
   };
 
   const read=(form,prefix='')=>{
@@ -57,11 +55,11 @@
     box.classList.remove('hidden');
     box.innerHTML=`
       <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
-        <b>DOCX → Atlas · 1/4 選擇 Word 來源</b>
-        <p class="text-xs text-slate-600">系統會把 Word 裡可驗證的內嵌 JPG／PNG／WEBP 單獨抽出成 Atlas 草稿；原 Word 教材仍會保留，不會被拆掉或覆蓋。</p>
-        <p class="text-xs text-amber-800">請先確認教材與圖片已去識別化；姓名、病歷號、條碼、生日等資訊不可匯入。</p>
-        <select id="atlas-docx-source" class="w-full border rounded-lg p-2 text-sm"><option>載入 DOCX 教材中…</option></select>
-        <button id="atlas-docx-next" type="button" class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">下一步：掃描 Word 圖片</button>
+        <b>Word 圖片轉圖譜｜第 1 步（共 5 步）：選擇 Word 檔</b>
+        <p class="text-xs text-slate-600">系統會把這份 Word 裡的圖片一張一張取出來，另外放進「圖譜」。原本的 Word 教材不會被改動或刪除。</p>
+        <p class="text-xs text-amber-800">請先確認圖片裡沒有病人的姓名、病歷號、條碼、生日等個人資料（去識別化）。</p>
+        <select id="atlas-docx-source" class="w-full border rounded-lg p-2 text-sm"><option>正在載入 Word 教材…</option></select>
+        <button id="atlas-docx-next" type="button" class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">下一步：找出 Word 裡的圖片</button>
       </section>`;
     try{
       const response=await fetch('/api/slides/admin',{credentials:'same-origin',cache:'no-store'});
@@ -71,13 +69,13 @@
       const docx=list.filter(item=>/\.docx$/i.test(item.filename||item.storageFilename||''));
       const select=box.querySelector('#atlas-docx-source');
       select.innerHTML=docx.map(item=>`<option value="${esc(item.id)}">${esc(item.title||item.filename||item.id)}</option>`).join('')
-        ||'<option value="">沒有可匯入的 DOCX 教材</option>';
+        ||'<option value="">沒有可以使用的 Word（.docx）教材</option>';
       if(preferred&&docx.some(item=>String(item.id)===preferred))select.value=preferred;
       box.querySelector('#atlas-docx-next')?.addEventListener('click',preview);
       if(preferred&&select.value===preferred)await preview();
       return true;
     }catch(error){
-      box.innerHTML=`<p class="text-sm text-rose-600">無法載入 DOCX 教材：${esc(error.message||'未知錯誤')}</p>`;
+      box.innerHTML=`<p class="text-sm text-rose-600">無法讀取 Word 教材：${esc(error.message||'未知錯誤')}</p>`;
       return false;
     }
   };
@@ -92,7 +90,7 @@
     });
     const data=await response.json().catch(()=>({}));
     if(!response.ok){
-      alert(data.error||'無法解析 DOCX');
+      alert(data.error||'無法讀取這份 Word 檔，請確認檔案沒有損壞。');
       return;
     }
     const images=Array.isArray(data.preview?.images)?data.preview.images:[];
@@ -100,9 +98,9 @@
     if(!images.length){
       box.innerHTML=`
         <section class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-          <b>DOCX → Atlas｜沒有可安全抽出的圖片</b>
+          <b>這份 Word 裡找不到可以取出的圖片</b>
           ${warnings}
-          <p class="text-xs text-slate-600">原 Word 教材不受影響。若圖片是浮動物件、SmartArt、圖表或 OLE，請先在 Word 另存為一般 inline JPG／PNG／WEBP 後再試。</p>
+          <p class="text-xs text-slate-600">原本的 Word 教材不受影響。如果圖片設成「文繞圖」（會浮在文字上方）、是做成圖表的，或不是 JPG／PNG 格式，請先在 Word 裡點選圖片 → 圖片格式 → 文繞圖 → 選「與文字排列在一起」，存檔後再試一次。</p>
           <button id="atlas-docx-reselect" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold">重新選擇 Word</button>
         </section>`;
       box.querySelector('#atlas-docx-reselect')?.addEventListener('click',()=>window.openAtlasDocxWizard(activeRootId));
@@ -111,12 +109,12 @@
     const defaults={group:data.defaultGroup||'',category:'microscope',difficulty:'general',sortOrder:0};
     box.innerHTML=`
       <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
-        <b>DOCX → Atlas · 2/4 共用 metadata</b>
-        <p class="text-xs text-slate-500">已找到 ${images.length} 張可驗證的內嵌圖片。共用欄位會套用至所有勾選圖片；下一步可以逐張覆寫。所有項目先建立為草稿。</p>
+        <b>第 2 步（共 5 步）：先填這批圖片共同的資料</b>
+        <p class="text-xs text-slate-500">已在 Word 裡找到 ${images.length} 張圖片。這裡填的資料會先套用到每一張圖，下一步還可以逐張修改。放進圖譜後都是「草稿」，學員暫時看不到，等你確認後才會公開。</p>
         ${warnings}
         <form id="atlas-docx-common" class="space-y-2">
           ${fields('',defaults)}
-          <button class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">下一步：選取與覆寫</button>
+          <button class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">下一步：挑選要用的圖片</button>
         </form>
       </section>`;
     box.querySelector('#atlas-docx-common')?.addEventListener('submit',event=>{
@@ -130,20 +128,20 @@
     if(!box)return;
     box.innerHTML=`
       <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
-        <b>DOCX → Atlas · 3/4 選取要獨立建立的圖片</b>
-        <p class="text-xs text-slate-500">Word 本身仍保留為教材；只有勾選的圖片會另外建立 Atlas 草稿。系統依圖片附近文字先給分類建議，教師仍可逐張修改。</p>
+        <b>第 3 步（共 5 步）：挑選要放進圖譜的圖片</b>
+        <p class="text-xs text-slate-500">Word 教材會照原樣保留；只有打勾的圖片會另外放進圖譜。系統會依圖片旁邊的文字，先幫你填好名稱和類型，你可以自己修改。</p>
         <form id="atlas-docx-items" class="space-y-3">
           ${images.map(item=>`
             <fieldset class="border rounded-lg p-3">
               <label class="font-bold text-sm">
                 <input type="checkbox" name="pick" value="${Number(item.index)}" data-relationship="${esc(item.relationshipId||'')}" checked>
-                圖片 ${Number(item.index)}${item.fileName?' · '+esc(item.fileName):''}
+                第 ${Number(item.index)} 張圖片
               </label>
               ${item.thumbnail?`<img src="${esc(item.thumbnail)}" alt="圖片 ${Number(item.index)} 預覽" loading="lazy" class="mt-2 max-h-52 rounded-lg border border-slate-200 bg-slate-50 object-contain">`:'<p class="mt-1 text-[11px] text-slate-400">（此圖未提供預覽）</p>'}
-              <p class="mt-1 text-xs text-slate-500">${esc(item.section||'無周圍文字')}</p>
+              <p class="mt-1 text-xs text-slate-500">${item.section?'圖片附近的文字：'+esc(item.section):'（這張圖附近沒有文字）'}</p>
               <details class="mt-2">
-                <summary class="cursor-pointer text-xs text-teal-700">覆寫此圖片 metadata</summary>
-                <p class="mt-2 text-[11px] font-bold text-teal-700">已把圖片同段文字帶入名稱，前後附近文字帶入描述；可直接修改。</p>
+                <summary class="cursor-pointer text-xs text-teal-700">修改這張圖的名稱與說明</summary>
+                <p class="mt-2 text-[11px] font-bold text-teal-700">已先把圖片旁邊的文字填進名稱和說明，可以直接修改。</p>
                 <div class="mt-2 space-y-2">${fields('item-'+Number(item.index)+'-',{
                   ...common,
                   category:item.suggestedCategory||common.category,
@@ -164,7 +162,7 @@
         ...read(form,'item-'+input.value+'-'),
       }));
       if(!items.length){
-        alert('請至少選擇一張圖片');
+        alert('請至少打勾一張圖片');
         return;
       }
       confirmStep(materialId,common,items);
@@ -176,10 +174,10 @@
     if(!box)return;
     box.innerHTML=`
       <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
-        <b>DOCX → Atlas · 4/4 確認建立草稿</b>
-        <p class="text-sm">將從 Word 另外建立 ${items.length} 筆 Atlas 草稿；原 Word 不會被刪除或改寫。發布前仍可逐筆編輯與覆核。</p>
-        <ul class="text-xs list-disc pl-5">${items.map(item=>`<li>${esc(item.title||('圖片 '+item.index))} · ${esc(item.category)} · ${esc(item.group)}</li>`).join('')}</ul>
-        <button id="atlas-docx-confirm" type="button" class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">確認建立 Atlas 草稿</button>
+        <b>第 4 步（共 5 步）：確認</b>
+        <p class="text-sm">即將把 ${items.length} 張圖片放進圖譜（草稿）。原本的 Word 不會被刪除或改寫；公開給學員之前，你還可以逐張修改。</p>
+        <ul class="text-xs list-disc pl-5">${items.map(item=>`<li>${esc(item.title||('第 '+item.index+' 張圖片'))} · ${esc(CATEGORY_LABELS[item.category]||'顯微鏡照片')}</li>`).join('')}</ul>
+        <button id="atlas-docx-confirm" type="button" class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">確認，放進圖譜</button>
       </section>`;
     box.querySelector('#atlas-docx-confirm')?.addEventListener('click',async()=>{
       const response=await fetch('/api/atlas/import-docx/'+encodeURIComponent(materialId)+'/confirm',{
@@ -190,7 +188,7 @@
       });
       const data=await response.json().catch(()=>({}));
       if(!response.ok){
-        alert(data.error||'建立失敗');
+        alert(data.error||'放進圖譜失敗，請稍後再試。');
         return;
       }
       framingStep(Array.isArray(data.created)?data.created:[]);
@@ -214,8 +212,8 @@
     const finish=()=>{box.classList.add('hidden');window.renderFormalAtlas?.();};
     box.innerHTML=`
       <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
-        <b>DOCX → Atlas · 5/5 已建立 ${ids.length} 筆草稿，要順便框選細胞嗎？（選填）</b>
-        <p class="text-xs text-slate-500">框選後，學員點圖就能放大看到你寫的介紹，也能拿來出「點選圖片題」。可以現在做，也可以之後到「圖譜」頁編輯。草稿發布前學員都看不到。</p>
+        <b>第 5 步（共 5 步）：已放進圖譜 ${ids.length} 張，要順便框出細胞的位置嗎？（可以略過）</b>
+        <p class="text-xs text-slate-500">框出來之後，學員點圖就能放大看到你寫的介紹，也能拿來出「點選圖片題」。可以現在做，也可以之後到「圖譜」頁再編輯。公開之前，學員都看不到這些圖。</p>
         <ul class="space-y-2">${items.map(item=>`
           <li class="flex flex-wrap items-center gap-2 rounded-lg border p-2" data-atlas-frame-item="${esc(item.id)}">
             <img src="${esc(item.thumbnailUrl||item.imageUrl)}" alt="" class="h-14 w-14 rounded object-cover">
@@ -240,7 +238,7 @@
     const host=box.querySelector('#atlas-docx-frame-editor');
     if(!host||!window.AtlasAnnotations?.attachEditor)return;
     host.innerHTML=`<form class="space-y-2 rounded-xl border border-indigo-200 p-3"><b class="text-sm">${esc(item.title)}</b>
-      <div class="flex gap-2"><button type="submit" class="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white">儲存標記</button>
+      <div class="flex gap-2"><button type="submit" class="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white">儲存</button>
       <button type="button" data-frame-cancel class="rounded-lg border px-3 py-1.5 text-xs font-bold">取消</button></div></form>`;
     const form=host.querySelector('form');
     window.AtlasAnnotations.attachEditor(form,item);
@@ -256,7 +254,7 @@
         body:JSON.stringify({annotationJson:marks||{}})
       });
       const data=await response.json().catch(()=>({}));
-      if(!response.ok){alert(data.error||'儲存標記失敗');return;}
+      if(!response.ok){alert(data.error||'儲存失敗，請稍後再試。');return;}
       const count=marks&&marks.marks?marks.marks.length:0;
       item.annotationJson=marks||{};
       const status=row?.querySelector('[data-frame-status]');
