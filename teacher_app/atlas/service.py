@@ -273,7 +273,7 @@ def _duplicate_key(item: Mapping[str, Any]) -> tuple:
     )
 
 
-def find_duplicate_ids(items: list[dict]) -> list[str]:
+def find_duplicate_ids(items: list[dict], material_id: str = "") -> list[str]:
     """Ids of redundant Word-import drafts (same group/material/title/description).
 
     Only unpublished ``docx`` drafts are ever returned; a published copy, or the
@@ -282,6 +282,8 @@ def find_duplicate_ids(items: list[dict]) -> list[str]:
     groups: dict[tuple, list[dict]] = {}
     for item in items:
         if item.get("source") != "docx" or not item.get("sourceMaterialId"):
+            continue
+        if material_id and item.get("sourceMaterialId") != material_id:
             continue
         groups.setdefault(_duplicate_key(item), []).append(item)
     redundant: list[str] = []
@@ -294,9 +296,9 @@ def find_duplicate_ids(items: list[dict]) -> list[str]:
     return redundant
 
 
-def remove_duplicate_drafts(user: Mapping[str, Any], release_image: Optional[Callable[[str], None]] = None) -> int:
+def remove_duplicate_drafts(user: Mapping[str, Any], release_image: Optional[Callable[[str], None]] = None, material_id: str = "") -> int:
     removed = 0
-    for item_id in find_duplicate_ids(repository.list_items()):
+    for item_id in find_duplicate_ids(repository.list_items(), material_id):
         item = repository.get_item(item_id)
         if not item or not can_manage(user, str(item.get("group") or "")):
             continue

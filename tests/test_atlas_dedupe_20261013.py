@@ -33,8 +33,13 @@ class WiringTest(unittest.TestCase):
 
     def test_button_route_and_allowlist(self):
         self.assertIn("/api/atlas/dedupe", (ROOT / "teacher_app/atlas/routes.py").read_text(encoding="utf-8"))
-        self.assertIn("removeAtlasDuplicates", (ROOT / "static/system-csp-actions.js").read_text(encoding="utf-8"))
-        self.assertIn("atlas-dedupe-action", (ROOT / "static/system.html").read_text(encoding="utf-8"))
+        self.assertNotIn("atlas-dedupe-action", (ROOT / "static/system.html").read_text(encoding="utf-8"))
+        self.assertIn("atlas-docx-dedupe", (ROOT / "static/atlas-docx-wizard-70.js").read_text(encoding="utf-8"))
+
+    def test_dedupe_can_be_scoped_to_one_material(self):
+        items = [item("1", "a", material="m1"), item("2", "b", material="m1"),
+                 item("3", "a", material="m2"), item("4", "b", material="m2")]
+        self.assertEqual(service.find_duplicate_ids(items, "m2"), ["4"])
 
 
 if __name__ == "__main__":

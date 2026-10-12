@@ -240,7 +240,10 @@ def register_atlas_70(
         user, denied = user_or_denied()
         if denied:
             return denied
-        removed = atlas_service.remove_duplicate_drafts(user, release_image)
+        body = request.get_json(silent=True) or {}
+        removed = atlas_service.remove_duplicate_drafts(
+            user, release_image, str(body.get("materialId") or "")
+        )
         return jsonify({"ok": True, "removed": removed})
 
     app.extensions["teacher_atlas_70_registered"] = True

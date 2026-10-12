@@ -142,6 +142,7 @@
       <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
         <b>第 3 步（共 5 步）：挑選要放進圖譜的圖片</b>
         <p class="text-xs text-slate-500">Word 教材會照原樣保留；只有打勾的圖片會另外放進圖譜。系統會依圖片旁邊的文字，先幫你填好名稱和類型，你可以自己修改。</p>
+        <div class="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-600"><span>這份 Word 之前如果匯入過好幾次，可以先清掉重複的草稿。</span><button id="atlas-docx-dedupe" type="button" class="rounded-lg border border-slate-300 bg-white px-2 py-1 font-bold text-slate-700">🧹 移除這份 Word 的重複草稿</button><span id="atlas-docx-dedupe-msg" role="status" class="font-bold"></span></div>
         <form id="atlas-docx-items" class="space-y-3">
           ${images.map(item=>`
             <fieldset class="border rounded-lg p-3">
@@ -165,6 +166,18 @@
           <button class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">下一步：確認</button>
         </form>
       </section>`;
+    box.querySelector('#atlas-docx-dedupe')?.addEventListener('click',async event=>{
+      const msg=box.querySelector('#atlas-docx-dedupe-msg');
+      if(!confirm('會刪除這份 Word 重複匯入、尚未發布的圖譜草稿，每組只保留最早的一張。已發布的圖譜不會被動到。要繼續嗎？'))return;
+      event.currentTarget.disabled=true;
+      try{
+        const res=await fetch('/api/atlas/dedupe',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({materialId})});
+        const data=await res.json().catch(()=>({}));
+        if(!res.ok)throw new Error(data.error||'清理失敗');
+        msg.textContent='已移除 '+(data.removed||0)+' 張重複草稿。';
+      }catch(error){msg.textContent='清理失敗：'+(error.message||'未知錯誤');}
+      event.currentTarget.disabled=false;
+    });
     box.querySelector('#atlas-docx-items')?.addEventListener('submit',event=>{
       event.preventDefault();
       const form=event.currentTarget;
