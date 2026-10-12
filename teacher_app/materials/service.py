@@ -170,7 +170,7 @@ def list_admin_materials(_legacy_base=None) -> list[dict]:
                     "categoryLabel": labels.get(category, catalog.CATEGORY_LABELS.get(category, catalog.CATEGORY_LABELS[""])),
                 }
             )
-    for material in repository.list_uploaded_materials(include_inactive=True):
+    for material in repository.list_uploaded_materials(include_inactive=True, fresh=True):
         category = material.get("category", "")
         items.append(
             {

@@ -130,11 +130,13 @@ def material_row_to_dict(row_or_legacy_base, legacy_row=None) -> dict:
     return r
 
 
-def list_uploaded_materials(legacy_base=None, include_inactive: bool = False) -> list[dict]:
+def list_uploaded_materials(legacy_base=None, include_inactive: bool = False, *, fresh: bool = False) -> list[dict]:
     """Read uploaded materials; legacy_base is accepted but never consulted."""
     if isinstance(legacy_base, bool) and include_inactive is False:
         include_inactive = legacy_base
-    ttl = _list_cache_seconds()
+    # ``fresh`` skips the short read cache: a Worker (separate process) may have
+    # just inserted a material that this web process cannot know about yet.
+    ttl = 0.0 if fresh else _list_cache_seconds()
     key = None
     if ttl > 0:
         key = (common_db.database_url() or str(common_db.sqlite_path()), bool(include_inactive))

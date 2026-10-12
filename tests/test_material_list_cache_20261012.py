@@ -129,3 +129,14 @@ class MaterialListCacheTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FreshReadTests(MaterialListCacheTests):
+    def test_fresh_read_sees_a_row_a_worker_just_inserted(self):
+        with mock.patch.dict("os.environ", {"MATERIAL_LIST_CACHE_SECONDS": "10"}):
+            repository.list_uploaded_materials(include_inactive=True)
+            self.db.rows = self.db.rows + [{"id": "upload-new", "title": "B", "active": False}]
+            stale = repository.list_uploaded_materials(include_inactive=True)
+            fresh = repository.list_uploaded_materials(include_inactive=True, fresh=True)
+        self.assertEqual([r["id"] for r in stale], ["m1"])
+        self.assertEqual([r["id"] for r in fresh], ["m1", "upload-new"])
