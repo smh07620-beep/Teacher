@@ -90,6 +90,23 @@
       await window.renderAdminQuizCategories(true);
       panel=document.getElementById(`qpanel-${catId}`);
     }
+    if(!panel&&typeof window.renderAdminQuizCategories==='function'){
+      // 考卷清單只列「目前選的訓練區／組別」；考卷實際屬於別的範圍時，改依考卷自己的範圍再讀一次。
+      try{
+        const res=await fetch('/api/quiz-categories/'+encodeURIComponent(catId),{credentials:'same-origin',cache:'no-store'});
+        const cat=res.ok?await res.json().catch(()=>({})):{};
+        const realArea=String(cat.area||''),realGroup=String(cat.group||'');
+        if(area&&realArea&&area.value!==realArea){
+          area.value=realArea;
+          if(group&&typeof window.groupOptionsForArea==='function')group.innerHTML=window.groupOptionsForArea(realArea);
+        }
+        if(group&&realGroup&&[...group.options].some(option=>option.value===realGroup))group.value=realGroup;
+        if(realArea||realGroup){
+          await window.renderAdminQuizCategories(true);
+          panel=document.getElementById(`qpanel-${catId}`);
+        }
+      }catch(_error){/* 讀不到就維持原本的錯誤提示 */}
+    }
     if(!panel)throw new Error('找不到指定考卷，請返回考卷管理重新選擇。');
 
     removeLegacyCloseControls(panel);

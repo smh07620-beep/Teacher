@@ -520,6 +520,11 @@
         aiPrepare77(host,'正在讀取考卷…','同步題庫與關聯教材');
         await timeout77(window.renderAdminQuizCategories?.(true),Math.min(2300,remaining()),'讀取考卷');
         panel=document.getElementById(`qpanel-${catId}`);
+        if(!panel){
+          await alignExamScope(catId);
+          await timeout77(window.renderAdminQuizCategories?.(true),Math.min(2300,remaining()),'讀取考卷');
+          panel=document.getElementById(`qpanel-${catId}`);
+        }
       }
       if(!panel)throw new Error('找不到指定考卷，請返回考卷管理重新選擇。');
       if(panel.classList.contains('hidden')){
