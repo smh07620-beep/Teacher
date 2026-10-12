@@ -258,7 +258,7 @@
     state.tab = ['pending', 'history'].includes(tab) ? tab : 'exams';
     host.dataset.assessTab = state.tab;
     document.getElementById('teacher-assessment-flow-1014')?.querySelectorAll('[data-assessment-tab-1030]').forEach(button => {
-      const active = button.dataset.assessmentTab1030 === (tab === 'analytics' ? 'analytics' : state.tab);
+      const active = button.getAttribute('data-assessment-tab-1030') === (tab === 'analytics' ? 'analytics' : state.tab);
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-selected', active ? 'true' : 'false');
     });

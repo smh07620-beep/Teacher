@@ -472,7 +472,7 @@
     const flow = document.getElementById('teacher-assessment-flow-1014');
     if (!flow) return;
     flow.querySelectorAll('[data-assessment-tab-1030]').forEach(button => {
-      const active = button.dataset.assessmentTab1030 === name;
+      const active = button.getAttribute('data-assessment-tab-1030') === name;
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-selected', active ? 'true' : 'false');
     });
@@ -496,7 +496,7 @@
       flow.addEventListener('click', async event => {
         const button = event.target.closest?.('[data-assessment-tab-1030]');
         if (!button) return;
-        const tab = button.dataset.assessmentTab1030;
+        const tab = button.getAttribute('data-assessment-tab-1030');
         const inline = window.TeacherAssessmentInline1031;
         if (tab === 'exams') {
           setAssessmentTab('exams');
