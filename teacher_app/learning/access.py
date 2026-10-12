@@ -145,13 +145,37 @@ def personal_course_grants(user: Mapping[str, Any] | None) -> frozenset[str]:
     return result
 
 
-def is_assignment_gated(user: Mapping[str, Any] | None) -> bool:
-    """True for accounts whose only role is student.
+LEARNER_VIEW_PARAM = "view"
+LEARNER_VIEW_VALUE = "learner"
 
-    Students see course-owned materials/exams only when the course is assigned to
-    them (individually, to their group, or to everyone).  Teachers, group leaders,
-    administrators and auditors are never gated: they manage/inspect content.
+
+def learner_view_requested() -> bool:
+    """True when the current request comes from the learner reading area.
+
+    The reading-area page sends ``?view=learner``.  The flag can only *narrow*
+    what a person sees (assigned courses only), never widen it, so trusting it
+    from the browser is safe; management pages simply do not send it.
     """
+    try:
+        from flask import has_request_context, request
+
+        return has_request_context() and request.args.get(LEARNER_VIEW_PARAM) == LEARNER_VIEW_VALUE
+    except Exception:
+        return False
+
+
+def is_assignment_gated(user: Mapping[str, Any] | None, learner_view: bool | None = None) -> bool:
+    """Whether course-owned content is limited to the courses assigned to this person.
+
+    Accounts whose only role is student are always limited.  Teachers, group
+    leaders, administrators and auditors are limited only in the learner reading
+    area (``learner_view``): management pages keep showing everything they may
+    manage, but the reading area treats them like any other learner.
+    """
+    if learner_view is None:
+        learner_view = learner_view_requested()
+    if learner_view and user:
+        return True
     roles = user_roles(user)
     return bool(roles) and all(role == "student" for role in roles)
 
@@ -185,9 +209,13 @@ def assigned_course_ids(user: Mapping[str, Any] | None) -> frozenset[str]:
     return result
 
 
-def student_may_see_course(user: Mapping[str, Any] | None, course_id: str) -> bool:
+def student_may_see_course(
+    user: Mapping[str, Any] | None,
+    course_id: str,
+    learner_view: bool | None = None,
+) -> bool:
     """Assignment gate for course-owned content; items without a course pass."""
-    if not course_id or not is_assignment_gated(user):
+    if not course_id or not is_assignment_gated(user, learner_view):
         return True
     return course_id in assigned_course_ids(user)
 
@@ -206,6 +234,7 @@ def _item_course_id(item: Mapping[str, Any]) -> str:
 def can_access_learning_item(
     user: Mapping[str, Any] | None,
     item: Mapping[str, Any] | None,
+    learner_view: bool | None = None,
 ) -> bool:
     if not user or not item:
         return False
@@ -217,6 +246,10 @@ def can_access_learning_item(
         _user_area, user_group = preferred_learning_scope(user)
         authoring = any(has_permission(user, name) for name in ("material.manage", "question.manage", "course.manage"))
         return authoring and owner == user_group
+    if has_explicit_learning_scope(user) and not student_may_see_course(
+        user, _item_course_id(item), learner_view
+    ):
+        return False
     if has_global_learning_access(user):
         return True
     if not has_explicit_learning_scope(user):
@@ -225,8 +258,6 @@ def can_access_learning_item(
     item_area, owner_group = item_learning_scope(item)
     user_area, user_group = preferred_learning_scope(user)
     if item_area != user_area:
-        return False
-    if not student_may_see_course(user, _item_course_id(item)):
         return False
     if owner_group == user_group:
         return True
@@ -263,6 +294,7 @@ __all__ = [
     "has_explicit_learning_scope",
     "has_global_learning_access",
     "is_assignment_gated",
+    "learner_view_requested",
     "item_learning_scope",
     "personal_course_grants",
     "preferred_learning_scope",

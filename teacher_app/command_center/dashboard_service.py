@@ -175,17 +175,17 @@ def dashboard_summary(
         materials = [
             item
             for item in all_materials
-            if learning_access.can_access_learning_item(user, item)
+            if learning_access.can_access_learning_item(user, item, learner_view=True)
         ]
         quizzes = [
             item
             for item in all_quizzes
-            if learning_access.can_access_learning_item(user, item)
+            if learning_access.can_access_learning_item(user, item, learner_view=True)
         ]
         courses = [
             item
             for item in all_courses
-            if learning_access.can_access_learning_item(user, item)
+            if learning_access.can_access_learning_item(user, item, learner_view=True)
         ]
         records = [
             record for record in all_records if _record_visible_to_user(user, record)

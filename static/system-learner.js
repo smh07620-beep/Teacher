@@ -171,7 +171,7 @@ async function renderSlidesGrid() {
 
     try {
 
-        const [res, courseRes, quizRes] = await Promise.all([fetch(`/api/slides?area=${encodeURIComponent(currentTrainingArea)}`), fetch(`/api/courses?area=${encodeURIComponent(currentTrainingArea)}&group=${encodeURIComponent(currentGroupKey)}`), fetch(`/api/quiz-categories?group=${encodeURIComponent(currentGroupKey)}&area=${encodeURIComponent(currentTrainingArea)}`)]);
+        const [res, courseRes, quizRes] = await Promise.all([fetch(`/api/slides?area=${encodeURIComponent(currentTrainingArea)}&view=learner`), fetch(`/api/courses?area=${encodeURIComponent(currentTrainingArea)}&group=${encodeURIComponent(currentGroupKey)}&view=learner`), fetch(`/api/quiz-categories?group=${encodeURIComponent(currentGroupKey)}&area=${encodeURIComponent(currentTrainingArea)}&view=learner`)]);
 
         if (!res.ok) {
             const detail = await res.json().catch(() => ({}));

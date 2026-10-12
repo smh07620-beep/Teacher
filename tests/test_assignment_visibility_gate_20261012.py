@@ -68,3 +68,50 @@ class AssignmentGateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LearnerViewTests(unittest.TestCase):
+    """Reading area (?view=learner) treats staff like learners; management pages do not."""
+
+    def test_staff_in_reading_area_only_see_assigned_courses(self):
+        with assigned([]):
+            for role in ("clinical_teacher", "group_leader", "education_admin", "system_admin"):
+                u = person(role)
+                self.assertFalse(access.can_access_learning_item(u, COURSE_ITEM, learner_view=True), role)
+                self.assertTrue(access.can_access_learning_item(u, COURSE_ITEM, learner_view=False), role)
+        with assigned(["c1"]):
+            self.assertTrue(access.can_access_learning_item(person("clinical_teacher"), COURSE_ITEM, learner_view=True))
+
+    def test_request_flag_switches_the_view(self):
+        from flask import Flask
+        app = Flask(__name__)
+        teacher = person("clinical_teacher")
+        with assigned([]):
+            with app.test_request_context("/api/courses?view=learner"):
+                self.assertTrue(access.learner_view_requested())
+                self.assertFalse(access.can_access_learning_item(teacher, COURSE_ITEM))
+                self.assertFalse(content_audience.visible_to_user(teacher, META))
+            with app.test_request_context("/api/courses"):
+                self.assertFalse(access.learner_view_requested())
+                self.assertTrue(access.can_access_learning_item(teacher, COURSE_ITEM))
+                self.assertTrue(content_audience.visible_to_user(teacher, META))
+
+    def test_course_list_filter_for_managers_only_narrows_in_reading_area(self):
+        from flask import Flask
+        from teacher_app.courses.visibility import filter_courses_for_user
+        app = Flask(__name__)
+        admin = person("education_admin")
+        courses = [{"id": "c1", "group": "grpBio", "area": "internal"}, {"id": "c2", "group": "grpBio", "area": "internal"}]
+        with assigned(["c1"]):
+            with app.test_request_context("/api/courses?view=learner"):
+                self.assertEqual([c["id"] for c in filter_courses_for_user(admin, courses)], ["c1"])
+            with app.test_request_context("/api/courses"):
+                self.assertEqual([c["id"] for c in filter_courses_for_user(admin, courses)], ["c1", "c2"])
+
+    def test_learner_page_sends_the_flag_and_admin_pages_do_not(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1] / "static"
+        learner = (root / "system-learner.js").read_text(encoding="utf-8")
+        self.assertEqual(learner.count("view=learner"), 3)
+        for name in ("admin-course-material.js", "system-exam.js", "admin-question-bank.js"):
+            self.assertNotIn("view=learner", (root / name).read_text(encoding="utf-8"), name)

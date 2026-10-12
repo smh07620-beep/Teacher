@@ -5182,6 +5182,14 @@ def api_list_quiz_categories():
             categories,
             lambda: canonical_assessments.list_categories(sys.modules[__name__], None, area, False),
         )
+    # Students (and anyone in the ?view=learner reading area) only get exams of
+    # courses assigned to them; exams without a course stay group-visible.
+    from teacher_app.learning import access as learning_access
+    viewer = _current_user()
+    categories = [
+        c for c in categories
+        if learning_access.student_may_see_course(viewer, str(c.get("courseId") or ""))
+    ]
     return jsonify(categories)
 
 

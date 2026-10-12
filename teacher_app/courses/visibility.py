@@ -52,7 +52,11 @@ def filter_courses_for_user(
 ) -> list[dict]:
     if not user:
         return []
-    if not courses or _sees_everything(user):
+    if not courses:
+        return []
+    if _sees_everything(user):
+        if learning_access.learner_view_requested():
+            return [c for c in courses if learning_access.student_may_see_course(user, str(c.get("id") or ""))]
         return list(courses)
 
     own = [c for c in courses if learning_access.can_access_learning_item(user, c)]
