@@ -109,6 +109,19 @@ def commit(job: dict, result: dict) -> dict:
         payload.get("area"),
         default=scope.DEFAULT_TRAINING_AREA,
     )
+    # A material attached to a course always takes that course's group/area, so a
+    # stale wizard selection cannot file it under another group.
+    attached_course_id = str(payload.get("courseId") or "").strip()
+    if attached_course_id:
+        try:
+            from teacher_app.courses import repository as course_repository
+
+            attached_course = course_repository.get_course(attached_course_id)
+        except Exception:
+            attached_course = None
+        if attached_course:
+            group_key = scope.normalize_group(attached_course.get("group") or group_key)
+            training_area = scope.normalize_area(attached_course.get("area") or training_area)
     resolved_material_type=str(result.get("materialType") or payload.get("materialType") or "standard").strip().lower()
     if resolved_material_type not in material_repository.MATERIAL_TYPES:
         resolved_material_type="standard"

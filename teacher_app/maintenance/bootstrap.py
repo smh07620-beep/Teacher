@@ -32,6 +32,30 @@ PRE_MIGRATION_SCHEMA_OWNERS = (
 )
 
 
+ALIGN_MATERIAL_SCOPE_SQL = (
+    "UPDATE materials SET "
+    "group_key=(SELECT c.group_key FROM courses c WHERE c.id=materials.course_id), "
+    "training_area=(SELECT c.training_area FROM courses c WHERE c.id=materials.course_id) "
+    "WHERE course_id<>'' AND EXISTS (SELECT 1 FROM courses c WHERE c.id=materials.course_id "
+    "AND (c.group_key<>materials.group_key OR c.training_area<>materials.training_area))"
+)
+
+
+def align_material_scope_to_courses(conn) -> None:
+    """A material attached to a course belongs to that course's group/area.
+
+    Idempotent: only rows that disagree with their course are touched.
+    """
+    try:
+        conn.execute(ALIGN_MATERIAL_SCOPE_SQL)
+        conn.commit()
+    except Exception:  # best effort; never block startup
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
 def run_bootstrap(app, *, connection_factory=None):
     """Establish canonical base schemas and one-time historical data state."""
     if app.extensions.get("teacher_bootstrap_completed"):
@@ -42,6 +66,7 @@ def run_bootstrap(app, *, connection_factory=None):
     try:
         for init_schema in PRE_MIGRATION_SCHEMA_OWNERS:
             init_schema(conn, kind)
+        align_material_scope_to_courses(conn)
     finally:
         conn.close()
 
