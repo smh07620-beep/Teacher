@@ -111,5 +111,22 @@ class StudioPlainLanguageAndHandoffTests(unittest.TestCase):
         self.assertIn("teacher-ai-material-request-draft", self.MATERIAL)
 
 
+
+class QualityCheckPlainTextTests(unittest.TestCase):
+    SRC = ROOT.joinpath("static", "teacher-ai-presentation-1016.js").read_text(encoding="utf-8")
+
+    def test_quality_result_is_not_raw_json(self):
+        self.assertNotIn("JSON.stringify({quality", self.SRC)
+        self.assertIn("qualityText(data)", self.SRC)
+
+    def test_every_server_quality_code_has_a_plain_sentence(self):
+        import sys
+        sys.path.insert(0, str(ROOT))
+        from teacher_app.materials.ai_presentation_quality import _QUALITY_CODES
+        for code in _QUALITY_CODES:
+            with self.subTest(code=code):
+                self.assertIn(f"{code}:'", self.SRC)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -111,6 +111,29 @@
     await loadPublicationMaterials().catch(() => { renderPublicationTarget(); });
     window.dispatchEvent(new CustomEvent('teacher-ai-presentation-rendered-f5',{detail:{count:presentationRows.length,materialId,currentPresentationId}}));
   }
+  // 品質檢查結果：用老師看得懂的話列出，不顯示程式用的原始資料。
+  const QUALITY_TEXT = {
+    TEXT_SPLIT:'文字太多，已自動分成多張', TABLE_SPLIT:'表格太大，已自動分成多張', COMPARISON_SPLIT:'對照內容太多，已自動分成多張',
+    MISSING_IMAGE:'找不到要放進去的圖片', TEMPLATE_FALLBACK:'選的版型無法套用，改用預設版面', PROVENANCE_MISSING:'缺少資料來源的紀錄',
+    NOTES_MISSING:'缺少講者備註', EMPTY_SLIDE:'有空白的投影片', NO_RENDERABLE_SLIDES:'沒有可以做成投影片的內容',
+    OVERFLOW_RISK:'文字可能超出版面，請打開檢查', MANUAL_ARTIFACT_UNCHECKED:'這是手動上傳的檔案，系統沒有檢查過內容',
+    AUTO_PICTURES:'系統自動配了圖片，請確認圖片合適'
+  };
+  function qualityLine(item) {
+    const slide = /^s(\d+)$/i.exec(String(item.slideId || ''));
+    const where = slide ? `第 ${slide[1]} 張：` : '';
+    const detail = item.detail ? `（${item.detail}）` : '';
+    return `・${where}${QUALITY_TEXT[item.code] || '需要人工確認'}${detail}`;
+  }
+  function qualityText(data) {
+    const q = data?.quality || {}, errors = q.errors || [], warnings = q.warnings || [];
+    const head = errors.length ? `❌ 有 ${errors.length} 個嚴重問題，修好之前無法發布` : warnings.length ? `⚠️ 有 ${warnings.length} 個提醒，發布前需要你確認` : '✅ 檢查通過，沒有發現問題';
+    const lines = [head, q.slideCount ? `共 ${q.slideCount} 張投影片` : ''];
+    if (errors.length) lines.push('', '【嚴重問題】', ...errors.map(qualityLine));
+    if (warnings.length) lines.push('', '【提醒】', ...warnings.map(qualityLine));
+    lines.push('', data?.publishable === false ? '目前不能發布。' : '可以發布。');
+    return lines.filter((line, index) => line !== '' || index > 1).join('\n');
+  }
   async function action(event) {
     const use = event.target.closest('[data-use-presentation]');
     if (use) {
@@ -131,7 +154,7 @@
       const output = node.querySelector('[data-output]');
       if (button.dataset.action === 'quality') {
         const data = await api(`/api/ai-presentations/${encodeURIComponent(id)}/quality`);
-        output.textContent = JSON.stringify({quality:data.quality, renderMetrics:data.renderMetrics, publishable:data.publishable}, null, 2);
+        output.textContent = qualityText(data);
         output.classList.toggle('hidden');
         return;
       }
