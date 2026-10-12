@@ -179,19 +179,38 @@
         <ul class="text-xs list-disc pl-5">${items.map(item=>`<li>${esc(item.title||('第 '+item.index+' 張圖片'))} · ${esc(CATEGORY_LABELS[item.category]||'顯微鏡照片')}</li>`).join('')}</ul>
         <button id="atlas-docx-confirm" type="button" class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">確認，放進圖譜</button>
       </section>`;
-    box.querySelector('#atlas-docx-confirm')?.addEventListener('click',async()=>{
-      const response=await fetch('/api/atlas/import-docx/'+encodeURIComponent(materialId)+'/confirm',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        credentials:'same-origin',
-        body:JSON.stringify({metadata,items})
-      });
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok){
-        alert(data.error||'放進圖譜失敗，請稍後再試。');
-        return;
+    const confirmButton=box.querySelector('#atlas-docx-confirm');
+    const message=document.createElement('p');
+    message.id='atlas-docx-confirm-message';
+    message.setAttribute('role','status');
+    message.className='text-sm font-bold text-slate-600';
+    confirmButton?.after(message);
+    const say=(text,bad)=>{message.textContent=text;message.className='text-sm font-bold '+(bad?'text-rose-700':'text-slate-600');};
+    confirmButton?.addEventListener('click',async()=>{
+      if(confirmButton.disabled)return;
+      confirmButton.disabled=true;
+      confirmButton.textContent='放進圖譜中，請稍候…';
+      say('正在處理，圖片多的時候需要十幾秒，請不要關閉或重新整理頁面。');
+      try{
+        const response=await fetch('/api/atlas/import-docx/'+encodeURIComponent(materialId)+'/confirm',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',
+          body:JSON.stringify({metadata,items})
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok){
+          const reason=data.error||('伺服器回應異常（代碼 '+response.status+'）');
+          throw new Error(reason);
+        }
+        const created=Array.isArray(data.created)?data.created:[];
+        if(!created.length)throw new Error('沒有任何圖片被放進圖譜。');
+        framingStep(created);
+      }catch(error){
+        confirmButton.disabled=false;
+        confirmButton.textContent='確認，放進圖譜';
+        say('沒有成功：'+(error&&error.message?error.message:'連線中斷')+'。可以再按一次「確認，放進圖譜」；仍然不行，請把這行字截圖給管理員。',true);
       }
-      framingStep(Array.isArray(data.created)?data.created:[]);
     });
   }
 
