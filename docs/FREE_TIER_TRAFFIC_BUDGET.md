@@ -20,4 +20,10 @@
 
 1. Render → 工作區 → Billing → Monthly Included Usage：實例時數（上限 750）、對外頻寬（上限 5 GB）。
 2. Supabase → 組織 → Usage → Egress：目標每天不超過約 150 MB。
-3. 任何一項超過 60% 就先處理，不要等通知信。
+3. 系統管理 → 「教材儲存策略」下方「用量最多」：看 `static`、`media/uploaded-slides`、`api/ai-worker` 各多大。`static` 突然變大多半是新圖片太大；`media/uploaded-slides` 只是導向 R2 的連結，每頁約 1 KB。
+4. Render → 網站服務 → Metrics → Outbound Bandwidth：紫線（Service-Initiated，網站自己對外送出）應穩定在每小時約 2.5 MB 以下；綠線（HTTP Responses）的尖峰要能對應到上班時間的使用。
+5. 任何一項超過 60% 就先處理，不要等通知信。
+
+## 絕對不要讓教材改走 Google Drive／MEGA
+
+R2 用量到 80% 時，`STORAGE_FAILOVER_ON_FULL` 會把新上傳自動切到備援（Google Drive），之後學員讀這些教材時整份檔案都會經過 Render 的 5 GB 額度。R2 接近滿之前請先清理或處理，不要放任自動切換。
