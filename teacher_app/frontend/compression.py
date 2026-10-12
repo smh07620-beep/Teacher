@@ -18,6 +18,11 @@ from threading import Lock
 
 from flask import request
 
+try:  # Optional: without the package every client simply gets gzip as before.
+    import brotli as _brotli
+except Exception:  # pragma: no cover - depends on the installed environment
+    _brotli = None
+
 COMPRESSIBLE_MIMETYPES = frozenset(
     {
         "text/html",
@@ -35,7 +40,7 @@ COMPRESSIBLE_MIMETYPES = frozenset(
 MIN_BYTES = 1024
 # Static files are served by send_file as a stream; only buffer them when small enough.
 MAX_BUFFERED_BYTES = 8 * 1024 * 1024
-_CACHE_MAX_ENTRIES = 64
+_CACHE_MAX_ENTRIES = 256
 _CACHE_MAX_BYTES = 8 * 1024 * 1024
 
 
@@ -43,11 +48,11 @@ def _enabled() -> bool:
     return os.environ.get("RESPONSE_COMPRESSION", "true").strip().lower() not in {"0", "false", "no", "off"}
 
 
-def _accepts_gzip() -> bool:
+def _accepts(names) -> bool:
     header = request.headers.get("Accept-Encoding", "")
     for part in header.split(","):
         token, _, params = part.strip().partition(";")
-        if token.strip().lower() not in {"gzip", "x-gzip"}:
+        if token.strip().lower() not in names:
             continue
         quality = 1.0
         params = params.strip().lower().replace(" ", "")
@@ -58,6 +63,32 @@ def _accepts_gzip() -> bool:
                 quality = 1.0
         return quality > 0
     return False
+
+
+def _accepts_gzip() -> bool:
+    return _accepts({"gzip", "x-gzip"})
+
+
+def _brotli_enabled() -> bool:
+    flag = os.environ.get("RESPONSE_COMPRESSION_BROTLI", "true").strip().lower()
+    return _brotli is not None and flag not in {"0", "false", "no", "off"}
+
+
+def _choose_encoding() -> str:
+    """``br`` when supported (about 15-20% smaller than gzip for JS/CSS), else gzip, else ''."""
+    if _brotli_enabled() and _accepts({"br"}):
+        return "br"
+    if _accepts_gzip():
+        return "gzip"
+    return ""
+
+
+def _compress(raw: bytes, encoding: str, *, static: bool) -> bytes:
+    if encoding == "br":
+        # Static files are compressed once and cached, so they can afford a higher
+        # quality; dynamic responses use a fast level to keep request latency low.
+        return _brotli.compress(raw, quality=9 if static else 4)
+    return gzip.compress(raw, compresslevel=6, mtime=0)
 
 
 class _GzipCache:
@@ -113,14 +144,15 @@ def register_response_compression(app):
             return response
         if response.is_streamed and not response.direct_passthrough:
             return response
-        if not _accepts_gzip():
+        encoding = _choose_encoding()
+        if not encoding:
             return response
         length = response.content_length
         if length is not None and (length < MIN_BYTES or length > MAX_BUFFERED_BYTES):
             return response
 
         etag = response.headers.get("ETag", "")
-        cache_key = f"{request.path}|{etag}" if etag and not etag.startswith("W/") else ""
+        cache_key = f"{request.path}|{etag}|{encoding}" if etag and not etag.startswith("W/") else ""
         if response.direct_passthrough:
             # send_file / send_from_directory: read the (small) file once, then serve gzip.
             if length is None:
@@ -132,7 +164,7 @@ def register_response_compression(app):
                     raw = b"".join(response.iter_encoded())
                 finally:
                     response.close()  # release the open file handle
-                cached = gzip.compress(raw, compresslevel=6, mtime=0)
+                cached = _compress(raw, encoding, static=True)
                 if cache_key:
                     cache.put(cache_key, cached)
             data = cached
@@ -140,10 +172,10 @@ def register_response_compression(app):
             raw = response.get_data()
             if len(raw) < MIN_BYTES:
                 return response
-            data = gzip.compress(raw, compresslevel=6, mtime=0)
+            data = _compress(raw, encoding, static=False)
 
         response.set_data(data)
-        response.headers["Content-Encoding"] = "gzip"
+        response.headers["Content-Encoding"] = encoding
         response.headers["Content-Length"] = str(len(data))
         if etag and not etag.startswith("W/"):
             # A strong validator no longer describes the bytes on the wire.

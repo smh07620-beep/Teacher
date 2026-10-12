@@ -1,4 +1,5 @@
 import gzip
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -55,7 +56,7 @@ class ResponseCompressionTests(unittest.TestCase):
     def test_json_is_gzipped_and_roundtrips(self):
         client = build_app().test_client()
         plain = client.get("/json", headers={"Accept-Encoding": "identity"})
-        zipped = client.get("/json", headers={"Accept-Encoding": "gzip, deflate, br"})
+        zipped = client.get("/json", headers={"Accept-Encoding": "gzip, deflate"})
         self.assertEqual(zipped.headers["Content-Encoding"], "gzip")
         self.assertIn("Accept-Encoding", zipped.headers["Vary"])
         self.assertEqual(int(zipped.headers["Content-Length"]), len(zipped.data))
@@ -114,6 +115,46 @@ class ResponseCompressionTests(unittest.TestCase):
             self.assertNotIn("Content-Encoding", plain.headers)
             self.assertGreater(len(plain.data), len(first.data))
             plain.close()
+
+    def test_brotli_is_used_when_the_client_supports_it_and_is_smaller(self):
+        import brotli
+
+        client = build_app().test_client()
+        plain = client.get("/json", headers={"Accept-Encoding": "identity"})
+        gz = client.get("/json", headers={"Accept-Encoding": "gzip"})
+        br = client.get("/json", headers={"Accept-Encoding": "gzip, deflate, br"})
+        self.assertEqual(br.headers["Content-Encoding"], "br")
+        self.assertIn("Accept-Encoding", br.headers["Vary"])
+        self.assertEqual(int(br.headers["Content-Length"]), len(br.data))
+        self.assertEqual(brotli.decompress(br.data), plain.data)
+        self.assertLessEqual(len(br.data), len(gz.data))
+
+    def test_brotli_static_cache_keeps_encodings_apart(self):
+        import brotli
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "app.js"
+            path.write_text("console.log('教材');\n" * 300, encoding="utf-8")
+            client = build_app(path).test_client()
+            br = client.get("/file.js", headers={"Accept-Encoding": "br"})
+            gz = client.get("/file.js", headers={"Accept-Encoding": "gzip"})
+            br2 = client.get("/file.js", headers={"Accept-Encoding": "br"})
+            self.assertEqual(br.headers["Content-Encoding"], "br")
+            self.assertEqual(gz.headers["Content-Encoding"], "gzip")
+            self.assertEqual(br.data, br2.data)
+            self.assertTrue(brotli.decompress(br.data).decode("utf-8").startswith("console.log"))
+            self.assertTrue(gzip.decompress(gz.data).decode("utf-8").startswith("console.log"))
+
+    def test_brotli_can_be_switched_off_and_missing_package_falls_back_to_gzip(self):
+        from unittest import mock
+
+        from teacher_app.frontend import compression
+
+        client = build_app().test_client()
+        with mock.patch.dict(os.environ, {"RESPONSE_COMPRESSION_BROTLI": "false"}):
+            self.assertEqual(client.get("/json", headers={"Accept-Encoding": "br, gzip"}).headers["Content-Encoding"], "gzip")
+        with mock.patch.object(compression, "_brotli", None):
+            self.assertEqual(client.get("/json", headers={"Accept-Encoding": "br, gzip"}).headers["Content-Encoding"], "gzip")
 
     def test_switch_off_with_environment(self):
         import os
