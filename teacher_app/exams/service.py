@@ -125,6 +125,12 @@ def start_attempt(base_or_user, user_or_data, data: Mapping[str, Any] | None = N
     from teacher_app.assessments import assignees as exam_assignees
 
     exam_assignees.assert_can_take(actor, category_id)
+    from teacher_app.learning import access as learning_access
+
+    # Exams hang under a course: a student must have that course assigned, so a
+    # remembered exam id cannot bypass the course assignment.
+    if not learning_access.student_may_see_course(actor, _text(category.get("courseId"), 100)):
+        raise ApiError("EXAM_NOT_ASSIGNED", "這份考卷所屬的課程沒有指派給你。", 403)
     questions = _draw_questions(category)
     if not questions:
         raise ApiError("NO_ACTIVE_QUESTIONS", "此考卷目前沒有可作答的啟用題目。", 409)

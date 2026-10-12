@@ -13,6 +13,14 @@ class AssessmentGoldenPathOperationalTests(unittest.TestCase):
     """GP-04: learner submission must become a scoped, server-attributed reviewed result."""
 
     def setUp(self):
+        # These exam-flow tests are not about course assignment (see
+        # test_assignment_visibility_gate_20261012.py): treat every course as assigned.
+        class _EveryCourse(frozenset):
+            def __contains__(self, item):
+                return True
+        _assigned = patch("teacher_app.learning.access.assigned_course_ids", return_value=_EveryCourse())
+        _assigned.start()
+        self.addCleanup(_assigned.stop)
         self.base = ExamBase()
         repo.init_schema(self.base)
         conn, _ = self.base._db_conn()

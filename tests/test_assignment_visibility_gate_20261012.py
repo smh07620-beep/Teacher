@@ -115,3 +115,19 @@ class LearnerViewTests(unittest.TestCase):
         self.assertEqual(learner.count("view=learner"), 3)
         for name in ("admin-course-material.js", "system-exam.js", "admin-question-bank.js"):
             self.assertNotIn("view=learner", (root / name).read_text(encoding="utf-8"), name)
+
+
+class ExamStartGateTests(unittest.TestCase):
+    def test_student_cannot_start_exam_of_unassigned_course(self):
+        from teacher_app.common.errors import ApiError
+        from teacher_app.exams import service as exams_service
+
+        category = {"id": "cat1", "active": True, "courseId": "c1", "group": "grpBio", "area": "internal"}
+        student = {**person("student"), "empId": "E1"}
+        with assigned([]), \
+             patch.object(exams_service, "assert_exam_open"), \
+             patch("teacher_app.assessments.repository.get_category_full", return_value=category), \
+             patch("teacher_app.assessments.assignees.assert_can_take"):
+            with self.assertRaises(ApiError) as ctx:
+                exams_service.start_attempt(student, {"quizCategoryId": "cat1"})
+        self.assertEqual(ctx.exception.status, 403)
