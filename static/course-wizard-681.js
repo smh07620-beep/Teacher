@@ -1354,12 +1354,17 @@ async function editCourse(courseId,step=2){
         await loadExistingExamSettings(category);
       }
     }catch(error){console.warn('Course wizard edit: exam lookup skipped',error);}
-    await verifyCreatedCourseMaterials();
+    // Opening an existing course for editing must never be blocked by the post-upload
+    // link check (a material of another group or a just-finished Worker job may be
+    // missing from the list): that check only gates creating/publishing.
+    try{await verifyCreatedCourseMaterials();}catch(error){console.warn('Course wizard edit: material link check skipped',error);state.linksVerified=false;}
     state.step=Math.max(1,Math.min(4,Number(step)||2));
     render();
     if(state.step===2)void loadMaterials();
     return true;
   }catch(error){
+    // Do not leave a half-open course behind: it would lock the wizard ("尚未離開精靈").
+    try{clearWizardState();render();}catch(_cleanupError){}
     alert('無法開啟課程編輯：'+(error.message||'未知錯誤'));
     return false;
   }

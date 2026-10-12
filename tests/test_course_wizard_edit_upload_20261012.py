@@ -47,3 +47,17 @@ class PersistentAtlasEntryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OpenEditNeverTrapsTheUserTests(unittest.TestCase):
+    def _open_edit_body(self):
+        start = SRC.index("const plan=await api('/api/courses/'+encodeURIComponent(courseId)+'/plan');")
+        return SRC[start - 200: start + 4200]
+
+    def test_material_link_check_does_not_block_opening_an_existing_course(self):
+        body = self._open_edit_body()
+        self.assertIn("try{await verifyCreatedCourseMaterials();}catch", body)
+
+    def test_failed_open_resets_the_half_open_course(self):
+        body = self._open_edit_body()
+        self.assertIn("clearWizardState();render();", body)
