@@ -131,3 +131,11 @@ class ExamStartGateTests(unittest.TestCase):
             with self.assertRaises(ApiError) as ctx:
                 exams_service.start_attempt(student, {"quizCategoryId": "cat1"})
         self.assertEqual(ctx.exception.status, 403)
+
+
+class DraftLocationLabelTests(unittest.TestCase):
+    def test_draft_cards_name_the_area_and_group_where_the_item_lives(self):
+        from teacher_app.command_center import service
+        self.assertEqual(service._location_suffix({"area": "internal", "group": "grpMicro"}), "（內部教育訓練區・2 鏡檢組）")
+        self.assertEqual(service._location_suffix({"area": "pgy", "group": "grpBio"}), "（PGY訓練區・1 生化組）")
+        self.assertEqual(service._location_suffix({}), "")

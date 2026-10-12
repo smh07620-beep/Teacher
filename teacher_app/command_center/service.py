@@ -12,6 +12,7 @@ import logging
 from typing import Any, Mapping, Optional
 
 from teacher_app.command_center import audience, dashboard_service
+from teacher_app.common import scope as scope_defs
 from teacher_app.common.auth import has_permission, normalize_role
 from teacher_app.common.errors import ApiError
 from teacher_app.assessments import repository as assessment_repository
@@ -524,6 +525,14 @@ def _teacher_due_items(user: Mapping[str, Any], current: dt.datetime) -> list[di
     return values
 
 
+def _location_suffix(item: Mapping[str, Any]) -> str:
+    """Where the item lives (訓練區・組別) so a draft in another group can be found."""
+    area = scope_defs.TRAINING_AREAS.get(str(item.get("area") or ""), "")
+    group = scope_defs.GROUPS.get(str(item.get("group") or ""), "")
+    place = "・".join(part for part in (area, group) if part)
+    return f"（{place}）" if place else ""
+
+
 def _teacher_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
     if not has_permission(user, "course.manage"):
         return []
@@ -563,7 +572,7 @@ def _teacher_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "課程已通過發布檢查，等待正式發布。"
                 if lifecycle == "ready"
                 else "此課程仍是草稿，學員尚無法使用。"
-            ),
+            ) + _location_suffix(course),
             "action": "draft",
             "actionLabel": "正式發布" if lifecycle == "ready" else "繼續編輯",
             "target": "course-materials",
@@ -603,7 +612,7 @@ def _teacher_exam_draft_items(user: Mapping[str, Any]) -> list[dict[str, Any]]:
             "area": str(category.get("area") or ""),
             "dueAt": "",
             "overdue": False,
-            "detail": "題目已審核，確認後即可發布。" if approved else "考卷還沒完成，可接著出題或發布。",
+            "detail": ("題目已審核，確認後即可發布。" if approved else "考卷還沒完成，可接著出題或發布。") + _location_suffix(category),
             "action": "exam_draft",
             "actionLabel": "發布考卷" if approved else "繼續出題",
             "target": "assessment",
