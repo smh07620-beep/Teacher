@@ -6,6 +6,8 @@ root compatibility adapter; image bytes are delegated to ``image_store``.
 """
 from __future__ import annotations
 
+import base64
+import io
 import posixpath
 import re
 import shutil
@@ -102,6 +104,11 @@ _DOCX_NS = {
     "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
 }
 _DOCX_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+_MC_FALLBACK = "{http://schemas.openxmlformats.org/markup-compatibility/2006}Fallback"
+_W_P = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"
+_PREVIEW_THUMBNAIL_LIMIT = 40
+_PREVIEW_THUMBNAIL_SIZE = (360, 360)
+_MAX_THUMBNAIL_SOURCE_BYTES = 30 * 1024 * 1024
 _DOCX_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
@@ -138,6 +145,65 @@ def _docx_relationship_media(archive: zipfile.ZipFile) -> dict[str, str]:
     return resolved
 
 
+def _drop_compat_fallbacks(root) -> None:
+    """Remove ``mc:Fallback`` copies so text boxes are not read twice.
+
+    Word stores every modern text box a second time (as legacy VML) for old
+    readers.  The picture/text we care about lives in ``mc:Choice``.
+    """
+    for parent in list(root.iter()):
+        for child in list(parent):
+            if child.tag == _MC_FALLBACK:
+                parent.remove(child)
+
+
+def _paragraph_text(paragraph) -> str:
+    """Text of a paragraph including text boxes, one space between boxes/lines."""
+    parts: list[str] = []
+    for node in paragraph.iter(_W_P):
+        own = "".join(
+            text.text or ""
+            for text in node.findall("w:r/w:t", _DOCX_NS)
+        ) + "".join(
+            text.text or ""
+            for text in node.findall("w:hyperlink/w:r/w:t", _DOCX_NS)
+        )
+        own = own.strip()
+        if own:
+            parts.append(own)
+    return re.sub(r"\s+", " ", " ".join(parts)).strip()
+
+
+def _docx_thumbnails(path: Path, images: list[dict]) -> dict[int, str]:
+    """Small JPEG data URLs so the teacher can see each picture before importing."""
+    try:
+        from PIL import Image
+    except Exception:  # Pillow missing -> preview without pictures
+        return {}
+    thumbnails: dict[int, str] = {}
+    try:
+        archive = zipfile.ZipFile(path)
+    except (zipfile.BadZipFile, OSError):
+        return {}
+    with archive:
+        for item in images[:_PREVIEW_THUMBNAIL_LIMIT]:
+            try:
+                media_path = str(item.get("mediaPath") or "")
+                if archive.getinfo(media_path).file_size > _MAX_THUMBNAIL_SOURCE_BYTES:
+                    continue
+                with Image.open(io.BytesIO(archive.read(media_path))) as picture:
+                    picture = picture.convert("RGB")
+                    picture.thumbnail(_PREVIEW_THUMBNAIL_SIZE)
+                    buffer = io.BytesIO()
+                    picture.save(buffer, "JPEG", quality=72)
+                thumbnails[int(item.get("index") or 0)] = (
+                    "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+                )
+            except Exception:  # one unreadable picture must not block the preview
+                continue
+    return thumbnails
+
+
 def _docx_inline_images(path: Path) -> list[dict]:
     """Return verified inline/table DOCX images in document order.
 
@@ -149,17 +215,13 @@ def _docx_inline_images(path: Path) -> list[dict]:
     with zipfile.ZipFile(path) as archive:
         root = ET.fromstring(archive.read("word/document.xml"))
         relationships = _docx_relationship_media(archive)
+    _drop_compat_fallbacks(root)
 
     paragraphs: list[tuple[str, list[str]]] = []
     relationship_attribute = f"{{{_DOCX_NS['r']}}}embed"
     link_attribute = f"{{{_DOCX_NS['r']}}}link"
     for paragraph in root.findall(".//w:p", _DOCX_NS):
-        parts = [
-            node.text
-            for node in paragraph.findall(".//w:t", _DOCX_NS)
-            if node.text
-        ]
-        paragraph_text = re.sub(r"\s+", " ", "".join(parts)).strip()
+        paragraph_text = _paragraph_text(paragraph)
         relation_ids: list[str] = []
         # Deliberately accept only wp:inline drawings. Floating wp:anchor
         # objects can have different visual/caption relationships and must not
@@ -244,6 +306,9 @@ def preview_docx_atlas(path: Path) -> dict:
         warnings.append(
             "沒有找到可安全抽出的 inline/table JPG、PNG 或 WEBP；浮動圖、SmartArt、圖表、群組物件與 OLE 不會自動建立圖譜。"
         )
+    thumbnails = _docx_thumbnails(path, images)
+    for item in images:
+        item["thumbnail"] = thumbnails.get(int(item.get("index") or 0), "")
     return {"images": images, "warnings": warnings}
 
 

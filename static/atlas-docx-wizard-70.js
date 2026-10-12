@@ -139,6 +139,7 @@
                 <input type="checkbox" name="pick" value="${Number(item.index)}" data-relationship="${esc(item.relationshipId||'')}" checked>
                 圖片 ${Number(item.index)}${item.fileName?' · '+esc(item.fileName):''}
               </label>
+              ${item.thumbnail?`<img src="${esc(item.thumbnail)}" alt="圖片 ${Number(item.index)} 預覽" loading="lazy" class="mt-2 max-h-52 rounded-lg border border-slate-200 bg-slate-50 object-contain">`:'<p class="mt-1 text-[11px] text-slate-400">（此圖未提供預覽）</p>'}
               <p class="mt-1 text-xs text-slate-500">${esc(item.section||'無周圍文字')}</p>
               <details class="mt-2">
                 <summary class="cursor-pointer text-xs text-teal-700">覆寫此圖片 metadata</summary>
