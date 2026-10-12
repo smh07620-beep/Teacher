@@ -45,3 +45,10 @@ class AnalyticsTabInlineTest(unittest.TestCase):
         self.assertIn("teacher-records-cleared", inline)
         self.assertIn("teacher-records-cleared", data)
         self.assertIn('data-assess-tab="analytics"', css)
+
+
+class EmptyRecordsRefreshAnalyticsTest(unittest.TestCase):
+    def test_empty_records_also_reset_analytics(self):
+        data = (ROOT / "static/admin-results-data.js").read_text(encoding="utf-8")
+        i = data.index("if(records.length===0){")
+        self.assertIn("renderResultsAnalytics([])", data[i:i + 120])

@@ -125,6 +125,7 @@
       const records=await window.fetchAdminRecords();
       if(!records) return;
       if(records.length===0){
+        window.renderResultsAnalytics([]);
         tbody.innerHTML='<tr><td colspan="8" class="p-6 text-center text-slate-400">目前尚無任何考核紀錄</td></tr>';
         document.getElementById('admin-results-pagination')?.replaceChildren();
         return;
