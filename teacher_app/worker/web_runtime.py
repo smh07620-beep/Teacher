@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from teacher_app.common.throttle import throttled
 from teacher_app.config import storage_paths
 from teacher_app.materials import job_commit
 from teacher_app.materials.staging_runtime import MaterialStagingRuntime
@@ -105,8 +106,11 @@ def build_canonical_runtime(*, paths_provider=storage_paths) -> WorkerWebRuntime
         operations.cleanup_staging(staging.delete)
 
     return WorkerWebRuntime(
-        cleanup_budget_state=lambda: r2_budget.cleanup_budget_state(
-            cleanup_staging=cleanup_staging
+        # The Worker claims every ~2 seconds and each claim used to run this
+        # cleanup, re-reading every finished job (payload included) from the
+        # database.  Housekeeping only needs to run every few minutes.
+        cleanup_budget_state=throttled(
+            lambda: r2_budget.cleanup_budget_state(cleanup_staging=cleanup_staging)
         ),
         enforce_large_upload_budget=lambda upload_id, object_key, source_bytes: (
             r2_budget.enforce_large_upload_budget(

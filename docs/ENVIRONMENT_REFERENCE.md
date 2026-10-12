@@ -118,6 +118,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` | `5` | `teacher_app/common/security.py` |  | yes |
 | `LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `900` | `teacher_app/common/security.py` |  | yes |
 | `MATERIAL_BACKGROUND_JOBS` | `True` | `teacher_app/config.py`, `teacher_app/legacy_host.py`, `teacher_app/materials/job_runtime.py` (+1) |  | yes |
+| `MATERIAL_CLEANUP_INTERVAL_SECONDS` |  | `teacher_app/common/throttle.py` |  |  |
 | `MATERIAL_DIRECT_UPLOAD_ENABLED` | `false` | `teacher_app/legacy_host.py`, `teacher_app/worker/web_runtime.py` |  | yes |
 | `MATERIAL_DIRECT_UPLOAD_MAX_MB` | `2048` | `teacher_app/legacy_host.py`, `teacher_app/worker/web_runtime.py` |  | yes |
 | `MATERIAL_FFMPEG_TIMEOUT_SECONDS` | `1800` | `material_worker.py`, `teacher_app/worker/media_transcode_compat.py` |  |  |

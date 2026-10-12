@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from teacher_app.common.throttle import throttled
 from teacher_app.config import storage_paths
 from teacher_app.materials.staging_runtime import MaterialStagingRuntime
 from teacher_app.materials.upload_progress import UploadProgressStore
@@ -68,8 +69,10 @@ def build_canonical_runtime(*, paths_provider=storage_paths) -> MaterialJobRunti
         upload_staging=staging.upload,
         staging_exists=staging.exists,
         delete_staging=staging.delete,
-        cleanup_budget_state=lambda: r2_budget.cleanup_budget_state(
-            cleanup_staging=cleanup_staging
+        # Same throttle as the Worker runtime: this cleanup rode along with
+        # every Worker claim and every admin job-list refresh.
+        cleanup_budget_state=throttled(
+            lambda: r2_budget.cleanup_budget_state(cleanup_staging=cleanup_staging)
         ),
         operations_status=lambda: operations.status(staging.capability),
         staging_capability=staging.capability,
