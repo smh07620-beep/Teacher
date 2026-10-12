@@ -391,6 +391,15 @@ def confirm_import(
         raise ApiError("ATLAS_DOCX_METADATA_INVALID", "共用 metadata 格式不正確。", status=400)
 
     created: list[str] = []
+    skipped = 0
+    # Re-running the wizard on the same Word file must not pile up copies.
+    existing_keys = {
+        (material_id, str((item.get("annotationJson") or {}).get("sourceMedia") or ""))
+        for item in service.repository.list_items()
+        if item.get("sourceMaterialId") == material_id
+        and (item.get("annotationJson") or {}).get("sourceMedia")
+    }
+    seen_media: set[str] = set()
     candidates = _docx_inline_images(path)
     by_index = {int(item["index"]): item for item in candidates}
     by_relationship = {
@@ -416,16 +425,10 @@ def confirm_import(
             if not media_path:
                 continue
 
-            raw = archive.read(media_path)
-            try:
-                stored = image_store.store_image_bytes(
-                    material_storage,
-                    raw,
-                    Path(media_path).suffix,
-                    max_bytes=None,
-                )
-            except image_store.AtlasImageError:
+            if media_path in seen_media:
+                skipped += 1
                 continue
+            seen_media.add(media_path)
 
             group = str(values.get("group") or source_group).strip()
             if not group or not service.can_manage(user, group):
@@ -439,6 +442,23 @@ def confirm_import(
                 or candidate.get("caption")
                 or Path(media_path).stem
             )[:255]
+            dup_key = (material_id, media_path)
+            if dup_key in existing_keys:
+                skipped += 1
+                continue
+            existing_keys.add(dup_key)
+
+            raw = archive.read(media_path)
+            try:
+                stored = image_store.store_image_bytes(
+                    material_storage,
+                    raw,
+                    Path(media_path).suffix,
+                    max_bytes=None,
+                )
+            except image_store.AtlasImageError:
+                continue
+
             item_id = service.create_item(user, {
                 "group": group,
                 "category": category,
@@ -459,10 +479,14 @@ def confirm_import(
                 "sourceMaterialId": material_id,
                 "sourceDocx": str(material.get("filename") or "")[:255],
                 "sortOrder": int(values.get("sortOrder") or 0),
-                "annotationJson": {},
+                "annotationJson": {"sourceMedia": media_path},
             })
             created.append(item_id)
 
+    if not created and skipped:
+        if cleanup_root:
+            shutil.rmtree(cleanup_root, ignore_errors=True)
+        return {"ok": True, "created": [], "skipped": skipped, "status": "draft"}
     if not created:
         if cleanup_root:
             shutil.rmtree(cleanup_root, ignore_errors=True)
@@ -474,4 +498,4 @@ def confirm_import(
         )
     if cleanup_root:
         shutil.rmtree(cleanup_root, ignore_errors=True)
-    return {"ok": True, "created": created, "status": "draft"}
+    return {"ok": True, "created": created, "skipped": skipped, "status": "draft"}

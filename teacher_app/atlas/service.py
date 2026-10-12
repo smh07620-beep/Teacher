@@ -261,3 +261,44 @@ def delete_item(user: Mapping[str, Any], item_id: str, *, confirmed: bool) -> No
     if not can_manage(user, str(item.get("group") or "")):
         raise ApiError("ATLAS_FORBIDDEN", "無權管理此圖譜。", status=403)
     repository.delete_item(item_id)
+
+
+def _duplicate_key(item: Mapping[str, Any]) -> tuple:
+    return (
+        str(item.get("group") or ""),
+        str(item.get("sourceMaterialId") or ""),
+        str(item.get("title") or "").strip(),
+        str(item.get("description") or "").strip(),
+    )
+
+
+def find_duplicate_ids(items: list[dict]) -> list[str]:
+    """Ids of redundant Word-import drafts (same group/material/title/description).
+
+    Only unpublished ``docx`` drafts are ever returned; a published copy, or the
+    oldest draft, is kept.
+    """
+    groups: dict[tuple, list[dict]] = {}
+    for item in items:
+        if item.get("source") != "docx" or not item.get("sourceMaterialId"):
+            continue
+        groups.setdefault(_duplicate_key(item), []).append(item)
+    redundant: list[str] = []
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        members.sort(key=lambda x: (not x.get("published"), str(x.get("createdAt") or ""), str(x.get("id"))))
+        # members[0] is kept (published first, then oldest).
+        redundant.extend(str(m["id"]) for m in members[1:] if not m.get("published"))
+    return redundant
+
+
+def remove_duplicate_drafts(user: Mapping[str, Any]) -> int:
+    removed = 0
+    for item_id in find_duplicate_ids(repository.list_items()):
+        item = repository.get_item(item_id)
+        if not item or not can_manage(user, str(item.get("group") or "")):
+            continue
+        repository.delete_item(item_id)
+        removed += 1
+    return removed

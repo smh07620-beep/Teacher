@@ -113,7 +113,7 @@ class AtlasImporterTests(unittest.TestCase):
                 material_storage=self.storage,
             )
 
-        self.assertEqual(result, {"ok": True, "created": ["atlas-1", "atlas-2"], "status": "draft"})
+        self.assertEqual(result, {"ok": True, "created": ["atlas-1", "atlas-2"], "skipped": 0, "status": "draft"})
         self.assertEqual([item["title"] for item in created_payloads], ["Shared title", "Override title"])
         self.assertEqual(created_payloads[0]["tags"], ["shared"])
         self.assertEqual(created_payloads[1]["tags"], ["override"])

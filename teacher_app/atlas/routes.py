@@ -231,5 +231,13 @@ def register_atlas_70(
             return _error(exc)
         return jsonify({"ok": True})
 
+    @app.post("/api/atlas/dedupe")
+    def atlas_dedupe():
+        user, denied = user_or_denied()
+        if denied:
+            return denied
+        removed = atlas_service.remove_duplicate_drafts(user)
+        return jsonify({"ok": True, "removed": removed})
+
     app.extensions["teacher_atlas_70_registered"] = True
     return app
