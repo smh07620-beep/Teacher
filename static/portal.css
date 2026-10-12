@@ -511,7 +511,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
 .v681-feature-icon{display:grid;place-items:center;width:42px;height:42px;flex:0 0 42px;border-radius:14px;background:#dff5f4;color:#0d8984}
 .v681-feature-icon svg{width:24px;height:24px}
 .v681-feature-chip strong,.v681-feature-chip small{display:block}.v681-feature-chip strong{color:#173f51;font-size:14px}.v681-feature-chip small{margin-top:3px;color:#6d8594;font-size:11px}
-.v681-internal-art{position:absolute;inset:16px;z-index:0;pointer-events:none;overflow:hidden;border-radius:24px;background:url('/assets/v681/lab-training-photo.jpg') 78% center/cover no-repeat;box-shadow:inset 0 0 0 1px rgba(255,255,255,.55)}
+.v681-internal-art{position:absolute;inset:16px;z-index:0;pointer-events:none;overflow:hidden;border-radius:24px;background:url('/assets/v681/lab-training-photo.webp') 78% center/cover no-repeat;box-shadow:inset 0 0 0 1px rgba(255,255,255,.55)}
 .v681-internal-art:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(247,252,253,.99) 0%,rgba(247,252,253,.96) 38%,rgba(247,252,253,.72) 57%,rgba(247,252,253,.18) 79%,rgba(247,252,253,.05) 100%)}
 .v681-internal-art:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(231,247,246,.06),rgba(8,96,107,.08));mix-blend-mode:multiply}
 .v681-quick-card{position:relative;z-index:4;align-self:center;justify-self:end;width:min(100%,390px);padding:24px;border:1px solid rgba(255,255,255,.92);border-radius:24px;background:rgba(255,255,255,.86);box-shadow:0 20px 48px rgba(42,80,93,.12);backdrop-filter:blur(16px)}
@@ -641,7 +641,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
 .pgy-training-page .v56-header{min-height:74px;padding-left:36px;padding-right:36px;background:rgba(255,255,255,.96);border-bottom-color:#dfeaec;box-shadow:0 5px 24px rgba(31,73,90,.035)}
 .pgy-training-page main{padding-top:24px}
 .pgy-training-page .v681-pgy-hero{position:relative;isolation:isolate;min-height:350px;overflow:hidden;align-items:center;padding:44px 42px;border-color:#d9e7e9;background:#eef7f6;box-shadow:0 20px 48px rgba(26,68,88,.08)}
-.pgy-training-page .v681-pgy-hero:before{content:"";position:absolute;inset:0;z-index:-2;background:url('/assets/v681/lab-training-photo.jpg') 70% 46%/cover no-repeat;filter:saturate(.82) contrast(.96) brightness(1.04)}
+.pgy-training-page .v681-pgy-hero:before{content:"";position:absolute;inset:0;z-index:-2;background:url('/assets/v681/lab-training-photo.webp') 70% 46%/cover no-repeat;filter:saturate(.82) contrast(.96) brightness(1.04)}
 .pgy-training-page .v681-pgy-hero:after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(247,252,252,.99) 0%,rgba(247,252,252,.96) 42%,rgba(238,248,247,.77) 60%,rgba(231,244,242,.28) 100%)}
 .v681-pgy-copy{min-width:0;max-width:760px}.v681-pgy-copy .v580-eyebrow{color:#3f7180;letter-spacing:.18em}.v681-pgy-copy h1{text-wrap:balance}.v681-pgy-copy>p:not(.v580-eyebrow){max-width:690px;color:#4f7180;font-size:15px;font-weight:560}
 .pgy-training-page .v681-pgy-aside{position:relative;z-index:2;align-self:center;min-width:260px;max-width:310px;padding:24px;border-color:rgba(255,255,255,.9);background:rgba(255,255,255,.88);box-shadow:0 18px 42px rgba(30,76,91,.12);backdrop-filter:blur(14px)}
@@ -808,7 +808,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
 .v682-pgy-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .v682-pgy-card{display:flex;flex-direction:column;min-height:180px;padding:6px 6px 9px;border:1px solid #dce8ec;border-radius:8px;background:#fff;box-shadow:0 3px 12px rgba(31,74,91,.05);transition:.18s ease}
 .v682-pgy-card:hover{transform:translateY(-2px);border-color:#a9d3d4;box-shadow:0 8px 18px rgba(31,74,91,.09)}
-.v682-pgy-photo{display:block;height:87px;border-radius:6px;background-image:url('/assets/v681/lab-training-photo.jpg');background-size:210%;filter:saturate(.72) contrast(.94) brightness(1.08)}
+.v682-pgy-photo{display:block;height:87px;border-radius:6px;background-image:url('/assets/v681/lab-training-photo.webp');background-size:210%;filter:saturate(.72) contrast(.94) brightness(1.08)}
 .v682-pgy-photo.photo-foundation{background-position:42% 57%}.v682-pgy-photo.photo-advanced{background-position:73% 61%}.v682-pgy-photo.photo-specialty{background-position:88% 35%}.v682-pgy-photo.photo-records{background-position:66% 27%}
 .v682-pgy-card h3{margin:8px 6px 0;color:#173f52;font-size:12px}.v682-pgy-card b{margin:2px 6px 0;color:#6e8591;font-size:8px}.v682-pgy-card p{margin:4px 6px 0;color:#7a909b;font-size:8px}.v682-pgy-card i{display:grid;place-items:center;width:19px;height:19px;margin:auto auto 0;border-radius:50%;background:#dff5f5;color:#078692;font-size:11px;font-style:normal}
 

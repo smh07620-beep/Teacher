@@ -15,11 +15,11 @@ class PublicPortalVisualConsistency681Tests(unittest.TestCase):
         cls.css = (STATIC / "portal.css").read_text(encoding="utf-8")
 
     def test_realistic_lab_photo_is_the_shared_hero_asset(self):
-        asset = STATIC / "assets" / "v681" / "lab-training-photo.jpg"
+        asset = STATIC / "assets" / "v681" / "lab-training-photo.webp"
         self.assertTrue(asset.exists())
-        self.assertGreater(asset.stat().st_size, 100_000)
-        self.assertIn('/assets/v681/lab-training-photo.jpg', self.home)
-        self.assertGreaterEqual(self.css.count("/assets/v681/lab-training-photo.jpg"), 2)
+        self.assertGreater(asset.stat().st_size, 20_000)
+        self.assertIn('/assets/v681/lab-training-photo.webp', self.home)
+        self.assertGreaterEqual(self.css.count("/assets/v681/lab-training-photo.webp"), 2)
 
     def test_public_headers_follow_the_supplied_reference_context(self):
         home_header = self.home[self.home.index('<header class="v56-header">'):self.home.index('</header>')]

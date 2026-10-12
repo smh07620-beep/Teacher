@@ -1,4 +1,4 @@
-lab-training-photo.jpg
+lab-training-photo.webp
 Source: National Cancer Institute / Unsplash
 Photo: https://unsplash.com/photos/27uaEym7Kq8
 License: Unsplash License (downloaded 2026-09-20)

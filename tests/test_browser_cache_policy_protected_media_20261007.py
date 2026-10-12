@@ -57,6 +57,20 @@ class ProtectedMediaCachePolicyTests(unittest.TestCase):
         self.assertIn("max-age=86400", self.client.get("/static-art.png").headers["Cache-Control"])
         self.assertEqual(self.client.get("/api/me").headers["Cache-Control"], "no-store")
 
+    def test_js_css_with_current_commit_version_are_immutable_others_revalidate(self):
+        from unittest import mock
+
+        with mock.patch.dict("os.environ", {"RENDER_GIT_COMMIT": "92843771f5d9aaaa", "ASSET_VERSION": ""}):
+            ok = self.client.get("/app.js?v=92843771f5d9").headers["Cache-Control"]
+            self.assertIn("immutable", ok)
+            self.assertIn("max-age=31536000", ok)
+            self.assertEqual("no-cache", self.client.get("/app.js?v=deadbeefcafe").headers["Cache-Control"])
+            self.assertEqual("no-cache", self.client.get("/app.js?v=runtime").headers["Cache-Control"])
+            self.assertEqual("no-cache", self.client.get("/app.js").headers["Cache-Control"])
+        # A build id that is not a git sha (VERSION fallback) is never long-cached.
+        with mock.patch.dict("os.environ", {"RENDER_GIT_COMMIT": "", "ASSET_VERSION": "v6.8.1"}):
+            self.assertEqual("no-cache", self.client.get("/app.js?v=v6.8.1").headers["Cache-Control"])
+
 
 if __name__ == "__main__":
     unittest.main()
