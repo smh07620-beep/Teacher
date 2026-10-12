@@ -47,8 +47,11 @@ services:
         value: "true"
       - key: CSP_ENFORCE
         value: "true"
+      # R2 serves learner downloads/slides through short-lived signed links, so
+      # file bytes never pass through Render's metered outbound bandwidth.
+      # (MEGA/GDrive proxy every file through this service.)
       - key: MATERIAL_STORAGE_BACKEND
-        value: mega
+        value: r2
       - key: STORAGE_FAILOVER_ON_FULL
         value: "true"
       - key: STORAGE_FALLBACK_BACKEND
