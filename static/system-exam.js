@@ -477,6 +477,9 @@ async function submitQuiz() {
     }
 
     renderExamRemediation(result.remediation||null);
+    // 重測只在「未達及格線」時出現；通過或待批改時不顯示任何操作按鈕。
+    const resultActions=document.getElementById('result-actions');
+    if(resultActions)resultActions.classList.toggle('hidden',!(essayCount<=0&&totalScore<passingScore));
 
     const resultDashboard = document.getElementById('result-dashboard');
     resultDashboard.classList.remove('hidden');

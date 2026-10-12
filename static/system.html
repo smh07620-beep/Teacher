@@ -354,14 +354,9 @@
                             <span id="result-passing-score" class="text-xl font-bold text-teal-700">80 分</span>
                         </div>
                     </div>
-                    <div class="flex gap-2">
-                        <button data-csp-click="scrollToReview()" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm shadow">
-                            🔍 逐題檢視解析
-                        </button>
-                        <button data-csp-click="toggleAdminModal(true)" class="flex-1 bg-indigo-700 hover:bg-indigo-800 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm shadow">
-                            📊 前往成績後台
-                        </button>
-                        <button data-csp-click="resetCurrentQuiz()" class="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold py-2.5 rounded-lg transition-colors text-sm shadow-sm">↻ 重測本卷</button>
+                    <!-- 學員只在「未達及格線」時才會看到重測；通過後不顯示任何按鈕（不提供逐題解答、成績後台）。 -->
+                    <div id="result-actions" class="flex gap-2 hidden">
+                        <button id="result-retake-btn" data-csp-click="resetCurrentQuiz()" class="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold py-2.5 rounded-lg transition-colors text-sm shadow-sm">↻ 複習後重測本卷</button>
                     </div>
                 </div>
             </div>
