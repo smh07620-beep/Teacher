@@ -398,6 +398,13 @@ function narrationButtons(m){
   return `<button type="button" data-cw-mat-action="narrate" data-cw-mat-id="${id}" class="rounded-lg border border-cyan-300 bg-cyan-50 px-2.5 py-1 font-bold text-cyan-900">🎙 ${has?'重錄旁白':'錄旁白'}</button>${has?`<button type="button" data-cw-mat-action="narration-remove" data-cw-mat-id="${id}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-bold text-slate-700">移除旁白</button>`:''}`;
 }
 
+function atlasImportButton(m){
+  // Word 內的圖片可轉成圖譜：入口固定放在教材列，離開頁面或重新整理後仍然找得到。
+  if(!/\.docx$/i.test(String(m.filename||m.storageFilename||'')))return '';
+  const count=Number(m.storageMeta?.uploadAnalysis?.imageCount||0);
+  return `<button type="button" data-cw-mat-action="atlas" data-cw-mat-id="${esc(m.id)}" class="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 font-bold text-teal-900">🔬 圖片轉圖譜${count?`（${count} 張）`:''}</button>`;
+}
+
 function paintCourseMaterials(){
   const list=document.querySelector('[data-cw681-course-materials-list]');
   if(!list)return;
@@ -416,7 +423,7 @@ function paintCourseMaterials(){
   if(!rows.length){list.innerHTML='<p class="rounded-lg bg-slate-50 px-3 py-2 text-slate-500">這門課目前沒有教材。可在上方上傳，或用 AI 製作新增。</p>';return;}
   list.innerHTML=rows.map(m=>{
     const off=m.active===false,id=esc(m.id);
-    return `<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border ${off?'border-amber-200 bg-amber-50/60':'border-slate-100 bg-slate-50'} px-3 py-2"><div class="min-w-0"><b class="truncate text-slate-800">${esc(m.title||m.filename||'未命名教材')}</b><span class="ml-1 rounded-full border bg-white px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${Math.max(1,Number(m.currentVersion||1))}</span>${narrationBadge(m)}${off?'<span class="ml-1 text-[10px] font-bold text-amber-700">已停用</span>':''}${m.audienceScope==='source_only'?'<span class="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">📎 僅供製作（學員看不到）</span>':''}</div><div class="flex flex-wrap gap-1.5">${narrationButtons(m)}<button type="button" data-cw-mat-action="toggle" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${off?'啟用':'停用'}</button><button type="button" data-cw-mat-action="audience" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${m.audienceScope==='source_only'?'改成學員可見':'設為僅供製作'}</button><button type="button" data-cw-mat-action="unlink" data-cw-mat-id="${id}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-bold text-slate-700">移出課程</button><button type="button" data-cw-mat-action="delete" data-cw-mat-id="${id}" class="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 font-bold text-rose-700">🗑️ 刪除</button></div></div>`;
+    return `<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border ${off?'border-amber-200 bg-amber-50/60':'border-slate-100 bg-slate-50'} px-3 py-2"><div class="min-w-0"><b class="truncate text-slate-800">${esc(m.title||m.filename||'未命名教材')}</b><span class="ml-1 rounded-full border bg-white px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${Math.max(1,Number(m.currentVersion||1))}</span>${narrationBadge(m)}${off?'<span class="ml-1 text-[10px] font-bold text-amber-700">已停用</span>':''}${m.audienceScope==='source_only'?'<span class="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">📎 僅供製作（學員看不到）</span>':''}</div><div class="flex flex-wrap gap-1.5">${narrationButtons(m)}${atlasImportButton(m)}<button type="button" data-cw-mat-action="toggle" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${off?'啟用':'停用'}</button><button type="button" data-cw-mat-action="audience" data-cw-mat-id="${id}" class="rounded-lg border border-amber-200 bg-white px-2.5 py-1 font-bold text-amber-800">${m.audienceScope==='source_only'?'改成學員可見':'設為僅供製作'}</button><button type="button" data-cw-mat-action="unlink" data-cw-mat-id="${id}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-bold text-slate-700">移出課程</button><button type="button" data-cw-mat-action="delete" data-cw-mat-id="${id}" class="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 font-bold text-rose-700">🗑️ 刪除</button></div></div>`;
   }).join('');
 }
 
@@ -425,6 +432,7 @@ async function courseMaterialAction(action,id){
   if(!material)return;
   const list=document.querySelector('[data-cw681-course-materials-list]');
   const note=text=>{if(list)list.insertAdjacentHTML('afterbegin',`<p class="rounded-lg bg-slate-100 px-3 py-1.5 text-slate-600" data-cw-mat-note>${esc(text)}</p>`);};
+  if(action==='atlas'){await openCourseAtlasImport(id);return;}
   if(action==='narrate'){
     const recorder=window.TeacherSlideNarration1109;
     if(!recorder||typeof recorder.open!=='function'){note('此帳號沒有錄製旁白的權限，或錄製功能尚未載入，請重新整理頁面。');return;}
@@ -974,7 +982,12 @@ function confirmMaterialType(materialId){
 async function openCourseAtlasImport(materialId){
   const id=String(materialId||'').trim();
   if(!id)return;
-  const host=el('cw681-atlas-import');
+  let host=el('cw681-atlas-import');
+  if(!host){
+    // 從教材列進來時頁面上還沒有匯入區：就地建立在「本課程的教材」下方。
+    const anchor=document.querySelector('[data-cw681-course-materials]');
+    if(anchor){anchor.insertAdjacentHTML('afterend','<div id="cw681-atlas-import" class="mt-3 hidden"></div>');host=el('cw681-atlas-import');}
+  }
   if(!host)return alert('Atlas 匯入區尚未載入，請重新整理後再試。');
   if(typeof window.openAtlasDocxWizard!=='function')return alert('DOCX → Atlas 工具尚未載入，請重新整理後再試。');
   host.classList.remove('hidden');

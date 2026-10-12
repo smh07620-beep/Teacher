@@ -31,5 +31,19 @@ class EditModeUploadTests(unittest.TestCase):
         self.assertIn("${review}${docHint}${fix}", SRC)
 
 
+
+class PersistentAtlasEntryTests(unittest.TestCase):
+    def test_docx_material_rows_have_a_permanent_atlas_button(self):
+        self.assertIn("atlasImportButton(m)", SRC)
+        self.assertIn('data-cw-mat-action="atlas"', SRC)
+        self.assertIn("action==='atlas'", SRC)
+
+    def test_atlas_host_is_created_on_demand_next_to_course_materials(self):
+        body = SRC[SRC.index("async function openCourseAtlasImport"):]
+        body = body[: body.index("async function watchQueuedJobs")]
+        self.assertIn("data-cw681-course-materials", body)
+        self.assertIn('insertAdjacentHTML(\'afterend\'', body)
+
+
 if __name__ == "__main__":
     unittest.main()
