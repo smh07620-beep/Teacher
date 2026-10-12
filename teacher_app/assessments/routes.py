@@ -66,15 +66,27 @@ def register_assessment_routes(owner):
         denied = _login_required()
         if denied:
             return denied
-        return jsonify(exam_assignees.filter_for_user(
-            getattr(g, "teacher_user", None),
-            service.list_categories(
-                app,
-                request.args.get("group", "") or None,
-                request.args.get("area", scope.DEFAULT_TRAINING_AREA),
-                False,
-            ),
-        ))
+        from teacher_app.courses import visibility as course_visibility
+        from teacher_app.learning import access as learning_access
+
+        user = getattr(g, "teacher_user", None)
+        group = request.args.get("group", "") or None
+        area = request.args.get("area", scope.DEFAULT_TRAINING_AREA)
+        categories = service.list_categories(app, group, area, False)
+        if group:
+            # Exams of a course this person was individually assigned from another group.
+            categories = course_visibility.add_personally_assigned_exams(
+                user,
+                categories,
+                lambda: service.list_categories(app, None, area, False),
+            )
+        # Students (and the ?view=learner reading area) only see exams of courses
+        # assigned to them; exams without a course stay group-visible.
+        categories = [
+            item for item in categories
+            if learning_access.student_may_see_course(user, str(item.get("courseId") or ""))
+        ]
+        return jsonify(exam_assignees.filter_for_user(user, categories))
 
     def api_admin_list_quiz_categories():
         denied = require_admin()

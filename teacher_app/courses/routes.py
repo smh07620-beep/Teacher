@@ -35,7 +35,14 @@ def register_course_routes(owner):
             return denied
         area = request.args.get("area", scope.DEFAULT_TRAINING_AREA)
         group = request.args.get("group", "") or None
-        return jsonify(service.list_courses(app, area, group, False))
+        courses = service.list_courses(app, area, group, False)
+        # Same owner-group / assignment rule as the learner reading area: students
+        # (and anyone using ?view=learner) only get courses assigned to them.
+        from teacher_app.courses import visibility as course_visibility
+
+        user = getattr(g, "teacher_user", None)
+        visible = course_visibility.filter_courses_for_user(user, courses)
+        return jsonify(course_visibility.add_personally_assigned_courses(user, visible))
 
     def api_courses_admin():
         denied = require_admin()
