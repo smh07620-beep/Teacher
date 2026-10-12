@@ -328,6 +328,30 @@ function bindStepOneControls(){
   }));
   paintWizardAudienceOptions();
   void loadWizardAudienceOptions();
+  void loadExistingAssignmentsNote();
+}
+
+// 編輯既有課程時，這個區塊只會「新增」指派；先把這門課目前已有的指派列出來，避免以為被清空。
+async function loadExistingAssignmentsNote(){
+  if(!state.editing||!state.course?.id||!canAssignLearning())return;
+  const panel=el('cw681-assignment-enabled')?.closest('section');
+  if(!panel)return;
+  let note=el('cw681-existing-assignments');
+  if(!note){
+    note=document.createElement('div');note.id='cw681-existing-assignments';
+    note.className='mb-3 rounded-lg border border-slate-200 bg-white p-2 text-[11px] text-slate-700';
+    panel.insertBefore(note,panel.firstChild);
+  }
+  note.textContent='正在讀取這門課目前的指派…';
+  try{
+    const area=state.course.area||scope().area,group=state.course.group||scope().group;
+    const rows=await api(`/api/learning-assignments?area=${encodeURIComponent(area)}&group=${encodeURIComponent(group)}`);
+    const mine=(Array.isArray(rows)?rows:[]).filter(row=>String(row.courseId||'')===String(state.course.id)&&row.active!==false);
+    const label=row=>row.assigneeType==='all'?'全體人員':row.assigneeType==='group'?'組別：'+(row.assigneeKey||row.group||''):'個人：'+(row.assigneeKey||'');
+    note.innerHTML=mine.length
+      ?`<b>這門課目前已有 ${mine.length} 筆指派（不會被清掉）：</b><br>${mine.map(row=>esc(label(row))).join('、')}<br><span class="text-slate-500">下方勾選才會「再新增」指派；要停用或調整，請到課程卡「⋯ 更多」→ 指派。</span>`
+      :'<b>這門課目前沒有指派。</b>下方勾選才會新增指派。';
+  }catch(error){note.textContent='目前的指派暫時無法讀取：'+(error.message||'未知錯誤');}
 }
 
 function isAllowedExternalUrl(url){
@@ -1332,7 +1356,7 @@ async function editCourse(courseId,step=2){
     const course=plan?.course||{};
     if(!course.id)throw new Error('找不到這門課程。');
     clearWizardState();
-    state.course=course;state.created=true;state.editing=true;state.assignmentEnabled=false;applyAssignMemory();
+    state.course=course;state.created=true;state.editing=true;applyAssignMemory();state.assignmentEnabled=false;
     const areaSelect=el('wizard-area'),groupSelect=el('wizard-group');
     if(areaSelect)areaSelect.value=course.area||areaSelect.value;
     if(groupSelect){
