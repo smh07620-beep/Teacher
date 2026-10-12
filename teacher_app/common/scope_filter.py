@@ -164,7 +164,7 @@ def _scope_resolution_denied(owner, *permissions):
     user, denied_response = denied(owner, *permissions)
     if denied_response:
         return denied_response
-    if not any(has_role(user, role) for role in GROUP_SCOPED_ROLES):
+    if not is_group_scoped_actor(user):
         return None
     LOGGER.warning(
         "scope authorization resolution denied endpoint=%s method=%s permissions=%s",
@@ -435,7 +435,7 @@ def require_any_permission(owner, *permissions):
     user, denied_response = denied(owner, *permissions)
     if denied_response:
         return denied_response
-    if not any(has_role(user, role) for role in GROUP_SCOPED_ROLES):
+    if not is_group_scoped_actor(user):
         return None
     if (request.endpoint or "") in FILTERED_LIST_ENDPOINTS:
         return None
@@ -504,7 +504,9 @@ def filter_scoped_response(owner, response):
     ):
         return response
     user = _current_user(owner)
-    if not user or not any(has_role(user, role) for role in GROUP_SCOPED_ROLES):
+    # Multi-role accounts with education/system-wide authority (e.g. 教學管理者 +
+    # 組長) must never be narrowed to one group by their group-scoped role.
+    if not user or not is_group_scoped_actor(user):
         return response
     group = preferred_group(user)
     if not group:
