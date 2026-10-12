@@ -6,7 +6,7 @@
 
 | 項目 | 頻率 | 檢查什麼 | 對應檔案 |
 |---|---|---|---|
-| 線上驗收（production smoke） | 每 15 分鐘 | 網站版本是否正確、`/health` `/ready` `/live`、首頁與登入頁、未登入時受保護頁面是否確實擋住；有監控帳號時另外確認院內 Worker 在線且版本最新 | `.github/workflows/production-smoke.yml` |
+| 線上驗收（production smoke） | 每小時 | 網站版本是否正確、`/health` `/ready` `/live`、首頁與登入頁、未登入時受保護頁面是否確實擋住；有監控帳號時另外確認院內 Worker 在線且版本最新 | `.github/workflows/production-smoke.yml` |
 | 完整流程檢查（synthetic） | 每天 1 次 | 網站 → 資料庫 → 雲端儲存 → 院內 Worker 整條鏈是否真的連通，並自動清除測試資料 | `.github/workflows/production-synthetic.yml` |
 | Worker 離線／異常通知 | 每 10 分鐘 | Worker 離線或錯誤過多時**寄 Email** 通知 | `.github/workflows/worker-offline-alerts.yml` |
 | 資料庫保活 | 每天 1 次 | 喚醒網站並確認 Supabase 資料庫可連線 | `.github/workflows/supabase-keepalive.yml` |
@@ -27,7 +27,7 @@
 
 ### 為什麼需要
 
-1. **網站掛掉時要即時知道。** 目前每 15 分鐘的檢查依賴 GitHub 排程，排程可能延遲，通知也不是即時的。
+1. **網站掛掉時要即時知道。** 目前每小時的檢查依賴 GitHub 排程，排程可能延遲，通知也不是即時的。
 2. **Render 免費方案閒置 15 分鐘就會休眠，下次有人開網站要等約 1 分鐘重新啟動。** 上線初期同仁陸續登入時，第一位使用者會遇到這個等待。每 5 分鐘有一次偵測，可以讓上班時段維持喚醒。
 3. **流量上限**：Render Hobby 工作區每月有免費流量上限，用完網站會被自動停用（2026-10-11 發生過）。偵測請求很小，但教材、影音若經由 Render 傳送會快速累積；請定期到 Render 後台查看用量。
 4. 注意事項（依 [Render 官方說明](https://render.com/docs/free)）：每個 workspace 每月有 750 小時免費時數；服務一整個月都維持喚醒時約用掉 720～744 小時（一個月的總時數），所以**同一個 workspace 不要再放其他免費服務**；用完時數所有免費服務會被停用到下個月。建議只在上班時段偵測，或到 Render 後台確認時數用量。

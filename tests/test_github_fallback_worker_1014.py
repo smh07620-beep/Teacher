@@ -33,7 +33,7 @@ class GithubMaterialFallback1014Tests(unittest.TestCase):
 
     def test_workflow_is_ephemeral_free_tool_fallback(self):
         for marker in (
-            'cron: "7,22,37,52 * * * *"',
+            'cron: "7,37 22,23,0-16 * * *"',
             "workflow_dispatch",
             "runs-on: ubuntu-latest",
             "libreoffice ffmpeg qpdf",

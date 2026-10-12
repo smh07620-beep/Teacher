@@ -65,9 +65,12 @@ class CheckoutWatcherTests(unittest.TestCase):
 class WorkerLoopContractTests(unittest.TestCase):
     def test_restart_only_happens_when_idle_and_uses_supervisor_exit_code(self):
         source = ROOT.joinpath("ai_question_worker.py").read_text(encoding="utf-8")
-        idle = source.index("if did_work:\n                        continue")
+        # An empty poll now sleeps via the idle backoff (2026-10-12) instead of a
+        # fixed interval; the restart check must still sit between "work found"
+        # (loop continues) and the idle sleep.
+        idle = source.index("if did_work:\n                        idle_backoff.reset()\n                        continue")
         restart = source.index("checkout_watcher.changed()")
-        sleep = source.index("time.sleep(poll_seconds)\n                except KeyboardInterrupt")
+        sleep = source.index("time.sleep(idle_backoff.idle_delay())\n                except KeyboardInterrupt")
         self.assertLess(idle, restart)
         self.assertLess(restart, sleep)
         self.assertIn("return 75", source[restart:sleep])

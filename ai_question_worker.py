@@ -21,6 +21,8 @@ else:
     os.environ["HF_HOME"] = str(_hf_path)
 
 from teacher_app import config as teacher_config
+from teacher_app.common import quiet_hours
+from teacher_app.common.idle_backoff import IdleBackoff, idle_max_seconds
 from teacher_app.assessments import ai_jobs, free_ai_fallback
 from teacher_app.assessments.question_runtime import build_canonical_question_runtime
 from teacher_app.materials import (
@@ -248,6 +250,10 @@ class _AIHeartbeat:
 
     def _run(self) -> None:
         while not self._stop.wait(self.interval_seconds):
+            # Quiet hours (default 01:00-06:00 Taiwan time): no heartbeat traffic, so the
+            # free Render service can sleep. TEACHER_QUIET_HOURS=off disables this.
+            if quiet_hours.in_quiet_hours(default=quiet_hours.DEFAULT_WORKER_QUIET_HOURS):
+                continue
             self._pulse_once()
             if self._fatal.is_set():
                 return
@@ -364,8 +370,14 @@ def main() -> int:
     audio_processor = media_audio_jobs.MediaAudioJobProcessor()
     subtitle_processor = media_subtitle_jobs.MediaSubtitleJobProcessor()
     poll_seconds = _env_int("AI_QUESTION_WORKER_POLL_SECONDS", 2, 1, 30)
+    # Empty polls slow down to this many seconds (default 15) and snap back to
+    # poll_seconds when any queue produces work; each loop is 6 HTTPS requests.
+    idle_backoff = IdleBackoff(
+        poll_seconds, idle_max_seconds("AI_QUESTION_WORKER_IDLE_POLL_MAX_SECONDS", poll_seconds)
+    )
     recovery_seconds = _env_int("AI_QUESTION_WORKER_RECOVERY_SECONDS", 300, 30, 3600)
     next_recovery = 0.0
+    quiet_logged = False
     log(
         "started queues=ai_questions,media_scripts,ai_presentations,ai_videos,media_audio,media_subtitles "
         f"free_fallback=enabled control_transport={transport}"
@@ -382,6 +394,18 @@ def main() -> int:
             _start_kokoro_warmup()
             while True:
                 try:
+                    if quiet_hours.in_quiet_hours(default=quiet_hours.DEFAULT_WORKER_QUIET_HOURS):
+                        if not quiet_logged:
+                            log("quiet hours: pausing queue polling and heartbeats until they end")
+                            quiet_logged = True
+                        idle_backoff.reset()
+                        time.sleep(max(1, min(60, quiet_hours.seconds_until_quiet_end(
+                            default=quiet_hours.DEFAULT_WORKER_QUIET_HOURS
+                        ))))
+                        continue
+                    if quiet_logged:
+                        log("quiet hours ended: resuming queue polling")
+                        quiet_logged = False
                     heartbeat.raise_if_unhealthy()
                     now = time.monotonic()
                     if now >= next_recovery:
@@ -420,12 +444,13 @@ def main() -> int:
                         did_work = audio_processor.run_next_queued() or did_work
                     did_work = subtitle_processor.run_next_queued() or did_work
                     if did_work:
+                        idle_backoff.reset()
                         continue
                     # Idle only: never interrupt a job to pick up a new version.
                     if checkout_watcher.changed():
                         log("worker code was updated on disk; restarting to load the new version")
                         return 75
-                    time.sleep(poll_seconds)
+                    time.sleep(idle_backoff.idle_delay())
                 except KeyboardInterrupt:
                     log("stopped")
                     return 0

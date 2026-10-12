@@ -27,6 +27,9 @@ jobs:
       SMTP_FROM: ${{ secrets.SMTP_FROM }}
       SMTP_STARTTLS: "true"
       MATERIAL_WORKER_ENABLED: "true"
+      # The hospital Workers pause 01:00-06:00 Taiwan time so Render can sleep;
+      # do not report them offline (or alert) during that window.
+      TEACHER_QUIET_HOURS: "01:00-06:00"
       MATERIAL_WORKER_OFFLINE_ALERT_SECONDS: "600"
       MATERIAL_INCIDENT_ERROR_BURST_COUNT: "3"
       MATERIAL_INCIDENT_FAILURE_RATE_MIN_JOBS: "5"

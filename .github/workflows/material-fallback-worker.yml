@@ -2,7 +2,10 @@ name: Material fallback worker
 
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    # Every 30 minutes (was 15): each run installs LibreOffice/FFmpeg and waits
+    # out a 5-minute grace period; the hospital Worker is the primary path.
+    # Skips 01:00-06:00 Taiwan time (UTC 17-21): the Workers are quiet then.
+    - cron: "7,37 22,23,0-16 * * *"
   workflow_dispatch:
 
 permissions:

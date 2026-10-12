@@ -168,6 +168,9 @@ services:
         value: "72"
       - key: MATERIAL_JOB_POLL_SECONDS
         value: "2"
+      # Short in-memory cache of the material list (Supabase egress); 0 disables.
+      - key: MATERIAL_LIST_CACHE_SECONDS
+        value: "10"
       - key: MAX_DOC_TEMPLATE_MB
         value: "20"
       - key: MAX_PGY_TEMPLATE_MB

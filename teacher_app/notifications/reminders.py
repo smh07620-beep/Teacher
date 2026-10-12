@@ -11,6 +11,7 @@ from typing import Any, Mapping
 from teacher_app.auth import repository as auth_repository
 from teacher_app.auth.self_service import _send
 from teacher_app.common import db as common_db
+from teacher_app.common import quiet_hours
 from teacher_app.common.auth import has_role
 from teacher_app.notifications import events, incidents, preferences
 from teacher_app.operations import history as operational_history
@@ -261,8 +262,19 @@ def _send_operational_alerts(*, now: dt.datetime, sync_incidents: bool, kinds: s
     return sent
 
 
+def _in_quiet_window() -> bool:
+    """Workers are intentionally silent overnight (see ``common.quiet_hours``).
+
+    Alerts stay paused for 15 more minutes after the window so a Worker that is
+    just waking up is not reported as offline. Off unless TEACHER_QUIET_HOURS is set.
+    """
+    return quiet_hours.in_quiet_hours(grace_minutes=15)
+
+
 def run_operational_incident_alerts() -> int:
     """Sync incident lifecycle and send one email per state transition/admin."""
+    if _in_quiet_window():
+        return 0
     return _send_operational_alerts(
         now=dt.datetime.now(dt.timezone.utc),
         sync_incidents=True,
@@ -272,6 +284,8 @@ def run_operational_incident_alerts() -> int:
 
 def run_worker_offline_reminders() -> int:
     """Backward-compatible Worker-only sender used by older callers/tests."""
+    if _in_quiet_window():
+        return 0
     return _send_operational_alerts(
         now=dt.datetime.now(dt.timezone.utc),
         sync_incidents=False,

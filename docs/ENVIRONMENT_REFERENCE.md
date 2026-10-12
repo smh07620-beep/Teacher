@@ -129,6 +129,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `MATERIAL_LIBREOFFICE_PROFILE_DIR` |  | `teacher_app/worker/libreoffice_warm.py` | yes |  |
 | `MATERIAL_LIBREOFFICE_WARM_ENABLED` | `True` | `teacher_app/storage/worker_runtime.py` | yes |  |
 | `MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS` | `5` | `teacher_app/storage/worker_runtime.py` | yes |  |
+| `MATERIAL_LIST_CACHE_SECONDS` | `0` | `teacher_app/materials/repository.py` |  | yes |
 | `MATERIAL_MEDIA_MAX_DURATION_SECONDS` | `14400` | `material_worker.py` |  |  |
 | `MATERIAL_MEDIA_MAX_HEIGHT` | `2160` | `material_worker.py` |  |  |
 | `MATERIAL_MEDIA_MAX_WIDTH` | `4096` | `material_worker.py` |  |  |

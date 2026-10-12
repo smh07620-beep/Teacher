@@ -7,7 +7,10 @@ name: Production smoke acceptance
 # the deployment-precondition check suite.
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # Hourly (was every 15 minutes): each run fetches public pages from Render
+    # (metered outbound bandwidth on the Hobby plan) and polls the Worker status.
+    # Skips 01:00-06:00 Taiwan time (UTC 17-21) so the free service can sleep.
+    - cron: "17 22,23,0-16 * * *"
   workflow_dispatch:
 
 permissions:
@@ -15,7 +18,7 @@ permissions:
 
 concurrency:
   # The probe may wait up to 12 minutes for checksPass-triggered Render deploys.
-  # Run every 15 minutes and never cancel an in-flight acceptance window.
+  # Run hourly and never cancel an in-flight acceptance window.
   group: production-smoke-acceptance
   cancel-in-progress: false
 

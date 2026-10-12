@@ -5,9 +5,14 @@ and storage SDK/process ownership remain outside this module.
 """
 from __future__ import annotations
 
+import copy
 import datetime as dt
+import functools
 import hashlib
 import json
+import os
+import threading
+import time
 from pathlib import Path
 
 from teacher_app.common import db as common_db
@@ -20,6 +25,42 @@ AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 PRESENTATION_EXTENSIONS = {".ppt", ".pptx", ".pps", ".ppsx", ".odp"}
 PAGED_DOCUMENT_EXTENSIONS = {".doc", ".docx", ".odt"}
+
+
+# --- Short-lived read cache for the full material list -----------------------
+# ``SELECT * FROM materials`` (including the per-slide storage_meta JSON) ran on
+# nearly every learner page and API call, so Supabase egress would have grown
+# with materials x users.  The cache is opt-in: MATERIAL_LIST_CACHE_SECONDS
+# (Render sets 10); 0/unset keeps the old always-read behaviour, which tests and
+# local SQLite use.  Every repository writer clears it; the TTL bounds staleness
+# for anything else.  The Web service runs a single process (WEB_CONCURRENCY=1).
+_LIST_CACHE_LOCK = threading.Lock()
+_LIST_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
+
+
+def _list_cache_seconds() -> float:
+    try:
+        return max(0.0, min(300.0, float(os.environ.get("MATERIAL_LIST_CACHE_SECONDS", "0") or 0)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def invalidate_materials_cache() -> None:
+    with _LIST_CACHE_LOCK:
+        _LIST_CACHE.clear()
+
+
+def _clears_list_cache(func):
+    """Drop the cached list after any repository writer (even if it raised)."""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        finally:
+            invalidate_materials_cache()
+
+    return wrapper
 
 
 def material_row_to_dict(row_or_legacy_base, legacy_row=None) -> dict:
@@ -93,13 +134,25 @@ def list_uploaded_materials(legacy_base=None, include_inactive: bool = False) ->
     """Read uploaded materials; legacy_base is accepted but never consulted."""
     if isinstance(legacy_base, bool) and include_inactive is False:
         include_inactive = legacy_base
+    ttl = _list_cache_seconds()
+    key = None
+    if ttl > 0:
+        key = (common_db.database_url() or str(common_db.sqlite_path()), bool(include_inactive))
+        with _LIST_CACHE_LOCK:
+            hit = _LIST_CACHE.get(key)
+        if hit and time.monotonic() - hit[0] < ttl:
+            return copy.deepcopy(hit[1])
     with common_db.read_connection() as (conn, kind):
         sql = "SELECT * FROM materials"
         if not include_inactive:
             sql += " WHERE active = " + ("TRUE" if kind == "postgres" else "1")
         sql += " ORDER BY date_added DESC"
         rows = conn.execute(sql).fetchall()
-    return [material_row_to_dict(row) for row in rows]
+    result = [material_row_to_dict(row) for row in rows]
+    if key is not None:
+        with _LIST_CACHE_LOCK:
+            _LIST_CACHE[key] = (time.monotonic(), copy.deepcopy(result))
+    return result
 
 
 def get_material(material_or_legacy_base, legacy_material_id: str | None = None) -> dict | None:
@@ -136,6 +189,7 @@ def _table_exists(conn, kind: str, table: str) -> bool:
     )
 
 
+@_clears_list_cache
 def ensure_material_version_baseline_on_connection(conn, kind: str, entry: dict) -> None:
     """Create immutable V1 history for materials created after migration 0084."""
     if not _table_exists(conn, kind, "material_versions"):
@@ -202,6 +256,7 @@ def _has_audience_column(conn, kind: str) -> bool:
     return any(str(row[1]) == "audience_scope" for row in conn.execute("PRAGMA table_info(materials)").fetchall())
 
 
+@_clears_list_cache
 def insert_material_on_connection(conn, kind: str, entry: dict, *, ignore_conflict: bool = False) -> None:
     ph = common_db.placeholder(kind)
     names = list(MATERIAL_DB_COLUMNS)
@@ -223,11 +278,13 @@ def insert_material_on_connection(conn, kind: str, entry: dict, *, ignore_confli
     ensure_material_version_baseline_on_connection(conn, kind, entry)
 
 
+@_clears_list_cache
 def insert_material(entry: dict, *, ignore_conflict: bool = False) -> None:
     with common_db.transaction() as (conn, kind):
         insert_material_on_connection(conn, kind, entry, ignore_conflict=ignore_conflict)
 
 
+@_clears_list_cache
 def update_material_storage(material_id: str, *, backend: str, storage_key: str, slides_prefix: str, storage_meta_json: str | None = None) -> None:
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -237,6 +294,7 @@ def update_material_storage(material_id: str, *, backend: str, storage_key: str,
             conn.execute(f"UPDATE materials SET storage_backend={ph}, storage_key={ph}, slides_prefix={ph}, storage_meta={ph} WHERE id={ph}", (backend, storage_key, slides_prefix, storage_meta_json, material_id))
 
 
+@_clears_list_cache
 def update_material_metadata(material_id: str, *, title: str, description: str, category: str, group_key: str, training_area: str, course_id: str, material_type: str, atlas_meta_json: str, active: bool) -> None:
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -410,6 +468,7 @@ def list_material_versions(material_id: str) -> list[dict]:
     return [material_version_row_to_dict(row) for row in rows]
 
 
+@_clears_list_cache
 def publish_material_version(
     material_id: str,
     *,
@@ -467,12 +526,14 @@ def publish_material_version(
     return get_material(material_id)
 
 
+@_clears_list_cache
 def delete_material_record(material_id: str) -> None:
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)
         conn.execute(f"DELETE FROM materials WHERE id={ph}", (material_id,))
 
 
+@_clears_list_cache
 def clear_course_assignment(conn, kind: str, course_id: str) -> None:
     ph = common_db.placeholder(kind)
     conn.execute(f"UPDATE materials SET course_id='' WHERE course_id={ph}", (course_id,))
@@ -484,6 +545,7 @@ def material_ids_for_course(conn, kind: str, course_id: str) -> set[str]:
     return {str(dict(row).get("id") or "") for row in rows if dict(row).get("id")}
 
 
+@_clears_list_cache
 def replace_category_assignments(category_id: str, material_ids: list[str], *, group_key: str, training_area: str) -> set[str]:
     """Replace and verify category links in one transaction; mismatch rolls back."""
     expected = {str(value) for value in material_ids if str(value)}
@@ -525,11 +587,13 @@ def material_ids_for_category(category_id: str, *, group_key: str = "", training
     return {str(dict(row).get("id") or "") for row in rows if dict(row).get("id")}
 
 
+@_clears_list_cache
 def clear_category_assignment(conn, kind: str, category_id: str) -> None:
     ph = common_db.placeholder(kind)
     conn.execute(f"UPDATE materials SET category='' WHERE category={ph}", (category_id,))
 
 
+@_clears_list_cache
 def replace_material_content_and_publish(
     material_id: str,
     *,
@@ -604,6 +668,7 @@ def replace_material_content_and_publish(
     return get_material(material_id)
 
 
+@_clears_list_cache
 def restore_material_version(
     material_id: str,
     source_version: int,

@@ -12,6 +12,8 @@ from teacher_app.materials.validation import (
     normalize_material_filename,
     validate_zip_source,
 )
+from teacher_app.common import quiet_hours
+from teacher_app.common.idle_backoff import IdleBackoff, idle_max_seconds
 from teacher_app.materials import ai_video_renderer, classification
 from teacher_app.storage.worker_runtime import OFFICE_EXT, WorkerMaterialStorageAdapter
 from teacher_app.worker import protocol as worker_protocol
@@ -25,6 +27,9 @@ TOKEN=os.environ.get("MATERIAL_WORKER_TOKEN", "")
 _FALLBACK_MACHINE=re.sub(r"[^A-Za-z0-9._-]","-",str(socket.gethostname() or "TeacherWorker").strip()).strip("-") or "TeacherWorker"
 WORKER_ID=os.environ.get("MATERIAL_WORKER_ID", "").strip() or f"{_FALLBACK_MACHINE}-TeacherWorker"
 POLL_SECONDS=max(2,min(60,int(os.environ.get("MATERIAL_WORKER_POLL_SECONDS","2"))))
+# Idle polling slows from POLL_SECONDS up to this many seconds (default 15) and
+# returns to POLL_SECONDS as soon as a job is claimed; saves Render bandwidth.
+IDLE_POLL_MAX_SECONDS=idle_max_seconds("MATERIAL_WORKER_IDLE_POLL_MAX_SECONDS",POLL_SECONDS)
 REQUEST_TIMEOUT=max(10,min(600,int(os.environ.get("MATERIAL_WORKER_HTTP_TIMEOUT","120"))))
 HEARTBEAT_SECONDS=max(5,min(90,int(os.environ.get("MATERIAL_WORKER_HEARTBEAT_SECONDS","30"))))
 COMPLETE_RETRIES=4
@@ -877,10 +882,23 @@ def main():
             last_preflight_error=error
             time.sleep(max(5,POLL_SECONDS))
 
+    idle_backoff=IdleBackoff(POLL_SECONDS,IDLE_POLL_MAX_SECONDS)
+    quiet_logged=False
     while True:
         try:
+            # Overnight (01:00-06:00 Taiwan time by default) nobody uploads: stay silent so
+            # the free Render service can sleep. TEACHER_QUIET_HOURS=off disables this.
+            if quiet_hours.in_quiet_hours(default=quiet_hours.DEFAULT_WORKER_QUIET_HOURS):
+                if not quiet_logged:
+                    log("quiet hours: pausing queue polling and heartbeats until they end"); quiet_logged=True
+                idle_backoff.reset()
+                time.sleep(max(1,min(60,quiet_hours.seconds_until_quiet_end(default=quiet_hours.DEFAULT_WORKER_QUIET_HOURS))))
+                continue
+            if quiet_logged:
+                log("quiet hours ended: resuming queue polling"); quiet_logged=False
             api.heartbeat(capabilities=caps); data=api.post("/api/material-worker/claim",{"workerId":WORKER_ID,"capabilities":caps,**AUTO_UPDATER.metadata()}); job=data.get("job")
             if job:
+                idle_backoff.reset()
                 # A claimed job is processing work: never fetch or modify code here.
                 process_one(api,job,capabilities=caps)
             else:
@@ -889,7 +907,7 @@ def main():
                     api.heartbeat(capabilities=caps)
                     log("safe update installed while idle; requesting launcher restart")
                     return RESTART_FOR_UPDATE
-                time.sleep(POLL_SECONDS)
+                time.sleep(idle_backoff.idle_delay())
         except KeyboardInterrupt:return 0
         except Exception as exc:log(f"API unavailable: {exc}");time.sleep(POLL_SECONDS)
 if __name__=="__main__":sys.exit(main())

@@ -122,7 +122,7 @@ class ProductionSmokeAcceptanceTests(unittest.TestCase):
         render = (ROOT / "render.yaml").read_text(encoding="utf-8")
         self.assertIn("autoDeployTrigger: checksPass", render)
         self.assertIn("schedule:", source)
-        self.assertIn('cron: "*/15 * * * *"', source)
+        self.assertIn('cron: "17 22,23,0-16 * * *"', source)
         self.assertIn("workflow_dispatch:", source)
         self.assertNotIn("workflow_run:", source)
         self.assertNotRegex(source, r"(?m)^\s*push:\s*$")
