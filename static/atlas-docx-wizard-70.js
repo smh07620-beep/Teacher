@@ -84,13 +84,25 @@
     const box=root();
     const id=box?.querySelector('#atlas-docx-source')?.value||'';
     if(!box||!id)return;
-    const response=await fetch('/api/atlas/import-docx/'+encodeURIComponent(id)+'/preview',{
-      method:'POST',
-      credentials:'same-origin'
-    });
-    const data=await response.json().catch(()=>({}));
+    // 讀 Word 要解壓縮與分析，主機忙時可能要等一陣子：先明確顯示「處理中」，避免看起來沒反應。
+    box.innerHTML=`
+      <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-2" role="status">
+        <b>正在找出這份 Word 裡的圖片…</b>
+        <p class="text-xs text-slate-600">請稍候，通常幾秒到半分鐘；請不要重複按按鈕或離開頁面。</p>
+      </section>`;
+    let response,data;
+    try{
+      response=await fetch('/api/atlas/import-docx/'+encodeURIComponent(id)+'/preview',{
+        method:'POST',
+        credentials:'same-origin'
+      });
+      data=await response.json().catch(()=>({}));
+    }catch(error){
+      response={ok:false};data={error:'連線中斷或逾時，請稍後再試一次。'};
+    }
     if(!response.ok){
       alert(data.error||'無法讀取這份 Word 檔，請確認檔案沒有損壞。');
+      await window.openAtlasDocxWizard(activeRootId);
       return;
     }
     const images=Array.isArray(data.preview?.images)?data.preview.images:[];

@@ -104,3 +104,10 @@ class PlainLanguageWizardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PreviewShowsProgress(unittest.TestCase):
+    def test_preview_shows_waiting_message_and_recovers_on_failure(self):
+        src = (Path(__file__).resolve().parents[1] / "static" / "atlas-docx-wizard-70.js").read_text(encoding="utf-8")
+        self.assertIn("正在找出這份 Word 裡的圖片", src)
+        self.assertIn("await window.openAtlasDocxWizard(activeRootId);", src)
