@@ -365,7 +365,7 @@ function updateProgressStats() {
 
     const statusText = document.getElementById('bottom-status-text');
     if (isSubmittedMap[currentCatKey]) {
-        statusText.innerHTML = `<span class="text-indigo-600 font-bold">🔒 本分頁考核已完成鎖定。</span> 若需重新填答請點擊上方「🔄 重測當前考卷」。`;
+        statusText.innerHTML = `<span class="text-indigo-600 font-bold">🔒 本分頁考核已完成鎖定。</span> 成績已送出；若未達及格線，請依上方補強建議複習後再重測。`;
     } else if (answeredCount === quizList.length) {
         statusText.innerHTML = `<span class="text-green-600 font-bold">✓ 本分頁所有題目已答完！</span> 請點擊右側按鈕提交試卷。`;
     } else {
@@ -403,7 +403,7 @@ function scrollToReview() {
 // --- Submit Quiz; server owns answer-key evaluation and score persistence. ---
 async function submitQuiz() {
     if (isSubmittedMap[currentCatKey]) {
-        alert('本分頁考卷已經提交過，無法重複更改答案！若需重測請點擊「重測當前考卷」。');
+        alert('本分頁考卷已經提交過，無法重複更改答案。');
         return;
     }
 

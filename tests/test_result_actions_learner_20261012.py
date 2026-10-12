@@ -20,3 +20,9 @@ class ResultActionsForLearners(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoRetakeHintForPassers(unittest.TestCase):
+    def test_locked_status_does_not_point_to_a_retake_button(self):
+        js = (STATIC / "system-exam.js").read_text(encoding="utf-8")
+        self.assertNotIn("重測當前考卷", js)
