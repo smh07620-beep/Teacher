@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from flask import g, jsonify, request, send_from_directory
+from flask import g, jsonify, redirect, request, send_from_directory
 
 from teacher_app.atlas import image_store as atlas_image_store
 from teacher_app.atlas import importer as atlas_importer
@@ -96,6 +96,14 @@ def register_atlas_70(
         except atlas_image_store.AtlasImageError:
             return jsonify({"error": "找不到圖譜圖片。"}), 404
         if not atlas_service.image_visible(user, image_url):
+            return jsonify({"error": "找不到圖譜圖片。"}), 404
+        if not (directory / safe).is_file():
+            # The host disk was wiped by a deploy/restart: use the object-store copy.
+            signed = atlas_image_store.object_store_url(safe)
+            if signed:
+                response = redirect(signed, code=302)
+                response.headers["Cache-Control"] = "private, max-age=300"
+                return response
             return jsonify({"error": "找不到圖譜圖片。"}), 404
         return send_from_directory(str(directory), safe)
 

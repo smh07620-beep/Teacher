@@ -6,6 +6,8 @@ image bytes, filenames, thumbnails and request-path normalization.
 from __future__ import annotations
 
 from io import BytesIO
+import logging
+import mimetypes
 from pathlib import Path
 import uuid
 
@@ -16,6 +18,14 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 THUMBNAIL_SIZE = (640, 640)
+
+
+LOGGER = logging.getLogger(__name__)
+# The web host's disk is wiped on every deploy/restart (Render free), so every
+# image is also kept in the object store and served from there when the local
+# copy is gone.
+OBJECT_PREFIX = "atlas-images/"
+OBJECT_URL_SECONDS = 3600
 
 
 class AtlasImageError(ValueError):
@@ -64,6 +74,7 @@ def store_image_bytes(
     thumb = image.copy()
     thumb.thumbnail(THUMBNAIL_SIZE)
     thumb.save(directory / f"thumb-{name}", format=image.format)
+    mirror_to_object_store(directory, (name, f"thumb-{name}"))
     return {
         "name": name,
         "imageUrl": f"/api/atlas/images/{name}",
@@ -77,3 +88,58 @@ def requested_image(storage_root, name: str) -> tuple[Path, str, str]:
     if not safe or original != Path(original).name:
         raise AtlasImageError("找不到圖譜圖片。")
     return image_directory(storage_root), safe, f"/api/atlas/images/{original}"
+
+
+def _object_store():
+    """(client, bucket) when R2 is configured, else None."""
+    try:
+        from teacher_app.storage import providers
+
+        if not providers.r2_is_configured():
+            return None
+        return providers.r2_client(), providers.R2_BUCKET_NAME
+    except Exception:
+        LOGGER.exception("atlas image object store unavailable")
+        return None
+
+
+def mirror_to_object_store(directory: Path, names) -> bool:
+    """Best-effort copy of stored image files to R2 so a redeploy cannot lose them."""
+    store = _object_store()
+    if store is None:
+        return False
+    client, bucket = store
+    ok = True
+    for name in names:
+        try:
+            path = Path(directory) / name
+            client.put_object(
+                Bucket=bucket,
+                Key=OBJECT_PREFIX + name,
+                Body=path.read_bytes(),
+                ContentType=mimetypes.guess_type(name)[0] or "application/octet-stream",
+                CacheControl="private, max-age=86400",
+            )
+        except Exception:
+            ok = False
+            LOGGER.exception("atlas image mirror to object store failed name=%s", name)
+    return ok
+
+
+def object_store_url(name: str) -> str:
+    """Short-lived signed URL for an image whose local file is gone, or ''."""
+    safe = Path(str(name or "")).name
+    store = _object_store()
+    if store is None or not safe:
+        return ""
+    client, bucket = store
+    key = OBJECT_PREFIX + safe
+    try:
+        client.head_object(Bucket=bucket, Key=key)
+        return client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=OBJECT_URL_SECONDS,
+        )
+    except Exception:
+        return ""
