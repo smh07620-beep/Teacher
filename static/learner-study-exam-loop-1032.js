@@ -211,7 +211,7 @@
     let pill = document.getElementById('loop1032-return-pill');
     const ret = ss.get(RETURN_KEY);
     const slides = document.getElementById('panel-slides');
-    const inStudy = slides && !slides.classList.contains('hidden');
+    const inStudy = slides && !slides.classList.contains('hidden') && slides.getClientRects().length > 0 && !/[?&]persona=teacher/.test(location.search);
     if (!ret || !inStudy) { if (pill) pill.hidden = true; return; }
     if (!pill) {
       pill = document.createElement('div');

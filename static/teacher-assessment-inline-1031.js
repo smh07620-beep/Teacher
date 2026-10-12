@@ -150,7 +150,7 @@
     const filter = `<select data-assess-result class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="all" ${v.result === 'all' ? 'selected' : ''}>全部結果</option><option value="pass" ${v.result === 'pass' ? 'selected' : ''}>合格</option><option value="fail" ${v.result === 'fail' ? 'selected' : ''}>未通過</option></select>`;
     const rows = shown.length ? shown.map(r => `<li class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2"><div class="min-w-0"><b class="text-sm text-slate-900">${esc(r.name)}</b> <span class="text-xs text-slate-500">${esc(r.empId)}</span><div class="truncate text-xs text-slate-600">${esc(r.quizTitle)}<span class="ml-2 text-slate-400">${esc(r.timestamp || '')}</span></div></div><div class="flex items-center gap-3"><span class="text-sm font-black ${r.status === '合格' ? 'text-emerald-700' : 'text-rose-700'}">${esc(r.score)} 分・${esc(r.status)}</span><button type="button" data-assess-open="${esc(r.id)}" class="whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700">查看</button></div></li>`).join('') : '<li class="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">沒有符合條件的紀錄</li>';
     const more = list.length > shown.length ? `<button type="button" data-assess-more class="w-full rounded-xl border border-slate-200 py-2 text-xs font-bold text-slate-600">顯示更多（還有 ${list.length - shown.length} 筆）</button>` : '';
-    pane.innerHTML = `<h4 class="text-sm font-black text-slate-900">歷史紀錄（${list.length}）</h4>${searchBox('history', '🔎 搜尋姓名、工號、考卷或組別', filter)}<ul class="space-y-2">${rows}</ul>${more}`;
+    pane.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-2"><h4 class="text-sm font-black text-slate-900">歷史紀錄（${list.length}）</h4><button type="button" data-assess-results-workspace class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700">📄 匯出 Word／清除紀錄（成績管理）</button></div>${searchBox('history', '🔎 搜尋姓名、工號、考卷或組別', filter)}<ul class="space-y-2">${rows}</ul>${more}`;
     restoreSearchFocus(pane, 'history');
   }
 
@@ -200,6 +200,7 @@
     if (!target) return;
     const v = state.view[name];
     if (target.hasAttribute('data-assess-open')) { v.openId = target.dataset.assessOpen; state.notice[name] = ''; render(name); panel()?.scrollIntoView?.({block: 'start'}); return; }
+    if (target.hasAttribute('data-assess-results-workspace')) { try { await window.AppWorkspaceRoutes.open('results'); } catch (_) { /* ignore */ } return; }
     if (target.hasAttribute('data-assess-back')) { v.openId = ''; render(name); return; }
     if (target.hasAttribute('data-assess-more')) { v.visible += PAGE; render(name); return; }
     if (target.hasAttribute('data-assess-step')) {
