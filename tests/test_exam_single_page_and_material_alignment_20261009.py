@@ -238,7 +238,7 @@ class ExamDraftQueueScopeTests(unittest.TestCase):
     def test_queue_switches_to_the_exam_scope_before_opening(self):
         js = read("teacher-action-queue-1024.js")
         self.assertIn("async function openExamDraft(examId, ready, item)", js)
-        self.assertIn("areaSelect.value = area", js)
+        self.assertIn("setSelect(areaSelect, area)", js)
         self.assertIn("openExamDraft(String(item.examId), item.status === 'exam_ready', item)", js)
 
     def test_opening_any_exam_aligns_scope_from_its_own_record(self):

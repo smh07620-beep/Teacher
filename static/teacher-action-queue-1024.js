@@ -246,18 +246,25 @@
   // 老師未完成的考卷：已審核→直接進發布；否則回到出題。
   async function openExamDraft(examId, ready, item) {
     // 待辦會列出所有範圍的草稿考卷；考卷頁只顯示目前的訓練區／組別，
-    // 所以先切到這份考卷所在的範圍，避免「待辦有、考卷頁找不到」。
+    // 所以要切到這份考卷所在的範圍，避免「待辦有、考卷頁找不到」。
+    // 頁面切換（show）會重設下拉選單，因此「先切頁、再設範圍、再重新載入」。
     const area = String(item?.area || ''), group = String(item?.group || '');
+    await window.AppWorkspaceRoutes.show('assessment', true);
     const areaSelect = document.getElementById('admin-quiz-area'), groupSelect = document.getElementById('admin-quiz-group');
+    const setSelect = (select, value) => {
+      if (!select || !value) return;
+      if (![...select.options].some(option => option.value === value)) select.add(new Option(value, value));
+      select.value = value;
+    };
     if (areaSelect && area) {
-      areaSelect.value = area;
+      setSelect(areaSelect, area);
       if (groupSelect && typeof window.groupOptionsForArea === 'function') groupSelect.innerHTML = window.groupOptionsForArea(area);
     }
-    if (groupSelect && group && [...groupSelect.options].some(option => option.value === group)) groupSelect.value = group;
-    await window.AppWorkspaceRoutes.show('assessment', true);
+    setSelect(groupSelect, group);
     if (area || group) await Promise.resolve(window.renderAdminQuizCategories?.(true));
-    if (ready && typeof window.adminOpenExamPublish === 'function') return window.adminOpenExamPublish(examId);
-    if (typeof window.openTeacherContentExam === 'function') return window.openTeacherContentExam(examId);
+    const opener = ready ? window.adminOpenExamPublish : window.openTeacherContentExam;
+    if (typeof opener !== 'function') throw new Error('找不到開啟考卷的功能');
+    return opener(examId);
   }
 
   async function openAction(item) {
