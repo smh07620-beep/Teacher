@@ -128,7 +128,7 @@
     mountState.catId=String(catId);
     mountState.kind=kind;
 
-    const returnLabel=window.TeacherCourseAuthoringContext?.active?'← 完成並回到建立課程｜評量':'← 考卷總覽';
+    const returnLabel=window.TeacherCourseAuthoringContext?.active?'← 完成並回到建立課程｜評量':'← 回到這份考卷';
     host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-3 flex items-center justify-between gap-3 border-b border-slate-200 pb-3"><div class="min-w-0"><button type="button" data-tool-return class="text-xs font-black text-indigo-700">${returnLabel}</button><h4 class="mt-1 text-lg font-black text-slate-950">${esc(title)}</h4><p class="mt-1 text-xs text-slate-500">${esc(desc)}</p></div><span data-tool-sync class="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">同步中…</span></div><div data-tool-host></div></div>`;
     host.querySelector('[data-tool-host]')?.appendChild(node);
     node.classList.remove('hidden');

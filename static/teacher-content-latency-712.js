@@ -245,10 +245,14 @@
     }catch(error){showActionError(catId,error);}
   }
 
-  window.TeacherContentStudio71?.registerExamActions?.(
-    ['question','image','video'],
-    (action,catId)=>openManualQuestion(action,catId)
-  );
+  // 一般／圖片／影片題優先使用考卷工作畫面內的出題面板（710，停留在同一頁）；
+  // 只有該面板沒載入時才退回舊作法（跳到考卷管理最外層的清單）。
+  if(!window.TeacherContentToolPanels710?.openManual){
+    window.TeacherContentStudio71?.registerExamActions?.(
+      ['question','image','video'],
+      (action,catId)=>openManualQuestion(action,catId)
+    );
+  }
   window.TeacherContentStudio71?.registerExamActions?.(
     ['settings'],
     (_action,catId)=>openSettings(catId)
