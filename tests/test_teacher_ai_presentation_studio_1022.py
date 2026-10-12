@@ -38,14 +38,14 @@ class TeacherAiPresentationStudio1022Tests(unittest.TestCase):
         source = (ROOT / "static" / "teacher-ai-presentation-1016.js").read_text(encoding="utf-8")
         for marker in (
             "目前工作中的投影片",
-            "正式發布目前版本",
+            "正式發布這一版",
             "teacher-ai-presentation-history-1016",
-            "歷史版本／改用其他投影片",
-            "只列目前 presentation family",
+            "以前做過的版本／改用其他版本",
+            "只列出這份教材以前做過的版本",
             "currentPresentationId",
             "data-use-presentation",
             "type=\"hidden\"",
-            "不再要求從以前的 PowerPoint 或舊教材清單重新挑選",
+            "不需要再從舊的投影片或教材清單裡重新挑選",
         ):
             self.assertIn(marker, source)
         self.assertNotIn("<select id=\"teacher-ai-presentation-publication-material-1016\"", source)

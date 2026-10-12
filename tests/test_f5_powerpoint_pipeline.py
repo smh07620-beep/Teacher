@@ -17,12 +17,12 @@ class F5PowerPointPipelineTests(unittest.TestCase):
 
     def test_teacher_ui_presents_one_five_step_pipeline(self):
         source=ROOT.joinpath("static","teacher-ai-presentation-1016.js").read_text(encoding="utf-8")
-        self.assertIn("AI POWERPOINT · F5",source)
+        self.assertIn("AI 投影片",source)
         self.assertIn("teacher-ai-presentation-flow-1016",source)
-        self.assertIn("AI Worker 產生 PPTX",source)
-        self.assertIn("發布或接續影片",source)
+        self.assertIn("系統產生投影片",source)
+        self.assertIn("發布或接續做影片",source)
         self.assertIn("serviceReady",source)
-        self.assertIn("等待 AI Worker 回報",source)
+        self.assertIn("等待院內 AI 工作站回報",source)
 
 
 if __name__=="__main__":
