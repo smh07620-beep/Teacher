@@ -17,8 +17,9 @@ class ExamResultHistoryAndAtlasReview1035Tests(unittest.TestCase):
 
     def test_atlas_review_is_only_shown_for_wrong_answers(self):
         self.assertIn("detail && detail.isCorrect !== false", self.review)
-        self.assertIn("建議回到圖譜重新判讀", self.review)
-        self.assertIn("回到圖譜複習", self.review)
+        self.assertIn("建議回到教材的重點圖片重新確認", self.review)
+        self.assertIn("回到教材複習", self.review)
+        self.assertIn("chunk-", self.review)  # internal chunk ids are hidden from learners
 
     def test_teacher_view_collapses_attempt_history(self):
         self.assertIn("function collapseExamHistory(records)", self.results)

@@ -815,7 +815,7 @@
 
         heading.textContent =
             source.anchorType === 'region' || source.regionHint
-                ? '🔬 建議回到圖譜重新判讀'
+                ? '📚 建議回到教材的重點圖片重新確認'
                 : '📚 建議回到教材加強閱讀';
 
         panel.appendChild(
@@ -846,7 +846,8 @@
         }
 
 
-        if (source.section) {
+        // 內部區塊代碼（例如 upload-xxxx:chunk-0001）對學員沒有意義，不顯示。
+        if (source.section && !/(^upload-|chunk-\d)/i.test(String(source.section))) {
             const p =
                 document.createElement(
                     'div'
@@ -913,7 +914,7 @@
 
             button.textContent =
                 source.anchorType === 'region' || source.regionHint
-                    ? '🔬 回到圖譜複習'
+                    ? '📖 回到教材複習'
                     : (source.page
                         ? `📖 回到教材第 ${source.page} 頁`
                         : '📖 回到教材');
