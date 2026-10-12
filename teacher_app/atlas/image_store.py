@@ -143,3 +143,29 @@ def object_store_url(name: str) -> str:
         )
     except Exception:
         return ""
+
+
+def delete_image_files(storage_root, image_url: str) -> None:
+    """Best-effort removal of an Atlas image, its thumbnail, and their R2 copies."""
+    name = Path(str(image_url or "")).name
+    if not name or not str(image_url).startswith("/api/atlas/images/") or name.startswith("thumb-"):
+        return
+    names = (name, f"thumb-{name}")
+    try:
+        directory = image_directory(storage_root)
+        for entry in names:
+            try:
+                (directory / entry).unlink(missing_ok=True)
+            except OSError:
+                LOGGER.exception("atlas image local delete failed name=%s", entry)
+    except Exception:
+        LOGGER.exception("atlas image directory unavailable")
+    store = _object_store()
+    if store is None:
+        return
+    client, bucket = store
+    for entry in names:
+        try:
+            client.delete_object(Bucket=bucket, Key=OBJECT_PREFIX + entry)
+        except Exception:
+            LOGGER.exception("atlas image object delete failed name=%s", entry)

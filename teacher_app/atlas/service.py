@@ -5,7 +5,7 @@ import datetime as dt
 import json
 import re
 import uuid
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
 from teacher_app.atlas import annotations, repository
 from teacher_app.common.auth import has_permission, has_role, is_system_admin
@@ -247,7 +247,7 @@ def update_item(user: Mapping[str, Any], item_id: str, body: Mapping[str, Any]) 
     )
 
 
-def delete_item(user: Mapping[str, Any], item_id: str, *, confirmed: bool) -> None:
+def delete_item(user: Mapping[str, Any], item_id: str, *, confirmed: bool, release_image: Optional[Callable[[str], None]] = None) -> None:
     if not confirmed:
         raise ApiError(
             "ATLAS_DELETE_CONFIRMATION_REQUIRED",
@@ -261,6 +261,7 @@ def delete_item(user: Mapping[str, Any], item_id: str, *, confirmed: bool) -> No
     if not can_manage(user, str(item.get("group") or "")):
         raise ApiError("ATLAS_FORBIDDEN", "無權管理此圖譜。", status=403)
     repository.delete_item(item_id)
+    _release_if_unused(item, release_image)
 
 
 def _duplicate_key(item: Mapping[str, Any]) -> tuple:
@@ -293,12 +294,32 @@ def find_duplicate_ids(items: list[dict]) -> list[str]:
     return redundant
 
 
-def remove_duplicate_drafts(user: Mapping[str, Any]) -> int:
+def remove_duplicate_drafts(user: Mapping[str, Any], release_image: Optional[Callable[[str], None]] = None) -> int:
     removed = 0
     for item_id in find_duplicate_ids(repository.list_items()):
         item = repository.get_item(item_id)
         if not item or not can_manage(user, str(item.get("group") or "")):
             continue
         repository.delete_item(item_id)
+        _release_if_unused(item, release_image)
         removed += 1
     return removed
+
+
+def _release_if_unused(item: Mapping[str, Any], release_image: Optional[Callable[[str], None]]) -> None:
+    """Free the stored files of a removed *draft* when no other item uses them.
+
+    Published items are never auto-released: exams or slides may still point at
+    their image URL.
+    """
+    if release_image is None or item.get("published"):
+        return
+    url = str(item.get("imageUrl") or "")
+    if not url:
+        return
+    if any(other.get("imageUrl") == url for other in repository.list_items()):
+        return
+    try:
+        release_image(url)
+    except Exception:  # best effort; never fail the delete
+        pass

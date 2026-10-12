@@ -48,6 +48,9 @@ def register_atlas_70(
             raise RuntimeError("Atlas storage paths are unavailable")
         return resolved
 
+    def release_image(image_url):
+        atlas_image_store.delete_image_files(current_paths().material_storage, image_url)
+
     def user_or_denied():
         user = getattr(g, "teacher_user", None)
         if not user:
@@ -226,6 +229,7 @@ def register_atlas_70(
                 user,
                 item_id,
                 confirmed=bool(body.get("confirmed")),
+                release_image=release_image,
             )
         except ApiError as exc:
             return _error(exc)
@@ -236,7 +240,7 @@ def register_atlas_70(
         user, denied = user_or_denied()
         if denied:
             return denied
-        removed = atlas_service.remove_duplicate_drafts(user)
+        removed = atlas_service.remove_duplicate_drafts(user, release_image)
         return jsonify({"ok": True, "removed": removed})
 
     app.extensions["teacher_atlas_70_registered"] = True

@@ -39,3 +39,32 @@ class WiringTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReleaseImageTest(unittest.TestCase):
+    def test_draft_files_released_only_when_unreferenced(self):
+        from unittest.mock import patch
+        released = []
+        draft = {"imageUrl": "/api/atlas/images/a.png", "published": False}
+        with patch.object(service.repository, "list_items", return_value=[]):
+            service._release_if_unused(draft, released.append)
+        self.assertEqual(released, ["/api/atlas/images/a.png"])
+        with patch.object(service.repository, "list_items", return_value=[dict(draft)]):
+            service._release_if_unused(draft, released.append)
+        self.assertEqual(len(released), 1)
+
+    def test_published_items_never_released(self):
+        released = []
+        service._release_if_unused({"imageUrl": "/api/atlas/images/a.png", "published": True}, released.append)
+        self.assertEqual(released, [])
+
+    def test_delete_image_files_removes_local_and_thumb(self):
+        import tempfile
+        from teacher_app.atlas import image_store
+        with tempfile.TemporaryDirectory() as root:
+            d = image_store.image_directory(root)
+            (d / "x.png").write_bytes(b"1")
+            (d / "thumb-x.png").write_bytes(b"1")
+            image_store.delete_image_files(root, "/api/atlas/images/x.png")
+            self.assertFalse((d / "x.png").exists())
+            self.assertFalse((d / "thumb-x.png").exists())
