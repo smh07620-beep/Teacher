@@ -142,7 +142,8 @@ class DashboardScopeTests(unittest.TestCase):
              patch("teacher_app.command_center.dashboard_service.material_repository.list_uploaded_materials", return_value=materials), \
              patch("teacher_app.command_center.dashboard_service.assessment_repository.list_categories", return_value=quizzes), \
              patch("teacher_app.command_center.dashboard_service.course_repository.list_courses", return_value=courses), \
-             patch("teacher_app.command_center.dashboard_service.assignment_service.list_for_user", return_value=[]):
+             patch("teacher_app.command_center.dashboard_service.assignment_service.list_for_user", return_value=[]), \
+             patch("teacher_app.learning.access.assigned_course_ids", return_value=frozenset({"course-bio"})):
             summary = dashboard_service.dashboard_summary(BIO_USER, today="2026-09-25")
 
         self.assertEqual(summary["scope"], {"area": "internal", "group": "grpBio"})

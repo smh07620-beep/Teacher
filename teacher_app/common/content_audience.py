@@ -189,6 +189,11 @@ def visible_to_user(user: Mapping[str, Any] | None, meta: Mapping[str, Any]) -> 
         return can_author_with_source(user, str(meta.get("ownerGroup") or ""))
     if _cross_group_manager(user):
         return True
+    from teacher_app.learning import access as learning_access
+
+    # Students only see course-owned content for courses assigned to them.
+    if not learning_access.student_may_see_course(user, str(meta.get("courseId") or "")):
+        return False
     owner_group = str(meta.get("ownerGroup") or "")
     user_group = _preferred_group(user)
     if user_group and user_group == owner_group:

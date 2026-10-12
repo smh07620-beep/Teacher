@@ -1,5 +1,6 @@
 """2026-10-09: 「僅供老師製作使用」教材：學員在伺服器端看不到，也不列入完成條件。"""
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from teacher_app.common import content_audience
@@ -40,7 +41,8 @@ class SourceOnlyVisibilityTests(unittest.TestCase):
 
     def test_other_scopes_are_unchanged(self):
         shared = {**META, "audienceScope": "all_staff"}
-        self.assertTrue(content_audience.visible_to_user(person("student", "grpHema"), shared))
+        with patch("teacher_app.learning.access.assigned_course_ids", return_value=frozenset({"c1"})):
+            self.assertTrue(content_audience.visible_to_user(person("student", "grpHema"), shared))
         self.assertIn("source_only", content_audience.AUDIENCE_SCOPES)
 
 

@@ -42,6 +42,7 @@ class SavedLearningItems88Tests(unittest.TestCase):
             patch.object(common_db, "transaction", self._tx),
             patch.object(course_repository, "get_course", side_effect=lambda item_id: self.course if item_id == "course-1" else None),
             patch.object(material_repository, "get_material", side_effect=lambda item_id: self.material if item_id == "mat-1" else None),
+            patch("teacher_app.learning.access.assigned_course_ids", return_value=frozenset({"course-1"})),
         )
 
     def test_release_contract_registers_0088_after_0087(self):
@@ -53,7 +54,7 @@ class SavedLearningItems88Tests(unittest.TestCase):
 
     def test_course_and_material_are_saved_per_account(self):
         p = self._patches()
-        with p[0], p[1], p[2], p[3]:
+        with p[0], p[1], p[2], p[3], p[4]:
             saved_service.set_saved_item(self.user, "course", "course-1", saved=True)
             saved_service.set_saved_item(self.user, "material", "mat-1", saved=True)
             items = saved_service.list_saved_items(self.user)
@@ -61,14 +62,14 @@ class SavedLearningItems88Tests(unittest.TestCase):
 
     def test_unsave_removes_marker(self):
         p = self._patches()
-        with p[0], p[1], p[2], p[3]:
+        with p[0], p[1], p[2], p[3], p[4]:
             saved_service.set_saved_item(self.user, "material", "mat-1", saved=True)
             saved_service.set_saved_item(self.user, "material", "mat-1", saved=False)
             self.assertEqual(saved_service.list_saved_items(self.user), [])
 
     def test_cross_scope_save_fails_closed_and_stale_marker_is_hidden(self):
         p = self._patches(); other = {**self.user, "preferredGroup": "grpHema"}
-        with p[0], p[1], p[2], p[3]:
+        with p[0], p[1], p[2], p[3], p[4]:
             with self.assertRaises(ApiError) as caught: saved_service.set_saved_item(other, "material", "mat-1", saved=True)
             self.assertEqual(caught.exception.status, 404)
             saved_service.set_saved_item(self.user, "material", "mat-1", saved=True)

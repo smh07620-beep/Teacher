@@ -1,5 +1,6 @@
 """Learners must not get empty course shells for materials they cannot see."""
 import unittest
+from unittest.mock import patch
 
 from teacher_app.courses.visibility import filter_courses_for_user
 
@@ -25,6 +26,12 @@ def meta(owner="grpBio", scope="group_only", groups=()):
 
 
 class CourseVisibilityTests(unittest.TestCase):
+    def setUp(self):
+        # These cases test group/audience sharing; the assignment gate has its own tests.
+        patcher = patch("teacher_app.learning.access.assigned_course_ids", return_value=frozenset({"c1", "c2"}))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def run_filter(self, who, courses, materials, meta_map):
         return [c["id"] for c in filter_courses_for_user(
             who, courses, material_loader=lambda: materials, meta_loader=metas(meta_map))]

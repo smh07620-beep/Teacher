@@ -49,9 +49,9 @@ class AssignmentAwareDashboardTests(unittest.TestCase):
             {"id": "q-unassigned", "active": True, "area": "internal", "group": "grpBio", "courseId": "c-unassigned", "passingScore": 80},
         ]
         courses = [
-            {"id": "c-required", "title": "必修課", "area": "internal", "group": "grpBio", "startDate": "", "endDate": ""},
-            {"id": "c-optional", "title": "選修課", "area": "internal", "group": "grpBio", "startDate": "", "endDate": ""},
-            {"id": "c-unassigned", "title": "未指派課", "area": "internal", "group": "grpBio", "startDate": "", "endDate": ""},
+            {"id": "c-required", "title": "必修課", "area": "internal", "group": "grpBio", "startDate": "", "endDate": "", "lifecycleStatus": "published"},
+            {"id": "c-optional", "title": "選修課", "area": "internal", "group": "grpBio", "startDate": "", "endDate": "", "lifecycleStatus": "published"},
+            {"id": "c-unassigned", "title": "未指派課", "area": "internal", "group": "grpBio", "startDate": "", "endDate": "", "lifecycleStatus": "published"},
         ]
         with patch("teacher_app.command_center.dashboard_service.common_db.read_connection", fake_read_connection), \
              patch("teacher_app.command_center.dashboard_service.material_repository.list_uploaded_materials", return_value=materials), \
@@ -101,10 +101,12 @@ class AssignmentAwareDashboardTests(unittest.TestCase):
     def test_no_assignments_retains_existing_scope_fallback(self):
         summary = self._summary([])
         self.assertFalse(summary["assignmentMode"])
-        self.assertEqual(summary["activeCourses"], 3)
-        self.assertEqual(summary["materialsTotal"], 3)
-        self.assertEqual(summary["materialsCompleted"], 2)
-        self.assertEqual(summary["examsTotal"], 3)
+        # 2026-10-12 policy: students only see assigned courses, so with no
+        # assignment a student's dashboard is empty (never "everything in my group").
+        self.assertEqual(summary["activeCourses"], 0)
+        self.assertEqual(summary["materialsTotal"], 0)
+        self.assertEqual(summary["materialsCompleted"], 0)
+        self.assertEqual(summary["examsTotal"], 0)
         self.assertEqual(summary["assignments"], [])
 
 

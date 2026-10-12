@@ -1,4 +1,5 @@
 """Individual assignment from another group = explicit per-person grant for ONE course."""
+import contextlib
 import unittest
 from unittest.mock import patch
 
@@ -15,8 +16,13 @@ BIO_MATERIAL = {"id": "m1", "courseId": "course-bio", "area": "internal", "group
 OTHER_MATERIAL = {"id": "m2", "courseId": "course-other", "area": "internal", "group": "grpBio", "active": True}
 
 
+@contextlib.contextmanager
 def _grants(ids):
-    return patch("teacher_app.learning.assignment_repository.list_personal_course_ids", return_value=list(ids))
+    # An individual assignment is both the cross-group grant and the student gate.
+    with patch("teacher_app.learning.assignment_repository.list_personal_course_ids", return_value=list(ids)), \
+         patch("teacher_app.learning.assignment_repository.list_for_user",
+               return_value=[{"courseId": i} for i in ids]):
+        yield
 
 
 def _course(course=COURSE):
@@ -43,7 +49,9 @@ class PersonalGrantAccessTests(unittest.TestCase):
     def test_grant_is_per_person(self):
         other = {**HEMA_USER, "username": "someone.else"}
         with patch("teacher_app.learning.assignment_repository.list_personal_course_ids",
-                   side_effect=lambda username, area: ["course-bio"] if username == "student.hema" else []), _course():
+                   side_effect=lambda username, area: ["course-bio"] if username == "student.hema" else []), \
+             patch("teacher_app.learning.assignment_repository.list_for_user",
+                   side_effect=lambda username, area, group: [{"courseId": "course-bio"}] if username == "student.hema" else []), _course():
             self.assertTrue(access.can_access_learning_item(HEMA_USER, BIO_MATERIAL))
             self.assertFalse(access.can_access_learning_item(other, BIO_MATERIAL))
 

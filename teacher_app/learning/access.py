@@ -16,7 +16,7 @@ import json
 from typing import Any, Mapping
 
 from teacher_app.common import scope
-from teacher_app.common.auth import has_permission, has_role
+from teacher_app.common.auth import has_permission, has_role, user_roles
 
 
 GLOBAL_LEARNING_ROLES = ("education_admin", "system_admin")
@@ -145,6 +145,53 @@ def personal_course_grants(user: Mapping[str, Any] | None) -> frozenset[str]:
     return result
 
 
+def is_assignment_gated(user: Mapping[str, Any] | None) -> bool:
+    """True for accounts whose only role is student.
+
+    Students see course-owned materials/exams only when the course is assigned to
+    them (individually, to their group, or to everyone).  Teachers, group leaders,
+    administrators and auditors are never gated: they manage/inspect content.
+    """
+    roles = user_roles(user)
+    return bool(roles) and all(role == "student" for role in roles)
+
+
+def assigned_course_ids(user: Mapping[str, Any] | None) -> frozenset[str]:
+    """Course ids actively assigned to this account (user, group or all targets)."""
+    username = _username(user)
+    if not username:
+        return frozenset()
+    cache = None
+    try:
+        from flask import g, has_request_context
+
+        if has_request_context():
+            cache = g.__dict__.setdefault("_assigned_course_ids", {})
+            if username in cache:
+                return cache[username]
+    except Exception:
+        cache = None
+    area, group = preferred_learning_scope(user)
+    try:
+        from teacher_app.learning import assignment_repository
+
+        rows = assignment_repository.list_for_user(username=username, area=area, group=group)
+        result = frozenset(assignment_repository.course_ids(rows))
+    except Exception:
+        # Fail closed: an unreadable assignment table must not widen student access.
+        return frozenset()
+    if cache is not None:
+        cache[username] = result
+    return result
+
+
+def student_may_see_course(user: Mapping[str, Any] | None, course_id: str) -> bool:
+    """Assignment gate for course-owned content; items without a course pass."""
+    if not course_id or not is_assignment_gated(user):
+        return True
+    return course_id in assigned_course_ids(user)
+
+
 def _item_course_id(item: Mapping[str, Any]) -> str:
     for key in ("courseId", "course_id"):
         value = str(item.get(key) or "").strip()
@@ -179,6 +226,8 @@ def can_access_learning_item(
     user_area, user_group = preferred_learning_scope(user)
     if item_area != user_area:
         return False
+    if not student_may_see_course(user, _item_course_id(item)):
+        return False
     if owner_group == user_group:
         return True
 
@@ -210,9 +259,12 @@ __all__ = [
     "GLOBAL_LEARNING_ROLES",
     "can_access_learning_item",
     "can_access_requested_scope",
+    "assigned_course_ids",
     "has_explicit_learning_scope",
     "has_global_learning_access",
+    "is_assignment_gated",
     "item_learning_scope",
     "personal_course_grants",
     "preferred_learning_scope",
+    "student_may_see_course",
 ]
