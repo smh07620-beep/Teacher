@@ -155,6 +155,28 @@ def groq_transcribe_segments(path: Path, *, settings=None) -> list[dict]:
     return segments
 
 
+def _load_whisper_model(model_cls, local):
+    """Load faster-whisper, allowing a one-time download when auto offline mode blocks it.
+
+    The AI Worker turns on Hugging Face offline mode by itself once Kokoro's assets are
+    cached (KOKORO_HF_OFFLINE=auto).  The Whisper model is a different repository, so on
+    a machine that has never transcribed, loading it fails with "Cannot find an appropriate
+    cached snapshot folder".  Undo only that automatic offline mode and retry once; an
+    explicit HF_HUB_OFFLINE set by the operator is still respected.
+    """
+    def build():
+        return model_cls(local.whisper_model, device=local.whisper_device, compute_type=local.whisper_compute_type)
+
+    try:
+        return build()
+    except Exception:
+        from teacher_app.materials import media_audio_runtime
+
+        if not media_audio_runtime._disable_auto_hf_offline():
+            raise
+        return build()
+
+
 def local_transcribe_segments(path: Path, *, local=None) -> list[dict]:
     local = local or free_ai_fallback.LocalFallbackSettings.from_env()
     if not local.whisper_enabled:
@@ -166,7 +188,7 @@ def local_transcribe_segments(path: Path, *, local=None) -> list[dict]:
     key = (local.whisper_model, local.whisper_device, local.whisper_compute_type)
     model = _LOCAL_WHISPER_CACHE.get(key)
     if model is None:
-        model = WhisperModel(local.whisper_model, device=local.whisper_device, compute_type=local.whisper_compute_type)
+        model = _load_whisper_model(WhisperModel, local)
         _LOCAL_WHISPER_CACHE[key] = model
     raw_segments, _info = model.transcribe(str(path), vad_filter=True)
     segments: list[dict] = []
