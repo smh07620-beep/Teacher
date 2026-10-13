@@ -211,7 +211,7 @@
 
   function adminHubMaterialRow(m){
       const version=Math.max(1,Number(m.currentVersion||1));
-      return `<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.title||m.filename||'未命名教材')}</div><span class="rounded-full bg-white border border-slate-200 px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${version}</span>${adminMaterialNarrationBadge(m)}</div><div class="text-[10px] text-slate-500 mt-1">${adminMaterialCourseNote(m)}${adminMaterialTypeBadge(m)}${m.categoryLabel?' · 對應：'+escapeHtml(m.categoryLabel):''}${m.active===false?' · 已停用':''}${adminMaterialAudienceNote(m)}</div></div>${m.isBuiltin?'':m.courseId?`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrateButton(m)}${adminMaterialNarrationRemove(m)}<span class="text-[10px] text-slate-400" data-material-manage-hint>要停用／移出／刪除：按上方「編輯課程」</span></div>`:`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrateButton(m)}${adminMaterialNarrationRemove(m)}<button data-csp-click="editAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white">管理教材</button><details class="relative" data-material-more><summary class="cursor-pointer list-none select-none text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700">更多 ▾</summary><div class="absolute right-0 z-20 mt-1 flex w-40 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"><button data-csp-click="prepareMaterialVersionUpload('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">上傳新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">版本紀錄</button>${m.courseId?'':`<button type="button" data-material-audience="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-emerald-800 hover:bg-emerald-50">設定可見範圍</button>`}<button data-csp-click="rebuildMaterialIndex('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">重建搜尋索引</button>${['slides','preview_pdf'].includes(String(m.viewerMode||''))?`<button data-csp-click="openSlideCheckpointEditor('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">設定投影片小測驗</button>`:''}<button data-csp-click="toggleAdminMaterial('${m.id}',${m.active?'false':'true'})" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-amber-700 hover:bg-amber-50">${m.active?'停用':'啟用'}</button><button type="button" data-material-course-link="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">${m.courseId?'更換課程':'歸入課程'}</button><div class="my-0.5 border-t border-slate-100"></div><button data-csp-click="deleteAdminMaterial('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 font-bold text-rose-700">🗑️ 刪除教材</button>${canSystemPurgeMaterial()?`<button type="button" data-material-purge-check="${escapeHtml(m.id||'')}" title="系統管理員用：清除無任何引用的實體儲存" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100">系統永久清除…</button>`:''}</div></details></div>`}</div>`;
+      return `<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.title||m.filename||'未命名教材')}</div><span class="rounded-full bg-white border border-slate-200 px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${version}</span>${adminMaterialNarrationBadge(m)}</div><div class="text-[10px] text-slate-500 mt-1">${adminMaterialCourseNote(m)}${adminMaterialTypeBadge(m)}${m.categoryLabel?' · 對應：'+escapeHtml(m.categoryLabel):''}${m.active===false?' · 已停用':''}${adminMaterialAudienceNote(m)}</div></div>${m.isBuiltin?'':m.courseId?`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrateButton(m)}${adminMaterialNarrationRemove(m)}<span class="text-[10px] text-slate-400" data-material-manage-hint>要停用／移出／刪除：按上方「編輯課程」</span></div>`:`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrateButton(m)}${adminMaterialNarrationRemove(m)}<button data-csp-click="editAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white">管理教材</button><details class="relative" data-material-more><summary class="cursor-pointer list-none select-none text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700">更多 ▾</summary><div class="absolute right-0 z-20 mt-1 flex w-40 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"><button data-csp-click="prepareMaterialVersionUpload('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">上傳新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">版本紀錄</button>${m.courseId?'':`<button type="button" data-material-audience="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-emerald-800 hover:bg-emerald-50">設定可見範圍</button>`}<button data-csp-click="rebuildMaterialIndex('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">重建搜尋索引</button>${['slides','preview_pdf'].includes(String(m.viewerMode||''))?`<button data-csp-click="openSlideCheckpointEditor('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">設定投影片小測驗</button>`:''}<button data-csp-click="toggleAdminMaterial('${m.id}',${m.active?'false':'true'})" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-amber-700 hover:bg-amber-50">${m.active?'停用':'啟用'}</button><button type="button" data-material-course-link="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">${m.courseId?'更換課程':'歸入課程'}</button>${canMoveMaterialGroup()?`<button type="button" data-material-group-move="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">更換組別</button>`:''}<div class="my-0.5 border-t border-slate-100"></div><button data-csp-click="deleteAdminMaterial('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 font-bold text-rose-700">🗑️ 刪除教材</button>${canSystemPurgeMaterial()?`<button type="button" data-material-purge-check="${escapeHtml(m.id||'')}" title="系統管理員用：清除無任何引用的實體儲存" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100">系統永久清除…</button>`:''}</div></details></div>`}</div>`;
   }
 
   function ensureMaterialPurgeDialog(){
@@ -401,6 +401,81 @@
       if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
   }
 
+  // 只有跨組管理者（教學管理者／系統管理者）能把教材移到別的組別；伺服器端另外也會擋（組長會得到 403）。
+  function canMoveMaterialGroup(){
+      const r=window.TeacherRBAC681||{};
+      const roles=r.roles instanceof Set?r.roles:new Set(Array.isArray(r.roles)?r.roles:[]);
+      return roles.has('system_admin')||roles.has('education_admin')||(typeof r.hasPermission==='function'&&r.hasPermission('education.cross_group.manage'));
+  }
+
+  function ensureMaterialGroupMoveDialog(){
+      let dialog=document.getElementById('material-group-move-dialog');
+      if(dialog)return dialog;
+      dialog=document.createElement('dialog');
+      dialog.id='material-group-move-dialog';
+      dialog.className='v561-profile-dialog';
+      dialog.innerHTML='<form class="v561-profile-card"><div class="v561-profile-head"><div><strong>更換教材組別</strong><span data-group-move-title></span></div><button type="button" data-group-move-close aria-label="關閉">×</button></div><label class="block text-xs font-bold text-slate-700">移到哪一組<select data-group-move-select class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"></select></label><p class="mt-2 text-xs leading-5 text-slate-500">移動後，這份教材會出現在新組別的教材清單，也能在新組別的課程精靈與 AI 出題中選到。原本對應的考卷若不屬於新組別，會自動清除對應。這份教材目前沒有掛在任何課程。</p><p data-group-move-status class="mt-2 text-xs text-slate-500"></p><div class="v561-profile-actions"><button type="button" class="secondary" data-group-move-close>取消</button><button type="submit">確定移動</button></div></form>';
+      document.body.appendChild(dialog);
+      const close=()=>{try{dialog.close();}catch(_){dialog.removeAttribute('open');}};
+      dialog.querySelectorAll('[data-group-move-close]').forEach(button=>button.addEventListener('click',close));
+      dialog.querySelector('form')?.addEventListener('submit',async event=>{
+          event.preventDefault();
+          const ctx=dialog._groupMoveState||{},select=dialog.querySelector('[data-group-move-select]'),status=dialog.querySelector('[data-group-move-status]');
+          const group=String(select?.value||'');
+          const button=dialog.querySelector('button[type="submit"]');
+          if(!ctx.materialId||!group)return;
+          if(group===ctx.group){if(status)status.textContent='這份教材已經在這一組了，請選擇其他組別。';return;}
+          if(button)button.disabled=true;
+          if(status)status.textContent='移動中…';
+          try{
+              const response=await fetch('/api/slides/'+encodeURIComponent(ctx.materialId),{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({group,area:ctx.area})});
+              const data=await response.json().catch(()=>({}));
+              if(!response.ok)throw new Error(data.error||'更換組別失敗');
+              window.invalidateAdminMaterialsCache?.();
+              close();
+              await renderAdminCourseMaterialHub(true);
+              await window.renderAdminMaterials?.(true);
+              alert(`已把「${ctx.title}」移到「${ctx.labels[group]||group}」。目前畫面只顯示目前組別的教材，請切換到「${ctx.labels[group]||group}」查看。`);
+          }catch(error){
+              if(status)status.textContent='❌ '+(error.message||'更換組別失敗');
+          }finally{if(button)button.disabled=false;}
+      });
+      return dialog;
+  }
+
+  function openMaterialGroupMoveDialog(materialId,box){
+      if(!canMoveMaterialGroup())return alert('只有教學管理者或系統管理者可以更換教材組別。');
+      const state=box?._adminCourseMaterialState||box?._learningAssignmentState||{};
+      const material=(state.materials||[]).find(item=>String(item.id||'')===String(materialId||''));
+      if(!material)return alert('找不到教材資料，請重新整理後再試。');
+      if(material.courseId)return alert('這份教材已掛在課程裡，請先到「編輯課程」把它移出課程，再更換組別。');
+      const area=String(material.area||state.area||'internal');
+      const catalog=typeof GROUPS!=='undefined'&&GROUPS?GROUPS:{};
+      const entries=Object.entries(catalog).filter(([,g])=>area==='pgy'||!g.pgyOnly);
+      if(!entries.length)return alert('無法讀取組別清單，請重新整理後再試。');
+      const labels=Object.fromEntries(entries.map(([key,g])=>[key,g.label||key]));
+      const current=String(material.group||state.group||'');
+      const dialog=ensureMaterialGroupMoveDialog(),select=dialog.querySelector('[data-group-move-select]'),status=dialog.querySelector('[data-group-move-status]');
+      dialog._groupMoveState={materialId:String(material.id||''),group:current,area,title:String(material.title||material.filename||'這份教材'),labels};
+      const title=dialog.querySelector('[data-group-move-title]');if(title)title.textContent=`「${dialog._groupMoveState.title}」目前在「${labels[current]||current||'未知組別'}」。`;
+      select.replaceChildren(...entries.map(([key,g])=>new Option(g.label||key,key)));
+      const firstOther=entries.find(([key])=>key!==current);
+      select.value=firstOther?firstOther[0]:current;
+      if(status)status.textContent='';
+      if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
+  }
+
+  function bindMaterialGroupMoveControls(box){
+      if(!box||box.dataset.materialGroupMoveBound==='1')return;
+      box.dataset.materialGroupMoveBound='1';
+      box.addEventListener('click',event=>{
+          const button=event.target.closest?.('[data-material-group-move]');
+          if(!button)return;
+          event.preventDefault();event.stopPropagation();
+          openMaterialGroupMoveDialog(button.dataset.materialGroupMove||'',box);
+      });
+  }
+
   function bindMaterialCourseLinkControls(box){
       if(!box||box.dataset.materialCourseLinkBound==='1')return;
       box.dataset.materialCourseLinkBound='1';
@@ -463,6 +538,7 @@
       if(!box)return;
       bindMaterialPurgeControls(box);
       bindMaterialCourseLinkControls(box);
+      bindMaterialGroupMoveControls(box);
       const {area,group}=state;
       const courses=Array.isArray(state.courses)?state.courses:[];
       const visibleLimit=Math.max(30,Number(box.dataset.courseVisibleLimit)||30);
