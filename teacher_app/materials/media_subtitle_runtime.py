@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
 import shutil
@@ -17,6 +18,8 @@ from teacher_app.common import privacy as ai_privacy
 from teacher_app.config import external_media_hospital_cdn_hosts, storage_paths
 from teacher_app.materials import external_media, repository as material_repository
 
+
+LOGGER = logging.getLogger(__name__)
 
 _LOCAL_WHISPER_CACHE: dict[tuple[str, str, str], object] = {}
 
@@ -155,14 +158,18 @@ def groq_transcribe_segments(path: Path, *, settings=None) -> list[dict]:
     return segments
 
 
-def _load_whisper_model(model_cls, local):
-    """Load faster-whisper, allowing a one-time download when auto offline mode blocks it.
+def _hf_offline_active() -> bool:
+    return str(os.environ.get("HF_HUB_OFFLINE") or "").strip().lower() in {"1", "true", "yes", "on"}
 
-    The AI Worker turns on Hugging Face offline mode by itself once Kokoro's assets are
-    cached (KOKORO_HF_OFFLINE=auto).  The Whisper model is a different repository, so on
-    a machine that has never transcribed, loading it fails with "Cannot find an appropriate
-    cached snapshot folder".  Undo only that automatic offline mode and retry once; an
-    explicit HF_HUB_OFFLINE set by the operator is still respected.
+
+def _load_whisper_model(model_cls, local):
+    """Load faster-whisper; if Hugging Face offline mode blocks the first download, lift it once.
+
+    The Whisper weights are public model files (no patient or exam data is sent).  Offline
+    mode is switched on by the Worker itself (Kokoro auto mode) or by an operator, and a
+    machine that has never transcribed has no cached Whisper snapshot, so loading fails with
+    "Cannot find an appropriate cached snapshot folder".  Offline mode is lifted only for the
+    download/load and restored afterwards.  Set LOCAL_WHISPER_ALLOW_MODEL_DOWNLOAD=0 to forbid.
     """
     def build():
         return model_cls(local.whisper_model, device=local.whisper_device, compute_type=local.whisper_compute_type)
@@ -170,11 +177,17 @@ def _load_whisper_model(model_cls, local):
     try:
         return build()
     except Exception:
+        allowed = str(os.environ.get("LOCAL_WHISPER_ALLOW_MODEL_DOWNLOAD", "1")).strip().lower() not in {"0", "false", "no", "off"}
+        if not (allowed and _hf_offline_active()):
+            raise
         from teacher_app.materials import media_audio_runtime
 
-        if not media_audio_runtime._disable_auto_hf_offline():
-            raise
-        return build()
+        LOGGER.warning("whisper model not cached; allowing a one-time download model=%s", local.whisper_model)
+        media_audio_runtime._set_hf_offline(False)
+        try:
+            return build()
+        finally:
+            media_audio_runtime._set_hf_offline(True)
 
 
 def local_transcribe_segments(path: Path, *, local=None) -> list[dict]:

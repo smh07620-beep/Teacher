@@ -30,17 +30,38 @@ class WhisperOfflineRetryTests(unittest.TestCase):
 
         self.assertEqual(media_subtitle_runtime._load_whisper_model(model_cls, _Local()), "model")
         self.assertEqual(calls, ["1", None])
+        self.assertEqual(os.environ.get("HF_HUB_OFFLINE"), "1")
 
-    def test_operator_set_offline_flag_is_respected(self):
+    def test_explicit_offline_flag_is_lifted_only_for_the_download_then_restored(self):
         media_audio_runtime._HF_OFFLINE_AUTO = False
+        os.environ["HF_HUB_OFFLINE"] = "1"
+
+        def model_cls(*args, **kwargs):
+            if os.environ.get("HF_HUB_OFFLINE") == "1":
+                raise RuntimeError("Cannot find an appropriate cached snapshot folder")
+            return "model"
+
+        self.assertEqual(media_subtitle_runtime._load_whisper_model(model_cls, _Local()), "model")
+        self.assertEqual(os.environ.get("HF_HUB_OFFLINE"), "1")
+
+    def test_download_can_be_forbidden_by_the_operator(self):
         os.environ["HF_HUB_OFFLINE"] = "1"
 
         def model_cls(*args, **kwargs):
             raise RuntimeError("Cannot find an appropriate cached snapshot folder")
 
+        with mock.patch.dict(os.environ, {"LOCAL_WHISPER_ALLOW_MODEL_DOWNLOAD": "0"}):
+            with self.assertRaises(RuntimeError):
+                media_subtitle_runtime._load_whisper_model(model_cls, _Local())
+
+    def test_error_is_not_masked_when_offline_mode_is_not_the_cause(self):
+        os.environ.pop("HF_HUB_OFFLINE", None)
+
+        def model_cls(*args, **kwargs):
+            raise RuntimeError("some other failure")
+
         with self.assertRaises(RuntimeError):
             media_subtitle_runtime._load_whisper_model(model_cls, _Local())
-        self.assertEqual(os.environ.get("HF_HUB_OFFLINE"), "1")
 
     def test_cached_model_loads_without_touching_offline_mode(self):
         media_audio_runtime._HF_OFFLINE_AUTO = True

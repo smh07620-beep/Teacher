@@ -98,7 +98,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `GUNICORN_THREADS` | `4` | `teacher_app/common/db.py` |  |  |
 | `HF_HOME` |  | `ai_question_worker.py`, `teacher_app/materials/media_audio_runtime.py` | yes |  |
 | `HF_HUB_CACHE` |  | `teacher_app/materials/media_audio_runtime.py` |  |  |
-| `HF_HUB_OFFLINE` |  | `teacher_app/materials/media_audio_runtime.py` |  |  |
+| `HF_HUB_OFFLINE` |  | `teacher_app/materials/media_audio_runtime.py`, `teacher_app/materials/media_subtitle_runtime.py` |  |  |
 | `HUGGINGFACE_HUB_CACHE` |  | `teacher_app/materials/media_audio_runtime.py` |  |  |
 | `KOKORO_CACHE_DIR` |  | `teacher_app/materials/media_audio_runtime.py` | yes |  |
 | `KOKORO_HF_OFFLINE` |  | `teacher_app/materials/media_audio_runtime.py` | yes |  |
@@ -111,6 +111,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `KOKORO_TTS_SPEED` | `1.0` | `teacher_app/materials/media_audio_runtime.py` | yes |  |
 | `KOKORO_VOICE` |  | `ai_question_worker.py`, `teacher_app/materials/media_audio_runtime.py` | yes | yes |
 | `LOCALAPPDATA` |  | `ai_question_worker.py`, `teacher_app/materials/media_audio_runtime.py`, `teacher_app/storage/worker_runtime.py` (+1) |  |  |
+| `LOCAL_WHISPER_ALLOW_MODEL_DOWNLOAD` | `1` | `teacher_app/materials/media_subtitle_runtime.py` |  |  |
 | `LOCAL_WHISPER_COMPUTE_TYPE` | `int8` | `teacher_app/assessments/free_ai_fallback.py` | yes |  |
 | `LOCAL_WHISPER_DEVICE` | `cpu` | `teacher_app/assessments/free_ai_fallback.py` | yes |  |
 | `LOCAL_WHISPER_ENABLED` | `True` | `teacher_app/assessments/free_ai_fallback.py` | yes |  |
