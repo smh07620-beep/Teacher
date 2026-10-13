@@ -51,11 +51,34 @@ class IdleBackoffTests(unittest.TestCase):
         name = "MATERIAL_WORKER_IDLE_POLL_MAX_SECONDS"
         with mock.patch.dict("os.environ", {}, clear=False):
             self.assertEqual(idle_max_seconds(name, 2), DEFAULT_IDLE_MAX_SECONDS)
-        for raw, expected in (("30", 30), ("999", IDLE_MAX_CEILING_SECONDS), ("1", 2), ("abc", 15), ("", 15)):
+        for raw, expected in (
+            ("30", 30),
+            ("999", IDLE_MAX_CEILING_SECONDS),
+            ("1", 2),
+            ("abc", DEFAULT_IDLE_MAX_SECONDS),
+            ("", DEFAULT_IDLE_MAX_SECONDS),
+        ):
             with mock.patch.dict("os.environ", {name: raw}):
                 self.assertEqual(idle_max_seconds(name, 2), expected, raw)
         # Admin screens call a Worker online for 120 s after its last heartbeat.
         self.assertLess(IDLE_MAX_CEILING_SECONDS, 120)
+
+    def test_default_idle_wait_is_45_seconds_and_stays_inside_the_ceiling(self):
+        # 2026-10-13: 15 s idle polling cost ~2 GB/month of the free 5 GB Render
+        # allowance; the default is now the highest value the ceiling allows.
+        self.assertEqual(DEFAULT_IDLE_MAX_SECONDS, 45)
+        self.assertLessEqual(DEFAULT_IDLE_MAX_SECONDS, IDLE_MAX_CEILING_SECONDS)
+
+    def test_default_idle_poll_is_at_least_two_and_a_half_times_lighter_than_15_seconds(self):
+        def polls_in_an_hour(maximum):
+            backoff = IdleBackoff(2, maximum)
+            elapsed, polls = 0.0, 0
+            while elapsed < 3600:
+                elapsed += backoff.idle_delay()
+                polls += 1
+            return polls
+
+        self.assertLess(polls_in_an_hour(DEFAULT_IDLE_MAX_SECONDS) * 2.5, polls_in_an_hour(15))
 
 
 class WorkerLoopWiringTests(unittest.TestCase):

@@ -11,7 +11,11 @@ from __future__ import annotations
 
 import os
 
-DEFAULT_IDLE_MAX_SECONDS = 15
+# 2026-10-13: raised from 15 to 45 seconds.  With two Workers idle-polling every
+# 15 seconds the steady traffic was about 3.5 MB/hour (roughly 2 GB/month, 40% of
+# the free 5 GB Render allowance) before any learner used the site.  A job that
+# is queued while the Worker is idle now starts after at most ~45 seconds.
+DEFAULT_IDLE_MAX_SECONDS = 45
 # Admin screens treat a Worker as online for 120 seconds after its last
 # heartbeat, so idle polling must stay well below that.
 IDLE_MAX_CEILING_SECONDS = 45
@@ -19,7 +23,7 @@ STEPS_PER_DOUBLING = 5
 
 
 def idle_max_seconds(env_name: str, base_seconds: float) -> float:
-    """Longest idle wait, from ``env_name`` (default 15 s, never below base)."""
+    """Longest idle wait, from ``env_name`` (default 45 s, never below base)."""
     raw = os.environ.get(env_name)
     try:
         value = float(raw) if raw is not None and str(raw).strip() != "" else float(DEFAULT_IDLE_MAX_SECONDS)
