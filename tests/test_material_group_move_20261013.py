@@ -19,7 +19,8 @@ SOURCE = (ROOT / "static" / "admin-course-material.js").read_text(encoding="utf-
 class MaterialGroupMoveFrontendTests(unittest.TestCase):
     def test_menu_item_is_only_rendered_for_cross_group_managers(self):
         self.assertIn("function canMoveMaterialGroup()", SOURCE)
-        self.assertIn("${canMoveMaterialGroup()?`<button type=\"button\" data-material-group-move=", SOURCE)
+        self.assertIn("function adminMaterialGroupMoveButton(m)", SOURCE)
+        self.assertIn("if(!canMoveMaterialGroup())return '';", SOURCE)
         body = SOURCE[SOURCE.index("function canMoveMaterialGroup()"):]
         body = body[:body.index("function ensureMaterialGroupMoveDialog")]
         for token in ("system_admin", "education_admin", "education.cross_group.manage"):
@@ -30,10 +31,13 @@ class MaterialGroupMoveFrontendTests(unittest.TestCase):
         self.assertIn("body:JSON.stringify({group,area:ctx.area})", SOURCE)
         self.assertIn("method:'PATCH'", SOURCE[SOURCE.index("function ensureMaterialGroupMoveDialog"):])
 
-    def test_materials_inside_a_course_are_not_moved(self):
+    def test_button_is_visible_on_every_row_including_course_materials(self):
+        row = SOURCE[SOURCE.index("function adminHubMaterialRow"):SOURCE.index("function ensureMaterialPurgeDialog")]
+        self.assertEqual(row.count("${adminMaterialGroupMoveButton(m)}"), 2)
+        self.assertNotIn("data-material-group-move", row)
         body = SOURCE[SOURCE.index("function openMaterialGroupMoveDialog"):]
         body = body[:body.index("function bindMaterialGroupMoveControls")]
-        self.assertIn("if(material.courseId)return alert(", body)
+        self.assertNotIn("if(material.courseId)return alert(", body)
 
     def test_controls_are_bound_when_the_hub_paints(self):
         paint = SOURCE[SOURCE.index("function paintAdminCourseMaterialHub"):]
