@@ -4,6 +4,9 @@
 # Render Web so the web image stays small.
 google-genai>=1.30,<2.0
 faster-whisper>=1.2,<2.0
+# faster-whisper calls av.open(..., metadata_errors=...), which older PyAV builds reject
+# ("open() got an unexpected keyword argument 'metadata_errors'"). Pin a new enough PyAV.
+av>=12,<17
 
 # AI PowerPoint rendering stays worker-only; Render Web only validates/enqueues.
 python-pptx>=1.0,<2.0
