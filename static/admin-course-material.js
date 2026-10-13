@@ -217,7 +217,100 @@
 
   function adminHubMaterialRow(m){
       const version=Math.max(1,Number(m.currentVersion||1));
-      return `<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.title||m.filename||'未命名教材')}</div><span class="rounded-full bg-white border border-slate-200 px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${version}</span>${adminMaterialNarrationBadge(m)}</div><div class="text-[10px] text-slate-500 mt-1">${adminMaterialCourseNote(m)}${adminMaterialTypeBadge(m)}${m.categoryLabel?' · 對應：'+escapeHtml(m.categoryLabel):''}${m.active===false?' · 已停用':''}${adminMaterialAudienceNote(m)}</div></div>${m.isBuiltin?'':m.courseId&&hubContext.courses.has(String(m.courseId))?`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrateButton(m)}${adminMaterialNarrationRemove(m)}${adminMaterialGroupMoveButton(m)}<span class="text-[10px] text-slate-400" data-material-manage-hint>要停用／移出／刪除：按上方「編輯課程」</span></div>`:`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrateButton(m)}${adminMaterialNarrationRemove(m)}${adminMaterialGroupMoveButton(m)}<button data-csp-click="editAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white">管理教材</button><details class="relative" data-material-more><summary class="cursor-pointer list-none select-none text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700">更多 ▾</summary><div class="absolute right-0 z-20 mt-1 flex w-40 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"><button data-csp-click="prepareMaterialVersionUpload('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">上傳新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">版本紀錄</button>${m.courseId?'':`<button type="button" data-material-audience="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-emerald-800 hover:bg-emerald-50">設定可見範圍</button>`}<button data-csp-click="rebuildMaterialIndex('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">重建搜尋索引</button>${['slides','preview_pdf'].includes(String(m.viewerMode||''))?`<button data-csp-click="openSlideCheckpointEditor('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">設定投影片小測驗</button>`:''}<button data-csp-click="toggleAdminMaterial('${m.id}',${m.active?'false':'true'})" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-amber-700 hover:bg-amber-50">${m.active?'停用':'啟用'}</button><button type="button" data-material-course-link="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">${m.courseId?'更換課程':'歸入課程'}</button><div class="my-0.5 border-t border-slate-100"></div><button data-csp-click="deleteAdminMaterial('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 font-bold text-rose-700">🗑️ 刪除教材</button>${canSystemPurgeMaterial()?`<button type="button" data-material-purge-check="${escapeHtml(m.id||'')}" title="系統管理員用：清除無任何引用的實體儲存" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100">系統永久清除…</button>`:''}</div></details></div>`}</div>`;
+      return `<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.title||m.filename||'未命名教材')}</div><span class="rounded-full bg-white border border-slate-200 px-1.5 py-0.5 text-[9px] font-black text-slate-600">V${version}</span>${adminMaterialNarrationBadge(m)}</div><div class="text-[10px] text-slate-500 mt-1">${adminMaterialCourseNote(m)}${adminMaterialTypeBadge(m)}${m.categoryLabel?' · 對應：'+escapeHtml(m.categoryLabel):''}${m.active===false?' · 已停用':''}${adminMaterialAudienceNote(m)}</div></div>${m.isBuiltin?'':m.courseId&&hubContext.courses.has(String(m.courseId))?`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrateButton(m)}${adminMaterialNarrationRemove(m)}${adminMaterialNarrationSubtitleButton(m)}${adminMaterialGroupMoveButton(m)}<span class="text-[10px] text-slate-400" data-material-manage-hint>要停用／移出／刪除：按上方「編輯課程」</span></div>`:`<div class="flex flex-wrap items-center gap-1.5 shrink-0">${adminMaterialNarrateButton(m)}${adminMaterialNarrationRemove(m)}${adminMaterialNarrationSubtitleButton(m)}${adminMaterialGroupMoveButton(m)}<button data-csp-click="editAdminMaterial('${m.id}')" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white">管理教材</button><details class="relative" data-material-more><summary class="cursor-pointer list-none select-none text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700">更多 ▾</summary><div class="absolute right-0 z-20 mt-1 flex w-40 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"><button data-csp-click="prepareMaterialVersionUpload('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">上傳新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">版本紀錄</button>${m.courseId?'':`<button type="button" data-material-audience="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-emerald-800 hover:bg-emerald-50">設定可見範圍</button>`}<button data-csp-click="rebuildMaterialIndex('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">重建搜尋索引</button>${['slides','preview_pdf'].includes(String(m.viewerMode||''))?`<button data-csp-click="openSlideCheckpointEditor('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">設定投影片小測驗</button>`:''}<button data-csp-click="toggleAdminMaterial('${m.id}',${m.active?'false':'true'})" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-amber-700 hover:bg-amber-50">${m.active?'停用':'啟用'}</button><button type="button" data-material-course-link="${escapeHtml(m.id||'')}" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg font-bold text-teal-800 hover:bg-teal-50">${m.courseId?'更換課程':'歸入課程'}</button><div class="my-0.5 border-t border-slate-100"></div><button data-csp-click="deleteAdminMaterial('${m.id}')" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 font-bold text-rose-700">🗑️ 刪除教材</button>${canSystemPurgeMaterial()?`<button type="button" data-material-purge-check="${escapeHtml(m.id||'')}" title="系統管理員用：清除無任何引用的實體儲存" class="w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100">系統永久清除…</button>`:''}</div></details></div>`}</div>`;
+  }
+
+
+  // 老師旁白的字幕：直接在旁白旁邊產生草稿、校對、核准（學員只看得到「已核准」的字幕）。
+  function adminMaterialNarrationSubtitleButton(m){
+      const narration=hubContext.narrations.get(String(m.id||''));
+      if(!narration||!(narration.storageMeta&&narration.storageMeta.mediaKind==='teacher_narration'))return '';
+      return `<button type="button" data-narration-subtitle="${escapeHtml(narration.id||'')}" data-narration-subtitle-title="${escapeHtml(m.title||m.filename||'旁白')}" class="text-[10px] px-2.5 py-1.5 rounded-lg border border-cyan-300 bg-white text-cyan-900 font-bold">💬 旁白字幕</button>`;
+  }
+
+  function ensureNarrationSubtitleDialog(){
+      let dialog=document.getElementById('narration-subtitle-dialog');
+      if(dialog)return dialog;
+      dialog=document.createElement('dialog');
+      dialog.id='narration-subtitle-dialog';
+      dialog.className='v561-profile-dialog';
+      dialog.innerHTML='<form class="v561-profile-card" style="max-width:720px;width:92vw"><div class="v561-profile-head"><div><strong>旁白字幕</strong><span data-ns-title></span></div><button type="button" data-ns-close aria-label="關閉">×</button></div><p class="text-xs leading-5 text-slate-500">字幕由醫院電腦的 AI Worker 聽寫你的旁白錄音產生草稿（免費）。草稿不會自動公開：請校對文字（人名、儀器、試劑名稱），按「核准字幕」後，學員才看得到。</p><p data-ns-status class="mt-2 text-xs font-bold text-slate-700"></p><textarea data-ns-vtt rows="12" spellcheck="false" disabled class="mt-2 w-full rounded-lg border border-slate-300 p-2 font-mono text-[11px]" placeholder="尚無字幕草稿"></textarea><div class="v561-profile-actions" style="flex-wrap:wrap"><button type="button" class="secondary" data-ns-generate>產生字幕草稿</button><button type="button" class="secondary" data-ns-save disabled>儲存修改</button><button type="button" data-ns-approve disabled>✅ 核准字幕</button></div></form>';
+      document.body.appendChild(dialog);
+      const q=sel=>dialog.querySelector(sel);
+      const st={audioId:'',subtitle:null,poll:0};
+      dialog._ns=st;
+      const say=(text,tone)=>{const el=q('[data-ns-status]');el.textContent=text||'';el.style.color=tone==='error'?'#be123c':tone==='ok'?'#047857':'#334155';};
+      const close=()=>{st.poll++;try{dialog.close();}catch(_){dialog.removeAttribute('open');}};
+      const paint=()=>{
+          const sub=st.subtitle,box=q('[data-ns-vtt]');
+          box.disabled=!sub;box.value=sub?(sub.vttText||''):'';
+          q('[data-ns-save]').disabled=!sub;q('[data-ns-approve]').disabled=!sub;
+          if(sub)say(sub.status==='approved'?'✅ 已核准：學員播放旁白時會顯示字幕。若修改文字，請再按「核准字幕」。':'📝 草稿待你確認：請校對文字後按「核准字幕」。',sub.status==='approved'?'ok':'');
+      };
+      const load=async()=>{
+          say('讀取字幕中…');
+          const res=await fetch('/api/media-subtitles?materialId='+encodeURIComponent(st.audioId),{credentials:'same-origin',cache:'no-store'});
+          const data=await res.json().catch(()=>[]);
+          if(!res.ok)throw new Error(data.error||'讀取字幕失敗');
+          const list=Array.isArray(data)?data:[];
+          st.subtitle=list.find(item=>item.status==='approved')||list[0]||null;
+          if(st.subtitle)paint();else{paint();say('目前還沒有字幕。按「產生字幕草稿」，約需數分鐘（要 AI Worker 在線）。');}
+      };
+      const save=async status=>{
+          if(!st.subtitle)return;
+          say(status==='approved'?'核准中…':'儲存中…');
+          const res=await fetch('/api/media-subtitles/'+encodeURIComponent(st.subtitle.id),{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,vttText:q('[data-ns-vtt]').value,label:st.subtitle.label||'繁體中文字幕'})});
+          const data=await res.json().catch(()=>({}));
+          if(!res.ok)throw new Error(data.error||'儲存失敗');
+          st.subtitle=data;paint();
+          say(status==='approved'?'✅ 已核准：學員播放旁白時會顯示字幕。':'✅ 已儲存草稿（尚未核准，學員看不到）。','ok');
+      };
+      const generate=async()=>{
+          const token=++st.poll;
+          say('送出字幕工作中…');
+          const res=await fetch('/api/media-subtitles/generate',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({materialId:st.audioId,language:'zh-TW',label:'繁體中文字幕'})});
+          const job=await res.json().catch(()=>({}));
+          if(!res.ok)throw new Error(job.error||'無法建立字幕工作');
+          while(token===st.poll&&dialog.open){
+              const r=await fetch('/api/media-subtitles/jobs/'+encodeURIComponent(job.jobId),{credentials:'same-origin',cache:'no-store'});
+              const d=await r.json().catch(()=>({}));
+              if(!r.ok)throw new Error(d.error||'讀取進度失敗');
+              const pr=d.progress||{};
+              if(d.status==='completed'){await load();return;}
+              if(d.status==='failed')throw new Error(d.error||'字幕產生失敗');
+              say(`${pr.stage||'處理中'}｜${Math.round(Number(pr.percent||0))}%${pr.detail?'｜'+pr.detail:''}（可關閉視窗，完成後再開啟）`);
+              await new Promise(resolve=>setTimeout(resolve,2000));
+          }
+      };
+      const guard=fn=>async()=>{try{await fn();}catch(error){say('❌ '+(error.message||'操作失敗'),'error');}};
+      dialog.querySelectorAll('[data-ns-close]').forEach(b=>b.addEventListener('click',close));
+      q('[data-ns-generate]').addEventListener('click',guard(generate));
+      q('[data-ns-save]').addEventListener('click',guard(()=>save('draft')));
+      q('[data-ns-approve]').addEventListener('click',guard(()=>save('approved')));
+      dialog.addEventListener('close',()=>{st.poll++;});
+      dialog._nsLoad=guard(load);
+      dialog._nsSay=say;
+      return dialog;
+  }
+
+  function openNarrationSubtitleDialog(audioId,title){
+      const dialog=ensureNarrationSubtitleDialog();
+      dialog._ns.audioId=String(audioId||'');dialog._ns.subtitle=null;dialog._ns.poll++;
+      dialog.querySelector('[data-ns-title]').textContent=title?`「${title}」`:'';
+      dialog.querySelector('[data-ns-vtt]').value='';
+      if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
+      void dialog._nsLoad();
+  }
+
+  function bindNarrationSubtitleControls(box){
+      if(!box||box.dataset.narrationSubtitleBound==='1')return;
+      box.dataset.narrationSubtitleBound='1';
+      box.addEventListener('click',event=>{
+          const button=event.target.closest?.('[data-narration-subtitle]');
+          if(!button||!box.contains(button))return;
+          event.preventDefault();event.stopPropagation();
+          openNarrationSubtitleDialog(button.dataset.narrationSubtitle||'',button.dataset.narrationSubtitleTitle||'');
+      });
   }
 
   function ensureMaterialPurgeDialog(){
@@ -544,6 +637,7 @@
       bindMaterialPurgeControls(box);
       bindMaterialCourseLinkControls(box);
       bindMaterialGroupMoveControls(box);
+      bindNarrationSubtitleControls(box);
       const {area,group}=state;
       const courses=Array.isArray(state.courses)?state.courses:[];
       const visibleLimit=Math.max(30,Number(box.dataset.courseVisibleLimit)||30);
