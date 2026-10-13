@@ -43,6 +43,12 @@ class MaterialGroupMoveFrontendTests(unittest.TestCase):
         paint = SOURCE[SOURCE.index("function paintAdminCourseMaterialHub"):]
         self.assertIn("bindMaterialGroupMoveControls(box);", paint[:400])
 
+    def test_material_pointing_at_a_course_in_another_group_is_not_hidden(self):
+        paint = SOURCE[SOURCE.index("function paintAdminCourseMaterialHub"):]
+        self.assertIn("!m.courseId||!hubContext.courses.has(String(m.courseId))", paint)
+        row = SOURCE[SOURCE.index("function adminHubMaterialRow"):SOURCE.index("function ensureMaterialPurgeDialog")]
+        self.assertIn("m.courseId&&hubContext.courses.has(String(m.courseId))", row)
+
     def test_no_inline_event_handlers_for_csp(self):
         block = SOURCE[SOURCE.index("function ensureMaterialGroupMoveDialog"):SOURCE.index("function bindMaterialCourseLinkControls")]
         self.assertNotIn("onclick=", block)
