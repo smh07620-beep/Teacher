@@ -161,6 +161,8 @@
     buildPanel();
     const showAudio = state === 'review' || state === 'saving' || state === 'bound';
     ui.audio.style.display = showAudio ? 'block' : 'none';
+    // 試聽列一旦隱藏，聲音也必須跟著停，不能在看不到控制列的情況下繼續播。
+    if (!showAudio) stopPreviewAudio();
     if (state !== 'saving') ui.status.style.display = ui.status.dataset.keep === '1' ? 'block' : 'none';
     ui.timer.style.display = state === 'idle' ? 'none' : 'block';
     ui.option.style.display = state === 'review' ? 'flex' : 'none';
@@ -263,6 +265,18 @@
     }
   }
 
+  // 試聽用的 <audio> 在「重錄／完成」時必須真的停下來：只移除 src 屬性不會停止正在播放的聲音，
+  // 而試聽控制列此時會被隱藏，老師就找不到地方關掉它（2026-10-13 回報）。
+  function stopPreviewAudio() {
+    const audio = ui.audio;
+    if (!audio) return;
+    if (!audio.paused || audio.hasAttribute('src')) {
+      try { audio.pause(); } catch (_) { /* ignore */ }
+      audio.removeAttribute('src');
+      try { audio.load(); } catch (_) { /* ignore */ }
+    }
+  }
+
   function clearRecording() {
     clearInterval(tickId);
     tickId = 0;
@@ -275,8 +289,8 @@
     recordedFile = null;
     durationMs = 0;
     pendingBind = null;
+    stopPreviewAudio();
     if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ''; }
-    ui.audio?.removeAttribute('src');
     if (ui.status) { ui.status.dataset.keep = ''; ui.status.style.display = 'none'; ui.status.textContent = ''; }
   }
 
