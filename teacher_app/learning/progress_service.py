@@ -49,6 +49,9 @@ def record_to_dict(row: Mapping[str, Any] | Any) -> dict[str, Any]:
     data["reviewerName"] = data.pop("reviewer_name", "") or ""
     data["reviewComment"] = data.pop("review_comment", "") or ""
     data["quizCategoryId"] = data.pop("quiz_category_id", "") or ""
+    # The UI, CSV export and per-exam grouping all read ``quizTitle``; without it
+    # every record shows a blank exam and different exams collapse together.
+    data["quizTitle"] = str(data.get("quiz_title", "") or "")
     data["publicationId"] = data.pop("publication_id", "") or ""
     data["publicationHash"] = data.pop("publication_hash", "") or ""
     try:

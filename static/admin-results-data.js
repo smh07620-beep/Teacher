@@ -6,18 +6,85 @@
 
   let page = 1;
 
+  // Server timestamps are UTC ISO strings; staff read Taiwan time (UTC+8).
+  window.formatTaipeiTime = window.formatTaipeiTime || function(raw){
+    const text = String(raw ?? '').trim();
+    if(!text) return '';
+    const ms = Date.parse(/(?:Z|[+-]\d\d:?\d\d)$/.test(text) ? text : `${text}Z`);
+    if(!Number.isFinite(ms)) return text;
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone:'Asia/Taipei', hour12:false, year:'numeric', month:'2-digit', day:'2-digit',
+      hour:'2-digit', minute:'2-digit'
+    }).formatToParts(new Date(ms)).reduce((o,p)=>{o[p.type]=p.value;return o;},{});
+    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour==='24'?'00':parts.hour}:${parts.minute}`;
+  };
+
+  const UNNAMED_EXAM = '（未命名考卷）';
+  const examKey = r => String(r?.quizCategoryId || r?.quizTitle || '').trim();
+  const examLabel = r => String(r?.quizTitle || '').trim() || UNNAMED_EXAM;
+  const selectedExam = () => document.getElementById('admin-results-exam')?.value || 'all';
+  const filterByExam = rows => {
+    const chosen = selectedExam();
+    return chosen === 'all' ? rows : rows.filter(r => examKey(r) === chosen);
+  };
+  window.adminResultsSelectedExam = selectedExam;
+  window.adminResultsFilterByExam = filterByExam;
+
+  function syncExamSelect(records){
+    const select = document.getElementById('admin-results-exam');
+    if(!select) return;
+    const previous = select.value || 'all';
+    const exams = new Map();
+    for(const r of records){
+      const key = examKey(r);
+      if(!key) continue;
+      const x = exams.get(key) || {label: examLabel(r), n: 0};
+      x.n++;
+      exams.set(key, x);
+    }
+    const options = [...exams.entries()].sort((a,b)=>a[1].label.localeCompare(b[1].label,'zh-Hant'));
+    const html = `<option value="all">全部考卷</option>${options.map(([key,x])=>`<option value="${escapeHtml(key)}">${escapeHtml(x.label)}（${x.n}）</option>`).join('')}`;
+    if(select.dataset.signature !== html){
+      select.innerHTML = html;
+      select.dataset.signature = html;
+    }
+    select.value = exams.has(previous) ? previous : 'all';
+  }
+
   window.renderResultsAnalytics = function(records){
     const wrap=document.getElementById('admin-results-analytics');
     const cards=document.getElementById('admin-analytics-cards');
     const qbox=document.getElementById('admin-question-analytics');
     if(!wrap||!cards||!qbox) return;
-    const rows=Array.isArray(records)?records:[];
+    const allRows=Array.isArray(records)?records:[];
+    const rows=filterByExam(allRows);
     const completed=rows.filter(r=>r.reviewStatus!=='pending'&&Number.isFinite(Number(r.score)));
     const pending=rows.filter(r=>r.reviewStatus==='pending').length;
     const avg=completed.length?completed.reduce((s,r)=>s+Number(r.score||0),0)/completed.length:0;
     const passed=completed.filter(r=>(r.status||'')==='合格').length;
     const rate=completed.length?Math.round(passed/completed.length*100):0;
     cards.innerHTML=`<div class="rounded-xl bg-slate-50 border px-3 py-2"><span class="text-xs text-slate-500">總考核次數</span><b class="block text-lg">${rows.length}</b></div><div class="rounded-xl bg-teal-50 border border-teal-100 px-3 py-2"><span class="text-xs text-teal-700">平均分</span><b class="block text-lg text-teal-950">${avg.toFixed(1)}</b></div><div class="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2"><span class="text-xs text-emerald-700">通過率</span><b class="block text-lg text-emerald-950">${rate}%</b></div><div class="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2"><span class="text-xs text-amber-700">待人工批改</span><b class="block text-lg text-amber-950">${pending}</b></div>`;
+    let breakdown=document.getElementById('admin-exam-breakdown');
+    if(!breakdown){
+      breakdown=document.createElement('div');
+      breakdown.id='admin-exam-breakdown';
+      cards.insertAdjacentElement('afterend',breakdown);
+    }
+    if(selectedExam()==='all'){
+      const byExam=new Map();
+      for(const r of rows){
+        const key=examKey(r)||UNNAMED_EXAM;
+        const x=byExam.get(key)||{label:examLabel(r),n:0,scored:0,sum:0,pass:0};
+        x.n++;
+        if(r.reviewStatus!=='pending'&&Number.isFinite(Number(r.score))){x.scored++;x.sum+=Number(r.score||0);if((r.status||'')==='合格')x.pass++;}
+        byExam.set(key,x);
+      }
+      const items=[...byExam.values()].sort((a,b)=>a.label.localeCompare(b.label,'zh-Hant'));
+      breakdown.innerHTML=items.length?`<div class="font-black text-sm text-slate-800">各考卷成效</div><p class="text-[11px] text-slate-500 mt-0.5">上方數字為所有考卷合計；要看單一考卷請使用下方「全部考卷」選單。</p><ul class="mt-1 divide-y divide-slate-100">${items.map(x=>`<li class="flex items-center justify-between gap-3 py-1.5 text-xs"><span class="min-w-0 truncate text-slate-800">${escapeHtml(x.label)}</span><span class="shrink-0 text-slate-600">${x.n} 人次・平均 ${x.scored?(x.sum/x.scored).toFixed(1):'—'}・通過 ${x.scored?Math.round(x.pass/x.scored*100):0}%</span></li>`).join('')}</ul>`:'';
+    }else{
+      const first=rows[0];
+      breakdown.innerHTML=`<div class="rounded-lg bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-900">目前僅統計考卷：${escapeHtml(first?examLabel(first):'')}</div>`;
+    }
     const map=new Map();
     for(const r of rows){
       for(const a of r.answersDetail||[]){
@@ -105,12 +172,30 @@
       historyMeta.set(pick, {attempts: list.length, failedBefore: completed.filter(r => !passed.includes(r)).length, passed: passed.length > 0});
       chosen.push(pick);
     }
-    return chosen.sort((a,b) =>
-      String(a?.role || a?.examineeRole || '未分類').localeCompare(String(b?.role || b?.examineeRole || '未分類'), 'zh-Hant') ||
+    return chosen.sort(compareRecords);
+  }
+
+  function compareRecords(a,b){
+    return String(a?.role || a?.examineeRole || '未分類').localeCompare(String(b?.role || b?.examineeRole || '未分類'), 'zh-Hant') ||
       String(a?.groupLabel || '').localeCompare(String(b?.groupLabel || ''), 'zh-Hant') ||
       String(a?.name || '').localeCompare(String(b?.name || ''), 'zh-Hant') ||
-      recordTime(b)-recordTime(a)
-    );
+      String(a?.quizTitle || '').localeCompare(String(b?.quizTitle || ''), 'zh-Hant') ||
+      recordTime(b)-recordTime(a);
+  }
+
+  // 第幾次作答: same person + same exam, oldest = 第 1 次.
+  const attemptNumbers = new WeakMap();
+  function numberAttempts(records){
+    const groups = new Map();
+    for(const r of records){
+      const key = resultPersonKey(r);
+      const list = groups.get(key) || [];
+      list.push(r);
+      groups.set(key, list);
+    }
+    for(const list of groups.values()){
+      list.sort((a,b)=>recordTime(a)-recordTime(b)).forEach((r,i)=>attemptNumbers.set(r,{no:i+1,total:list.length}));
+    }
   }
 
   window.collapseExamHistory = collapseExamHistory;
@@ -130,8 +215,12 @@
         document.getElementById('admin-results-pagination')?.replaceChildren();
         return;
       }
+      syncExamSelect(records);
       window.renderResultsAnalytics(records);
-      let visibleRecords=collapseExamHistory(records);
+      numberAttempts(records);
+      const showEveryAttempt=(document.getElementById('admin-results-attempts')?.value||'best')==='all';
+      const scoped=filterByExam(records);
+      let visibleRecords=showEveryAttempt?[...scoped].sort(compareRecords):collapseExamHistory(scoped);
       const query=(document.getElementById('admin-results-search')?.value||'').trim().toLowerCase();
       const filter=document.getElementById('admin-results-filter')?.value||'all';
       visibleRecords=visibleRecords.filter(r=>{
@@ -160,9 +249,10 @@
         const meta=historyMeta.get(r)||{attempts:1,failedBefore:0,passed:false};
         const header=role!==lastRole?`<tr class="bg-indigo-50/70"><td colspan="9" class="px-3 py-2 text-xs font-black text-indigo-900">👥 人員別：${escapeHtml(role)}<span class="ml-2 font-bold text-indigo-600">${(roleCounts.get(role)||new Set()).size} 人</span></td></tr>`:'';
         lastRole=role;
-        const attemptsNote=meta.attempts>1?`<div class="mt-1 text-[10px] text-slate-400">${meta.passed?`共考 ${meta.attempts} 次，顯示通過成績`:`共考 ${meta.attempts} 次，尚未通過`}</div>`:'';
+        const attemptInfo=attemptNumbers.get(r);
+        const attemptsNote=showEveryAttempt?(attemptInfo&&attemptInfo.total>1?`<div class="mt-1 text-[10px] text-slate-400">第 ${attemptInfo.no} 次作答（共 ${attemptInfo.total} 次）</div>`:''):meta.attempts>1?`<div class="mt-1 text-[10px] text-slate-400">${meta.passed?`共考 ${meta.attempts} 次，顯示通過成績`:`共考 ${meta.attempts} 次，尚未通過`}</div>`:'';
         const detail=r.answersDetail||[];
-        return `${header}<tr class="hover:bg-slate-50 transition-colors"><td class="p-3"><button data-csp-click="adminResultDetail(${index})" class="text-xs font-bold text-indigo-700">明細</button></td><td class="p-3 font-mono text-slate-500">${r.timestamp||''}</td><td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">${escapeHtml(r.groupLabel||'1 生化組')}</span></td><td class="p-3 font-bold text-slate-800">${escapeHtml(r.name||'')}</td><td class="p-3 font-mono">${escapeHtml(r.empId||'')}</td><td class="p-3">${escapeHtml(r.quizTitle||'')}</td><td class="p-3 text-center font-bold ${r.reviewStatus==='pending'?'text-amber-600':(Number(r.score)>=Number(r.passingScore||80)?'text-green-600':'text-red-600')}">${r.reviewStatus==='pending'?'待批改':(Number(r.score)||0)}</td><td class="p-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${r.reviewStatus==='pending'?'bg-amber-100 text-amber-800':(r.status==='合格'?'bg-green-100 text-green-800':'bg-red-100 text-red-800')}">${escapeHtml(r.status||'')}</span>${attemptsNote}</td><td class="p-3 text-center space-y-1">${detail.some(a=>a.questionType==='essay')?`<button data-csp-click="openEssayReview(${index})" class="bg-rose-600 hover:bg-rose-500 text-white text-xs px-2.5 py-1 rounded shadow-sm">✍️ ${r.reviewStatus==='pending'?'批改問答題':'重新批改'}</button>`:''}<button data-csp-click="exportRecordToWord(${index})" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded transition-colors shadow-sm">📄 匯出 Word</button></td></tr><tr id="admin-result-detail-${index}" class="hidden bg-slate-50"><td colspan="9" class="p-3"><div class="text-xs text-slate-600"><b>作答明細（預設收合）</b><div class="mt-2 space-y-1">${detail.length?detail.map((a,i)=>`<div>${i+1}. ${escapeHtml(a.questionText||'')}　<span class="text-slate-500">${escapeHtml(String(a.userAnswer??'未作答'))}</span></div>`).join(''):'無逐題明細'}</div></div></td></tr>`;
+        return `${header}<tr class="hover:bg-slate-50 transition-colors"><td class="p-3"><button data-csp-click="adminResultDetail(${index})" class="text-xs font-bold text-indigo-700">明細</button></td><td class="p-3 font-mono text-slate-500">${escapeHtml(window.formatTaipeiTime(r.timestamp))}</td><td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">${escapeHtml(r.groupLabel||'1 生化組')}</span></td><td class="p-3 font-bold text-slate-800">${escapeHtml(r.name||'')}</td><td class="p-3 font-mono">${escapeHtml(r.empId||'')}</td><td class="p-3">${escapeHtml(r.quizTitle||UNNAMED_EXAM)}</td><td class="p-3 text-center font-bold ${r.reviewStatus==='pending'?'text-amber-600':(Number(r.score)>=Number(r.passingScore||80)?'text-green-600':'text-red-600')}">${r.reviewStatus==='pending'?'待批改':(Number(r.score)||0)}</td><td class="p-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${r.reviewStatus==='pending'?'bg-amber-100 text-amber-800':(r.status==='合格'?'bg-green-100 text-green-800':'bg-red-100 text-red-800')}">${escapeHtml(r.status||'')}</span>${attemptsNote}</td><td class="p-3 text-center space-y-1">${detail.some(a=>a.questionType==='essay')?`<button data-csp-click="openEssayReview(${index})" class="bg-rose-600 hover:bg-rose-500 text-white text-xs px-2.5 py-1 rounded shadow-sm">✍️ ${r.reviewStatus==='pending'?'批改問答題':'重新批改'}</button>`:''}<button data-csp-click="exportRecordToWord(${index})" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded transition-colors shadow-sm">📄 匯出 Word</button></td></tr><tr id="admin-result-detail-${index}" class="hidden bg-slate-50"><td colspan="9" class="p-3"><div class="text-xs text-slate-600"><b>作答明細（預設收合）</b><div class="mt-2 space-y-1">${detail.length?detail.map((a,i)=>`<div>${i+1}. ${escapeHtml(a.questionText||'')}　<span class="text-slate-500">${escapeHtml(String(a.userAnswer??'未作答'))}</span></div>`).join(''):'無逐題明細'}</div></div></td></tr>`;
       }).join('');
       paintPagination(visibleRecords,pageSize,pages);
     }catch(error){

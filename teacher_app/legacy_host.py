@@ -2180,6 +2180,7 @@ def _record_to_dict(row):
     r["reviewerName"] = r.pop("reviewer_name", "") or ""
     r["reviewComment"] = r.pop("review_comment", "") or ""
     r["quizCategoryId"] = r.pop("quiz_category_id", "") or ""
+    r["quizTitle"] = str(r.get("quiz_title", "") or "")
     r["publicationId"] = r.pop("publication_id", "") or ""
     r["publicationHash"] = r.pop("publication_hash", "") or ""
     try:

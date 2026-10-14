@@ -17,7 +17,7 @@
     records: [],
     loaded: false,
     loading: false,
-    view: {pending: {openId: '', query: ''}, history: {openId: '', query: '', result: 'all', visible: PAGE}},
+    view: {pending: {openId: '', query: ''}, history: {openId: '', query: '', result: 'all', exam: 'all', visible: PAGE}, analytics: {exam: 'all'}},
     drafts: {},
     notice: {pending: '', history: ''},
   };
@@ -29,6 +29,24 @@
     return Number.isFinite(t) ? t : 0;
   };
   const byNewest = (a, b) => time(b) - time(a);
+  // Server times are UTC; show Taiwan time (UTC+8) to staff.
+  const tw = raw => {
+    if (typeof window.formatTaipeiTime === 'function') return window.formatTaipeiTime(raw);
+    const text = String(raw ?? '').trim();
+    const ms = Date.parse(/(?:Z|[+-]\d\d:?\d\d)$/.test(text) ? text : `${text}Z`);
+    if (!Number.isFinite(ms)) return text;
+    const d = new Date(ms + 8 * 3600 * 1000).toISOString();
+    return `${d.slice(0, 10)} ${d.slice(11, 16)}`;
+  };
+  const UNNAMED = '（未命名考卷）';
+  const examKey = r => String(r?.quizCategoryId || r?.quizTitle || '').trim();
+  const examName = r => String(r?.quizTitle || '').trim() || UNNAMED;
+  function examOptions(selected) {
+    const map = new Map();
+    state.records.forEach(r => { const k = examKey(r); if (k && !map.has(k)) map.set(k, examName(r)); });
+    const items = [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'zh-Hant'));
+    return `<option value="all">全部考卷</option>${items.map(([k, label]) => `<option value="${esc(k)}" ${k === selected ? 'selected' : ''}>${esc(label)}</option>`).join('')}`;
+  }
 
   function panel() { return document.getElementById('admin-section-quiz'); }
 
@@ -88,6 +106,7 @@
     const q = v.query.trim().toLowerCase();
     return state.records.filter(r => !isPending(r)).filter(r => {
       if (q && !`${r.name || ''} ${r.empId || ''} ${r.quizTitle || ''} ${r.groupLabel || ''}`.toLowerCase().includes(q)) return false;
+      if (v.exam !== 'all' && examKey(r) !== v.exam) return false;
       if (v.result === 'pass') return r.status === '合格';
       if (v.result === 'fail') return r.status !== '合格';
       return true;
@@ -107,7 +126,7 @@
     const index = list.findIndex(r => String(r.id) === v.openId);
     if (v.openId && index >= 0) { renderPendingDetail(pane, list, index); return; }
     v.openId = '';
-    const rows = list.length ? list.map(r => `<li class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2"><div class="min-w-0"><b class="text-sm text-slate-900">${esc(r.name)}</b> <span class="text-xs text-slate-500">${esc(r.empId)}</span><div class="truncate text-xs text-slate-600">${esc(r.quizTitle)}<span class="ml-2 text-slate-400">${esc(r.timestamp || '')}</span></div></div><button type="button" data-assess-open="${esc(r.id)}" class="whitespace-nowrap rounded-lg bg-indigo-700 px-4 py-2 text-xs font-black text-white">批改</button></li>`).join('') : '<li class="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">🎉 目前沒有待批改的作答</li>';
+    const rows = list.length ? list.map(r => `<li class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2"><div class="min-w-0"><b class="text-sm text-slate-900">${esc(r.name)}</b> <span class="text-xs text-slate-500">${esc(r.empId)}</span><div class="truncate text-xs text-slate-600">${esc(r.quizTitle)}<span class="ml-2 text-slate-400">${esc(tw(r.timestamp))}</span></div></div><button type="button" data-assess-open="${esc(r.id)}" class="whitespace-nowrap rounded-lg bg-indigo-700 px-4 py-2 text-xs font-black text-white">批改</button></li>`).join('') : '<li class="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">🎉 目前沒有待批改的作答</li>';
     pane.innerHTML = `${noticeHtml('pending')}<div class="flex items-center justify-between gap-2"><h4 class="text-sm font-black text-slate-900">待批改（${list.length}）</h4></div>${searchBox('pending', '🔎 搜尋姓名、工號或考卷')}<ul class="space-y-2">${rows}</ul>`;
     restoreSearchFocus(pane, 'pending');
   }
@@ -134,7 +153,7 @@
     const auto = answers.filter(a => a?.questionType !== 'essay');
     const autoRight = auto.filter(a => a.isCorrect === true).length;
     const questions = essays.length ? essays.map(({a, i}) => `<div class="space-y-2 rounded-xl border border-rose-100 bg-white p-3"><div class="text-sm font-semibold text-slate-800">第 ${i + 1} 題：${esc(a.questionText || '')}</div><div class="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm">${esc(a.userAnswer || '未答')}</div><div class="grid grid-cols-1 items-center gap-2 md:grid-cols-[auto_6rem_1fr]"><label class="text-xs font-bold text-slate-600" for="assess-score-${i}">本題分數 0–100</label><input id="assess-score-${i}" data-assess-score="${i}" type="number" min="0" max="100" step="1" value="${esc(draft.scores[i] ?? '')}" class="rounded-lg border px-2 py-1.5 text-sm"><input data-assess-comment="${i}" type="text" maxlength="1000" value="${esc(draft.comments[i] ?? '')}" placeholder="本題評語（選填）" class="rounded-lg border px-2 py-1.5 text-sm"></div></div>`).join('') : '<p class="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">此份作答沒有問答題。</p>';
-    pane.innerHTML = `${noticeHtml('pending')}${backBar('pending', list, index)}<div><h4 class="text-base font-black text-slate-900">${esc(r.name)} <span class="text-xs font-normal text-slate-500">${esc(r.empId)}</span></h4><p class="text-xs text-slate-600">${esc(r.quizTitle)}・${esc(r.timestamp || '')}${auto.length ? `・其餘 ${auto.length} 題系統已自動評分（答對 ${autoRight} 題）` : ''}</p></div>${questions}<textarea data-assess-overall rows="2" maxlength="2000" placeholder="整體評語（選填）" class="w-full rounded-xl border px-3 py-2 text-sm">${esc(draft.overall)}</textarea><p data-assess-error role="alert" class="${draft.error ? '' : 'hidden '}rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">${esc(draft.error)}</p><div class="flex flex-wrap items-center gap-3"><button type="button" data-assess-save ${draft.saving ? 'disabled' : ''} class="rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">✅ 儲存批改${index < list.length - 1 ? '並看下一位' : ''}</button><span class="text-[11px] text-slate-500">切換上一位／下一位時，已輸入的分數會暫存在本頁，按「儲存批改」後才正式送出。</span></div>`;
+    pane.innerHTML = `${noticeHtml('pending')}${backBar('pending', list, index)}<div><h4 class="text-base font-black text-slate-900">${esc(r.name)} <span class="text-xs font-normal text-slate-500">${esc(r.empId)}</span></h4><p class="text-xs text-slate-600">${esc(r.quizTitle)}・${esc(tw(r.timestamp))}${auto.length ? `・其餘 ${auto.length} 題系統已自動評分（答對 ${autoRight} 題）` : ''}</p></div>${questions}<textarea data-assess-overall rows="2" maxlength="2000" placeholder="整體評語（選填）" class="w-full rounded-xl border px-3 py-2 text-sm">${esc(draft.overall)}</textarea><p data-assess-error role="alert" class="${draft.error ? '' : 'hidden '}rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">${esc(draft.error)}</p><div class="flex flex-wrap items-center gap-3"><button type="button" data-assess-save ${draft.saving ? 'disabled' : ''} class="rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">✅ 儲存批改${index < list.length - 1 ? '並看下一位' : ''}</button><span class="text-[11px] text-slate-500">切換上一位／下一位時，已輸入的分數會暫存在本頁，按「儲存批改」後才正式送出。</span></div>`;
   }
 
   function renderHistory() {
@@ -147,8 +166,9 @@
     if (v.openId && index >= 0) { renderHistoryDetail(pane, list, index); return; }
     v.openId = '';
     const shown = list.slice(0, v.visible);
-    const filter = `<select data-assess-result class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="all" ${v.result === 'all' ? 'selected' : ''}>全部結果</option><option value="pass" ${v.result === 'pass' ? 'selected' : ''}>合格</option><option value="fail" ${v.result === 'fail' ? 'selected' : ''}>未通過</option></select>`;
-    const rows = shown.length ? shown.map(r => `<li class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2"><div class="min-w-0"><b class="text-sm text-slate-900">${esc(r.name)}</b> <span class="text-xs text-slate-500">${esc(r.empId)}</span><div class="truncate text-xs text-slate-600">${esc(r.quizTitle)}<span class="ml-2 text-slate-400">${esc(r.timestamp || '')}</span></div></div><div class="flex items-center gap-3"><span class="text-sm font-black ${r.status === '合格' ? 'text-emerald-700' : 'text-rose-700'}">${esc(r.score)} 分・${esc(r.status)}</span><button type="button" data-assess-open="${esc(r.id)}" class="whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700">查看</button></div></li>`).join('') : '<li class="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">沒有符合條件的紀錄</li>';
+    const examSelect = `<select data-assess-exam="history" aria-label="依考卷篩選" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">${examOptions(v.exam)}</select>`;
+    const filter = `${examSelect}<select data-assess-result class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"><option value="all" ${v.result === 'all' ? 'selected' : ''}>全部結果</option><option value="pass" ${v.result === 'pass' ? 'selected' : ''}>合格</option><option value="fail" ${v.result === 'fail' ? 'selected' : ''}>未通過</option></select>`;
+    const rows = shown.length ? shown.map(r => `<li class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2"><div class="min-w-0"><b class="text-sm text-slate-900">${esc(r.name)}</b> <span class="text-xs text-slate-500">${esc(r.empId)}</span><div class="truncate text-xs text-slate-600">${esc(r.quizTitle)}<span class="ml-2 text-slate-400">${esc(tw(r.timestamp))}</span></div></div><div class="flex items-center gap-3"><span class="text-sm font-black ${r.status === '合格' ? 'text-emerald-700' : 'text-rose-700'}">${esc(r.score)} 分・${esc(r.status)}</span><button type="button" data-assess-open="${esc(r.id)}" class="whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700">查看</button></div></li>`).join('') : '<li class="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">沒有符合條件的紀錄</li>';
     const more = list.length > shown.length ? `<button type="button" data-assess-more class="w-full rounded-xl border border-slate-200 py-2 text-xs font-bold text-slate-600">顯示更多（還有 ${list.length - shown.length} 筆）</button>` : '';
     pane.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-2"><h4 class="text-sm font-black text-slate-900">歷史紀錄（${list.length}）</h4><button type="button" data-assess-results-workspace class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700">📄 匯出 Word／清除紀錄（成績管理）</button></div>${searchBox('history', '🔎 搜尋姓名、工號、考卷或組別', filter)}<ul class="space-y-2">${rows}</ul>${more}`;
     restoreSearchFocus(pane, 'history');
@@ -162,7 +182,7 @@
       const verdict = essay ? `問答題：${esc(a.reviewScore ?? '—')} 分` : (a?.isCorrect === true ? '✅ 答對' : (a?.isCorrect === false ? '❌ 答錯' : '—'));
       return `<li class="space-y-1 rounded-xl border border-slate-200 p-3"><div class="flex items-start justify-between gap-2 text-sm font-semibold text-slate-800"><span>第 ${i + 1} 題：${esc(a?.questionText || '')}</span><span class="whitespace-nowrap text-xs">${verdict}</span></div><div class="whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-sm">${esc(a?.userAnswer ?? '未答')}</div>${essay && a.reviewComment ? `<p class="text-xs text-slate-600">評語：${esc(a.reviewComment)}</p>` : ''}</li>`;
     }).join('') || '<li class="text-sm text-slate-500">此紀錄沒有題目明細。</li>';
-    pane.innerHTML = `${backBar('history', list, index)}<div><h4 class="text-base font-black text-slate-900">${esc(r.name)} <span class="text-xs font-normal text-slate-500">${esc(r.empId)}</span></h4><p class="text-xs text-slate-600">${esc(r.quizTitle)}・${esc(r.timestamp || '')}・<b class="${r.status === '合格' ? 'text-emerald-700' : 'text-rose-700'}">${esc(r.score)} 分・${esc(r.status)}</b>${r.reviewerName ? `・批改：${esc(r.reviewerName)}` : ''}</p>${r.reviewComment ? `<p class="mt-1 text-xs text-slate-700">整體評語：${esc(r.reviewComment)}</p>` : ''}</div><ul class="space-y-2">${items}</ul>`;
+    pane.innerHTML = `${backBar('history', list, index)}<div><h4 class="text-base font-black text-slate-900">${esc(r.name)} <span class="text-xs font-normal text-slate-500">${esc(r.empId)}</span></h4><p class="text-xs text-slate-600">${esc(r.quizTitle)}・${esc(tw(r.timestamp))}・<b class="${r.status === '合格' ? 'text-emerald-700' : 'text-rose-700'}">${esc(r.score)} 分・${esc(r.status)}</b>${r.reviewerName ? `・批改：${esc(r.reviewerName)}` : ''}</p>${r.reviewComment ? `<p class="mt-1 text-xs text-slate-700">整體評語：${esc(r.reviewComment)}</p>` : ''}</div><ul class="space-y-2">${items}</ul>`;
   }
 
   function restoreSearchFocus(pane, name) {
@@ -176,14 +196,15 @@
     const pane = ensurePane('analytics', '教學分析');
     if (!pane) return;
     if (!state.loaded) { pane.innerHTML = `<p class="text-sm text-slate-500">${state.error ? '❌ ' + esc(state.error) : '讀取統計中…'}</p>`; return; }
-    const rows = state.records;
+    const examChoice = state.view.analytics.exam;
+    const rows = examChoice === 'all' ? state.records : state.records.filter(r => examKey(r) === examChoice);
     const done = rows.filter(r => !isPending(r) && Number.isFinite(Number(r.score)));
     const passed = done.filter(r => r.status === '合格').length;
     const avg = done.length ? done.reduce((sum, r) => sum + Number(r.score || 0), 0) / done.length : 0;
     const chip = (label, value) => `<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center"><b class="block text-lg text-slate-900">${value}</b><span class="text-[11px] text-slate-500">${label}</span></div>`;
     const byExam = new Map();
     rows.forEach(r => {
-      const key = r.quizTitle || '（未命名考卷）';
+      const key = examName(r);
       const x = byExam.get(key) || {title: key, n: 0, sum: 0, scored: 0, pass: 0};
       x.n++;
       if (!isPending(r) && Number.isFinite(Number(r.score))) { x.scored++; x.sum += Number(r.score); if (r.status === '合格') x.pass++; }
@@ -200,7 +221,9 @@
     }));
     const weak = [...qmap.values()].map(x => ({...x, rate: Math.round(x.ok / x.total * 100)})).filter(x => x.rate < 80).sort((a, b) => a.rate - b.rate).slice(0, 5);
     const weakHtml = weak.length ? weak.map(x => `<li class="flex items-start justify-between gap-3 py-1.5 text-xs"><span class="min-w-0 text-slate-700">${esc(x.text)}</span><b class="shrink-0 text-rose-700">${x.rate}%（${x.ok}/${x.total}）</b></li>`).join('') : '<li class="py-1.5 text-xs text-slate-500">目前沒有答對率偏低（低於 80%）的題目。</li>';
-    pane.innerHTML = `<div class="max-w-3xl space-y-3"><h4 class="text-sm font-black text-slate-900">教學分析（簡易統計）</h4><div class="grid grid-cols-2 gap-2 sm:grid-cols-4">${chip('考核人次', rows.length)}${chip('平均分', avg.toFixed(1))}${chip('通過率', (done.length ? Math.round(passed / done.length * 100) : 0) + '%')}${chip('待批改', rows.filter(isPending).length)}</div><div><div class="text-xs font-black text-slate-600">各考卷</div><ul class="divide-y divide-slate-100">${examRows || '<li class="py-2 text-xs text-slate-500">目前沒有考核紀錄。</li>'}</ul></div><div><div class="text-xs font-black text-slate-600">答對率偏低的題目（最多 5 題）</div><ul class="divide-y divide-slate-100">${weakHtml}</ul></div></div>`;
+    const examSelect = `<select data-assess-exam="analytics" aria-label="依考卷篩選" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">${examOptions(examChoice)}</select>`;
+    const scopeNote = examChoice === 'all' ? '<p class="text-[11px] text-slate-500">上方數字為所有考卷合計；要看單一考卷的平均、通過率與答對率偏低題目，請在右側選擇考卷。</p>' : '';
+    pane.innerHTML = `<div class="max-w-3xl space-y-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="text-sm font-black text-slate-900">教學分析（簡易統計）</h4>${examSelect}</div>${scopeNote}<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">${chip('考核人次', rows.length)}${chip('平均分', avg.toFixed(1))}${chip('通過率', (done.length ? Math.round(passed / done.length * 100) : 0) + '%')}${chip('待批改', rows.filter(isPending).length)}</div><div><div class="text-xs font-black text-slate-600">各考卷</div><ul class="divide-y divide-slate-100">${examRows || '<li class="py-2 text-xs text-slate-500">目前沒有考核紀錄。</li>'}</ul></div><div><div class="text-xs font-black text-slate-600">答對率偏低的題目（最多 5 題）</div><ul class="divide-y divide-slate-100">${weakHtml}</ul></div></div>`;
   }
 
   function render(name) { (name === 'pending' ? renderPending : name === 'analytics' ? renderAnalytics : renderHistory)(); }
@@ -214,6 +237,11 @@
       if (name === 'history') state.view.history.visible = PAGE;
       state.focusSearch = name;
       render(name);
+      return;
+    }
+    if (t.matches?.('[data-assess-exam]')) {
+      if (t.dataset.assessExam === 'analytics') { state.view.analytics.exam = t.value; render('analytics'); }
+      else { state.view.history.exam = t.value; state.view.history.visible = PAGE; render('history'); }
       return;
     }
     if (t.matches?.('[data-assess-result]')) { state.view.history.result = t.value; state.view.history.visible = PAGE; render('history'); return; }

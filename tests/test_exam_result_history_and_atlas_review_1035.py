@@ -24,7 +24,7 @@ class ExamResultHistoryAndAtlasReview1035Tests(unittest.TestCase):
     def test_teacher_view_collapses_attempt_history(self):
         self.assertIn("function collapseExamHistory(records)", self.results)
         self.assertIn("const passed = completed.filter", self.results)
-        self.assertIn("let visibleRecords=collapseExamHistory(records);", self.results)
+        self.assertIn("collapseExamHistory(scoped)", self.results)
         self.assertIn("完整歷史仍保留在系統", self.workspace)
 
 

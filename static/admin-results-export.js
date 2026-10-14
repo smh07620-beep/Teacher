@@ -30,7 +30,7 @@
       documentVersion: String(source.quizVersion || source.version || ''),
       groupLabel: groupLabel || '',
       quizTitle: quizTitle || source.quizTitle || '',
-      assessmentDate: String(source.timestamp || source.assessmentDate || ''),
+      assessmentDate: String(window.formatTaipeiTime ? (window.formatTaipeiTime(source.timestamp) || source.assessmentDate || '') : (source.timestamp || source.assessmentDate || '')),
       exportedAt: localDateTime(),
       exportedBy: exporterName(),
       paperStatus: '待列印簽核',
@@ -208,19 +208,40 @@
 
   window.exportToCSV = async function() {
     try {
-      const records = await fetchAdminRecords();
-      if (!records || records.length === 0) {
+      const allRecords = await fetchAdminRecords();
+      if (!allRecords || allRecords.length === 0) {
         alert('目前無可供匯出的紀錄！');
         return;
       }
-      let csvContent = '\ufeff考核時間,組別,姓名,工號,考試人員類別,考核人員,考核人員職稱,考卷主題,得分,考核結果\n';
+      // Follow the 考卷 filter on screen so one export = one exam's records.
+      const records = (window.adminResultsFilterByExam ? window.adminResultsFilterByExam(allRecords) : allRecords)
+        .slice()
+        .sort((a, b) => String(a.quizTitle || '').localeCompare(String(b.quizTitle || ''), 'zh-Hant')
+          || String(a.empId || '').localeCompare(String(b.empId || ''))
+          || String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+      if (records.length === 0) {
+        alert('所選考卷目前沒有可匯出的紀錄！');
+        return;
+      }
+      const cell = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+      const fmt = window.formatTaipeiTime || (v => v || '');
+      const seen = new Map();
+      let csvContent = '\ufeff考核時間,組別,姓名,工號,考試人員類別,考核人員,考核人員職稱,考卷主題,第幾次作答,得分,考核結果\n';
       records.forEach(r => {
-        csvContent += `"${r.timestamp || ''}","${r.groupLabel || '1 生化組'}","${r.name || ''}","${r.empId || ''}","${r.role || ''}","${r.evaluatorName || ''}","${r.evaluatorTitle || ''}","${r.quizTitle || ''}",${Number(r.score) || 0},"${r.status || ''}"\n`;
+        const key = `${r.empId || ''}|${r.quizCategoryId || r.quizTitle || ''}`;
+        const attemptNo = (seen.get(key) || 0) + 1;
+        seen.set(key, attemptNo);
+        csvContent += [
+          cell(fmt(r.timestamp)), cell(r.groupLabel || '1 生化組'), cell(r.name), cell(r.empId), cell(r.role),
+          cell(r.evaluatorName), cell(r.evaluatorTitle), cell(r.quizTitle), attemptNo, Number(r.score) || 0, cell(r.status)
+        ].join(',') + '\n';
       });
+      const chosen = window.adminResultsSelectedExam ? window.adminResultsSelectedExam() : 'all';
+      const examPart = chosen === 'all' ? '全部考卷' : String(records[0].quizTitle || '考卷').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `生化組教育訓練考核成績表_${new Date().toISOString().slice(0,10)}.csv`;
+      link.download = `教育訓練考核成績表_${examPart}_${new Date().toISOString().slice(0,10)}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
