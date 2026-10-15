@@ -178,15 +178,29 @@ def my_progress(
             f"ORDER BY created_at DESC",
             (emp_id, normalized_area),
         ).fetchall()
-        # A course assigned from another group is taken (and recorded) under its
-        # owner group; its records still belong in this learner's status.
-        granted_courses = set(learning_access.assigned_course_grants(user))
-        records = [
-            record
-            for record in (record_to_dict(row) for row in record_rows)
-            if str(record.get("group") or record.get("groupKey") or "") == normalized_group
-            or str(record.get("courseId") or "") in granted_courses
-        ]
+        all_records = [record_to_dict(row) for row in record_rows]
+
+    # A course assigned from another group is taken (and recorded) under its
+    # owner group; its records still belong in this learner's status.  Match by
+    # course id OR by the exam (some older records carry no course id).
+    granted_courses = set(learning_access.assigned_course_grants(user))
+    granted_exam_ids: set[str] = set()
+    if granted_courses:
+        try:
+            granted_exam_ids = {
+                str(item.get("id") or "")
+                for item in assessment_repository.list_categories(None, normalized_area, True)
+                if str(item.get("courseId") or "") in granted_courses
+            }
+        except Exception:
+            granted_exam_ids = set()
+    records = [
+        record
+        for record in all_records
+        if str(record.get("groupKey") or "") == normalized_group
+        or str(record.get("courseId") or "") in granted_courses
+        or str(record.get("quizCategoryId") or "") in granted_exam_ids
+    ]
 
     try:
         smart_progress_rows = learning_repository.list_progress_for_user(
