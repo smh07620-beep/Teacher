@@ -39,6 +39,27 @@ function Write-TeacherAIWorkerEvent {
   else { Write-Warning $fallback }
 }
 
+# Persistent log so a crash can still be diagnosed after the console is gone.
+# Lives in <checkout>\logs\ (git-ignored, so it never blocks Worker updates).
+# Best-effort only: a logging problem must never prevent Worker startup.
+function Start-TeacherAIWorkerLog {
+  try {
+    $logDir = Join-Path $root "logs"
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    $logFile = Join-Path $logDir "ai-worker.log"
+    if ((Test-Path -LiteralPath $logFile) -and ((Get-Item -LiteralPath $logFile).Length -gt 5MB)) {
+      Move-Item -LiteralPath $logFile -Destination (Join-Path $logDir "ai-worker.previous.log") -Force
+    }
+    Start-Transcript -Path $logFile -Append | Out-Null
+  } catch {
+    # ignore
+  }
+}
+
+function Write-TeacherAIWorkerLog([string]$Message) {
+  Write-Host ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message)
+}
+
 function Load-LocalWorkerEnvironment {
   $envFile = Join-Path $root ".local-worker.env"
   if (-not (Test-Path $envFile -PathType Leaf)) { return }
@@ -182,6 +203,7 @@ function Ensure-AIWorkerEnvironment {
   return @($python, $entry)
 }
 
+Start-TeacherAIWorkerLog
 Load-LocalWorkerEnvironment
 if (-not $env:FREE_ONLY_MODE) { $env:FREE_ONLY_MODE = "true" }
 if (-not $env:AI_FREE_FALLBACK_ENABLED) { $env:AI_FREE_FALLBACK_ENABLED = "true" }
@@ -191,7 +213,12 @@ Write-TeacherAIWorkerEvent -EntryType "Information" -EventId 1100 -Message "Teac
 Write-Host "Teacher AI Worker: ai_questions, media_scripts, ai_presentations, ai_videos, media_audio, media_subtitles (HTTPS control; Kokoro local TTS)"
 
 $crashRestarts = 0
-$maxCrashRestarts = 5
+# A long outage (network, DNS, a Windows update) can outlast five quick retries,
+# which used to make the supervisor give up. Retry longer with growing waits, and
+# forget earlier crashes once the Worker has run stably for a while.
+$maxCrashRestarts = 10
+$stableRunSeconds = 300
+$restartDelays = @(5, 15, 30, 60, 120, 180, 300, 300, 300, 300)
 while ($true) {
   try {
     $runtime = Ensure-AIWorkerEnvironment
@@ -204,6 +231,7 @@ while ($true) {
   }
 
   # See run_material_worker_autostart.ps1: stderr lines must not abort the supervisor.
+  $runTimer = [System.Diagnostics.Stopwatch]::StartNew()
   $previousErrorPreference = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
   try {
@@ -226,13 +254,16 @@ while ($true) {
     continue
   }
 
+  if ($runTimer.Elapsed.TotalSeconds -ge $stableRunSeconds) { $crashRestarts = 0 }
   $crashRestarts++
+  Write-TeacherAIWorkerLog "AI Worker exited with code $workerExit after $([int]$runTimer.Elapsed.TotalSeconds) seconds."
   if ($crashRestarts -gt $maxCrashRestarts) {
-    Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3105 -Message "AI Worker restart limit exhausted; supervisor stopped to avoid a restart loop."
+    Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3105 -Message "AI Worker restart limit exhausted; supervisor stopped to avoid a restart loop. See logs\ai-worker.log."
     Write-Warning "AI Worker crashed too many times; stopping to avoid a restart loop."
     exit $workerExit
   }
-  Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2200 -Message "AI Worker exited abnormally and will be restarted by the supervisor."
-  Write-Warning "AI Worker exited with code $workerExit; restarting in 5 seconds ($crashRestarts/$maxCrashRestarts)."
-  Start-Sleep -Seconds 5
+  $delay = $restartDelays[[Math]::Min($crashRestarts - 1, $restartDelays.Count - 1)]
+  Write-TeacherAIWorkerEvent -EntryType "Warning" -EventId 2200 -Message "AI Worker exited abnormally (code $workerExit) and will be restarted by the supervisor. See logs\ai-worker.log."
+  Write-Warning "AI Worker exited with code $workerExit; restarting in $delay seconds ($crashRestarts/$maxCrashRestarts)."
+  Start-Sleep -Seconds $delay
 }

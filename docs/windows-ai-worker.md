@@ -184,4 +184,14 @@ Invoke-RestMethod http://127.0.0.1:11434/api/tags
 
 In Event Viewer, inspect **Windows Logs → Application** and filter the `TeacherAIWorker` source. Event 1100 indicates the AI supervisor started. Warnings 2201/2202 mean narration or free-provider configuration is incomplete without exposing secret values. Errors 3101/3103/3104/3105 indicate missing production DB, missing runtime prerequisites, launch failure, or restart exhaustion.
 
+### AI Worker log file and restart policy
+
+The AI supervisor writes everything the Worker prints (including Python errors) to `logs\ai-worker.log` inside the Worker checkout. The folder is git-ignored, so it never blocks Worker updates. The file is rotated to `logs\ai-worker.previous.log` when it passes 5 MB. View the latest lines:
+
+```powershell
+Get-Content .\logs\ai-worker.log -Tail 80
+```
+
+After an abnormal exit the supervisor now waits 5, 15, 30, 60, 120, 180, then 300 seconds between retries and gives up after 10 consecutive crashes (Event 3105). A Worker that ran for at least 5 minutes resets the counter, so occasional crashes over days never exhaust the limit. An approved restart (exit code 75) is unaffected.
+
 A working AI Worker prints all six queues plus `control_transport=https`. The first Kokoro narration, faster-whisper transcription, or local model initialization can be slower because model files may be entering the normal local cache. Render carries only small authenticated control JSON (heartbeat, claim, progress, complete/fail and allow-listed repository metadata); long AI execution and large media transfers stay off the Render Web process.
