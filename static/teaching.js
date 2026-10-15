@@ -134,9 +134,13 @@ function renderTeachingCourseOverview() {
     window.LearnerCourseOverview?.ensureSupportData?.();
     const query = (document.getElementById('learning-search')?.value || '').trim().toLowerCase();
     const filter = document.getElementById('learning-filter')?.value || 'all';
-    const courses = cachedCourses.filter(c => c.group === currentGroupKey && c.area === currentTrainingArea);
-    const materials = cachedSlidesList.filter(m => (m.group || 'grpBio') === currentGroupKey && (m.area || currentTrainingArea) === currentTrainingArea);
-    const quizzes = cachedQuizCategories.filter(q => (q.group || currentGroupKey) === currentGroupKey && (q.area || currentTrainingArea) === currentTrainingArea);
+    // A course from another group that was assigned to this person individually
+    // (assignedFromGroup) belongs in the list. The server re-labels such a course's
+    // materials with the learner's OWN group and keeps the real owner in ownerGroup,
+    // so a material is also matched through ownerGroup; otherwise the course opens empty.
+    const courses = cachedCourses.filter(c => (c.group === currentGroupKey || c.assignedFromGroup) && c.area === currentTrainingArea);
+    const materials = cachedSlidesList.filter(m => ((m.group || 'grpBio') === currentGroupKey || m.ownerGroup === currentGroupKey) && (m.area || currentTrainingArea) === currentTrainingArea);
+    const quizzes = cachedQuizCategories.filter(q => ((q.group || currentGroupKey) === currentGroupKey || q.assignedFromGroup) && (q.area || currentTrainingArea) === currentTrainingArea);
     const openIds = new Set([...grid.querySelectorAll('details[open]')].map(x => x.dataset.course));
     // 2026-10-10: until the learner opens or closes a unit themselves, follow the
     // recommended unit (first one with unfinished materials). A different group/area

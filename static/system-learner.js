@@ -191,7 +191,7 @@ async function renderSlidesGrid() {
         cachedSlidesList = (await res.json()).map(x => ({...x, courseTitle: courseMap[x.courseId] || ''}));
         window.cachedSlidesList = cachedSlidesList;
 
-        const allInGroup = cachedSlidesList.filter(s => (s.group || 'grpBio') === currentGroupKey);
+        const allInGroup = cachedSlidesList.filter(s => (s.group || 'grpBio') === currentGroupKey || s.ownerGroup === currentGroupKey);
 
         const atlasAll=allInGroup.filter(isAtlasMaterial);
 
@@ -1141,7 +1141,7 @@ function renderCourseOverviewBase() {
     const box=document.getElementById('course-overview'),grid=document.getElementById('course-overview-grid');if(!box||!grid)return;
     ensureCourseOverviewSupportData();
 
-    const groupMaterials=cachedSlidesList.filter(m=>(m.group||'grpBio')===currentGroupKey&&(m.area||currentTrainingArea)===currentTrainingArea),quizzes=(cachedQuizCategories||[]).filter(q=>(q.group||currentGroupKey)===currentGroupKey&&(q.area||currentTrainingArea)===currentTrainingArea),courses=(cachedCourses||[]).filter(c=>(c.group||c.groupKey||currentGroupKey)===currentGroupKey&&(c.area||currentTrainingArea)===currentTrainingArea);
+    const groupMaterials=cachedSlidesList.filter(m=>((m.group||'grpBio')===currentGroupKey||m.ownerGroup===currentGroupKey)&&(m.area||currentTrainingArea)===currentTrainingArea),quizzes=(cachedQuizCategories||[]).filter(q=>((q.group||currentGroupKey)===currentGroupKey||q.assignedFromGroup)&&(q.area||currentTrainingArea)===currentTrainingArea),courses=(cachedCourses||[]).filter(c=>((c.group||c.groupKey||currentGroupKey)===currentGroupKey||c.assignedFromGroup)&&(c.area||currentTrainingArea)===currentTrainingArea);
 
     const orphanMaterials=groupMaterials.filter(m=>!m.courseId||!courses.some(c=>c.id===m.courseId)),orphanQuizzes=quizzes.filter(q=>!q.courseId||!courses.some(c=>c.id===q.courseId));if(!courses.length&&!orphanMaterials.length&&!orphanQuizzes.length){box.classList.add('hidden');grid.innerHTML='';return;}box.classList.remove('hidden');
 
