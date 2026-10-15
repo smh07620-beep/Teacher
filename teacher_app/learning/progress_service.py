@@ -175,10 +175,18 @@ def my_progress(
         ).fetchall()
         record_rows = conn.execute(
             f"SELECT * FROM exam_records WHERE emp_id={ph} AND training_area={ph} "
-            f"AND group_key={ph} ORDER BY created_at DESC",
-            (emp_id, normalized_area, normalized_group),
+            f"ORDER BY created_at DESC",
+            (emp_id, normalized_area),
         ).fetchall()
-        records = [record_to_dict(row) for row in record_rows]
+        # A course assigned from another group is taken (and recorded) under its
+        # owner group; its records still belong in this learner's status.
+        granted_courses = set(learning_access.assigned_course_grants(user))
+        records = [
+            record
+            for record in (record_to_dict(row) for row in record_rows)
+            if str(record.get("group") or record.get("groupKey") or "") == normalized_group
+            or str(record.get("courseId") or "") in granted_courses
+        ]
 
     try:
         smart_progress_rows = learning_repository.list_progress_for_user(
@@ -196,7 +204,10 @@ def my_progress(
         item
         for item in material_repository.list_uploaded_materials(include_inactive=False)
         if item.get("area") == normalized_area
-        and item.get("group") == normalized_group
+        and (
+            item.get("group") == normalized_group
+            or str(item.get("courseId") or "") in granted_courses
+        )
     ]
     allowed_material_ids = {
         str(item.get("id") or "") for item in materials if item.get("id")
