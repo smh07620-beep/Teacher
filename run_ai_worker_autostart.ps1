@@ -235,7 +235,10 @@ while ($true) {
   $previousErrorPreference = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
   try {
-    & $python -u $entry
+    # Relay every Worker line (stdout and stderr) through Write-Host with a timestamp.
+    # Windows PowerShell does not reliably put a native program's own output into a
+    # transcript, so without this the log would hold supervisor lines but no Python errors.
+    & $python -u $entry 2>&1 | ForEach-Object { Write-Host ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $_) }
     $workerExit = $LASTEXITCODE
   } catch {
     Write-TeacherAIWorkerEvent -EntryType "Error" -EventId 3104 -Message "AI Worker process launch failed; supervisor will retry."

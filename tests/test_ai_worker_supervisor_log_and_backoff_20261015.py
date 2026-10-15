@@ -16,6 +16,11 @@ class AIWorkerSupervisorLogAndBackoffTests(unittest.TestCase):
         ignored = {line.strip() for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()}
         self.assertIn("logs/", ignored)
 
+    def test_worker_output_is_relayed_to_the_host_so_the_transcript_records_it(self):
+        self.assertIn("& $python -u $entry 2>&1 | ForEach-Object { Write-Host", self.text)
+        launch = self.text.index("& $python -u $entry")
+        self.assertLess(launch, self.text.index("$workerExit = $LASTEXITCODE"))
+
     def test_logging_failure_cannot_stop_the_worker(self):
         block = self.text[self.text.index("function Start-TeacherAIWorkerLog"):self.text.index("function Write-TeacherAIWorkerLog")]
         self.assertIn("catch", block)
