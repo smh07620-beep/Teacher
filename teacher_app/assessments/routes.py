@@ -79,6 +79,7 @@ def register_assessment_routes(owner):
                 user,
                 categories,
                 lambda: service.list_categories(app, None, area, False),
+                requested_group=group,
             )
         # Students (and the ?view=learner reading area) only see exams of courses
         # assigned to them; exams without a course stay group-visible.

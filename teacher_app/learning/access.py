@@ -102,12 +102,14 @@ def _username(user: Mapping[str, Any] | None) -> str:
     return str((user or {}).get("username") or "").strip().lower()
 
 
-def personal_course_grants(user: Mapping[str, Any] | None) -> frozenset[str]:
-    """Course ids this account was individually assigned, even from another group.
+def assigned_course_grants(user: Mapping[str, Any] | None) -> frozenset[str]:
+    """Course ids whose content this person may see because the COURSE is assigned.
 
-    An individual assignment is the explicit, audited grant that lets one person
-    see one course (and its materials) outside their own group.  Only published,
-    active courses in the person's own training area count.  Cached per request.
+    One rule for every kind of assignment (individual, group, all-staff): a person
+    who is actively assigned a published, active course in their own training area
+    may see that course, its materials and its exams, whichever group owns them.
+    Owner group and the material "audience" setting only matter for content that is
+    not part of an assigned course.  Cached per request.
     """
     username = _username(user)
     if not username:
@@ -117,7 +119,7 @@ def personal_course_grants(user: Mapping[str, Any] | None) -> frozenset[str]:
         from flask import g, has_request_context
 
         if has_request_context():
-            cache = g.__dict__.setdefault("_personal_course_grants", {})
+            cache = g.__dict__.setdefault("_assigned_course_grants", {})
             if username in cache:
                 return cache[username]
     except Exception:
@@ -126,9 +128,8 @@ def personal_course_grants(user: Mapping[str, Any] | None) -> frozenset[str]:
     granted: set[str] = set()
     try:
         from teacher_app.courses import repository as course_repository
-        from teacher_app.learning import assignment_repository
 
-        for course_id in assignment_repository.list_personal_course_ids(username=username, area=area):
+        for course_id in assigned_course_ids(user):
             course = course_repository.get_course(course_id)
             if not course or not course.get("active", True):
                 continue
@@ -143,6 +144,10 @@ def personal_course_grants(user: Mapping[str, Any] | None) -> frozenset[str]:
     if cache is not None:
         cache[username] = result
     return result
+
+
+# Historical name, kept so older imports keep working; the rule is now course-wide.
+personal_course_grants = assigned_course_grants
 
 
 LEARNER_VIEW_PARAM = "view"
@@ -268,7 +273,7 @@ def can_access_learning_item(
     if audience == "multi_group" and user_group in _audience_groups(item):
         return True
     course_id = _item_course_id(item)
-    return bool(course_id) and course_id in personal_course_grants(user)
+    return bool(course_id) and course_id in assigned_course_grants(user)
 
 
 def can_access_requested_scope(
@@ -288,6 +293,7 @@ def can_access_requested_scope(
 
 __all__ = [
     "GLOBAL_LEARNING_ROLES",
+    "assigned_course_grants",
     "can_access_learning_item",
     "can_access_requested_scope",
     "assigned_course_ids",

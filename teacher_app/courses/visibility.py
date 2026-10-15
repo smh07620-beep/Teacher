@@ -83,21 +83,38 @@ def filter_courses_for_user(
     return [c for c in courses if str(c.get("id") or "") in own_ids | shared_course_ids]
 
 
+def _view_includes(user, requested_group, item_group) -> bool:
+    """Show an assigned course from another group only where it belongs.
+
+    That is the owner group's own view and the learner's own group view, never an
+    unrelated third group's tab (it would open as an empty shell there).
+    """
+    requested = str(requested_group or "").strip()
+    if not requested:
+        return True
+    if requested == str(item_group or "").strip():
+        return True
+    _area, own_group = learning_access.preferred_learning_scope(user)
+    return requested == own_group
+
+
 def add_personally_assigned_courses(
     user: Mapping[str, Any] | None,
     courses: list[dict],
     *,
     course_loader: Callable[[str], dict | None] | None = None,
+    requested_group: str | None = None,
 ) -> list[dict]:
-    """Append courses from other groups that this person was individually assigned.
+    """Append courses from other groups that are assigned to this person.
 
     The learner course list is requested per group, so a course owned by another
-    group would never show up even though an administrator assigned it to the
-    person.  Only ids in ``personal_course_grants`` (published, same area) are added.
+    group would never show up even though it was assigned to the person (by
+    individual, group or all-staff assignment).  Only ids in
+    ``assigned_course_grants`` (published, same area) are added.
     """
     if not user:
         return list(courses)
-    grants = learning_access.personal_course_grants(user)
+    grants = learning_access.assigned_course_grants(user)
     if not grants:
         return list(courses)
     if course_loader is None:
@@ -108,7 +125,7 @@ def add_personally_assigned_courses(
     extra = []
     for course_id in sorted(grants - present):
         course = course_loader(course_id)
-        if course:
+        if course and _view_includes(user, requested_group, course.get("group")):
             extra.append({**course, "assignedFromGroup": course.get("group", "")})
     return list(courses) + extra
 
@@ -117,22 +134,27 @@ def add_personally_assigned_exams(
     user: Mapping[str, Any] | None,
     categories: list[dict],
     all_categories_loader: Callable[[], list[dict]],
+    *,
+    requested_group: str | None = None,
 ) -> list[dict]:
-    """Append exams (quiz categories) linked to a course this person was individually assigned.
+    """Append exams (quiz categories) linked to a course assigned to this person.
 
     Same grant as ``add_personally_assigned_courses``: the exam must hang under a
-    granted course; nothing else from the other group becomes visible.
+    granted course; nothing else from the other group becomes visible.  An exam
+    that lists its own assignees still honours that list afterwards.
     """
     if not user:
         return list(categories)
-    grants = learning_access.personal_course_grants(user)
+    grants = learning_access.assigned_course_grants(user)
     if not grants:
         return list(categories)
     present = {str(c.get("id") or "") for c in categories}
     extra = [
         {**item, "assignedFromGroup": item.get("group", "")}
         for item in all_categories_loader()
-        if str(item.get("courseId") or "") in grants and str(item.get("id") or "") not in present
+        if str(item.get("courseId") or "") in grants
+        and str(item.get("id") or "") not in present
+        and _view_includes(user, requested_group, item.get("group"))
     ]
     return list(categories) + extra
 

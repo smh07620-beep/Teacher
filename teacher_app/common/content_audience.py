@@ -208,7 +208,7 @@ def visible_to_user(user: Mapping[str, Any] | None, meta: Mapping[str, Any]) -> 
     if course_id:
         from teacher_app.learning import access as learning_access
 
-        return course_id in learning_access.personal_course_grants(user)
+        return course_id in learning_access.assigned_course_grants(user)
     return False
 
 

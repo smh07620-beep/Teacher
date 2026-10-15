@@ -375,7 +375,7 @@
         <label id="learning-assignment-audience-key-wrap"><span id="learning-assignment-audience-key-label">組別</span><input id="learning-assignment-audience-key" autocomplete="off"></label>
         <label><span>學習要求</span><select id="learning-assignment-requirement"><option value="required">指定完成</option><option value="elective">自由選讀</option></select></label>
         <label><span>完成期限</span><input id="learning-assignment-due-at" type="date"></label>
-        <p id="learning-assignment-status" class="v561-profile-status">建立後會出現在學員首頁、我的待辦與通知中心。</p>
+        <p id="learning-assignment-status" class="v561-profile-status">建立後會出現在學員首頁、我的待辦與通知中心。被指派的人會同時看到這門課的課程、教材與考卷（不論屬於哪一組）。</p>
         <div class="v561-profile-actions"><button type="button" id="learning-assignment-cancel" class="secondary">取消</button><button type="submit">建立指派</button></div>
       </form>`;
       document.body.appendChild(dialog);

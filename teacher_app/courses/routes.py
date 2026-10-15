@@ -42,7 +42,7 @@ def register_course_routes(owner):
 
         user = getattr(g, "teacher_user", None)
         visible = course_visibility.filter_courses_for_user(user, courses)
-        return jsonify(course_visibility.add_personally_assigned_courses(user, visible))
+        return jsonify(course_visibility.add_personally_assigned_courses(user, visible, requested_group=group))
 
     def api_courses_admin():
         denied = require_admin()

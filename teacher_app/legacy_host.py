@@ -5182,6 +5182,7 @@ def api_list_quiz_categories():
             _current_user(),
             categories,
             lambda: canonical_assessments.list_categories(sys.modules[__name__], None, area, False),
+            requested_group=group,
         )
     # Students (and anyone in the ?view=learner reading area) only get exams of
     # courses assigned to them; exams without a course stay group-visible.
@@ -6153,7 +6154,7 @@ def api_courses():
     # accounts that cannot see any of the course's materials.
     user = _current_user()
     visible = course_visibility.filter_courses_for_user(user, courses)
-    return jsonify(course_visibility.add_personally_assigned_courses(user, visible))
+    return jsonify(course_visibility.add_personally_assigned_courses(user, visible, requested_group=group))
 
 @app.get("/api/courses/admin")
 def api_courses_admin():
