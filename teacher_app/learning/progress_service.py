@@ -147,6 +147,21 @@ def mark_material_complete(user: Mapping[str, Any], material_id: str) -> str:
     return now
 
 
+def _has_assigned_course_in(user: Mapping[str, Any], area: str, group: str) -> bool:
+    for course_id in learning_access.assigned_course_grants(user):
+        try:
+            course = course_repository.get_course(course_id)
+        except Exception:
+            course = None
+        if (
+            course
+            and scope.normalize_group(course.get("group")) == group
+            and scope.normalize_area(course.get("area")) == area
+        ):
+            return True
+    return False
+
+
 def my_progress(
     user: Mapping[str, Any],
     *,
@@ -160,12 +175,16 @@ def my_progress(
 
     normalized_area = scope.normalize_area(area)
     normalized_group = scope.normalize_group(group)
-    if not learning_access.can_access_requested_scope(
+    own_scope = learning_access.can_access_requested_scope(
         user,
         normalized_area,
         normalized_group,
-    ):
-        raise ProgressError("此學習範圍不在你的授權範圍。", 403)
+    )
+    if not own_scope:
+        # A course assigned from another group is taken inside its owner group's
+        # screen; that screen may ask for progress, but only about assigned courses.
+        if not _has_assigned_course_in(user, normalized_area, normalized_group):
+            raise ProgressError("此學習範圍不在你的授權範圍。", 403)
 
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
@@ -260,6 +279,9 @@ def my_progress(
         normalized_area,
         False,
     )
+    if not own_scope:
+        courses = [c for c in courses if str(c.get("id") or "") in granted_courses]
+        categories = [c for c in categories if str(c.get("courseId") or "") in granted_courses]
     result = []
     for course in courses:
         course_materials = [
