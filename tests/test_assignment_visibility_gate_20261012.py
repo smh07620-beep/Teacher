@@ -113,7 +113,7 @@ class LearnerViewTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1] / "static"
         learner = (root / "system-learner.js").read_text(encoding="utf-8")
         self.assertEqual(learner.count("view=learner"), 3)
-        for name in ("admin-course-material.js", "system-exam.js", "admin-question-bank.js"):
+        for name in ("admin-course-material.js", "admin-question-bank.js"):
             self.assertNotIn("view=learner", (root / name).read_text(encoding="utf-8"), name)
 
 

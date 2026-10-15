@@ -81,11 +81,18 @@ function resetExamAttemptState(catId=currentCatKey){
     delete isSubmittedMap[catId];
 }
 
+// 學員閱讀區只顯示「被指派」的課程與考卷；教師／管理頁（admin=1 或有 persona）維持完整清單。
+// 此旗標只會縮小可見範圍，伺服器仍以身分與指派為準。
+function learnerViewQuery(){
+    const p=new URLSearchParams(window.location.search);
+    return (p.get('admin')==='1'||p.get('persona'))?'':'&view=learner';
+}
+
 async function renderDynamicExamTabs() {
     const listBox=document.getElementById('dynamic-exam-tabs-list'),emptyBox=document.getElementById('dynamic-exam-tabs-empty');
     listBox.innerHTML='<p class="text-xs text-slate-400">載入課程考卷中…</p>';emptyBox.classList.add('hidden');
     try{
-        const [res,courseRes]=await Promise.all([fetch(`/api/quiz-categories?group=${currentGroupKey}&area=${currentTrainingArea}`),fetch(`/api/courses?area=${encodeURIComponent(currentTrainingArea)}&group=${encodeURIComponent(currentGroupKey)}`)]);
+        const [res,courseRes]=await Promise.all([fetch(`/api/quiz-categories?group=${currentGroupKey}&area=${currentTrainingArea}${learnerViewQuery()}`),fetch(`/api/courses?area=${encodeURIComponent(currentTrainingArea)}&group=${encodeURIComponent(currentGroupKey)}${learnerViewQuery()}`)]);
         const cats=await res.json();if(courseRes.ok)cachedCourses=await courseRes.json();cachedQuizCategories=Array.isArray(cats)?cats:[];dynamicCategoriesCache[`${currentTrainingArea}:${currentGroupKey}`]=cachedQuizCategories;
         if(!cachedQuizCategories.length){listBox.innerHTML='';emptyBox.classList.remove('hidden');document.getElementById('current-quiz-title').innerHTML=`<span class="text-teal-600">📝</span> ${GROUPS[currentGroupKey].label} 尚無考題`;document.getElementById('current-quiz-desc').innerText='本組別尚未建立任何考卷，請由管理者後台新增。';document.getElementById('quiz-questions-list').innerHTML='';document.getElementById('quick-jump-grid').innerHTML='';document.getElementById('stat-progress').innerText='0 / 0';document.getElementById('stat-flagged').innerText='0 題';const pctText=document.getElementById('exam-progress-percent');if(pctText)pctText.textContent='0%';const pctBar=document.getElementById('exam-progress-bar');if(pctBar)pctBar.style.width='0%';document.getElementById('result-dashboard').classList.add('hidden');return;}
         const courseMap=Object.fromEntries((cachedCourses||[]).map(c=>[c.id,c])),courseOrder=(cachedCourses||[]).map(c=>c.id),grouped={};
