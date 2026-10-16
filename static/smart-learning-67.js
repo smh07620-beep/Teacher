@@ -5,7 +5,7 @@
   const api=(url,opts)=>fetch(url,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(opts?.headers||{})},...opts});
   async function apiJson(url,opts){const response=await api(url,opts),body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'操作失敗');return body;}
   async function load(id){try{return await apiJson(`/api/learning-progress/${encodeURIComponent(id)}`);}catch(_){return {position:{},progress:0,completed:false,lastPositionSeconds:0,watchedBuckets:[]};}}
-  async function save(position,progress,completed=false,media={}){if(!state.material)return null;try{const response=await api(`/api/learning-progress/${encodeURIComponent(state.material.id)}`,{method:'PUT',body:JSON.stringify({position,progress,completed,...media})});const data=await response.json().catch(()=>({}));if(response.ok)window.dispatchEvent(new CustomEvent('smartLearning67:progress',{detail:data}));return data;}catch(_){return null;/* offline readers remain usable */}}
+  async function save(position,progress,completed=false,media={},opts={}){if(!state.material)return null;try{const response=await api(`/api/learning-progress/${encodeURIComponent(state.material.id)}`,{method:'PUT',keepalive:Boolean(opts.keepalive),body:JSON.stringify({position,progress,completed,...media})});const data=await response.json().catch(()=>({}));if(response.ok)window.dispatchEvent(new CustomEvent('smartLearning67:progress',{detail:data}));return data;}catch(_){return null;/* offline readers remain usable */}}
   async function saveExternalProgress(active){if(!active?.materialId)return;const duration=Math.max(0,Number(active.duration||0)),seconds=Math.max(0,Number(active.lastPositionSeconds||0)),progress=duration?Math.min(100,seconds/duration*100):0;try{await api(`/api/learning-progress/${encodeURIComponent(active.materialId)}`,{method:'PUT',body:JSON.stringify({position:{seconds},progress,completed:false,duration,lastPositionSeconds:seconds,watchedBuckets:[...active.watchedBuckets],completionThreshold:.9})});}catch(_){/* server remains authoritative when reader is offline */}}
   function updateHtml5Progress(active){if(!active?.media)return;const seconds=Math.max(0,Number(active.media.currentTime||0)),duration=Math.max(0,Number(active.media.duration||active.duration||0));active.lastPositionSeconds=seconds;active.duration=duration;if(duration>0)active.watchedBuckets.add(Math.floor(seconds/10));}
   async function saveHtml5Progress(active=state.activeHtml5){if(!active?.materialId)return;updateHtml5Progress(active);const duration=active.duration,seconds=active.lastPositionSeconds,progress=duration?Math.min(100,seconds/duration*100):0;try{await api(`/api/learning-progress/${encodeURIComponent(active.materialId)}`,{method:'PUT',body:JSON.stringify({position:{seconds},progress,completed:false,duration,lastPositionSeconds:seconds,watchedBuckets:[...active.watchedBuckets],completionThreshold:active.threshold})});}catch(_){/* server remains authoritative when reader is offline */}}
@@ -14,7 +14,19 @@
   function activateHtml5Media(media,material,saved,threshold=.9){if(!media||!material)return;const prior=state.activeHtml5;if(prior&&prior.media!==media||prior&&prior.materialId!==material.id)flushHtml5();state.activeHtml5={materialId:material.id,material,media,watchedBuckets:new Set(saved?.watchedBuckets||[]),lastPositionSeconds:Number(saved?.lastPositionSeconds||0),duration:Number(saved?.duration||0),lastSavedAt:0,threshold};state.material=material;bindHtml5Media(media);}
   function page(){return Number(window.slideViewerState?.index||0)+1;}
   function total(){return Math.max(1,Number(window.slideViewerState?.pageCount||window.slideViewerState?.images?.length||1));}
-  function syncPage(){const p=page(),t=total();save({page:p,totalPages:t},Math.round(p/t*100),false);}
+  /* Batched page progress: dwell is accumulated in memory and sent every 30s, on hide and on close. */
+  const pend={materialId:'',page:0,total:0,since:0,delta:{},dirty:false,timer:0};
+  function accrue(){const now=Date.now();if(pend.page&&pend.since&&!document.hidden){const secs=Math.min(35,(now-pend.since)/1000);if(secs>0)pend.delta[pend.page]=(pend.delta[pend.page]||0)+secs;}pend.since=document.hidden?0:now;}
+  function flushPage(keepalive){if(!pend.page||!pend.materialId||!state.material||state.material.id!==pend.materialId)return null;accrue();const delta={};Object.keys(pend.delta).forEach(k=>{const v=Math.round(pend.delta[k]*10)/10;if(v>0)delta[k]=v;});pend.delta={};pend.dirty=false;return save({page:pend.page,totalPages:pend.total,pageDwellDelta:delta},Math.round(pend.page/pend.total*100),false,{},{keepalive});}
+  function syncPage(){
+    if(!state.material)return;
+    if(pend.materialId!==state.material.id){pend.materialId=state.material.id;pend.page=0;pend.delta={};pend.since=0;}
+    const first=!pend.page;accrue();pend.page=page();pend.total=total();pend.dirty=true;
+    if(first||pend.page===pend.total)flushPage(false);
+    if(!pend.timer)pend.timer=setInterval(()=>{if(pend.dirty||pend.since)flushPage(false);},30000);
+  }
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){flushPage(true);pend.since=0;}else if(pend.page)pend.since=Date.now();});
+  window.addEventListener('pagehide',()=>{flushPage(true);});
   function externalFrame(){let frame=document.getElementById('external-media-frame');if(!frame){frame=document.createElement('iframe');frame.id='external-media-frame';frame.className='hidden w-full aspect-video rounded-lg bg-black';frame.title='外部影音教材';frame.allow='encrypted-media; picture-in-picture; fullscreen';frame.referrerPolicy='no-referrer';frame.loading='lazy';document.getElementById('media-video')?.insertAdjacentElement('afterend',frame);}return frame;}
   function postYouTube(frame,payload){if(frame?.contentWindow)frame.contentWindow.postMessage(JSON.stringify(payload),'https://www.youtube-nocookie.com');}
   function applyPendingYouTubeSeek(active){const pending=state.pendingSeek;if(!pending||pending.materialId!==active.materialId||!active.ready)return;postYouTube(active.frame,{event:'command',func:'seekTo',args:[pending.seconds,true]});state.pendingSeek=null;}
@@ -28,7 +40,7 @@
   const originalGoto=window.goToSlidePage;
   window.goToSlidePage=function(){const result=originalGoto?.apply(this,arguments);if(state.material)setTimeout(syncPage,0);return result;};
   const originalClose=window.closeSlideViewer;
-  window.closeSlideViewer=function(){if(state.material)syncPage();return originalClose?.apply(this,arguments);};
+  window.closeSlideViewer=function(){if(state.material){syncPage();flushPage(false);pend.page=0;pend.since=0;}return originalClose?.apply(this,arguments);};
   const originalCloseMedia=window.closeMediaViewer;
   window.closeMediaViewer=function(){flushHtml5();return originalCloseMedia?.apply(this,arguments);};
   window.smartLearning67Complete=()=>{if(state.material)save({page:page(),totalPages:total()},Math.round(page()/total()*100),false);};
