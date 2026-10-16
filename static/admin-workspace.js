@@ -104,6 +104,10 @@
       button.classList.toggle('hover:bg-slate-200', !active);
       button.setAttribute('aria-current', active ? 'page' : 'false');
     });
+    // The current tab must stay visible: open the "更多" menu when it holds the active one.
+    document.querySelectorAll('.admin-more').forEach(menu => {
+      if (menu.querySelector('.admin-nav-btn[aria-current="page"]')) menu.open = true;
+    });
   }
 
   function paintWorkspaceHeader(name) {

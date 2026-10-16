@@ -1078,3 +1078,10 @@ details[data-unassigned-group] [data-material-more][open] { position: relative; 
     color: #0f172a;
     font-size: 13px;
 }
+
+/* Workspace nav: infrequent tabs live under "更多"; the menu hides itself when none is permitted. */
+.admin-more{position:relative;display:inline-block}
+.admin-more:not(:has(.admin-nav-btn:not(.hidden))){display:none}
+.admin-more-summary{display:inline-flex;align-items:center;min-height:44px;padding:0 .9rem;border-radius:.75rem;background:#f1f5f9;color:#475569;font-size:14px;font-weight:700;cursor:pointer;list-style:none}
+.admin-more-summary::-webkit-details-marker{display:none}
+.admin-more-menu{position:absolute;z-index:30;top:calc(100% + 4px);left:0;display:flex;flex-direction:column;gap:.25rem;min-width:11rem;padding:.4rem;border-radius:.75rem;background:#fff;border:1px solid #dbe4e8;box-shadow:0 12px 28px rgba(15,51,66,.16)}

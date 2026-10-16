@@ -113,3 +113,19 @@ class SkeletonAndHumanErrorTests(unittest.TestCase):
     def test_unsent_reading_progress_is_kept_when_network_fails(self):
         js = (self.ROOT / "smart-learning-67.js").read_text(encoding="utf-8")
         self.assertIn("if(result===null)", js)
+
+
+class AdminMoreMenuTests(unittest.TestCase):
+    ROOT = Path(__file__).resolve().parents[1] / "static"
+
+    def test_infrequent_tabs_sit_in_a_more_menu_that_keeps_ids_and_opens_for_active_tab(self):
+        html = (self.ROOT / "system.html").read_text(encoding="utf-8")
+        start = html.index('<details class="admin-more">')
+        end = html.index("</details>", start)
+        block = html[start:end]
+        self.assertIn('id="admin-nav-compliance"', block)
+        self.assertIn('id="admin-nav-word"', block)
+        self.assertNotIn('id="admin-nav-results"', block)
+        js = (self.ROOT / "admin-workspace.js").read_text(encoding="utf-8")
+        self.assertIn(".admin-more", js)
+        self.assertIn(":has(.admin-nav-btn:not(.hidden))", (self.ROOT / "admin.css").read_text(encoding="utf-8"))
