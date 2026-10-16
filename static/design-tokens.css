@@ -60,7 +60,13 @@ h1,h2,h3{line-height:1.3;font-weight:700}
 @media (pointer:coarse){.micro-btn,.viewer-tool-light,[data-slide-action],button[aria-label]{min-width:44px;min-height:44px}}
 
 /* Phones: pinch-zoom replaces the header zoom buttons, so the title row keeps its width. */
-@media (max-width:639px){#slide-viewer-shell [data-slide-image-tool]{display:none}}
+@media (max-width:639px){
+  #slide-viewer-shell .reader-head-tool,#slide-viewer-shell .reader-eyebrow{display:none}
+  #slide-viewer-canvas{padding:0}
+  #slide-viewer-image{border:0;border-radius:0;box-shadow:none}
+  #slide-viewer-stage{background:#0f1a20}
+}
+@media (min-width:640px){.reader-phone-tools{display:none}}
 @media (pointer:coarse){#slide-viewer-shell button{min-height:44px}}
 
 /* The submit bar only makes sense once questions are on screen (the exam list shows before that). */

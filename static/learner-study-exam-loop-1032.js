@@ -202,8 +202,11 @@
     const exams = examsForCourse(material?.courseId);
     loadGate(material?.courseId);
     button.hidden = !exams.length || isLocked(material?.courseId);
+    // One forward action: the exam once unlocked, otherwise the next material.
+    const anchorEl = document.getElementById(anchorId);
+    if (anchorEl && anchorId === 'reader-next') anchorEl.hidden = !button.hidden;
     const ret = ss.get(RETURN_KEY);
-    button.textContent = ret && exams.some(e => String(e.id) === String(ret.catId)) ? '↩ 回到考核（保留作答）' : '📝 看完了，直接考核 →';
+    button.textContent = ret && exams.some(e => String(e.id) === String(ret.catId)) ? '↩ 回到考核（保留作答）' : '前往考試 →';
   }
   function syncReaderButtons() {
     ensureReaderExamButton('reader-next', () => g('closeSlideViewer')?.());

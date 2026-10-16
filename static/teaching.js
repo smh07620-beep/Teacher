@@ -31,7 +31,7 @@ function teachingSavePage() {
     if (context) context.textContent = [course?.title, material?.desc, saved ? '已記住本頁（此瀏覽器）；閱讀完成請自行標記。' : '此瀏覽器無法保存頁碼；完成紀錄仍可送出。'].filter(Boolean).join(' ｜ ');
     const complete = document.getElementById('reader-complete');
     if (complete) {
-        complete.hidden = !!material?.isBuiltin;
+        complete.hidden = !!material?.isBuiltin || !!window.SmartLearning67?.isAutoTracked?.(material);
         complete.disabled = teachingReaderBusy || !!myCompletedMaterials[s.materialId];
         complete.textContent = myCompletedMaterials[s.materialId] ? '✓ 已完成' : '標記完成';
     }

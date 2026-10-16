@@ -17,7 +17,7 @@ class LearnerStudyExamLoop1032Tests(unittest.TestCase):
 
     def test_material_completion_is_not_a_gate(self):
         self.assertNotIn("請先完成目前這份教材，再進入下一份教材。", self.teaching)
-        self.assertIn("看完了，直接考核", self.loop)
+        self.assertIn("前往考試 →", self.loop)
 
     def test_learner_can_return_to_study_and_keep_result(self):
         for marker in ("回教材閱覽", "回圖譜區", "回到考核", "loop1032:lastResult:", "未通過"):
