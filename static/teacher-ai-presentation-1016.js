@@ -63,9 +63,10 @@
   function currentCard(item) {
     const approve = item.status === 'draft' ? '<button type="button" data-action="approve" class="rounded-lg bg-emerald-700 px-3 py-1.5 font-black text-white">教師核准</button>' : '';
     const publish = item.status === 'approved' ? '<button type="button" data-action="publish" class="rounded-lg bg-violet-700 px-3 py-1.5 font-black text-white">正式發布這一版</button>' : '';
+    const regenerate = item.status !== 'published' ? '<button type="button" data-action="regenerate" class="rounded-lg border border-violet-200 bg-white px-3 py-1.5 font-bold text-violet-700">重新產生</button>' : '';
     const discard = item.status !== 'published' ? '<button type="button" data-action="discard" class="rounded-lg border border-rose-200 bg-white px-3 py-1.5 font-bold text-rose-700">捨棄這份</button>' : '';
     const published = item.status === 'published' ? '<span class="rounded-lg bg-emerald-50 px-3 py-1.5 font-bold text-emerald-800">✓ 已正式發布</span>' : '';
-    return `<article class="rounded-xl border border-violet-200 bg-white p-4 space-y-3" data-presentation-id="${escape(item.id)}"><div class="flex flex-wrap items-start justify-between gap-3"><div><div class="text-[11px] font-black tracking-wide text-violet-700">目前工作中的投影片</div><b class="mt-1 block text-base text-slate-950">${escape(item.title || 'AI 教學投影片')}</b><p class="mt-1 text-xs text-slate-500">V${Number(item.revisionNumber || 1)} · ${escape(statusLabel(item))} · ${Number((item.slides || []).length)} 張${item.approvedBy ? ` · 核准：${escape(item.approvedBy)}` : ''}</p></div>${qualityBadge(item)}</div><div class="flex flex-wrap gap-2 text-xs"><a class="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 font-bold text-indigo-700 ${item.artifactReady ? '' : 'pointer-events-none opacity-40'}" href="/api/ai-presentations/${encodeURIComponent(item.id)}/download">⬇️ 下載</a><button type="button" data-action="quality" class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 font-bold text-emerald-700">品質檢查</button><button type="button" data-action="provenance" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-bold text-slate-700">來源追溯</button>${approve}${publish}${discard}${published}</div><pre data-output class="hidden overflow-auto rounded-lg bg-slate-900 p-2 text-[11px] text-slate-100"></pre></article>`;
+    return `<article class="rounded-xl border border-violet-200 bg-white p-4 space-y-3" data-presentation-id="${escape(item.id)}"><div class="flex flex-wrap items-start justify-between gap-3"><div><div class="text-[11px] font-black tracking-wide text-violet-700">目前工作中的投影片</div><b class="mt-1 block text-base text-slate-950">${escape(item.title || 'AI 教學投影片')}</b><p class="mt-1 text-xs text-slate-500">V${Number(item.revisionNumber || 1)} · ${escape(statusLabel(item))} · ${Number((item.slides || []).length)} 張${item.approvedBy ? ` · 核准：${escape(item.approvedBy)}` : ''}</p></div>${qualityBadge(item)}</div><div class="flex flex-wrap gap-2 text-xs"><a class="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 font-bold text-indigo-700 ${item.artifactReady ? '' : 'pointer-events-none opacity-40'}" href="/api/ai-presentations/${encodeURIComponent(item.id)}/download">⬇️ 下載</a><button type="button" data-action="quality" class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 font-bold text-emerald-700">品質檢查</button><button type="button" data-action="provenance" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-bold text-slate-700">來源追溯</button>${approve}${publish}${regenerate}${discard}${published}</div><pre data-output class="hidden overflow-auto rounded-lg bg-slate-900 p-2 text-[11px] text-slate-100"></pre></article>`;
   }
   function renderHistory() {
     const host = $('teacher-ai-presentation-history-list-1016');
@@ -165,6 +166,15 @@
         const captured=Number(material.capturedVersion||0), current=Number(material.currentVersion||0);
         output.textContent = [`來源教材：${material.title||'（名稱不可用）'}`,`來源教材版本：${captured?'v'+captured:'舊版本未記錄'}${current?'｜目前 v'+current:''}${material.versionChanged?'｜⚠️ 來源教材之後已有新版':''}`,`來源投影片大綱：${draft.title||'（名稱不可用）'}｜${draft.status||'—'}`,`大綱核准：${approval.teacher||draft.approvedBy||'—'}｜${approval.at||draft.approvedAt||'—'}`,`RAG 來源片段：${Number(rag.chunkCount||0)} 個`,`AI：${ai.provider||'—'} / ${ai.model||'—'}`,`PowerPoint 範本：${template.name||'未套用範本'}`,`目前簡報 revision：r${Number(data.revisionNumber||1)}`].join('\n');
         output.classList.toggle('hidden');
+        return;
+      }
+      if (button.dataset.action === 'regenerate') {
+        if (!confirm('用相同內容重新產生一份 PowerPoint 嗎？會建立新的版本，目前這份保留。')) return;
+        const started = await api(`/api/ai-presentations/${encodeURIComponent(id)}/regenerate`, {method:'POST'});
+        const jobId = started?.job?.id;
+        if (!jobId) throw new Error('伺服器沒有回傳工作 ID');
+        note('已排入重新產生，請稍候…');
+        await poll(jobId);
         return;
       }
       if (button.dataset.action === 'discard') {

@@ -166,3 +166,14 @@ class AiAuthoringGuardTests(unittest.TestCase):
         src = (Path(__file__).resolve().parents[1] / "static" / "course-wizard-681.js").read_text(encoding="utf-8")
         self.assertIn("teacher:ai-busy", src)
         self.assertIn("state.aiBusy", src)
+
+
+class AiRegenerateUiTests(unittest.TestCase):
+    def test_presentation_card_offers_regenerate_for_unpublished_only(self):
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parents[1] / "static" / "teacher-ai-presentation-1016.js").read_text(encoding="utf-8")
+        self.assertIn('data-action="regenerate"', src)
+        self.assertIn("/regenerate`, {method:'POST'}", src)
+        line = next(l for l in src.splitlines() if "const regenerate" in l)
+        self.assertIn("item.status !== 'published'", line)
