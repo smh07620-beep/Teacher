@@ -64,6 +64,7 @@
 
   /* ---------------- exam unlock gate (server-decided) ---------------- */
   const gateByCourse = new Map();
+  const reviewByCourse = new Map();
   const gateLoading = new Set();
   function gateFor(courseId) { return gateByCourse.get(String(courseId || '')) || null; }
   function isLocked(courseId) { const gate = gateFor(courseId); return Boolean(gate && gate.unlocked === false); }
@@ -77,13 +78,20 @@
       const data = await res.json().catch(() => ({}));
       if (data && data.gate) {
         gateByCourse.set(key, data.gate);
+        reviewByCourse.set(key, (data.materials || []).filter(m => (m.reviewPages || []).length).map(m => ({materialId: m.id, pages: m.reviewPages})));
         if (typeof window.renderCourseOverview === 'function') window.renderCourseOverview();
       }
     } catch (_) {
       /* offline: leave the exam row as is; the server still enforces the gate */
     } finally { gateLoading.delete(key); }
   }
-  window.LearnerExamGate = Object.freeze({get: gateFor, isLocked, reload: courseId => loadGate(courseId, true)});
+  window.LearnerExamGate = Object.freeze({
+    get: gateFor,
+    isLocked,
+    load: courseId => loadGate(courseId, false),
+    reload: courseId => loadGate(courseId, true),
+    reviewPages: courseId => reviewByCourse.get(String(courseId || '')) || []
+  });
   function lockedCardHtml(gate) {
     const pct = Math.max(0, Math.min(100, Number(gate.progress || 0)));
     return `<div class="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700" data-exam-locked="1"><div class="font-bold">🔒 ${esc(gate.reason || '讀完教材後解鎖')}</div><div class="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden"><div class="h-2 bg-teal-700" style="width:${pct}%"></div></div></div>`;
