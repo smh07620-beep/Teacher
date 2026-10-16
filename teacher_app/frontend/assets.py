@@ -181,7 +181,29 @@ STUDENT_LEAN_EXCLUDE = frozenset({
     "/teacher-ai-presentation-video-handoff-f5.js",
     "/teacher-ai-material-convergence-1014.js",
     "/teacher-assessment-inline-1031.js",
-})
+}) | frozenset(f"/{name}.js" for name in (
+    # batch 2: admin-* back-office scripts (only reachable from admin/teacher screens)
+    "admin-workspace", "admin-results-data", "admin-results-workspace",
+    "admin-exam-settings", "admin-doc-templates", "admin-pgy-assessments",
+    "admin-results", "admin-course-material", "admin-compliance-91",
+    "admin-people", "admin-announcements", "admin-system",
+    "admin-competency-matrix-92", "admin-materials", "admin-question-bank",
+    "admin-quiz-materials", "admin-question-editor-ui", "admin-question-actions",
+    "admin-jobs", "admin-material-upload", "admin-ai-questions",
+    "admin-question-panel", "admin-external-media", "admin-results-export",
+    "admin-hotspot-question-1010", "admin-slide-checkpoints-1011",
+    # batch 3: teacher-* authoring / back-office scripts
+    "teacher-workspace-1014", "teacher-media-script-1014", "teacher-media-recorder-1014",
+    "teacher-ai-presentation-1016", "teacher-ai-presentation-editor-f5", "teacher-ai-video-1015",
+    "production-readiness-f6", "system-admin-focus-1014", "training-intervention-f3",
+    "material-upload-client", "teacher-ai-material-1014", "teacher-content-studio-71",
+    "teacher-content-tool-panels-710", "teacher-content-latency-712", "teacher-content-composer-72",
+    "teacher-ux-convergence-72", "teacher-ui-resilience-1014", "course-wizard-runtime-fix-1014",
+    "teacher-interface-convergence-1014", "teacher-authoring-source-fix-1017", "teacher-ai-media-studio-1018",
+    "teacher-ai-media-controls-1023", "teacher-assignment-experience-1014", "teacher-action-queue-1024",
+    "teacher-learners-p2", "teacher-course-tracking-f2", "maintenance-64",
+    "roles-signing-66", "content-audience-1014", "course-wizard-681",
+))
 
 
 def student_lean_enabled() -> bool:

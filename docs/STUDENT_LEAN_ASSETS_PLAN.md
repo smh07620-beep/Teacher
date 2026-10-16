@@ -1,6 +1,6 @@
 # 學員少載入教師／管理程式：評估與計畫
 
-**狀態：已加入環境變數開關 `STUDENT_LEAN_ASSETS`（預設關閉）與 16 支已檢查的小檔案（`assets.STUDENT_LEAN_EXCLUDE`）；其餘清單尚未逐支確認。** 預計 11/06 考試結束後再進行。
+**狀態：開關 `STUDENT_LEAN_ASSETS` 預設仍為關閉。`assets.STUDENT_LEAN_EXCLUDE` 已有 72 支（學員頁 121 支 → 49 支）。** 第 2、3 批（admin-* 26 支、teacher-* 與其他後台 30 支）已用靜態引用檢查加上本機瀏覽器（學員帳號）驗證：課程頁、教材閱讀器、考卷作答／交卷／結果、各學習模組切換，無主控台錯誤；管理員帳號仍載入全部 121 支。仍保留不排除：training-command-center-71、learning-analytics-71、course-lifecycle-f2、pgy-workflow、product-convergence-101、review-links-66、teacher-persona-isolation-1014、teacher-media-audio/subtitle-1014、teacher-slide-narration-1109、notification-center-71 等學員畫面可能用到的檔案。正式開啟前請在 Render 預備環境以學員身分再跑一次完整流程。
 
 ## 為什麼
 
