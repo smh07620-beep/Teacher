@@ -241,6 +241,7 @@
 
   function setBusy(busy) {
     busyNow = Boolean(busy);
+    window.AppApiClient?.aiBusy?.('script', busyNow);
     updateGenerateState();
     const select = document.getElementById('teacher-script-material-1014');
     if (select) select.disabled = busy;

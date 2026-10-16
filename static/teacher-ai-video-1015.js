@@ -20,6 +20,7 @@
     }
   };
   const busy = value => {
+    window.AppApiClient?.aiBusy?.('video', !!value);
     const button = $('teacher-ai-video-generate-1015');
     if (button) button.disabled = value || !status?.ready || !status?.capabilities?.['video.create'];
   };

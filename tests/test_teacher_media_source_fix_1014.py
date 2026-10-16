@@ -50,7 +50,7 @@ class TeacherMediaSourceFix1014Tests(unittest.TestCase):
         self.assertNotIn("item.active !== false", self.script)
 
     def test_draft_material_is_valid_media_authoring_source(self):
-        draft = {"id": "mat-draft", "group": "grpBio", "area": "internal", "active": False}
+        draft = {"id": "mat-draft", "group": "grpBio", "area": "internal", "active": False, "filename": "a.pptx"}
         actor = {"username": "teacher1"}
         with patch.object(media_script_jobs.material_repository, "get_material", return_value=draft):
             request = media_script_jobs.prepare_request({"materialId": "mat-draft"}, actor)
@@ -58,7 +58,7 @@ class TeacherMediaSourceFix1014Tests(unittest.TestCase):
         self.assertEqual(request["group_key"], "grpBio")
 
     def test_worker_can_generate_from_draft_but_not_missing_material(self):
-        draft = {"id": "mat-draft", "group": "grpBio", "area": "internal", "active": False}
+        draft = {"id": "mat-draft", "group": "grpBio", "area": "internal", "active": False, "filename": "a.pptx"}
         with patch.object(media_script_jobs.material_repository, "get_material", return_value=draft), \
              patch.object(media_script_jobs.media_script_runtime, "generate_script", return_value={"title": "ok"}) as generate:
             result = media_script_jobs.run_generation_sync({"materialId": "mat-draft"})

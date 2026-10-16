@@ -86,6 +86,7 @@
   }
 
   function setBusy(busy) {
+    window.AppApiClient?.aiBusy?.('subtitle', !!busy);
     ['teacher-subtitle-generate-1014','teacher-subtitle-save-1014','teacher-subtitle-approve-1014'].forEach(id => {
       const node = document.getElementById(id);
       if (node) node.disabled = busy;
@@ -264,6 +265,16 @@
     });
     document.getElementById('teacher-subtitle-draft-1014')?.addEventListener('change', renderSelected);
     document.getElementById('teacher-subtitle-generate-1014')?.addEventListener('click', () => void generate());
+    const syncGenerate = () => {
+      const button = document.getElementById('teacher-subtitle-generate-1014');
+      if (!button) return;
+      const ready = Boolean(sourceMaterialId());
+      button.disabled = !ready;
+      button.title = ready ? '' : '請先選擇來源影音教材，才能產生字幕';
+    };
+    syncGenerate();
+    source.addEventListener('change', syncGenerate);
+    document.getElementById('teacher-subtitle-material-1017')?.addEventListener('change', syncGenerate);
     document.getElementById('teacher-subtitle-save-1014')?.addEventListener('click', () => void save('draft'));
     document.getElementById('teacher-subtitle-approve-1014')?.addEventListener('click', () => void save('approved'));
     void loadSubtitles();

@@ -69,6 +69,7 @@
   }
 
   function setBusy(busy) {
+    window.AppApiClient?.aiBusy?.('audio', !!busy);
     const section = document.getElementById('teacher-media-audio-1014');
     const button = document.getElementById('teacher-audio-generate-1014');
     const script = document.getElementById('teacher-audio-script-1014');

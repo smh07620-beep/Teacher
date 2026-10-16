@@ -78,8 +78,17 @@
     };
   }
 
+  /* AI production busy registry: modules report work in flight; the course wizard locks its navigation. */
+  const aiBusyKeys = new Set();
+  function aiBusy(key, on) {
+    if (on) aiBusyKeys.add(String(key)); else aiBusyKeys.delete(String(key));
+    global.dispatchEvent(new CustomEvent('teacher:ai-busy', {detail: {busy: aiBusyKeys.size > 0, keys: [...aiBusyKeys]}}));
+  }
+
   global.fetch = fetchWithMiddleware;
   global.AppApiClient = Object.freeze({
+    aiBusy,
+    isAiBusy: () => aiBusyKeys.size > 0,
     pollBackoff,
     fetch: fetchWithMiddleware,
     nativeFetch,

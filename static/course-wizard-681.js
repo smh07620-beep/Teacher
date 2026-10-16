@@ -89,8 +89,25 @@ function canLeaveCourse(){
 // 會讓按鈕卡在停用狀態，所以狀態改變時要就地同步。
 function syncNextButton(){
   const node=el('cw681-next');
-  if(node)node.disabled=Boolean(state.busy||(state.created&&!canLeaveCourse()));
+  if(node)node.disabled=Boolean(state.busy||state.aiBusy||(state.created&&!canLeaveCourse()));
+  syncAiNavLock();
 }
+// While an AI product is being made, only the in-page tools stay usable: no stepping away mid-job.
+function syncAiNavLock(){
+  const root=el('course-wizard-681');
+  if(!root)return;
+  root.querySelectorAll('[data-csp-click^="courseWizard681Back"]').forEach(button=>{button.disabled=Boolean(state.aiBusy);});
+  let note=el('cw681-ai-busy-note');
+  if(state.aiBusy&&!note){
+    note=document.createElement('p');
+    note.id='cw681-ai-busy-note';
+    note.setAttribute('role','status');
+    note.className='mt-2 text-xs font-bold text-amber-800';
+    note.textContent='AI 製作中：完成或取消後才能換步驟。';
+    el('cw681-step')?.appendChild(note);
+  }else if(!state.aiBusy&&note){note.remove();}
+}
+window.addEventListener('teacher:ai-busy',event=>{state.aiBusy=Boolean(event.detail?.busy);syncNextButton();});
 function syncCompletionControls(){
   syncNextButton();
   const ready=canLeaveCourse();
@@ -201,7 +218,7 @@ window.courseWizard681QuickPublishExam=async function(){
 
 function actionFooter(){
   if(state.step<4){
-    const blocked=state.busy||(state.created&&!canLeaveCourse());
+    const blocked=state.busy||state.aiBusy||(state.created&&!canLeaveCourse());
     return `<button id="cw681-next" ${blocked?'disabled':''} data-csp-click="courseWizard681Next()" class="rounded bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">${state.created?'下一步':'下一步'}</button>`;
   }
   if(!state.created)return `<button id="cw681-create" ${state.busy?'disabled':''} data-csp-click="courseWizard681CreateAndPublish()" class="rounded bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">${state.busy?'⏳ 建立中…':'🟢 建立並發布課程'}</button>`;

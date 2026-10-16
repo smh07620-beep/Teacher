@@ -149,3 +149,20 @@ class PageTextLengthTests(unittest.TestCase):
         material = {"storageMeta": {"pageTextLengths": [0, 250, 5000]}}
         required = routes._required_by_page(material, 3)
         self.assertEqual(required, {"1": 5, "2": 15, "3": 30})
+
+
+class AiAuthoringGuardTests(unittest.TestCase):
+    def test_empty_shell_material_is_rejected_with_a_clear_message(self):
+        from teacher_app.materials import media_script_jobs
+
+        shell = {"id": "m1", "group": "grpBio", "area": "internal", "filename": "", "storageKey": ""}
+        with patch.object(media_script_jobs.material_repository, "get_material", return_value=shell):
+            with self.assertRaisesRegex(ValueError, "上傳完成"):
+                media_script_jobs.prepare_request({"materialId": "m1"}, {"username": "t1"})
+
+    def test_wizard_locks_navigation_while_ai_is_busy(self):
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parents[1] / "static" / "course-wizard-681.js").read_text(encoding="utf-8")
+        self.assertIn("teacher:ai-busy", src)
+        self.assertIn("state.aiBusy", src)

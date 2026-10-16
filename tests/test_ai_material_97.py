@@ -47,7 +47,7 @@ class AIMaterialMigration97Tests(unittest.TestCase):
 
 class AIMaterialRuntime97Tests(unittest.TestCase):
     def test_prepare_request_reuses_media_script_queue_for_multiple_output_types(self):
-        material = {"id": "mat-1", "group": "grpBio", "area": "internal", "active": False}
+        material = {"id": "mat-1", "group": "grpBio", "area": "internal", "active": False, "filename": "a.pptx"}
         actor = {"username": "teacher1"}
         with patch.object(media_script_jobs.material_repository, "get_material", return_value=material):
             values = media_script_jobs.prepare_request(
@@ -62,7 +62,7 @@ class AIMaterialRuntime97Tests(unittest.TestCase):
                 )
 
     def test_prepare_request_keeps_secondary_authoring_sources_for_worker_rag(self):
-        material = {"id": "mat-1", "group": "grpBio", "area": "internal", "active": False}
+        material = {"id": "mat-1", "group": "grpBio", "area": "internal", "active": False, "filename": "a.pptx"}
         with patch.object(media_script_jobs.material_repository, "get_material", return_value=material):
             values = media_script_jobs.prepare_request(
                 {"materialId": "mat-1", "referenceMaterialIds": ["mat-2", "mat-3", "mat-2"]}, {"username": "teacher1"}
@@ -128,7 +128,7 @@ class AIMaterialRoute97Tests(unittest.TestCase):
 
     def test_generate_queues_existing_worker_path_and_never_runs_ai_in_web(self):
         app = self._app("grpBio")
-        material = {"id": "mat-1", "group": "grpBio", "area": "internal", "active": False}
+        material = {"id": "mat-1", "group": "grpBio", "area": "internal", "active": False, "filename": "a.pptx"}
         queued = {
             "id": "msjob-97", "materialId": "mat-1", "group": "grpBio", "area": "internal",
             "status": "queued", "request": {"outputType": "summary"},
