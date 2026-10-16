@@ -157,6 +157,18 @@ def list_uploaded_materials(legacy_base=None, include_inactive: bool = False, *,
     return result
 
 
+def list_materials_by_ids(material_ids) -> list[dict]:
+    """Fetch several materials in one query (active or not) instead of listing them all."""
+    ids = [str(item) for item in dict.fromkeys(material_ids or []) if item]
+    if not ids:
+        return []
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        marks = ",".join([ph] * len(ids))
+        rows = conn.execute(f"SELECT * FROM materials WHERE id IN ({marks})", tuple(ids)).fetchall()
+    return [material_row_to_dict(row) for row in rows]
+
+
 def get_material(material_or_legacy_base, legacy_material_id: str | None = None) -> dict | None:
     """Read one material; old (base, id) calls remain format-only compatibility."""
     material_id = legacy_material_id if legacy_material_id is not None else str(material_or_legacy_base or "")

@@ -21,7 +21,7 @@ class SlideViewerClientSpeedTests(unittest.TestCase):
 
     def test_prefetches_ahead_and_dedupes(self):
         self.assertIn("function prefetchAroundPresentationPage(page)", self.js)
-        self.assertIn("prefetchPresentationPage(page+2)", self.js)
+        self.assertNotIn("prefetchPresentationPage(page+2)", self.js)  # 只預載下一頁
         self.assertIn("const slidePrefetched=new Set()", self.js)
         self.assertIn("prefetchImageUrl(images[i])", self.js)
 

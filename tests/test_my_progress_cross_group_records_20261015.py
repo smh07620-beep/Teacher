@@ -35,7 +35,7 @@ class MyProgressCrossScopeRequestTests(unittest.TestCase):
 
         course = {"id": "c503", "group": "grpBio", "area": "internal"}
         with patch.object(ps.learning_access, "assigned_course_grants", return_value=frozenset({"c503"})), \
-             patch.object(ps.course_repository, "get_course", return_value=course):
+             patch.object(ps.course_repository, "list_courses_by_ids", return_value=[course]):
             self.assertTrue(ps._has_assigned_course_in(self.USER, "internal", "grpBio"))
             self.assertFalse(ps._has_assigned_course_in(self.USER, "internal", "grpMicro"))
         with patch.object(ps.learning_access, "assigned_course_grants", return_value=frozenset()):

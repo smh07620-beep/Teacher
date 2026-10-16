@@ -340,12 +340,16 @@ def register_smart_learning(
         user, denied = _user(owner)
         if denied:
             return denied
+        rows = repository.list_progress_for_user(str(user.get("username") or ""))
+        # Only the materials this learner has progress on, fetched in one query.
         materials = {
             str(item.get("id") or ""): item
-            for item in material_repository.list_uploaded_materials(include_inactive=False)
-            if item.get("id") and learning_access.can_access_learning_item(user, item)
+            for item in material_repository.list_materials_by_ids(
+                [row.get("material_id") for row in rows]
+            )
+            if item.get("id") and item.get("active", True)
+            and learning_access.can_access_learning_item(user, item)
         }
-        rows = repository.list_progress_for_user(str(user.get("username") or ""))
         items = []
         for row in rows:
             material_id = str(row.get("material_id") or "")

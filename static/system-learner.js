@@ -697,11 +697,9 @@ function prefetchPresentationPage(page){
     prefetchImageUrl(presentationPreviewPageUrl(page));
 }
 
-// 翻頁前先把前一頁、後兩頁備好，連續翻頁不用每頁都等伺服器轉圖。
+// 只預載下一頁，節省外送流量。
 function prefetchAroundPresentationPage(page){
     prefetchPresentationPage(page+1);
-    prefetchPresentationPage(page+2);
-    prefetchPresentationPage(page-1);
 }
 
 function updateSlideViewerPresentationPage(page,total,attempt=0){
@@ -837,26 +835,9 @@ function renderSlideThumbs() {
 
     const container = document.getElementById('slide-viewer-thumbs');
 
-    if(slideViewerState.mode==='pdf'){
-
-        const total=Math.max(1,Number(slideViewerState.pageCount||1));
-
-        container.innerHTML=Array.from({length:total},(_,i)=>`<button class="slide-page-btn ${i===slideViewerState.index?'active':''}" data-csp-click="goToSlidePage(${i})" aria-label="跳到第 ${i+1} 頁">${i+1}</button>`).join('');
-
-        return;
-
-    }
-
-    container.innerHTML = slideViewerState.images.map((src, i) => `
-
-        <button class="slide-thumb-card ${i===slideViewerState.index?'active':''}" data-csp-click="goToSlidePage(${i})" aria-label="跳到第 ${i + 1} 頁">
-
-            <img src="${src}" class="w-full aspect-video object-contain bg-white" alt="第 ${i + 1} 頁縮圖" loading="lazy">
-
-            <span class="hidden md:block text-[10px] text-slate-500 text-center py-1 bg-white">第 ${i + 1} 頁</span>
-
-        </button>`).join('');
-
+    // 純數字頁碼列（不載入縮圖原圖，節省流量）。
+    const total=Math.max(1,slideViewerState.mode==='pdf'?Number(slideViewerState.pageCount||1):slideViewerState.images.length);
+    container.innerHTML=Array.from({length:total},(_,i)=>`<button class="slide-page-btn ${i===slideViewerState.index?'active':''}" data-csp-click="goToSlidePage(${i})" aria-label="跳到第 ${i+1} 頁">${i+1}</button>`).join('');
 }
 
 

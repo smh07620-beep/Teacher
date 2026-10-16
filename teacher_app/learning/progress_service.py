@@ -16,6 +16,25 @@ from teacher_app.learning import versioning
 from teacher_app.materials import repository as material_repository
 
 
+_POSTGRES_VERSION_COLUMN_PRESENT = False
+
+
+def _postgres_has_completed_version_column(conn: Any) -> bool:
+    """Ask information_schema once per process; the column never disappears once migrated."""
+    global _POSTGRES_VERSION_COLUMN_PRESENT
+    if _POSTGRES_VERSION_COLUMN_PRESENT:
+        return True
+    present = bool(
+        conn.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name=%s AND column_name=%s",
+            ("material_progress", "completed_version"),
+        ).fetchone()
+    )
+    _POSTGRES_VERSION_COLUMN_PRESENT = present
+    return present
+
+
 class ProgressError(ValueError):
     def __init__(self, message: str, status: int):
         super().__init__(message)
@@ -102,13 +121,7 @@ def mark_material_complete(user: Mapping[str, Any], material_id: str) -> str:
     completed_version = versioning.current_version(material)
     with common_db.transaction() as (conn, kind):
         if kind == "postgres":
-            version_column = bool(
-                conn.execute(
-                    "SELECT 1 FROM information_schema.columns "
-                    "WHERE table_schema=current_schema() AND table_name=%s AND column_name=%s",
-                    ("material_progress", "completed_version"),
-                ).fetchone()
-            )
+            version_column = _postgres_has_completed_version_column(conn)
         else:
             version_column = any(
                 str(dict(row).get("name", row[1] if len(row) > 1 else "")) == "completed_version"
@@ -148,18 +161,18 @@ def mark_material_complete(user: Mapping[str, Any], material_id: str) -> str:
 
 
 def _has_assigned_course_in(user: Mapping[str, Any], area: str, group: str) -> bool:
-    for course_id in learning_access.assigned_course_grants(user):
-        try:
-            course = course_repository.get_course(course_id)
-        except Exception:
-            course = None
-        if (
-            course
-            and scope.normalize_group(course.get("group")) == group
-            and scope.normalize_area(course.get("area")) == area
-        ):
-            return True
-    return False
+    grants = list(learning_access.assigned_course_grants(user))
+    if not grants:
+        return False
+    try:
+        courses = course_repository.list_courses_by_ids(grants)
+    except Exception:
+        courses = []
+    return any(
+        scope.normalize_group(course.get("group")) == group
+        and scope.normalize_area(course.get("area")) == area
+        for course in courses
+    )
 
 
 def my_progress(

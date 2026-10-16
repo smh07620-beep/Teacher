@@ -48,6 +48,18 @@ def get_course(course_id: str) -> dict | None:
     return course_row_to_dict(row) if row else None
 
 
+def list_courses_by_ids(course_ids) -> list[dict]:
+    """Fetch several courses in one query instead of one query per id."""
+    ids = [str(item) for item in dict.fromkeys(course_ids or []) if item]
+    if not ids:
+        return []
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        marks = ",".join([ph] * len(ids))
+        rows = conn.execute(f"SELECT * FROM courses WHERE id IN ({marks})", tuple(ids)).fetchall()
+    return [course_row_to_dict(row) for row in rows]
+
+
 def list_courses(area: str | None = None, group: str | None = None, include_inactive: bool = False) -> list[dict]:
     with common_db.read_connection() as (conn, kind):
         ph = common_db.placeholder(kind)
