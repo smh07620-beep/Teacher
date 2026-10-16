@@ -39,6 +39,14 @@
   }
 
   function load(materialId) {
+    var bundled = root.LearnerBundleCheckpoints && root.LearnerBundleCheckpoints[materialId];
+    if (Array.isArray(bundled)) {
+      // Delivered with the course learner-bundle: no extra request.
+      state.items = bundled;
+      state.materialId = materialId;
+      state.page = -1;
+      return;
+    }
     state.loading = materialId;
     request('/api/materials/' + encodeURIComponent(materialId) + '/checkpoints').then(function (res) {
       if (state.loading !== materialId) return;

@@ -192,8 +192,8 @@ def _learner_view(item: Mapping[str, Any], answer: Mapping[str, Any] | None) -> 
     return view
 
 
-def list_for_learner(user, get_material: MaterialGetter, material_id: str) -> dict:
-    material = _readable_material(user, get_material, material_id)
+def learner_items(user, material: Mapping[str, Any]) -> list[dict]:
+    """Learner-safe checkpoint items for an already-authorised material."""
     current = int(material.get("currentVersion") or 1)
     answers = repository.answers_for_user(_username(user), material["id"])
     items = [
@@ -201,7 +201,12 @@ def list_for_learner(user, get_material: MaterialGetter, material_id: str) -> di
         for item in repository.list_for_material(material["id"])
         if item["active"] and item["materialVersion"] == current
     ]
-    return {"items": items}
+    return items
+
+
+def list_for_learner(user, get_material: MaterialGetter, material_id: str) -> dict:
+    material = _readable_material(user, get_material, material_id)
+    return {"items": learner_items(user, material)}
 
 
 def answer(user, get_material: MaterialGetter, checkpoint_id: str, body: Mapping[str, Any]) -> dict:

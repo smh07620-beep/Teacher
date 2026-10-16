@@ -78,6 +78,8 @@
       const data = await res.json().catch(() => ({}));
       if (data && data.gate) {
         gateByCourse.set(key, data.gate);
+        // Checkpoint questions ride along; the slide checkpoint card reads this instead of its own request.
+        window.LearnerBundleCheckpoints = Object.assign(window.LearnerBundleCheckpoints || {}, data.checkpoints || {});
         reviewByCourse.set(key, (data.materials || []).filter(m => (m.reviewPages || []).length).map(m => ({materialId: m.id, pages: m.reviewPages})));
         if (typeof window.renderCourseOverview === 'function') window.renderCourseOverview();
       }
