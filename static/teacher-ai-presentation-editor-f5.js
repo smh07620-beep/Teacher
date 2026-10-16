@@ -146,8 +146,8 @@
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-2"><b class="text-sm text-slate-900">第 ${index+1} 張</b><label class="text-[11px] font-bold text-slate-600"><input data-field="enabled" type="checkbox" ${slide.enabled!==false?'checked':''}> 啟用</label></div>
           <div class="flex gap-1">
-            <button type="button" data-slide-action="up" class="rounded border border-slate-200 bg-white px-2 py-1 text-xs" ${index===0?'disabled':''}>↑</button>
-            <button type="button" data-slide-action="down" class="rounded border border-slate-200 bg-white px-2 py-1 text-xs" ${index===total-1?'disabled':''}>↓</button>
+            <button type="button" aria-label="上移" data-slide-action="up" class="rounded border border-slate-200 bg-white px-2 py-1 text-xs" ${index===0?'disabled':''}>↑</button>
+            <button type="button" aria-label="下移" data-slide-action="down" class="rounded border border-slate-200 bg-white px-2 py-1 text-xs" ${index===total-1?'disabled':''}>↓</button>
             <button type="button" data-slide-action="delete" class="rounded border border-rose-200 bg-white px-2 py-1 text-xs text-rose-700">刪除</button>
           </div>
         </div>
