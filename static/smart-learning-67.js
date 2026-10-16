@@ -17,7 +17,7 @@
   /* Batched page progress: dwell is accumulated in memory and sent every 30s, on hide and on close. */
   const pend={materialId:'',page:0,total:0,since:0,delta:{},dirty:false,timer:0};
   function accrue(){const now=Date.now();if(pend.page&&pend.since&&!document.hidden){const secs=Math.min(35,(now-pend.since)/1000);if(secs>0)pend.delta[pend.page]=(pend.delta[pend.page]||0)+secs;}pend.since=document.hidden?0:now;}
-  function flushPage(keepalive){if(!pend.page||!pend.materialId||!state.material||state.material.id!==pend.materialId)return null;accrue();const delta={};Object.keys(pend.delta).forEach(k=>{const v=Math.round(pend.delta[k]*10)/10;if(v>0)delta[k]=v;});pend.delta={};pend.dirty=false;return save({page:pend.page,totalPages:pend.total,pageDwellDelta:delta},Math.round(pend.page/pend.total*100),false,{},{keepalive});}
+  function flushPage(keepalive){if(!pend.page||!pend.materialId||!state.material||state.material.id!==pend.materialId)return null;accrue();const delta={};Object.keys(pend.delta).forEach(k=>{const v=Math.round(pend.delta[k]*10)/10;if(v>0)delta[k]=v;});pend.delta={};pend.dirty=false;const sent=save({page:pend.page,totalPages:pend.total,pageDwellDelta:delta},Math.round(pend.page/pend.total*100),false,{},{keepalive});sent.then(result=>{if(result===null){Object.keys(delta).forEach(k=>{pend.delta[k]=(pend.delta[k]||0)+delta[k];});pend.dirty=true;}});return sent;}
   function syncPage(){
     if(!state.material)return;
     if(pend.materialId!==state.material.id){pend.materialId=state.material.id;pend.page=0;pend.delta={};pend.since=0;}

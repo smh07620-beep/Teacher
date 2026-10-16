@@ -90,3 +90,26 @@ class ExamResultPageTests(unittest.TestCase):
         self.assertIn("function renderWrongQuestionList(", js)
         self.assertIn("前往第 ${Number(source.page)} 頁複習", js)
         self.assertIn("renderExamRemediation(result.remediation||null);\n    renderWrongQuestionList();", js.replace("\r\n", "\n"))
+
+
+class SkeletonAndHumanErrorTests(unittest.TestCase):
+    ROOT = Path(__file__).resolve().parents[1] / "static"
+
+    def test_shared_helpers_exist(self):
+        api = (self.ROOT / "api-client.js").read_text(encoding="utf-8")
+        for name in ("function skeletonBlocks(", "function skeletonRows(", "function humanError("):
+            self.assertIn(name, api)
+        self.assertIn("恢復連線後會自動補送", api)
+
+    def test_course_list_and_grade_table_use_skeletons_and_plain_errors(self):
+        learner = (self.ROOT / "system-learner.js").read_text(encoding="utf-8")
+        results = (self.ROOT / "admin-results-data.js").read_text(encoding="utf-8")
+        self.assertIn("skeletonBlocks", learner)
+        self.assertIn("humanError", learner)
+        self.assertIn("skeletonRows", results)
+        self.assertIn("humanError", results)
+        self.assertIn("重新載入", results)
+
+    def test_unsent_reading_progress_is_kept_when_network_fails(self):
+        js = (self.ROOT / "smart-learning-67.js").read_text(encoding="utf-8")
+        self.assertIn("if(result===null)", js)

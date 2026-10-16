@@ -107,7 +107,7 @@
       return null;
     }
     const data=await res.json().catch(()=>[]);
-    if(!res.ok) throw new Error(data.error||'無法取得成績');
+    if(!res.ok){const failure=new Error(data.error||'無法取得成績');failure.status=res.status;throw failure;}
     adminRecords=Array.isArray(data)?data:[];
     return adminRecords;
   };
@@ -205,7 +205,7 @@
     window.updateResultsWorkspacePresentation?.();
     const tbody=document.getElementById('admin-table-body');
     if(!tbody) return;
-    tbody.innerHTML='<tr><td colspan="8" class="p-6 text-center text-slate-400">讀取伺服器成績中…</td></tr>';
+    tbody.innerHTML=window.AppApiClient?.skeletonRows?.(8,6)||'<tr><td colspan="8" class="p-6 text-center text-slate-400">讀取伺服器成績中…</td></tr>';
     try{
       const records=await window.fetchAdminRecords();
       if(!records) return;
@@ -256,7 +256,7 @@
       }).join('');
       paintPagination(visibleRecords,pageSize,pages);
     }catch(error){
-      tbody.innerHTML=`<tr><td colspan="8" class="p-6 text-center text-rose-500">❌ ${escapeHtml(error.message)}</td></tr>`;
+      tbody.innerHTML=`<tr><td colspan="8" class="p-6 text-center text-rose-600">❌ ${escapeHtml(window.AppApiClient?.humanError?.(error,'成績')||error.message)}<div class="mt-2"><button type="button" class="btn btn-secondary" data-csp-click="renderAdminTable()">重新載入</button></div></td></tr>`;
     }
   };
 

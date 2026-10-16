@@ -167,7 +167,9 @@ async function renderSlidesGrid() {
 
     if (!grid) return;
 
-    grid.innerHTML = `<p class="text-xs text-slate-400 col-span-full text-center py-6">載入教材清單中…</p>`;
+    grid.innerHTML = window.AppApiClient?.skeletonBlocks?.(3, 96) || `<p class="text-xs text-slate-400 col-span-full text-center py-6">載入教材清單中…</p>`;
+    const courseGrid = document.getElementById('course-overview-grid');
+    if (courseGrid && !courseGrid.children.length) courseGrid.innerHTML = window.AppApiClient?.skeletonBlocks?.(3, 120) || '';
 
     try {
 
@@ -251,17 +253,13 @@ async function renderSlidesGrid() {
         console.error(err);
         const status = Number(err?.status || 0);
         const loginRequired = Boolean(err?.loginRequired);
-        let message = '❌ 無法連線至伺服器';
+        let message = `❌ ${window.AppApiClient?.humanError?.(err, '教材清單') || '無法連線至伺服器'}`;
         if (status === 401 || loginRequired) {
             const next = `${location.pathname}${location.search}`;
             const loginUrl = `/login?next=${encodeURIComponent(next)}`;
             message = `❌ 登入已逾時，請<a class="underline font-semibold" href="${loginUrl}">重新登入</a>`;
-        } else if (status === 403) {
-            message = '❌ 沒有教材瀏覽權限';
-        } else if (status >= 500) {
-            message = '❌ 教材服務暫時發生錯誤';
         }
-        grid.innerHTML = `<p class="text-xs text-rose-500 col-span-full text-center py-6">${message}</p>`;
+        grid.innerHTML = `<div class="col-span-full text-center py-6"><p class="text-sm text-rose-600">${message}</p><button type="button" class="btn btn-secondary mt-3" data-csp-click="renderSlidesGrid()">重新載入</button></div>`;
     }
 }
 
