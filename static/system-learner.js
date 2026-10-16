@@ -491,6 +491,7 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
     if(mode==='pdf') updateSlideViewerPdf(); else updateSlideViewerImage();
 
     document.getElementById('slide-viewer-modal').classList.remove('hidden');
+    announceReader(true);
 
     document.body.style.overflow = 'hidden';
 
@@ -940,6 +941,7 @@ function goToSlidePage(i) {
     // 縮圖／頁碼列只在開啟時建立一次；翻頁只切換 active（updateViewerNav 負責），
     // 否則每翻一頁都要重建並重新載入所有縮圖，會卡。
     if(slideViewerState.mode==='pdf')updateSlideViewerPdf();else updateSlideViewerImage();
+    announceReader(true);
 }
 
 function slideViewerPrev() { goToSlidePage(slideViewerState.index - 1); }
@@ -952,7 +954,7 @@ window.goToSlidePage = goToSlidePage;
 window.slideViewerPrev = slideViewerPrev;
 window.slideViewerNext = slideViewerNext;
 
-function closeSlideViewer() { ++slidePdfSwapSerial; ++slidePresentationImageSerial; slidePageRetryNonce=0; hideSlidePageError(); document.getElementById('slide-viewer-pdf-pending')?.remove(); const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';pdf.dataset.pendingSrc='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); }
+function closeSlideViewer() { ++slidePdfSwapSerial; ++slidePresentationImageSerial; slidePageRetryNonce=0; hideSlidePageError(); document.getElementById('slide-viewer-pdf-pending')?.remove(); const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';pdf.dataset.pendingSrc='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); announceReader(false); }
 
 
 
@@ -1337,3 +1339,42 @@ async function loadMyProgress(){
     hist.innerHTML=(data.records||[]).length ? data.records.map(r=>`<div class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><div class="font-semibold text-slate-800">${escapeHtml(r.quizTitle||'')}</div><div class="text-xs text-slate-400">${escapeHtml(r.timestamp||'')}</div></div><div class="text-right"><div class="font-bold ${r.reviewStatus==='pending'?'text-amber-600':(Number(r.score)>=80?'text-emerald-600':'text-rose-600')}">${r.reviewStatus==='pending'?'待人工批改':`${Number(r.score)||0} 分`}</div><div class="text-xs text-slate-500">${escapeHtml(r.status||'')}</div></div></div>`).join('') : '<div class="p-5 text-sm text-slate-400">尚無考試紀錄。</div>';
 
 }
+
+/* Reader as a page: #read/<materialId>/<page>.  The URL follows the reader through an event
+ * (teacher:reader-changed); browser Back closes the reader, a reload or shared link reopens it. */
+function announceReader(open) {
+    const state = window.slideViewerState || {};
+    window.dispatchEvent(new CustomEvent('teacher:reader-changed', {detail: {open, materialId: state.materialId || '', page: Number(state.index || 0) + 1}}));
+}
+(function bindReaderRoute() {
+    const parse = () => { const m = /^#read\/([^/]+)\/(\d+)$/.exec(location.hash || ''); return m ? {id: decodeURIComponent(m[1]), page: Number(m[2])} : null; };
+    let pushed = false;
+    window.addEventListener('teacher:reader-changed', event => {
+        const {open, materialId, page} = event.detail || {};
+        const modalOpen = !document.getElementById('slide-viewer-modal')?.classList.contains('hidden');
+        if (open && modalOpen && materialId) {
+            const next = `#read/${encodeURIComponent(materialId)}/${page}`;
+            if (location.hash === next) return;
+            if (parse() || pushed) history.replaceState(null, '', next);
+            else { history.pushState({reader: true}, '', next); pushed = true; }
+        } else if (!open && parse()) {
+            if (pushed) { pushed = false; history.back(); } else history.replaceState(null, '', location.pathname + location.search);
+        }
+    });
+    window.addEventListener('hashchange', () => {
+        const route = parse();
+        const modalOpen = !document.getElementById('slide-viewer-modal')?.classList.contains('hidden');
+        if (!route && modalOpen) { pushed = false; closeSlideViewer(); }
+        else if (route && !modalOpen) openRouteMaterial(route);
+    });
+    async function openRouteMaterial(route) {
+        for (let tries = 0; tries < 40; tries += 1) {
+            if (typeof cachedSlidesList !== 'undefined' && (cachedSlidesList || []).some(m => String(m.id) === route.id)) break;
+            await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        if (!(cachedSlidesList || []).some(m => String(m.id) === route.id)) return;
+        await window.openMaterial(route.id);
+        goToSlidePage(Math.max(0, route.page - 1));
+    }
+    window.addEventListener('load', () => { const route = parse(); if (route) { pushed = true; openRouteMaterial(route); } });
+})();

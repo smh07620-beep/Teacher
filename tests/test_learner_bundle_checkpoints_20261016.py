@@ -43,3 +43,11 @@ class WrongCheckpointPlantsReviewPageTests(unittest.TestCase):
 
         with patch("teacher_app.learning.review_pages.plant", side_effect=RuntimeError("db")):
             service._plant_review_page({"username": "s1"}, {"id": "c", "materialId": "m", "page": 1})
+
+
+class ReaderRouteTests(unittest.TestCase):
+    def test_reader_uses_hash_route_and_event(self):
+        src = (ROOT / "static/system-learner.js").read_text(encoding="utf8")
+        self.assertIn("teacher:reader-changed", src)
+        self.assertIn("#read/", src)
+        self.assertEqual(src.count("announceReader("), 4)  # three call sites + definition
