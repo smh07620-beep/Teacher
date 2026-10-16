@@ -71,6 +71,7 @@
       box.appendChild(el('p', 'text-sm ' + cls, mark + String.fromCharCode(65 + j) + '. ' + opt));
     });
     if (item.explanation) box.appendChild(el('p', 'rounded-lg bg-slate-50 p-2 text-xs text-slate-700', '說明：' + item.explanation));
+    if (!item.isCorrect) box.appendChild(el('p', 'text-xs font-bold text-amber-800', '這一頁已列入待加強，重新讀過這一頁即可。'));
   }
 
   function paintQuestion(box, item, host) {

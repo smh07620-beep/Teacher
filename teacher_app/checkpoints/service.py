@@ -229,5 +229,18 @@ def answer(user, get_material: MaterialGetter, checkpoint_id: str, body: Mapping
         raise _fail("CHECKPOINT_CHOICE", "選項超出範圍。")
     correct = chosen == item["correctIndex"]
     # First answer is the record; a repeat call returns it unchanged.
+    first_time = not repository.get_answer(item["id"], _username(user))
     repository.record_answer(item["id"], _username(user), item["materialId"], chosen, correct, _now())
+    if first_time and not correct:
+        _plant_review_page(user, item)
     return _learner_view(item, repository.get_answer(item["id"], _username(user)))
+
+
+def _plant_review_page(user, item: Mapping[str, Any]) -> None:
+    """A wrong checkpoint adds its page to the same review list a failed exam uses."""
+    try:
+        from teacher_app.learning import review_pages
+
+        review_pages.plant(_username(user), {str(item["materialId"]): [int(item["page"])]})
+    except Exception:  # never let reading support break answering
+        return
