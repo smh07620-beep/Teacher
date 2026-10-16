@@ -335,6 +335,13 @@ def register_pgy_frontend(app):
                 response.content_length = len(response.get_data())
                 return response
 
+            if path in {"/login", "/login.html", "/account.html", "/reset-password", "/reset-password.html"}:
+                # Plain pages: only the commit-sha cache-busting version, no manifest.
+                html = _rewrite_local_asset_versions(response.get_data(as_text=True))
+                response.set_data(html)
+                response.content_length = len(response.get_data())
+                return response
+
             if path not in {"/system", "/system.html"}:
                 return response
 
