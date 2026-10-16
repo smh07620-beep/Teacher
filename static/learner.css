@@ -517,7 +517,7 @@ body{
 #slide-viewer-shell.reader-fill>div:not(.viewer-layout):not(#reader-fill-exit){display:none}
 #slide-viewer-shell.reader-fill{position:fixed;inset:0;z-index:70}
 #slide-viewer-shell.reader-fill #reader-fill-exit{display:block;position:absolute;top:8px;right:8px;z-index:40;padding:.5rem .8rem;min-height:44px;border-radius:.75rem;background:rgba(15,23,42,.72);color:#fff;font-size:14px;font-weight:700}
-#reader-portrait-hint{position:absolute;left:50%;bottom:72px;transform:translateX(-50%);z-index:40;padding:.5rem 1rem;border-radius:999px;background:rgba(15,23,42,.82);color:#fff;font-size:14px;font-weight:700;pointer-events:none}
+#reader-portrait-hint{position:absolute;left:50%;top:84px;transform:translateX(-50%);z-index:40;padding:.5rem 1rem;border-radius:999px;background:rgba(15,23,42,.82);color:#fff;font-size:14px;font-weight:700;pointer-events:none}
 #reader-portrait-hint:not(.hidden){display:block}
 
 /* Course step list: only the current step is expanded. */

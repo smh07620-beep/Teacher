@@ -133,9 +133,8 @@ def learner_bundle(user: Mapping[str, Any], course_id: str) -> dict[str, Any]:
         for item in info["materials"]:
             if not learning_access.can_access_learning_item(user, item):
                 continue
-            found = checkpoint_service.learner_items(user, item)
-            if found:
-                checkpoints[str(item.get("id") or "")] = found
+            # An empty list is meaningful: the reader then skips its own request.
+            checkpoints[str(item.get("id") or "")] = checkpoint_service.learner_items(user, item)
     except Exception:
         checkpoints = {}
     return {"courseId": course_id, "materials": materials, "gate": state, "exams": exams, "checkpoints": checkpoints}

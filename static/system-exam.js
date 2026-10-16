@@ -168,7 +168,19 @@ async function ensureDynamicCategoryLoaded(catId) {
 }
 
 async function switchDynamicCategory(catId) {
-    await ensureDynamicCategoryLoaded(catId);currentCatKey=catId;blindTestMode=!!allQuizData[catId]?.blindMode;
+    try{await ensureDynamicCategoryLoaded(catId);}
+    catch(error){
+        if(error&&(error.code==='MATERIALS_NOT_COMPLETE'||error.data?.errorDetail?.code==='MATERIALS_NOT_COMPLETE')){
+            // Exam gate: say what is missing instead of a generic page error.
+            const courseId=(dynamicCategoriesCache[`${currentTrainingArea}:${currentGroupKey}`]||[]).find(c=>c.id===catId)?.courseId||'';
+            window.LearnerExamGate?.reload?.(courseId);
+            const box=document.getElementById('current-quiz-desc');
+            if(box){box.textContent=`🔒 ${error.message||'讀完教材後解鎖'}。請先回到課程完成教材閱讀。`;box.scrollIntoView({block:'center',behavior:'smooth'});}
+            return;
+        }
+        throw error;
+    }
+    currentCatKey=catId;blindTestMode=!!allQuizData[catId]?.blindMode;
     document.querySelectorAll('#dynamic-exam-tabs-list .tab-btn').forEach(btn=>{const active=btn.id===`dyn-tab-${catId}`;btn.classList.toggle('ring-2',active);btn.classList.toggle('ring-teal-500',active);btn.classList.toggle('border-teal-400',active);btn.classList.toggle('bg-teal-50',active);});updateUIForActiveKey();
 }
 
