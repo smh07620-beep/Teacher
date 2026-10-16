@@ -125,7 +125,7 @@
 | `/admin-quiz-materials.js` | 1.4 | 是 | closeQuizMaterialLinker, filterQuizMaterialLinker, loadAiMaterialOptions, openQuizMaterialLinker, saveQuizMaterialLinks |
 | `/external-material-681.js` | 1.4 |  |  |
 | `/course-wizard-group-fix-1014.js` | 1.3 | 是 |  |
-| `/learning-progress-convergence-1025.js` | 1.3 |  |  |
+| `/learner-progress.js` | 1.3 |  |  |
 | `/portal-navigation-73.js` | 1.3 |  |  |
 | `/teacher-media-status-fix-1014.js` | 1.2 | 是 |  |
 | `/teacher-media-mvp-status-1014.js` | 1.2 | 是 |  |

@@ -27,7 +27,7 @@ class ApiGetDedupeContractTests(unittest.TestCase):
             "/training-command-center-71.js",
             "/pgy-competency-matrix-71.js",
             "/learning-analytics-71.js",
-            "/learning-progress-convergence-1025.js",
+            "/learner-progress.js",
             "/admin-course-material.js",
         ):
             self.assertLess(order.index("/api-get-dedupe-1007.js"), order.index(feature), feature)

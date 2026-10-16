@@ -11,7 +11,7 @@ class HomeDashboardRefresh681Tests(unittest.TestCase):
         cls.html = ROOT.joinpath("static", "index.html").read_text(encoding="utf-8")
         cls.css = ROOT.joinpath("static", "portal.css").read_text(encoding="utf-8")
         cls.runtime = ROOT.joinpath("static", "portal-v56.js").read_text(encoding="utf-8")
-        cls.todo = ROOT.joinpath("static", "learner-todo-convergence-1025.js").read_text(encoding="utf-8")
+        cls.todo = ROOT.joinpath("static", "learner-todo.js").read_text(encoding="utf-8")
 
     def test_home_header_is_intentionally_minimal(self):
         header = self.html[self.html.index('<header class="v56-header">'):self.html.index('</header>')]

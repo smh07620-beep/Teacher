@@ -24,8 +24,8 @@ ASSET_MANIFEST = {
         "body": (
             "/home-profile-title-71.js",
             "/portal-navigation-73.js",
-            "/learner-todo-convergence-1025.js",
-            "/learning-progress-convergence-1025.js",
+            "/learner-todo.js",
+            "/learner-progress.js",
         ),
     },
     "system": {
@@ -88,7 +88,7 @@ ASSET_MANIFEST = {
             "/training-command-center-71.js",
             "/pgy-competency-matrix-71.js",
             "/learning-analytics-71.js",
-            "/learning-progress-convergence-1025.js",
+            "/learner-progress.js",
             "/notification-center-71.js",
             "/worker-status-70.js",
             "/production-readiness-f6.js",
@@ -134,7 +134,6 @@ ASSET_MANIFEST = {
             "/teacher-content-latency-712.js",
             "/teacher-content-composer-72.js",
             "/teacher-ux-convergence-72.js",
-            "/learner-ui-cleanup-71.js",
             "/portal-navigation-73.js",
             "/teacher-ui-resilience-1014.js",
             "/teacher-interface-convergence-1014.js",
