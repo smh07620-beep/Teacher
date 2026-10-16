@@ -227,6 +227,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `R2_PRESIGN_SECONDS` | `3600` | `teacher_app/storage/providers.py` |  |  |
 | `R2_REGION` | `auto` | `teacher_app/storage/providers.py` |  |  |
 | `R2_SECRET_ACCESS_KEY` |  | `teacher_app/storage/providers.py` | yes | yes |
+| `R2_STORAGE_LIMIT_BYTES` |  | `teacher_app/admin/health_overview.py` |  |  |
 | `READER_RULES_V2` |  | `teacher_app/learning/routes.py` |  |  |
 | `RENDER` | `false` | `teacher_app/common/security.py`, `teacher_app/config.py`, `teacher_app/maintenance/health.py` |  |  |
 | `RENDER_GIT_BRANCH` |  | `teacher_app/maintenance/health.py` |  |  |

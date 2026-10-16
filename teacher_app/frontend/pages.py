@@ -39,6 +39,21 @@ def register_page_routes(app, *, static_dir, current_user):
         # that guard a base-free page-shell owner.
         return send_from_directory(static_dir, "system.html")
 
+    def _workspace_entry(next_path, workspace, persona, extra=None):
+        from teacher_app.common.workspace_routes import workspace_url
+
+        if not current_user():
+            return redirect(f"/login?next={next_path.replace('/', '%2F')}")
+        return redirect(workspace_url(workspace, persona=persona, params=extra or {}))
+
+    def teach_entry():
+        """Short, bookmarkable address for the teacher workspace (RBAC still decides what loads)."""
+        return _workspace_entry("/teach", "course-materials", "teacher")
+
+    def admin_entry():
+        """Short, bookmarkable address for the system area, opening on the health overview."""
+        return _workspace_entry("/admin", "system", "system")
+
     for rule, endpoint, view in (
         ("/", "index", index),
         ("/internal", "internal_area", internal_area),
@@ -47,6 +62,8 @@ def register_page_routes(app, *, static_dir, current_user):
         ("/account", "account_page", account_page),
         ("/reset-password", "reset_password_page", reset_password_page),
         ("/system", "training_system", training_system),
+        ("/teach", "teach_entry", teach_entry),
+        ("/admin", "admin_entry", admin_entry),
     ):
         app.add_url_rule(rule, endpoint=endpoint, view_func=view, methods=["GET"])
 

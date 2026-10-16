@@ -604,6 +604,10 @@
                 </div>
 
                 <div id="admin-section-system" data-product-section="overview" class="admin-section-panel hidden space-y-5">
+                    <section id="admin-health-overview" class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3" aria-live="polite">
+                        <div class="flex items-center justify-between gap-3 flex-wrap"><div><p class="admin-page-eyebrow">HEALTH</p><h4 class="font-black text-slate-950 text-xl">健康總覽</h4><p class="text-sm text-slate-600 mt-1">網站、資料庫、Worker、儲存與流量各一盞燈；按下才檢查，不會自動刷新。</p></div><button type="button" id="admin-health-run" data-csp-click="adminHealthOverview()" class="btn btn-primary">檢查現在狀態</button></div>
+                        <ul id="admin-health-lights" class="health-lights"></ul>
+                    </section>
                     <section class="admin-system-overview bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                         <div class="admin-page-section-heading"><div><p class="admin-page-eyebrow">SYSTEM HEALTH</p><h4 class="font-black text-slate-950 text-xl">系統與服務狀態</h4><p class="text-xs text-slate-500 mt-1">日常先看服務是否正常；儲存搬移與高風險維護仍放在各自的維運工作區。</p></div><button data-csp-click="renderAdminSystemStatus(true)" class="admin-toolbar-button">↻ 重新檢查</button></div>
                         <div id="admin-system-health" class="admin-system-health-grid"></div>

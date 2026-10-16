@@ -414,6 +414,16 @@ def register_smart_learning(
 
         return jsonify(learning_gate.learner_bundle(user, str(course_id)))
 
+    @app.get("/api/admin/health-overview")
+    def admin_health_overview():
+        denied = rbac_legacy_adapter.require_admin(owner)
+        if denied:
+            return denied
+        from teacher_app.admin import health_overview
+        from teacher_app.maintenance import health as maintenance_health
+
+        return jsonify(health_overview.collect(health_state=lambda: maintenance_health.health_state(getattr(owner, "_db_conn", None))))
+
     @app.get("/api/admin/access-diagnosis")
     def admin_access_diagnosis():
         denied = rbac_legacy_adapter.require_admin(owner)
