@@ -38,3 +38,19 @@ class ResumeCardTests(unittest.TestCase):
     def test_progress_api_exposes_last_viewed_at(self):
         src = (Path(__file__).resolve().parents[1] / "teacher_app" / "learning" / "routes.py").read_text(encoding="utf-8")
         self.assertIn('"lastViewedAt": str(data.get("last_viewed_at") or "")', src)
+
+
+class HomeResumeTests(unittest.TestCase):
+    def test_home_card_links_to_learning_center_with_resume_param(self):
+        nav = (Path(__file__).resolve().parents[1] / "static" / "portal-navigation-73.js").read_text(encoding="utf-8")
+        self.assertIn("&resume=${encodeURIComponent(item.materialId)}", nav)
+        self.assertIn("location.pathname!=='/'", nav)
+
+    def test_learning_center_auto_opens_resume_material_once(self):
+        self.assertIn("function teachingAutoResume(", JS)
+        self.assertIn("params.get('resume')", JS)
+        self.assertIn("history.replaceState", JS)
+
+    def test_progress_payload_carries_title_and_scope(self):
+        src = (Path(__file__).resolve().parents[1] / "teacher_app" / "learning" / "routes.py").read_text(encoding="utf-8")
+        self.assertIn('"materialTitle"', src)

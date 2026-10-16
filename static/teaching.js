@@ -86,6 +86,21 @@ function teachingPaintResume(found) {
     const where = page && total ? `上次讀到第 ${page} / ${total} 頁` : `已完成 ${Math.round(Number(found.item.progress || 0))}%`;
     box.innerHTML = `<section class="card" role="region" aria-label="繼續上次"><div><p class="teaching-help">繼續上次</p><h3 class="text-base font-bold">${escapeHtml(found.material.title || found.material.filename || '教材')}</h3><p class="teaching-help">${escapeHtml(where)}</p></div><button type="button" class="btn btn-primary mt-2" data-material-resume="${escapeHtml(String(found.item.materialId))}" data-resume-page="${page}">繼續閱讀 →</button></section>`;
 }
+// /system?resume=<materialId>&page=<n> (from the home page card): open that material once.
+let teachingAutoResumed = false;
+function teachingAutoResume() {
+    if (teachingAutoResumed) return;
+    const params = new URLSearchParams(location.search);
+    const id = params.get('resume');
+    if (!id) { teachingAutoResumed = true; return; }
+    if (!(cachedSlidesList || []).some(m => String(m.id) === id)) return; // list not loaded yet; retry on next render
+    teachingAutoResumed = true;
+    const page = Number(params.get('page') || 0);
+    if (page > 0) { try { localStorage.setItem(teachingBookmarkKey(id), String(page - 1)); } catch (_) {} }
+    params.delete('resume'); params.delete('page');
+    try { history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params.toString() : '') + location.hash); } catch (_) {}
+    openMaterial(id);
+}
 function teachingWelcome() {
     const host = document.getElementById('learning-start');
     if (!host || host.dataset.ready) return;
@@ -272,6 +287,7 @@ function renderTeachingCourseOverview() {
     grid.dataset.autoOpenId = autoOpenId;
     teachingSyncStickyOffset();
     void teachingLoadResume(false);
+    teachingAutoResume();
     window.LearnerCourseOverview?.finalize?.(grid, courses);
 }
 
