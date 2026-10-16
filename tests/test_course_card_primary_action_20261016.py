@@ -78,3 +78,15 @@ class ExamPhoneLayoutTests(unittest.TestCase):
                        "applyExamPaging();updateQuickJumpButtons();"):
             self.assertIn(needle, self.JS_EXAM)
         self.assertNotIn("尚有 ${unanswered} 題未作答，確定要直接提交", self.JS_EXAM)
+
+
+class ExamResultPageTests(unittest.TestCase):
+    ROOT = Path(__file__).resolve().parents[1] / "static"
+
+    def test_score_comes_before_report_title_and_wrong_list_has_review_jumps(self):
+        html = (self.ROOT / "system.html").read_text(encoding="utf-8")
+        self.assertLess(html.index('id="final-score-text"'), html.index("測驗成績結算報告"))
+        js = (self.ROOT / "system-exam.js").read_text(encoding="utf-8")
+        self.assertIn("function renderWrongQuestionList(", js)
+        self.assertIn("前往第 ${Number(source.page)} 頁複習", js)
+        self.assertIn("renderExamRemediation(result.remediation||null);\n    renderWrongQuestionList();", js.replace("\r\n", "\n"))

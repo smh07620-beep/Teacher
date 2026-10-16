@@ -562,6 +562,7 @@ async function submitQuiz() {
     }
 
     renderExamRemediation(result.remediation||null);
+    renderWrongQuestionList();
     // 重測只在「未達及格線」時出現；通過或待批改時不顯示任何操作按鈕。
     const resultActions=document.getElementById('result-actions');
     if(resultActions)resultActions.classList.toggle('hidden',!(essayCount<=0&&totalScore<passingScore));
@@ -572,6 +573,37 @@ async function submitQuiz() {
 
     renderCategoryChart(result.categoryStats||{});
     updateProgressStats();
+}
+
+// Wrong questions right under the verdict, each with a jump to the page/time to re-read.
+function reviewSourceLabel(source){
+    if(!source||!source.materialId)return '';
+    if(Number(source.page)>0)return `前往第 ${Number(source.page)} 頁複習`;
+    const seconds=Number(source.timeStart||source.timeSeconds||0);
+    if(seconds>0)return `前往 ${Math.floor(seconds/60)}:${String(Math.floor(seconds%60)).padStart(2,'0')} 複習`;
+    return '前往教材複習';
+}
+function renderWrongQuestionList(){
+    const dashboard=document.getElementById('result-dashboard');
+    if(!dashboard)return;
+    let box=document.getElementById('result-wrong-list');
+    const wrong=(window.currentExamReviewQuestions||[]).filter(item=>item&&item.isCorrect===false);
+    if(!wrong.length){box?.remove();return;}
+    if(!box){
+        box=document.createElement('section');
+        box.id='result-wrong-list';
+        box.className='card';
+        box.setAttribute('aria-label','答錯的題目');
+        const anchor=document.getElementById('result-remediation');
+        (anchor?.parentElement||dashboard).insertBefore(box,anchor||null);
+        box.addEventListener('click',event=>{
+            const button=event.target.closest('[data-wrong-review]');
+            if(!button)return;
+            const item=wrong[Number(button.dataset.wrongReview)];
+            if(item?.reviewSource&&typeof window.teacher66OpenReviewSource==='function')window.teacher66OpenReviewSource(item.reviewSource);
+        });
+    }
+    box.innerHTML=`<h3 class="font-bold text-base">答錯的題目（${wrong.length} 題）</h3><ul class="mt-2 space-y-2">${wrong.map((item,idx)=>{const label=reviewSourceLabel(item.reviewSource);return `<li class="flex flex-wrap items-center justify-between gap-2 text-sm"><span>第 ${Number(item.number)} 題　${escapeHtml(String(item.questionText||'').slice(0,60))}</span>${label?`<button type="button" class="btn btn-secondary" data-wrong-review="${idx}">${escapeHtml(label)}</button>`:''}</li>`;}).join('')}</ul>`;
 }
 
 function renderExamRemediation(plan){
