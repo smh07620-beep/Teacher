@@ -565,6 +565,8 @@ body{
   #slide-viewer-shell .reader-context{background:#18313a;color:#cfe0e8}
   #slide-viewer-shell .reader-breadcrumb{color:#a9bcc6}
   #slide-viewer-shell .reader-crumb-link{color:#6fd3cb}
+  #slide-viewer-shell .reader-eyebrow{color:#7fd6cd}
+  #slide-viewer-shell .reader-back,#slide-viewer-shell .bg-teal-50{background:#0f3d3a;border-color:#2a6b66;color:#bdf2ec}
   #slide-viewer-shell .reader-crumb-current{color:#fff}
   #slide-viewer-shell input,#slide-viewer-shell select{background:#1d303a;border-color:#32495a;color:#e6eef2}
   #slide-viewer-shell #slide-prev-btn,#slide-viewer-shell #slide-next-btn{background:rgba(22,36,44,.92);color:#e6eef2;border-color:#32495a}
