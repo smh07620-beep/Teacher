@@ -3051,7 +3051,7 @@ def build_single_preview_pdf(source_path: Path, output_pdf: Path, progress_id: s
         try:
             if progress_id:
                 set_upload_progress(progress_id, 12, "建立單一預覽檔", "LibreOffice 正在將教材轉為單一 PDF 預覽檔…")
-            cmd=[SOFFICE_BIN,"--headless","--norestore",f"-env:UserInstallation=file:///{profile_dir.as_posix()}","--convert-to","pdf","--outdir",str(pdf_tmp_dir),str(source_path)]
+            cmd=[SOFFICE_BIN,"--headless","--norestore",f"-env:UserInstallation={profile_dir.resolve().as_uri()}","--convert-to","pdf","--outdir",str(pdf_tmp_dir),str(source_path)]
             result=subprocess.run(cmd,capture_output=True,timeout=240)
             if result.returncode != 0:
                 raise RuntimeError(result.stderr.decode(errors="ignore")[:500] or "LibreOffice 轉檔失敗")
@@ -3094,7 +3094,7 @@ def convert_pptx_to_images(pptx_path: Path, out_folder: Path) -> int:
                 SOFFICE_BIN,
                 "--headless",
                 "--norestore",
-                f"-env:UserInstallation=file:///{profile_dir.as_posix()}",
+                f"-env:UserInstallation={profile_dir.resolve().as_uri()}",
                 "--convert-to",
                 "pdf",
                 "--outdir",
@@ -3159,7 +3159,7 @@ def convert_office_to_images(source_path: Path, out_folder: Path, progress_id: s
         try:
             if progress_id:
                 set_upload_progress(progress_id, 12, "轉換 Office 文件", "LibreOffice 正在轉換為 PDF…")
-            cmd=[SOFFICE_BIN,"--headless","--norestore",f"-env:UserInstallation=file:///{profile_dir.as_posix()}","--convert-to","pdf","--outdir",str(pdf_tmp_dir),str(source_path)]
+            cmd=[SOFFICE_BIN,"--headless","--norestore",f"-env:UserInstallation={profile_dir.resolve().as_uri()}","--convert-to","pdf","--outdir",str(pdf_tmp_dir),str(source_path)]
             result=subprocess.run(cmd,capture_output=True,timeout=180)
             if result.returncode != 0: raise RuntimeError(result.stderr.decode(errors="ignore")[:500] or "LibreOffice 轉檔失敗")
             pdfs=list(pdf_tmp_dir.glob("*.pdf"))
@@ -4226,7 +4226,7 @@ def _convert_office_to_pdf_for_text(source: Path, temp_root: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
     profile_dir = temp_root / "lo-profile"
     profile_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [SOFFICE_BIN, "--headless", "--norestore", f"-env:UserInstallation=file:///{profile_dir.as_posix()}", "--convert-to", "pdf", "--outdir", str(out_dir), str(source)]
+    cmd = [SOFFICE_BIN, "--headless", "--norestore", f"-env:UserInstallation={profile_dir.resolve().as_uri()}", "--convert-to", "pdf", "--outdir", str(out_dir), str(source)]
     with conversion_lock:
         proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180, check=False)
     pdfs = list(out_dir.glob("*.pdf"))

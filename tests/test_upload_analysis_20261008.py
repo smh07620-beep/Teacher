@@ -104,6 +104,31 @@ class UploadAnalysisTests(unittest.TestCase):
         self.assertEqual(result["imageCount"], 0)
         self.assertEqual(result["imageScanError"], "FileNotFoundError")
 
+    def test_doc_conversion_passes_a_valid_profile_uri(self):
+        """``file://C:/...`` makes Windows LibreOffice report bootstrap.ini as corrupt."""
+        from unittest import mock
+
+        commands = []
+
+        def fake_run(command, **_kwargs):
+            commands.append(list(command))
+            out_dir = Path(command[command.index("--outdir") + 1])
+            (out_dir / "source.docx").write_bytes(b"docx")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy = Path(tmp) / "old.doc"
+            legacy.write_bytes(b"\xd0\xcf\x11\xe0 legacy")
+            out_dir = Path(tmp) / "scan"
+            out_dir.mkdir()
+            with mock.patch.dict("os.environ", {"SOFFICE_PATH": "soffice"}), mock.patch.object(
+                upload_analysis.subprocess, "run", side_effect=fake_run
+            ):
+                upload_analysis._convert_doc_to_docx(legacy, out_dir)
+            expected = (out_dir / "profile").resolve().as_uri()
+        profile_args = [arg for arg in commands[0] if arg.startswith("-env:UserInstallation=")]
+        self.assertEqual(profile_args, [f"-env:UserInstallation={expected}"])
+        self.assertTrue(expected.startswith("file:///"))
+
     def test_worker_stores_analysis_in_storage_meta(self):
         worker = ROOT.joinpath("material_worker.py").read_text(encoding="utf-8")
         self.assertIn('media_meta["uploadAnalysis"]', worker)

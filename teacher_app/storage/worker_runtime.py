@@ -78,9 +78,9 @@ class WorkerMaterialStorageAdapter:
             self.slide_dpi = 170
         self.soffice = os.environ.get("SOFFICE_PATH", "soffice")
         try:
-            warm_startup = float(os.environ.get("MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS", "5") or 5)
+            warm_startup = float(os.environ.get("MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS", "15") or 15)
         except ValueError:
-            warm_startup = 5.0
+            warm_startup = 15.0
         self.libreoffice_warm_enabled = _env_true("MATERIAL_LIBREOFFICE_WARM_ENABLED", True)
         self._libreoffice_warm = WarmLibreOfficeConverter(
             self.soffice,
@@ -523,7 +523,7 @@ class WorkerMaterialStorageAdapter:
             self.soffice,
             "--headless",
             "--norestore",
-            f"-env:UserInstallation=file:///{profile_dir.as_posix()}",
+            f"-env:UserInstallation={profile_dir.resolve().as_uri()}",
             "--convert-to",
             "pdf",
             "--outdir",

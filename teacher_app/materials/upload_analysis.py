@@ -39,7 +39,7 @@ def _convert_doc_to_docx(path: Path, out_dir: Path) -> Path:
     subprocess.run(
         [
             binary,
-            f"-env:UserInstallation=file://{profile.as_posix()}",
+            f"-env:UserInstallation={profile.resolve().as_uri()}",
             "--headless", "--norestore", "--convert-to", "docx:MS Word 2007 XML",
             "--outdir", str(out_dir), str(source),
         ],
