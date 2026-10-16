@@ -137,3 +137,13 @@ Add or update tests for at least these cases:
 - Do not weaken existing authentication/session protections to make RBAC easier.
 - Before finishing an RBAC change, search for every use of legacy role values (`learner`, `teacher`, `manager`) and update or deliberately preserve it.
 - Document any new tables, columns, environment variables, endpoints, and migration steps in the repository README or a dedicated `docs/` file.
+
+## 前端施工規則（2026-10 大改起適用）
+
+1. 一個畫面只有一個擁有者檔案；要改該畫面就改該檔，不新增 `*-fix-*.js` 之類的補丁檔。
+2. 不覆寫別人的全域函式。需要「某事發生後做什麼」就發事件：`window.dispatchEvent(new CustomEvent('teacher:material-opened', {detail}))`，其他模組 `addEventListener`。
+3. 不用 `MutationObserver` 改畫面；畫面由 render 函式依狀態一次畫好。純監測用途需在檔頭註明。
+4. 不用文字比對判斷狀態，一律看 `data-*` 屬性或狀態物件。
+5. 樣式只用 `static/design-tokens.css` 的 token 與元件 class（`.btn`、`.card`、`.badge`、`.field`、`.skeleton`、`.empty-state`）；新程式不得加 `!important`，不得寫 `text-[11px]` 之類小於 12px 的任意字級。
+6. `python tools/ui_debt_report.py` 統計補丁檔、`MutationObserver`、`!important`、小字級數量；`tests/test_ui_debt_budget_20261016.py` 只准減少不准增加。
+7. 進度、輪詢類請求要批次或退避（見 `AppApiClient.pollBackoff`），不要每個操作各打一次 API。
