@@ -94,7 +94,7 @@ body.home-dashboard-page .phase3-home .v56-list-row{min-height:54px;padding:9px 
 body.home-dashboard-page .phase3-home .v56-list-title strong{font-size:14px}
 body.home-dashboard-page .phase3-home .v56-list-title span{font-size:12px;color:#5f7886}
 body.home-dashboard-page .phase3-home .v56-list-row b{font-size:16px}
-body.home-dashboard-page .phase3-home .v56-file-pill{min-width:38px;height:22px;border-radius:5px;font-size:11px}
+body.home-dashboard-page .phase3-home .v56-file-pill{min-width:38px;height:22px;border-radius:5px;font-size:12px}
 body.home-dashboard-page .phase3-home .v56-assessment-badge{padding:4px 9px;border-radius:5px;font-size:12px}
 body.home-dashboard-page .phase3-home .phase3-content-panel .phase3-home-task-row>span:nth-child(2)>strong{font-size:14px}
 body.home-dashboard-page .phase3-home .phase3-content-panel .phase3-home-task-row>span:nth-child(2)>span{font-size:12px;color:#5f7886}
@@ -114,7 +114,7 @@ body.home-dashboard-page .v56-bottom-nav svg{width:22px;height:22px;fill:none;st
 
 /* ---------- 手機 ---------- */
 @media(max-width:620px){
-  body.home-dashboard-page .v56-brand-copy span{font-size:11px}
+  body.home-dashboard-page .v56-brand-copy span{font-size:12px}
   body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy h1{font-size:28px}
   body.home-dashboard-page .phase3-home .phase3-groups>a{padding:13px 12px 12px}
   body.home-dashboard-page .phase3-home .phase3-groups h3{font-size:16px}

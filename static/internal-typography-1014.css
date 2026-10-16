@@ -55,7 +55,7 @@ body.internal-training-page main {
 }
 
 .internal-training-page .v580-group-card small {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
@@ -105,7 +105,7 @@ body.internal-training-page main {
 
 @media (max-width: 760px) {
   .internal-training-page .v681-internal-copy .v580-eyebrow {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .internal-training-page .v681-internal-copy h1 {
