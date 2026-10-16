@@ -143,3 +143,24 @@ class ReaderDarkThemeTests(unittest.TestCase):
                 self.assertTrue(line.startswith("#slide-viewer-shell"), line)
         self.assertIn("#slide-viewer-image{background:#fff}", block)
         self.assertNotIn("filter:invert", block)
+
+
+class SvgSpriteTests(unittest.TestCase):
+    ROOT = Path(__file__).resolve().parents[1] / "static"
+
+    def test_every_used_icon_exists_in_the_sprite(self):
+        import re
+
+        sprite = (self.ROOT / "icons.svg").read_text(encoding="utf-8")
+        defined = set(re.findall(r'<symbol id="([\w-]+)"', sprite))
+        used = set()
+        for name in ("system.html", "system-learner.js"):
+            used |= set(re.findall(r"/icons\.svg#([\w-]+)", (self.ROOT / name).read_text(encoding="utf-8")))
+        self.assertTrue(used)
+        self.assertEqual(set(), used - defined)
+        learner = (self.ROOT / "system-learner.js").read_text(encoding="utf-8")
+        for name in re.findall(r":'([a-z]+)'", learner[learner.index("UI_ICON_BY_EMOJI"):][:300]):
+            self.assertIn(name, defined)
+
+    def test_sprite_is_small(self):
+        self.assertLess((self.ROOT / "icons.svg").stat().st_size, 10 * 1024)

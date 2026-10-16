@@ -1135,13 +1135,20 @@ function courseMaterialMeta(m){
 
 }
 
+// Emoji -> sprite icon (static/icons.svg); unknown emoji are shown as before.
+const UI_ICON_BY_EMOJI = {'🎬':'video','🎧':'audio','🧰':'tools','🩸':'drop','📑':'sop','📊':'infographic','📚':'book','📝':'exam'};
+function uiIcon(emoji){
+    const name = UI_ICON_BY_EMOJI[emoji];
+    return name ? `<svg class="icon" aria-hidden="true" focusable="false"><use href="/icons.svg#${name}"/></svg>` : emoji;
+}
+
 function buildCourseMaterialRow(m){
 
     const meta=courseMaterialMeta(m), done=!!myCompletedMaterials[m.id];
 
     const detail=[m.pageCount?`${m.pageCount} 頁`:'',m.dateAdded?`上傳 ${m.dateAdded}`:''].filter(Boolean).join(' · ');
 
-    return `<div class="course-material-row"><span class="course-type-icon">${meta.icon}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="course-material-title font-bold text-sm text-slate-800 break-words">${escapeHtml(m.title||m.filename||'未命名教材')}</span><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.tone}">${escapeHtml(meta.label)}</span>${done?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✓ 已完成</span>':''}</div><p class="text-[11px] text-slate-400 mt-1">${escapeHtml(detail||m.description||'')}</p></div><div class="course-row-actions flex items-center gap-2"><button data-csp-click="openMaterial('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg bg-[#006b64] hover:bg-[#005a54] text-white text-xs font-bold">${meta.key==='media'?'▶ 播放':'📖 閱讀'}</button>${m.isBuiltin?'':`<button data-csp-click="markMaterialComplete('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg border ${done?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'} text-xs font-bold">${done?'✓ 已完成':'完成標記'}</button><button type="button" data-save-learning-item="material" data-save-learning-id="${escapeHtml(m.id)}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">${savedLearningItems.has(savedLearningKey('material',m.id))?'★ 已收藏':'☆ 稍後閱讀'}</button>`}</div></div>`;
+    return `<div class="course-material-row"><span class="course-type-icon">${uiIcon(meta.icon)}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="course-material-title font-bold text-sm text-slate-800 break-words">${escapeHtml(m.title||m.filename||'未命名教材')}</span><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.tone}">${escapeHtml(meta.label)}</span>${done?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✓ 已完成</span>':''}</div><p class="text-[11px] text-slate-400 mt-1">${escapeHtml(detail||m.description||'')}</p></div><div class="course-row-actions flex items-center gap-2"><button data-csp-click="openMaterial('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg bg-[#006b64] hover:bg-[#005a54] text-white text-xs font-bold">${meta.key==='media'?'▶ 播放':'📖 閱讀'}</button>${m.isBuiltin?'':`<button data-csp-click="markMaterialComplete('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg border ${done?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'} text-xs font-bold">${done?'✓ 已完成':'完成標記'}</button><button type="button" data-save-learning-item="material" data-save-learning-id="${escapeHtml(m.id)}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">${savedLearningItems.has(savedLearningKey('material',m.id))?'★ 已收藏':'☆ 稍後閱讀'}</button>`}</div></div>`;
 
 }
 
@@ -1149,7 +1156,7 @@ function buildCourseExamRow(q){
 
     const bank=examBankCount(q),actual=examActualCount(q),draft=hasExamDraft(q.id);
 
-    return `<div class="course-material-row"><span class="course-type-icon">📝</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-sm text-slate-800">${escapeHtml(q.title||'課後評量')}</span>${q.blindMode?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white">導師盲測</span>':''}${draft?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">進行中</span>':''}</div><div class="flex flex-wrap gap-1.5 mt-1.5 text-[10px]"><span class="course-stat-chip">👤 ${escapeHtml(examAudienceLabel(q))}</span><span class="course-stat-chip">🧠 題庫 ${bank} 題</span><span class="course-stat-chip">📋 ${escapeHtml(examDrawLabel(q))}</span><span class="course-stat-chip">🎯 及格 ${Number(q.passingScore||80)} 分</span></div>${q.desc?`<p class="text-[11px] text-slate-400 mt-1">${escapeHtml(q.desc)}</p>`:''}</div><div class="course-row-actions"><button data-csp-click="openCourseExam('${escapeHtml(q.id)}')" class="px-3 py-2 rounded-lg ${draft?'bg-amber-600 hover:bg-amber-500':'bg-indigo-600 hover:bg-indigo-500'} text-white text-xs font-bold">${draft?'繼續作答 →':'開始考核 →'}</button></div></div>`;
+    return `<div class="course-material-row"><span class="course-type-icon">${uiIcon('📝')}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-sm text-slate-800">${escapeHtml(q.title||'課後評量')}</span>${q.blindMode?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white">導師盲測</span>':''}${draft?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">進行中</span>':''}</div><div class="flex flex-wrap gap-1.5 mt-1.5 text-[10px]"><span class="course-stat-chip">👤 ${escapeHtml(examAudienceLabel(q))}</span><span class="course-stat-chip">🧠 題庫 ${bank} 題</span><span class="course-stat-chip">📋 ${escapeHtml(examDrawLabel(q))}</span><span class="course-stat-chip">🎯 及格 ${Number(q.passingScore||80)} 分</span></div>${q.desc?`<p class="text-[11px] text-slate-400 mt-1">${escapeHtml(q.desc)}</p>`:''}</div><div class="course-row-actions"><button data-csp-click="openCourseExam('${escapeHtml(q.id)}')" class="px-3 py-2 rounded-lg ${draft?'bg-amber-600 hover:bg-amber-500':'bg-indigo-600 hover:bg-indigo-500'} text-white text-xs font-bold">${draft?'繼續作答 →':'開始考核 →'}</button></div></div>`;
 
 }
 
