@@ -57,16 +57,16 @@ def course_progress(user: Mapping[str, Any], course_id: str) -> dict[str, Any]:
     for item in materials:
         material_id = str(item.get("id") or "")
         row = rows.get(material_id)
+        pages = [p for p in _position(row).get("reviewPages") or [] if isinstance(p, int)] if row else []
         ok = bool(
             row
             and row.get("completed")
             and versioning.completion_is_current(item, row.get("completed_version", 1))
+            and not pages
         )
         (done if ok else missing).append(material_id)
-        if row:
-            pages = [p for p in _position(row).get("reviewPages") or [] if isinstance(p, int)]
-            if pages:
-                review_pages[material_id] = pages
+        if pages:
+            review_pages[material_id] = pages
     return {"materials": materials, "done": done, "missing": missing, "reviewPages": review_pages}
 
 

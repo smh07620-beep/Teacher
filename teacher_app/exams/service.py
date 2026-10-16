@@ -273,6 +273,16 @@ def submit_attempt(base_or_user, user_or_attempt_id, attempt_id_or_data, data: M
             "reviewSource": reviewed_question.get("reviewSource") or {},
             "questionType": str(question.get("questionType") or "choice"),
         })
+    review_pages = {}
+    if remediation_plan.get("required"):
+        from teacher_app.learning import review_pages as learning_review_pages
+
+        review_pages = learning_review_pages.pages_by_material(review_questions)
+        try:
+            learning_review_pages.plant(_username(actor), review_pages)
+        except Exception:
+            review_pages = {}  # best effort: the exam result itself must not fail
+    remediation_plan["reviewPages"] = review_pages
     return {
         "ok": True, "attemptId": str(attempt["id"]), "recordId": record_id, "score": result["score"],
         "status": result["status"], "correctCount": result["correctCount"], "wrongCount": result["wrongCount"],

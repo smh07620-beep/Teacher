@@ -20,6 +20,7 @@ from flask import g, jsonify, request
 from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.learning import access as learning_access
 from teacher_app.learning import content, repository, versioning
+from teacher_app.learning import review_pages as review_pages_mod
 from teacher_app.materials import repository as material_repository
 
 
@@ -508,6 +509,11 @@ def register_smart_learning(
                     "version": current_version,
                 }
                 progress = float(document["progress"])
+                position["reviewPages"] = [
+                    p for p in prior_position.get("reviewPages") or [] if isinstance(p, int)
+                ]
+                position["reviewDwell"] = dict(prior_position.get("reviewDwell") or {})
+                delta = {}
                 if rules_v2:
                     dwell = {}
                     same_version = int(prior_position.get("version") or current_version) == current_version
@@ -525,11 +531,16 @@ def register_smart_learning(
                     position["reviewPages"] = [
                         p for p in prior_position.get("reviewPages") or [] if isinstance(p, int)
                     ] if same_version else []
+                    position["reviewDwell"] = dict(prior_position.get("reviewDwell") or {}) if same_version else {}
                     v2 = content.document_completion_v2(
                         total_pages, dwell, _required_by_page(material, total_pages)
                     )
                     progress = float(v2["progress"])
                     document = {"completed": v2["completed"]}
+                review_pages_mod.advance(
+                    position, page, delta if rules_v2 else {},
+                    _required_by_page(material, total_pages), rules_v2,
+                )
                 narration = required_narration(user, material)
                 narration_ok = narration is None or narration_heard(str(user["username"]), narration.get("id"))
                 narration_pending = bool(document["completed"]) and not narration_ok

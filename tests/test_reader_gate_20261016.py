@@ -77,3 +77,42 @@ class GateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewPagesTests(unittest.TestCase):
+    def test_pages_by_material_uses_wrong_page_anchored_questions(self):
+        from teacher_app.learning import review_pages
+
+        questions = [
+            {"isCorrect": False, "reviewSource": {"materialId": "m1", "page": 4}},
+            {"isCorrect": False, "reviewSource": {"materialId": "m1", "page": 7}},
+            {"isCorrect": True, "reviewSource": {"materialId": "m1", "page": 9}},
+            {"isCorrect": False, "reviewSource": {"materialId": "m2", "timeSeconds": 30}},
+        ]
+        self.assertEqual(review_pages.pages_by_material(questions), {"m1": [4, 7]})
+
+    def test_advance_clears_pages_only_after_required_dwell(self):
+        from teacher_app.learning import review_pages
+
+        position = {"reviewPages": [4, 7], "reviewDwell": {}}
+        review_pages.advance(position, 4, {"4": 3}, {"4": 5, "7": 5}, True)
+        self.assertEqual(position["reviewPages"], [4, 7])
+        review_pages.advance(position, 4, {"4": 3}, {"4": 5, "7": 5}, True)
+        self.assertEqual(position["reviewPages"], [7])
+
+    def test_v1_visit_clears_page(self):
+        from teacher_app.learning import review_pages
+
+        position = {"reviewPages": [4, 7]}
+        review_pages.advance(position, 7, {}, {}, False)
+        self.assertEqual(position["reviewPages"], [4])
+
+    def test_pending_review_pages_keep_exam_locked(self):
+        materials = [{"id": "m1", "courseId": "c1"}]
+        rows = [{"material_id": "m1", "completed": 1, "completed_version": 1,
+                 "position": '{"reviewPages": [4]}'}]
+        with patch.object(gate.material_repository, "list_uploaded_materials", return_value=materials), \
+             patch.object(gate.learning_repository, "list_progress_for_user", return_value=rows), \
+             patch.object(gate.learning_access, "is_assignment_gated", return_value=True):
+            state = gate.exam_unlock_state({"username": "s1"}, "c1")
+        self.assertFalse(state["unlocked"])
