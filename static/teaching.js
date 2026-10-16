@@ -55,6 +55,37 @@ async function teachingFinishReading() {
     try { await markMaterialComplete(slideViewerState.materialId); }
     finally { teachingReaderBusy = false; teachingSavePage(); }
 }
+/* 繼續上次: the most recently read unfinished material of this scope, one click back to its page. */
+let teachingResumeAt = 0;
+async function teachingLoadResume(force) {
+    const now = Date.now();
+    if (!force && now - teachingResumeAt < 30000) return;
+    teachingResumeAt = now;
+    try {
+        const res = await fetch('/api/learning-progress', {credentials: 'same-origin', cache: 'no-store'});
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const known = new Map((cachedSlidesList || []).map(m => [String(m.id), m]));
+        const item = (data.items || [])
+            .filter(row => known.has(String(row.materialId)) && !row.completed && row.lastViewedAt)
+            .sort((a, b) => String(b.lastViewedAt).localeCompare(String(a.lastViewedAt)))[0];
+        teachingPaintResume(item ? {item, material: known.get(String(item.materialId))} : null);
+    } catch (_) { /* resume card is a convenience; stay silent offline */ }
+}
+function teachingPaintResume(found) {
+    let box = document.getElementById('learning-resume');
+    if (!found) { box?.remove(); return; }
+    const host = document.getElementById('learning-start');
+    if (!host) return;
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'learning-resume';
+        host.insertAdjacentElement('afterend', box);
+    }
+    const page = Number(found.item.position?.page || 0), total = Number(found.item.position?.totalPages || 0);
+    const where = page && total ? `上次讀到第 ${page} / ${total} 頁` : `已完成 ${Math.round(Number(found.item.progress || 0))}%`;
+    box.innerHTML = `<section class="card" role="region" aria-label="繼續上次"><div><p class="teaching-help">繼續上次</p><h3 class="text-base font-bold">${escapeHtml(found.material.title || found.material.filename || '教材')}</h3><p class="teaching-help">${escapeHtml(where)}</p></div><button type="button" class="btn btn-primary mt-2" data-material-resume="${escapeHtml(String(found.item.materialId))}" data-resume-page="${page}">繼續閱讀 →</button></section>`;
+}
 function teachingWelcome() {
     const host = document.getElementById('learning-start');
     if (!host || host.dataset.ready) return;
@@ -240,6 +271,7 @@ function renderTeachingCourseOverview() {
     document.getElementById('course-overview-exam-count').textContent = `考卷 ${quizzes.length}`;
     grid.dataset.autoOpenId = autoOpenId;
     teachingSyncStickyOffset();
+    void teachingLoadResume(false);
     window.LearnerCourseOverview?.finalize?.(grid, courses);
 }
 
@@ -368,6 +400,12 @@ async function teachingSaveCourse() {
 document.addEventListener('click', event => {
     const button = event.target.closest('button'); if (!button) return;
     if (button.dataset.materialOpen) openMaterial(button.dataset.materialOpen);
+    if (button.dataset.materialResume) {
+        // The bookmark is per browser; seed it from the server so another device/incognito resumes too.
+        const page = Number(button.dataset.resumePage || 0);
+        if (page > 0) { try { localStorage.setItem(teachingBookmarkKey(button.dataset.materialResume), String(page - 1)); } catch (_) {} }
+        openMaterial(button.dataset.materialResume);
+    }
     if (button.dataset.materialComplete) {button.disabled=true;markMaterialComplete(button.dataset.materialComplete).finally(()=>{if(button.isConnected)button.disabled=false;});}
     if (button.dataset.moveIndex != null && teachingEditor && !teachingEditorBusy) {
         const index=Number(button.dataset.moveIndex),direction=Number(button.dataset.direction),next=index+direction;

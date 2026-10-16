@@ -374,6 +374,7 @@ def register_smart_learning(
             "currentVersion": version_status["currentVersion"],
             "requiredCompletionVersion": version_status["requiredCompletionVersion"],
             "retrainingRequired": retraining_required,
+            "lastViewedAt": str(data.get("last_viewed_at") or ""),
         }
 
     @app.get("/api/learning-progress")

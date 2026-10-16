@@ -26,3 +26,15 @@ class CourseStepListTests(unittest.TestCase):
         self.assertIn("teachingStepWrap(course.id, m.id,", JS)
         self.assertIn("Boolean(next && next.id === m.id)", JS)
         self.assertIn("function teachingExamStep(", JS)
+
+
+class ResumeCardTests(unittest.TestCase):
+    def test_resume_card_uses_last_viewed_and_seeds_bookmark(self):
+        self.assertIn("async function teachingLoadResume(", JS)
+        self.assertIn("lastViewedAt", JS)
+        self.assertIn("data-material-resume", JS)
+        self.assertIn("teachingBookmarkKey(button.dataset.materialResume)", JS)
+
+    def test_progress_api_exposes_last_viewed_at(self):
+        src = (Path(__file__).resolve().parents[1] / "teacher_app" / "learning" / "routes.py").read_text(encoding="utf-8")
+        self.assertIn('"lastViewedAt": str(data.get("last_viewed_at") or "")', src)
