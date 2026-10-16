@@ -375,6 +375,33 @@ class WorkerMaterialStorageAdapter:
                 return candidate
         return slides_dir / f"slide-{page_no:02d}.png"
 
+    MEDIUM_SLIDE_WIDTH = 1280
+
+    @classmethod
+    def make_medium_slide(cls, slide: Path, page_no: int) -> Path | None:
+        """Write ``slide-NN.m.webp`` (1280 px wide) next to a larger slide image.
+
+        Learners load this by default; only full screen or very dense screens fetch the
+        original.  Returns None when the original is already small or cannot be read.
+        """
+        try:
+            from PIL import Image
+
+            target = slide.parent / f"slide-{page_no:02d}.m.webp"
+            with Image.open(slide) as image:
+                if image.width <= cls.MEDIUM_SLIDE_WIDTH:
+                    return None
+                height = max(1, round(image.height * cls.MEDIUM_SLIDE_WIDTH / image.width))
+                resized = image.convert("RGB").resize((cls.MEDIUM_SLIDE_WIDTH, height), Image.LANCZOS)
+                resized.save(target, "WEBP", quality=82, method=4)
+            if target.stat().st_size >= slide.stat().st_size:
+                target.unlink(missing_ok=True)
+                return None
+            return target
+        except Exception:
+            LOGGER.warning("medium slide skipped page=%s", page_no, exc_info=True)
+            return None
+
     def slide_format(self, slides_dir: Path, page_count: int) -> str:
         if int(page_count or 0) <= 0:
             return ""
@@ -732,6 +759,13 @@ class WorkerMaterialStorageAdapter:
             slide = self._slide_local_path(slides_dir, index)
             if slide.exists():
                 slide_paths.append((index, slide))
+        page_total = len(slide_paths)
+        medium_paths = [
+            (f"{index}m", medium)
+            for index, medium in ((index, self.make_medium_slide(slide, index)) for index, slide in slide_paths)
+            if medium is not None
+        ]
+        slide_paths = slide_paths + medium_paths
         derivative_paths: list[tuple[str, Path]] = []
         for name, raw_path in (derivatives or {}).items():
             path = Path(raw_path)
@@ -777,7 +811,7 @@ class WorkerMaterialStorageAdapter:
                     publish_key=publish_key,
                     source_sha256=source_sha256,
                     object_key=f"slide:{index}",
-                    progress_callback=file_delta(f"預覽第 {index}/{len(slide_paths)} 頁") if callable(progress_callback) else None,
+                    progress_callback=file_delta(f"預覽第 {index}/{page_total} 頁") if callable(progress_callback) else None,
                 )
             )
             slide_files[slide.name] = key
@@ -800,6 +834,7 @@ class WorkerMaterialStorageAdapter:
             "slideFiles": slide_files,
             "derivedFiles": derived_files,
             "slideFormat": self.slide_format(slides_dir, page_count),
+            "slideMedium": "webp" if medium_paths else "",
             "publishKey": publish_key,
             "sourceSha256": str(source_sha256 or "").lower(),
         }

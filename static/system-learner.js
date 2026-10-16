@@ -389,18 +389,21 @@ function openSlide(id) {
 
     if (!entry) { alert('找不到該份簡報，可能已被刪除，請重新整理頁面。'); return; }
 
-    const images = [];
+    const images = [], fullImages = [], mediumImages = [];
 
     for (let i = 1; i <= entry.pageCount; i++) {
 
-        const fmt=(entry.slideFormat||entry.storageMeta?.slideFormat||'png').toLowerCase(); images.push(`${entry.imageFolder}/slide-${String(i).padStart(2, '0')}.${fmt}`);
+        const fmt=(entry.slideFormat||entry.storageMeta?.slideFormat||'png').toLowerCase(); images.push(`${entry.imageFolder}/slide-${String(i).padStart(2, '0')}.${fmt}`); fullImages.push(images[images.length-1]); if (entry.storageMeta?.slideMedium) mediumImages.push(`${entry.imageFolder}/slide-${String(i).padStart(2, '0')}.m.${entry.storageMeta.slideMedium}`);
 
     }
 
     if (!images.length) { alert("此教材尚無可閱讀頁面，請聯絡教師確認轉檔狀態。"); return; }
 
+    // 1280px copy by default; the original only for full screen or very dense screens.
+    const wantFull = (window.innerWidth * (window.devicePixelRatio || 1)) > 1600 || mediumImages.length !== images.length;
     openSlideViewer({
-        images,
+        images: wantFull ? images : mediumImages,
+        fullImages,
         title: entry.title,
         materialId: id,
         readerMode: inferPdfReaderMode(entry)
@@ -424,7 +427,7 @@ function openPdfPreview(entry) {
 
 
 
-function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, materialId = "", readerMode = 'presentation' }) {
+function openSlideViewer({ images = [], fullImages = null, previewUrl = '', pageCount = 0, title, materialId = "", readerMode = 'presentation' }) {
 
     const mode = previewUrl ? 'pdf' : 'images';
 
@@ -436,7 +439,7 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
             ? 'paged_document'
             : (mode === 'pdf' ? 'document' : 'paged_document');
 
-    slideViewerState = { images, previewUrl, pageCount: total, mode, readerMode: normalizedReaderMode, index: teachingReadPage(materialId, total), title, zoom: 1, materialId };
+    slideViewerState = { images, fullImages: fullImages || images, previewUrl, pageCount: total, mode, readerMode: normalizedReaderMode, index: teachingReadPage(materialId, total), title, zoom: 1, materialId };
     window.slideViewerState = slideViewerState;
     slidePrefetched.clear();
     {
@@ -629,11 +632,23 @@ function toggleReaderFill(force) {
     if (!shell) return;
     const on = typeof force === 'boolean' ? force : !shell.classList.contains('reader-fill');
     shell.classList.toggle('reader-fill', on);
+    if (on) useFullSlideImages();
     const button = document.getElementById('reader-fullscreen-btn');
     if (button) { button.title = on ? '退出撐滿畫面' : '全螢幕'; button.setAttribute('aria-label', button.title); }
     setTimeout(() => { if (typeof applySlideZoom === 'function') applySlideZoom(); }, 60);
 }
 window.toggleReaderFill = toggleReaderFill;
+
+// Full screen / fill mode wants the original resolution; swap once, keep the page.
+function useFullSlideImages() {
+    const state = slideViewerState;
+    if (!state.fullImages || state.images === state.fullImages || state.mode === 'pdf') return;
+    state.images = state.fullImages;
+    window.slideViewerState = state;
+    updateSlideViewerImage();
+}
+document.addEventListener('fullscreenchange', () => { if (document.fullscreenElement) useFullSlideImages(); });
+document.addEventListener('webkitfullscreenchange', () => { if (document.webkitFullscreenElement) useFullSlideImages(); });
 
 // 課程 › 教材 › 第幾頁: the course link closes the reader and opens that course's card.
 function paintReaderBreadcrumb(total) {
