@@ -636,6 +636,31 @@ function toggleReaderFill(force) {
 }
 window.toggleReaderFill = toggleReaderFill;
 
+// 課程 › 教材 › 第幾頁: the course link closes the reader and opens that course's card.
+function paintReaderBreadcrumb(total) {
+    const nav = document.getElementById('reader-breadcrumb');
+    if (!nav) return;
+    const material = (cachedSlidesList || []).find(m => String(m.id) === String(slideViewerState.materialId || ''));
+    const course = material?.courseId ? (cachedCourses || []).find(c => String(c.id) === String(material.courseId)) : null;
+    const count = Number(total || slideViewerState.pageCount || slideViewerState.images?.length || 0);
+    const parts = [];
+    if (course) parts.push(`<button type="button" class="reader-crumb-link" data-course-id="${escapeHtml(String(course.id))}" data-csp-click="readerGoToCourse(this.dataset.courseId)">${escapeHtml(course.title || '課程')}</button>`);
+    parts.push(`<span class="reader-crumb-text">${escapeHtml(slideViewerState.title || material?.title || '教材')}</span>`);
+    if (count) parts.push(`<span class="reader-crumb-current" aria-current="page">第 ${Number(slideViewerState.index || 0) + 1} / ${count} 頁</span>`);
+    nav.innerHTML = parts.join('<span class="reader-crumb-sep" aria-hidden="true">›</span>');
+}
+
+function readerGoToCourse(courseId) {
+    closeSlideViewer();
+    setTimeout(() => {
+        const card = document.querySelector(`.course-learning-card[data-course="${CSS.escape(String(courseId || ''))}"]`);
+        if (!card) return;
+        card.open = true;
+        card.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }, 150);
+}
+window.readerGoToCourse = readerGoToCourse;
+
 function toggleReaderMore() {
     const shell = document.getElementById('slide-viewer-shell');
     const open = shell.classList.toggle('reader-more-open');
@@ -685,6 +710,8 @@ function showReaderPortraitHint() {
 function updateViewerNav(total){
 
     const index=slideViewerState.index;
+
+    paintReaderBreadcrumb(total);
 
     document.getElementById('slide-viewer-page-info').textContent = `第 ${index + 1} / ${total} 頁`;
 

@@ -54,3 +54,16 @@ class HomeResumeTests(unittest.TestCase):
     def test_progress_payload_carries_title_and_scope(self):
         src = (Path(__file__).resolve().parents[1] / "teacher_app" / "learning" / "routes.py").read_text(encoding="utf-8")
         self.assertIn('"materialTitle"', src)
+
+
+class ReaderBreadcrumbTests(unittest.TestCase):
+    ROOT = Path(__file__).resolve().parents[1] / "static"
+
+    def test_breadcrumb_shows_course_material_and_page(self):
+        js = (self.ROOT / "system-learner.js").read_text(encoding="utf-8")
+        html = (self.ROOT / "system.html").read_text(encoding="utf-8")
+        self.assertIn('id="reader-breadcrumb"', html)
+        self.assertIn("function paintReaderBreadcrumb(", js)
+        self.assertIn("paintReaderBreadcrumb(total);", js)
+        self.assertIn("function readerGoToCourse(", js)
+        self.assertIn("aria-current=\"page\"", js)

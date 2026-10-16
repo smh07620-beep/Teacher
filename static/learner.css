@@ -528,3 +528,9 @@ body{
 .course-step-state{flex-shrink:0;font-size:12px;font-weight:700;color:#516878}
 .course-step-current .course-step-state{color:#087b78}
 .course-step-body{padding:.25rem .5rem .75rem}
+
+.reader-breadcrumb{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem;font-size:var(--fs-sm,14px);color:#516878}
+.reader-crumb-link{min-height:32px;padding:0 .25rem;background:none;border:0;color:#087b78;font-weight:700;text-decoration:underline;cursor:pointer}
+.reader-crumb-text{max-width:18em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reader-crumb-current{font-weight:700;color:#17384a}
+.reader-crumb-sep{color:#94a3b8}
