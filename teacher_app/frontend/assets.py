@@ -160,6 +160,57 @@ ASSET_MANIFEST = {
 }
 
 
+# Teacher/admin-only scripts a student-only account never needs on /system.
+# Each one was checked by tools/student_asset_inventory.py: it defines no global that
+# a remaining script references and touches no learner-screen element.  Withholding
+# is opt-in (STUDENT_LEAN_ASSETS=1); see docs/STUDENT_LEAN_ASSETS_PLAN.md.
+STUDENT_LEAN_EXCLUDE = frozenset({
+    "/system-admin.js",
+    "/worker-status-70.js",
+    "/worker-status-convergence-101.js",
+    "/admin-scenario-question-1011.js",
+    "/course-wizard-group-fix-1014.js",
+    "/teacher-workspace-nav-fix-1014.js",
+    "/teacher-media-source-fix-1014.js",
+    "/teacher-media-mvp-status-1014.js",
+    "/teacher-media-status-fix-1014.js",
+    "/teacher-media-help-1014.js",
+    "/teacher-media-free-tts-1014.js",
+    "/teacher-voice-catalog-1026.js",
+    "/teacher-paper-template-manager-1014.js",
+    "/teacher-ai-presentation-video-handoff-f5.js",
+    "/teacher-ai-material-convergence-1014.js",
+    "/teacher-assessment-inline-1031.js",
+})
+
+
+def student_lean_enabled() -> bool:
+    return os.environ.get("STUDENT_LEAN_ASSETS", "").strip().lower() in {"1", "true", "on", "yes"}
+
+
+def _strip_scripts(html: str, paths) -> str:
+    for path in paths:
+        pattern = (
+            r"""<script[^>]*src=["']""" + re.escape(path)
+            + r"""(?:\?[^"']*)?["'][^>]*></script>\s*"""
+        )
+        html = re.sub(pattern, "", html)
+    return html
+
+
+def _is_student_only_request() -> bool:
+    try:
+        from flask import g
+
+        from teacher_app.learning import access as learning_access
+
+        user = getattr(g, "teacher_user", None)
+        # Only a plain learner account is trimmed; anyone with another role keeps everything.
+        return bool(user) and learning_access.is_assignment_gated(user, learner_view=False)
+    except Exception:
+        return False
+
+
 def _asset_tag(path: str) -> str:
     if path.endswith(".css"):
         return f'<link rel="stylesheet" href="{path}">'
@@ -267,6 +318,10 @@ def register_pgy_frontend(app):
 
             html = response.get_data(as_text=True)
             html = _apply_asset_manifest(html, "system")
+            if student_lean_enabled():
+                response.headers.add("Vary", "Cookie")
+                if _is_student_only_request():
+                    html = _strip_scripts(html, STUDENT_LEAN_EXCLUDE)
             html = _rewrite_local_asset_versions(html)
             response.set_data(html)
             response.content_length = len(response.get_data())

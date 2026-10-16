@@ -250,6 +250,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `STORAGE_FAILOVER_ON_FULL` | `false` | `teacher_app/config.py`, `teacher_app/legacy_host.py`, `teacher_app/materials/staging_runtime.py` (+3) |  | yes |
 | `STORAGE_FALLBACK_BACKEND` |  | `teacher_app/config.py`, `teacher_app/legacy_host.py`, `teacher_app/materials/staging_runtime.py` (+3) |  | yes |
 | `STORAGE_STATUS_CACHE_SECONDS` | `30` | `teacher_app/legacy_host.py`, `teacher_app/storage/admin_service.py` |  |  |
+| `STUDENT_LEAN_ASSETS` |  | `teacher_app/frontend/assets.py` |  |  |
 | `TEACHER_BASE_URL` |  | `ai_question_worker.py`, `material_worker.py`, `teacher_app/worker/ai_remote.py` (+1) | yes |  |
 | `TEACHER_E2E_DETERMINISTIC_STUBS` |  | `ai_question_worker.py` |  |  |
 | `TEACHER_E2E_TEST_MODE` |  | `teacher_app/testing/deterministic_ai_provider.py` |  |  |
