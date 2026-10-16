@@ -129,3 +129,17 @@ class AdminMoreMenuTests(unittest.TestCase):
         js = (self.ROOT / "admin-workspace.js").read_text(encoding="utf-8")
         self.assertIn(".admin-more", js)
         self.assertIn(":has(.admin-nav-btn:not(.hidden))", (self.ROOT / "admin.css").read_text(encoding="utf-8"))
+
+
+class ReaderDarkThemeTests(unittest.TestCase):
+    def test_dark_theme_is_scoped_to_reader_and_leaves_slide_image_white(self):
+        css = (Path(__file__).resolve().parents[1] / "static" / "learner.css").read_text(encoding="utf-8")
+        start = css.index("/* Reader dark theme")
+        block = css[start:]
+        self.assertIn("prefers-color-scheme: dark", block)
+        for line in block.splitlines():
+            line = line.strip()
+            if line.startswith("#") or line.startswith("."):
+                self.assertTrue(line.startswith("#slide-viewer-shell"), line)
+        self.assertIn("#slide-viewer-image{background:#fff}", block)
+        self.assertNotIn("filter:invert", block)
