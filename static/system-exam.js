@@ -302,7 +302,7 @@ async function attachVideoQuestionSubtitles(){
 }
 // 提交後依伺服器回傳的 isCorrect 標示對錯（紅＝答錯、綠＝答對）；只標示對錯，不揭露正確答案。
 function examQuestionVerdict(i){const r=(window.currentExamReviewQuestions||[])[i];return r&&typeof r.isCorrect==='boolean'?r.isCorrect:null;}
-function renderQuestions(){const c=document.getElementById('quiz-questions-list');c.innerHTML='';const quizList=allQuizData[currentCatKey].questions,userAnswers=userAnswersMap[currentCatKey],flags=flaggedQuestionsMap[currentCatKey],submitted=isSubmittedMap[currentCatKey];quizList.forEach((q,i)=>{const type=q.questionType||'choice',ans=userAnswers[i];const verdict=submitted?examQuestionVerdict(i):null;const card=document.createElement('div');card.id=`question-card-${i}`;card.className=submitted?`bg-slate-50/60 p-5 sm:p-6 rounded-2xl border-2 ${verdict===false?'border-rose-300':'border-slate-300'} shadow-sm space-y-4 scroll-mt-24`:'question-card-learning micro-card bg-white p-5 sm:p-6 border space-y-4 scroll-mt-28';let body='';if(type==='essay'){body=`<textarea ${submitted?'disabled':''} data-csp-input="selectEssay(${i},this.value)" rows="7" class="w-full min-h-[190px] border border-slate-300 rounded-2xl p-4 text-sm leading-7" placeholder="請在此完整填寫作答內容……">${escapeHtml(typeof ans==='string'?ans:'')}</textarea><p class="text-xs text-slate-400">問答題由考核者人工閱卷。</p>`;}else if(type==='fill'){body=`<input ${submitted?'disabled':''} value="${escapeHtml(typeof ans==='string'?ans:'')}" data-csp-input="selectFill(${i},this.value)" class="fill-answer" placeholder="請輸入答案"><p class="text-xs text-slate-400">請依題意填入關鍵字或數值。</p>`;}else if(type==='scenario'){body=window.ScenarioQuestion?window.ScenarioQuestion.render(q,i,submitted,ans):'';}else if(type==='atlas_hotspot'){body='';}else{(q.options||[]).forEach((opt,j)=>{const chosen=type==='multi'?(Array.isArray(ans)&&ans.includes(j)):ans===j;let cls='hover:bg-slate-50 cursor-pointer';if(submitted)cls=chosen?(verdict===false?'border-2 border-rose-400 bg-rose-50 font-bold exam-wrong-choice':verdict===true?'border-2 border-emerald-400 bg-emerald-50 font-bold':'border-2 border-teal-400 bg-teal-50 font-bold'):'opacity-60 bg-slate-50';body+=`<label class="choice-learning flex items-start gap-3 p-4 border ${cls}"><input type="${type==='multi'?'checkbox':'radio'}" ${type==='multi'?'class="multi-check mt-1"':'class="mt-1"'} name="question-${i}" ${chosen?'checked':''} ${submitted?'disabled':''} data-csp-change="${type==='multi'?`selectMulti(${i},${j},this.checked)`:`selectOption(${i},${j})`}"><span class="text-sm font-medium"><b class="mr-1">${String.fromCharCode(65+j)}.</b>${escapeHtml(opt)}</span></label>`;});}const videoLocked=!!q.answerConfig?.mediaUrl&&Number(q.answerConfig?.pauseAt||0)>0&&!submitted&&!answerHasValue(ans);card.innerHTML=`<div class="flex flex-wrap justify-between gap-2 border-b border-slate-100 pb-3"><div class="flex items-center gap-2 flex-wrap"><span class="w-8 h-8 rounded-lg bg-[#0b3342] text-white flex items-center justify-center font-black">${i+1}</span>${blindTestMode?'':`<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-800">${escapeHtml(q.category||q.tag||'一般')}</span>`}<span class="question-type-pill ${type==='multi'?'bg-violet-100 text-violet-800':type==='fill'?'bg-sky-100 text-sky-800':type==='essay'?'bg-amber-100 text-amber-800':'bg-slate-100 text-slate-600'}">${q.answerConfig?.mediaUrl?'影片・':''}${questionTypeLabel(type)}</span><span id="answer-status-${i}" class="answer-status-pill ${verdict===false?'':answerHasValue(ans)?'answered':'unanswered'}" ${verdict===false?'style="background:#ffe4e6;color:#be123c;border-color:#fda4af"':''}>${verdict===false?'✕ 答錯':verdict===true?'✓ 答對':answerHasValue(ans)?'✓ 已作答':'○ 未作答'}</span></div><button data-csp-click="toggleFlag(${i})" id="flag-btn-${i}" class="text-xs px-2.5 py-1 rounded-lg border border-slate-200">${flags[i]?'🚩 取消標記':'🏳️ 標記此題'}</button></div>${renderQuestionMedia(q,i,submitted)}<div id="video-answer-${i}" class="${videoLocked?'hidden ':''}space-y-4"><h3 class="text-base sm:text-lg font-black leading-relaxed">${escapeHtml(q.question)}</h3><div class="space-y-2.5">${body}</div></div>`;c.appendChild(card);});const b=document.getElementById('submit-btn');if(submitted){b.disabled=true;b.className='w-full sm:w-auto bg-slate-400 text-white font-bold px-8 py-3 rounded-xl shadow cursor-not-allowed';b.textContent='🔒 本分頁考卷已繳交';}else{b.disabled=false;b.className='w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white font-bold px-8 py-3 rounded-xl shadow-lg';b.textContent='📋 提交試卷結算成績';}updateQuickJumpButtons();}
+function renderQuestions(){const c=document.getElementById('quiz-questions-list');c.innerHTML='';const quizList=allQuizData[currentCatKey].questions,userAnswers=userAnswersMap[currentCatKey],flags=flaggedQuestionsMap[currentCatKey],submitted=isSubmittedMap[currentCatKey];quizList.forEach((q,i)=>{const type=q.questionType||'choice',ans=userAnswers[i];const verdict=submitted?examQuestionVerdict(i):null;const card=document.createElement('div');card.id=`question-card-${i}`;card.className=submitted?`bg-slate-50/60 p-5 sm:p-6 rounded-2xl border-2 ${verdict===false?'border-rose-300':'border-slate-300'} shadow-sm space-y-4 scroll-mt-24`:'question-card-learning micro-card bg-white p-5 sm:p-6 border space-y-4 scroll-mt-28';let body='';if(type==='essay'){body=`<textarea ${submitted?'disabled':''} data-csp-input="selectEssay(${i},this.value)" rows="7" class="w-full min-h-[190px] border border-slate-300 rounded-2xl p-4 text-sm leading-7" placeholder="請在此完整填寫作答內容……">${escapeHtml(typeof ans==='string'?ans:'')}</textarea><p class="text-xs text-slate-400">問答題由考核者人工閱卷。</p>`;}else if(type==='fill'){body=`<input ${submitted?'disabled':''} value="${escapeHtml(typeof ans==='string'?ans:'')}" data-csp-input="selectFill(${i},this.value)" class="fill-answer" placeholder="請輸入答案"><p class="text-xs text-slate-400">請依題意填入關鍵字或數值。</p>`;}else if(type==='scenario'){body=window.ScenarioQuestion?window.ScenarioQuestion.render(q,i,submitted,ans):'';}else if(type==='atlas_hotspot'){body='';}else{(q.options||[]).forEach((opt,j)=>{const chosen=type==='multi'?(Array.isArray(ans)&&ans.includes(j)):ans===j;let cls='hover:bg-slate-50 cursor-pointer';if(submitted)cls=chosen?(verdict===false?'border-2 border-rose-400 bg-rose-50 font-bold exam-wrong-choice':verdict===true?'border-2 border-emerald-400 bg-emerald-50 font-bold':'border-2 border-teal-400 bg-teal-50 font-bold'):'opacity-60 bg-slate-50';body+=`<label class="choice-learning flex items-start gap-3 p-4 border ${cls}"><input type="${type==='multi'?'checkbox':'radio'}" ${type==='multi'?'class="multi-check mt-1"':'class="mt-1"'} name="question-${i}" ${chosen?'checked':''} ${submitted?'disabled':''} data-csp-change="${type==='multi'?`selectMulti(${i},${j},this.checked)`:`selectOption(${i},${j})`}"><span class="text-sm font-medium"><b class="mr-1">${String.fromCharCode(65+j)}.</b>${escapeHtml(opt)}</span></label>`;});}const videoLocked=!!q.answerConfig?.mediaUrl&&Number(q.answerConfig?.pauseAt||0)>0&&!submitted&&!answerHasValue(ans);card.innerHTML=`<div class="flex flex-wrap justify-between gap-2 border-b border-slate-100 pb-3"><div class="flex items-center gap-2 flex-wrap"><span class="w-8 h-8 rounded-lg bg-[#0b3342] text-white flex items-center justify-center font-black">${i+1}</span>${blindTestMode?'':`<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-800">${escapeHtml(q.category||q.tag||'一般')}</span>`}<span class="question-type-pill ${type==='multi'?'bg-violet-100 text-violet-800':type==='fill'?'bg-sky-100 text-sky-800':type==='essay'?'bg-amber-100 text-amber-800':'bg-slate-100 text-slate-600'}">${q.answerConfig?.mediaUrl?'影片・':''}${questionTypeLabel(type)}</span><span id="answer-status-${i}" class="answer-status-pill ${verdict===false?'':answerHasValue(ans)?'answered':'unanswered'}" ${verdict===false?'style="background:#ffe4e6;color:#be123c;border-color:#fda4af"':''}>${verdict===false?'✕ 答錯':verdict===true?'✓ 答對':answerHasValue(ans)?'✓ 已作答':'○ 未作答'}</span></div><button data-csp-click="toggleFlag(${i})" id="flag-btn-${i}" class="text-xs px-2.5 py-1 rounded-lg border border-slate-200">${flags[i]?'🚩 取消標記':'🏳️ 標記此題'}</button></div>${renderQuestionMedia(q,i,submitted)}<div id="video-answer-${i}" class="${videoLocked?'hidden ':''}space-y-4"><h3 class="text-base sm:text-lg font-black leading-relaxed">${escapeHtml(q.question)}</h3><div class="space-y-2.5">${body}</div></div>`;c.appendChild(card);});const b=document.getElementById('submit-btn');if(submitted){b.disabled=true;b.className='w-full sm:w-auto bg-slate-400 text-white font-bold px-8 py-3 rounded-xl shadow cursor-not-allowed';b.textContent='🔒 本分頁考卷已繳交';}else{b.disabled=false;b.className='w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white font-bold px-8 py-3 rounded-xl shadow-lg';b.textContent='📋 提交試卷結算成績';}applyExamPaging();updateQuickJumpButtons();}
 
 function questionTimingSeconds(catId=currentCatKey){
     const now=performance.now(),states=questionTimingMap[catId]||[];
@@ -371,6 +371,7 @@ function updateProgressStats() {
     const pctText = document.getElementById('exam-progress-percent'); if (pctText) pctText.textContent = `${pct}%`;
     const pctBar = document.getElementById('exam-progress-bar'); if (pctBar) pctBar.style.width = `${pct}%`;
     document.getElementById('stat-flagged').innerText = `${flaggedCount} 題`;
+    updateExamPager();
 
     const statusText = document.getElementById('bottom-status-text');
     if (isSubmittedMap[currentCatKey]) {
@@ -399,6 +400,7 @@ function scrollToFirstFlagged(){
 }
 
 function scrollToQuestion(index) {
+    if (examIsPaged()) { showExamPage(index); document.getElementById('exam-pager')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const element = document.getElementById(`question-card-${index}`);
     if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -407,6 +409,78 @@ function scrollToQuestion(index) {
 
 function scrollToReview() {
     scrollToQuestion(0);
+}
+
+// --- Phone layout: one question per page with a "第 N / M 題" progress bar. ---
+let examPagedIndex = 0, examPagedFor = '';
+function examIsPaged() {
+    return !isSubmittedMap[currentCatKey] && window.matchMedia?.('(max-width:767px)').matches === true;
+}
+function showExamPage(index) {
+    const cards = [...document.querySelectorAll('#quiz-questions-list [id^="question-card-"]')];
+    if (!cards.length) return;
+    examPagedIndex = Math.max(0, Math.min(cards.length - 1, Number(index) || 0));
+    cards.forEach((card, i) => card.classList.toggle('exam-card-hidden', i !== examPagedIndex));
+    updateExamPager();
+}
+function examPagerStep(delta) {
+    showExamPage(examPagedIndex + Number(delta));
+    document.getElementById('exam-pager')?.scrollIntoView({ block: 'start' });
+}
+function updateExamPager() {
+    const pager = document.getElementById('exam-pager');
+    if (!pager || pager.hidden) return;
+    const total = (allQuizData[currentCatKey]?.questions || []).length;
+    const answers = userAnswersMap[currentCatKey] || [];
+    const answered = answers.filter(answerHasValue).length;
+    document.getElementById('exam-pager-label').textContent = `第 ${examPagedIndex + 1} / ${total} 題`;
+    document.getElementById('exam-pager-answered').textContent = `已作答 ${answered}`;
+    document.getElementById('exam-pager-fill').style.width = `${total ? Math.round(((examPagedIndex + 1) / total) * 100) : 0}%`;
+    pager.querySelector('[data-pager-step="-1"]').disabled = examPagedIndex <= 0;
+    pager.querySelector('[data-pager-step="1"]').disabled = examPagedIndex >= total - 1;
+}
+function applyExamPaging() {
+    const list = document.getElementById('quiz-questions-list');
+    if (!list) return;
+    let pager = document.getElementById('exam-pager');
+    if (!pager) {
+        pager = document.createElement('div');
+        pager.id = 'exam-pager';
+        pager.className = 'exam-pager';
+        pager.innerHTML = '<div class="exam-pager-top"><b id="exam-pager-label"></b><span id="exam-pager-answered"></span></div><div class="exam-pager-bar" role="presentation"><span id="exam-pager-fill"></span></div><div class="exam-pager-nav"><button type="button" class="btn btn-secondary" data-pager-step="-1" data-csp-click="examPagerStep(-1)">‹ 上一題</button><button type="button" class="btn btn-primary" data-pager-step="1" data-csp-click="examPagerStep(1)">下一題 ›</button></div>';
+        list.insertAdjacentElement('beforebegin', pager);
+    }
+    const paged = examIsPaged();
+    pager.hidden = !paged;
+    list.classList.toggle('exam-paged', paged);
+    if (!paged) { list.querySelectorAll('.exam-card-hidden').forEach(card => card.classList.remove('exam-card-hidden')); return; }
+    if (examPagedFor !== currentCatKey) { examPagedFor = currentCatKey; examPagedIndex = 0; }
+    showExamPage(examPagedIndex);
+}
+window.addEventListener('resize', () => { if (document.getElementById('exam-pager') && allQuizData[currentCatKey]) applyExamPaging(); });
+
+// Before submitting: list the unanswered questions; each number jumps straight to it.
+function askUnansweredBeforeSubmit(missing) {
+    return new Promise(resolve => {
+        document.getElementById('exam-unanswered-dialog')?.remove();
+        const dialog = document.createElement('dialog');
+        dialog.id = 'exam-unanswered-dialog';
+        dialog.className = 'exam-unanswered-dialog';
+        dialog.setAttribute('aria-label', '尚有未作答題目');
+        const jumps = missing.map(i => `<button type="button" class="btn btn-secondary" data-jump="${i}">第 ${i + 1} 題</button>`).join('');
+        dialog.innerHTML = `<h3 class="text-lg font-bold">還有 ${missing.length} 題未作答</h3><p class="text-sm">點題號可直接跳過去作答。</p><div class="exam-unanswered-list">${jumps}</div><div class="exam-unanswered-actions"><button type="button" class="btn btn-ghost" data-act="submit">仍要提交</button><button type="button" class="btn btn-primary" data-act="back">回去作答</button></div>`;
+        const done = result => { dialog.close(); dialog.remove(); resolve(result); };
+        dialog.addEventListener('click', event => {
+            const target = event.target.closest('button');
+            if (!target) return;
+            if (target.dataset.jump != null) done({ action: 'jump', index: Number(target.dataset.jump) });
+            else if (target.dataset.act === 'submit') done({ action: 'submit' });
+            else done({ action: 'cancel' });
+        });
+        dialog.addEventListener('cancel', event => { event.preventDefault(); done({ action: 'cancel' }); });
+        document.body.appendChild(dialog);
+        dialog.showModal();
+    });
 }
 
 // --- Submit Quiz; server owns answer-key evaluation and score persistence. ---
@@ -426,10 +500,11 @@ async function submitQuiz() {
 
     const userAnswers = userAnswersMap[currentCatKey] || [];
 
-    const unanswered = userAnswers.filter(a => !answerHasValue(a)).length;
-    if (unanswered > 0) {
-        const confirmSubmit = confirm(`尚有 ${unanswered} 題未作答，確定要直接提交本份試卷嗎？`);
-        if (!confirmSubmit) return;
+    const missing = userAnswers.map((a, i) => (answerHasValue(a) ? -1 : i)).filter(i => i >= 0);
+    if (missing.length > 0) {
+        const choice = await askUnansweredBeforeSubmit(missing);
+        if (choice.action === 'jump') { scrollToQuestion(choice.index); return; }
+        if (choice.action !== 'submit') return;
     }
 
     const attemptId=secureAttemptMap[currentCatKey]||loadExamDraft(currentCatKey)?.attemptId;

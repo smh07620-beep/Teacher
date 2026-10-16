@@ -67,3 +67,14 @@ class ReaderBreadcrumbTests(unittest.TestCase):
         self.assertIn("paintReaderBreadcrumb(total);", js)
         self.assertIn("function readerGoToCourse(", js)
         self.assertIn("aria-current=\"page\"", js)
+
+
+class ExamPhoneLayoutTests(unittest.TestCase):
+    JS_EXAM = (Path(__file__).resolve().parents[1] / "static" / "system-exam.js").read_text(encoding="utf-8")
+
+    def test_one_question_per_page_progress_and_unanswered_list(self):
+        for needle in ("function applyExamPaging(", "function showExamPage(", "exam-pager-label",
+                       "第 ${examPagedIndex + 1} / ${total} 題", "function askUnansweredBeforeSubmit(",
+                       "applyExamPaging();updateQuickJumpButtons();"):
+            self.assertIn(needle, self.JS_EXAM)
+        self.assertNotIn("尚有 ${unanswered} 題未作答，確定要直接提交", self.JS_EXAM)
