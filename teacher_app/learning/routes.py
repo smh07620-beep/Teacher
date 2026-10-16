@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Callable
@@ -35,6 +36,34 @@ def _user(owner=None):
     if not user:
         return None, (jsonify({"error": "請先登入。", "loginRequired": True}), 401)
     return user, None
+
+
+def reader_rules_v2() -> bool:
+    return os.environ.get("READER_RULES_V2", "").strip().lower() in {"1", "true", "on", "yes"}
+
+
+def _seconds_since(value) -> float | None:
+    try:
+        stamp = dt.datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=dt.timezone.utc)
+    return max(0.0, (dt.datetime.now(dt.timezone.utc) - stamp).total_seconds())
+
+
+def _required_by_page(material: dict, total_pages: int) -> dict:
+    meta = material.get("storageMeta") or {}
+    lengths = meta.get("pageTextLengths") if isinstance(meta, dict) else None
+    overrides = meta.get("pageMinSeconds") if isinstance(meta, dict) else None
+    result = {}
+    for page in range(1, total_pages + 1):
+        text_len = 0
+        if isinstance(lengths, list) and page - 1 < len(lengths):
+            text_len = lengths[page - 1]
+        override = overrides.get(str(page)) if isinstance(overrides, dict) else None
+        result[str(page)] = content.min_dwell_seconds(text_len, override)
+    return result
 
 
 def _material_path(paths, material: dict, material_id: str) -> Path:
@@ -358,6 +387,17 @@ def register_smart_learning(
                 items.append(progress_payload(material_id, material, row))
         return jsonify({"items": items})
 
+    @app.get("/api/courses/<course_id>/learner-bundle")
+    def course_learner_bundle(course_id):
+        user, denied = _user(owner)
+        if denied:
+            return denied
+        if not learning_access.student_may_see_course(user, str(course_id)):
+            return jsonify({"error": "這門課尚未指派給你，請洽組長。"}), 403
+        from teacher_app.learning import gate as learning_gate
+
+        return jsonify(learning_gate.learner_bundle(user, str(course_id)))
+
     @app.get("/api/learning-progress/<material_id>")
     def learning_progress_get(material_id):
         user, denied = _user(owner)
@@ -406,6 +446,22 @@ def register_smart_learning(
         except (TypeError, ValueError):
             return jsonify({"error": "watchedBuckets 格式錯誤"}), 400
 
+        prior_position = {}
+        if existing:
+            try:
+                prior_position = json.loads(existing.get("position") or "{}")
+            except Exception:
+                prior_position = {}
+            if not isinstance(prior_position, dict):
+                prior_position = {}
+        rules_v2 = reader_rules_v2()
+        elapsed = _seconds_since(prior_position.get("lastSaveAt"))
+        if elapsed is None:
+            elapsed = 35.0  # first report: allow one normal 30s batch
+        if rules_v2:
+            known = [] if reset_evidence else (existing_payload.get("watchedBuckets") or [])
+            buckets = content.limit_new_buckets(buckets, known, elapsed)
+
         threshold = 0.9
         narration_pending = False
         media_request = duration > 0 or "watchedBuckets" in body or "lastPositionSeconds" in body
@@ -452,6 +508,28 @@ def register_smart_learning(
                     "version": current_version,
                 }
                 progress = float(document["progress"])
+                if rules_v2:
+                    dwell = {}
+                    same_version = int(prior_position.get("version") or current_version) == current_version
+                    if not reset_evidence and same_version and isinstance(prior_position.get("pageDwell"), dict):
+                        dwell = {
+                            str(k): float(v)
+                            for k, v in prior_position["pageDwell"].items()
+                            if isinstance(v, (int, float))
+                        }
+                    delta = content.clamp_dwell_delta(requested_position.get("pageDwellDelta"), elapsed)
+                    for key, seconds in delta.items():
+                        if 1 <= int(key) <= total_pages:
+                            dwell[key] = round(dwell.get(key, 0.0) + seconds, 1)
+                    position["pageDwell"] = dwell
+                    position["reviewPages"] = [
+                        p for p in prior_position.get("reviewPages") or [] if isinstance(p, int)
+                    ] if same_version else []
+                    v2 = content.document_completion_v2(
+                        total_pages, dwell, _required_by_page(material, total_pages)
+                    )
+                    progress = float(v2["progress"])
+                    document = {"completed": v2["completed"]}
                 narration = required_narration(user, material)
                 narration_ok = narration is None or narration_heard(str(user["username"]), narration.get("id"))
                 narration_pending = bool(document["completed"]) and not narration_ok
@@ -465,6 +543,9 @@ def register_smart_learning(
                 completed = completion_already_current or bool(body.get("completed", False))
 
         now = _now()
+        if rules_v2 and isinstance(position, dict):
+            position["lastSaveAt"] = now
+            position.pop("pageDwellDelta", None)
         repository.upsert_progress(
             material_id,
             user["username"],

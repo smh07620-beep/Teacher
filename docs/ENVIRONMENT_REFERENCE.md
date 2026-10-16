@@ -80,6 +80,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `DB_POOL_MIN_SIZE` | `1` | `teacher_app/common/db.py` |  |  |
 | `DB_POOL_TIMEOUT_SECONDS` | `5.0` | `teacher_app/common/db.py` |  |  |
 | `EMAIL_REMINDER_DAYS` | `7` | `teacher_app/notifications/reminders.py` |  |  |
+| `EXAM_GATE_ENABLED` | `1` | `teacher_app/learning/gate.py` |  |  |
 | `FFMPEG_PATH` |  | `teacher_app/materials/ai_video_runtime.py` |  |  |
 | `FREE_ONLY_MODE` | `True` | `teacher_app/assessments/ai_runtime.py`, `teacher_app/assessments/question_runtime.py`, `teacher_app/legacy_host.py` (+3) | yes | yes |
 | `GDRIVE_CHUNK_MB` | `8` | `teacher_app/storage/providers.py` |  |  |
@@ -226,6 +227,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `R2_PRESIGN_SECONDS` | `3600` | `teacher_app/storage/providers.py` |  |  |
 | `R2_REGION` | `auto` | `teacher_app/storage/providers.py` |  |  |
 | `R2_SECRET_ACCESS_KEY` |  | `teacher_app/storage/providers.py` | yes | yes |
+| `READER_RULES_V2` |  | `teacher_app/learning/routes.py` |  |  |
 | `RENDER` | `false` | `teacher_app/common/security.py`, `teacher_app/config.py`, `teacher_app/maintenance/health.py` |  |  |
 | `RENDER_GIT_BRANCH` |  | `teacher_app/maintenance/health.py` |  |  |
 | `RENDER_GIT_COMMIT` |  | `teacher_app/frontend/assets.py`, `teacher_app/maintenance/health.py`, `teacher_app/materials/media_audio_routes.py` |  |  |

@@ -131,6 +131,11 @@ def start_attempt(base_or_user, user_or_data, data: Mapping[str, Any] | None = N
     # remembered exam id cannot bypass the course assignment.
     if not learning_access.student_may_see_course(actor, _text(category.get("courseId"), 100)):
         raise ApiError("EXAM_NOT_ASSIGNED", "這份考卷所屬的課程沒有指派給你。", 403)
+    from teacher_app.learning import gate as learning_gate
+
+    unlock = learning_gate.exam_unlock_state(actor, _text(category.get("courseId"), 100))
+    if not unlock["unlocked"]:
+        raise ApiError("MATERIALS_NOT_COMPLETE", unlock["reason"], 403, {"gate": unlock})
     questions = _draw_questions(category)
     if not questions:
         raise ApiError("NO_ACTIVE_QUESTIONS", "此考卷目前沒有可作答的啟用題目。", 409)
