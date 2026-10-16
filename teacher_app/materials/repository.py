@@ -309,6 +309,25 @@ def update_material_storage(material_id: str, *, backend: str, storage_key: str,
 
 
 @_clears_list_cache
+def merge_storage_meta(material_id: str, updates: dict) -> None:
+    """Merge keys into the material's storage_meta JSON without touching other columns."""
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(f"SELECT storage_meta FROM materials WHERE id={ph}", (material_id,)).fetchone()
+        if not row:
+            return
+        raw = dict(row).get("storage_meta") or "{}"
+        try:
+            meta = json.loads(raw) if isinstance(raw, str) else dict(raw)
+        except (TypeError, ValueError):
+            meta = {}
+        if not isinstance(meta, dict):
+            meta = {}
+        meta.update(updates)
+        conn.execute(f"UPDATE materials SET storage_meta={ph} WHERE id={ph}", (json.dumps(meta, ensure_ascii=False), material_id))
+
+
+@_clears_list_cache
 def update_material_metadata(material_id: str, *, title: str, description: str, category: str, group_key: str, training_area: str, course_id: str, material_type: str, atlas_meta_json: str, active: bool) -> None:
     with common_db.transaction() as (conn, kind):
         ph = common_db.placeholder(kind)

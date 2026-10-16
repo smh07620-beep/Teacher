@@ -140,3 +140,12 @@ class AccessExplainTests(unittest.TestCase):
         with patch.object(access_explain.access, "assigned_course_ids", return_value=frozenset({"c1"})):
             result = access_explain.explain(user, "course", course, learner_view=True)
         self.assertTrue(result["allowed"])
+
+
+class PageTextLengthTests(unittest.TestCase):
+    def test_required_dwell_uses_stored_page_text_lengths(self):
+        from teacher_app.learning import routes
+
+        material = {"storageMeta": {"pageTextLengths": [0, 250, 5000]}}
+        required = routes._required_by_page(material, 3)
+        self.assertEqual(required, {"1": 5, "2": 15, "3": 30})

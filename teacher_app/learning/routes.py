@@ -194,9 +194,20 @@ def auto_index_material(
             reason=reason,
             source_kind=source_kind,
         )
-        return status
     except Exception:
         return terminal("failed", "索引寫入失敗", source_kind)
+    # Per-page text length drives the minimum dwell time (reader rules v2).
+    try:
+        total = max(int(material.get("pageCount") or 0), max((int(r[0]) for r in rows), default=0))
+        lengths = [0] * total
+        for number, text, _title in rows:
+            if 1 <= int(number) <= total:
+                lengths[int(number) - 1] = len(str(text or ""))
+        if total:
+            material_repository.merge_storage_meta(material_id, {"pageTextLengths": lengths})
+    except Exception:
+        pass  # best effort: without it every page uses the 5s default
+    return status
 
 
 def register_smart_learning(
