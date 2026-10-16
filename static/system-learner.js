@@ -441,6 +441,11 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
     slideViewerState = { images, previewUrl, pageCount: total, mode, readerMode: normalizedReaderMode, index: teachingReadPage(materialId, total), title, zoom: 1, materialId };
     window.slideViewerState = slideViewerState;
     slidePrefetched.clear();
+    {
+        const readerShell = document.getElementById('slide-viewer-shell');
+        readerShell?.classList.remove('reader-fill', 'reader-more-open', 'reader-pages-open');
+        showReaderPortraitHint();
+    }
 
     document.getElementById('slide-viewer-title').textContent = title;
 
@@ -605,18 +610,74 @@ function initPdfPresentationWheel(){
     },{passive:false});
 }
 
+// iPhone Safari has no element Fullscreen API: fall back to a CSS "fill the window" mode.
 async function toggleSlideFullscreen() {
-
     const shell = document.getElementById('slide-viewer-shell');
-
+    if (!shell) return;
+    if (shell.classList.contains('reader-fill')) { toggleReaderFill(false); return; }
+    const enter = shell.requestFullscreen || shell.webkitRequestFullscreen;
+    const leave = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!enter) { toggleReaderFill(true); return; }
     try {
+        if (!(document.fullscreenElement || document.webkitFullscreenElement)) await enter.call(shell);
+        else await leave?.call(document);
+    } catch (_) { toggleReaderFill(true); }
+}
+window.toggleSlideFullscreen = toggleSlideFullscreen;
 
-        if (!document.fullscreenElement) await shell.requestFullscreen?.();
+function toggleReaderFill(force) {
+    const shell = document.getElementById('slide-viewer-shell');
+    if (!shell) return;
+    const on = typeof force === 'boolean' ? force : !shell.classList.contains('reader-fill');
+    shell.classList.toggle('reader-fill', on);
+    const button = document.getElementById('reader-fullscreen-btn');
+    if (button) { button.title = on ? '退出撐滿畫面' : '全螢幕'; button.setAttribute('aria-label', button.title); }
+    setTimeout(() => { if (typeof applySlideZoom === 'function') applySlideZoom(); }, 60);
+}
+window.toggleReaderFill = toggleReaderFill;
 
-        else await document.exitFullscreen?.();
+function toggleReaderMore() {
+    const shell = document.getElementById('slide-viewer-shell');
+    const open = shell.classList.toggle('reader-more-open');
+    document.getElementById('reader-more-btn')?.setAttribute('aria-expanded', String(open));
+    setTimeout(() => applySlideZoom(), 60);
+}
+window.toggleReaderMore = toggleReaderMore;
 
-    } catch (_) {}
+function toggleReaderPages() {
+    const shell = document.getElementById('slide-viewer-shell');
+    const open = shell.classList.toggle('reader-pages-open');
+    document.getElementById('reader-pages-btn')?.setAttribute('aria-label', open ? '關閉頁碼清單' : '開啟頁碼清單');
+}
+window.toggleReaderPages = toggleReaderPages;
 
+// Swipe left/right to turn pages; portrait phones get a one-time "rotate" hint.
+(function bindReaderGestures() {
+    let startX = 0, startY = 0, tracking = false;
+    document.addEventListener('touchstart', (event) => {
+        const stage = document.getElementById('slide-viewer-stage');
+        tracking = Boolean(stage && stage.contains(event.target) && event.touches.length === 1 && (slideViewerState.zoom || 1) < 1.01);
+        if (tracking) { startX = event.touches[0].clientX; startY = event.touches[0].clientY; }
+    }, { passive: true });
+    document.addEventListener('touchend', (event) => {
+        if (!tracking) return;
+        tracking = false;
+        const touch = event.changedTouches[0];
+        const dx = touch.clientX - startX, dy = touch.clientY - startY;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) { if (dx < 0) slideViewerNext(); else slideViewerPrev(); }
+    }, { passive: true });
+})();
+
+function showReaderPortraitHint() {
+    try {
+        if (sessionStorage.getItem('readerPortraitHint')) return;
+        if (!window.matchMedia('(orientation: portrait)').matches || window.innerWidth >= 768) return;
+        sessionStorage.setItem('readerPortraitHint', '1');
+    } catch (_) { return; }
+    const hint = document.getElementById('reader-portrait-hint');
+    if (!hint) return;
+    hint.classList.remove('hidden');
+    setTimeout(() => hint.classList.add('hidden'), 4000);
 }
 
 
@@ -881,6 +942,11 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') slideViewerPrev();
 
     else if (e.key === 'ArrowRight') slideViewerNext();
+
+    else if (e.key === ' ' && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target?.tagName || '')) {
+        const narration = document.querySelector('#slide-viewer-modal audio, #slide-viewer-modal video');
+        if (narration) { e.preventDefault(); if (narration.paused) narration.play?.(); else narration.pause?.(); }
+    }
 
     else if (e.key === 'Escape') closeSlideViewer();
 

@@ -61,7 +61,7 @@
     'teacher78FilterQuizCategories','teacher78LoadMoreQuizCategories','teacher78SetQuizStatus','teachingCloseEditor',
     'teachingEditCourse','teachingFinishReading','teachingNextMaterial','teachingSaveCourse','toggleAdminAnnouncement',
     'toggleAdminMaterial','toggleAdminModal','toggleAdminUserAccount','toggleAiMaterialSelection','loadAiMaterialOptions','toggleAtlasFullscreen','viewMaterialVersions',
-    'toggleFlag','toggleMediaFullscreen','toggleQuizQuestionsPanel','toggleSlideFullscreen','updateAdminMaterialTypeFields',
+    'toggleFlag','toggleReaderMore','toggleReaderPages','toggleReaderFill','toggleMediaFullscreen','toggleQuizQuestionsPanel','toggleSlideFullscreen','updateAdminMaterialTypeFields',
     'updateManualQuestionType','atlasHotspotPick','atlasHotspotZoom','scenarioPick','openSlideCheckpointEditor'
   ]);
 
