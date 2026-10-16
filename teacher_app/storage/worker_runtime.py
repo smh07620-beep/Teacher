@@ -523,7 +523,7 @@ class WorkerMaterialStorageAdapter:
             self.soffice,
             "--headless",
             "--norestore",
-            f"-env:UserInstallation=file:///{profile_dir.as_posix()}",
+            f"-env:UserInstallation={profile_dir.resolve().as_uri()}",
             "--convert-to",
             "pdf",
             "--outdir",

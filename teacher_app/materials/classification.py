@@ -166,7 +166,7 @@ def convert_office_to_pdf_for_text(source: Path, temp_root: Path) -> Path:
         soffice_bin(),
         "--headless",
         "--norestore",
-        f"-env:UserInstallation=file:///{profile_dir.as_posix()}",
+        f"-env:UserInstallation={profile_dir.resolve().as_uri()}",
         "--convert-to",
         "pdf",
         "--outdir",
