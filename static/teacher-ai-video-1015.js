@@ -148,6 +148,7 @@
     }
   }
   async function watch(jobId, token) {
+    const pollWait = AppApiClient.pollBackoff();
     for (let attempt = 0; attempt < 600 && active === jobId && poll === token; attempt += 1) {
       const data = await api(`/api/ai-videos/jobs/${encodeURIComponent(jobId)}`);
       const progress = data.progress || {};
@@ -170,7 +171,7 @@
         }
         throw new Error(failure || 'AI 影片產生失敗');
       }
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await pollWait();
     }
     if (active === jobId && poll === token) throw new Error('影片工作等待逾時；可稍後按「讀取版本」確認結果。');
   }

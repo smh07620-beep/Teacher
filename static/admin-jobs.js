@@ -93,7 +93,7 @@
       materialJobsRefreshTimer=null;
     }
     if(active){
-      materialJobsRefreshTimer=setTimeout(()=>window.renderMaterialJobs(false),4000);
+      materialJobsRefreshTimer=setTimeout(()=>{if(document.hidden){document.addEventListener('visibilitychange',()=>window.renderMaterialJobs(false),{once:true});return;}window.renderMaterialJobs(false);},4000);
     }
   };
 

@@ -227,12 +227,13 @@
 
   async function poll(jobId){
     const status=$('teacher-ppt-editor-status-f5');
+    const pollWait=AppApiClient.pollBackoff();
     for(let attempt=0;attempt<180;attempt+=1){
       const job=await api('/api/ai-presentations/jobs/'+encodeURIComponent(jobId));
       if(status)status.textContent=(job.progressStage||job.status||'重新產檔')+'｜'+Math.round(Number(job.progressPercent||0))+'%'+(job.progressDetail?'｜'+job.progressDetail:'');
       if(job.status==='completed')return job;
       if(job.status==='failed')throw new Error(job.error||'新 revision 產檔失敗');
-      await new Promise(resolve=>setTimeout(resolve,1800));
+      await pollWait();
     }
     throw new Error('重新產檔仍在背景處理；可稍後按「讀取版本」查看。');
   }

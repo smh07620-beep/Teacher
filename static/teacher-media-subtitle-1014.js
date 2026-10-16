@@ -160,6 +160,7 @@
   }
 
   async function pollJob(jobId, token) {
+    const pollWait = AppApiClient.pollBackoff();
     while (token === pollToken && activeJob === jobId) {
       const response = await fetch(`/api/media-subtitles/jobs/${encodeURIComponent(jobId)}`, {
         credentials:'same-origin', cache:'no-store'
@@ -178,7 +179,7 @@
         setBusy(false);
         throw new Error(data.error || 'AI 字幕產生失敗');
       }
-      await new Promise(resolve => setTimeout(resolve, 1800));
+      await pollWait();
     }
   }
 

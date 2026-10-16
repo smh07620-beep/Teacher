@@ -54,8 +54,33 @@
     return dispatch(makeContext(input, init), 0);
   }
 
+  /* Job polling: 2s -> 5s -> 10s, paused while the tab is hidden (resumes with an immediate check). */
+  function pollBackoff() {
+    let attempt = 0;
+    return function wait() {
+      const delay = attempt < 3 ? 2000 : attempt < 10 ? 5000 : 10000;
+      attempt += 1;
+      return new Promise(resolve => {
+        let timer = 0;
+        const done = () => {
+          clearTimeout(timer);
+          global.document.removeEventListener('visibilitychange', onVisible);
+          resolve();
+        };
+        const onVisible = () => { if (!global.document.hidden) done(); };
+        if (global.document.hidden) {
+          global.document.addEventListener('visibilitychange', onVisible);
+        } else {
+          timer = setTimeout(done, delay);
+          global.document.addEventListener('visibilitychange', onVisible);
+        }
+      });
+    };
+  }
+
   global.fetch = fetchWithMiddleware;
   global.AppApiClient = Object.freeze({
+    pollBackoff,
     fetch: fetchWithMiddleware,
     nativeFetch,
     use,

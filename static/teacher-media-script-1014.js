@@ -332,6 +332,7 @@
   }
 
   async function pollMaterialJob(jobId, token, label) {
+    const pollWait = AppApiClient.pollBackoff();
     for (let attempt = 0; attempt < 180 && token === pollToken; attempt += 1) {
       const response = await fetch(`/api/material-jobs/${encodeURIComponent(jobId)}`, {credentials:'same-origin', cache:'no-store'});
       const data = await response.json().catch(() => ({}));
@@ -340,7 +341,7 @@
       status(`${label}｜${data.stage || state}${data.detail ? `｜${data.detail}` : ''}`);
       if (state === 'completed') return data;
       if (['failed','cancelled'].includes(state)) throw new Error(data.error || data.detail || `${label}失敗`);
-      await new Promise(resolve => setTimeout(resolve, 2200));
+      await pollWait();
     }
     throw new Error(`${label}等待逾時，工作仍可能在背景繼續。`);
   }

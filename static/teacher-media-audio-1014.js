@@ -252,6 +252,7 @@
   }
 
   async function pollJob(jobId, token) {
+    const pollWait = AppApiClient.pollBackoff();
     while (token === pollToken && activeJobId === jobId) {
       const response = await fetch(`/api/media-audio/jobs/${encodeURIComponent(jobId)}`, {
         credentials:'same-origin', cache:'no-store'
@@ -289,7 +290,7 @@
         setBusy(false);
         throw new Error(data.error || 'AI 語音產生失敗');
       }
-      await new Promise(resolve => setTimeout(resolve, 1800));
+      await pollWait();
     }
   }
 
