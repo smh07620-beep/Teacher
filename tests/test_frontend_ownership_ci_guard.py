@@ -21,8 +21,6 @@ BROAD_OBSERVER_CONTRACT = {
     "home-profile-title-71.js": ("mutationTouchesIdentity",),
     "teacher-ui-resilience-1014.js": ("mutationTouchesWorkerSurface",),
     "teacher-ux-convergence-72.js": ("mutationNeedsReconcile",),
-    "course-wizard-runtime-fix-1014.js": ("mutationNeedsConverge",),
-    "course-wizard-group-fix-1014.js": ("nodeContainsWizard", "observer?.disconnect()"),
     "teacher-authoring-source-fix-1017.js": ("mutationNeedsInstall", "scheduleInstallAll"),
     "teacher-assignment-experience-1014.js": ("mutationNeedsConverge",),
     "teacher-ai-material-convergence-1014.js": ("nodeTouchesTarget", "observer?.disconnect()"),

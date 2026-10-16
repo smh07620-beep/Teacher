@@ -8,11 +8,11 @@ class ClinicalCourseMaterialRegression20261006Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.wizard = ROOT.joinpath("static", "course-wizard-681.js").read_text(encoding="utf-8")
-        cls.runtime = ROOT.joinpath("static", "course-wizard-runtime-fix-1014.js").read_text(encoding="utf-8")
+        cls.runtime = ROOT.joinpath("static", "course-wizard-681.js").read_text(encoding="utf-8")
         cls.hub = ROOT.joinpath("static", "admin-course-material.js").read_text(encoding="utf-8")
 
     def test_finish_wrapper_calls_canonical_navigation_owner(self):
-        self.assertIn("return await canonical()", self.runtime)
+        self.assertIn("return await openCourseWorkspaceNow()", self.runtime)
         self.assertIn("teacherContentStudioClose?.(false)", self.wizard)
 
     def test_course_creation_verifies_material_links_before_exit(self):

@@ -453,6 +453,16 @@
     catch(error){
       if(error?.status===401){options.onUnauthorized?.();throw new Error('登入已逾時，請重新登入。');}
       if(error?.status===403)throw error;
+      // The same file is already queued: report it as accepted instead of failing the wizard.
+      const queuedBody=error?.body&&typeof error.body==='object'?error.body:{};
+      const existingJobId=String(queuedBody.existingJobId||'').trim();
+      if(Number(error?.status)===409&&queuedBody.alreadyQueued===true&&existingJobId){
+        const queuedFile=formData?.get?.('file');
+        if(queuedFile instanceof Blob){
+          options.onProgress?.({loaded:Number(queuedFile.size||0),total:Number(queuedFile.size||0),percent:100,fileName:options.fileName||queuedFile.name||'教材'});
+        }
+        return {accepted:true,reused:true,jobId:existingJobId,materialId:String(queuedBody.existingMaterialId||''),uploadId:String(queuedBody.existingUploadId||''),status:String(queuedBody.existingJobStatus||'queued')};
+      }
       const file=formData.get('file');
       if(options.fallbackToSameOriginQueue&&file instanceof Blob&&file.size<=COMPAT_QUEUE_FALLBACK_MAX_BYTES&&isDirectNetworkFailure(error)){
         // A multipart upload is normally resumable.  Once we deliberately

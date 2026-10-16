@@ -127,10 +127,6 @@ class SystemObserverBrowserRegressionTests(unittest.TestCase):
                 'mutationTouchesWorkerSurface',
                 'if (workerSurfaceChanged) scheduleWorkerEnhance();',
             ),
-            'course-wizard-runtime-fix-1014.js': (
-                'mutationNeedsConverge',
-                'if(records.some(mutationNeedsConverge))converge();',
-            ),
             'teacher-authoring-source-fix-1017.js': (
                 'mutationNeedsInstall',
                 'if (records.some(mutationNeedsInstall)) scheduleInstallAll();',
@@ -149,13 +145,11 @@ class SystemObserverBrowserRegressionTests(unittest.TestCase):
             for marker in markers:
                 self.assertIn(marker, source, filename)
 
-    def test_course_wizard_group_observer_rebinds_from_body_to_wizard(self):
-        source = ROOT.joinpath('static', 'course-wizard-group-fix-1014.js').read_text(encoding='utf-8')
-        self.assertIn('function observeWizard()', source)
-        self.assertIn("document.getElementById('course-wizard-681')", source)
-        self.assertIn('observer?.disconnect();', source)
-        self.assertIn('observeWizard();', source)
-        self.assertNotIn("const root = document.getElementById('course-wizard-681') || document.body", source)
+    def test_course_wizard_group_selector_is_synced_at_render_not_by_an_observer(self):
+        source = ROOT.joinpath('static', 'course-wizard-681.js').read_text(encoding='utf-8')
+        self.assertIn('function syncWizardGroups()', source)
+        self.assertIn('syncWizardGroups();', source)
+        self.assertNotIn('MutationObserver', source)
 
     def test_ai_material_legacy_observer_disconnects_after_convergence(self):
         source = ROOT.joinpath('static', 'teacher-ai-material-convergence-1014.js').read_text(encoding='utf-8')

@@ -239,7 +239,39 @@ function render(){
   if(state.step===4)box.innerHTML=stepFour();
   const status=el('cw681-status');if(status&&state.resultHtml)status.innerHTML=state.resultHtml;
   syncCompletionControls();
+  syncWizardGroups();
 }
+
+/* Group selector: scope-safe options for the chosen area (scoped teachers see only their own group). */
+function wizardGroupRows(area){
+  const catalog=typeof GROUPS!=='undefined'?GROUPS:(window.GROUPS||{});
+  const rbac=window.TeacherRBAC681||{};
+  const preferred=String(rbac.user?.preferredGroup||rbac.user?.preferred_group||'').trim();
+  let rows=Object.entries(catalog).filter(([,group])=>area==='pgy'||!group?.pgyOnly).map(([value,group])=>({value:String(value),label:String(group?.label||group?.name||value)}));
+  if(rbac.scopedTeacher&&preferred)rows=rows.filter(row=>row.value===preferred);
+  return {rows,preferred};
+}
+function replaceGroupOptions(select,rows,selected){
+  if(!select)return;
+  const signature=rows.map(row=>`${row.value}:${row.label}`).join('|');
+  if(select.dataset.groupSignature!==signature){
+    select.replaceChildren(...rows.map(row=>new Option(row.label,row.value)));
+    select.dataset.groupSignature=signature;
+  }
+  if(selected&&[...select.options].some(option=>option.value===selected))select.value=selected;
+}
+function syncWizardGroups(){
+  const visible=el('cw681-group'),hidden=el('wizard-group');
+  if(!visible&&!hidden)return;
+  const area=el('cw681-area')?.value||el('wizard-area')?.value||'pgy';
+  const {rows,preferred}=wizardGroupRows(area);
+  if(!rows.length)return;
+  const current=visible?.value||hidden?.value;
+  const selected=[String(current||''),preferred,'grpBio'].filter(Boolean).find(value=>rows.some(row=>row.value===value))||rows[0].value;
+  replaceGroupOptions(hidden,rows,selected);
+  replaceGroupOptions(visible,rows,selected);
+}
+void (window.TeacherRBAC681Ready||Promise.resolve()).then(()=>syncWizardGroups());
 
 function stepOne(){
   const s=scope(),options=[...document.querySelectorAll('#wizard-group option')],permissionPending=state.assignPermission===null,canAssign=canAssignLearning(),locked=state.created?'disabled':'';
@@ -340,6 +372,7 @@ function bindStepOneControls(){
   el('cw681-assignee-none')?.addEventListener('click',()=>setAll(false));
   [el('cw681-area'),el('cw681-group')].filter(Boolean).forEach(node=>node.addEventListener('change',()=>{
     if(el('wizard-area'))el('wizard-area').value=el('cw681-area')?.value||'pgy';
+    if(node===el('cw681-area')){const {rows,preferred}=wizardGroupRows(node.value||'pgy');const keep=rows.some(row=>row.value===preferred)?preferred:rows[0]?.value;replaceGroupOptions(el('wizard-group'),rows,keep);replaceGroupOptions(el('cw681-group'),rows,keep);}
     if(el('wizard-group'))el('wizard-group').value=el('cw681-group')?.value||el('wizard-group').value;
     state.audienceOptions=null;state.assigneeKey='';state.assigneeKeys=[];void loadWizardAudienceOptions();
   }));
@@ -1645,6 +1678,18 @@ async function publishAndOpenCourseWorkspace(){
 }
 
 async function openCourseWorkspace(){
+  const buttons=[...document.querySelectorAll('[data-csp-click="courseWizard681OpenCourse()"]')];
+  buttons.forEach(button=>{button.disabled=true;button.setAttribute('aria-busy','true');});
+  try{return await openCourseWorkspaceNow();}
+  catch(error){
+    console.error('Course Wizard finish navigation failed',error);
+    window.teacherContentStudioClose?.(false);
+    // The course workspace is a back-office workspace: reach it through the route registry.
+    window.location.assign(window.AppWorkspaceRoutes.url('course-materials',{persona:'teacher'}));
+  }finally{buttons.forEach(button=>{button.disabled=false;button.removeAttribute('aria-busy');});}
+}
+
+async function openCourseWorkspaceNow(){
   if(state.publicationBusy)return;
   if(!canLeaveCourse())return alert('教材尚未正式完成。請留在此頁等待 Worker 完成，避免回到課程後看不到教材。');
   state.watchToken++;

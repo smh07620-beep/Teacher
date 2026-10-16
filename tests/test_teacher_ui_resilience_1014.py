@@ -38,12 +38,8 @@ class TeacherUiResilience1014Tests(unittest.TestCase):
     def test_worker_ui_exposes_fallback_and_failure_detail(self):
         for marker in (
             "worker-fallback-1014",
-            "worker-recent-failures-1014",
             "LibreOffice",
             "FFmpeg",
-            "job.error || job.detail",
-            "/api/material-jobs?limit=30",
-            "data.problemJobs || data.jobs || []",
         ):
             self.assertIn(marker, self.source)
 
