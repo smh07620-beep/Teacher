@@ -123,11 +123,12 @@
     const preview = video.previewUrl ? `<a class="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 font-black text-indigo-700" target="_blank" rel="noopener" href="${escape(video.previewUrl)}">▶ 預覽 MP4</a>` : '<span class="text-slate-500">MP4 尚未就緒</span>';
     const captions = `${video.vttUrl ? `<a class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700" target="_blank" rel="noopener" href="${escape(video.vttUrl)}">VTT</a>` : ''}${video.srtUrl ? `<a class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700" target="_blank" rel="noopener" href="${escape(video.srtUrl)}">SRT</a>` : ''}`;
     const approve = video.status === 'draft' && status?.capabilities?.['video.approve'] ? '<button type="button" data-video-action="approve" class="rounded-lg bg-emerald-700 px-3 py-1.5 font-black text-white">教師核准影片</button>' : '';
+    const discard = video.status !== 'published' && status?.capabilities?.['video.approve'] ? '<button type="button" data-video-action="discard" class="rounded-lg border border-rose-200 bg-white px-3 py-1.5 font-black text-rose-700">捨棄影片</button>' : '';
     const publish = video.status === 'approved' && status?.capabilities?.['video.publish'] ? '<button type="button" data-video-action="publish" class="rounded-lg bg-violet-700 px-3 py-1.5 font-black text-white">正式發布影片</button>' : '';
     return `<article data-video-id="${escape(video.id)}" class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2 text-xs">
       <div class="flex flex-wrap items-start justify-between gap-2"><div><b class="text-sm text-slate-950">${escape(video.title || 'AI 教學影片')}</b><p class="text-[11px] text-slate-500">${escape(video.id)}｜r${Number(video.revisionNumber || 1)}｜${escape(video.status || 'draft')}｜${Math.round(Number(video.durationSeconds || 0))} 秒</p></div><div class="flex flex-wrap gap-2">${qualityBadge(video)}<span class="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-black text-indigo-800">${escape(rendererLabel(video.frameRenderer))}</span></div></div>
       <p class="text-[11px] text-slate-600">Renderer 嘗試：${escape(rendererAttempts)}｜TTS ${Number(metrics.ttsSegmentCount || 0)} 段｜FFmpeg ${Number(metrics.ffmpegSegmentCount || 0)} 段</p>
-      <div class="flex flex-wrap items-center gap-2">${preview}${captions}<button type="button" data-video-action="quality" class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 font-black text-emerald-700">品質／Renderer 詳情</button>${approve}${publish}</div>
+      <div class="flex flex-wrap items-center gap-2">${preview}${captions}<button type="button" data-video-action="quality" class="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 font-black text-emerald-700">品質／Renderer 詳情</button>${approve}${publish}${discard}</div>
       <pre data-video-detail class="hidden overflow-auto rounded-lg bg-slate-900 p-2 text-[11px] text-slate-100"></pre>
     </article>`;
   }
@@ -287,6 +288,13 @@
         const output = card.querySelector('[data-video-detail]');
         output.textContent = JSON.stringify({quality:data.quality, frameRenderer:data.frameRenderer, renderMetrics:data.renderMetrics, rendererPolicy:data.rendererPolicy}, null, 2);
         output.classList.toggle('hidden');
+        return;
+      }
+      if (button.dataset.videoAction === 'discard') {
+        if (!confirm('確定捨棄這支 AI 影片嗎？檔案會立即刪除，無法復原。')) return;
+        await api(`/api/ai-videos/${encodeURIComponent(videoId)}`, {method:'DELETE'});
+        note('🗑 已捨棄這支影片。');
+        await loadVideos();
         return;
       }
       if (button.dataset.videoAction === 'approve') {

@@ -393,6 +393,35 @@ def register_ai_video_routes(owner):
         )
         return jsonify({"ok": True, "video": _public_video(updated or {})})
 
+    @app.delete("/api/ai-videos/<video_id>")
+    def video_discard(video_id):
+        user = _actor(owner)
+        if not user:
+            return jsonify({"error": "請先登入。", "loginRequired": True}), 401
+        if not _video_allowed(user, "video.approve"):
+            return jsonify({"error": "只有臨床教師或組長可捨棄 AI 影片。"}), 403
+        video = repository.get_video(str(video_id))
+        if not video:
+            return jsonify({"error": "找不到 AI 影片。"}), 404
+        denied = _scope(owner, str(video.get("group") or ""))
+        if denied:
+            return denied
+        from teacher_app.maintenance import retention
+
+        try:
+            retention.discard_video(str(video_id))
+        except retention.DiscardBlocked as exc:
+            return jsonify({"error": exc.message}), 404 if exc.code == "not_found" else 409
+        audit.record_event(
+            actor=user,
+            action="video.discard",
+            target_type="ai_presentation_video",
+            target_id=str(video_id),
+            group=str(video.get("group") or ""),
+            before={"status": video.get("status"), "title": video.get("title")},
+        )
+        return jsonify({"ok": True, "deleted": str(video_id)})
+
     @app.post("/api/ai-videos/<video_id>/publish")
     def video_publish(video_id):
         user = _actor(owner)
