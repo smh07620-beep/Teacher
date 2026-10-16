@@ -1383,3 +1383,9 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
 }
 
 @media(max-width:520px){.v580-learning-primary,.v580-resource-grid{grid-template-columns:minmax(0,1fr)}}
+/* Phones get 640px hero photos (about 90% smaller than the desktop originals). */
+@media(max-width:760px){
+  .home-dashboard-page .phase3-hero-art-frame{background-image:url('/assets/v687/home-hero-photo-640.webp')}
+  .internal-training-page .v681-internal-art{background-image:url('/assets/v687/internal-hero-photo-640.webp')}
+  .v681-internal-art,.pgy-training-page .v681-pgy-hero:before{background-image:url('/assets/v681/lab-training-photo-640.webp')}
+}
