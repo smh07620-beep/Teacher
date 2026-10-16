@@ -399,6 +399,40 @@ def register_smart_learning(
 
         return jsonify(learning_gate.learner_bundle(user, str(course_id)))
 
+    @app.get("/api/admin/access-diagnosis")
+    def admin_access_diagnosis():
+        denied = rbac_legacy_adapter.require_admin(owner)
+        if denied:
+            return denied
+        from teacher_app.auth import repository as auth_repository
+        from teacher_app.auth import service as auth_service
+        from teacher_app.learning import access_explain
+
+        kind = str(request.args.get("kind", "")).strip()
+        item_id = str(request.args.get("item", "")).strip()
+        username = str(request.args.get("user", "")).strip().lower()
+        row = auth_repository.find_user(username) if username else None
+        if not row:
+            return jsonify({"error": "找不到這位人員。"}), 404
+        if kind == "course":
+            from teacher_app.courses import repository as course_repository
+
+            item = course_repository.get_course(item_id)
+        elif kind == "material":
+            item = material_repository.get_material(item_id)
+        elif kind == "exam":
+            from teacher_app.assessments import repository as assessment_repository
+
+            item = assessment_repository.get_category_full(item_id)
+        else:
+            return jsonify({"error": "kind 必須是 course、material 或 exam"}), 400
+        if not item:
+            return jsonify({"error": "找不到這個項目。"}), 404
+        user = auth_service.public_user(row, include_roles=True)
+        return jsonify({"user": {"username": user["username"], "name": user["name"]}, "kind": kind,
+                        "item": {"id": item_id, "title": str(item.get("title") or item.get("name") or item_id)},
+                        "views": access_explain.diagnose(user, kind, item)})
+
     @app.get("/api/learning-progress/<material_id>")
     def learning_progress_get(material_id):
         user, denied = _user(owner)

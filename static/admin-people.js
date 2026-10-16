@@ -226,7 +226,7 @@
       const body=document.getElementById('admin-user-accounts-body'),status=document.getElementById('admin-user-status');if(!body)return;
       updateAdminUserSummary();
       const rows=filteredAdminUserAccounts();
-      body.innerHTML=rows.length?rows.map(u=>{const tags=adminProfileTags(u.responsibilityTags),profile=`<div class="mt-1 text-[11px] text-slate-500">${u.professionalTitle?`職稱：${escapeHtml(u.professionalTitle)}`:'職稱：未設定'}</div>${tags.length?`<div class="mt-1 flex flex-wrap gap-1">${tags.map(tag=>`<span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">${escapeHtml(tag)}</span>`).join('')}</div>`:''}`;return `<tr class="${u.active?'':'opacity-55'}"><td class="p-3"><b>${escapeHtml(u.username)}</b><div class="text-slate-500 mt-1">${escapeHtml(u.name)}</div></td><td class="p-3 font-mono">${escapeHtml(u.empId)}</td><td class="p-3"><div>${escapeHtml(adminUserRoleSummary(u))}</div>${profile}</td><td class="p-3">${ADMIN_USER_AREA_LABELS[u.preferredArea]||''} · ${escapeHtml((GROUPS[u.preferredGroup]||GROUPS.grpBio).name)}</td><td class="p-3 text-slate-500">${escapeHtml((u.lastLoginAt||'尚未登入').slice(0,16).replace('T',' '))}</td><td class="p-3"><div class="flex flex-wrap gap-1.5"><button data-username="${escapeHtml(u.username)}" data-csp-click="openAdminUserEditor(this.dataset.username)" class="text-[11px] border border-teal-200 bg-teal-50 text-teal-800 px-2.5 py-1.5 rounded-lg font-bold">編輯人員資料</button><button data-username="${escapeHtml(u.username)}" data-csp-click="resetAdminUserPassword(this.dataset.username)" class="text-[11px] border border-slate-300 bg-white px-2.5 py-1.5 rounded-lg">重設密碼</button><button data-username="${escapeHtml(u.username)}" data-csp-click="toggleAdminUserAccount(this.dataset.username,${u.active?'false':'true'})" class="text-[11px] ${u.active?'text-rose-600 border-rose-200':'text-emerald-700 border-emerald-200'} border bg-white px-2.5 py-1.5 rounded-lg">${u.active?'停用':'啟用'}</button></div></td></tr>`;}).join(''):'<tr><td colspan="6" class="p-5 text-center text-slate-400">沒有符合目前條件的人員。</td></tr>';
+      body.innerHTML=rows.length?rows.map(u=>{const tags=adminProfileTags(u.responsibilityTags),profile=`<div class="mt-1 text-[11px] text-slate-500">${u.professionalTitle?`職稱：${escapeHtml(u.professionalTitle)}`:'職稱：未設定'}</div>${tags.length?`<div class="mt-1 flex flex-wrap gap-1">${tags.map(tag=>`<span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">${escapeHtml(tag)}</span>`).join('')}</div>`:''}`;return `<tr class="${u.active?'':'opacity-55'}"><td class="p-3"><b>${escapeHtml(u.username)}</b><div class="text-slate-500 mt-1">${escapeHtml(u.name)}</div></td><td class="p-3 font-mono">${escapeHtml(u.empId)}</td><td class="p-3"><div>${escapeHtml(adminUserRoleSummary(u))}</div>${profile}</td><td class="p-3">${ADMIN_USER_AREA_LABELS[u.preferredArea]||''} · ${escapeHtml((GROUPS[u.preferredGroup]||GROUPS.grpBio).name)}</td><td class="p-3 text-slate-500">${escapeHtml((u.lastLoginAt||'尚未登入').slice(0,16).replace('T',' '))}</td><td class="p-3"><div class="flex flex-wrap gap-1.5"><button data-username="${escapeHtml(u.username)}" data-csp-click="openAdminUserEditor(this.dataset.username)" class="text-[11px] border border-teal-200 bg-teal-50 text-teal-800 px-2.5 py-1.5 rounded-lg font-bold">編輯人員資料</button><button data-username="${escapeHtml(u.username)}" data-csp-click="resetAdminUserPassword(this.dataset.username)" class="text-[11px] border border-slate-300 bg-white px-2.5 py-1.5 rounded-lg">重設密碼</button><button data-username="${escapeHtml(u.username)}" data-csp-click="openAdminAccessDiagnosis(this.dataset.username)" class="text-[11px] border border-indigo-200 bg-indigo-50 text-indigo-800 px-2.5 py-1.5 rounded-lg font-bold">診斷</button><button data-username="${escapeHtml(u.username)}" data-csp-click="toggleAdminUserAccount(this.dataset.username,${u.active?'false':'true'})" class="text-[11px] ${u.active?'text-rose-600 border-rose-200':'text-emerald-700 border-emerald-200'} border bg-white px-2.5 py-1.5 rounded-lg">${u.active?'停用':'啟用'}</button></div></td></tr>`;}).join(''):'<tr><td colspan="6" class="p-5 text-center text-slate-400">沒有符合目前條件的人員。</td></tr>';
       if(status){const filtered=rows.length!==adminUserAccountsCache.length?`；目前顯示 ${rows.length} 人`:'';status.textContent=`共 ${adminUserAccountsCache.length} 個帳號${filtered}；職稱／職責與系統角色權限分開管理。`;}
   }
 
@@ -285,4 +285,39 @@
   window.createAdminUserAccount=createAdminUserAccount;
   window.renderAdminActivitySummary=renderAdminActivitySummary;
   window.renderAdminPeople=renderAdminPeople;
+})();
+
+/* 可見性診斷：只在按下「診斷」時查詢，不自動刷新、不寫資料庫。 */
+(function(){
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  function options(){
+    const out=[];
+    try{(typeof cachedCourses!=='undefined'?cachedCourses:[]).forEach(c=>out.push(['course',c.id,'課程｜'+(c.title||c.name||c.id)]));}catch(_){}
+    try{(typeof cachedSlidesList!=='undefined'?cachedSlidesList:[]).forEach(m=>out.push(['material',m.id,'教材｜'+(m.title||m.filename||m.id)]));}catch(_){}
+    try{(typeof cachedQuizCategories!=='undefined'?cachedQuizCategories:[]).forEach(q=>out.push(['exam',q.id,'考卷｜'+(q.title||q.id)]));}catch(_){}
+    return out;
+  }
+  function column(title,view){
+    const rows=view.steps.map(s=>`<li class="flex gap-2 py-1"><span aria-hidden="true">${s.passed?'✅':'⛔'}</span><span><b>${esc(s.name)}</b>　${esc(s.reason)}</span></li>`).join('');
+    const verdict=view.allowed?'<p class="mt-2 font-bold text-emerald-700">結論：看得到</p>':`<p class="mt-2 font-bold text-rose-700">結論：看不到 — ${esc(view.blocker)}</p>`;
+    return `<section class="rounded-xl border border-slate-200 p-3"><h4 class="font-bold text-slate-800">${esc(title)}</h4><ul class="mt-1 text-sm text-slate-700">${rows}</ul>${verdict}</section>`;
+  }
+  async function run(username,value,box){
+    const [kind,id]=value.split('|');
+    box.innerHTML='<p class="text-sm text-slate-500">查詢中…</p>';
+    try{
+      const res=await fetch(`/api/admin/access-diagnosis?user=${encodeURIComponent(username)}&kind=${encodeURIComponent(kind)}&item=${encodeURIComponent(id)}`,{credentials:'same-origin'});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok){box.innerHTML=`<p class="text-sm text-rose-700">${esc(data.error||'查詢失敗')}</p>`;return;}
+      box.innerHTML=`<p class="mb-2 text-sm text-slate-600">${esc(data.user.name)}（${esc(data.user.username)}）→ ${esc(data.item.title)}</p><div class="grid gap-3 md:grid-cols-2">${column('管理頁看到的',data.views.management)}${column('閱讀區看到的',data.views.learner)}</div>`;
+    }catch(_){box.innerHTML='<p class="text-sm text-rose-700">網路中斷，請稍後再試。</p>';}
+  }
+  window.openAdminAccessDiagnosis=function(username){
+    document.getElementById('admin-access-diagnosis')?.remove();
+    const opts=options().map(o=>`<option value="${esc(o[0]+'|'+o[1])}">${esc(o[2])}</option>`).join('');
+    document.body.insertAdjacentHTML('beforeend',`<div id="admin-access-diagnosis" class="fixed inset-0 z-[130] bg-slate-950/50 p-4 overflow-y-auto" data-csp-click="if(event.target===this)this.remove()"><div class="mx-auto mt-10 max-w-3xl rounded-2xl bg-white p-5 shadow-2xl" role="dialog" aria-label="可見性診斷"><div class="flex items-center justify-between gap-3"><h3 class="text-lg font-bold">可見性診斷：${esc(username)}</h3><button type="button" id="admin-access-diagnosis-close" class="btn btn-ghost" aria-label="關閉">✕</button></div><div class="mt-3 flex gap-2"><select id="admin-access-diagnosis-item" class="field">${opts||'<option value="">（目前沒有可選項目）</option>'}</select><button type="button" id="admin-access-diagnosis-run" class="btn btn-primary">查詢</button></div><div id="admin-access-diagnosis-result" class="mt-4"></div></div></div>`);
+    const root=document.getElementById('admin-access-diagnosis');
+    root.querySelector('#admin-access-diagnosis-close').addEventListener('click',()=>root.remove());
+    root.querySelector('#admin-access-diagnosis-run').addEventListener('click',()=>{const v=root.querySelector('#admin-access-diagnosis-item').value;if(v)run(username,v,root.querySelector('#admin-access-diagnosis-result'));});
+  };
 })();

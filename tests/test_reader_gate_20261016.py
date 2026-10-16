@@ -116,3 +116,27 @@ class ReviewPagesTests(unittest.TestCase):
              patch.object(gate.learning_access, "is_assignment_gated", return_value=True):
             state = gate.exam_unlock_state({"username": "s1"}, "c1")
         self.assertFalse(state["unlocked"])
+
+
+class AccessExplainTests(unittest.TestCase):
+    def test_unassigned_student_is_blocked_and_reason_names_assignment(self):
+        from teacher_app.learning import access_explain
+
+        user = {"username": "s1", "role": "student", "roles": ["student"], "active": True,
+                "preferredArea": "internal", "preferredGroup": "grpBio"}
+        course = {"id": "c1", "area": "internal", "group": "grpBio", "active": True, "lifecycleStatus": "published"}
+        with patch.object(access_explain.access, "assigned_course_ids", return_value=frozenset()), \
+             patch("teacher_app.courses.repository.get_course", return_value=course):
+            result = access_explain.explain(user, "course", course, learner_view=True)
+        self.assertFalse(result["allowed"])
+        self.assertIn("課程指派", result["blocker"])
+
+    def test_assigned_student_is_allowed(self):
+        from teacher_app.learning import access_explain
+
+        user = {"username": "s1", "role": "student", "roles": ["student"], "active": True,
+                "preferredArea": "internal", "preferredGroup": "grpBio"}
+        course = {"id": "c1", "area": "internal", "group": "grpBio", "active": True, "lifecycleStatus": "published"}
+        with patch.object(access_explain.access, "assigned_course_ids", return_value=frozenset({"c1"})):
+            result = access_explain.explain(user, "course", course, learner_view=True)
+        self.assertTrue(result["allowed"])
