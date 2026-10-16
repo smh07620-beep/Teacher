@@ -1,7 +1,8 @@
 /* 1032 · Learner study ⇄ exam loop.
  *
- * 1. Material "完成標記" is never a gate: learners may start an exam directly
- *    from the course list or from inside the reader / media viewer.
+ * 1. Exams unlock once the course's required materials are completed. The
+ *    server decides (403 MATERIALS_NOT_COMPLETE); this file only shows the
+ *    locked card with progress, using GET /api/courses/<id>/learner-bundle.
  * 2. While answering (or after submitting) learners can jump back to the
  *    materials / atlas area at any time. In-page switching keeps the current
  *    attempt and result; a floating "回到考核" pill brings them back.
@@ -59,6 +60,33 @@
   function currentReaderMaterial() {
     const id = window.slideViewerState?.materialId || g('teachingMediaId') || '';
     return materials().find(m => String(m.id) === String(id)) || null;
+  }
+
+  /* ---------------- exam unlock gate (server-decided) ---------------- */
+  const gateByCourse = new Map();
+  const gateLoading = new Set();
+  function gateFor(courseId) { return gateByCourse.get(String(courseId || '')) || null; }
+  function isLocked(courseId) { const gate = gateFor(courseId); return Boolean(gate && gate.unlocked === false); }
+  async function loadGate(courseId, force) {
+    const key = String(courseId || '');
+    if (!key || gateLoading.has(key) || (!force && gateByCourse.has(key))) return;
+    gateLoading.add(key);
+    try {
+      const res = await fetch(`/api/courses/${encodeURIComponent(key)}/learner-bundle?view=learner`, {credentials: 'same-origin'});
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      if (data && data.gate) {
+        gateByCourse.set(key, data.gate);
+        if (typeof window.renderCourseOverview === 'function') window.renderCourseOverview();
+      }
+    } catch (_) {
+      /* offline: leave the exam row as is; the server still enforces the gate */
+    } finally { gateLoading.delete(key); }
+  }
+  window.LearnerExamGate = Object.freeze({get: gateFor, isLocked, reload: courseId => loadGate(courseId, true)});
+  function lockedCardHtml(gate) {
+    const pct = Math.max(0, Math.min(100, Number(gate.progress || 0)));
+    return `<div class="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700" data-exam-locked="1"><div class="font-bold">🔒 ${esc(gate.reason || '讀完教材後解鎖')}</div><div class="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden"><div class="h-2 bg-teal-700" style="width:${pct}%"></div></div></div>`;
   }
 
   /* ---------------- exam pass / fail status per quiz ---------------- */
@@ -125,6 +153,13 @@
       if (body) body.insertAdjacentHTML('beforeend', failHint(exam.id));
       const s = examStatus.get(String(exam.id));
       const btn = row.querySelector('[data-csp-click^="openCourseExam("]');
+      loadGate(exam.courseId);
+      if (isLocked(exam.courseId)) {
+        if (btn) { btn.disabled = true; btn.removeAttribute('data-csp-click'); btn.textContent = '🔒 尚未解鎖'; btn.classList.add('opacity-60', 'cursor-not-allowed'); }
+        const lockHost = row.querySelector('.min-w-0.flex-1');
+        if (lockHost) lockHost.insertAdjacentHTML('beforeend', lockedCardHtml(gateFor(exam.courseId)));
+        return holder.innerHTML;
+      }
       if (btn && s && !s.passed && !s.pending && !/繼續作答/.test(btn.textContent)) btn.textContent = '重新考核 →';
       if (btn && s && s.passed) btn.textContent = '再練習一次 →';
       return holder.innerHTML;
@@ -155,7 +190,8 @@
     }
     const material = currentReaderMaterial();
     const exams = examsForCourse(material?.courseId);
-    button.hidden = !exams.length;
+    loadGate(material?.courseId);
+    button.hidden = !exams.length || isLocked(material?.courseId);
     const ret = ss.get(RETURN_KEY);
     button.textContent = ret && exams.some(e => String(e.id) === String(ret.catId)) ? '↩ 回到考核（保留作答）' : '📝 看完了，直接考核 →';
   }
@@ -168,6 +204,11 @@
 
   /* ---------------- exam ⇄ materials ---------------- */
   async function goToExam(catId) {
+    const meta = categories().find(c => String(c.id) === String(catId)) || {};
+    if (isLocked(meta.courseId)) {
+      alert(gateFor(meta.courseId)?.reason || '讀完教材後解鎖考卷。');
+      return;
+    }
     if (typeof window.openCourseExam === 'function') await window.openCourseExam(catId);
     else { g('switchLearningModule')?.('exam'); await g('switchDynamicCategory')?.(catId); }
     paintPill();
