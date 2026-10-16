@@ -17,3 +17,12 @@ class CourseCardPrimaryActionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CourseStepListTests(unittest.TestCase):
+    def test_only_current_step_opens_by_default_and_choice_is_remembered(self):
+        self.assertIn("function teachingStepWrap(", JS)
+        self.assertIn("teachingStepChoice", JS)
+        self.assertIn("teachingStepWrap(course.id, m.id,", JS)
+        self.assertIn("Boolean(next && next.id === m.id)", JS)
+        self.assertIn("function teachingExamStep(", JS)

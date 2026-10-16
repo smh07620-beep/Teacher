@@ -519,3 +519,12 @@ body{
 #slide-viewer-shell.reader-fill #reader-fill-exit{display:block;position:absolute;top:8px;right:8px;z-index:40;padding:.5rem .8rem;min-height:44px;border-radius:.75rem;background:rgba(15,23,42,.72);color:#fff;font-size:14px;font-weight:700}
 #reader-portrait-hint{position:absolute;left:50%;bottom:72px;transform:translateX(-50%);z-index:40;padding:.5rem 1rem;border-radius:999px;background:rgba(15,23,42,.82);color:#fff;font-size:14px;font-weight:700;pointer-events:none}
 #reader-portrait-hint:not(.hidden){display:block}
+
+/* Course step list: only the current step is expanded. */
+.course-step{border:1px solid #e6ecef;border-radius:.8rem;background:#fff;margin-top:.5rem}
+.course-step-current{border-color:#8fc7c1;box-shadow:0 4px 14px rgba(0,107,100,.08)}
+.course-step-summary{display:flex;align-items:center;justify-content:space-between;gap:.75rem;min-height:44px;padding:.5rem .85rem;cursor:pointer;font-size:14px;font-weight:700;color:#17384a;list-style:none}
+.course-step-summary::-webkit-details-marker{display:none}
+.course-step-state{flex-shrink:0;font-size:12px;font-weight:700;color:#516878}
+.course-step-current .course-step-state{color:#087b78}
+.course-step-body{padding:.25rem .5rem .75rem}

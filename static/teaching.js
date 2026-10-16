@@ -127,6 +127,27 @@ function teachingCourseStateBadge(mats, exams, done, complete) {
     if (results.some(r => r && r.pending && !r.passed)) return badge('review', '待批改');
     return badge('review', '待評核');
 }
+/* Step list: only the step to do now is expanded; a learner's own open/close choice is remembered. */
+const teachingStepChoice = new Map();
+function teachingStepKey(courseId, step) { return `${courseId}|${step}`; }
+function teachingStepWrap(courseId, stepId, summaryHtml, bodyHtml, isCurrent) {
+    const key = teachingStepKey(courseId, stepId);
+    const open = teachingStepChoice.has(key) ? teachingStepChoice.get(key) : isCurrent;
+    return `<details class="course-step${isCurrent ? ' course-step-current' : ''}" data-step-key="${escapeHtml(key)}" ${open ? 'open' : ''}><summary class="course-step-summary">${summaryHtml}</summary><div class="course-step-body">${bodyHtml}</div></details>`;
+}
+document.addEventListener('toggle', event => {
+    const step = event.target;
+    if (step?.classList?.contains('course-step') && step.dataset.stepKey) teachingStepChoice.set(step.dataset.stepKey, step.open);
+}, true);
+
+function teachingExamStep(course, mats, exams, next) {
+    const passedAll = exams.every(exam => window.LearnerExamStatus?.get?.(exam.id)?.passed);
+    const locked = course.id !== '__general__' && Boolean(window.LearnerExamGate?.isLocked?.(course.id));
+    const state = passedAll ? '✓ 已通過' : (locked ? '🔒 讀完教材後解鎖' : (next ? '待進行' : '目前步驟'));
+    const summary = `<span class="course-step-title">${mats.length + 1}. 課後評量</span><span class="course-step-state">${state}</span>`;
+    const body = `<p class="teaching-help">讀完必讀教材後解鎖；未通過只需複習錯題對應的頁面，再重新考試。</p>${exams.map(buildCourseExamRow).join('')}`;
+    return `<div class="mt-3">${teachingStepWrap(course.id, '__exam__', summary, body, !next && !passedAll)}</div>`;
+}
 /* One primary button per course card, chosen from state (never rewritten afterwards):
  * 開始閱讀 -> 繼續閱讀 (n%) -> 前往考試 -> 未通過｜複習第 X 頁 -> 已完成. */
 function teachingPrimaryAction(course, mats, exams, done, complete, next, pct) {
@@ -211,7 +232,7 @@ function renderTeachingCourseOverview() {
         const dueChip = dueTask
             ? `<span class="course-due${dueTask.overdue ? ' course-due-overdue' : ''}">${dueTask.overdue ? '已逾期' : '截止'} ${escapeHtml(String(dueTask.dueAt).slice(0, 10).replace(/-/g, '/'))}</span>`
             : '';
-        return `<details class="course-learning-card" data-course="${escapeHtml(course.id)}" ${isOpen(course.id, shown) ? 'open' : ''}><summary class="course-learning-summary"><div class="min-w-0 flex-1"><div class="teaching-course-header"><span class="teaching-course-number">${general ? '+' : String(index + 1).padStart(2,'0')}</span><h3 class="text-lg font-black">${escapeHtml(course.title)}</h3>${stateBadge}</div><div class="teaching-meta"><span>教材完成 ${done}／${mats.length}</span>${dueChip}${course.estimatedMinutes ? `<span>建議 ${course.estimatedMinutes} 分鐘</span>` : ''}${course.startDate || course.endDate ? `<span>建議學習期間：${escapeHtml(course.startDate || '不限')} ～ ${escapeHtml(course.endDate || '不限')}</span>` : ''}<span>課後評量 ${exams.length} 份</span></div>${mats.length ? `<div class="course-progress-mini mt-3" role="progressbar" aria-label="教材完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>` : ''}</div><span class="course-learning-toggle" aria-hidden="true"><span class="when-closed">展開</span><span class="when-open">收合</span><span class="course-learning-chevron"><svg viewBox="0 0 20 20" width="16" height="16" focusable="false"><path d="M5 7.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span></summary><div class="teaching-plan"><div>${course.desc ? `<p>${escapeHtml(course.desc)}</p>` : ''}${objectives.length ? `<h4 class="mt-3">學完這堂課，你將能夠</h4><ul>${objectives.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : '<p class="teaching-help">依下方順序閱讀教材，再進行課後評量。</p>'}</div><div>${primaryAction}</div></div><div class="course-material-group"><h4 class="teaching-section-title">${general ? '選讀教材' : '學習路徑 · 請依序閱讀'}</h4>${mats.map(teachingMaterialRow).join('') || '<p class="teaching-help">尚無教材。</p>'}${exams.length ? `<div class="mt-5"><h4 class="teaching-section-title">${mats.length + 1}. 課後評量</h4><p class="teaching-help">讀完必讀教材後解鎖；未通過只需複習錯題對應的頁面，再重新考試。</p>${exams.map(buildCourseExamRow).join('')}</div>` : ''}</div></details>`;
+        return `<details class="course-learning-card" data-course="${escapeHtml(course.id)}" ${isOpen(course.id, shown) ? 'open' : ''}><summary class="course-learning-summary"><div class="min-w-0 flex-1"><div class="teaching-course-header"><span class="teaching-course-number">${general ? '+' : String(index + 1).padStart(2,'0')}</span><h3 class="text-lg font-black">${escapeHtml(course.title)}</h3>${stateBadge}</div><div class="teaching-meta"><span>教材完成 ${done}／${mats.length}</span>${dueChip}${course.estimatedMinutes ? `<span>建議 ${course.estimatedMinutes} 分鐘</span>` : ''}${course.startDate || course.endDate ? `<span>建議學習期間：${escapeHtml(course.startDate || '不限')} ～ ${escapeHtml(course.endDate || '不限')}</span>` : ''}<span>課後評量 ${exams.length} 份</span></div>${mats.length ? `<div class="course-progress-mini mt-3" role="progressbar" aria-label="教材完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>` : ''}</div><span class="course-learning-toggle" aria-hidden="true"><span class="when-closed">展開</span><span class="when-open">收合</span><span class="course-learning-chevron"><svg viewBox="0 0 20 20" width="16" height="16" focusable="false"><path d="M5 7.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span></summary><div class="teaching-plan"><div>${course.desc ? `<p>${escapeHtml(course.desc)}</p>` : ''}${objectives.length ? `<h4 class="mt-3">學完這堂課，你將能夠</h4><ul>${objectives.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : '<p class="teaching-help">依下方順序閱讀教材，再進行課後評量。</p>'}</div><div>${primaryAction}</div></div><div class="course-material-group"><h4 class="teaching-section-title">${general ? '選讀教材' : '學習路徑 · 請依序閱讀'}</h4>${mats.map((m, i) => teachingStepWrap(course.id, m.id, `<span class="course-step-title">${i + 1}. ${escapeHtml(m.title || m.filename || '教材')}</span><span class="course-step-state">${myCompletedMaterials[m.id] ? '✓ 已完成' : (next && next.id === m.id ? '目前步驟' : '待進行')}</span>`, teachingMaterialRow(m, i), Boolean(next && next.id === m.id))).join('') || '<p class="teaching-help">尚無教材。</p>'}${exams.length ? teachingExamStep(course, mats, exams, next) : ''}</div></details>`;
     }).join('') || '<div class="course-empty-row">沒有符合條件的課程。請更換關鍵字或閱讀狀態；尚無課程時請聯絡教師。</div>';
     document.getElementById('learning-result-count').textContent = `顯示 ${shown} 個課程／資源區`;
     document.getElementById('course-overview-course-count').textContent = `課程 ${courses.length}`;
