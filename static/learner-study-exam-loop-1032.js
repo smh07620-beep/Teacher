@@ -146,37 +146,26 @@
     return '<p class="mt-1 text-xs font-bold text-rose-700">⚠️ 尚未通過：請先回上方教材重新閱覽，再重新考核（不會鎖定，重考時題目順序會重新打亂）。</p>';
   }
 
-  function wrapExamRow() {
-    if (typeof window.buildCourseExamRow !== 'function' || window.buildCourseExamRow.__loop1032) return;
-    const original = window.buildCourseExamRow;
-    const wrapped = function (exam) {
-      const html = original.apply(this, arguments);
-      if (!exam || !exam.id || /data-exam-not-ready/.test(html)) return html;
-      const holder = document.createElement('div');
-      holder.innerHTML = html;
-      const row = holder.firstElementChild;
-      if (!row) return html;
-      row.dataset.loop1032Exam = String(exam.id);
-      const titleLine = row.querySelector('.flex.items-center.gap-2.flex-wrap');
-      if (titleLine) titleLine.insertAdjacentHTML('beforeend', statusBadge(exam.id));
-      const body = row.querySelector('.min-w-0.flex-1');
-      if (body) body.insertAdjacentHTML('beforeend', failHint(exam.id));
-      const s = examStatus.get(String(exam.id));
-      const btn = row.querySelector('[data-csp-click^="openCourseExam("]');
-      loadGate(exam.courseId);
-      if (isLocked(exam.courseId)) {
-        if (btn) { btn.disabled = true; btn.removeAttribute('data-csp-click'); btn.textContent = '🔒 尚未解鎖'; btn.classList.add('opacity-60', 'cursor-not-allowed'); }
-        const lockHost = row.querySelector('.min-w-0.flex-1');
-        if (lockHost) lockHost.insertAdjacentHTML('beforeend', lockedCardHtml(gateFor(exam.courseId)));
-        return holder.innerHTML;
-      }
-      if (btn && s && !s.passed && !s.pending && !/繼續作答/.test(btn.textContent)) btn.textContent = '重新考核 →';
-      if (btn && s && s.passed) btn.textContent = '再練習一次 →';
-      return holder.innerHTML;
+  // The owner (buildCourseExamRow in system-learner.js) asks for these pieces while it
+  // renders the row; nothing re-parses its HTML afterwards.
+  function examRowParts(exam) {
+    if (!exam || !exam.id) return null;
+    loadGate(exam.courseId);
+    const s = examStatus.get(String(exam.id));
+    const locked = isLocked(exam.courseId);
+    let label = '';
+    if (s && s.passed) label = '再練習一次 →';
+    else if (s && !s.pending) label = '重新考核 →';
+    return {
+      badge: statusBadge(exam.id),
+      hint: failHint(exam.id),
+      locked,
+      lockedHtml: locked ? lockedCardHtml(gateFor(exam.courseId)) : '',
+      label,
     };
-    wrapped.__loop1032 = true;
-    window.buildCourseExamRow = wrapped;
   }
+  window.LearnerExamRow = Object.freeze({ parts: examRowParts });
+
 
   /* ---------------- reader → exam ---------------- */
   function ensureReaderExamButton(anchorId, closeFn) {
@@ -407,7 +396,7 @@
   }
 
   function boot() {
-    wrapExamRow(); wrapSubmit(); wrapRender(); wrapModuleSwitch(); wrapCategorySwitch(); wrapRemediationButton();
+    wrapSubmit(); wrapRender(); wrapModuleSwitch(); wrapCategorySwitch(); wrapRemediationButton();
     ensureExamToolbar();
     loadExamStatus(false);
     paintPill();

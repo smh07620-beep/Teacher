@@ -43,9 +43,10 @@ class FrontendJsOwnershipContractTests(unittest.TestCase):
             "teacher66OriginalMarkComplete",
             "teacher66OriginalNextMaterial",
             "teacher66OriginalSwitchCategory",
-            "originalBuildCourseExamRow",
         ):
             self.assertIn(marker, self.teaching)
+        # 2026-10-17: the exam row is rendered by its owner; no wrapper chain on buildCourseExamRow.
+        self.assertNotIn("originalBuildCourseExamRow", self.teaching)
         self.assertNotIn("fetch('/api/material-progress'", self.teaching)
 
     def test_assessment_resilience_wraps_rendering_not_question_crud(self):

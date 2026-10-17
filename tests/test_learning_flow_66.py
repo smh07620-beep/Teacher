@@ -93,8 +93,12 @@ class LearningFlow66Tests(
         self.assertIn("(c.area||currentTrainingArea)===currentTrainingArea", base)
 
     def test_empty_exam_has_explicit_not_ready_state(self):
+        # The course-row "not ready" state lives in the row owner (system-learner.js);
+        # the exam-open guard stays in teaching.js.
         source = self.source(
             "static/teaching.js"
+        ) + self.source(
+            "static/system-learner.js"
         )
 
         for marker in (

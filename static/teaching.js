@@ -958,73 +958,7 @@ function teachingNextMedia() {
         };
 
 
-    /*
-     * Course overview:
-     * zero-question exams should not look like
-     * an actionable exam button.
-     */
-    if (
-        typeof buildCourseExamRow
-        === 'function'
-    ) {
-        const originalBuildCourseExamRow =
-            buildCourseExamRow;
-
-        buildCourseExamRow =
-            function (exam) {
-                const count =
-                    teacher66ExamBankCount(
-                        exam
-                    );
-
-                if (count !== 0) {
-                    return originalBuildCourseExamRow
-                        .apply(
-                            this,
-                            arguments
-                        );
-                }
-
-                const title =
-                    typeof escapeHtml
-                    === 'function'
-                    ? escapeHtml(
-                        exam?.title
-                        || '未命名考卷'
-                    )
-                    : (
-                        exam?.title
-                        || '未命名考卷'
-                    );
-
-                return `
-                    <div
-                        class="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 flex items-center justify-between gap-3"
-                        data-exam-not-ready="${String(
-                            exam?.id || ''
-                        )}"
-                    >
-                        <div>
-                            <div class="font-bold text-sm text-slate-800">
-                                📝 ${title}
-                            </div>
-
-                            <div class="text-xs text-amber-700 mt-1">
-                                尚待題庫建置・目前 0 題
-                            </div>
-                        </div>
-
-                        <button
-                            type="button"
-                            disabled
-                            class="px-3 py-2 rounded-lg bg-slate-100 text-slate-400 text-xs font-bold cursor-not-allowed"
-                        >
-                            尚未開放
-                        </button>
-                    </div>
-                `;
-            };
-    }
+    // Zero-question exams render as "尚待題庫建置" inside buildCourseExamRow (system-learner.js).
 
 
     window.teacher66ShowEmptyExam =

@@ -1200,9 +1200,21 @@ function buildCourseMaterialRow(m){
 function buildCourseExamRow(q){
 
     const bank=examBankCount(q),actual=examActualCount(q),draft=hasExamDraft(q.id);
+    if(Number(bank)===0)return buildCourseExamNotReadyRow(q);
+    // Status badge, fail hint and the locked card come from the study/exam loop (if loaded).
+    const parts=window.LearnerExamRow?.parts?.(q)||{badge:'',hint:'',locked:false,lockedHtml:'',label:''};
+    const label=draft?'繼續作答 →':(parts.label||'開始考核 →');
+    const action=parts.locked
+        ?`<button type="button" disabled class="px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold opacity-60 cursor-not-allowed">🔒 尚未解鎖</button>`
+        :`<button data-csp-click="openCourseExam('${escapeHtml(q.id)}')" class="px-3 py-2 rounded-lg ${draft?'bg-amber-600 hover:bg-amber-500':'bg-indigo-600 hover:bg-indigo-500'} text-white text-xs font-bold">${label}</button>`;
 
-    return `<div class="course-material-row"><span class="course-type-icon">${uiIcon('📝')}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-sm text-slate-800">${escapeHtml(q.title||'課後評量')}</span>${q.blindMode?'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white">導師盲測</span>':''}${draft?'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">進行中</span>':''}</div><div class="flex flex-wrap gap-1.5 mt-1.5 text-xs"><span class="course-stat-chip">👤 ${escapeHtml(examAudienceLabel(q))}</span><span class="course-stat-chip">🧠 題庫 ${bank} 題</span><span class="course-stat-chip">📋 ${escapeHtml(examDrawLabel(q))}</span><span class="course-stat-chip">🎯 及格 ${Number(q.passingScore||80)} 分</span></div>${q.desc?`<p class="text-xs text-slate-400 mt-1">${escapeHtml(q.desc)}</p>`:''}</div><div class="course-row-actions"><button data-csp-click="openCourseExam('${escapeHtml(q.id)}')" class="px-3 py-2 rounded-lg ${draft?'bg-amber-600 hover:bg-amber-500':'bg-indigo-600 hover:bg-indigo-500'} text-white text-xs font-bold">${draft?'繼續作答 →':'開始考核 →'}</button></div></div>`;
+    return `<div class="course-material-row"><span class="course-type-icon">${uiIcon('📝')}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-sm text-slate-800">${escapeHtml(q.title||'課後評量')}</span>${q.blindMode?'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white">導師盲測</span>':''}${draft?'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">進行中</span>':''}${parts.badge}</div><div class="flex flex-wrap gap-1.5 mt-1.5 text-xs"><span class="course-stat-chip">👤 ${escapeHtml(examAudienceLabel(q))}</span><span class="course-stat-chip">🧠 題庫 ${bank} 題</span><span class="course-stat-chip">📋 ${escapeHtml(examDrawLabel(q))}</span><span class="course-stat-chip">🎯 及格 ${Number(q.passingScore||80)} 分</span></div>${q.desc?`<p class="text-xs text-slate-400 mt-1">${escapeHtml(q.desc)}</p>`:''}${parts.hint}${parts.lockedHtml}</div><div class="course-row-actions">${action}</div></div>`;
 
+}
+
+// An exam with no questions yet cannot be taken: show it as not ready (was a teaching.js wrapper).
+function buildCourseExamNotReadyRow(q){
+    return `<div class="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 flex items-center justify-between gap-3" data-exam-not-ready="${escapeHtml(q?.id||'')}"><div><div class="font-bold text-sm text-slate-800">📝 ${escapeHtml(q?.title||'未命名考卷')}</div><div class="text-xs text-amber-700 mt-1">尚待題庫建置・目前 0 題</div></div><button type="button" disabled class="px-3 py-2 rounded-lg bg-slate-100 text-slate-400 text-xs font-bold cursor-not-allowed">尚未開放</button></div>`;
 }
 
 async function openCourseExam(catId){
