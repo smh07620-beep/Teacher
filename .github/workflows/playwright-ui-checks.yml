@@ -91,6 +91,11 @@ jobs:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
         run: npx playwright test tests/playwright/reader-paging-20261007.spec.js --reporter=line --workers=1
 
+      - name: Run reader checkpoint browser regression
+        env:
+          TEACHER_UI_BASE_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/playwright/reader-checkpoints-1017.spec.js --reporter=line --workers=1
+
       - name: Run P2 teacher learner browser regression
         env:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
