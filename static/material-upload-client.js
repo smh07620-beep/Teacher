@@ -247,9 +247,23 @@
     return metadata;
   }
 
+  // A dropped Wi-Fi pauses the upload instead of failing it: wait (up to 10 minutes) for the
+  // browser to report the network back, then carry on with the same part.
+  function waitForOnline(){
+    if(typeof navigator==='undefined'||navigator.onLine!==false)return Promise.resolve(true);
+    return new Promise(resolve=>{
+      const done=ok=>{window.removeEventListener('online',onOnline);clearTimeout(timer);resolve(ok);};
+      const onOnline=()=>done(true);
+      const timer=setTimeout(()=>done(false),10*60*1000);
+      window.addEventListener('online',onOnline);
+      window.dispatchEvent(new CustomEvent('teacher:upload-paused',{detail:{reason:'offline'}}));
+    });
+  }
+
   async function retryPut(url,chunk,headers){
     let lastError=null;
     for(let attempt=0;attempt<MAX_RETRIES;attempt++){
+      if(!(await waitForOnline()))throw new Error('網路中斷超過 10 分鐘，上傳已暫停；重新選同一個檔案即可從中斷處繼續。');
       try{
         const response=await fetch(url,{method:'PUT',body:chunk,headers:headers||undefined});
         if(response.ok)return response;

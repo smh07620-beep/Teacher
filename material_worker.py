@@ -423,6 +423,27 @@ def published_job(api,job_id,result):
             log(f"published {job_id} acknowledgement failed; retry {attempt}/{COMPLETE_RETRIES-1} in {delay}s")
             time.sleep(delay)
 
+def _quality_check(slides,source,pages,media_meta):
+    """Teacher-only "please confirm" notes (blank pages, silent media); never blocks publishing."""
+    try:
+        from teacher_app.materials import quality_check
+        kind=str((media_meta or {}).get("mediaKind") or "")
+        max_db=None
+        ffmpeg=_bin("FFMPEG_PATH","ffmpeg") if kind else ""
+        if kind and ffmpeg: max_db=quality_check.max_volume_db(ffmpeg,source)
+        audio=(media_meta or {}).get("audioCodec")
+        return quality_check.build(
+            page_count=int(pages or 0),
+            blank=[] if kind else quality_check.blank_pages(quality_check.page_images(slides)),
+            media_kind=kind,
+            has_audio=(bool(str(audio or "").strip()) if kind=="video" and (media_meta or {}).get("videoCodec") else None),
+            max_db=max_db,
+            duration=float((media_meta or {}).get("durationSeconds") or 0) or None,
+        )
+    except Exception as exc:  # the check must never fail an upload
+        return {"issues":[],"error":str(exc)[:200]}
+
+
 def _probe_media(source):
     ffprobe=_bin("FFPROBE_PATH","ffprobe")
     if not ffprobe:raise RuntimeError("FFprobe unavailable")
@@ -782,6 +803,7 @@ def publish_to_storage(source,original,job,temp,source_sha256,timings=None,progr
         # so the teacher can choose to upload a PDF exported from PowerPoint.
         fidelity_warnings=office_fidelity.conversion_warnings(source)
         if fidelity_warnings: meta["conversionWarnings"]=fidelity_warnings
+    meta["qualityCheck"]=_quality_check(slides,source,pages,media_meta)
     return {"storageBackend":backend,"storageKey":key,"slidesPrefix":prefix,"storageFilename":f"source{source.suffix.lower()}","pageCount":pages,"storageMeta":meta,"materialType":resolved_material_type,"classificationMethod":classification_method,"classificationReason":str(classification_reason or "")[:240],"publishKey":publish_key,"publishSourceSha256":source_sha256}
 
 def process_one(api,job,capabilities=None):

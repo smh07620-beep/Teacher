@@ -43,6 +43,32 @@ def _sanitize_conversion_warnings(storage_meta: dict) -> dict:
         result["conversionWarnings"] = cleaned
     return result
 
+def _sanitize_quality_check(storage_meta: dict) -> dict:
+    """Worker-supplied post-upload notes: bounded, typed, display-safe (2026-10-17)."""
+    raw = storage_meta.get("qualityCheck")
+    if raw is None:
+        return storage_meta
+    result = {key: value for key, value in storage_meta.items() if key != "qualityCheck"}
+    if not isinstance(raw, dict):
+        return result
+    issues = []
+    for item in (raw.get("issues") if isinstance(raw.get("issues"), list) else [])[:6]:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "").strip()[:40]
+        label = str(item.get("label") or "").strip()[:80]
+        detail = str(item.get("detail") or "").strip()[:300]
+        if not (code and label):
+            continue
+        clean = {"code": code, "label": label, "detail": detail}
+        pages = item.get("pages")
+        if isinstance(pages, list):
+            clean["pages"] = [int(p) for p in pages[:200] if isinstance(p, int) and 0 < p < 100000]
+        issues.append(clean)
+    result["qualityCheck"] = {"checkedAt": str(raw.get("checkedAt") or "")[:40], "issues": issues}
+    return result
+
+
 def commit(job: dict, result: dict) -> dict:
     """Persist a Worker-produced material only after Web ownership validation."""
     payload = dict(job.get("payload") or {})
@@ -72,7 +98,7 @@ def commit(job: dict, result: dict) -> dict:
     storage_meta = (
         result.get("storageMeta") if isinstance(result.get("storageMeta"), dict) else {}
     )
-    storage_meta = _sanitize_conversion_warnings(storage_meta)
+    storage_meta = _sanitize_quality_check(_sanitize_conversion_warnings(storage_meta))
     if Path(original).suffix.lower() in _OFFICE_EXTENSIONS:
         preview_mode = str(storage_meta.get("previewMode") or "").strip().lower()
         slides_prefix = str(result.get("slidesPrefix") or "").strip()
