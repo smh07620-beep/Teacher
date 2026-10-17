@@ -91,7 +91,7 @@
       const securityResponse = await fetch('/api/security/status', {credentials: 'same-origin', cache: 'no-store'});
       const security = await securityResponse.json().catch(() => ({}));
       if (!securityResponse.ok) throw new Error(security.error || `讀取失敗（${securityResponse.status}）`);
-      const chip = (label, value, good=true) => `<div class="rounded-xl border ${good?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50'} p-3"><div class="text-[11px] font-bold text-slate-500">${escapeHtml(label)}</div><div class="mt-1 text-sm font-black text-slate-900">${escapeHtml(value)}</div></div>`;
+      const chip = (label, value, good=true) => `<div class="rounded-xl border ${good?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50'} p-3"><div class="text-xs font-bold text-slate-500">${escapeHtml(label)}</div><div class="mt-1 text-sm font-black text-slate-900">${escapeHtml(value)}</div></div>`;
       securityHost.innerHTML = [
         chip('Session 期限', `${Number(security.sessionHours||0)} 小時`, Number(security.sessionHours||0)>0),
         chip('Secure Cookie', security.secureCookie?'已啟用':'未啟用', !!security.secureCookie),
@@ -234,7 +234,7 @@
           </table>
         </div>
         <div class="border-t border-slate-100 pt-4 space-y-2">
-          <div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-slate-900">🎞️ 外部影音可用性</h5><p class="mt-1 text-[11px] text-slate-500">YouTube/Vimeo 以固定 provider 驗證；院內 CDN 僅檢查明確 allowlist 主機。驗證結果不會刪除或停用教材。</p></div><span id="external-media-report-status-80" class="text-[11px] text-slate-500">讀取中…</span></div>
+          <div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-slate-900">🎞️ 外部影音可用性</h5><p class="mt-1 text-xs text-slate-500">YouTube/Vimeo 以固定 provider 驗證；院內 CDN 僅檢查明確 allowlist 主機。驗證結果不會刪除或停用教材。</p></div><span id="external-media-report-status-80" class="text-xs text-slate-500">讀取中…</span></div>
           <div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs"><thead class="bg-slate-50"><tr><th class="p-3">教材</th><th class="p-3">Provider</th><th class="p-3">狀態</th><th class="p-3">最後驗證</th><th class="p-3">訊息</th><th class="p-3">操作</th></tr></thead><tbody id="external-media-report-body-80" class="divide-y divide-slate-100"></tbody></table></div>
         </div>
       </section>`;
@@ -282,10 +282,10 @@
       body.innerHTML = rows.length ? rows.map(row => `
         <tr>
           <td class="p-3 whitespace-nowrap text-slate-500">${escapeHtml(row.createdAt || '')}</td>
-          <td class="p-3"><div class="font-bold text-slate-800">${escapeHtml(row.action || '—')}</div><div class="text-[10px] text-slate-400">${escapeHtml(row.auditSource || '')}</div></td>
-          <td class="p-3"><div class="font-semibold">${escapeHtml(row.actorUsername || '—')}</div><div class="text-[10px] text-slate-400">${escapeHtml(row.actorRole || '')}</div></td>
+          <td class="p-3"><div class="font-bold text-slate-800">${escapeHtml(row.action || '—')}</div><div class="text-xs text-slate-400">${escapeHtml(row.auditSource || '')}</div></td>
+          <td class="p-3"><div class="font-semibold">${escapeHtml(row.actorUsername || '—')}</div><div class="text-xs text-slate-400">${escapeHtml(row.actorRole || '')}</div></td>
           <td class="p-3 whitespace-nowrap">${escapeHtml(groupLabel(row.group))}</td>
-          <td class="p-3"><div class="font-semibold">${escapeHtml(row.itemTitle || '—')}</div><div class="text-[10px] text-slate-400">${escapeHtml(row.targetId || '')}</div></td>
+          <td class="p-3"><div class="font-semibold">${escapeHtml(row.itemTitle || '—')}</div><div class="text-xs text-slate-400">${escapeHtml(row.targetId || '')}</div></td>
           <td class="p-3 whitespace-nowrap">${escapeHtml(row.statusText || '—')}</td>
         </tr>`).join('') : '<tr><td colspan="6" class="p-6 text-center text-slate-400">目前沒有稽核紀錄。</td></tr>';
       status.textContent = `共 ${rows.length} 筆紀錄 · 系統 ${generalRows.length} · PGY ${pgyRows.length} · 唯讀`;
@@ -295,7 +295,7 @@
       const availabilityLabel = value => ({available:'可用',unavailable:'不可用',error:'驗證錯誤',unverified:'待驗證'}[String(value||'')] || String(value||'待驗證'));
       if (externalStatus) externalStatus.textContent = `${externalRows.length} 筆 · 報告唯讀${canVerifyExternalMedia?' · 管理者可手動驗證':''}`;
       if (externalBody) {
-        externalBody.innerHTML = externalRows.length ? externalRows.map(item => `<tr><td class="p-3"><div class="font-semibold text-slate-800">${escapeHtml(item.title||item.materialId||'—')}</div><div class="text-[10px] text-slate-400">${escapeHtml(groupLabel(item.group))}</div></td><td class="p-3">${escapeHtml(item.provider||'—')}</td><td class="p-3 font-bold">${escapeHtml(availabilityLabel(item.availabilityStatus))}</td><td class="p-3 whitespace-nowrap text-slate-500">${escapeHtml(item.lastVerifiedAt||'尚未驗證')}</td><td class="p-3 max-w-xs break-words text-slate-500">${escapeHtml(item.lastError||'—')}</td><td class="p-3">${canVerifyExternalMedia?`<button type="button" data-external-media-verify="${escapeHtml(item.materialId||'')}" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold">重新驗證</button>`:'—'}</td></tr>`).join('') : '<tr><td colspan="6" class="p-5 text-center text-slate-400">目前沒有外部影音教材。</td></tr>';
+        externalBody.innerHTML = externalRows.length ? externalRows.map(item => `<tr><td class="p-3"><div class="font-semibold text-slate-800">${escapeHtml(item.title||item.materialId||'—')}</div><div class="text-xs text-slate-400">${escapeHtml(groupLabel(item.group))}</div></td><td class="p-3">${escapeHtml(item.provider||'—')}</td><td class="p-3 font-bold">${escapeHtml(availabilityLabel(item.availabilityStatus))}</td><td class="p-3 whitespace-nowrap text-slate-500">${escapeHtml(item.lastVerifiedAt||'尚未驗證')}</td><td class="p-3 max-w-xs break-words text-slate-500">${escapeHtml(item.lastError||'—')}</td><td class="p-3">${canVerifyExternalMedia?`<button type="button" data-external-media-verify="${escapeHtml(item.materialId||'')}" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold">重新驗證</button>`:'—'}</td></tr>`).join('') : '<tr><td colspan="6" class="p-5 text-center text-slate-400">目前沒有外部影音教材。</td></tr>';
         externalBody.querySelectorAll('[data-external-media-verify]').forEach(button => button.addEventListener('click', async () => {
           const materialId = String(button.dataset.externalMediaVerify || '');
           if (!materialId || button.disabled) return;

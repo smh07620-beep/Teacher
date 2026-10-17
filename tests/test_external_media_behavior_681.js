@@ -31,11 +31,15 @@ function harness({ external = null, externalError = false } = {}) {
       { id: 'fallback-x', title: 'F', viewerMode: 'video' },
     ],
     addEventListener(name, fn) { (windowListeners[name] ||= []).push(fn); },
-    openMaterial: async () => { fallback += 1; }, closeSlideViewer() {}, closeMediaViewer() {}, goToSlidePage() {},
+    openMaterial: async () => { fallback += 1; },
+    // Like system-learner.js: closing announces the event that smart-learning listens to.
+    closeSlideViewer() { (windowListeners['teacher:reader-changed'] || []).forEach(fn => fn({ detail: { open: false } })); },
+    closeMediaViewer() { (windowListeners['teacher:media-changed'] || []).forEach(fn => fn({ detail: { open: false } })); },
+    goToSlidePage() {},
     console: { warn() {} },
   };
   const document = {
-    body: { style: {} }, getElementById: id => ids[id] || null,
+    body: { style: {} }, hidden: false, addEventListener() {}, getElementById: id => ids[id] || null,
     createElement: tag => { const node = element(); let assigned = ''; Object.defineProperty(node, 'id', { get: () => assigned, set: value => { assigned = value; ids[value] = node; } }); node.tagName = tag; if (tag === 'iframe') node.contentWindow = { postMessage: (message, origin) => posts.push({ message: JSON.parse(message), origin }) }; return node; },
   };
   const fetch = async (url, options = {}) => {
@@ -48,6 +52,9 @@ function harness({ external = null, externalError = false } = {}) {
   };
   const context = vm.createContext({ window, document, fetch, console: window.console, location: { origin: 'https://teacher.example' }, JSON, Set, Number, Math, Date, Error, encodeURIComponent, setTimeout: fn => fn() });
   vm.runInContext(fs.readFileSync('static/smart-learning-67.js', 'utf8'), context);
+  // Like system-learner.js openMaterial(): hand the open to smart-learning with the base opener.
+  const openBase = window.openMaterial;
+  window.openMaterial = id => window.SmartLearning67.openWith(id, openBase);
   const frame = () => ids['external-media-frame'];
   return {
     window, calls, progress, posts, frame, fallback: () => fallback, jsonCalls: () => jsonCalls,

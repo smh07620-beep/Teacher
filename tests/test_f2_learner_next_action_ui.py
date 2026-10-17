@@ -14,7 +14,7 @@ class F2LearnerNextActionUiTests(unittest.TestCase):
         self.assertIn("if (item?.materialId) query.set('materialId'",source)
 
     def test_home_todo_marks_the_same_canonical_next_action(self):
-        source=ROOT.joinpath('static','learner-todo-convergence-1025.js').read_text(encoding='utf-8')
+        source=ROOT.joinpath('static','learner-todo.js').read_text(encoding='utf-8')
         self.assertIn('command?.nextAction',source)
         self.assertIn('data-learner-next-action',source)
         self.assertIn("if(item?.materialId)query.set('materialId'",source)

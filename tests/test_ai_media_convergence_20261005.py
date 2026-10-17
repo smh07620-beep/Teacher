@@ -22,7 +22,7 @@ class AIMediaConvergence20261005Tests(unittest.TestCase):
         cls.audio = ROOT.joinpath("static", "teacher-media-audio-1014.js").read_text(encoding="utf-8")
         cls.video = ROOT.joinpath("static", "teacher-ai-video-1015.js").read_text(encoding="utf-8")
         cls.material = ROOT.joinpath("static", "teacher-ai-material-1014.js").read_text(encoding="utf-8")
-        cls.convergence = ROOT.joinpath("static", "teacher-ai-material-convergence-1014.js").read_text(encoding="utf-8")
+        cls.convergence = ROOT.joinpath("static", "teacher-ai-material-1014.js").read_text(encoding="utf-8")
 
     def test_supabase_direct_and_pooler_urls_have_same_non_secret_identity(self):
         direct = database_identity({

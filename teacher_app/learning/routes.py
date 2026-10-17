@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Callable
@@ -19,6 +20,8 @@ from flask import g, jsonify, request
 from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.learning import access as learning_access
 from teacher_app.learning import content, repository, versioning
+from teacher_app.learning import review_pages as review_pages_mod
+from teacher_app.checkpoints import retry as checkpoint_retry
 from teacher_app.materials import repository as material_repository
 
 
@@ -35,6 +38,59 @@ def _user(owner=None):
     if not user:
         return None, (jsonify({"error": "請先登入。", "loginRequired": True}), 401)
     return user, None
+
+
+def reader_rules_v2() -> bool:
+    return os.environ.get("READER_RULES_V2", "").strip().lower() in {"1", "true", "on", "yes"}
+
+
+def _seconds_since(value) -> float | None:
+    try:
+        stamp = dt.datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=dt.timezone.utc)
+    return max(0.0, (dt.datetime.now(dt.timezone.utc) - stamp).total_seconds())
+
+
+def _required_by_page(material: dict, total_pages: int) -> dict:
+    meta = material.get("storageMeta") or {}
+    lengths = meta.get("pageTextLengths") if isinstance(meta, dict) else None
+    overrides = meta.get("pageMinSeconds") if isinstance(meta, dict) else None
+    fixed = meta.get("minSecondsPerPage") if isinstance(meta, dict) else None
+    if isinstance(fixed, bool) or not isinstance(fixed, (int, float)):
+        fixed = None  # teacher's whole-material setting; None = automatic by text length
+    result = {}
+    for page in range(1, total_pages + 1):
+        text_len = 0
+        if isinstance(lengths, list) and page - 1 < len(lengths):
+            text_len = lengths[page - 1]
+        override = overrides.get(str(page)) if isinstance(overrides, dict) else None
+        if override is None:
+            override = fixed
+        result[str(page)] = content.min_dwell_seconds(text_len, override)
+    return result
+
+
+AUTO_TRACKED_SUFFIXES = {
+    ".pdf", ".ppt", ".pptx", ".doc", ".docx", ".odp", ".odt",
+    ".mp4", ".m4v", ".mov", ".webm", ".mp3", ".m4a", ".wav", ".ogg",
+}
+
+
+def auto_tracked(material: dict) -> bool:
+    """Pages or media are measured by the reader, so the browser may not just say 'done'."""
+    if str(material.get("viewerMode") or "") in {"slides", "preview_pdf", "video", "audio"}:
+        return True
+    name = str(material.get("filename") or material.get("storedName") or "").lower()
+    return Path(name).suffix in AUTO_TRACKED_SUFFIXES
+
+
+def _exam_gate_enabled() -> bool:
+    from teacher_app.learning import gate as learning_gate
+
+    return learning_gate.gate_enabled()
 
 
 def _material_path(paths, material: dict, material_id: str) -> Path:
@@ -164,9 +220,20 @@ def auto_index_material(
             reason=reason,
             source_kind=source_kind,
         )
-        return status
     except Exception:
         return terminal("failed", "索引寫入失敗", source_kind)
+    # Per-page text length drives the minimum dwell time (reader rules v2).
+    try:
+        total = max(int(material.get("pageCount") or 0), max((int(r[0]) for r in rows), default=0))
+        lengths = [0] * total
+        for number, text, _title in rows:
+            if 1 <= int(number) <= total:
+                lengths[int(number) - 1] = len(str(text or ""))
+        if total:
+            material_repository.merge_storage_meta(material_id, {"pageTextLengths": lengths})
+    except Exception:
+        pass  # best effort: without it every page uses the 5s default
+    return status
 
 
 def register_smart_learning(
@@ -333,6 +400,10 @@ def register_smart_learning(
             "currentVersion": version_status["currentVersion"],
             "requiredCompletionVersion": version_status["requiredCompletionVersion"],
             "retrainingRequired": retraining_required,
+            "lastViewedAt": str(data.get("last_viewed_at") or ""),
+            "materialTitle": str(material.get("title") or material.get("filename") or ""),
+            "area": str(material.get("area") or ""),
+            "group": str(material.get("group") or ""),
         }
 
     @app.get("/api/learning-progress")
@@ -340,12 +411,16 @@ def register_smart_learning(
         user, denied = _user(owner)
         if denied:
             return denied
+        rows = repository.list_progress_for_user(str(user.get("username") or ""))
+        # Only the materials this learner has progress on, fetched in one query.
         materials = {
             str(item.get("id") or ""): item
-            for item in material_repository.list_uploaded_materials(include_inactive=False)
-            if item.get("id") and learning_access.can_access_learning_item(user, item)
+            for item in material_repository.list_materials_by_ids(
+                [row.get("material_id") for row in rows]
+            )
+            if item.get("id") and item.get("active", True)
+            and learning_access.can_access_learning_item(user, item)
         }
-        rows = repository.list_progress_for_user(str(user.get("username") or ""))
         items = []
         for row in rows:
             material_id = str(row.get("material_id") or "")
@@ -353,6 +428,61 @@ def register_smart_learning(
             if material:
                 items.append(progress_payload(material_id, material, row))
         return jsonify({"items": items})
+
+    @app.get("/api/courses/<course_id>/learner-bundle")
+    def course_learner_bundle(course_id):
+        user, denied = _user(owner)
+        if denied:
+            return denied
+        if not learning_access.student_may_see_course(user, str(course_id)):
+            return jsonify({"error": "這門課尚未指派給你，請洽組長。"}), 403
+        from teacher_app.learning import gate as learning_gate
+
+        return jsonify(learning_gate.learner_bundle(user, str(course_id)))
+
+    @app.get("/api/admin/health-overview")
+    def admin_health_overview():
+        denied = rbac_legacy_adapter.require_admin(owner)
+        if denied:
+            return denied
+        from teacher_app.admin import health_overview
+        from teacher_app.maintenance import health as maintenance_health
+
+        return jsonify(health_overview.collect(health_state=lambda: maintenance_health.health_state(getattr(owner, "_db_conn", None))))
+
+    @app.get("/api/admin/access-diagnosis")
+    def admin_access_diagnosis():
+        denied = rbac_legacy_adapter.require_admin(owner)
+        if denied:
+            return denied
+        from teacher_app.auth import repository as auth_repository
+        from teacher_app.auth import service as auth_service
+        from teacher_app.learning import access_explain
+
+        kind = str(request.args.get("kind", "")).strip()
+        item_id = str(request.args.get("item", "")).strip()
+        username = str(request.args.get("user", "")).strip().lower()
+        row = auth_repository.find_user(username) if username else None
+        if not row:
+            return jsonify({"error": "找不到這位人員。"}), 404
+        if kind == "course":
+            from teacher_app.courses import repository as course_repository
+
+            item = course_repository.get_course(item_id)
+        elif kind == "material":
+            item = material_repository.get_material(item_id)
+        elif kind == "exam":
+            from teacher_app.assessments import repository as assessment_repository
+
+            item = assessment_repository.get_category_full(item_id)
+        else:
+            return jsonify({"error": "kind 必須是 course、material 或 exam"}), 400
+        if not item:
+            return jsonify({"error": "找不到這個項目。"}), 404
+        user = auth_service.public_user(row, include_roles=True)
+        return jsonify({"user": {"username": user["username"], "name": user["name"]}, "kind": kind,
+                        "item": {"id": item_id, "title": str(item.get("title") or item.get("name") or item_id)},
+                        "views": access_explain.diagnose(user, kind, item)})
 
     @app.get("/api/learning-progress/<material_id>")
     def learning_progress_get(material_id):
@@ -402,6 +532,22 @@ def register_smart_learning(
         except (TypeError, ValueError):
             return jsonify({"error": "watchedBuckets 格式錯誤"}), 400
 
+        prior_position = {}
+        if existing:
+            try:
+                prior_position = json.loads(existing.get("position") or "{}")
+            except Exception:
+                prior_position = {}
+            if not isinstance(prior_position, dict):
+                prior_position = {}
+        rules_v2 = reader_rules_v2()
+        elapsed = _seconds_since(prior_position.get("lastSaveAt"))
+        if elapsed is None:
+            elapsed = 35.0  # first report: allow one normal 30s batch
+        if rules_v2:
+            known = [] if reset_evidence else (existing_payload.get("watchedBuckets") or [])
+            buckets = content.limit_new_buckets(buckets, known, elapsed)
+
         threshold = 0.9
         narration_pending = False
         media_request = duration > 0 or "watchedBuckets" in body or "lastPositionSeconds" in body
@@ -448,6 +594,38 @@ def register_smart_learning(
                     "version": current_version,
                 }
                 progress = float(document["progress"])
+                position["reviewPages"] = [
+                    p for p in prior_position.get("reviewPages") or [] if isinstance(p, int)
+                ]
+                position["reviewDwell"] = dict(prior_position.get("reviewDwell") or {})
+                delta = {}
+                if rules_v2:
+                    dwell = {}
+                    same_version = int(prior_position.get("version") or current_version) == current_version
+                    if not reset_evidence and same_version and isinstance(prior_position.get("pageDwell"), dict):
+                        dwell = {
+                            str(k): float(v)
+                            for k, v in prior_position["pageDwell"].items()
+                            if isinstance(v, (int, float))
+                        }
+                    delta = content.clamp_dwell_delta(requested_position.get("pageDwellDelta"), elapsed)
+                    for key, seconds in delta.items():
+                        if 1 <= int(key) <= total_pages:
+                            dwell[key] = round(dwell.get(key, 0.0) + seconds, 1)
+                    position["pageDwell"] = dwell
+                    position["reviewPages"] = [
+                        p for p in prior_position.get("reviewPages") or [] if isinstance(p, int)
+                    ] if same_version else []
+                    position["reviewDwell"] = dict(prior_position.get("reviewDwell") or {}) if same_version else {}
+                    v2 = content.document_completion_v2(
+                        total_pages, dwell, _required_by_page(material, total_pages)
+                    )
+                    progress = float(v2["progress"])
+                    document = {"completed": v2["completed"]}
+                review_pages_mod.advance(
+                    position, page, delta if rules_v2 else {},
+                    _required_by_page(material, total_pages), rules_v2,
+                )
                 narration = required_narration(user, material)
                 narration_ok = narration is None or narration_heard(str(user["username"]), narration.get("id"))
                 narration_pending = bool(document["completed"]) and not narration_ok
@@ -458,9 +636,19 @@ def register_smart_learning(
                 except (TypeError, ValueError):
                     return jsonify({"error": "progress 格式錯誤"}), 400
                 position["version"] = current_version
-                completed = completion_already_current or bool(body.get("completed", False))
+                client_done = bool(body.get("completed", False))
+                if client_done and auto_tracked(material) and _exam_gate_enabled():
+                    # Slides/documents/media complete by the server's own rule only;
+                    # otherwise a single request could unlock the exam.
+                    client_done = False
+                completed = completion_already_current or client_done
 
+        if not reset_evidence:
+            checkpoint_retry.carry_forward(prior_position, position)
         now = _now()
+        if rules_v2 and isinstance(position, dict):
+            position["lastSaveAt"] = now
+            position.pop("pageDwellDelta", None)
         repository.upsert_progress(
             material_id,
             user["username"],

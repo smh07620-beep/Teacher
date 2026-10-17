@@ -51,7 +51,6 @@ function handleGlobalLearningSearchKey(event){
     switchLearningModule('materials');setTimeout(()=>renderCourseOverview(),0);
 }
 
-function goBackLearning(){ location.href=currentTrainingArea==='pgy'?'/pgy':'/internal'; }
 
 // ==================================================================
 // 六大組別 (Top-level Groups)
@@ -155,7 +154,7 @@ function switchLearningModule(module){
     const panels={slides:document.getElementById('panel-slides'),exam:document.getElementById('panel-exam'),progress:document.getElementById('panel-progress'),assessment:document.getElementById('panel-assessment')};
     Object.entries(panels).forEach(([k,el])=>el&&el.classList.toggle('hidden',k!==panel));
     updateLearningModuleNav();
-    if(panel==='slides'){applyMaterialModulePresentation();renderSlidesGrid();}
+    if(panel==='slides'){applyMaterialModulePresentation();window.renderSlidesGrid?.();}
     if(panel==='assessment'){ initPgyAssessmentCenter(); }
     if(panel==='progress'){
         const identity=syncLinkedLearnerUI();
@@ -163,6 +162,7 @@ function switchLearningModule(module){
         else document.getElementById('progress-summary')?.classList.add('hidden');
     }
     window.scrollTo({top:0,behavior:'smooth'});
+    window.dispatchEvent(new CustomEvent('teacher:module-changed',{detail:{module}}));
 }
 
 // The role-aware header entry is the single management entry for staff.
@@ -192,7 +192,7 @@ function switchGroup(groupKey) {
     currentCatKey = '';
     renderDynamicExamTabs();
 
-    if (!document.getElementById('panel-slides').classList.contains('hidden')) renderSlidesGrid();
+    if (!document.getElementById('panel-slides').classList.contains('hidden')) window.renderSlidesGrid?.();
 }
 
 // ==================================================================

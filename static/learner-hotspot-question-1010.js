@@ -38,9 +38,9 @@
     var hint = submitted ? '你點選的位置以橘色圓圈標示。' : '請在圖片上點選你認為正確的位置；再點一次可以更改。圖片太小可先按「＋」放大。';
     var tools = submitted ? '' :
       '<div class="mb-2 flex items-center gap-2 text-xs">' +
-      '<button type="button" data-csp-click="atlasHotspotZoom(' + i + ',-1)" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-bold">－</button>' +
+      '<button type="button" aria-label="縮小" data-csp-click="atlasHotspotZoom(' + i + ',-1)" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-bold">－</button>' +
       '<span id="aa-hotspot-zoom-' + i + '" class="w-12 text-center font-bold text-slate-600">100%</span>' +
-      '<button type="button" data-csp-click="atlasHotspotZoom(' + i + ',1)" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-bold">＋</button>' +
+      '<button type="button" aria-label="放大" data-csp-click="atlasHotspotZoom(' + i + ',1)" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-bold">＋</button>' +
       '</div>';
     return '<div class="question-media aa-hotspot" data-hotspot-index="' + i + '">' + tools +
       '<div class="aa-hotspot-scroll" style="overflow:auto;max-height:70vh;border-radius:12px;border:1px solid #cbd5e1;background:#0f172a">' +

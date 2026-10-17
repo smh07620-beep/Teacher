@@ -247,9 +247,23 @@
     return metadata;
   }
 
+  // A dropped Wi-Fi pauses the upload instead of failing it: wait (up to 10 minutes) for the
+  // browser to report the network back, then carry on with the same part.
+  function waitForOnline(){
+    if(typeof navigator==='undefined'||navigator.onLine!==false)return Promise.resolve(true);
+    return new Promise(resolve=>{
+      const done=ok=>{window.removeEventListener('online',onOnline);clearTimeout(timer);resolve(ok);};
+      const onOnline=()=>done(true);
+      const timer=setTimeout(()=>done(false),10*60*1000);
+      window.addEventListener('online',onOnline);
+      window.dispatchEvent(new CustomEvent('teacher:upload-paused',{detail:{reason:'offline'}}));
+    });
+  }
+
   async function retryPut(url,chunk,headers){
     let lastError=null;
     for(let attempt=0;attempt<MAX_RETRIES;attempt++){
+      if(!(await waitForOnline()))throw new Error('網路中斷超過 10 分鐘，上傳已暫停；重新選同一個檔案即可從中斷處繼續。');
       try{
         const response=await fetch(url,{method:'PUT',body:chunk,headers:headers||undefined});
         if(response.ok)return response;
@@ -449,10 +463,34 @@
   }
 
   async function enqueue(formData,options={}){
+    // Course-wizard uploads (bundleWorkflowId) must go Browser -> R2 directly: no same-origin fallback.
+    const wizardUpload=typeof formData?.get==='function'&&String(formData.get('bundleWorkflowId')||'');
+    if(wizardUpload){
+      const directOptions={...options,fallbackToSameOriginQueue:false};
+      delete directOptions.onFallback;
+      return enqueueOnce(formData,directOptions).catch(error=>{
+        if(/Web 檔案接收相容路徑已關閉/.test(String(error?.message||'')))throw new Error('Browser → R2 直傳未完成。請直接重試；若仍失敗，請檢查 R2 CORS 是否允許目前網站來源並公開 ETag。');
+        throw error;
+      });
+    }
+    return enqueueOnce(formData,options);
+  }
+
+  async function enqueueOnce(formData,options={}){
     try{return await directUpload(formData,options);}
     catch(error){
       if(error?.status===401){options.onUnauthorized?.();throw new Error('登入已逾時，請重新登入。');}
       if(error?.status===403)throw error;
+      // The same file is already queued: report it as accepted instead of failing the wizard.
+      const queuedBody=error?.body&&typeof error.body==='object'?error.body:{};
+      const existingJobId=String(queuedBody.existingJobId||'').trim();
+      if(Number(error?.status)===409&&queuedBody.alreadyQueued===true&&existingJobId){
+        const queuedFile=formData?.get?.('file');
+        if(queuedFile instanceof Blob){
+          options.onProgress?.({loaded:Number(queuedFile.size||0),total:Number(queuedFile.size||0),percent:100,fileName:options.fileName||queuedFile.name||'教材'});
+        }
+        return {accepted:true,reused:true,jobId:existingJobId,materialId:String(queuedBody.existingMaterialId||''),uploadId:String(queuedBody.existingUploadId||''),status:String(queuedBody.existingJobStatus||'queued')};
+      }
       const file=formData.get('file');
       if(options.fallbackToSameOriginQueue&&file instanceof Blob&&file.size<=COMPAT_QUEUE_FALLBACK_MAX_BYTES&&isDirectNetworkFailure(error)){
         // A multipart upload is normally resumable.  Once we deliberately

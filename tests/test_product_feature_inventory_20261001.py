@@ -44,8 +44,8 @@ class ProductFeatureInventory20261001Tests(unittest.TestCase):
     def test_known_duplicate_and_retired_owners_are_not_silently_promoted(self):
         for marker in (
             "static/portal-v56.js",
-            "static/learning-progress-convergence-1025.js",
-            "static/learner-todo-convergence-1025.js",
+            "static/learner-progress.js",
+            "static/learner-todo.js",
             "Legacy root compatibility modules",
             "old question drawer/overlay",
             "pgy_atomic.py",

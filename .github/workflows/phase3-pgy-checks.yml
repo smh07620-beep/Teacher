@@ -71,6 +71,7 @@ jobs:
           find static -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
           find tests -maxdepth 1 -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
           node tests/test_external_media_behavior_681.js
+          node tests/test_learner_checkpoint_flow_1017.js
       - name: Web and worker shell contracts
         run: |
           bash -n run_web.sh

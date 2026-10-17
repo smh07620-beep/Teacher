@@ -116,7 +116,9 @@ test('teacher persona full-page workspace never collapses to a blank surface', a
     }
   });
 
-  await open(page, '/system?area=internal&group=grpBio&module=materials&from=home&admin=1&workspace=course-materials&persona=teacher');
+  // Wait for the document itself (not just the commit) so the evaluate below cannot land
+  // in the outgoing about:blank context.
+  await page.goto(`${baseURL}/system?area=internal&group=grpBio&module=materials&from=home&admin=1&workspace=course-materials&persona=teacher`, { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.waitForFunction(() => Boolean(window.TeacherRBAC681Ready));
   await page.evaluate(() => window.TeacherRBAC681Ready);
   await page.waitForTimeout(500);

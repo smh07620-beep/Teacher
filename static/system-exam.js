@@ -98,7 +98,7 @@ async function renderDynamicExamTabs() {
         const courseMap=Object.fromEntries((cachedCourses||[]).map(c=>[c.id,c])),courseOrder=(cachedCourses||[]).map(c=>c.id),grouped={};
         cachedQuizCategories.forEach(c=>{const key=c.courseId&&courseMap[c.courseId]?c.courseId:'__orphan__';(grouped[key]||(grouped[key]=[])).push(c);});
         const keys=[...courseOrder.filter(k=>grouped[k]?.length),...(grouped.__orphan__?['__orphan__']:[])];
-        listBox.innerHTML=keys.map(k=>{const course=k==='__orphan__'?null:courseMap[k],items=grouped[k]||[];const desc=course?.desc&&course.desc.trim()!==course.title?.trim()?`<div class="text-[11px] text-slate-500 mt-1">${escapeHtml(course.desc)}</div>`:'';return `<section class="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4"><div class="flex items-start justify-between gap-3 mb-3"><div><div class="text-sm font-black text-slate-800">${course?`📘 ${escapeHtml(course.title)}`:'📁 通用考卷'}</div>${desc}</div><span class="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 rounded-full px-2.5 py-1">考卷 ${items.length} 份</span></div><div class="grid md:grid-cols-2 xl:grid-cols-3 gap-2.5">${items.map(c=>{const bank=examBankCount(c),actual=examActualCount(c),draft=hasExamDraft(c.id);return `<button type="button" data-csp-click="switchDynamicCategory('${c.id}')" id="dyn-tab-${c.id}" class="tab-btn text-left rounded-xl border border-slate-200 bg-white hover:border-teal-300 hover:shadow-sm p-3 transition-all"><div class="flex items-start justify-between gap-2"><span class="font-black text-sm text-slate-900">📝 ${escapeHtml(c.title)}</span>${draft?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">可續答</span>':''}</div><div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500"><span>👤 ${escapeHtml(examAudienceLabel(c))}</span><span>🎯 及格 ${Number(c.passingScore||80)} 分</span><span>🧠 題庫 ${bank} 題</span><span>📋 本次 ${actual} 題</span></div><div class="mt-2 text-[11px] font-bold text-teal-700">${escapeHtml(examDrawLabel(c))} → ${draft?'繼續作答':'開始考核'}</div></button>`;}).join('')}</div></section>`;}).join('');
+        listBox.innerHTML=keys.map(k=>{const course=k==='__orphan__'?null:courseMap[k],items=grouped[k]||[];const desc=course?.desc&&course.desc.trim()!==course.title?.trim()?`<div class="text-xs text-slate-500 mt-1">${escapeHtml(course.desc)}</div>`:'';return `<section class="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4"><div class="flex items-start justify-between gap-3 mb-3"><div><div class="text-sm font-black text-slate-800">${course?`📘 ${escapeHtml(course.title)}`:'📁 通用考卷'}</div>${desc}</div><span class="text-xs font-bold text-slate-500 bg-white border border-slate-200 rounded-full px-2.5 py-1">考卷 ${items.length} 份</span></div><div class="grid md:grid-cols-2 xl:grid-cols-3 gap-2.5">${items.map(c=>{const bank=examBankCount(c),actual=examActualCount(c),draft=hasExamDraft(c.id);return `<button type="button" data-csp-click="switchDynamicCategory('${c.id}')" id="dyn-tab-${c.id}" class="tab-btn text-left rounded-xl border border-slate-200 bg-white hover:border-teal-300 hover:shadow-sm p-3 transition-all"><div class="flex items-start justify-between gap-2"><span class="font-black text-sm text-slate-900">📝 ${escapeHtml(c.title)}</span>${draft?'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">可續答</span>':''}</div><div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-500"><span>👤 ${escapeHtml(examAudienceLabel(c))}</span><span>🎯 及格 ${Number(c.passingScore||80)} 分</span><span>🧠 題庫 ${bank} 題</span><span>📋 本次 ${actual} 題</span></div><div class="mt-2 text-xs font-bold text-teal-700">${escapeHtml(examDrawLabel(c))} → ${draft?'繼續作答':'開始考核'}</div></button>`;}).join('')}</div></section>`;}).join('');
         const requestedExamId=new URLSearchParams(window.location.search).get('examId')||'';
         const requestedCategory=cachedQuizCategories.find(
             c=>String(c.id)===String(requestedExamId)
@@ -168,8 +168,24 @@ async function ensureDynamicCategoryLoaded(catId) {
 }
 
 async function switchDynamicCategory(catId) {
-    await ensureDynamicCategoryLoaded(catId);currentCatKey=catId;blindTestMode=!!allQuizData[catId]?.blindMode;
+    // An exam with no questions is shown as not ready instead of opening an attempt (teaching.js).
+    if(window.TeachingEmptyExam?.blocked?.(catId))return window.TeachingEmptyExam.show(catId);
+    try{await ensureDynamicCategoryLoaded(catId);}
+    catch(error){
+        if(error&&(error.code==='MATERIALS_NOT_COMPLETE'||error.data?.errorDetail?.code==='MATERIALS_NOT_COMPLETE')){
+            // Exam gate: say what is missing instead of a generic page error.
+            const courseId=(dynamicCategoriesCache[`${currentTrainingArea}:${currentGroupKey}`]||[]).find(c=>c.id===catId)?.courseId||'';
+            window.LearnerExamGate?.reload?.(courseId);
+            const box=document.getElementById('current-quiz-desc');
+            if(box){box.textContent=`🔒 ${error.message||'讀完教材後解鎖'}。請先回到課程完成教材閱讀。`;box.scrollIntoView({block:'center',behavior:'smooth'});}
+            return;
+        }
+        throw error;
+    }
+    if(window.TeachingEmptyExam&&Array.isArray(allQuizData[catId]?.questions)&&allQuizData[catId].questions.length===0)return window.TeachingEmptyExam.show(catId);
+    currentCatKey=catId;blindTestMode=!!allQuizData[catId]?.blindMode;
     document.querySelectorAll('#dynamic-exam-tabs-list .tab-btn').forEach(btn=>{const active=btn.id===`dyn-tab-${catId}`;btn.classList.toggle('ring-2',active);btn.classList.toggle('ring-teal-500',active);btn.classList.toggle('border-teal-400',active);btn.classList.toggle('bg-teal-50',active);});updateUIForActiveKey();
+    window.dispatchEvent(new CustomEvent('teacher:exam-opened',{detail:{catId}}));
 }
 
 
@@ -247,7 +263,7 @@ function questionTypeLabel(t){return ({choice:'單選題',multi:'複選題',true
 function answerHasValue(v){return Array.isArray(v)?(v.length>0&&!v.includes(null)):(v!==null&&v!==''&&v!==undefined);}
 function renderQuestionMedia(q,i,submitted=false){
     if(q.questionType==='atlas_hotspot')return window.AtlasHotspotQuestion?window.AtlasHotspotQuestion.render(q,i,submitted,userAnswersMap[currentCatKey]?.[i]):'';
-    if(q.imageUrl)return `<div class="question-media"><button type="button" data-csp-click="openQuestionImage('${escapeHtml(q.imageUrl)}','${escapeHtml(q.question)}')" class="w-full"><img src="${escapeHtml(q.imageUrl)}" alt="題目影像" loading="lazy" decoding="async"><span class="block text-[11px] text-white/70 bg-black/50 py-1">🔍 點擊放大影像，支援局部縮放</span></button></div>`;
+    if(q.imageUrl)return `<div class="question-media"><button type="button" data-csp-click="openQuestionImage('${escapeHtml(q.imageUrl)}','${escapeHtml(q.question)}')" class="w-full"><img src="${escapeHtml(q.imageUrl)}" alt="題目影像" loading="lazy" decoding="async"><span class="block text-xs text-white/70 bg-black/50 py-1">🔍 點擊放大影像，支援局部縮放</span></button></div>`;
     const u=q.answerConfig?.mediaUrl||'';const sec=Number(q.answerConfig?.pauseAt||0);
     if(u)return `<div class="question-media"><video id="question-video-${i}" src="${escapeHtml(u)}" controls playsinline preload="metadata" ${(!submitted&&sec>0)?`data-question-pause-at="${sec}" data-question-index="${i}"`:''}></video>${sec>0?`<div id="video-cue-${i}" class="px-3 py-2 bg-slate-900 text-white/80 text-xs">⏱️ 互動影片題：播放至 ${formatSeconds(sec)} 時會自動暫停並開放作答。</div>`:''}</div>`;
     return '';
@@ -302,7 +318,7 @@ async function attachVideoQuestionSubtitles(){
 }
 // 提交後依伺服器回傳的 isCorrect 標示對錯（紅＝答錯、綠＝答對）；只標示對錯，不揭露正確答案。
 function examQuestionVerdict(i){const r=(window.currentExamReviewQuestions||[])[i];return r&&typeof r.isCorrect==='boolean'?r.isCorrect:null;}
-function renderQuestions(){const c=document.getElementById('quiz-questions-list');c.innerHTML='';const quizList=allQuizData[currentCatKey].questions,userAnswers=userAnswersMap[currentCatKey],flags=flaggedQuestionsMap[currentCatKey],submitted=isSubmittedMap[currentCatKey];quizList.forEach((q,i)=>{const type=q.questionType||'choice',ans=userAnswers[i];const verdict=submitted?examQuestionVerdict(i):null;const card=document.createElement('div');card.id=`question-card-${i}`;card.className=submitted?`bg-slate-50/60 p-5 sm:p-6 rounded-2xl border-2 ${verdict===false?'border-rose-300':'border-slate-300'} shadow-sm space-y-4 scroll-mt-24`:'question-card-learning micro-card bg-white p-5 sm:p-6 border space-y-4 scroll-mt-28';let body='';if(type==='essay'){body=`<textarea ${submitted?'disabled':''} data-csp-input="selectEssay(${i},this.value)" rows="7" class="w-full min-h-[190px] border border-slate-300 rounded-2xl p-4 text-sm leading-7" placeholder="請在此完整填寫作答內容……">${escapeHtml(typeof ans==='string'?ans:'')}</textarea><p class="text-xs text-slate-400">問答題由考核者人工閱卷。</p>`;}else if(type==='fill'){body=`<input ${submitted?'disabled':''} value="${escapeHtml(typeof ans==='string'?ans:'')}" data-csp-input="selectFill(${i},this.value)" class="fill-answer" placeholder="請輸入答案"><p class="text-xs text-slate-400">請依題意填入關鍵字或數值。</p>`;}else if(type==='scenario'){body=window.ScenarioQuestion?window.ScenarioQuestion.render(q,i,submitted,ans):'';}else if(type==='atlas_hotspot'){body='';}else{(q.options||[]).forEach((opt,j)=>{const chosen=type==='multi'?(Array.isArray(ans)&&ans.includes(j)):ans===j;let cls='hover:bg-slate-50 cursor-pointer';if(submitted)cls=chosen?(verdict===false?'border-2 border-rose-400 bg-rose-50 font-bold exam-wrong-choice':verdict===true?'border-2 border-emerald-400 bg-emerald-50 font-bold':'border-2 border-teal-400 bg-teal-50 font-bold'):'opacity-60 bg-slate-50';body+=`<label class="choice-learning flex items-start gap-3 p-4 border ${cls}"><input type="${type==='multi'?'checkbox':'radio'}" ${type==='multi'?'class="multi-check mt-1"':'class="mt-1"'} name="question-${i}" ${chosen?'checked':''} ${submitted?'disabled':''} data-csp-change="${type==='multi'?`selectMulti(${i},${j},this.checked)`:`selectOption(${i},${j})`}"><span class="text-sm font-medium"><b class="mr-1">${String.fromCharCode(65+j)}.</b>${escapeHtml(opt)}</span></label>`;});}const videoLocked=!!q.answerConfig?.mediaUrl&&Number(q.answerConfig?.pauseAt||0)>0&&!submitted&&!answerHasValue(ans);card.innerHTML=`<div class="flex flex-wrap justify-between gap-2 border-b border-slate-100 pb-3"><div class="flex items-center gap-2 flex-wrap"><span class="w-8 h-8 rounded-lg bg-[#0b3342] text-white flex items-center justify-center font-black">${i+1}</span>${blindTestMode?'':`<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-800">${escapeHtml(q.category||q.tag||'一般')}</span>`}<span class="question-type-pill ${type==='multi'?'bg-violet-100 text-violet-800':type==='fill'?'bg-sky-100 text-sky-800':type==='essay'?'bg-amber-100 text-amber-800':'bg-slate-100 text-slate-600'}">${q.answerConfig?.mediaUrl?'影片・':''}${questionTypeLabel(type)}</span><span id="answer-status-${i}" class="answer-status-pill ${verdict===false?'':answerHasValue(ans)?'answered':'unanswered'}" ${verdict===false?'style="background:#ffe4e6;color:#be123c;border-color:#fda4af"':''}>${verdict===false?'✕ 答錯':verdict===true?'✓ 答對':answerHasValue(ans)?'✓ 已作答':'○ 未作答'}</span></div><button data-csp-click="toggleFlag(${i})" id="flag-btn-${i}" class="text-xs px-2.5 py-1 rounded-lg border border-slate-200">${flags[i]?'🚩 取消標記':'🏳️ 標記此題'}</button></div>${renderQuestionMedia(q,i,submitted)}<div id="video-answer-${i}" class="${videoLocked?'hidden ':''}space-y-4"><h3 class="text-base sm:text-lg font-black leading-relaxed">${escapeHtml(q.question)}</h3><div class="space-y-2.5">${body}</div></div>`;c.appendChild(card);});const b=document.getElementById('submit-btn');if(submitted){b.disabled=true;b.className='w-full sm:w-auto bg-slate-400 text-white font-bold px-8 py-3 rounded-xl shadow cursor-not-allowed';b.textContent='🔒 本分頁考卷已繳交';}else{b.disabled=false;b.className='w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white font-bold px-8 py-3 rounded-xl shadow-lg';b.textContent='📋 提交試卷結算成績';}updateQuickJumpButtons();}
+function renderQuestions(){const c=document.getElementById('quiz-questions-list');c.innerHTML='';const quizList=allQuizData[currentCatKey].questions,userAnswers=userAnswersMap[currentCatKey],flags=flaggedQuestionsMap[currentCatKey],submitted=isSubmittedMap[currentCatKey];quizList.forEach((q,i)=>{const type=q.questionType||'choice',ans=userAnswers[i];const verdict=submitted?examQuestionVerdict(i):null;const card=document.createElement('div');card.id=`question-card-${i}`;card.className=submitted?`bg-slate-50/60 p-5 sm:p-6 rounded-2xl border-2 ${verdict===false?'border-rose-300':'border-slate-300'} shadow-sm space-y-4 scroll-mt-24`:'question-card-learning micro-card bg-white p-5 sm:p-6 border space-y-4 scroll-mt-28';let body='';if(type==='essay'){body=`<textarea ${submitted?'disabled':''} data-csp-input="selectEssay(${i},this.value)" rows="7" class="w-full min-h-[190px] border border-slate-300 rounded-2xl p-4 text-sm leading-7" placeholder="請在此完整填寫作答內容……">${escapeHtml(typeof ans==='string'?ans:'')}</textarea><p class="text-xs text-slate-400">問答題由考核者人工閱卷。</p>`;}else if(type==='fill'){body=`<input ${submitted?'disabled':''} value="${escapeHtml(typeof ans==='string'?ans:'')}" data-csp-input="selectFill(${i},this.value)" class="fill-answer" placeholder="請輸入答案"><p class="text-xs text-slate-400">請依題意填入關鍵字或數值。</p>`;}else if(type==='scenario'){body=window.ScenarioQuestion?window.ScenarioQuestion.render(q,i,submitted,ans):'';}else if(type==='atlas_hotspot'){body='';}else{(q.options||[]).forEach((opt,j)=>{const chosen=type==='multi'?(Array.isArray(ans)&&ans.includes(j)):ans===j;let cls='hover:bg-slate-50 cursor-pointer';if(submitted)cls=chosen?(verdict===false?'border-2 border-rose-400 bg-rose-50 font-bold exam-wrong-choice':verdict===true?'border-2 border-emerald-400 bg-emerald-50 font-bold':'border-2 border-teal-400 bg-teal-50 font-bold'):'opacity-60 bg-slate-50';body+=`<label class="choice-learning flex items-start gap-3 p-4 border ${cls}"><input type="${type==='multi'?'checkbox':'radio'}" ${type==='multi'?'class="multi-check mt-1"':'class="mt-1"'} name="question-${i}" ${chosen?'checked':''} ${submitted?'disabled':''} data-csp-change="${type==='multi'?`selectMulti(${i},${j},this.checked)`:`selectOption(${i},${j})`}"><span class="text-sm font-medium"><b class="mr-1">${String.fromCharCode(65+j)}.</b>${escapeHtml(opt)}</span></label>`;});}const videoLocked=!!q.answerConfig?.mediaUrl&&Number(q.answerConfig?.pauseAt||0)>0&&!submitted&&!answerHasValue(ans);card.innerHTML=`<div class="flex flex-wrap justify-between gap-2 border-b border-slate-100 pb-3"><div class="flex items-center gap-2 flex-wrap"><span class="w-8 h-8 rounded-lg bg-[#1d4835] text-white flex items-center justify-center font-black">${i+1}</span>${blindTestMode?'':`<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-800">${escapeHtml(q.category||q.tag||'一般')}</span>`}<span class="question-type-pill ${type==='multi'?'bg-violet-100 text-violet-800':type==='fill'?'bg-sky-100 text-sky-800':type==='essay'?'bg-amber-100 text-amber-800':'bg-slate-100 text-slate-600'}">${q.answerConfig?.mediaUrl?'影片・':''}${questionTypeLabel(type)}</span><span id="answer-status-${i}" class="answer-status-pill ${verdict===false?'':answerHasValue(ans)?'answered':'unanswered'}" ${verdict===false?'style="background:#ffe4e6;color:#be123c;border-color:#fda4af"':''}>${verdict===false?'✕ 答錯':verdict===true?'✓ 答對':answerHasValue(ans)?'✓ 已作答':'○ 未作答'}</span></div><button data-csp-click="toggleFlag(${i})" id="flag-btn-${i}" class="text-xs px-2.5 py-1 rounded-lg border border-slate-200">${flags[i]?'🚩 取消標記':'🏳️ 標記此題'}</button></div>${renderQuestionMedia(q,i,submitted)}<div id="video-answer-${i}" class="${videoLocked?'hidden ':''}space-y-4"><h3 class="text-base sm:text-lg font-black leading-relaxed">${escapeHtml(q.question)}</h3><div class="space-y-2.5">${body}</div></div>`;c.appendChild(card);});const b=document.getElementById('submit-btn');if(submitted){b.disabled=true;b.className='w-full sm:w-auto bg-slate-400 text-white font-bold px-8 py-3 rounded-xl shadow cursor-not-allowed';b.textContent='🔒 本分頁考卷已繳交';}else{b.disabled=false;b.className='w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white font-bold px-8 py-3 rounded-xl shadow-lg';b.textContent='📋 提交試卷結算成績';}applyExamPaging();updateQuickJumpButtons();window.dispatchEvent(new CustomEvent('teacher:exam-rendered',{detail:{catKey:currentCatKey}}));}
 
 function questionTimingSeconds(catId=currentCatKey){
     const now=performance.now(),states=questionTimingMap[catId]||[];
@@ -371,6 +387,7 @@ function updateProgressStats() {
     const pctText = document.getElementById('exam-progress-percent'); if (pctText) pctText.textContent = `${pct}%`;
     const pctBar = document.getElementById('exam-progress-bar'); if (pctBar) pctBar.style.width = `${pct}%`;
     document.getElementById('stat-flagged').innerText = `${flaggedCount} 題`;
+    updateExamPager();
 
     const statusText = document.getElementById('bottom-status-text');
     if (isSubmittedMap[currentCatKey]) {
@@ -399,14 +416,83 @@ function scrollToFirstFlagged(){
 }
 
 function scrollToQuestion(index) {
+    if (examIsPaged()) { showExamPage(index); document.getElementById('exam-pager')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const element = document.getElementById(`question-card-${index}`);
     if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
-function scrollToReview() {
-    scrollToQuestion(0);
+// --- Phone layout: one question per page with a "第 N / M 題" progress bar. ---
+let examPagedIndex = 0, examPagedFor = '';
+function examIsPaged() {
+    return !isSubmittedMap[currentCatKey] && window.matchMedia?.('(max-width:767px)').matches === true;
+}
+function showExamPage(index) {
+    const cards = [...document.querySelectorAll('#quiz-questions-list [id^="question-card-"]')];
+    if (!cards.length) return;
+    examPagedIndex = Math.max(0, Math.min(cards.length - 1, Number(index) || 0));
+    cards.forEach((card, i) => card.classList.toggle('exam-card-hidden', i !== examPagedIndex));
+    updateExamPager();
+}
+function examPagerStep(delta) {
+    showExamPage(examPagedIndex + Number(delta));
+    document.getElementById('exam-pager')?.scrollIntoView({ block: 'start' });
+}
+function updateExamPager() {
+    const pager = document.getElementById('exam-pager');
+    if (!pager || pager.hidden) return;
+    const total = (allQuizData[currentCatKey]?.questions || []).length;
+    const answers = userAnswersMap[currentCatKey] || [];
+    const answered = answers.filter(answerHasValue).length;
+    document.getElementById('exam-pager-label').textContent = `第 ${examPagedIndex + 1} / ${total} 題`;
+    document.getElementById('exam-pager-answered').textContent = `已作答 ${answered}`;
+    document.getElementById('exam-pager-fill').style.width = `${total ? Math.round(((examPagedIndex + 1) / total) * 100) : 0}%`;
+    pager.querySelector('[data-pager-step="-1"]').disabled = examPagedIndex <= 0;
+    pager.querySelector('[data-pager-step="1"]').disabled = examPagedIndex >= total - 1;
+}
+function applyExamPaging() {
+    const list = document.getElementById('quiz-questions-list');
+    if (!list) return;
+    let pager = document.getElementById('exam-pager');
+    if (!pager) {
+        pager = document.createElement('div');
+        pager.id = 'exam-pager';
+        pager.className = 'exam-pager';
+        pager.innerHTML = '<div class="exam-pager-top"><b id="exam-pager-label"></b><span id="exam-pager-answered"></span></div><div class="exam-pager-bar" role="presentation"><span id="exam-pager-fill"></span></div><div class="exam-pager-nav"><button type="button" class="btn btn-secondary" data-pager-step="-1" data-csp-click="examPagerStep(-1)">‹ 上一題</button><button type="button" class="btn btn-primary" data-pager-step="1" data-csp-click="examPagerStep(1)">下一題 ›</button></div>';
+        list.insertAdjacentElement('beforebegin', pager);
+    }
+    const paged = examIsPaged();
+    pager.hidden = !paged;
+    list.classList.toggle('exam-paged', paged);
+    if (!paged) { list.querySelectorAll('.exam-card-hidden').forEach(card => card.classList.remove('exam-card-hidden')); return; }
+    if (examPagedFor !== currentCatKey) { examPagedFor = currentCatKey; examPagedIndex = 0; }
+    showExamPage(examPagedIndex);
+}
+window.addEventListener('resize', () => { if (document.getElementById('exam-pager') && allQuizData[currentCatKey]) applyExamPaging(); });
+
+// Before submitting: list the unanswered questions; each number jumps straight to it.
+function askUnansweredBeforeSubmit(missing) {
+    return new Promise(resolve => {
+        document.getElementById('exam-unanswered-dialog')?.remove();
+        const dialog = document.createElement('dialog');
+        dialog.id = 'exam-unanswered-dialog';
+        dialog.className = 'exam-unanswered-dialog';
+        dialog.setAttribute('aria-label', '尚有未作答題目');
+        const jumps = missing.map(i => `<button type="button" class="btn btn-secondary" data-jump="${i}">第 ${i + 1} 題</button>`).join('');
+        dialog.innerHTML = `<h3 class="text-lg font-bold">還有 ${missing.length} 題未作答</h3><p class="text-sm">點題號可直接跳過去作答。</p><div class="exam-unanswered-list">${jumps}</div><div class="exam-unanswered-actions"><button type="button" class="btn btn-ghost" data-act="submit">仍要提交</button><button type="button" class="btn btn-primary" data-act="back">回去作答</button></div>`;
+        const done = result => { dialog.close(); dialog.remove(); resolve(result); };
+        dialog.addEventListener('click', event => {
+            const target = event.target.closest('button');
+            if (!target) return;
+            if (target.dataset.jump != null) done({ action: 'jump', index: Number(target.dataset.jump) });
+            else if (target.dataset.act === 'submit') done({ action: 'submit' });
+            else done({ action: 'cancel' });
+        });
+        dialog.addEventListener('cancel', event => { event.preventDefault(); done({ action: 'cancel' }); });
+        document.body.appendChild(dialog);
+        dialog.showModal();
+    });
 }
 
 // --- Submit Quiz; server owns answer-key evaluation and score persistence. ---
@@ -426,10 +512,11 @@ async function submitQuiz() {
 
     const userAnswers = userAnswersMap[currentCatKey] || [];
 
-    const unanswered = userAnswers.filter(a => !answerHasValue(a)).length;
-    if (unanswered > 0) {
-        const confirmSubmit = confirm(`尚有 ${unanswered} 題未作答，確定要直接提交本份試卷嗎？`);
-        if (!confirmSubmit) return;
+    const missing = userAnswers.map((a, i) => (answerHasValue(a) ? -1 : i)).filter(i => i >= 0);
+    if (missing.length > 0) {
+        const choice = await askUnansweredBeforeSubmit(missing);
+        if (choice.action === 'jump') { scrollToQuestion(choice.index); return; }
+        if (choice.action !== 'submit') return;
     }
 
     const attemptId=secureAttemptMap[currentCatKey]||loadExamDraft(currentCatKey)?.attemptId;
@@ -487,6 +574,7 @@ async function submitQuiz() {
     }
 
     renderExamRemediation(result.remediation||null);
+    renderWrongQuestionList();
     // 重測只在「未達及格線」時出現；通過或待批改時不顯示任何操作按鈕。
     const resultActions=document.getElementById('result-actions');
     if(resultActions)resultActions.classList.toggle('hidden',!(essayCount<=0&&totalScore<passingScore));
@@ -497,6 +585,38 @@ async function submitQuiz() {
 
     renderCategoryChart(result.categoryStats||{});
     updateProgressStats();
+    window.dispatchEvent(new CustomEvent('teacher:exam-submitted',{detail:{catId:currentCatKey}}));
+}
+
+// Wrong questions right under the verdict, each with a jump to the page/time to re-read.
+function reviewSourceLabel(source){
+    if(!source||!source.materialId)return '';
+    if(Number(source.page)>0)return `前往第 ${Number(source.page)} 頁複習`;
+    const seconds=Number(source.timeStart||source.timeSeconds||0);
+    if(seconds>0)return `前往 ${Math.floor(seconds/60)}:${String(Math.floor(seconds%60)).padStart(2,'0')} 複習`;
+    return '前往教材複習';
+}
+function renderWrongQuestionList(){
+    const dashboard=document.getElementById('result-dashboard');
+    if(!dashboard)return;
+    let box=document.getElementById('result-wrong-list');
+    const wrong=(window.currentExamReviewQuestions||[]).filter(item=>item&&item.isCorrect===false);
+    if(!wrong.length){box?.remove();return;}
+    if(!box){
+        box=document.createElement('section');
+        box.id='result-wrong-list';
+        box.className='card';
+        box.setAttribute('aria-label','答錯的題目');
+        const anchor=document.getElementById('result-remediation');
+        (anchor?.parentElement||dashboard).insertBefore(box,anchor||null);
+        box.addEventListener('click',event=>{
+            const button=event.target.closest('[data-wrong-review]');
+            if(!button)return;
+            const item=wrong[Number(button.dataset.wrongReview)];
+            if(item?.reviewSource&&typeof window.teacher66OpenReviewSource==='function')window.teacher66OpenReviewSource(item.reviewSource);
+        });
+    }
+    box.innerHTML=`<h3 class="font-bold text-base">答錯的題目（${wrong.length} 題）</h3><ul class="mt-2 space-y-2">${wrong.map((item,idx)=>{const label=reviewSourceLabel(item.reviewSource);return `<li class="flex flex-wrap items-center justify-between gap-2 text-sm"><span>第 ${Number(item.number)} 題　${escapeHtml(String(item.questionText||'').slice(0,60))}</span>${label?`<button type="button" class="btn btn-secondary" data-wrong-review="${idx}">${escapeHtml(label)}</button>`:''}</li>`;}).join('')}</ul>`;
 }
 
 function renderExamRemediation(plan){
@@ -512,11 +632,12 @@ function renderExamRemediation(plan){
         : '目前沒有綁定特定教材，請先回本組教材區複習相關 SOP／教材，再重新作答。';
     const list=document.getElementById('result-remediation-list');
     if(list)list.innerHTML=materials.length
-        ? materials.map((m,index)=>`<div class="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs text-slate-700"><b>${index+1}. ${escapeHtml(m.title||'教材')}</b><span class="ml-2 text-[10px] text-slate-400">V${Number(m.currentVersion||1)}</span></div>`).join('')
+        ? materials.map((m,index)=>`<div class="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs text-slate-700"><b>${index+1}. ${escapeHtml(m.title||'教材')}</b><span class="ml-2 text-xs text-slate-400">V${Number(m.currentVersion||1)}</span></div>`).join('')
         : '<div class="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs text-slate-500">請回教材區依課程順序重新複習。</div>';
 }
 
 window.openExamRemediationMaterials=function(){
+    if(typeof window.LearnerBackToStudy==='function')return window.LearnerBackToStudy('materials');
     const plan=window.currentExamRemediationPlan||{};
     const qs=new URLSearchParams({
         area:plan.area||currentTrainingArea||'internal',

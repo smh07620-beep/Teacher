@@ -24,7 +24,7 @@ class HomeRouting66Tests(
             "static/portal-v56.js"
         )
         todo = self.source(
-            "static/learner-todo-convergence-1025.js"
+            "static/learner-todo.js"
         )
 
         self.assertIn(

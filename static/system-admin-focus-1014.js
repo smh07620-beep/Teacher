@@ -44,7 +44,7 @@
     if (!note) {
       note = document.createElement('div');
       note.id = 'system-focus-note-1014';
-      note.className = 'mt-2 text-[11px] text-slate-500';
+      note.className = 'mt-2 text-xs text-slate-500';
       banner.appendChild(note);
     }
     const text = '日常教材、媒體、出題、紙本輸出與範本維護已移至「教師工作區」；系統管理只保留平台治理與高風險維運。';

@@ -717,6 +717,16 @@ def correct_page_references(question: dict, units: dict[str, dict[int, str]]) ->
     return changed
 
 
+def source_page_number(hint: str) -> int:
+    """First slide / page number cited in a source hint ("投影片 3", "第 12 頁"), else 0."""
+    for pattern in _PAGE_CITATION.values():
+        match = pattern.search(str(hint or ""))
+        if match:
+            number = int(match.group(2))
+            return number if 0 < number < 100000 else 0
+    return 0
+
+
 def _best_page_label(question: dict, units: dict[str, dict[int, str]]) -> str:
     basis = _question_basis(question)
     best_label, best_score = "", 0.0
@@ -766,7 +776,7 @@ def attach_question_provenance(questions: list[dict], chunks: list[dict]) -> lis
         question["sourceHint"] = hint
         question["sourceEvidence"] = evidence[:600]
         config = question.get("answerConfig") if isinstance(question.get("answerConfig"), dict) else {}
-        config["reviewSource"] = {
+        source = {
             "materialId": question["sourceMaterialId"],
             "materialTitle": str(chosen.get("materialTitle") or "")[:500],
             "anchorType": "section",
@@ -774,6 +784,14 @@ def attach_question_provenance(questions: list[dict], chunks: list[dict]) -> lis
             "regionHint": hint,
             "reviewHint": question["sourceEvidence"],
         }
+        # 2026-10-17: a numeric page lets the learner's "回看第 N 頁" and the teacher's
+        # review open the exact slide instead of a section label.
+        page = source_page_number(hint)
+        if page:
+            source["anchorType"] = "page"
+            source["page"] = page
+            question["sourcePage"] = page
+        config["reviewSource"] = source
         question["answerConfig"] = config
     return questions
 

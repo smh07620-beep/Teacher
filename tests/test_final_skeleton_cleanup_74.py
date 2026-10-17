@@ -55,7 +55,9 @@ class FinalSkeletonCleanup74Tests(unittest.TestCase):
     def test_review_links_wrap_canonical_question_payload_owner(self):
         review = self.source('static/review-links-66.js')
         frontend = self.source('teacher_app/frontend/assets.py')
-        self.assertIn('window.adminBuildQuestionPayload', review)
+        # 2026-10-17: the payload owner asks review-links for the review source.
+        self.assertIn('window.TeacherReviewSource = Object.freeze', review)
+        self.assertIn('window.TeacherReviewSource?.apply?.(payload,qId)', self.source('static/admin-question-actions.js'))
         self.assertNotIn('adminPayloadFromQuestionEditor', review)
         self.assertGreater(frontend.index('/review-links-66.js'), frontend.index('/admin-question-actions.js'))
 

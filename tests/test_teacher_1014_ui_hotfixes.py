@@ -11,28 +11,27 @@ class Teacher1014UiHotfixTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.body = ASSET_MANIFEST["system"]["body"]
-        cls.group_fix = (ROOT / "static" / "course-wizard-group-fix-1014.js").read_text(encoding="utf-8")
-        cls.nav_fix = (ROOT / "static" / "teacher-workspace-nav-fix-1014.js").read_text(encoding="utf-8")
+        cls.group_fix = (ROOT / "static" / "course-wizard-681.js").read_text(encoding="utf-8")
+        cls.nav_fix = (ROOT / "static" / "teacher-workspace-1014.js").read_text(encoding="utf-8")
         cls.paper = (ROOT / "static" / "teacher-paper-template-manager-1014.js").read_text(encoding="utf-8")
-        cls.media = (ROOT / "static" / "teacher-media-status-fix-1014.js").read_text(encoding="utf-8")
+        cls.media = (ROOT / "static" / "teacher-media-mvp-status-1014.js").read_text(encoding="utf-8")
 
     def test_assets_are_injected_in_required_order(self):
         for asset in (
-            "/teacher-workspace-nav-fix-1014.js",
             "/teacher-paper-template-manager-1014.js",
-            "/teacher-media-status-fix-1014.js",
             "/teacher-media-free-tts-1014.js",
             "/teacher-persona-isolation-1014.js",
-            "/course-wizard-group-fix-1014.js",
         ):
             self.assertIn(asset, self.body)
-        self.assertLess(self.body.index('/teacher-workspace-1014.js'), self.body.index('/teacher-workspace-nav-fix-1014.js'))
-        self.assertLess(self.body.index('/teacher-media-mvp-status-1014.js'), self.body.index('/teacher-media-status-fix-1014.js'))
-        self.assertLess(self.body.index('/admin-question-bank.js'), self.body.index('/course-wizard-group-fix-1014.js'))
+        # 2026-10-17: the nav and media-status hotfixes now live inside their owners.
+        for merged in ('/teacher-workspace-nav-fix-1014.js', '/teacher-media-status-fix-1014.js'):
+            self.assertNotIn(merged, self.body)
+        self.assertIn('/teacher-workspace-1014.js', self.body)
+        self.assertIn('/teacher-media-mvp-status-1014.js', self.body)
         self.assertLess(self.body.index('/system-admin-focus-1014.js'), self.body.index('/teacher-persona-isolation-1014.js'))
 
     def test_course_wizard_group_fix_uses_catalog_and_scope(self):
-        for marker in ('rowsFor(area)', 'R.scopedTeacher', 'preferredGroup()', 'cw681-group', 'wizard-group'):
+        for marker in ('wizardGroupRows(area)', 'rbac.scopedTeacher', 'preferred', 'cw681-group', 'wizard-group'):
             self.assertIn(marker, self.group_fix)
         self.assertNotIn('X-Admin-Key', self.group_fix)
 

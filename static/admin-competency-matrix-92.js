@@ -112,7 +112,7 @@
           </select>
         </label>
         <div class="sm:col-span-2 flex items-end gap-2">
-          <p class="text-[11px] leading-5 text-slate-500">上方既有「訓練區／組別／課程／搜尋」仍可一起使用；矩陣篩選只影響人員 × 能力檢視，不改寫任何資格或學習紀錄。</p>
+          <p class="text-xs leading-5 text-slate-500">上方既有「訓練區／組別／課程／搜尋」仍可一起使用；矩陣篩選只影響人員 × 能力檢視，不改寫任何資格或學習紀錄。</p>
           <button id="admin-competency-clear-filters" type="button" class="admin-toolbar-button shrink-0">清除矩陣篩選</button>
         </div>`;
       view.insertBefore(tools, summary);
@@ -155,7 +155,7 @@
       '點選查看評核證據',
     ].filter(Boolean).join('；');
     const selected = selectedEvidenceKey === evidenceKey(item);
-    return `<button type="button" data-competency-cell="1" data-username="${esc(item.username)}" data-course-id="${esc(item.courseId)}" title="${esc(evidence)}" aria-label="${esc((item.name || item.username) + '，' + item.courseTitle + '，' + meta[0] + '，查看評核證據')}" class="inline-flex min-w-[88px] justify-center rounded-full border px-2 py-1 text-[10px] font-bold transition ${meta[1]} ${selected ? 'ring-2 ring-teal-500 ring-offset-1' : 'hover:ring-2 hover:ring-slate-200'}">${meta[0]}</button>`;
+    return `<button type="button" data-competency-cell="1" data-username="${esc(item.username)}" data-course-id="${esc(item.courseId)}" title="${esc(evidence)}" aria-label="${esc((item.name || item.username) + '，' + item.courseTitle + '，' + meta[0] + '，查看評核證據')}" class="inline-flex min-w-[88px] justify-center rounded-full border px-2 py-1 text-xs font-bold transition ${meta[1]} ${selected ? 'ring-2 ring-teal-500 ring-offset-1' : 'hover:ring-2 hover:ring-slate-200'}">${meta[0]}</button>`;
   }
 
   function visibleData() {
@@ -220,10 +220,10 @@
     host.innerHTML = `<table class="min-w-max w-full text-left text-xs">
       <thead class="bg-slate-50 text-slate-700"><tr>
         <th class="sticky left-0 z-10 min-w-[190px] border-b border-r border-slate-200 bg-slate-50 p-3">人員</th>
-        ${data.abilities.map(ability => `<th class="min-w-[138px] border-b border-slate-200 p-3 text-center"><div class="font-bold text-slate-800">${esc(ability.title)}</div><div class="mt-0.5 text-[9px] font-normal text-slate-400">${esc((groups()[ability.group] || {}).name || ability.group || '')}</div></th>`).join('')}
+        ${data.abilities.map(ability => `<th class="min-w-[138px] border-b border-slate-200 p-3 text-center"><div class="font-bold text-slate-800">${esc(ability.title)}</div><div class="mt-0.5 text-xs font-normal text-slate-400">${esc((groups()[ability.group] || {}).name || ability.group || '')}</div></th>`).join('')}
       </tr></thead>
       <tbody>${data.people.map(person => `<tr>
-        <td class="sticky left-0 z-[1] border-b border-r border-slate-100 bg-white p-3"><div class="font-bold text-slate-900">${esc(person.name || person.username)}</div><div class="mt-0.5 text-[9px] text-slate-400">${esc(person.empId || person.username)} · ${esc((groups()[person.group] || {}).name || person.group || '')}</div></td>
+        <td class="sticky left-0 z-[1] border-b border-r border-slate-100 bg-white p-3"><div class="font-bold text-slate-900">${esc(person.name || person.username)}</div><div class="mt-0.5 text-xs text-slate-400">${esc(person.empId || person.username)} · ${esc((groups()[person.group] || {}).name || person.group || '')}</div></td>
         ${data.abilities.map(ability => `<td class="border-b border-slate-100 bg-white p-2 text-center">${cellHtml(person.cells[ability.id])}</td>`).join('')}
       </tr>`).join('')}</tbody>
     </table>`;
@@ -254,30 +254,30 @@
     panel.innerHTML = `
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p class="text-[10px] font-black tracking-wide text-teal-700">ASSESSMENT EVIDENCE</p>
+          <p class="text-xs font-black tracking-wide text-teal-700">ASSESSMENT EVIDENCE</p>
           <h5 class="mt-1 text-base font-black text-slate-950">${esc(item.name || item.username)} · ${esc(item.courseTitle || item.courseId)}</h5>
-          <p class="mt-1 text-[11px] text-slate-500">工號 ${esc(item.empId || item.username)} · ${esc((groups()[item.group] || {}).name || item.group || '')}</p>
+          <p class="mt-1 text-xs text-slate-500">工號 ${esc(item.empId || item.username)} · ${esc((groups()[item.group] || {}).name || item.group || '')}</p>
         </div>
-        <div class="flex items-center gap-2"><span class="inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold ${meta[1]}">${meta[0]}</span><button id="admin-competency-close-evidence" type="button" class="admin-toolbar-button">關閉</button></div>
+        <div class="flex items-center gap-2"><span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${meta[1]}">${meta[0]}</span><button id="admin-competency-close-evidence" type="button" class="admin-toolbar-button">關閉</button></div>
       </div>
       <div class="mt-4 grid md:grid-cols-2 xl:grid-cols-4 gap-3">
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><p class="text-[10px] font-bold text-slate-500">教材完成</p><p class="mt-1 font-black text-slate-900">${Number(item.materialsCompleted || 0)} / ${Number(item.materialsTotal || 0)}</p><p class="mt-1 text-[10px] text-slate-500">${item.retrainingRequired ? '目前標記：需重新訓練' : '目前無重訓標記'}</p></div>
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><p class="text-[10px] font-bold text-slate-500">考核結果</p><p class="mt-1 font-black text-slate-900">${esc(examResultText(item, exam))}</p><p class="mt-1 text-[10px] text-slate-500">${item.examPassed ? '考核已通過' : item.examRequired ? '考核尚未通過' : '本能力未指定考核'}</p></div>
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><p class="text-[10px] font-bold text-slate-500">指派／截止</p><p class="mt-1 font-black text-slate-900">${esc(dateText(item.assignedAt))}</p><p class="mt-1 text-[10px] text-slate-500">截止 ${esc(dateText(item.dueAt))} · ${item.required ? '指定完成' : '自由選讀'}</p></div>
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><p class="text-[10px] font-bold text-slate-500">完訓證明</p><p class="mt-1 font-black text-slate-900">${certificate.status === 'current' || item.certificateStatus === 'current' ? '目前有效' : certificate.status === 'historical' || item.certificateStatus === 'historical' ? '僅歷史證明' : '尚無'}</p><p class="mt-1 text-[10px] text-slate-500">核發 ${esc(dateText(certificate.issuedAt || item.certificateIssuedAt))}</p></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><p class="text-xs font-bold text-slate-500">教材完成</p><p class="mt-1 font-black text-slate-900">${Number(item.materialsCompleted || 0)} / ${Number(item.materialsTotal || 0)}</p><p class="mt-1 text-xs text-slate-500">${item.retrainingRequired ? '目前標記：需重新訓練' : '目前無重訓標記'}</p></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><p class="text-xs font-bold text-slate-500">考核結果</p><p class="mt-1 font-black text-slate-900">${esc(examResultText(item, exam))}</p><p class="mt-1 text-xs text-slate-500">${item.examPassed ? '考核已通過' : item.examRequired ? '考核尚未通過' : '本能力未指定考核'}</p></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><p class="text-xs font-bold text-slate-500">指派／截止</p><p class="mt-1 font-black text-slate-900">${esc(dateText(item.assignedAt))}</p><p class="mt-1 text-xs text-slate-500">截止 ${esc(dateText(item.dueAt))} · ${item.required ? '指定完成' : '自由選讀'}</p></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><p class="text-xs font-bold text-slate-500">完訓證明</p><p class="mt-1 font-black text-slate-900">${certificate.status === 'current' || item.certificateStatus === 'current' ? '目前有效' : certificate.status === 'historical' || item.certificateStatus === 'historical' ? '僅歷史證明' : '尚無'}</p><p class="mt-1 text-xs text-slate-500">核發 ${esc(dateText(certificate.issuedAt || item.certificateIssuedAt))}</p></div>
       </div>
       <div class="mt-3 rounded-xl border border-teal-100 bg-teal-50/50 p-3">
         <div class="grid md:grid-cols-3 gap-3 text-xs">
-          <div><span class="block text-[10px] font-bold text-teal-700">評核／批改者</span><strong class="mt-1 block text-slate-900">${esc(reviewer)}${reviewerTitle}</strong></div>
-          <div><span class="block text-[10px] font-bold text-teal-700">評核時間</span><strong class="mt-1 block text-slate-900">${esc(dateText(reviewTime))}</strong></div>
-          <div><span class="block text-[10px] font-bold text-teal-700">評核狀態</span><strong class="mt-1 block text-slate-900">${esc(exam?.reviewStatus || (item.examRequired ? item.examStatus || '尚無紀錄' : '不要求'))}</strong></div>
+          <div><span class="block text-xs font-bold text-teal-700">評核／批改者</span><strong class="mt-1 block text-slate-900">${esc(reviewer)}${reviewerTitle}</strong></div>
+          <div><span class="block text-xs font-bold text-teal-700">評核時間</span><strong class="mt-1 block text-slate-900">${esc(dateText(reviewTime))}</strong></div>
+          <div><span class="block text-xs font-bold text-teal-700">評核狀態</span><strong class="mt-1 block text-slate-900">${esc(exam?.reviewStatus || (item.examRequired ? item.examStatus || '尚無紀錄' : '不要求'))}</strong></div>
         </div>
-        <div class="mt-3 border-t border-teal-100 pt-3"><span class="block text-[10px] font-bold text-teal-700">評語／備註</span><p class="mt-1 whitespace-pre-wrap text-xs text-slate-700">${esc(reviewComment || '目前沒有評核評語。')}</p></div>
+        <div class="mt-3 border-t border-teal-100 pt-3"><span class="block text-xs font-bold text-teal-700">評語／備註</span><p class="mt-1 whitespace-pre-wrap text-xs text-slate-700">${esc(reviewComment || '目前沒有評核評語。')}</p></div>
       </div>
       <section id="admin-training-intervention-f3" class="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/30 p-3" data-username="${esc(item.username)}" data-course-id="${esc(item.courseId)}">
         <div class="text-xs text-slate-500">正在讀取介入追蹤…</div>
       </section>
-      <p class="mt-3 text-[10px] leading-5 text-slate-400">此區只顯示既有學習、考核與證明紀錄的可追溯摘要；不提供在矩陣直接改寫評核結果或資格狀態。介入追蹤只記錄處理流程，不會改寫原始證據。</p>`;
+      <p class="mt-3 text-xs leading-5 text-slate-400">此區只顯示既有學習、考核與證明紀錄的可追溯摘要；不提供在矩陣直接改寫評核結果或資格狀態。介入追蹤只記錄處理流程，不會改寫原始證據。</p>`;
     panel.classList.remove('hidden');
     panel.dispatchEvent(new CustomEvent('training-intervention:evidence',{
       bubbles:true,

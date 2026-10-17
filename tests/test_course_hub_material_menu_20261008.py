@@ -45,7 +45,7 @@ class CourseHubMaterialMenuTests(unittest.TestCase):
         self.assertNotIn('id="admin-materials-list"', html)
         materials = read("static", "admin-materials.js")
         # Callers still refresh the shared cache when the list panel is absent.
-        self.assertIn("await window.fetchAdminMaterials(force);\n      return;", materials)
+        self.assertIn("await window.fetchAdminMaterials(force);\n      announceAdminRendered('materials');\n      return;", materials)
         # Word -> Atlas has a single entry point (the course wizard); the
         # material list and hub menu no longer offer a second one.
         self.assertNotIn("openAdminMaterialAtlasImport", materials)

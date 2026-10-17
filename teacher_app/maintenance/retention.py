@@ -301,6 +301,75 @@ def purge_expired(
     return summary
 
 
+class DiscardBlocked(Exception):
+    """The item is published, referenced by a kept item, or already gone."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _storage_runtime(storage_runtime=None):
+    if storage_runtime is not None:
+        return storage_runtime
+    from teacher_app.config import storage_paths
+    from teacher_app.storage.web_runtime import WebStorageRuntime
+
+    return WebStorageRuntime(storage_paths())
+
+
+def discard_presentation(presentation_id: str, *, storage_runtime=None) -> None:
+    """Delete one unpublished AI deck now (same safety rules as the 24h purge)."""
+    ph = _ph()
+    rows = _rows(
+        "SELECT id,status,artifact_backend,artifact_storage_key,slides_json FROM ai_presentations "
+        f"WHERE id={ph}",
+        (presentation_id,),
+    )
+    if not rows:
+        raise DiscardBlocked("not_found", "找不到這份 PowerPoint。")
+    row = rows[0]
+    if str(row.get("status") or "") == "published" or _rows(
+        f"SELECT 1 FROM ai_presentation_publications WHERE presentation_id={ph} LIMIT 1", (presentation_id,)
+    ):
+        raise DiscardBlocked("published", "已正式發布的 PowerPoint 不能捨棄。")
+    if _rows(f"SELECT 1 FROM ai_presentation_videos WHERE presentation_id={ph} LIMIT 1", (presentation_id,)):
+        raise DiscardBlocked("in_use", "已有 AI 影片使用這份 PowerPoint，請先捨棄該影片。")
+    runtime = _storage_runtime(storage_runtime)
+    key = str(row.get("artifact_storage_key") or "")
+    if not _artifact_still_referenced(key, ignore_table="ai_presentations", ignore_id=presentation_id):
+        _delete_artifact(row.get("artifact_backend"), key, kind="presentation", runtime=runtime)
+    _execute(f"DELETE FROM ai_presentations WHERE id={ph}", (presentation_id,))
+    for backend, picture in sorted(_picture_assets(row.get("slides_json"))):
+        try:
+            if not _picture_still_referenced(picture):
+                _delete_artifact(backend, picture, kind="presentation", runtime=runtime)
+        except Exception:
+            LOGGER.warning("discard: slide picture not removed", exc_info=True)
+
+
+def discard_video(video_id: str, *, storage_runtime=None) -> None:
+    """Delete one unpublished AI video now (same safety rules as the 24h purge)."""
+    ph = _ph()
+    rows = _rows(
+        f"SELECT id,status,artifact_backend,artifact_storage_key FROM ai_presentation_videos WHERE id={ph}",
+        (video_id,),
+    )
+    if not rows:
+        raise DiscardBlocked("not_found", "找不到這支 AI 影片。")
+    row = rows[0]
+    if str(row.get("status") or "") == "published" or _rows(
+        f"SELECT 1 FROM ai_video_publications WHERE video_id={ph} LIMIT 1", (video_id,)
+    ):
+        raise DiscardBlocked("published", "已正式發布的 AI 影片不能捨棄。")
+    runtime = _storage_runtime(storage_runtime)
+    key = str(row.get("artifact_storage_key") or "")
+    if not _artifact_still_referenced(key, ignore_table="ai_presentation_videos", ignore_id=video_id):
+        _delete_artifact(row.get("artifact_backend"), key, kind="video", runtime=runtime)
+    _execute(f"DELETE FROM ai_presentation_videos WHERE id={ph}", (video_id,))
+
+
 _started = threading.Event()
 
 

@@ -219,7 +219,7 @@
     if (!guide) {
       guide = document.createElement('div');
       guide.id = id;
-      guide.className = 'grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-2 text-center text-[11px] font-black text-slate-600 sm:grid-cols-4';
+      guide.className = 'grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-2 text-center text-xs font-black text-slate-600 sm:grid-cols-4';
       panel.prepend(guide);
     }
     guide.innerHTML = steps.map((step,index)=>`<span class="rounded-lg bg-white px-2 py-2">${index+1} ${step}</span>`).join('');
@@ -457,7 +457,7 @@
       flow.innerHTML = `
         <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div><b class="text-sm text-slate-950">${modeLabel}｜簡易製作</b><p class="mt-1 text-xs leading-5 text-slate-600">丟入資料就能先試做，不必先填完所有設定。 ${modeNote}</p></div>
-          <div class="grid grid-cols-2 gap-1.5 text-center text-[11px] font-black text-slate-600 sm:grid-cols-4">
+          <div class="grid grid-cols-2 gap-1.5 text-center text-xs font-black text-slate-600 sm:grid-cols-4">
             <span class="rounded-lg bg-white px-2 py-2">1 丟入資料</span>
             <span class="rounded-lg bg-white px-2 py-2">2 需求（選填）</span>
             <span class="rounded-lg bg-white px-2 py-2">3 試產出／AI 修正</span>
@@ -473,6 +473,10 @@
       panel.appendChild(flow);
       if (mode === 'presentation') {
         // 大綱編輯區已有「重新產出／放棄草稿」，底部只保留「完成帶回教材」。
+        // The PowerPoint tab already numbers its own steps 1–6; a second 1–4 strip confused teachers.
+        flow.querySelector('.grid.grid-cols-2')?.remove();
+        const status = $(`teacher-media-simple-status-${mode}-1032`);
+        if (status) status.textContent = '大綱核准、投影片建立好之後，按這裡把成果帶回課程教材。';
         $(`teacher-media-simple-revision-${mode}-1032`)?.classList.add('hidden');
         $(`teacher-media-simple-revise-${mode}-1032`)?.classList.add('hidden');
       }
@@ -682,6 +686,26 @@
     if (event.detail?.selectedId && shared) shared.value = event.detail.selectedId;
     syncSharedSource();
   }
+
+  // 講稿與配音沒有底部的簡易列；配音完成時才出現一個「帶回課程」按鈕，讓精靈流程接得回去。
+  window.addEventListener('teacher-ai-narration-published', event => {
+    const panel = $('teacher-media-panel-narration-1018');
+    if (!panel) return;
+    let done = $('teacher-media-narration-done-1018');
+    if (!done) {
+      done = document.createElement('section');
+      done.id = 'teacher-media-narration-done-1018';
+      done.className = 'rounded-2xl border border-emerald-200 bg-emerald-50 p-3 sm:p-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between';
+      done.setAttribute('role', 'status');
+      done.innerHTML = '<p class="text-sm font-bold text-emerald-900" id="teacher-media-narration-done-text-1018"></p><button id="teacher-media-narration-finish-1018" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white">✅ 配音完成，帶回課程</button><p id="teacher-media-simple-status-narration-1032" class="text-xs font-bold text-slate-600 sm:hidden"></p>';
+      panel.appendChild(done);
+      $('teacher-media-narration-finish-1018')?.addEventListener('click', () => void finishSimpleFlow('narration'));
+    }
+    const title = String(event.detail?.title || 'AI 講稿配音');
+    const text = $('teacher-media-narration-done-text-1018');
+    if (text) text.textContent = `「${title}」的配音已掛在原教材上，學員打開教材會自動播放。`;
+    done.scrollIntoView?.({block: 'nearest', behavior: 'smooth'});
+  });
 
   window.addEventListener('teacher-ai-presentation-video-request', async event => {
     const presentationId=String(event.detail?.presentationId||'');

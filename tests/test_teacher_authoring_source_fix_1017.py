@@ -10,18 +10,16 @@ ROOT = Path(__file__).resolve().parents[1]
 class TeacherAuthoringSourceFix1017Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.source = ROOT.joinpath("static", "teacher-authoring-source-fix-1017.js").read_text(encoding="utf-8")
+        cls.source = ROOT.joinpath("static", "teacher-media-subtitle-1014.js").read_text(encoding="utf-8")  # picker merged into its owner 2026-10-17
         cls.subtitle_frontend = ROOT.joinpath("static", "teacher-media-subtitle-1014.js").read_text(encoding="utf-8")
         cls.subtitle_routes = ROOT.joinpath("teacher_app", "materials", "media_subtitle_routes.py").read_text(encoding="utf-8")
         cls.presentation_routes = ROOT.joinpath("teacher_app", "materials", "ai_presentation_routes.py").read_text(encoding="utf-8")
 
-    def test_asset_loads_after_interface_convergence(self):
+    def test_hotfix_file_is_merged_into_the_subtitle_owner(self):
         body = ASSET_MANIFEST["system"]["body"]
-        self.assertIn("/teacher-authoring-source-fix-1017.js", body)
-        self.assertLess(
-            body.index("/teacher-interface-convergence-1014.js"),
-            body.index("/teacher-authoring-source-fix-1017.js"),
-        )
+        self.assertNotIn("/teacher-authoring-source-fix-1017.js", body)
+        self.assertFalse(ROOT.joinpath("static", "teacher-authoring-source-fix-1017.js").exists())
+        self.assertIn("/teacher-media-subtitle-1014.js", body)
 
     def test_powerpoint_is_one_guided_studio_without_visible_internal_ids(self):
         presentation = ROOT.joinpath("static", "teacher-ai-presentation-1016.js").read_text(encoding="utf-8")
@@ -65,7 +63,7 @@ class TeacherAuthoringSourceFix1017Tests(unittest.TestCase):
             "teacher-subtitle-material-1017",
             "來源影音教材",
             "isCaptionMaterial",
-            "syncSubtitleSource",
+            "buildSourcePicker",
             "/api/slides/admin",
         ):
             self.assertIn(marker, self.source)
@@ -73,19 +71,15 @@ class TeacherAuthoringSourceFix1017Tests(unittest.TestCase):
         self.assertIn("denied = _scope(owner", self.subtitle_routes)
         self.assertIn('action="media.subtitle.generate"', self.subtitle_routes)
 
-    def test_media_workspace_has_failure_recovery(self):
-        for marker in (
-            "safeOpenMediaWorkspace",
-            "fallbackRevealMediaWorkspace",
-            "teacher-course-media-entry-1014 button",
-            "teacherMode', 'media'",
-        ):
-            self.assertIn(marker, self.source)
+    def test_media_workspace_is_opened_by_its_owner(self):
+        workspace = ROOT.joinpath("static", "teacher-workspace-1014.js").read_text(encoding="utf-8")
+        self.assertIn("if (state.mode === 'media') {", workspace)
+        self.assertIn("await openMedia();", workspace)
 
     def test_fix_does_not_reintroduce_browser_admin_secrets(self):
         self.assertNotIn("getAdminKey", self.source)
         self.assertNotIn("X-Admin-Key", self.source)
-        self.assertIn("credentials:'same-origin'", self.source)
+        self.assertIn("credentials:'same-origin'", self.source.replace(' ', ''))
 
 
 

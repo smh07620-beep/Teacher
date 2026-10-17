@@ -22,7 +22,7 @@ class NextButtonSyncTests(unittest.TestCase):
         self.assertIn("syncNextButton();", body("setBusy").replace("\r", ""))
 
     def test_sync_uses_same_rule_as_render(self):
-        self.assertIn("state.busy||(state.created&&!canLeaveCourse())", body("syncNextButton"))
+        self.assertIn("state.busy||state.aiBusy||(state.created&&!canLeaveCourse())", body("syncNextButton"))
 
 
 

@@ -12,7 +12,7 @@ class ExamRemediationUi85Tests(unittest.TestCase):
         cls.exam = ROOT.joinpath("static", "system-exam.js").read_text(encoding="utf-8")
         cls.csp = ROOT.joinpath("static", "system-csp-actions.js").read_text(encoding="utf-8")
         cls.portal = ROOT.joinpath("static", "portal-v56.js").read_text(encoding="utf-8")
-        cls.todo = ROOT.joinpath("static", "learner-todo-convergence-1025.js").read_text(encoding="utf-8")
+        cls.todo = ROOT.joinpath("static", "learner-todo.js").read_text(encoding="utf-8")
         cls.notifications = ROOT.joinpath("static", "notification-center-71.js").read_text(encoding="utf-8")
         cls.notification_events = ROOT.joinpath("teacher_app", "notifications", "events.py").read_text(encoding="utf-8")
 

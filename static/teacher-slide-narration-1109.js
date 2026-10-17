@@ -105,7 +105,7 @@
     node.type = 'button';
     node.textContent = label;
     const palette = {
-      primary: 'background:#0f766e;color:#fff;border:0',
+      primary: 'background:#2f6b4f;color:#fff;border:0',
       danger: 'background:#be123c;color:#fff;border:0',
       plain: 'background:#fff;color:#334155;border:1px solid #cbd5e1',
     }[tone] || 'background:#fff;color:#334155;border:1px solid #cbd5e1';

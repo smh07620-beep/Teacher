@@ -65,14 +65,14 @@
       const s=data.summary||{};
       const avg=s.averageResolutionHours===null||s.averageResolutionHours===undefined?'—':Number(s.averageResolutionHours).toFixed(1)+' 小時';
       host.innerHTML=
-        '<div class="flex items-center justify-between gap-2"><div><b class="text-xs text-slate-900">🧭 介入追蹤成效</b><p class="mt-1 text-[10px] text-slate-500">只統計正式介入案件；結案仍需真實學習／考核證據解除異常。</p></div><button type="button" data-intervention-overview-refresh class="text-[10px] font-bold text-indigo-700">↻ 更新</button></div>'+
+        '<div class="flex items-center justify-between gap-2"><div><b class="text-xs text-slate-900">🧭 介入追蹤成效</b><p class="mt-1 text-xs text-slate-500">只統計正式介入案件；結案仍需真實學習／考核證據解除異常。</p></div><button type="button" data-intervention-overview-refresh class="text-xs font-bold text-indigo-700">↻ 更新</button></div>'+
         '<div class="mt-2 grid grid-cols-2 md:grid-cols-5 gap-2">'+[
           ['處理中',s.active||0],
           ['可結案',s.readyToResolve||0],
           ['已結案',s.resolved||0],
           ['結案率',Number(s.resolutionRate||0).toFixed(1)+'%'],
           ['平均結案時間',avg]
-        ].map(([label,value])=>'<div class="rounded-lg border border-indigo-100 bg-white px-2.5 py-2"><div class="text-[9px] text-slate-400">'+label+'</div><div class="mt-0.5 text-sm font-black text-slate-900">'+esc(value)+'</div></div>').join('')+
+        ].map(([label,value])=>'<div class="rounded-lg border border-indigo-100 bg-white px-2.5 py-2"><div class="text-xs text-slate-400">'+label+'</div><div class="mt-0.5 text-sm font-black text-slate-900">'+esc(value)+'</div></div>').join('')+
         '</div>';
       host.querySelector('[data-intervention-overview-refresh]')?.addEventListener('click',()=>void loadOverview());
     }catch(error){
@@ -89,13 +89,13 @@
     const materials=Array.isArray(plan.reviewMaterials)?plan.reviewMaterials:[];
     const parts=[];
     if(plan.type==='remediation'){
-      parts.push('<div class="text-[11px] text-orange-800">最近考核 '+esc(plan.score??'—')+' / 及格 '+esc(plan.passingScore??'—')+'；差距 '+esc(plan.scoreGap??'—')+' 分。</div>');
+      parts.push('<div class="text-xs text-orange-800">最近考核 '+esc(plan.score??'—')+' / 及格 '+esc(plan.passingScore??'—')+'；差距 '+esc(plan.scoreGap??'—')+' 分。</div>');
     }
     if(plan.type==='overdue'&&plan.dueAt){
-      parts.push('<div class="text-[11px] text-rose-700">原截止：'+esc(String(plan.dueAt).slice(0,10))+'</div>');
+      parts.push('<div class="text-xs text-rose-700">原截止：'+esc(String(plan.dueAt).slice(0,10))+'</div>');
     }
     if(materials.length){
-      parts.push('<div class="mt-2 flex flex-wrap gap-1.5">'+materials.map(item=>'<span class="rounded-full border border-indigo-100 bg-white px-2 py-1 text-[10px] text-slate-700">'+esc(item.title||item.id)+'</span>').join('')+'</div>');
+      parts.push('<div class="mt-2 flex flex-wrap gap-1.5">'+materials.map(item=>'<span class="rounded-full border border-indigo-100 bg-white px-2 py-1 text-xs text-slate-700">'+esc(item.title||item.id)+'</span>').join('')+'</div>');
     }
     return parts.join('');
   }
@@ -117,7 +117,7 @@
       buttons.push(['取消案件','cancelled','border border-rose-200 bg-white text-rose-700']);
     }
     return buttons.map(([label,target,classes])=>
-      '<button type="button" data-intervention-status="'+esc(target)+'" class="rounded-lg px-2.5 py-1.5 text-[11px] font-bold '+classes+'">'+esc(label)+'</button>'
+      '<button type="button" data-intervention-status="'+esc(target)+'" class="rounded-lg px-2.5 py-1.5 text-xs font-bold '+classes+'">'+esc(label)+'</button>'
     ).join('');
   }
 
@@ -133,7 +133,7 @@
       render(host,item,active,rows);
     }catch(error){
       if(error.code==='FORBIDDEN'){
-        host.innerHTML='<div class="text-[11px] text-slate-500">目前帳號可查看證據，但沒有介入案件管理權限。</div>';
+        host.innerHTML='<div class="text-xs text-slate-500">目前帳號可查看證據，但沒有介入案件管理權限。</div>';
         return;
       }
       host.innerHTML='<div class="text-xs text-rose-700">❌ '+esc(error.message||'介入追蹤讀取失敗')+'</div>';
@@ -145,33 +145,33 @@
     if(!active){
       const recent=(history||[])[0]||null;
       host.innerHTML=
-        '<div class="flex flex-wrap items-start justify-between gap-3"><div><b class="text-xs text-slate-900">🧭 教學介入追蹤</b><p class="mt-1 text-[11px] text-slate-500">'+
+        '<div class="flex flex-wrap items-start justify-between gap-3"><div><b class="text-xs text-slate-900">🧭 教學介入追蹤</b><p class="mt-1 text-xs text-slate-500">'+
         (ABNORMAL.has(currentStatus)
           ? '目前狀態可建立正式介入案件；案件只記錄追蹤，不會改寫學習／考試證據。'
           : '目前真實證據沒有逾期、重訓或補強狀態。')+
         '</p></div>'+
-        (ABNORMAL.has(currentStatus)?'<button type="button" data-intervention-create class="rounded-lg bg-indigo-700 px-3 py-1.5 text-[11px] font-bold text-white">建立介入追蹤</button>':'')+
+        (ABNORMAL.has(currentStatus)?'<button type="button" data-intervention-create class="rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white">建立介入追蹤</button>':'')+
         '</div>'+
-        (recent?'<div class="mt-2 text-[10px] text-slate-400">最近案件：'+esc(labels[recent.status]||recent.status)+' · '+esc(String(recent.updatedAt||'').slice(0,10))+'</div>':'');
+        (recent?'<div class="mt-2 text-xs text-slate-400">最近案件：'+esc(labels[recent.status]||recent.status)+' · '+esc(String(recent.updatedAt||'').slice(0,10))+'</div>':'');
       bind(host,item,null);
       return;
     }
 
     const eligibility=active?.resolutionEligible
-      ? '<div class="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] font-bold text-emerald-700">✓ 真實證據已解除原異常，目前可以結案。</div>'
+      ? '<div class="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs font-bold text-emerald-700">✓ 真實證據已解除原異常，目前可以結案。</div>'
       : '';
     host.innerHTML=
       '<div class="flex flex-wrap items-start justify-between gap-3">'+
-        '<div><div class="flex items-center gap-2"><b class="text-xs text-slate-900">🧭 教學介入追蹤</b><span class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">'+esc(labels[active.status]||active.status)+'</span></div>'+
-        '<p class="mt-1 text-[11px] text-slate-500">案件 '+esc(active.id)+' · 來源狀態 '+esc(active.sourceStatus||active.kind)+'</p></div>'+
+        '<div><div class="flex items-center gap-2"><b class="text-xs text-slate-900">🧭 教學介入追蹤</b><span class="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">'+esc(labels[active.status]||active.status)+'</span></div>'+
+        '<p class="mt-1 text-xs text-slate-500">案件 '+esc(active.id)+' · 來源狀態 '+esc(active.sourceStatus||active.kind)+'</p></div>'+
         '<div class="flex flex-wrap gap-2">'+actions(active,item)+'</div>'+
       '</div>'+
       '<div class="mt-3 grid lg:grid-cols-2 gap-3">'+
-        '<label class="text-[11px] font-bold text-slate-600">給學員的訊息<textarea data-intervention-learner-message rows="3" class="learning-input mt-1 w-full">'+esc(active.learnerMessage||'')+'</textarea></label>'+
-        '<label class="text-[11px] font-bold text-slate-600">內部追蹤備註<textarea data-intervention-internal-note rows="3" class="learning-input mt-1 w-full">'+esc(active.internalNote||'')+'</textarea></label>'+
+        '<label class="text-xs font-bold text-slate-600">給學員的訊息<textarea data-intervention-learner-message rows="3" class="learning-input mt-1 w-full">'+esc(active.learnerMessage||'')+'</textarea></label>'+
+        '<label class="text-xs font-bold text-slate-600">內部追蹤備註<textarea data-intervention-internal-note rows="3" class="learning-input mt-1 w-full">'+esc(active.internalNote||'')+'</textarea></label>'+
       '</div>'+
       planHtml(active)+eligibility+
-      '<div class="mt-3 flex items-center gap-2"><button type="button" data-intervention-save class="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-[11px] font-bold text-indigo-700">儲存訊息／備註</button><span data-intervention-feedback class="text-[10px] text-slate-400"></span></div>';
+      '<div class="mt-3 flex items-center gap-2"><button type="button" data-intervention-save class="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700">儲存訊息／備註</button><span data-intervention-feedback class="text-xs text-slate-400"></span></div>';
     bind(host,item,active);
   }
 

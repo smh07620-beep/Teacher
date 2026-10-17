@@ -104,6 +104,10 @@
       button.classList.toggle('hover:bg-slate-200', !active);
       button.setAttribute('aria-current', active ? 'page' : 'false');
     });
+    // The current tab must stay visible: open the "更多" menu when it holds the active one.
+    document.querySelectorAll('.admin-more').forEach(menu => {
+      if (menu.querySelector('.admin-nav-btn[aria-current="page"]')) menu.open = true;
+    });
   }
 
   function paintWorkspaceHeader(name) {
@@ -122,6 +126,8 @@
     if (summary) summary.textContent = area ? `${area}｜${meta.summary}` : meta.summary;
     const modal = document.getElementById('admin-modal');
     if (modal) modal.dataset.area = area ? ROUTES.areaOf(key) : '';
+    // Persona owners (e.g. teacher-workspace-1014.js) repaint their own header after this.
+    window.dispatchEvent(new CustomEvent('teacher:workspace-header-painted', {detail: {workspace: key}}));
   }
 
   function syncSectionChrome(name) {

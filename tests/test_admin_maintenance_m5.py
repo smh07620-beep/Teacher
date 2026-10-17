@@ -146,4 +146,4 @@ setImmediate(() => {
     def test_updated_assets_have_fresh_cache_versions(self):
         from pgy_frontend import ASSET_MANIFEST
         self.assertIn('/maintenance-64.js', ASSET_MANIFEST['system']['body'])
-        self.assertIn('/admin.css?v=6606', self.source('static/system.html'))
+        self.assertIn('/admin.css?v=6607', self.source('static/system.html'))

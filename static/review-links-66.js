@@ -202,11 +202,11 @@
                 data-review-source-66="1"
             >
                 <div>
-                    <div class="text-[11px] font-black text-teal-900">
+                    <div class="text-xs font-black text-teal-900">
                         📚 答題後複習來源
                     </div>
 
-                    <div class="text-[10px] text-teal-700 mt-0.5">
+                    <div class="text-xs text-teal-700 mt-0.5">
                         學員提交考卷後會看到這段提示，並可一鍵回到指定教材複習。
                     </div>
                 </div>
@@ -214,7 +214,7 @@
                 <div class="grid sm:grid-cols-2 gap-2">
 
                     <label>
-                        <span class="text-[11px] font-bold text-slate-600">
+                        <span class="text-xs font-bold text-slate-600">
                             複習教材
                         </span>
 
@@ -225,7 +225,7 @@
                     </label>
 
                     <label class="sm:col-span-2">
-                        <span class="text-[11px] font-bold text-slate-600">
+                        <span class="text-xs font-bold text-slate-600">
                             加強閱讀提示
                         </span>
 
@@ -239,14 +239,14 @@
                 </div>
 
                 <details class="rounded-lg border border-teal-100 bg-white/70 px-3 py-2" data-review-source-advanced-66="1">
-                    <summary class="cursor-pointer text-[11px] font-bold text-teal-800">
+                    <summary class="cursor-pointer text-xs font-bold text-teal-800">
                         更多定位設定（選填，AI 出題會自動帶入）
                     </summary>
 
                     <div class="mt-2 grid sm:grid-cols-2 gap-2">
 
                         <label>
-                            <span class="text-[11px] font-bold text-slate-600">
+                            <span class="text-xs font-bold text-slate-600">
                                 定位方式
                             </span>
 
@@ -262,7 +262,7 @@
                         </label>
 
                         <label>
-                            <span class="text-[11px] font-bold text-slate-600">
+                            <span class="text-xs font-bold text-slate-600">
                                 頁碼／投影片
                             </span>
 
@@ -278,7 +278,7 @@
                         </label>
 
                         <label>
-                            <span class="text-[11px] font-bold text-slate-600">
+                            <span class="text-xs font-bold text-slate-600">
                                 影片／音訊秒數
                             </span>
 
@@ -294,7 +294,7 @@
                         </label>
 
                         <label>
-                            <span class="text-[11px] font-bold text-slate-600">
+                            <span class="text-xs font-bold text-slate-600">
                                 圖像重點區域
                             </span>
 
@@ -307,7 +307,7 @@
                         </label>
 
                         <label class="sm:col-span-2">
-                            <span class="text-[11px] font-bold text-slate-600">
+                            <span class="text-xs font-bold text-slate-600">
                                 建議複習區塊
                             </span>
 
@@ -469,125 +469,10 @@
     // Existing-question inline editor
     // --------------------------------------------------------
 
-    if (
-        typeof adminQuestionEditFormHTML
-        === 'function'
-        && !window.__teacher66ReviewEditWrapped
-    ) {
-        window.__teacher66ReviewEditWrapped =
-            true;
-
-        const original =
-            adminQuestionEditFormHTML;
-
-        adminQuestionEditFormHTML =
-            function (question, catId) {
-                let html =
-                    original.apply(
-                        this,
-                        arguments
-                    );
-
-                const source =
-                    question?.reviewSource
-                    || question?.answerConfig
-                        ?.reviewSource
-                    || {};
-
-                const block =
-                    reviewSourceFields(
-                        `qreview-${question.id}`,
-                        source,
-                    );
-
-                const needle =
-                    `<div class="flex gap-2"><button id="qsave-${question.id}"`;
-
-                if (
-                    html.includes(
-                        needle
-                    )
-                ) {
-                    html =
-                        html.replace(
-                            needle,
-                            block
-                            + needle
-                        );
-                } else {
-                    const index =
-                        html.lastIndexOf(
-                            '</div>'
-                        );
-
-                    if (index >= 0) {
-                        html =
-                            html.slice(
-                                0,
-                                index
-                            )
-                            + block
-                            + html.slice(
-                                index
-                            );
-                    }
-                }
-
-                return html;
-            };
-    }
+    // The question editor (admin-question-editor-ui.js) asks TeacherReviewSource.editorBlock(q).
 
 
-    if (
-        typeof window.adminBuildQuestionPayload
-        === 'function'
-        && !window.__teacher66ReviewPayloadWrapped
-    ) {
-        window.__teacher66ReviewPayloadWrapped =
-            true;
-
-        const original =
-            window.adminBuildQuestionPayload;
-
-        window.adminBuildQuestionPayload =
-            function (qId, catId) {
-                const payload =
-                    original.apply(
-                        this,
-                        arguments
-                    );
-
-                const box =
-                    document.getElementById(
-                        `qedit-${qId}`
-                    );
-
-                const source =
-                    sourceFromContainer(
-                        box
-                    );
-
-                payload.answerConfig = {
-                    ...(payload.answerConfig
-                        || {})
-                };
-
-                if (
-                    hasSource(source)
-                ) {
-                    payload
-                        .answerConfig
-                        .reviewSource =
-                        source;
-                } else {
-                    delete payload
-                        .answerConfig
-                        .reviewSource;
-                }
-
-                return payload;
-            };
-    }
+    // The payload builder (admin-question-actions.js) asks TeacherReviewSource.apply(payload, qId).
 
 
     // --------------------------------------------------------
@@ -1008,30 +893,8 @@
     }
 
 
-    if (
-        typeof renderQuestions
-        === 'function'
-        && !window.__teacher66ReviewRenderWrapped
-    ) {
-        window.__teacher66ReviewRenderWrapped =
-            true;
-
-        const original =
-            renderQuestions;
-
-        renderQuestions =
-            function () {
-                const result =
-                    original.apply(
-                        this,
-                        arguments
-                    );
-
-                teacher66InjectReviewPanels();
-
-                return result;
-            };
-    }
+    // Exam questions announce teacher:exam-rendered (system-exam.js); inject review panels then.
+    window.addEventListener('teacher:exam-rendered', () => teacher66InjectReviewPanels());
 
 
     // --------------------------------------------------------
@@ -1495,56 +1358,28 @@
     }
 
 
-    if (
-        typeof renderSlidesGrid
-        === 'function'
-        && !window.__teacher66ReviewSlidesWrapped
-    ) {
-        window.__teacher66ReviewSlidesWrapped =
-            true;
-
-        const original =
-            renderSlidesGrid;
-
-        renderSlidesGrid =
-            async function () {
-                const result =
-                    await original.apply(
-                        this,
-                        arguments
-                    );
-
-                tryOpenReviewDeepLink();
-
-                return result;
-            };
-    }
+    // The material list announces teacher:learner-rendered (system-learner.js).
+    window.addEventListener('teacher:learner-rendered', event => { if (event.detail?.view === 'slides') tryOpenReviewDeepLink(); });
 
 
-    if (
-        typeof teachingSavePage
-        === 'function'
-        && !window.__teacher66ReviewPageWrapped
-    ) {
-        window.__teacher66ReviewPageWrapped =
-            true;
+    // Page turns are announced by the reader (teacher:reader-changed).
+    window.addEventListener('teacher:reader-changed', event => { if (event.detail?.open) syncReaderReviewContext(); });
 
-        const original =
-            teachingSavePage;
 
-        teachingSavePage =
-            function () {
-                const result =
-                    original.apply(
-                        this,
-                        arguments
-                    );
-
-                syncReaderReviewContext();
-
-                return result;
-            };
-    }
+    window.TeacherReviewSource = Object.freeze({
+        editorBlock(question) {
+            if (!question || !question.id) return '';
+            const source = question.reviewSource || question.answerConfig?.reviewSource || {};
+            return reviewSourceFields(`qreview-${question.id}`, source);
+        },
+        apply(payload, qId) {
+            const source = sourceFromContainer(document.getElementById(`qedit-${qId}`));
+            payload.answerConfig = { ...(payload.answerConfig || {}) };
+            if (hasSource(source)) payload.answerConfig.reviewSource = source;
+            else delete payload.answerConfig.reviewSource;
+            return payload;
+        },
+    });
 
 
     function startDeepLinkRetry() {
