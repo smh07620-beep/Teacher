@@ -21,6 +21,7 @@ from teacher_app.auth import rbac_legacy_adapter
 from teacher_app.learning import access as learning_access
 from teacher_app.learning import content, repository, versioning
 from teacher_app.learning import review_pages as review_pages_mod
+from teacher_app.checkpoints import retry as checkpoint_retry
 from teacher_app.materials import repository as material_repository
 
 
@@ -65,6 +66,26 @@ def _required_by_page(material: dict, total_pages: int) -> dict:
         override = overrides.get(str(page)) if isinstance(overrides, dict) else None
         result[str(page)] = content.min_dwell_seconds(text_len, override)
     return result
+
+
+AUTO_TRACKED_SUFFIXES = {
+    ".pdf", ".ppt", ".pptx", ".doc", ".docx", ".odp", ".odt",
+    ".mp4", ".m4v", ".mov", ".webm", ".mp3", ".m4a", ".wav", ".ogg",
+}
+
+
+def auto_tracked(material: dict) -> bool:
+    """Pages or media are measured by the reader, so the browser may not just say 'done'."""
+    if str(material.get("viewerMode") or "") in {"slides", "preview_pdf", "video", "audio"}:
+        return True
+    name = str(material.get("filename") or material.get("storedName") or "").lower()
+    return Path(name).suffix in AUTO_TRACKED_SUFFIXES
+
+
+def _exam_gate_enabled() -> bool:
+    from teacher_app.learning import gate as learning_gate
+
+    return learning_gate.gate_enabled()
 
 
 def _material_path(paths, material: dict, material_id: str) -> Path:
@@ -610,8 +631,15 @@ def register_smart_learning(
                 except (TypeError, ValueError):
                     return jsonify({"error": "progress 格式錯誤"}), 400
                 position["version"] = current_version
-                completed = completion_already_current or bool(body.get("completed", False))
+                client_done = bool(body.get("completed", False))
+                if client_done and auto_tracked(material) and _exam_gate_enabled():
+                    # Slides/documents/media complete by the server's own rule only;
+                    # otherwise a single request could unlock the exam.
+                    client_done = False
+                completed = completion_already_current or client_done
 
+        if not reset_evidence:
+            checkpoint_retry.carry_forward(prior_position, position)
         now = _now()
         if rules_v2 and isinstance(position, dict):
             position["lastSaveAt"] = now

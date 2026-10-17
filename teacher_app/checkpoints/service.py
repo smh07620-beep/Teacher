@@ -3,7 +3,7 @@
 Opt-in by construction: a material with no checkpoint behaves exactly as before.
 Teachers add checkpoints per material page; learners may answer or skip (never
 blocks reading or completion).  The right answer and explanation reach a learner
-only after that learner answered (formative practice, not an exam).
+only after a right answer or the second try (formative practice, not an exam).
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import json
 import uuid
 from typing import Any, Callable, Mapping
 
-from teacher_app.checkpoints import repository
+from teacher_app.checkpoints import repository, retry
 from teacher_app.common.auth import has_permission, has_role, is_system_admin
 from teacher_app.common.errors import ApiError
 from teacher_app.learning import access as learning_access
@@ -179,16 +179,24 @@ def list_for_manager(user, get_material: MaterialGetter, material_id: str) -> di
     return {"items": items, "pageCount": int(material.get("pageCount") or 0)}
 
 
-def _learner_view(item: Mapping[str, Any], answer: Mapping[str, Any] | None) -> dict:
+def _learner_view(item: Mapping[str, Any], answer: Mapping[str, Any] | None, second: Mapping[str, Any] | None = None) -> dict:
+    """Two-stage reveal: a first wrong answer gets the explanation and one more try;
+    the right option is shown only after a right answer or the second try."""
     view = {"id": item["id"], "page": item["page"], "question": item["question"], "options": list(item["options"])}
-    if answer:
-        view["answered"] = True
-        view["chosenIndex"] = answer["chosenIndex"]
-        view["isCorrect"] = answer["isCorrect"]
-        view["correctIndex"] = item["correctIndex"]
-        view["explanation"] = item["explanation"]
-    else:
+    if not answer:
         view["answered"] = False
+        return view
+    view["answered"] = True
+    view["firstCorrect"] = bool(answer["isCorrect"])
+    view["explanation"] = item["explanation"]
+    if answer["isCorrect"]:
+        view.update(attempts=1, canRetry=False, isCorrect=True, chosenIndex=answer["chosenIndex"], correctIndex=item["correctIndex"])
+    elif second:
+        view.update(attempts=2, canRetry=False, isCorrect=bool(second.get("isCorrect")),
+                    chosenIndex=int(second.get("chosenIndex", -1)), firstChosenIndex=answer["chosenIndex"],
+                    correctIndex=item["correctIndex"])
+    else:
+        view.update(attempts=1, canRetry=True, isCorrect=False, chosenIndex=answer["chosenIndex"])
     return view
 
 
@@ -196,8 +204,9 @@ def learner_items(user, material: Mapping[str, Any]) -> list[dict]:
     """Learner-safe checkpoint items for an already-authorised material."""
     current = int(material.get("currentVersion") or 1)
     answers = repository.answers_for_user(_username(user), material["id"])
+    seconds = retry.retries_for(_username(user), material["id"]) if answers else {}
     items = [
-        _learner_view(item, answers.get(item["id"]))
+        _learner_view(item, answers.get(item["id"]), seconds.get(item["id"]))
         for item in repository.list_for_material(material["id"])
         if item["active"] and item["materialVersion"] == current
     ]
@@ -228,19 +237,18 @@ def answer(user, get_material: MaterialGetter, checkpoint_id: str, body: Mapping
     if not 0 <= chosen < len(item["options"]):
         raise _fail("CHECKPOINT_CHOICE", "選項超出範圍。")
     correct = chosen == item["correctIndex"]
-    # First answer is the record; a repeat call returns it unchanged.
-    first_time = not repository.get_answer(item["id"], _username(user))
-    repository.record_answer(item["id"], _username(user), item["materialId"], chosen, correct, _now())
-    if first_time and not correct:
-        _plant_review_page(user, item)
-    return _learner_view(item, repository.get_answer(item["id"], _username(user)))
+    username = _username(user)
+    first = repository.get_answer(item["id"], username)
+    if not first:
+        # First answer is the learning record.  A wrong checkpoint never locks the
+        # exam: the reader lists its page as 建議再看 instead (plan: 不影響通過).
+        repository.record_answer(item["id"], username, item["materialId"], chosen, correct, _now())
+    elif not first["isCorrect"]:
+        try:
+            retry.record(username, item["materialId"], item["id"], chosen, correct)
+        except Exception:  # practice only: an unsaved retry must not break answering
+            pass
+    second = retry.retries_for(username, item["materialId"]).get(item["id"])
+    return _learner_view(item, repository.get_answer(item["id"], username), second)
 
 
-def _plant_review_page(user, item: Mapping[str, Any]) -> None:
-    """A wrong checkpoint adds its page to the same review list a failed exam uses."""
-    try:
-        from teacher_app.learning import review_pages
-
-        review_pages.plant(_username(user), {str(item["materialId"]): [int(item["page"])]})
-    except Exception:  # never let reading support break answering
-        return

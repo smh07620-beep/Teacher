@@ -177,3 +177,34 @@ class AiRegenerateUiTests(unittest.TestCase):
         self.assertIn("/regenerate`, {method:'POST'}", src)
         line = next(l for l in src.splitlines() if "const regenerate" in l)
         self.assertIn("item.status !== 'published'", line)
+
+
+class ClientClaimedCompletionTests(unittest.TestCase):
+    """Reader-measured materials cannot be completed by a bare {"completed": true}."""
+
+    def test_auto_tracked_detection(self):
+        from teacher_app.learning import routes
+
+        self.assertTrue(routes.auto_tracked({"viewerMode": "slides"}))
+        self.assertTrue(routes.auto_tracked({"viewerMode": "video"}))
+        self.assertTrue(routes.auto_tracked({"filename": "deck.PPTX"}))
+        self.assertFalse(routes.auto_tracked({"viewerMode": "external", "filename": "https://example.org"}))
+
+    def test_progress_put_ignores_client_completed_for_tracked_material(self):
+        import inspect
+        from teacher_app.learning import routes
+
+        src = inspect.getsource(routes)
+        self.assertIn("client_done and auto_tracked(material) and _exam_gate_enabled()", src)
+
+
+class CheckpointRetryCarryTests(unittest.TestCase):
+    def test_progress_save_keeps_checkpoint_retry(self):
+        from teacher_app.checkpoints import retry
+
+        position = {"page": 2}
+        retry.carry_forward({"checkpointRetry": {"c1": {"chosenIndex": 1, "isCorrect": True}}}, position)
+        self.assertEqual(position["checkpointRetry"]["c1"]["chosenIndex"], 1)
+        fresh = {"page": 2, "checkpointRetry": {"c2": {}}}
+        retry.carry_forward({"checkpointRetry": {"c1": {}}}, fresh)
+        self.assertEqual(list(fresh["checkpointRetry"]), ["c2"])

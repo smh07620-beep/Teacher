@@ -38,6 +38,11 @@ class SlideCheckpointTests(unittest.TestCase):
                 "expires_at TEXT NOT NULL, session_version INTEGER NOT NULL DEFAULT 0)"
             )
             slide_checkpoints_118(conn, kind)
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS learning_progress (material_id TEXT NOT NULL, username TEXT NOT NULL, "
+                "position TEXT NOT NULL DEFAULT '{}', progress REAL NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0, "
+                "last_viewed_at TEXT NOT NULL DEFAULT '', completed_at TEXT NOT NULL DEFAULT '', PRIMARY KEY(material_id,username))"
+            )
             for username, role, group in (
                 ("education-admin", "education_admin", "grpHema"),
                 ("clinical-teacher", "clinical_teacher", "grpHema"),
@@ -129,20 +134,40 @@ class SlideCheckpointTests(unittest.TestCase):
         r = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 0}, headers=ORIGIN)
         self.assertEqual(r.status_code, 200)
         data = r.get_json()
+        # First wrong answer: explanation and one more try, the right option stays hidden.
         self.assertFalse(data["isCorrect"])
-        self.assertEqual(data["correctIndex"], 1)
+        self.assertTrue(data["canRetry"])
+        self.assertNotIn("correctIndex", data)
         self.assertEqual(data["explanation"], "固定細胞形態")
+        again = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 2}, headers=ORIGIN).get_json()
+        self.assertFalse(again["canRetry"])
+        self.assertEqual(again["attempts"], 2)
+        self.assertEqual(again["correctIndex"], 1)
 
-    def test_first_answer_is_the_record_and_repeat_does_not_change_it(self):
+    def test_first_answer_is_the_record_and_only_one_retry(self):
         cid = self.create()
         self.login("student-user")
         first = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 0}, headers=ORIGIN).get_json()
         second = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 1}, headers=ORIGIN).get_json()
+        third = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 0}, headers=ORIGIN).get_json()
         self.assertFalse(first["isCorrect"])
-        self.assertFalse(second["isCorrect"])
-        self.assertEqual(second["chosenIndex"], 0)
+        self.assertTrue(second["isCorrect"])
+        self.assertFalse(second["firstCorrect"])
+        self.assertEqual(third["chosenIndex"], 1)  # the single retry is kept
+        self.assertTrue(third["isCorrect"])
+        from teacher_app.checkpoints import repository
+        self.assertFalse(repository.get_answer(cid, "student-user")["isCorrect"])  # record unchanged
         listing = self.client.get("/api/materials/mat-1/checkpoints").get_json()["items"][0]
         self.assertTrue(listing["answered"])
+        self.assertEqual(listing["attempts"], 2)
+
+    def test_right_first_answer_reveals_and_has_no_retry(self):
+        cid = self.create()
+        self.login("student-user")
+        data = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 1}, headers=ORIGIN).get_json()
+        self.assertTrue(data["isCorrect"])
+        self.assertFalse(data["canRetry"])
+        self.assertEqual(data["correctIndex"], 1)
 
     def test_bad_choices_are_rejected(self):
         cid = self.create()

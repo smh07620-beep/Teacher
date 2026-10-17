@@ -27,22 +27,11 @@ class LearnerBundleCheckpointsTests(unittest.TestCase):
         self.assertTrue(re.search(r"LearnerBundleCheckpoints\[materialId\]", cp))
 
 
-class WrongCheckpointPlantsReviewPageTests(unittest.TestCase):
-    def test_wrong_first_answer_plants_page_and_correct_does_not(self):
-        from unittest.mock import patch
-        from teacher_app.checkpoints import service
-
-        item = {"id": "cp1", "materialId": "m1", "page": 4}
-        with patch("teacher_app.learning.review_pages.plant") as plant:
-            service._plant_review_page({"username": "s1"}, item)
-        plant.assert_called_once_with("s1", {"m1": [4]})
-
-    def test_plant_failure_is_swallowed(self):
-        from unittest.mock import patch
-        from teacher_app.checkpoints import service
-
-        with patch("teacher_app.learning.review_pages.plant", side_effect=RuntimeError("db")):
-            service._plant_review_page({"username": "s1"}, {"id": "c", "materialId": "m", "page": 1})
+class WrongCheckpointNeverLocksExamTests(unittest.TestCase):
+    def test_service_no_longer_plants_blocking_review_pages(self):
+        src = (ROOT / "teacher_app/checkpoints/service.py").read_text(encoding="utf8")
+        self.assertNotIn("review_pages", src)
+        self.assertNotIn("_plant_review_page", src)
 
 
 class ReaderRouteTests(unittest.TestCase):
