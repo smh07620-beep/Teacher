@@ -212,7 +212,7 @@
       panel.className = 'mb-4 rounded-2xl border border-teal-200 bg-teal-50/50 p-4 shadow-sm';
       panel.innerHTML = `
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div><p class="admin-page-eyebrow text-teal-700">TEACHER QUICK START</p><h4 class="text-base font-black text-slate-950">建立一門課，照這四步完成</h4><p class="mt-1 text-xs leading-5 text-slate-600">這裡和「建立課程」精靈使用同一套流程；AI 製作與出題都從課程裡進入，不需要先到其他工作區找功能。</p></div>
+          <div><p class="admin-page-eyebrow text-teal-700">快速上手</p><h4 class="text-base font-black text-slate-950">建立一門課，照這四步完成</h4><p class="mt-1 text-xs leading-5 text-slate-600">這裡和「建立課程」精靈使用同一套流程；AI 製作與出題都從課程裡進入，不需要先到其他工作區找功能。</p></div>
           <button id="teacher-guide-close-1014" type="button" class="shrink-0 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-bold text-teal-800">關閉導覽</button>
         </div>
         <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -230,7 +230,8 @@
         rememberGuideDismissed();
       });
     }
-    panel.classList.toggle('hidden', guideDismissed());
+    // The four-step course guide belongs to 教材與課程; inside the AI 製作室 it is only noise.
+    panel.classList.toggle('hidden', guideDismissed() || String(state.mode || '').startsWith('media'));
     return panel;
   }
 
@@ -280,7 +281,7 @@
     section.className = 'hidden space-y-5';
     section.innerHTML = `
       <section id="teacher-media-studio-shell-1018" class="teacher-media-shell-compact-1018 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 px-1">
-        <div><p class="admin-page-eyebrow text-cyan-700">TEACHER CONTENT STUDIO</p><h4 class="text-xl font-black text-slate-950">🧰 教材媒體製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">同一頁完成 AI PowerPoint、講稿與配音、老師錄影、字幕與 AI 教學影片。</p></div>
+        <div><p class="admin-page-eyebrow text-cyan-700">AI 製作</p><h4 class="text-xl font-black text-slate-950">🧰 AI 製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">同一頁完成 AI PowerPoint、講稿與配音、老師錄影、字幕與 AI 教學影片。</p></div>
         <div class="teacher-media-shell-actions-1014 flex flex-wrap items-center gap-2"><span class="admin-workspace-chip">本機 AI｜隱私模式</span><button id="teacher-media-pick-material-1014" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">📚 回教材與課程</button></div>
       </section>`;
     content.appendChild(section);
@@ -362,7 +363,7 @@
     const summary = document.getElementById('admin-workspace-summary');
     const icon = document.getElementById('admin-workspace-icon');
     if (icon) icon.textContent = '🎙️';
-    if (title) title.textContent = '教材媒體製作 Workspace';
+    if (title) title.textContent = 'AI 製作室';
     if (summary) summary.textContent = '同一製作室完成 AI PowerPoint、講稿與配音、老師錄影與 AI 教學影片；正式發布仍使用原教材權限與範圍。';
   }
 

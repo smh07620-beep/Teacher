@@ -10,7 +10,7 @@ def test_media_studio_is_loaded_after_the_existing_media_controls():
     body = ASSET_MANIFEST["system"]["body"]
     assert "/teacher-ai-media-studio-1018.js" in body
     assert body.index("/teacher-ai-video-1015.js") < body.index("/teacher-ai-media-studio-1018.js")
-    assert body.index("/teacher-authoring-source-fix-1017.js") < body.index("/teacher-ai-media-studio-1018.js")
+    assert "/teacher-authoring-source-fix-1017.js" not in body
 
 
 def test_media_studio_uses_hidden_compatibility_source_and_accessible_mode_tabs():

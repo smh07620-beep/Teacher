@@ -1,4 +1,6 @@
-/* Teacher AI subtitles: Worker transcription -> teacher review -> approved WebVTT playback. */
+/* Teacher AI subtitles: Worker transcription -> teacher review -> approved WebVTT playback.
+ * Privacy: with AI_EXTERNAL_MEDIA_ALLOWED=false media never goes to an outside AI; the hospital
+ * Worker transcribes locally (faster-whisper).  Teachers see this in plain words only. */
 (async function () {
   'use strict';
 
@@ -36,25 +38,12 @@
     video.appendChild(track);
   }
 
-  function installPlayerHook() {
-    if (window.__teacherAiSubtitlePlayerInstalled) return true;
-    if (typeof window.openMaterial !== 'function') return false;
-    const originalOpen = window.openMaterial;
-    window.openMaterial = async function (materialId) {
-      const result = await originalOpen.apply(this, arguments);
-      void attachApprovedTrack(materialId);
-      return result;
-    };
-    window.__teacherAiSubtitlePlayerInstalled = true;
-    return true;
-  }
-  if (!installPlayerHook()) {
-    let attempts = 0;
-    const timer = setInterval(() => {
-      attempts += 1;
-      if (installPlayerHook() || attempts > 40) clearInterval(timer);
-    }, 250);
-  }
+  // Approved subtitles attach when the media player opens (event from system-learner.js);
+  // openMaterial is no longer wrapped and nothing polls for it.
+  window.addEventListener('teacher:media-changed', event => {
+    const detail = event.detail || {};
+    if (detail.open && detail.materialId && detail.kind === 'video') void attachApprovedTrack(detail.materialId);
+  });
 
   const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));
   const roles = R.roles instanceof Set ? R.roles : new Set();
@@ -66,9 +55,8 @@
   let activeJob = '';
   let pollToken = 0;
 
-  // Do not couple captions to the script picker.  The visible subtitle source
-  // picker is installed by teacher-authoring-source-fix-1017.js; retain the
-  // legacy picker only as a compatibility fallback while it is loading.
+  // Do not couple captions to the script picker.  The subtitle section owns its
+  // own source picker (buildSourcePicker); the script picker is only a fallback.
   const sourcePicker = () => document.getElementById('teacher-subtitle-material-1017')
     || document.getElementById('teacher-script-material-1014');
   const sourceMaterialId = () => sourcePicker()?.value || '';
@@ -233,6 +221,148 @@
     }
   }
 
+  /* ---- source picker (merged from teacher-authoring-source-fix-1017.js on 2026-10-17) ---- */
+  let pickerMaterials = null;
+  let wantedMaterialId = '';
+  let pickerMaterialsPromise = null;
+  function currentScope() {
+    const query = new URLSearchParams(window.location.search);
+    return {
+      group: String(query.get('group') || window.currentGroupKey || '').trim(),
+      area: String(query.get('area') || window.currentTrainingArea || '').trim(),
+    };
+  }
+
+  async function fetchRows(path) {
+    const response = await fetch(path, {credentials:'same-origin', cache:'no-store'});
+    const data = await response.json().catch(() => ([]));
+    if (!response.ok) throw new Error(data?.error || '資料讀取失敗');
+    return data;
+  }
+
+  function materialStamp(item) {
+    const value = item?.updatedAt || item?.dateAdded || item?.createdAt || '';
+    const stamp = Date.parse(String(value || ''));
+    return Number.isFinite(stamp) ? stamp : 0;
+  }
+
+  function dedupeMaterialRows(rows) {
+    const byId = new Map();
+    (Array.isArray(rows) ? rows : []).forEach(item => {
+      if (!item || !item.id || item.isBuiltin) return;
+      const id = String(item.id).trim();
+      const previous = byId.get(id);
+      if (!previous || materialStamp(item) >= materialStamp(previous)) byId.set(id, item);
+    });
+    const byLogicalSource = new Map();
+    [...byId.values()].forEach(item => {
+      const name = String(item.filename || item.title || item.id || '').trim().toLocaleLowerCase('zh-Hant');
+      const key = [
+        String(item.area || '').trim(),
+        String(item.group || '').trim(),
+        String(item.courseId || '').trim(),
+        item.active === false ? 'draft' : 'active',
+        name,
+      ].join('::');
+      const previous = byLogicalSource.get(key);
+      if (!previous || materialStamp(item) >= materialStamp(previous)) byLogicalSource.set(key, item);
+    });
+    return [...byLogicalSource.values()];
+  }
+
+  async function loadMaterials(force = false) {
+    if (!force && Array.isArray(pickerMaterials)) return pickerMaterials;
+    if (!force && pickerMaterialsPromise) return pickerMaterialsPromise;
+    pickerMaterialsPromise = (async () => {
+      const data = await fetchRows('/api/slides/admin');
+      const current = currentScope();
+      pickerMaterials = dedupeMaterialRows(data)
+        .filter(item => !current.group || String(item.group || '') === current.group)
+        .filter(item => !current.area || String(item.area || '') === current.area)
+        .sort((a, b) => String(a.title || a.filename || a.id).localeCompare(String(b.title || b.filename || b.id), 'zh-Hant'));
+      return pickerMaterials;
+    })();
+    try {
+      return await pickerMaterialsPromise;
+    } finally {
+      pickerMaterialsPromise = null;
+    }
+  }
+
+  function areaLabel(area) {
+    return area === 'pgy' ? 'PGY' : (area === 'internal' ? '院內' : String(area || ''));
+  }
+
+  function materialLabel(item) {
+    const draft = item.active === false ? '［草稿］' : '';
+    const group = String(item.groupLabel || item.group || '').trim();
+    const area = areaLabel(String(item.area || '').trim());
+    const title = item.title || item.filename || item.id;
+    const scopeText = [group, area].filter(Boolean).join('・');
+    return `${draft}${scopeText ? `${scopeText}｜` : ''}${title}`;
+  }
+
+  function isCaptionMaterial(item) {
+    const type = String(item?.materialType || '').toLowerCase();
+    const mime = String(item?.mimeType || item?.sourceMimeType || '').toLowerCase();
+    const filename = String(item?.filename || item?.title || '').toLowerCase();
+    const backend = String(item?.storageBackend || '').toLowerCase();
+    return type === 'video'
+      || mime.startsWith('video/')
+      || mime.startsWith('audio/')
+      || /\.(mp4|webm|mov|m4v|avi|mkv|mp3|wav|m4a|aac|ogg|oga|flac)$/i.test(filename)
+      || backend === 'external';
+  }
+
+  function buildSourcePicker(grid) {
+    const label = document.createElement('label');
+    label.className = 'block text-xs font-bold text-slate-600';
+    label.textContent = '來源影音教材';
+    const select = document.createElement('select');
+    select.id = 'teacher-subtitle-material-1017';
+    select.className = 'learning-input mt-1';
+    select.innerHTML = '<option value="">讀取影音教材中…</option>';
+    label.appendChild(select);
+    grid.insertAdjacentElement('beforebegin', label);
+    void (async () => {
+      try {
+        const rows = (await loadMaterials()).filter(isCaptionMaterial);
+        select.replaceChildren();
+        const first = document.createElement('option');
+        first.value = '';
+        first.textContent = rows.length ? '選擇影音教材…' : '目前沒有可產生字幕的影音教材';
+        select.appendChild(first);
+        rows.forEach(item => {
+          const option = document.createElement('option');
+          option.value = String(item.id || '');
+          option.textContent = materialLabel(item);
+          select.appendChild(option);
+        });
+        select.disabled = !rows.length;
+        if (wantedMaterialId && rows.some(item => String(item.id) === wantedMaterialId)) {
+          select.value = wantedMaterialId;
+          void loadSubtitles();
+        }
+        syncGenerate();
+      } catch (_) {
+        select.innerHTML = '<option value="">影音教材讀取失敗</option>';
+        select.disabled = true;
+      }
+    })();
+    return select;
+  }
+
+  // The generate button follows whichever picker chose the source: this section's own picker,
+  // or the AI 製作室 shared picker that calls selectMaterial() (which sets .value without a
+  // change event, so the button used to stay grey).
+  function syncGenerate() {
+    const button = document.getElementById('teacher-subtitle-generate-1014');
+    if (!button) return;
+    const ready = Boolean(sourceMaterialId());
+    button.disabled = !ready;
+    button.title = ready ? '' : '請先選擇來源影音教材，才能產生字幕';
+  }
+
   function installAdmin() {
     const media = document.getElementById('teacher-media-production-1014');
     const source = document.getElementById('teacher-script-material-1014');
@@ -242,8 +372,8 @@
     section.className = 'bg-white border border-cyan-200 rounded-2xl p-5 shadow-sm space-y-4';
     section.innerHTML = `
       <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-        <div><p class="admin-page-eyebrow text-cyan-700">AI CAPTIONS</p><h4 class="text-lg font-black text-slate-950">💬 影音 → AI 字幕（教師核准後發布）</h4><p class="mt-1 text-xs text-slate-500">上傳影音與允許的 hospital CDN direct video 可由 AI Worker 轉錄成 WebVTT/SRT。YouTube/Vimeo 不下載原始影音，僅使用平台本身提供的字幕。</p></div>
-        <span class="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-800">本機 Whisper 優先符合院方隱私設定</span>
+        <div><p class="admin-page-eyebrow text-cyan-700">AI 字幕</p><h4 class="text-lg font-black text-slate-950">💬 影音 → AI 字幕（教師核准後發布）</h4><p class="mt-1 text-xs text-slate-500">選一份已上傳的影片或錄音，院內 AI 工作站會先做出字幕草稿，你修改並核准後學員才看得到。YouTube／Vimeo 影片請使用平台本身的字幕。</p></div>
+        <span class="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-800">院內轉錄，影音不外傳</span>
       </div>
       <div class="grid md:grid-cols-3 gap-3">
         <label class="text-xs font-bold text-slate-600">語言代碼<input id="teacher-subtitle-language-1014" value="zh-TW" maxlength="32" class="learning-input mt-1"></label>
@@ -252,11 +382,16 @@
       <div class="flex flex-col sm:flex-row sm:items-center gap-3"><button id="teacher-subtitle-generate-1014" type="button" class="rounded-xl bg-cyan-700 px-5 py-2.5 text-xs font-black text-white">💬 產生 AI 字幕草稿</button><span id="teacher-subtitle-status-1014" class="text-xs text-slate-600">選擇影音教材後即可開始。</span></div>
       <label class="block text-xs font-bold text-slate-600">字幕版本<select id="teacher-subtitle-draft-1014" class="learning-input mt-1"><option value="">請先選擇影音教材</option></select></label>
       <div id="teacher-subtitle-meta-1014" class="text-xs text-slate-500">尚未選擇字幕草稿。</div>
-      <label class="block text-xs font-bold text-slate-600">WebVTT 字幕內容<textarea id="teacher-subtitle-vtt-1014" disabled rows="14" spellcheck="false" class="learning-input mt-1 font-mono text-xs" placeholder="WEBVTT"></textarea></label>
+      <label class="block text-xs font-bold text-slate-600">字幕內容（可直接修改文字，時間碼請保留）<textarea id="teacher-subtitle-vtt-1014" disabled rows="14" spellcheck="false" class="learning-input mt-1 font-mono text-xs" placeholder="WEBVTT"></textarea></label>
       <div class="flex flex-wrap items-center gap-2"><button id="teacher-subtitle-save-1014" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700">儲存草稿</button><button id="teacher-subtitle-approve-1014" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white">✅ 教師核准字幕</button><a id="teacher-subtitle-srt-1014" class="hidden rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-2 text-xs font-black text-cyan-800" href="#">下載 SRT</a></div>
-      <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><b>安全規則：</b>AI 只產生草稿；教材更新版本後舊字幕不會繼續發布。當 AI_EXTERNAL_MEDIA_ALLOWED=false 時，影音不送外部 AI，改由本機 faster-whisper 轉錄。</div>`;
+      <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><b>規則：</b>AI 只做草稿，核准後才發布；影片換新版本後，舊字幕會自動停用。</div>`;
     const audio = document.getElementById('teacher-media-audio-1014');
     if (audio) audio.insertAdjacentElement('afterend', section); else media.appendChild(section);
+    const picker = buildSourcePicker(section.querySelector('#teacher-subtitle-language-1014').closest('div'));
+    picker.addEventListener('change', () => {
+      void loadSubtitles();
+      if (picker.value) setStatus('已選擇影音教材，正在讀取既有字幕版本…');
+    });
     // The script source remains a backwards-compatible fallback.  The
     // dedicated subtitle picker calls selectMaterial below and is the source
     // of truth once it is present.
@@ -265,13 +400,6 @@
     });
     document.getElementById('teacher-subtitle-draft-1014')?.addEventListener('change', renderSelected);
     document.getElementById('teacher-subtitle-generate-1014')?.addEventListener('click', () => void generate());
-    const syncGenerate = () => {
-      const button = document.getElementById('teacher-subtitle-generate-1014');
-      if (!button) return;
-      const ready = Boolean(sourceMaterialId());
-      button.disabled = !ready;
-      button.title = ready ? '' : '請先選擇來源影音教材，才能產生字幕';
-    };
     syncGenerate();
     source.addEventListener('change', syncGenerate);
     document.getElementById('teacher-subtitle-material-1017')?.addEventListener('change', syncGenerate);
@@ -285,8 +413,10 @@
     loadSubtitles,
     selectedMaterialId: sourceMaterialId,
     selectMaterial(materialId) {
+      wantedMaterialId = String(materialId || '');
       const picker = document.getElementById('teacher-subtitle-material-1017');
       if (picker && [...picker.options].some(option => option.value === materialId)) picker.value = materialId;
+      syncGenerate();
       void loadSubtitles();
     },
   });

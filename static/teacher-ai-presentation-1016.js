@@ -18,12 +18,16 @@
   function setBusy(value) { window.AppApiClient?.aiBusy?.('presentation', !!value); ['teacher-ai-presentation-generate-1016','teacher-ai-presentation-refresh-1016','teacher-ai-presentation-create-material-1016'].forEach(id => { const b = $(id); if (b) b.disabled = value; }); }
   function syncDraft() {
     const approved = selectedDraft?.draftType === 'slides' && selectedDraft?.status === 'approved';
+    // Steps 4–6 only make sense once there is an outline (or an earlier version to continue);
+    // until then the panel shows one line instead of an empty template picker and service warnings.
+    const panelRoot = $('teacher-ai-presentation-1016');
+    if (panelRoot) panelRoot.dataset.stage = (selectedDraft || currentPresentation) ? 'ready' : 'waiting';
     const summary = $('teacher-ai-presentation-draft-summary-1016');
     if (summary) summary.textContent = selectedDraft ? `${selectedDraft.title || '投影片大綱'}｜${approved ? '已核准，可以建立投影片' : '請先在上方「第 3 步」儲存，並按「教師核准」'}` : '請先在上方「第 3 步」產生大綱、儲存，並按「教師核准」。';
     const generate = $('teacher-ai-presentation-generate-1016'); if (generate) generate.disabled = !approved || !capabilities['presentation.create'] || !serviceReady;
   }
   async function loadStatus() { const state = await api('/api/ai-presentations/status'); capabilities = state.capabilities || {}; qualityRulesetVersion = state.qualityRulesetVersion || ''; serviceReady = Boolean(state.ready); serviceDiagnostic = String(state.diagnostic?.message || 'PowerPoint 生產鏈尚未就緒。'); const badge = $('teacher-ai-presentation-provider-1016'); if (badge) badge.textContent = serviceReady ? '投影片製作服務：已就緒' : state.storage?.available ? '投影片製作服務：等待院內 AI 工作站回報' : `投影片製作服務：尚未啟用${state.storage?.reason ? '（' + state.storage.reason + '）' : ''}`; const flow = $('teacher-ai-presentation-flow-1016'); if (flow) flow.textContent = state.workflow?.ready ? '① 核准大綱 → ② 選版型 → ③ 系統產生投影片 → ④ 你檢查修改並核准 → ⑤ 發布或接續做影片' : serviceDiagnostic; syncDraft(); }
-  async function loadTemplates() { const select = $('teacher-ai-presentation-template-1016'); if (!select) return; const prior = select.value, current = scope(), templates = await api(`/api/ai-presentation-templates?group=${encodeURIComponent(current.group)}&area=${encodeURIComponent(current.area)}`); select.replaceChildren(new Option('不使用版型', '')); templates.forEach(item => select.add(new Option(item.name || item.id, item.id))); if ([...select.options].some(o => o.value === prior)) select.value = prior; }
+  async function loadTemplates() { const select = $('teacher-ai-presentation-template-1016'); if (!select) return; const prior = select.value, current = scope(), templates = await api(`/api/ai-presentation-templates?group=${encodeURIComponent(current.group)}&area=${encodeURIComponent(current.area)}`); select.replaceChildren(new Option('不使用版型', '')); (Array.isArray(templates) ? templates : []).forEach(item => select.add(new Option(item.name || item.id, item.id))); if ([...select.options].some(o => o.value === prior)) select.value = prior; }
   function publicationTarget() {
     const id = String($('teacher-ai-presentation-publication-material-1016')?.value || '');
     return publicationMaterials.find(item => String(item.id || '') === id) || null;
@@ -31,6 +35,8 @@
   function renderPublicationTarget() {
     const host = $('teacher-ai-presentation-publication-target-1016');
     const create = $('teacher-ai-presentation-create-material-1016');
+    const panelRoot = $('teacher-ai-presentation-1016');
+    if (panelRoot && currentPresentation) panelRoot.dataset.stage = 'ready';
     if (!host) return;
     if (!currentPresentation) {
       host.innerHTML = '<p class="text-xs text-slate-500">先按上面的「建立投影片」；系統會自動使用這次的來源與最新一版。</p>';
@@ -213,7 +219,9 @@
     const panel = document.createElement('section');
     panel.id = 'teacher-ai-presentation-1016';
     panel.className = 'space-y-4';
+    panel.dataset.stage = 'waiting';
     panel.innerHTML = `
+      <p class="ai-pres-waiting rounded-xl border border-dashed border-violet-200 bg-violet-50/40 p-3 text-sm text-slate-600">先完成上面的第 1～3 步（加入來源 → 產生大綱 → 教師核准），這裡就會接著做第 4～6 步：選版型、建立投影片、確認發布。</p>
       <div class="flex flex-col lg:flex-row lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-violet-700">AI 投影片</p><h4 class="text-xl font-black text-slate-950">🖥️ AI 投影片製作室</h4><p class="mt-1 text-sm text-slate-600">在這一頁依序完成：核准大綱 → 選版型 → 產生投影片 → 你檢查修改 → 發布。</p><p id="teacher-ai-presentation-flow-1016" class="mt-2 text-xs font-bold text-violet-800">正在確認投影片製作服務…</p></div><span id="teacher-ai-presentation-provider-1016" class="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-800">檢查服務中…</span></div>
       <div class="rounded-xl border border-violet-100 bg-violet-50/50 p-4 space-y-3"><div><b class="text-sm text-slate-900">第 4 步｜選擇投影片版型（可以不選）</b><select id="teacher-ai-presentation-template-1016" class="learning-input mt-2"><option>讀取中…</option></select></div><div><b class="text-sm text-slate-900">第 5 步｜建立投影片</b><p id="teacher-ai-presentation-draft-summary-1016" class="mt-1 text-sm text-slate-600">請在 Step 3 建立、儲存並核准投影片大綱。</p><div class="mt-3 flex flex-wrap gap-2"><button id="teacher-ai-presentation-generate-1016" type="button" class="rounded-xl bg-violet-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40">建立投影片</button><button id="teacher-ai-presentation-refresh-1016" type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-black text-slate-700">重新讀取結果</button></div><div id="teacher-ai-presentation-status-1016" class="mt-2 text-sm font-bold text-slate-600">大綱核准後，按上面的「建立投影片」。</div></div></div>
       <div class="rounded-xl border border-violet-200 bg-violet-50/30 p-4 space-y-3"><div><b class="text-sm text-slate-900">第 6 步｜確認並發布這份投影片</b><p class="mt-1 text-xs text-slate-600">系統會直接使用你剛做好的這一版，不需要再從舊的投影片或教材清單裡重新挑選。</p></div><input id="teacher-ai-presentation-publication-material-1016" type="hidden" value=""><div id="teacher-ai-presentation-results-1016" class="space-y-2"></div><div id="teacher-ai-presentation-publication-target-1016"></div><button id="teacher-ai-presentation-create-material-1016" type="button" class="hidden rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-black text-amber-800">建立本次正式教材</button></div>

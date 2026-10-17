@@ -66,7 +66,25 @@ window.TeacherRBAC681Ready = (async function () {
   const canOpenWorkspace = name => hasAny(WORKSPACE_RULES[name] || EXTENSION_WORKSPACE_RULES[name] || []);
   const groupCatalog = typeof GROUPS !== 'undefined' ? GROUPS : (window.GROUPS || {});
 
+  // The URL persona decides what this screen is for: an administrator who is also a teacher
+  // and opens the teacher persona sees the teacher surface, not 系統管理.
+  const personaParam = new URLSearchParams(window.location.search).get('persona') || '';
+  const teacherCapable = ['clinical_teacher', 'group_leader', 'education_admin'].some(role => roles.has(role));
+  function teacherSurface() {
+    return {
+      key: 'teacher',
+      entryIcon: '👨‍🏫',
+      entryLabel: '教師工作區',
+      heading: '教師工作區',
+      summary: '課程、教材、AI 製作與評量。',
+      teachingLabel: '課程、教材與評量',
+      evaluationLabel: '學員評核與成績',
+      platformLabel: '教學工具'
+    };
+  }
+
   function workspaceSurface() {
+    if (personaParam === 'teacher' && teacherCapable) return teacherSurface();
     if (systemAdmin) {
       return {
         key: 'system',

@@ -290,3 +290,7 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
 #admin-section-quiz:not([data-assess-tab="pending"]):not([data-assess-tab="history"]):not([data-assess-tab="analytics"]) > .teacher-assess-pane-1031 {
   display: none;
 }
+
+/* AI 投影片: steps 4–6 wait for an outline (teacher-ai-presentation-1016.js syncDraft) */
+#teacher-ai-presentation-1016[data-stage="waiting"] > :not(.ai-pres-waiting){display:none}
+#teacher-ai-presentation-1016[data-stage="ready"] > .ai-pres-waiting{display:none}

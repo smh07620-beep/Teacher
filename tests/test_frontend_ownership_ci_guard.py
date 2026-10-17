@@ -21,7 +21,6 @@ BROAD_OBSERVER_CONTRACT = {
     "home-profile-title-71.js": ("mutationTouchesIdentity",),
     "teacher-ui-resilience-1014.js": ("mutationTouchesWorkerSurface",),
     "teacher-ux-convergence-72.js": ("mutationNeedsReconcile",),
-    "teacher-authoring-source-fix-1017.js": ("mutationNeedsInstall", "scheduleInstallAll"),
     "teacher-assignment-experience-1014.js": ("mutationNeedsConverge",),
     "teacher-ai-media-controls-1023.js": ("teacher-media-source-1018", "if (!shared) return"),
     "teacher-media-help-1014.js": ("observer.disconnect()",),

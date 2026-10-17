@@ -127,10 +127,6 @@ class SystemObserverBrowserRegressionTests(unittest.TestCase):
                 'mutationTouchesWorkerSurface',
                 'if (workerSurfaceChanged) scheduleWorkerEnhance();',
             ),
-            'teacher-authoring-source-fix-1017.js': (
-                'mutationNeedsInstall',
-                'if (records.some(mutationNeedsInstall)) scheduleInstallAll();',
-            ),
             'teacher-assignment-experience-1014.js': (
                 'mutationNeedsConverge',
                 'if (records.some(mutationNeedsConverge)) scheduleConverge();',
