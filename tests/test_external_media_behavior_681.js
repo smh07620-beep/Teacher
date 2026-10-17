@@ -35,7 +35,7 @@ function harness({ external = null, externalError = false } = {}) {
     console: { warn() {} },
   };
   const document = {
-    body: { style: {} }, getElementById: id => ids[id] || null,
+    body: { style: {} }, hidden: false, addEventListener() {}, getElementById: id => ids[id] || null,
     createElement: tag => { const node = element(); let assigned = ''; Object.defineProperty(node, 'id', { get: () => assigned, set: value => { assigned = value; ids[value] = node; } }); node.tagName = tag; if (tag === 'iframe') node.contentWindow = { postMessage: (message, origin) => posts.push({ message: JSON.parse(message), origin }) }; return node; },
   };
   const fetch = async (url, options = {}) => {
