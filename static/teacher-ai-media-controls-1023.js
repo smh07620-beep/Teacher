@@ -690,30 +690,8 @@
     return true;
   }
 
-  function installCourseWizardDirectUploadGuard() {
-    const client = window.MaterialUploadClient;
-    if (!client?.enqueue || client.enqueue.__teacherWizardDirectOnly1024) return;
-    const original = client.enqueue;
-    const wrapped = function(formData, options = {}) {
-      const workflowId = typeof formData?.get === 'function' ? String(formData.get('bundleWorkflowId') || '') : '';
-      if (!workflowId) return original.call(client, formData, options);
-      const directOptions = { ...options, fallbackToSameOriginQueue: false };
-      delete directOptions.onFallback;
-      return original.call(client, formData, directOptions).catch(error => {
-        if (/Web 檔案接收相容路徑已關閉/.test(String(error?.message || ''))) {
-          throw new Error('Browser → R2 直傳未完成。請直接重試；若仍失敗，請檢查 R2 CORS 是否允許目前網站來源並公開 ETag。');
-        }
-        throw error;
-      });
-    };
-    wrapped.__teacherWizardDirectOnly1024 = true;
-    wrapped.__teacherWizardOriginal1024 = original;
-    client.enqueue = wrapped;
-  }
-
   async function enhance(options = {}) {
     const shared = $('teacher-media-source-1018');
-    installCourseWizardDirectUploadGuard();
     if (!shared) return false;
     if (shared.dataset.mediaControls1023 !== '1') {
       shared.dataset.mediaControls1023 = '1';
@@ -770,7 +748,6 @@
       )
     ));
     if (!relevant) return;
-    installCourseWizardDirectUploadGuard();
     const shared = $('teacher-media-source-1018');
     if (!shared) return;
     ensureSourceEmptyState();
@@ -781,7 +758,6 @@
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
-  installCourseWizardDirectUploadGuard();
   scheduleEnhance();
   window.addEventListener('teacher-ai-material-options-rendered-1014', () => syncSelectedSource());
   window.addEventListener('teacher-ai-presentation-rendered-f5', () => {

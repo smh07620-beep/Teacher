@@ -449,6 +449,20 @@
   }
 
   async function enqueue(formData,options={}){
+    // Course-wizard uploads (bundleWorkflowId) must go Browser -> R2 directly: no same-origin fallback.
+    const wizardUpload=typeof formData?.get==='function'&&String(formData.get('bundleWorkflowId')||'');
+    if(wizardUpload){
+      const directOptions={...options,fallbackToSameOriginQueue:false};
+      delete directOptions.onFallback;
+      return enqueueOnce(formData,directOptions).catch(error=>{
+        if(/Web 檔案接收相容路徑已關閉/.test(String(error?.message||'')))throw new Error('Browser → R2 直傳未完成。請直接重試；若仍失敗，請檢查 R2 CORS 是否允許目前網站來源並公開 ETag。');
+        throw error;
+      });
+    }
+    return enqueueOnce(formData,options);
+  }
+
+  async function enqueueOnce(formData,options={}){
     try{return await directUpload(formData,options);}
     catch(error){
       if(error?.status===401){options.onUnauthorized?.();throw new Error('登入已逾時，請重新登入。');}

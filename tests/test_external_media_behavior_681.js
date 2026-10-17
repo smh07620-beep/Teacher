@@ -52,6 +52,9 @@ function harness({ external = null, externalError = false } = {}) {
   };
   const context = vm.createContext({ window, document, fetch, console: window.console, location: { origin: 'https://teacher.example' }, JSON, Set, Number, Math, Date, Error, encodeURIComponent, setTimeout: fn => fn() });
   vm.runInContext(fs.readFileSync('static/smart-learning-67.js', 'utf8'), context);
+  // Like system-learner.js openMaterial(): hand the open to smart-learning with the base opener.
+  const openBase = window.openMaterial;
+  window.openMaterial = id => window.SmartLearning67.openWith(id, openBase);
   const frame = () => ids['external-media-frame'];
   return {
     window, calls, progress, posts, frame, fallback: () => fallback, jsonCalls: () => jsonCalls,

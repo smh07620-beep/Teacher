@@ -37,6 +37,7 @@ function teachingSavePage() {
     }
     const next = document.getElementById('reader-next');
     if (next) next.disabled = teachingReaderBusy || !teachingFindNextMaterial();
+    window.teacher66SyncReaderNext?.();
 }
 function teachingFindNextMaterial(materialId = slideViewerState.materialId) {
     const material = cachedSlidesList.find(m => m.id === materialId);
@@ -46,6 +47,8 @@ function teachingFindNextMaterial(materialId = slideViewerState.materialId) {
     return materials[materials.findIndex(m => m.id === material.id) + 1] || null;
 }
 function teachingNextMaterial() {
+    // Not marking a material complete no longer blocks navigation.
+    window.teacher66SyncReaderNext?.();
     const next = teachingFindNextMaterial();
     if (next) { closeSlideViewer(); openMaterial(next.id); }
 }
@@ -564,89 +567,21 @@ function teachingNextMedia() {
     }
 
 
-    const teacher66OriginalSavePage =
-        teachingSavePage;
-
-    teachingSavePage = function () {
-        const result =
-            teacher66OriginalSavePage
-                .apply(
-                    this,
-                    arguments
-                );
-
-        teacher66SyncReaderNext();
-
-        return result;
-    };
-
-
-    const teacher66OriginalMarkComplete =
-        window.LearnerMaterialProgress?.complete
-        || window.markMaterialComplete;
-
-    if (typeof teacher66OriginalMarkComplete === 'function') {
-        window.markMaterialComplete =
-            async function (materialId) {
-                if (!teachingIdentity) {
-                    closeSlideViewer();
-                    closeMediaViewer();
-                    teachingWelcome();
-                    const status =
-                        document.getElementById(
-                            'learning-identity-status'
-                        );
-                    if (status) {
-                        status.textContent =
-                            '請先回首頁設定姓名與工號，再標記教材完成。';
-                    }
-                    return false;
-                }
-
-                teachingSetIdentityFields(
-                    teachingIdentity.name,
-                    teachingIdentity.empId
-                );
-
-                const result =
-                    await teacher66OriginalMarkComplete
-                        .apply(
-                            this,
-                            arguments
-                        );
-
-                if (result) {
-                    /*
-                     * Completion is stored by the canonical
-                     * learner progress owner. This wrapper
-                     * only refreshes reader controls.
-                     */
-                    teacher66SyncReaderNext();
-
-                    requestAnimationFrame(
-                        teacher66SyncReaderNext
-                    );
-                }
-
-                return result;
-            };
-    }
-
-
-    const teacher66OriginalNextMaterial =
-        teachingNextMaterial;
-
-    teachingNextMaterial =
-        function () {
-            // Not marking a material complete no longer blocks navigation.
-            teacher66SyncReaderNext();
-
-            return teacher66OriginalNextMaterial
-                .apply(
-                    this,
-                    arguments
-                );
-        };
+    // system-learner.js markMaterialComplete asks this first (no wrapper around it).
+    window.TeachingIdentity = Object.freeze({
+        ensure() {
+            if (!teachingIdentity) {
+                closeSlideViewer();
+                closeMediaViewer();
+                teachingWelcome();
+                const status = document.getElementById('learning-identity-status');
+                if (status) status.textContent = '請先回首頁設定姓名與工號，再標記教材完成。';
+                return false;
+            }
+            teachingSetIdentityFields(teachingIdentity.name, teachingIdentity.empId);
+            return true;
+        },
+    });
 
 
     /*

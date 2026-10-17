@@ -55,6 +55,16 @@ async function deleteUploadedSlide(id) {
 window.deleteUploadedSlide = deleteUploadedSlide;
 
 
+// Shared-content badge (cross-group / all-staff material), formerly added by learner-content-audience-1014.js.
+function sharedContentBadge(item){
+    if(!item?.sharedFromGroup)return '';
+    const catalog=typeof GROUPS!=='undefined'?GROUPS:(window.GROUPS||{});
+    const key=item.ownerGroup||item.sharedFromGroup;
+    const name=catalog[key]?.label||catalog[key]?.name||key||'其他組別';
+    const audience=item.audienceScope==='all_staff'?'全科共用':'跨組共用';
+    return `<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">🌐 ${audience}｜來源：${escapeHtml(name)}</span>`;
+}
+
 function buildSlideCardHTML(s) {
 
     const catLabel = s.categoryLabel || slideCategoryLabels[s.category] || slideCategoryLabels[''];
@@ -91,7 +101,7 @@ function buildSlideCardHTML(s) {
 
     return `
 
-        <div class="slide-card lesson-card micro-card p-5 sm:p-6 ${s.materialType==='infographic'?'infographic-card':s.materialType==='sop'?'sop-card':s.materialType==='troubleshooting'?'troubleshoot-card':s.materialType==='case'?'case-card':''}">
+        <div class="slide-card lesson-card micro-card p-5 sm:p-6 ${s.materialType==='infographic'?'infographic-card':s.materialType==='sop'?'sop-card':s.materialType==='troubleshooting'?'troubleshoot-card':s.materialType==='case'?'case-card':''}">${sharedContentBadge(s)?`<div class="mb-2 flex flex-wrap gap-1">${sharedContentBadge(s)}</div>`:''}
 
             <div class="flex items-start justify-between gap-2">
 
@@ -308,7 +318,13 @@ function inferPdfReaderMode(entry = {}) {
 
 
 
+// Smart-learning (resume position, progress, external links) receives the open from here.
 function openMaterial(id) {
+    const handler=window.SmartLearning67?.openWith;
+    return typeof handler==='function'?handler(id,openMaterialBase):openMaterialBase(id);
+}
+
+function openMaterialBase(id) {
 
     const e = cachedSlidesList.find(s => s.id === id);
 
@@ -1193,7 +1209,7 @@ function buildCourseMaterialRow(m){
 
     const detail=[m.pageCount?`${m.pageCount} 頁`:'',m.dateAdded?`上傳 ${m.dateAdded}`:''].filter(Boolean).join(' · ');
 
-    return `<div class="course-material-row"><span class="course-type-icon">${uiIcon(meta.icon)}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="course-material-title font-bold text-sm text-slate-800 break-words">${escapeHtml(m.title||m.filename||'未命名教材')}</span><span class="text-xs font-bold px-2 py-0.5 rounded-full ${meta.tone}">${escapeHtml(meta.label)}</span>${done?'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✓ 已完成</span>':''}</div><p class="text-xs text-slate-400 mt-1" data-row-detail>${escapeHtml(detail||m.description||'')}</p></div><div class="course-row-actions flex items-center gap-2"><button data-csp-click="openMaterial('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg bg-[#006b64] hover:bg-[#005a54] text-white text-xs font-bold">${meta.key==='media'?'▶ 播放':'📖 閱讀'}</button>${m.isBuiltin?'':`${materialAutoTracked(m)?'':`<button data-csp-click="markMaterialComplete('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg border ${done?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'} text-xs font-bold">${done?'✓ 已完成':'完成標記'}</button>`}<button type="button" data-save-learning-item="material" data-save-learning-id="${escapeHtml(m.id)}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">${savedLearningItems.has(savedLearningKey('material',m.id))?'★ 已收藏':'☆ 稍後閱讀'}</button>`}</div></div>`;
+    return `<div class="course-material-row"><span class="course-type-icon">${uiIcon(meta.icon)}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap">${sharedContentBadge(m)}<span class="course-material-title font-bold text-sm text-slate-800 break-words">${escapeHtml(m.title||m.filename||'未命名教材')}</span><span class="text-xs font-bold px-2 py-0.5 rounded-full ${meta.tone}">${escapeHtml(meta.label)}</span>${done?'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✓ 已完成</span>':''}</div><p class="text-xs text-slate-400 mt-1" data-row-detail>${escapeHtml(detail||m.description||'')}</p></div><div class="course-row-actions flex items-center gap-2"><button data-csp-click="openMaterial('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg bg-[#006b64] hover:bg-[#005a54] text-white text-xs font-bold">${meta.key==='media'?'▶ 播放':'📖 閱讀'}</button>${m.isBuiltin?'':`${materialAutoTracked(m)?'':`<button data-csp-click="markMaterialComplete('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg border ${done?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'} text-xs font-bold">${done?'✓ 已完成':'完成標記'}</button>`}<button type="button" data-save-learning-item="material" data-save-learning-id="${escapeHtml(m.id)}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">${savedLearningItems.has(savedLearningKey('material',m.id))?'★ 已收藏':'☆ 稍後閱讀'}</button>`}</div></div>`;
 
 }
 
@@ -1333,6 +1349,7 @@ async function markMaterialComplete(materialId){
         if(typeof window.openMaterial==='function')await window.openMaterial(materialId);
         return false;
     }
+    if(window.TeachingIdentity&&!window.TeachingIdentity.ensure())return false;
 
     const name=(document.getElementById('examinee-name')?.value || document.getElementById('progress-name')?.value || '').trim();
 
@@ -1351,6 +1368,7 @@ async function markMaterialComplete(materialId){
     if(currentName!==identitySnapshot.name || currentEmpId!==identitySnapshot.empId) return false;
 
     myCompletedMaterials[materialId]=data.completedAt||true;
+    window.dispatchEvent(new CustomEvent('teacher66:material-complete',{detail:{materialId}}));
 
     if(currentMaterialView==='materials') renderCourseOverview(); else await renderSlidesGrid();
 

@@ -136,7 +136,7 @@
 | `/admin-external-media.js` | 0.9 | 是 | escapeHtml |
 | ~~`/teacher-workspace-nav-fix-1014.js`~~ | — | — | 2026-10-17 併入 `/teacher-workspace-1014.js` |
 | `/teacher-voice-catalog-1026.js` | 0.8 | 是 |  |
-| `/learner-content-audience-1014.js` | 0.7 |  |  |
+| ~~`/learner-content-audience-1014.js`~~ | — | — | 2026-10-17 併入 `/system-learner.js` |
 | `/learner-ui-cleanup-71.js` | 0.7 |  |  |
 | `/learner-result-chart.js` | 0.7 |  |  |
 | ~~`/teacher-ai-material-convergence-1014.js`~~ | — | — | 2026-10-17 併入 `/teacher-ai-material-1014.js` |

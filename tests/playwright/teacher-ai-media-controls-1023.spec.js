@@ -312,38 +312,7 @@ test('multi-source PowerPoint opens inline and does not run the old jump-back ha
   await expect(page.locator('#admin-course-material-hub > #teacher-ai-material-1014')).toHaveCount(1);
 });
 
-test('course wizard upload is forced to Browser to R2 and cannot fall back to disabled web byte upload', async ({ page }) => {
-  await page.setContent('<select id="teacher-media-source-1018"><option value="">來源</option></select><p id="teacher-media-next-step-1018"></p>');
-  await installTeacherRBAC(page);
-  await page.evaluate(() => {
-    window.fetch = async () => ({ ok: true, json: async () => [] });
-    window.MaterialUploadClient = {
-      enqueue: async (_form, options) => {
-        window.wizardUploadOptions1024 = { ...options };
-        return { accepted: true, status: 'queued', jobId: 'job-1', materialId: 'material-1' };
-      }
-    };
-  });
-
-  await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
-  await expect.poll(() => page.evaluate(() => Boolean(window.MaterialUploadClient?.enqueue?.__teacherWizardDirectOnly1024))).toBe(true);
-
-  const result = await page.evaluate(async () => {
-    const form = new FormData();
-    form.append('file', new File(['ppt'], 'c503.pptx', { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }));
-    form.append('bundleWorkflowId', 'cw-safe-1');
-    return window.MaterialUploadClient.enqueue(form, {
-      fileName: 'c503.pptx',
-      fallbackToSameOriginQueue: true,
-      onFallback: () => { window.fallbackCalled1024 = true; }
-    });
-  });
-
-  expect(result).toMatchObject({ accepted: true, jobId: 'job-1' });
-  await expect.poll(() => page.evaluate(() => window.wizardUploadOptions1024?.fallbackToSameOriginQueue)).toBe(false);
-  await expect.poll(() => page.evaluate(() => Boolean(window.wizardUploadOptions1024?.onFallback))).toBe(false);
-  await expect.poll(() => page.evaluate(() => Boolean(window.fallbackCalled1024))).toBe(false);
-});
+// The wizard Browser -> R2 rule now lives in material-upload-client.js (see tests/test_upload_wizard_direct_1017.py).
 
 test('F5 hydration and observers issue one PowerPoint request per selected source', async ({ page }) => {
   await page.setContent(`

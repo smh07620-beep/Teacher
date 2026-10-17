@@ -34,12 +34,9 @@ class FrontendJsOwnershipContractTests(unittest.TestCase):
             self.assertIn(marker, self.review)
 
     def test_teaching_wrappers_preserve_one_previous_implementation(self):
-        for marker in (
-            "teacher66OriginalSavePage",
-            "teacher66OriginalMarkComplete",
-            "teacher66OriginalNextMaterial",
-        ):
-            self.assertIn(marker, self.teaching)
+        # 2026-10-17: teaching.js wraps nothing; it exposes helpers its owners call.
+        self.assertNotIn("teacher66Original", self.teaching)
+        self.assertIn("window.TeachingIdentity = Object.freeze", self.teaching)
         # 2026-10-17: the exam row is rendered by its owner; no wrapper chain on buildCourseExamRow.
         self.assertNotIn("originalBuildCourseExamRow", self.teaching)
         self.assertNotIn("teacher66OriginalSwitchCategory", self.teaching)
