@@ -121,6 +121,37 @@ class SlideCheckpointTests(unittest.TestCase):
         r = self.client.post("/api/materials/mat-1/checkpoints", json=self.body(), headers=ORIGIN)
         self.assertEqual(r.status_code, 400)
 
+    # --- per-material reading rules (2026-10-17)
+    def test_teacher_sets_reading_rules_and_others_cannot(self):
+        saved = {}
+        with patch("teacher_app.materials.repository.merge_storage_meta", side_effect=lambda mid, upd: saved.update(upd)):
+            self.login("clinical-teacher")
+            r = self.client.put("/api/materials/mat-1/reading-rules",
+                                json={"optional": True, "minSecondsPerPage": 12, "checkpointsEnabled": False}, headers=ORIGIN)
+            self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+            self.assertEqual(saved, {"optional": True, "minSecondsPerPage": 12, "checkpointsEnabled": False})
+            self.assertTrue(r.get_json()["optional"])
+            for bad in ({"minSecondsPerPage": 999}, {"minSecondsPerPage": "x"}, {"minSecondsPerPage": True}, {}):
+                self.assertEqual(self.client.put("/api/materials/mat-1/reading-rules", json=bad, headers=ORIGIN).status_code, 400, bad)
+            self.assertEqual(self.client.put("/api/materials/mat-1/reading-rules", json={"minSecondsPerPage": ""}, headers=ORIGIN).get_json()["minSecondsPerPage"], None)
+            for username in ("student-user", "other-teacher", "auditor-user"):
+                self.login(username)
+                self.assertEqual(self.client.put("/api/materials/mat-1/reading-rules", json={"optional": True}, headers=ORIGIN).status_code, 403, username)
+
+    def test_checkpoints_switched_off_are_hidden_from_learners(self):
+        self.create()
+        self.material["storageMeta"] = {"checkpointsEnabled": False}
+        self.login("student-user")
+        self.assertEqual(self.client.get("/api/materials/mat-1/checkpoints").get_json()["items"], [])
+
+    def test_fixed_seconds_override_the_automatic_dwell(self):
+        from teacher_app.learning import routes
+
+        required = routes._required_by_page({"storageMeta": {"minSecondsPerPage": 8, "pageTextLengths": [900, 0]}}, 2)
+        self.assertEqual(required, {"1": 8, "2": 8})
+        auto = routes._required_by_page({"storageMeta": {"pageTextLengths": [900, 0]}}, 2)
+        self.assertEqual(auto, {"1": 30, "2": 5})
+
     # --- learner side: secrecy until answered
     def test_learner_list_hides_answer_until_answered(self):
         cid = self.create()

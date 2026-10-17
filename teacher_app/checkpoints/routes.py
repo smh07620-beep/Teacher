@@ -5,7 +5,7 @@ from typing import Callable
 
 from flask import g, jsonify, request
 
-from teacher_app.checkpoints import service
+from teacher_app.checkpoints import reading_rules, service
 from teacher_app.common.errors import ApiError
 
 
@@ -60,5 +60,23 @@ def register_slide_checkpoints(app, *, material_getter: Callable):
     def answer(checkpoint_id):
         body = request.get_json(silent=True) or {}
         return guarded(lambda user: jsonify(service.answer(user, material_getter, checkpoint_id, body)))
+
+    @app.get("/api/materials/<material_id>/reading-rules", endpoint="material_reading_rules_get")
+    def reading_rules_get(material_id):
+        return guarded(lambda user: jsonify(reading_rules.read(service.manageable_material(user, material_getter, material_id))))
+
+    @app.put("/api/materials/<material_id>/reading-rules", endpoint="material_reading_rules_put")
+    def reading_rules_put(material_id):
+        body = request.get_json(silent=True) or {}
+
+        def run(user):
+            material = service.manageable_material(user, material_getter, material_id)
+            updates = reading_rules.clean(body)
+            reading_rules.save(material["id"], updates)
+            merged = dict(material)
+            merged["storageMeta"] = {**(material.get("storageMeta") or {}), **updates}
+            return jsonify({"ok": True, **reading_rules.read(merged)})
+
+        return guarded(run)
 
     return app

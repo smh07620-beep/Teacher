@@ -116,6 +116,13 @@ def mark_material_complete(user: Mapping[str, Any], material_id: str) -> str:
         raise ProgressError("找不到教材", 404)
     if not learning_access.can_access_learning_item(user, material):
         raise ProgressError("此教材不在你的授權範圍。", 403)
+    from teacher_app.learning import gate as learning_gate
+    from teacher_app.learning.routes import auto_tracked
+
+    if learning_gate.gate_enabled() and auto_tracked(material) and learning_access.is_assignment_gated(user):
+        # Slides, documents and media are completed by reading them in the reader,
+        # so a button press must not show 已完成 while the exam stays locked.
+        raise ProgressError("這份教材在閱讀器裡讀完後會自動完成，不需要手動標記。", 409)
 
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     completed_version = versioning.current_version(material)

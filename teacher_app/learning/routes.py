@@ -58,12 +58,17 @@ def _required_by_page(material: dict, total_pages: int) -> dict:
     meta = material.get("storageMeta") or {}
     lengths = meta.get("pageTextLengths") if isinstance(meta, dict) else None
     overrides = meta.get("pageMinSeconds") if isinstance(meta, dict) else None
+    fixed = meta.get("minSecondsPerPage") if isinstance(meta, dict) else None
+    if isinstance(fixed, bool) or not isinstance(fixed, (int, float)):
+        fixed = None  # teacher's whole-material setting; None = automatic by text length
     result = {}
     for page in range(1, total_pages + 1):
         text_len = 0
         if isinstance(lengths, list) and page - 1 < len(lengths):
             text_len = lengths[page - 1]
         override = overrides.get(str(page)) if isinstance(overrides, dict) else None
+        if override is None:
+            override = fixed
         result[str(page)] = content.min_dwell_seconds(text_len, override)
     return result
 

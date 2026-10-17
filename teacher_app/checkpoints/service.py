@@ -64,6 +64,11 @@ def _manageable_material(user, get_material, material_id):
     return material
 
 
+def manageable_material(user, get_material, material_id):
+    """Public guard for the per-material reading rules (same rule as checkpoints)."""
+    return _manageable_material(user, get_material, material_id)
+
+
 def _readable_material(user, get_material, material_id):
     material = _material(get_material, material_id)
     if not learning_access.can_access_learning_item(user, material):
@@ -202,6 +207,10 @@ def _learner_view(item: Mapping[str, Any], answer: Mapping[str, Any] | None, sec
 
 def learner_items(user, material: Mapping[str, Any]) -> list[dict]:
     """Learner-safe checkpoint items for an already-authorised material."""
+    from teacher_app.checkpoints import reading_rules
+
+    if not reading_rules.checkpoints_enabled(material):
+        return []
     current = int(material.get("currentVersion") or 1)
     answers = repository.answers_for_user(_username(user), material["id"])
     seconds = retry.retries_for(_username(user), material["id"]) if answers else {}
