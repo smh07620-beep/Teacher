@@ -240,7 +240,7 @@
       const q=sel=>dialog.querySelector(sel);
       const st={audioId:'',subtitle:null,poll:0};
       dialog._ns=st;
-      const say=(text,tone)=>{const el=q('[data-ns-status]');el.textContent=text||'';el.style.color=tone==='error'?'#be123c':tone==='ok'?'#047857':'#334155';};
+      const say=(text,tone)=>{const el=q('[data-ns-status]');el.textContent=text||'';el.style.color=tone==='error'?'#be123c':tone==='ok'?'#2f6b4f':'#334155';};
       const close=()=>{st.poll++;try{dialog.close();}catch(_){dialog.removeAttribute('open');}};
       const paint=()=>{
           const sub=st.subtitle,box=q('[data-ns-vtt]');

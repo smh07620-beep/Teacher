@@ -159,7 +159,7 @@
     if (!node) return false;
     node.scrollIntoView?.({behavior: 'smooth', block: 'center'});
     const before = node.style.boxShadow;
-    node.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, .28)';
+    node.style.boxShadow = '0 0 0 3px rgba(90, 143, 118, .28)';
     setTimeout(() => { node.style.boxShadow = before; }, 2600);
     return true;
   }

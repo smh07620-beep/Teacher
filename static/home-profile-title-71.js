@@ -53,7 +53,7 @@
     nameEl.style.alignItems='center';
     nameEl.style.gap='0.35rem';
     nameEl.style.minWidth='0';
-    nameEl.innerHTML=`<span data-teacher-display-name style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</span><span data-teacher-title-badge style="flex:none;border:1px solid #bae6fd;background:#f0f9ff;color:#075985;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:800;line-height:1.45">${esc(title)}</span>`;
+    nameEl.innerHTML=`<span data-teacher-display-name style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</span><span data-teacher-title-badge style="flex:none;border:1px solid #cfe0d7;background:#fbf9f5;color:#2f6b4f;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:800;line-height:1.45">${esc(title)}</span>`;
     metaEl.textContent=expectedMeta;
     metaEl.style.display='block';
     metaEl.style.marginTop='2px';

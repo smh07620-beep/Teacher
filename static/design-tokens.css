@@ -1,29 +1,29 @@
 /* V5.9.0 · 全站設計語彙 */
 :root{
-  --platform-ink:#17384a;
-  --platform-teal:#087b78;
-  --platform-teal-dark:#075b5c;
+  --platform-ink:#2b302d;
+  --platform-teal:#2f6b4f;
+  --platform-teal-dark:#245a41;
   --platform-surface:#ffffff;
-  --platform-canvas:#f4f8fa;
-  --platform-line:#dce8ed;
-  --platform-muted:#647b88;
+  --platform-canvas:#fbf9f5;
+  --platform-line:#e2e8e5;
+  --platform-muted:#5f6b65;
   --platform-radius:18px;
-  --platform-shadow:0 14px 36px rgba(25,65,84,.10);
+  --platform-shadow:0 14px 36px rgba(43,48,45,.10);
 }
 *,*::before,*::after{box-sizing:border-box}
 html{scroll-behavior:smooth}
 button,a,input,select,textarea{font:inherit}
-:focus-visible{outline:3px solid rgba(8,123,120,.28);outline-offset:2px}
+:focus-visible{outline:3px solid rgba(47,107,79,.28);outline-offset:2px}
 
 /* ---- 2026-10 tokens: type, space, radius, semantic colour ---- */
 :root{
   --fs-xs:12px;--fs-sm:14px;--fs-base:16px;--fs-lg:18px;--fs-xl:22px;--fs-2xl:28px;
   --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-6:24px;--sp-8:32px;
   --r-sm:8px;--r-md:12px;--r-lg:16px;
-  --shadow-1:0 1px 3px rgba(23,56,74,.10);--shadow-2:0 8px 24px rgba(23,56,74,.14);
-  --color-primary:#087b78;--color-primary-dark:#075b5c;--color-accent:#0f5b83;
-  --color-success:#15803d;--color-danger:#be123c;--color-locked:#64748b;
-  --color-text:#17384a;--color-text-muted:#516878;
+  --shadow-1:0 1px 3px rgba(43,48,45,.10);--shadow-2:0 8px 24px rgba(43,48,45,.14);
+  --color-primary:#2f6b4f;--color-primary-dark:#245a41;--color-accent:#2f6b4f;
+  --color-success:#2f6b4f;--color-danger:#b54a3c;--color-warn:#a86b14;--color-warn-bg:#fdf6e7;--color-danger-bg:#fdf4f2;--color-sage:#5a8f76;--color-sage-bg:#eef4f1;--color-locked:#64748b;
+  --color-text:#2b302d;--color-text-muted:#5f6b65;
   --font-tc:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
 }
 body{font-family:var(--font-tc);font-size:var(--fs-base);line-height:1.7;color:var(--color-text)}
@@ -38,17 +38,17 @@ h1,h2,h3{line-height:1.3;font-weight:700}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);min-height:44px;padding:0 var(--sp-4);border-radius:var(--r-md);border:1px solid transparent;font-size:var(--fs-sm);font-weight:700;cursor:pointer;transition:background-color .15s,transform .15s,box-shadow .15s}
 .btn:active{transform:translateY(1px)}
 .btn-primary{background:var(--color-primary);color:#fff}.btn-primary:hover{background:var(--color-primary-dark)}
-.btn-secondary{background:#fff;color:var(--color-primary-dark);border-color:var(--platform-line)}.btn-secondary:hover{background:#f1f7f8}
-.btn-ghost{background:transparent;color:var(--color-primary-dark)}.btn-ghost:hover{background:#eef6f6}
+.btn-secondary{background:#fff;color:var(--color-primary-dark);border-color:var(--platform-line)}.btn-secondary:hover{background:#f1f7f4}
+.btn-ghost{background:transparent;color:var(--color-primary-dark)}.btn-ghost:hover{background:#f1f7f4}
 .btn[disabled]{opacity:.55;cursor:not-allowed}
 .card{background:var(--platform-surface);border:1px solid var(--platform-line);border-radius:var(--r-lg);padding:var(--sp-4);box-shadow:var(--shadow-1);transition:box-shadow .15s,transform .15s}
 .card:hover{box-shadow:var(--shadow-2);transform:translateY(-2px)}
 .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px;font-size:var(--fs-xs);font-weight:700}
-.badge-done{background:#dcfce7;color:#166534}.badge-progress{background:#e0f2fe;color:#075985}
+.badge-done{background:#dcfce7;color:#166534}.badge-progress{background:#e3efe8;color:#2f6b4f}
 .badge-locked{background:#e2e8f0;color:#334155}.badge-failed{background:#ffe4e6;color:#9f1239}
 .field{width:100%;min-height:44px;padding:0 var(--sp-3);border:1px solid var(--platform-line);border-radius:var(--r-md);font-size:var(--fs-base);background:#fff}
 .empty-state{padding:var(--sp-8) var(--sp-4);text-align:center;color:var(--color-text-muted);font-size:var(--fs-sm)}
-.skeleton{border-radius:var(--r-sm);background:linear-gradient(90deg,#e8eff2 25%,#f4f8fa 50%,#e8eff2 75%);background-size:200% 100%;animation:skeleton-sweep 1.2s ease-in-out infinite;min-height:1em}
+.skeleton{border-radius:var(--r-sm);background:linear-gradient(90deg,#e3efe8 25%,#fbf9f5 50%,#e3efe8 75%);background-size:200% 100%;animation:skeleton-sweep 1.2s ease-in-out infinite;min-height:1em}
 @keyframes skeleton-sweep{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 
@@ -63,7 +63,7 @@ h1,h2,h3{line-height:1.3;font-weight:700}
   #slide-viewer-shell .reader-head-tool,#slide-viewer-shell .reader-eyebrow{display:none}
   #slide-viewer-canvas{padding:0}
   #slide-viewer-image{border:0;border-radius:0;box-shadow:none}
-  #slide-viewer-stage{background:#0f1a20}
+  #slide-viewer-stage{background:#2b302d}
 }
 @media (min-width:640px){.reader-phone-tools{display:none}}
 @media (pointer:coarse){#slide-viewer-shell button{min-height:44px}}
@@ -83,3 +83,9 @@ body:has(#slide-viewer-modal:not(.hidden)) #loop1032-return-pill{display:none}
 .health-light[data-state="green"] .health-dot{background:#16a34a}
 .health-light[data-state="yellow"] .health-dot{background:#d97706}
 .health-light[data-state="red"] .health-dot{background:#dc2626}
+
+/* Note boxes (2026-10-17 palette): brick red = 警語/重要考點, amber = 待辦/提醒. Always with an icon so they never read as a group colour. */
+.note-danger,.note-warn{margin:var(--sp-3) 0;padding:var(--sp-3) var(--sp-4);border-left:5px solid;border-radius:10px;color:var(--color-text);font-size:var(--fs-sm)}
+.note-danger{background:var(--color-danger-bg);border-color:var(--color-danger)}.note-danger b{color:var(--color-danger)}
+.note-warn{background:var(--color-warn-bg);border-color:var(--color-warn)}.note-warn b{color:var(--color-warn)}
+body{background-color:var(--platform-canvas)}

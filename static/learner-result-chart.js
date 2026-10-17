@@ -23,8 +23,8 @@
           {
             label: '答對題數',
             data: userScores,
-            backgroundColor: 'rgba(13, 148, 136, 0.85)',
-            borderColor: '#0f766e',
+            backgroundColor: 'rgba(47, 107, 79, 0.85)',
+            borderColor: '#2f6b4f',
             borderWidth: 1
           },
           {

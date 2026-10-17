@@ -29,7 +29,7 @@
     <header class="official-main-header sticky top-0 z-50 v573-system-header">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-3">
             <a href="/" class="v56-system-brand" aria-label="回醫學檢驗教學平台首頁">
-                <svg class="v56-system-logo" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M10 14l20-7 24 7v35l-22 8-22-8V14Z" fill="#eaf8fb" stroke="#12658d" stroke-width="2.4"/><path d="M13 17l17 5v29l-17-6V17Zm38 0-18 5v29l18-6V17Z" fill="#fff" stroke="#12658d" stroke-width="2"/><path d="M27 11h10v8h7v10h-7v8H27v-8h-7V19h7v-8Z" fill="#0ca1b1" stroke="#0f5b83" stroke-width="2"/></svg>
+                <svg class="v56-system-logo" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M10 14l20-7 24 7v35l-22 8-22-8V14Z" fill="#f1f7f4" stroke="#2f6b4f" stroke-width="2.4"/><path d="M13 17l17 5v29l-17-6V17Zm38 0-18 5v29l18-6V17Z" fill="#fff" stroke="#2f6b4f" stroke-width="2"/><path d="M27 11h10v8h7v10h-7v8H27v-8h-7V19h7v-8Z" fill="#5a8f76" stroke="#2f6b4f" stroke-width="2"/></svg>
                 <span class="v56-system-brand-copy"><strong>醫學檢驗教學平台</strong><small>專業學習 · 教材 · 考核 · 教師評核</small></span>
             </a>
             <nav class="v56-system-nav v573-primary-nav v575-system-nav" aria-label="系統功能">
@@ -218,7 +218,7 @@
         <section class="edu-card px-4 py-3 sm:px-5" aria-label="本卷作答進度">
             <div class="flex items-center justify-between gap-3 text-xs mb-2">
                 <span class="font-bold text-slate-700">本卷完成進度</span>
-                <span class="flex items-center gap-2 text-slate-500"><b id="stat-progress" class="text-teal-700">0 / 0</b><span aria-hidden="true">·</span><b id="exam-progress-percent" class="text-[#006b64]">0%</b></span>
+                <span class="flex items-center gap-2 text-slate-500"><b id="stat-progress" class="text-teal-700">0 / 0</b><span aria-hidden="true">·</span><b id="exam-progress-percent" class="text-[#245a41]">0%</b></span>
             </div>
             <div class="edu-progress-track"><div id="exam-progress-bar" class="edu-progress-fill" style="width:0%"></div></div>
         </section>
@@ -629,8 +629,8 @@
         <div id="slide-viewer-shell" class="bg-white w-full h-[100dvh] flex flex-col overflow-hidden relative">
             <div id="reader-head" class="bg-white text-slate-800 px-3 sm:px-5 py-3 flex justify-between items-center border-b border-slate-200 gap-2 shrink-0">
                 <div class="flex items-center gap-3 min-w-0">
-                    <button type="button" data-csp-click="closeSlideViewer()" aria-label="返回教材" class="reader-back shrink-0 rounded-lg border border-teal-200 bg-teal-50 px-3 text-xs font-bold text-[#006b64]">‹ 返回</button><div class="hidden sm:flex w-9 h-9 rounded-lg bg-teal-50 text-[#006b64] items-center justify-center font-bold"><svg class="icon" aria-hidden="true" focusable="false"><use href="/icons.svg#book"/></svg></div>
-                    <div class="min-w-0"><p class="reader-eyebrow text-xs tracking-[.16em] font-bold text-[#006b64]">COURSE READER</p><h3 id="slide-viewer-title" class="text-sm sm:text-base font-black truncate">教材標題</h3><nav id="reader-breadcrumb" class="reader-breadcrumb" aria-label="目前位置"></nav><p id="slide-viewer-subtitle" class="text-xs text-slate-400 hidden sm:block">教學專用・不得轉發、轉載、販售｜原始教材不提供下載</p></div>
+                    <button type="button" data-csp-click="closeSlideViewer()" aria-label="返回教材" class="reader-back shrink-0 rounded-lg border border-teal-200 bg-teal-50 px-3 text-xs font-bold text-[#245a41]">‹ 返回</button><div class="hidden sm:flex w-9 h-9 rounded-lg bg-teal-50 text-[#245a41] items-center justify-center font-bold"><svg class="icon" aria-hidden="true" focusable="false"><use href="/icons.svg#book"/></svg></div>
+                    <div class="min-w-0"><p class="reader-eyebrow text-xs tracking-[.16em] font-bold text-[#245a41]">COURSE READER</p><h3 id="slide-viewer-title" class="text-sm sm:text-base font-black truncate">教材標題</h3><nav id="reader-breadcrumb" class="reader-breadcrumb" aria-label="目前位置"></nav><p id="slide-viewer-subtitle" class="text-xs text-slate-400 hidden sm:block">教學專用・不得轉發、轉載、販售｜原始教材不提供下載</p></div>
                 </div>
                 <div class="flex items-center gap-1.5 shrink-0">
                     <button data-csp-click="toggleReaderMore()" id="reader-more-btn" aria-label="更多選項" aria-expanded="false" title="更多（搜尋、說明）" class="viewer-tool-light">⋯</button>
@@ -655,7 +655,7 @@
                     </div>
                     <iframe id="slide-viewer-pdf" class="hidden absolute inset-0 w-full h-full bg-white border-0" title="教材單一 PDF 預覽" referrerpolicy="no-referrer"></iframe>
                     <div class="edu-use-watermark">教學專用・不得轉發、轉載、販售</div>
-                    <div id="slide-page-error" hidden class="hidden absolute inset-x-4 top-1/2 -translate-y-1/2 z-20 mx-auto max-w-sm rounded-2xl border border-rose-200 bg-white/95 p-4 text-center shadow-xl" role="alert"><p class="text-sm font-black text-rose-700">這一頁暫時無法顯示</p><p id="slide-page-error-text" class="mt-1 text-xs leading-5 text-slate-600">請檢查網路後重試；你的閱讀進度不會被清除。</p><button type="button" data-csp-click="slideViewerRetryPage()" class="mt-3 rounded-lg bg-[#006b64] px-4 py-2 text-xs font-bold text-white hover:bg-[#005a54]">重新載入此頁</button></div>
+                    <div id="slide-page-error" hidden class="hidden absolute inset-x-4 top-1/2 -translate-y-1/2 z-20 mx-auto max-w-sm rounded-2xl border border-rose-200 bg-white/95 p-4 text-center shadow-xl" role="alert"><p class="text-sm font-black text-rose-700">這一頁暫時無法顯示</p><p id="slide-page-error-text" class="mt-1 text-xs leading-5 text-slate-600">請檢查網路後重試；你的閱讀進度不會被清除。</p><button type="button" data-csp-click="slideViewerRetryPage()" class="mt-3 rounded-lg bg-[#245a41] px-4 py-2 text-xs font-bold text-white hover:bg-[#1d4835]">重新載入此頁</button></div>
                     <div id="slide-pan-hint" class="hidden absolute left-1/2 -translate-x-1/2 bottom-3 z-20 text-xs font-bold px-2.5 py-1 rounded-full bg-slate-900/70 text-white pointer-events-none">✋ 放大後可按住拖曳移動畫面</div>
                     <button id="slide-prev-btn" data-csp-click="slideViewerPrev()" aria-label="上一頁" class="absolute left-2 sm:left-5 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-slate-700 border border-slate-300 w-10 h-12 sm:w-12 sm:h-14 rounded-xl flex items-center justify-center text-2xl shadow-lg z-10">‹</button>
                     <button id="slide-next-btn" data-csp-click="slideViewerNext()" aria-label="下一頁" class="absolute right-2 sm:right-5 top-1/2 -translate-y-1/2 bg-white/95 hover:bg-white text-slate-700 border border-slate-300 w-10 h-12 sm:w-12 sm:h-14 rounded-xl flex items-center justify-center text-2xl shadow-lg z-10">›</button>
@@ -672,7 +672,7 @@
     <div id="media-viewer-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[65] hidden items-center justify-center p-0 sm:p-3">
         <div id="media-viewer-shell" class="bg-white w-full h-[100dvh] sm:h-[94dvh] sm:max-w-[1500px] sm:rounded-2xl flex flex-col shadow-2xl overflow-hidden">
             <div class="px-4 sm:px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3">
-                <div class="min-w-0"><p class="text-xs tracking-[.16em] font-bold text-[#006b64]">MULTIMEDIA LEARNING</p><h3 id="media-viewer-title" class="text-sm sm:text-base font-black truncate">多媒體教材</h3></div>
+                <div class="min-w-0"><p class="text-xs tracking-[.16em] font-bold text-[#245a41]">MULTIMEDIA LEARNING</p><h3 id="media-viewer-title" class="text-sm sm:text-base font-black truncate">多媒體教材</h3></div>
                 <div class="flex items-center gap-1.5">
                     <button data-csp-click="setMediaSize('sm')" class="viewer-tool-light hidden sm:inline-flex">小</button>
                     <button data-csp-click="setMediaSize('md')" class="viewer-tool-light hidden sm:inline-flex">適中</button>
@@ -695,7 +695,7 @@
                 <div id="media-volume-controls" class="flex items-center gap-3 text-xs text-slate-500">
                     <span>🔊 音量</span><input id="media-volume" type="range" min="0" max="1" step="0.05" value="1" class="w-32 accent-teal-700" data-csp-input="setMediaVolume(this.value)"><span id="media-volume-text">100%</span><span class="ml-2">速度</span><select id="media-rate" data-csp-change="setMediaRate(this.value)" class="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
                 </div>
-                <button aria-label="關閉" data-csp-click="closeMediaViewer()" class="text-xs font-bold text-[#006b64] border border-teal-200 bg-teal-50 hover:bg-teal-100 px-4 py-2 rounded-lg">完成閱讀，返回教材區</button>
+                <button aria-label="關閉" data-csp-click="closeMediaViewer()" class="text-xs font-bold text-[#245a41] border border-teal-200 bg-teal-50 hover:bg-teal-100 px-4 py-2 rounded-lg">完成閱讀，返回教材區</button>
             </div>
         </div>
     </div>

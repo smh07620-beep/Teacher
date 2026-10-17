@@ -204,8 +204,8 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
   transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
 }
 .teacher-home-job-1024:hover {
-  border-color: rgb(153 246 228);
-  background: rgb(240 253 250);
+  border-color: rgb(169 201 184);
+  background: rgb(251 249 245);
   transform: translateY(-1px);
 }
 .teacher-home-job-1024 b,

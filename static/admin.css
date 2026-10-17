@@ -7,8 +7,8 @@
     grid-template-columns: 1.35fr .85fr .95fr;
     gap: 8px;
     padding: 9px 14px;
-    background: #f7fafb;
-    border-bottom: 1px solid #e2ebee;
+    background: #fbf9f5;
+    border-bottom: 1px solid #e3efe8;
 }
 .v580-admin-group { min-width: 0; }
 .v580-admin-group-label {
@@ -171,7 +171,7 @@
 
 .teacher-content-workspace-card {
     overflow: hidden;
-    border: 1px solid #dbe4e8;
+    border: 1px solid #cfe0d7;
     border-radius: 18px;
     background: #f8fafc;
     box-shadow: 0 14px 38px rgba(15, 23, 42, .08);
@@ -196,7 +196,7 @@ body[data-teacher-content-studio-open="1"] #admin-workspace-content > .admin-sec
    of forcing course, assessment, people and system tools through a small modal. */
 body.admin-page-mode {
     overflow: hidden;
-    background: #f4f7f8 !important;
+    background: #f1f7f4 !important;
 }
 
 body.admin-page-mode > main,
@@ -218,7 +218,7 @@ body.admin-page-mode #admin-modal {
     padding: 0 !important;
     align-items: stretch !important;
     justify-content: center !important;
-    background: #f4f7f8 !important;
+    background: #f1f7f4 !important;
     backdrop-filter: none !important;
 }
 
@@ -265,8 +265,8 @@ body.admin-page-mode .v580-admin-groups {
     padding: 20px 14px !important;
     overflow-x: hidden;
     overflow-y: auto;
-    background: #f8fafb !important;
-    border-right: 1px solid #e2ebee;
+    background: #fbf9f5 !important;
+    border-right: 1px solid #e3efe8;
     border-bottom: 0 !important;
 }
 
@@ -365,13 +365,13 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
 }
 
 .admin-workspace-primary-button {
-    border: 1px solid #0f766e;
-    background: #0f766e;
+    border: 1px solid #2f6b4f;
+    background: #2f6b4f;
     color: #fff;
 }
 
 .admin-workspace-primary-button:hover {
-    background: #115e59;
+    background: #245a41;
 }
 
 .admin-workspace-secondary-button {
@@ -387,7 +387,7 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
 
 .admin-page-eyebrow {
     margin: 0 0 4px;
-    color: #0f766e;
+    color: #2f6b4f;
     font-size: 12px;
     font-weight: 900;
     letter-spacing: .14em;
@@ -654,7 +654,7 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
 
 .admin-course-sync-row .is-ready {
     background: #ecfdf5;
-    color: #047857;
+    color: #2f6b4f;
 }
 
 .admin-course-sync-row .is-syncing {
@@ -833,7 +833,7 @@ body.admin-page-mode #admin-workspace-content > .admin-section-panel {
         padding: 10px 12px !important;
         overflow: visible;
         border-right: 0;
-        border-bottom: 1px solid #e2ebee !important;
+        border-bottom: 1px solid #e3efe8 !important;
     }
 
     body.admin-page-mode .v580-admin-group-actions,
@@ -1084,4 +1084,4 @@ details[data-unassigned-group] [data-material-more][open] { position: relative; 
 .admin-more:not(:has(.admin-nav-btn:not(.hidden))){display:none}
 .admin-more-summary{display:inline-flex;align-items:center;min-height:44px;padding:0 .9rem;border-radius:.75rem;background:#f1f5f9;color:#475569;font-size:14px;font-weight:700;cursor:pointer;list-style:none}
 .admin-more-summary::-webkit-details-marker{display:none}
-.admin-more-menu{position:absolute;z-index:30;top:calc(100% + 4px);left:0;display:flex;flex-direction:column;gap:.25rem;min-width:11rem;padding:.4rem;border-radius:.75rem;background:#fff;border:1px solid #dbe4e8;box-shadow:0 12px 28px rgba(15,51,66,.16)}
+.admin-more-menu{position:absolute;z-index:30;top:calc(100% + 4px);left:0;display:flex;flex-direction:column;gap:.25rem;min-width:11rem;padding:.4rem;border-radius:.75rem;background:#fff;border:1px solid #cfe0d7;box-shadow:0 12px 28px rgba(29,72,53,.16)}

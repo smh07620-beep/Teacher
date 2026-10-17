@@ -10,26 +10,26 @@
  *  4. 圖示統一為同一套線條風格、單一主色
  */
 
-body.portal-v56.home-dashboard-page{background:#f7fafb;color:#17384a}
+body.portal-v56.home-dashboard-page{background:#fbf9f5;color:#2b302d}
 
 /* ---------- 頁首 ---------- */
-body.home-dashboard-page .v56-header{background:#fff;border-bottom:1px solid #dbe6ea;box-shadow:none;backdrop-filter:none}
+body.home-dashboard-page .v56-header{background:#fff;border-bottom:1px solid #e3efe8;box-shadow:none;backdrop-filter:none}
 body.home-dashboard-page .v56-nav a,
 body.home-dashboard-page .v56-nav button{font-size:15px}
 body.home-dashboard-page .v56-brand-copy span{font-size:12px;letter-spacing:.04em;color:#5f7886}
 body.home-dashboard-page .v56-user-copy strong{font-size:14px}
 body.home-dashboard-page .v56-user-copy span{font-size:12px;color:#5f7886}
-body.home-dashboard-page .v56-avatar{background:#e8f2f2;border-color:#d3e3e5}
+body.home-dashboard-page .v56-avatar{background:#e3efe8;border-color:#cfe0d7}
 
 /* ---------- 主視覺 ---------- */
-body.home-dashboard-page .phase3-home .phase3-home-hero-681{border-radius:12px;border-color:#d6e5e8;background:#eef6f6;box-shadow:none}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681{border-radius:12px;border-color:#cfe0d7;background:#f1f7f4;box-shadow:none}
 body.home-dashboard-page .phase3-home .phase3-home-hero-681:before{display:none}
-body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy h1{font-size:clamp(30px,2.9vw,40px);line-height:1.3;letter-spacing:0;font-weight:800;color:#113d52}
-body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy>p:not(.phase3-hero-eyebrow){font-size:15px;line-height:1.8;font-weight:500;color:#4d6a78}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy h1{font-size:clamp(30px,2.9vw,40px);line-height:1.3;letter-spacing:0;font-weight:800;color:#245a41}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy>p:not(.phase3-hero-eyebrow){font-size:15px;line-height:1.8;font-weight:500;color:#5a8f76}
 /* 主按鈕：舊版文字色偏暗（深色字壓在深青綠底），統一改白字 */
-body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary{min-width:0;min-height:48px;padding:0 22px;border-radius:10px;background:#0a6f7d;box-shadow:none;font-size:15px;color:#fff!important}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary{min-width:0;min-height:48px;padding:0 22px;border-radius:10px;background:#2f6b4f;box-shadow:none;font-size:15px;color:#fff!important}
 body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary>span{color:#fff!important;font-size:15px}
-body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary:hover{background:#085c68;transform:none;box-shadow:none}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-primary:hover{background:#245a41;transform:none;box-shadow:none}
 /* 照片：改成有留白的圓角矩形，不再整塊滿版加漸層淡出 */
 body.home-dashboard-page .phase3-hero-art-frame{inset:16px 16px 16px 0;border-radius:10px;box-shadow:none}
 body.home-dashboard-page .phase3-hero-art-frame:before{display:none}
@@ -46,19 +46,19 @@ body.home-dashboard-page .phase3-home .phase3-stats{margin-top:16px}
 /* ---------- 三張摘要卡 ---------- */
 body.home-dashboard-page .phase3-home .phase3-stat{min-height:112px;border-radius:10px;background:#fff;box-shadow:none;transition:border-color .15s ease}
 body.home-dashboard-page .phase3-home .phase3-stat:after{display:none}
-body.home-dashboard-page .phase3-home .phase3-stat:hover{transform:none;box-shadow:none;border-color:#7fb9ba}
-body.home-dashboard-page .phase3-home .phase3-stat-icon{border-radius:10px;background:#e5f2f2;color:#0a6f7d}
+body.home-dashboard-page .phase3-home .phase3-stat:hover{transform:none;box-shadow:none;border-color:#7aa892}
+body.home-dashboard-page .phase3-home .phase3-stat-icon{border-radius:10px;background:#e3efe8;color:#2f6b4f}
 body.home-dashboard-page .phase3-home .phase3-stat b{font-size:15px}
 body.home-dashboard-page .phase3-home .phase3-stat strong{font-size:32px}
 body.home-dashboard-page .phase3-home .phase3-stat strong small{font-size:14px;color:#5f7886}
 body.home-dashboard-page .phase3-home .phase3-stat-note{font-size:13px;color:#5f7886}
-body.home-dashboard-page .phase3-home .phase3-stat em{font-size:13px;font-style:normal;font-weight:700;color:#0a6f7d}
+body.home-dashboard-page .phase3-home .phase3-stat em{font-size:13px;font-style:normal;font-weight:700;color:#2f6b4f}
 body.home-dashboard-page .phase3-home .phase3-stat i{height:8px}
-body.home-dashboard-page .phase3-home .phase3-stat i span{background:#0d8f92}
+body.home-dashboard-page .phase3-home .phase3-stat i span{background:#2f6b4f}
 
 /* ---------- 公告列 ---------- */
-body.home-dashboard-page .phase3-announcement-strip{border-radius:10px;background:#f1f8f7}
-body.home-dashboard-page .phase3-announcement-mark{border-radius:8px;background:#dff0ee}
+body.home-dashboard-page .phase3-announcement-strip{border-radius:10px;background:#f1f7f4}
+body.home-dashboard-page .phase3-announcement-mark{border-radius:8px;background:#e3efe8}
 body.home-dashboard-page .phase3-announcement-strip b{font-size:13px;letter-spacing:0}
 body.home-dashboard-page .phase3-announcement-strip strong{font-size:14px}
 body.home-dashboard-page .phase3-announcement-strip small{font-size:12px}
@@ -70,18 +70,18 @@ body.home-dashboard-page .phase3-home .phase3-heading p{font-size:14px;color:#5f
 body.home-dashboard-page .phase3-heading a{font-size:14px}
 body.home-dashboard-page .phase3-home .phase3-area-switch{border-radius:10px}
 body.home-dashboard-page .phase3-home .phase3-area-switch button{font-size:14px;border-radius:7px}
-body.home-dashboard-page .phase3-home .phase3-area-switch button[aria-pressed="true"]{background:#0a6f7d;box-shadow:none}
+body.home-dashboard-page .phase3-home .phase3-area-switch button[aria-pressed="true"]{background:#2f6b4f;box-shadow:none}
 
 /* ---------- 專業組別卡片（圖示改為統一線條風格） ---------- */
 body.home-dashboard-page .phase3-home .phase3-groups{gap:12px}
 body.home-dashboard-page .phase3-home .phase3-groups>a{align-items:stretch;min-height:0;padding:12px 12px 14px;border-radius:10px;background:#fff;box-shadow:none;text-align:center;transition:border-color .15s ease,background-color .15s ease}
-body.home-dashboard-page .phase3-home .phase3-groups>a:hover{transform:none;box-shadow:none;border-color:#7fb9ba;background:#fafdfd}
+body.home-dashboard-page .phase3-home .phase3-groups>a:hover{transform:none;box-shadow:none;border-color:#7aa892;background:#fbf9f5}
 body.home-dashboard-page .phase3-home .phase3-groups>a>span:before,
 body.home-dashboard-page .phase3-home .phase3-groups>a>span:after{display:none}
 body.home-dashboard-page .phase3-home .phase3-groups small{display:none}
 body.home-dashboard-page .phase3-home .phase3-groups h3{margin:12px 0 4px;text-align:center;font-size:18px}
 body.home-dashboard-page .phase3-home .phase3-groups p{font-size:13px;line-height:1.5;color:#5f7886}
-body.home-dashboard-page .phase3-home .phase3-groups b{justify-content:center;gap:6px;margin:auto 0 0;padding-top:14px;font-size:13px;font-weight:700;color:#0a6f7d}
+body.home-dashboard-page .phase3-home .phase3-groups b{justify-content:center;gap:6px;margin:auto 0 0;padding-top:14px;font-size:13px;font-weight:700;color:#2f6b4f}
 body.home-dashboard-page .phase3-home .phase3-groups b i{width:auto;height:auto;background:transparent}
 
 /* ---------- 最近更新 / 我的待辦 ---------- */
@@ -102,14 +102,14 @@ body.home-dashboard-page .phase3-home .phase3-content-panel .phase3-home-task-ro
 body.home-dashboard-page .phase3-home .v56-empty{padding:34px 16px;font-size:14px;color:#5f7886}
 
 /* ---------- 頁尾 ---------- */
-body.home-dashboard-page .v56-footer{background:#fff;border-top:1px solid #dbe6ea}
+body.home-dashboard-page .v56-footer{background:#fff;border-top:1px solid #e3efe8}
 body.home-dashboard-page .v56-footer-brand span{font-size:12px}
 body.home-dashboard-page .v56-footer-cell{font-size:13px;letter-spacing:.02em;color:#5f7886}
 
 /* ---------- 手機底部導覽（改用一致的線條圖示） ---------- */
-body.home-dashboard-page .v56-bottom-nav{height:62px;border-top:1px solid #dbe6ea;background:#fff;box-shadow:none;backdrop-filter:none}
+body.home-dashboard-page .v56-bottom-nav{height:62px;border-top:1px solid #e3efe8;background:#fff;box-shadow:none;backdrop-filter:none}
 body.home-dashboard-page .v56-bottom-nav a{gap:3px;font-size:12px;font-weight:700;color:#5f7886}
-body.home-dashboard-page .v56-bottom-nav a.active{color:#0a6f7d}
+body.home-dashboard-page .v56-bottom-nav a.active{color:#2f6b4f}
 body.home-dashboard-page .v56-bottom-nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 
 /* ---------- 手機 ---------- */
@@ -133,11 +133,11 @@ body.home-dashboard-page .v56-bottom-nav svg{width:22px;height:22px;fill:none;st
  * ===================================================================== */
 
 /* ---------- 專業組別：統一 4:3、主體置中、切掉圖片裡烙死的邊條 ---------- */
-body.home-dashboard-page .phase3-home .phase3-groups a>span:first-child{width:100%!important;height:auto!important;aspect-ratio:4/3;display:block;overflow:hidden;border-radius:8px!important;background:#eef6f7!important;background-image:none!important}
+body.home-dashboard-page .phase3-home .phase3-groups a>span:first-child{width:100%!important;height:auto!important;aspect-ratio:4/3;display:block;overflow:hidden;border-radius:8px!important;background:#f1f7f4!important;background-image:none!important}
 body.home-dashboard-page .phase3-home .phase3-groups a>span:first-child img{display:block!important;visibility:visible!important;opacity:1!important;position:static;width:100%;height:100%;max-width:none;max-height:none;object-fit:cover;object-position:center;mix-blend-mode:normal;filter:none;transform:none}
 
 /* ---------- 摘要卡圖示：輕微立體（漸層底 + 內側高光 + 柔和下影） ---------- */
-body.home-dashboard-page .phase3-home .phase3-stat-icon{border-radius:14px;color:#fff;background:linear-gradient(145deg,#5cc7c2,#0a7a83);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -3px 6px rgba(0,60,70,.18),0 6px 12px rgba(10,111,125,.25)}
+body.home-dashboard-page .phase3-home .phase3-stat-icon{border-radius:14px;color:#fff;background:linear-gradient(145deg,#7aa892,#2f6b4f);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -3px 6px rgba(23,58,43,.18),0 6px 12px rgba(47,107,79,.25)}
 
 /* ---------- 滿版：頁首與主視覺左右貼齊視窗，內容仍限制在 1420px ---------- */
 body.home-dashboard-page .v56-shell{width:100%!important;max-width:none!important;margin:0!important;border-radius:0!important;border-left:0!important;border-right:0!important;box-shadow:none!important}
@@ -148,8 +148,8 @@ body.home-dashboard-page .phase3-home .phase3-stats{margin-top:24px}
 body.home-dashboard-page .v56-footer{padding-left:max(24px,calc((100% - 1420px)/2 + 24px))!important;padding-right:max(24px,calc((100% - 1420px)/2 + 24px))!important}
 
 /* ---------- 主視覺：左側純色文字區 + 右側實景照片（滿版、無漸層淡出） ---------- */
-body.home-dashboard-page .phase3-home .phase3-home-hero-681{position:relative;display:flex!important;align-items:center;width:100%!important;max-width:none!important;margin:0!important;min-height:clamp(380px,30vw,520px);height:auto!important;border:0;border-radius:0;background:#eaf3f3!important;box-shadow:none;overflow:hidden}
-body.home-dashboard-page .phase3-home .phase3-home-hero-681:before{display:block;content:"";position:absolute;inset:0 0 0 auto;width:74%;height:auto;border-radius:0;clip-path:none;-webkit-mask:none;mask:none;filter:none;opacity:1;transform:none;box-shadow:none;background:linear-gradient(90deg,#eaf3f3 0%,rgba(234,243,243,.85) 12%,rgba(234,243,243,0) 40%),url('/assets/v1017/home-hero-1280.webp') 70% 6%/cover no-repeat;pointer-events:none}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681{position:relative;display:flex!important;align-items:center;width:100%!important;max-width:none!important;margin:0!important;min-height:clamp(380px,30vw,520px);height:auto!important;border:0;border-radius:0;background:#e3efe8!important;box-shadow:none;overflow:hidden}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681:before{display:block;content:"";position:absolute;inset:0 0 0 auto;width:74%;height:auto;border-radius:0;clip-path:none;-webkit-mask:none;mask:none;filter:none;opacity:1;transform:none;box-shadow:none;background:linear-gradient(90deg,#e3efe8 0%,rgba(227,239,232,.85) 12%,rgba(227,239,232,0) 40%),url('/assets/v1017/home-hero-1280.webp') 70% 6%/cover no-repeat;pointer-events:none}
 body.home-dashboard-page .phase3-home .phase3-home-hero-681>.phase3-home-hero-art{display:none!important}
 body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy{position:relative;z-index:2;width:56%;min-width:0;padding:56px 24px 56px max(24px,calc((100vw - 1420px)/2 + 24px))}
 body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy>p:not(.phase3-hero-eyebrow){max-width:560px}
@@ -175,11 +175,11 @@ body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy>p:not
  * ===================================================================== */
 body.home-dashboard-page a,
 body.home-dashboard-page button,
-body.home-dashboard-page [role="button"]{touch-action:manipulation;-webkit-tap-highlight-color:rgba(10,111,125,.14)}
+body.home-dashboard-page [role="button"]{touch-action:manipulation;-webkit-tap-highlight-color:rgba(47,107,79,.14)}
 body.home-dashboard-page .phase3-home .phase3-groups>a:active,
-body.home-dashboard-page .phase3-home .phase3-stat:active{background:#f1f8f8;border-color:#7fb9ba}
+body.home-dashboard-page .phase3-home .phase3-stat:active{background:#f1f7f4;border-color:#7aa892}
 body.home-dashboard-page .v56-list-row:active,
-body.home-dashboard-page .phase3-home-task-row:active{background:#f1f8f8}
+body.home-dashboard-page .phase3-home-task-row:active{background:#f1f7f4}
 
 @media(max-width:1000px),(pointer:coarse){
   body.home-dashboard-page .v56-user-actions{display:flex!important;align-items:center;gap:2px}
@@ -201,8 +201,8 @@ body.home-dashboard-page .phase3-home-task-row:active{background:#f1f8f8}
  * 1) 頁首  2) 三張統計卡  3) 手機底部導覽
  * 不支援 backdrop-filter 的瀏覽器 → 自動維持上方的實心白底。 */
 @supports((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-  body.home-dashboard-page .v56-header{background:rgba(255,255,255,.78)!important;-webkit-backdrop-filter:saturate(1.4) blur(12px);backdrop-filter:saturate(1.4) blur(12px);border-bottom-color:rgba(205,222,228,.7)}
-  body.home-dashboard-page .phase3-home .phase3-stat{background:rgba(255,255,255,.72)!important;-webkit-backdrop-filter:saturate(1.3) blur(10px);backdrop-filter:saturate(1.3) blur(10px);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(17,61,82,.10),inset 0 1px 0 rgba(255,255,255,.9)}
+  body.home-dashboard-page .v56-header{background:rgba(255,255,255,.78)!important;-webkit-backdrop-filter:saturate(1.4) blur(12px);backdrop-filter:saturate(1.4) blur(12px);border-bottom-color:rgba(207,224,215,.7)}
+  body.home-dashboard-page .phase3-home .phase3-stat{background:rgba(255,255,255,.72)!important;-webkit-backdrop-filter:saturate(1.3) blur(10px);backdrop-filter:saturate(1.3) blur(10px);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(36,90,65,.10),inset 0 1px 0 rgba(255,255,255,.9)}
   body.home-dashboard-page .v56-bottom-nav{background:rgba(255,255,255,.82)!important;-webkit-backdrop-filter:saturate(1.3) blur(12px);backdrop-filter:saturate(1.3) blur(12px)}
 }
 /* 統計卡上緣壓進主視覺底部，讓顯微鏡照片的光透出來 */
