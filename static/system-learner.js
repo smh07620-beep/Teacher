@@ -708,6 +708,27 @@ window.toggleReaderPages = toggleReaderPages;
         const dx = touch.clientX - startX, dy = touch.clientY - startY;
         if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) { if (dx < 0) slideViewerNext(); else slideViewerPrev(); }
     }, { passive: true });
+    // Two-finger pinch zooms the slide itself (0.7x–2.5x) instead of the whole page.
+    let pinchStart = 0, zoomStart = 1;
+    const spread = touches => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    document.addEventListener('touchstart', (event) => {
+        const stage = document.getElementById('slide-viewer-stage');
+        if (stage && stage.contains(event.target) && event.touches.length === 2) {
+            tracking = false;
+            pinchStart = spread(event.touches);
+            zoomStart = slideViewerState.zoom || 1;
+        }
+    }, { passive: true });
+    document.addEventListener('touchmove', (event) => {
+        if (!pinchStart || event.touches.length !== 2) return;
+        if (slideViewerState.mode === 'pdf' && slideViewerState.readerMode === 'document') return;
+        event.preventDefault();
+        slideViewerState.zoom = Math.max(0.7, Math.min(2.5, zoomStart * spread(event.touches) / pinchStart));
+        applySlideZoom();
+    }, { passive: false });
+    document.addEventListener('touchend', (event) => {
+        if (pinchStart && event.touches.length < 2) { pinchStart = 0; updateSlidePanState(); }
+    }, { passive: true });
 })();
 
 function showReaderPortraitHint() {
