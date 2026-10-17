@@ -206,7 +206,6 @@ window.courseWizard681QuickPublishExam=async function(){
   window.courseWizard681SelectExisting=()=>{if(!state.created)state.existing=[...document.querySelectorAll('.cw681-existing:checked')].map(x=>x.value);};
   window.courseWizard681FilesChanged=input=>{if(state.created&&!state.editing)return;state.files=[...(input?.files||[])];state.fileMeta={};renderFileSummary();};
   window.courseWizard681SetFileMeta=(index,field,value)=>{if(!state.created)state.fileMeta[index]={...(state.fileMeta[index]||{}),[field]:value};};
-  window.courseWizard681Continue=continueToAssessment;
   window.courseWizard681OpenCourse=openCourseWorkspace;
   window.courseWizard681PublishAndOpen=publishAndOpenCourseWorkspace;
   window.courseWizard681OpenAtlasImport=openCourseAtlasImport;
@@ -1513,17 +1512,6 @@ window.addEventListener('teacher-ai-source-kept',event=>{
 window.addEventListener('teacher-ai-presentation-published',event=>recordAiProduct(event.detail||{}));
 window.addEventListener('teacher-ai-narration-published',event=>recordAiProduct(event.detail||{},'AI 講稿配音'));
 window.addEventListener('teacher-ai-video-published',event=>recordAiProduct(event.detail||{},'AI 教學影片',true));
-
-async function continueToAssessment(){
-  if(!canLeaveCourse())return alert('新教材尚未全部完成處理。請等到所有教材顯示「已完成」後再前往下一步。');
-  if(!state.categoryId)return openCourseWorkspace();
-  state.watchToken++;
-  if(typeof window.switchAdminWorkspace==='function')await window.AppWorkspaceRoutes.show('assessment',true);
-  if(typeof window.renderAdminQuizCategories==='function')await window.renderAdminQuizCategories(true).catch(()=>{});
-  const targets=[`qpanel-${state.categoryId}`,`qcard-${state.categoryId}`,`quiz-${state.categoryId}`];
-  let target=null;for(const id of targets){target=el(id);if(target)break;}
-  target?.classList.remove('hidden');target?.scrollIntoView({behavior:'smooth',block:'start'});
-}
 
 function publicationBlockerText(readiness){
   const blockers=Array.isArray(readiness?.blockers)?readiness.blockers:[];

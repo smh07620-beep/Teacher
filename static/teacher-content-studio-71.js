@@ -740,8 +740,6 @@
     hideMaterialExecutorNode(document.getElementById('admin-atlas-fields'));
     hideMaterialExecutorNode(document.getElementById('admin-upload-btn')?.parentElement);
 
-    const external=[...root.querySelectorAll('button')].find(button=>(button.getAttribute('onclick')||'').includes('openExternalMaterialCreateDrawer'));
-    hideMaterialExecutorNode(external);
   }
 
   function bindWorkspaceActions(){

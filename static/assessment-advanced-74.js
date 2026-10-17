@@ -11,7 +11,7 @@
   const esc = value => (window.escapeHtml
     ? window.escapeHtml(String(value ?? ''))
     : String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-  const state = {tab:'blueprint', categories:[], questions:[], blueprint:null};
+  const state = {tab:'blueprint', categories:[], questions:[], blueprint:null, report:null};
 
   async function api(url, options = {}) {
     const headers = {...(options.headers || {})};
@@ -67,6 +67,7 @@
       if (event.target.closest('[data-blueprint-create]')) createBlueprint();
       if (event.target.closest('[data-blueprint-publish]')) publishBlueprint();
       if (event.target.closest('[data-analytics-load]')) loadAnalytics();
+      if (event.target.closest('[data-item-report]')) loadItemReport();
     });
     render();
     return panel;
@@ -100,7 +101,17 @@
         <div class="rounded-xl border border-sky-100 bg-sky-50/40 p-4">
           <h5 class="font-black text-sky-950">📈 題目分析</h5>
           <p class="mt-1 text-xs text-sky-700">只讀取既有作答統計，不修改題目。</p>
-          <label class="mt-4 block text-xs font-bold text-slate-700">題目
+          <div class="mt-4 rounded-xl border border-sky-200 bg-white p-3">
+            <b class="text-sm text-slate-900">整份考卷題目體檢</b>
+            <p class="mt-1 text-xs text-slate-500">一次列出整份考卷每一題的答對率、鑑別度與選項被選情形，有問題的題目排在最前面。</p>
+            <div class="mt-2 flex flex-wrap items-end gap-2">
+              <label class="text-xs font-bold text-slate-700">考卷<select id="advanced-report-exam-74" class="mt-1 block rounded-lg border border-slate-300 bg-white p-2 text-sm">${examOptions()}</select></label>
+              <button type="button" data-item-report class="rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white">開始體檢</button>
+              <span id="advanced-report-status-74" class="text-xs text-slate-500" role="status"></span>
+            </div>
+            <div id="advanced-report-result-74" class="mt-3"></div>
+          </div>
+          <label class="mt-4 block text-xs font-bold text-slate-700">單題分析：題目
             <select id="advanced-analytics-question-74" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-sm">${questionOptions()}</select>
           </label>
           <div class="mt-3 flex items-center gap-3 flex-wrap">
@@ -223,6 +234,42 @@
       const discrimination=data.discriminationD==null?'資料不足':Number(data.discriminationD).toFixed(2);
       const averageSeconds=data.averageResponseSeconds==null?'尚無 timing':`${Number(data.averageResponseSeconds).toFixed(1)} 秒`;
       if (box) box.innerHTML = `<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><div class="rounded-lg bg-white p-3"><b>曝光／作答次數</b><div>${Number(data.exposureCount || data.attemptCount || 0)}</div></div><div class="rounded-lg bg-white p-3"><b>難度 P（答對率）</b><div>${Math.round(Number(data.difficultyP ?? data.correctRate ?? 0) * 100)}%</div></div><div class="rounded-lg bg-white p-3"><b>鑑別度 D</b><div>${esc(discrimination)}</div></div><div class="rounded-lg bg-white p-3"><b>平均作答時間</b><div>${esc(averageSeconds)}</div></div></div><div class="mt-2 rounded-lg bg-white p-3 text-xs"><b>選項選擇次數：</b>${esc(JSON.stringify(data.optionSelectionCounts || {}))}<br><b>誘答選項分布：</b>${esc(JSON.stringify(data.distractorDistribution || {}))}</div>`;
+    } catch (error) {
+      if (out) out.textContent = `❌ ${error.message}`;
+    }
+  }
+
+  const pct = value => value == null ? '—' : `${Math.round(Number(value) * 100)}%`;
+  const letter = key => (/^\d+$/.test(String(key)) ? 'ABCDEFGHIJ'[Number(key)] || String(Number(key) + 1) : String(key));
+
+  function reportRow(item, index) {
+    const flags = item.flags.length
+      ? item.flags.map(f => `<span class="inline-block rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs font-bold text-amber-800" title="${esc(f.advice)}">${esc(f.label)}</span>`).join(' ')
+      : (item.sufficientData ? '<span class="text-xs text-emerald-700">正常</span>' : `<span class="text-xs text-slate-500">作答未滿 ${state.report.minAttempts} 次</span>`);
+    const picks = Object.entries(item.optionSelectionCounts || {}).filter(([k]) => k !== 'null' && k !== '').map(([k, v]) => `${esc(letter(k))}:${Number(v)}`).join('　');
+    const advice = item.flags.map(f => `<li>${esc(f.advice)}</li>`).join('');
+    return `<tr class="border-t border-slate-100 align-top">
+      <td class="py-2 pr-2 text-xs text-slate-500">${index + 1}</td>
+      <td class="py-2 pr-2 text-sm text-slate-800">${esc(item.question || item.questionId)}${advice ? `<ul class="mt-1 list-disc pl-4 text-xs text-slate-600">${advice}</ul>` : ''}</td>
+      <td class="py-2 pr-2 text-sm whitespace-nowrap">${pct(item.correctRate)}</td>
+      <td class="py-2 pr-2 text-sm whitespace-nowrap">${item.discriminationD == null ? '—' : Number(item.discriminationD).toFixed(2)}</td>
+      <td class="py-2 pr-2 text-xs text-slate-600">${picks || '—'}</td>
+      <td class="py-2">${flags}</td></tr>`;
+  }
+
+  async function loadItemReport() {
+    const out = document.getElementById('advanced-report-status-74');
+    const box = document.getElementById('advanced-report-result-74');
+    const id = document.getElementById('advanced-report-exam-74')?.value || '';
+    if (!id) { if (out) out.textContent = '請先選擇考卷'; return; }
+    try {
+      if (out) out.textContent = '⏳ 體檢中…';
+      state.report = await api(`/api/quiz-categories/${encodeURIComponent(id)}/item-report`);
+      const items = state.report.items || [];
+      if (out) out.textContent = `共 ${items.length} 題，${state.report.flaggedCount} 題建議檢查，${state.report.insufficientCount} 題作答次數還不夠判斷。`;
+      if (box) box.innerHTML = items.length ? `<div class="overflow-x-auto"><table class="w-full text-left">
+        <thead><tr class="text-xs text-slate-500"><th class="pb-1 pr-2">#</th><th class="pb-1 pr-2">題目</th><th class="pb-1 pr-2">答對率</th><th class="pb-1 pr-2" title="高分組答對率減低分組答對率，0.3 以上較理想">鑑別度</th><th class="pb-1 pr-2">各選項被選次數</th><th class="pb-1">判讀</th></tr></thead>
+        <tbody>${items.map(reportRow).join('')}</tbody></table></div>` : '<p class="text-xs text-slate-500">這份考卷目前沒有啟用的題目。</p>';
     } catch (error) {
       if (out) out.textContent = `❌ ${error.message}`;
     }

@@ -129,3 +129,60 @@ def balanced_selection_weight(metrics: dict, *, max_exposure: int = 0) -> float:
         + 0.20 * freshness
     )
     return round(max(0.35, min(1.65, 0.65 + score)), 3)
+
+
+def _flags(metrics: dict) -> list[dict]:
+    """Plain-language findings a teacher can act on (empty when the item looks healthy)."""
+    if not metrics.get("sufficientData"):
+        return []
+    found = []
+    p = metrics.get("difficultyP")
+    d = metrics.get("discriminationD")
+    dist = metrics.get("distractorEffectiveness")
+    if p is not None and p >= 0.9:
+        found.append({"code": "too_easy", "label": "太簡單", "advice": "九成以上答對，可考慮加深或改成情境題。"})
+    if p is not None and p < 0.3:
+        found.append({"code": "too_hard", "label": "太難", "advice": "不到三成答對；請確認答案、題意或教材是否有教到。"})
+    if d is not None and d < 0:
+        found.append({"code": "reverse", "label": "高分者反而答錯", "advice": "成績好的人答錯比例較高，常見原因是答案設錯或題意有歧義，請優先檢查。"})
+    elif d is not None and d < 0.2:
+        found.append({"code": "low_discrimination", "label": "鑑別度低", "advice": "會的人和不會的人答對率差不多，題目可能只考記憶細節。"})
+    if dist is not None and dist < 0.5:
+        found.append({"code": "dead_distractor", "label": "選項沒人選", "advice": "一半以上的錯誤選項幾乎沒人選，請改成更像真的的選項。"})
+    return found
+
+
+def item_report(category_id: str) -> dict:
+    """Health check of every active question in one exam, worst first."""
+    questions = repository.list_questions(category_id, include_inactive=False)
+    items = []
+    for question in questions:
+        qid = str(question.get("id") or "")
+        if not qid:
+            continue
+        try:
+            metrics = get_question_analytics(qid)
+        except Exception:  # one broken item must not hide the rest
+            metrics = {"attemptCount": 0, "sufficientData": False, "message": "讀取失敗"}
+        flags = _flags(metrics)
+        items.append({
+            "questionId": qid,
+            "question": str(question.get("question") or "")[:200],
+            "questionType": str(question.get("questionType") or "choice"),
+            "attemptCount": int(metrics.get("attemptCount") or 0),
+            "sufficientData": bool(metrics.get("sufficientData")),
+            "correctRate": metrics.get("correctRate"),
+            "discriminationD": metrics.get("discriminationD"),
+            "distractorEffectiveness": metrics.get("distractorEffectiveness"),
+            "optionSelectionCounts": metrics.get("optionSelectionCounts") or {},
+            "flags": flags,
+        })
+    severity = {"reverse": 0, "too_hard": 1, "dead_distractor": 2, "low_discrimination": 3, "too_easy": 4}
+    items.sort(key=lambda it: (min((severity.get(f["code"], 9) for f in it["flags"]), default=10), -it["attemptCount"]))
+    return {
+        "categoryId": category_id,
+        "minAttempts": MIN_SUFFICIENT_ATTEMPTS,
+        "flaggedCount": sum(1 for it in items if it["flags"]),
+        "insufficientCount": sum(1 for it in items if not it["sufficientData"]),
+        "items": items,
+    }

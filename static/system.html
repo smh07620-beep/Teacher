@@ -172,6 +172,14 @@
                     <div id="v573-progress-linked" class="v573-linked-identity"><div><b>首頁個人資料已連動</b><span id="v573-progress-person">尚未設定</span></div><a href="/">回首頁更新個人資料</a></div>
                 </div>
             </section>
+            <section id="wrong-book" class="edu-card p-4 sm:p-5" aria-labelledby="wrong-book-title">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div><h3 id="wrong-book-title" class="font-black text-slate-900">📕 我的錯題本</h3><p class="text-sm text-slate-500 mt-1">最近考試答錯、而且還沒在之後的考試答對的題目。答對後會自動移出。</p></div>
+                    <button id="wrong-book-load" type="button" class="btn btn-secondary">打開錯題本</button>
+                </div>
+                <p id="wrong-book-status" class="text-sm text-slate-500 mt-2" role="status"></p>
+                <ol id="wrong-book-list" class="mt-3 space-y-3"></ol>
+            </section>
             <section id="progress-summary" class="hidden space-y-4">
                 <div id="progress-course-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -564,6 +572,7 @@
                                 <label class="block"><span class="text-xs font-bold text-slate-600">對象說明（顯示給學員看的文字，留白會自動帶入）</span><input id="exam-settings-audience" list="exam-audience-presets" class="mt-1 w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm" placeholder="例如：值班人員／值班醫檢師／Cover C1者"><datalist id="exam-audience-presets"><option value="一般人員"><option value="組員"><option value="值班人員"><option value="值班醫檢師"><option value="新進人員"><option value="Cover C1者"></datalist></label>
                                 <label class="block lg:col-span-2"><span class="text-xs font-bold text-slate-600">考卷說明</span><textarea id="exam-settings-desc" rows="3" class="mt-1 w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm" placeholder="考核目的、注意事項或說明"></textarea></label>
                                 <label class="flex items-center gap-2 text-sm font-bold text-slate-700 lg:col-span-2"><input id="exam-settings-blind" type="checkbox"> 開啟盲測模式</label>
+                                <label class="flex items-center gap-2 text-sm font-bold text-slate-700 lg:col-span-2"><input id="exam-settings-shuffle" type="checkbox" checked> 每位考生的選項順序打亂（「以上皆是」這類題目會自動保持原順序）</label>
                                 <div class="lg:col-span-2 rounded-2xl border border-teal-200 bg-teal-50/50 p-4 space-y-3"><div><h5 class="font-black text-teal-950"><svg class="icon" aria-hidden="true" focusable="false"><use href="/icons.svg#tools"/></svg> 出題設定</h5><p id="exam-settings-question-summary" class="text-xs text-teal-700 mt-1">讀取題庫中…</p></div>
                                 <label class="flex items-start gap-2 text-sm"><input id="exam-draw-all" name="exam-draw-mode" type="radio" value="all" data-csp-change="syncExamDrawModeUI()" class="mt-1" checked><span><b>使用全部啟用題目</b><span class="block text-xs text-slate-500 mt-0.5">題庫增加後自動跟著增加，不必再修改數字。</span></span></label>
                                 <label class="flex items-start gap-2 text-sm"><input id="exam-draw-limited" name="exam-draw-mode" type="radio" value="limited" data-csp-change="syncExamDrawModeUI()" class="mt-1"><span><b>隨機抽取指定題數</b><span class="block text-xs text-slate-500 mt-0.5">適合大型題庫每次隨機出不同題目。</span></span></label>

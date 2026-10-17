@@ -423,10 +423,6 @@ function scrollToQuestion(index) {
     }
 }
 
-function scrollToReview() {
-    scrollToQuestion(0);
-}
-
 // --- Phone layout: one question per page with a "第 N / M 題" progress bar. ---
 let examPagedIndex = 0, examPagedFor = '';
 function examIsPaged() {

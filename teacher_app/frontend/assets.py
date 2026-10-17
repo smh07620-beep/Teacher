@@ -86,6 +86,7 @@ ASSET_MANIFEST = {
             "/pgy-competency-matrix-71.js",
             "/learning-analytics-71.js",
             "/learner-progress.js",
+            "/learner-wrong-book-1017.js",
             "/notification-center-71.js",
             "/worker-status-70.js",
             "/production-readiness-f6.js",
