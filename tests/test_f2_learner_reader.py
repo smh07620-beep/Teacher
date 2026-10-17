@@ -29,7 +29,11 @@ class F2LearnerReaderTests(unittest.TestCase):
 
     def test_f2_layer_removes_manual_completion_for_trackable_materials(self):
         source = ROOT.joinpath("static", "learner-reading-progress-f2.js").read_text(encoding="utf-8")
-        self.assertIn("window.markMaterialComplete", source)
+        # The owner (system-learner.js) now opens reader-measured materials itself.
+        owner = ROOT.joinpath("static", "system-learner.js").read_text(encoding="utf-8")
+        self.assertIn("if(tracked&&materialAutoTracked(tracked))", owner)
+        self.assertNotIn("window.markMaterialComplete=", source)
+        self.assertIn("teacher:learner-rendered", source)
         self.assertIn("autoTracked(material)", source)
         self.assertIn("/api/learning-progress", source)
         self.assertIn("需要重新閱讀", source)

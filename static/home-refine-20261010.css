@@ -149,7 +149,7 @@ body.home-dashboard-page .v56-footer{padding-left:max(24px,calc((100% - 1420px)/
 
 /* ---------- 主視覺：左側純色文字區 + 右側實景照片（滿版、無漸層淡出） ---------- */
 body.home-dashboard-page .phase3-home .phase3-home-hero-681{position:relative;display:flex!important;align-items:center;width:100%!important;max-width:none!important;margin:0!important;min-height:clamp(380px,30vw,520px);height:auto!important;border:0;border-radius:0;background:#eaf3f3!important;box-shadow:none;overflow:hidden}
-body.home-dashboard-page .phase3-home .phase3-home-hero-681:before{display:block;content:"";position:absolute;inset:0 0 0 auto;width:74%;height:auto;border-radius:0;clip-path:none;-webkit-mask:none;mask:none;filter:none;opacity:1;transform:none;box-shadow:none;background:linear-gradient(90deg,#eaf3f3 0%,rgba(234,243,243,.85) 12%,rgba(234,243,243,0) 40%),url('/assets/v687/home-hero-photo.webp') 70% 6%/cover no-repeat;pointer-events:none}
+body.home-dashboard-page .phase3-home .phase3-home-hero-681:before{display:block;content:"";position:absolute;inset:0 0 0 auto;width:74%;height:auto;border-radius:0;clip-path:none;-webkit-mask:none;mask:none;filter:none;opacity:1;transform:none;box-shadow:none;background:linear-gradient(90deg,#eaf3f3 0%,rgba(234,243,243,.85) 12%,rgba(234,243,243,0) 40%),url('/assets/v1017/home-hero-1280.webp') 70% 6%/cover no-repeat;pointer-events:none}
 body.home-dashboard-page .phase3-home .phase3-home-hero-681>.phase3-home-hero-art{display:none!important}
 body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy{position:relative;z-index:2;width:56%;min-width:0;padding:56px 24px 56px max(24px,calc((100vw - 1420px)/2 + 24px))}
 body.home-dashboard-page .phase3-home .phase3-home-hero-681 .v56-hero-copy>p:not(.phase3-hero-eyebrow){max-width:560px}

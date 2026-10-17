@@ -785,7 +785,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
 .internal-training-page .v580-card-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:7px}
 .internal-training-page .v580-group-card{min-height:164px;padding:6px 6px 9px;border-radius:8px;align-items:flex-start;text-align:left;box-shadow:0 3px 12px rgba(31,74,91,.05)}
 .internal-training-page .v580-group-art{height:78px;margin:0 0 7px;border-radius:6px;background:#eef8fa}
-.internal-training-page .v580-group-art img{width:100%;max-width:100%;height:100%;object-fit:cover;mix-blend-mode:normal;filter:saturate(.78) contrast(.95)}
+.internal-training-page .v580-group-art img{width:100%;max-width:100%;height:100%;object-fit:cover;mix-blend-mode:normal}
 .internal-training-page .v580-card-top{display:none!important}.internal-training-page .v580-group-card h3{margin:0 5px 2px;font-size:12px}.internal-training-page .v580-group-card p{margin:0 5px;font-size:12px;line-height:1.45}.internal-training-page .v580-group-card b{align-self:center;margin-top:auto;padding-top:5px;font-size:0}.internal-training-page .v580-group-card b:after{content:'→';display:grid;place-items:center;width:19px;height:19px;border-radius:50%;background:#dff5f5;color:#078692;font-size:12px}
 
 /* PGY: one hero and four learning cards as shown in the supplied reference. */
@@ -924,7 +924,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
 .internal-training-page .v580-group-card:nth-child(4) .v580-group-art{background-image:url('/assets/v686/internal-bb-hd.webp')!important}
 .internal-training-page .v580-group-card:nth-child(5) .v580-group-art{background-image:url('/assets/v686/internal-bact-hd.webp')!important}
 .internal-training-page .v580-group-card:nth-child(6) .v580-group-art{background-image:url('/assets/v686/internal-hema-hd.webp')!important}
-.internal-training-page .v580-group-art img{opacity:0!important}
+.internal-training-page .v580-group-art img{opacity:1}
 
 .pgy-training-page .v682-pgy-photo{
   background-repeat:no-repeat!important;
@@ -1085,7 +1085,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
   .home-dashboard-page .phase3-hero-art-frame{
     inset:0;
     border-radius:0;
-    background:url('/assets/v687/home-hero-photo.webp') center/cover no-repeat;
+    background:url('/assets/v1017/home-hero-1280.webp') center/cover no-repeat;
     box-shadow:none
   }
   .home-dashboard-page .phase3-hero-art-frame:before{
@@ -1169,7 +1169,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
     opacity:1;
     pointer-events:none;
     border-radius:0;
-    background:url('/assets/v687/internal-hero-photo.webp') center/cover no-repeat;
+    background:url('/assets/v1017/internal-hero-1280.webp') center/cover no-repeat;
     box-shadow:none;
     filter:none
   }
@@ -1207,7 +1207,7 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
     display:block;
     inset:0 0 0 44%;
     z-index:-2;
-    background:url('/assets/v687/pgy-hero-photo.webp') center/cover no-repeat;
+    background:url('/assets/v1017/pgy-hero-1280.webp') center/cover no-repeat;
     filter:none
   }
   .pgy-training-page .v681-pgy-hero:after{
@@ -1281,12 +1281,12 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
   .v687-home-hint{display:none}
   .home-dashboard-page .phase3-home .phase3-home-hero-681>.v56-hero-copy,
   .home-dashboard-page .phase3-home .phase3-home-hero-681>.phase3-home-hero-art{opacity:1;position:relative;inset:auto}
-  .home-dashboard-page .phase3-hero-art-frame{background:url('/assets/v687/home-hero-photo.webp') center/cover no-repeat}
+  .home-dashboard-page .phase3-hero-art-frame{background:url('/assets/v1017/home-hero-1280.webp') center/cover no-repeat}
   .home-dashboard-page .phase3-home .phase3-home-hero-art img{display:none}
   .internal-training-page .v681-internal-copy,
   .internal-training-page .v681-internal-art,
   .pgy-training-page .v681-pgy-copy{opacity:1;pointer-events:auto}
-  .internal-training-page .v681-internal-art{background-image:url('/assets/v687/internal-hero-photo.webp')}
+  .internal-training-page .v681-internal-art{background-image:url('/assets/v1017/internal-hero-1280.webp')}
 }
 
 /* V6.8.8 · iPhone/mobile home alignment and bottom-navigation hardening. */

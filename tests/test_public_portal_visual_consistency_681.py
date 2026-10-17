@@ -18,7 +18,9 @@ class PublicPortalVisualConsistency681Tests(unittest.TestCase):
         asset = STATIC / "assets" / "v681" / "lab-training-photo.webp"
         self.assertTrue(asset.exists())
         self.assertGreater(asset.stat().st_size, 20_000)
-        self.assertIn('/assets/v681/lab-training-photo.webp', self.home)
+        # 2026-10-17: the home hero shows its photo through CSS; the hidden duplicate <img>
+        # (display:none, still downloaded, 105 KB) is gone.
+        self.assertNotIn('<img src="/assets/v681/lab-training-photo.webp"', self.home)
         self.assertGreaterEqual(self.css.count("/assets/v681/lab-training-photo.webp"), 2)
 
     def test_public_headers_follow_the_supplied_reference_context(self):

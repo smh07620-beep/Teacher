@@ -231,7 +231,9 @@ class LearnerPlayerBehaviourTests(unittest.TestCase):
           pause() { this.paused = true; }
         }
         function el() { return { style: {}, setAttribute() {}, addEventListener(n, f) { this.onclick = f; }, appendChild() {}, remove() {}, textContent: '' }; }
-        const window = { slideViewerState: { materialId: 'm1', index: 0 }, addEventListener() {}, openMaterial() {}, cachedSlidesList: [] };
+        const winListeners = {};
+        const window = { slideViewerState: { materialId: 'm1', index: 0 }, addEventListener(n, f) { (winListeners[n] = winListeners[n] || []).push(f); }, cachedSlidesList: [] };
+        const announce = (detail) => (winListeners['teacher:reader-changed'] || []).forEach((f) => f({ detail }));
         const context = {
           window, console,
           document: { readyState: 'complete', body: { appendChild() {} }, createElement: el, addEventListener() {},
@@ -249,7 +251,9 @@ class LearnerPlayerBehaviourTests(unittest.TestCase):
         function open(narration) {
           window.cachedSlidesList = [{ id: 'm1', narration }];
           window.slideViewerState.index = 0;
-          window.openMaterial('m1');
+          // The reader announces close/open (system-learner.js); the player listens.
+          announce({ open: false });
+          announce({ open: true, materialId: 'm1', page: 1 });
         }
         // 1) segmented narration: stop at the end of each slide, resume only after the page changes
         open({ id: 'a1', kind: 'ai', viewUrl: '/view/a1', stale: false,

@@ -69,12 +69,6 @@ body.portal-v56:not(.home-dashboard-page) [role="button"]{touch-action:manipulat
 /* 院內課程：組別卡圖片改用首頁同一套 HD 圖（修正偏移的白邊） */
 body.internal-training-page .v580-group-card .v580-group-art{aspect-ratio:4/3;height:auto;background-size:cover!important;background-position:center!important;background-color:#eef6f7!important;border-radius:8px}
 body.internal-training-page .v580-card-top small{display:none}
-body.portal-v56.internal-training-page .v580-group-card:nth-child(1) .v580-group-art{background-image:url('/assets/v1010/card-bio.webp')!important}
-body.portal-v56.internal-training-page .v580-group-card:nth-child(2) .v580-group-art{background-image:url('/assets/v1010/card-micro.webp')!important}
-body.portal-v56.internal-training-page .v580-group-card:nth-child(3) .v580-group-art{background-image:url('/assets/v1010/card-sero.webp')!important}
-body.portal-v56.internal-training-page .v580-group-card:nth-child(4) .v580-group-art{background-image:url('/assets/v1010/card-bb.webp')!important}
-body.portal-v56.internal-training-page .v580-group-card:nth-child(5) .v580-group-art{background-image:url('/assets/v1010/card-bact.webp')!important}
-body.portal-v56.internal-training-page .v580-group-card:nth-child(6) .v580-group-art{background-image:url('/assets/v1010/card-hema.webp')!important}
 
 /* 手機：圖片高度回到合理範圍；標題區加淡色底，避免文字壓在照片上 */
 @media(max-width:620px){

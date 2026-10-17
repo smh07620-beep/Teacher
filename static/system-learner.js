@@ -261,6 +261,7 @@ async function renderSlidesGrid() {
         }
         grid.innerHTML = `<div class="col-span-full text-center py-6"><p class="text-sm text-rose-600">${message}</p><button type="button" class="btn btn-secondary mt-3" data-csp-click="renderSlidesGrid()">重新載入</button></div>`;
     }
+    announceLearnerRendered('slides');
 }
 
 
@@ -1279,8 +1280,14 @@ function renderCourseOverviewBase() {
 
 function renderCourseOverview(){
     const presenter=window.TeachingCourseOverview66?.render;
-    if(typeof presenter==='function')return presenter();
-    return renderCourseOverviewBase();
+    const result=typeof presenter==='function'?presenter():renderCourseOverviewBase();
+    announceLearnerRendered('course-overview');
+    return result;
+}
+
+// Listeners (reading progress labels, etc.) repaint on this instead of wrapping the renderers.
+function announceLearnerRendered(view){
+    window.dispatchEvent(new CustomEvent('teacher:learner-rendered',{detail:{view}}));
 }
 
 window.LearnerCourseOverview = Object.freeze({
@@ -1308,6 +1315,12 @@ function bindCourseFeedbackUI(){
 
 
 async function markMaterialComplete(materialId){
+    // Slides, PDFs and media complete by being read in the reader: open it instead.
+    const tracked=(window.cachedSlidesList||[]).find(m=>String(m.id)===String(materialId));
+    if(tracked&&materialAutoTracked(tracked)){
+        if(typeof window.openMaterial==='function')await window.openMaterial(materialId);
+        return false;
+    }
 
     const name=(document.getElementById('examinee-name')?.value || document.getElementById('progress-name')?.value || '').trim();
 

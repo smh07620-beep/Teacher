@@ -31,7 +31,11 @@ function harness({ external = null, externalError = false } = {}) {
       { id: 'fallback-x', title: 'F', viewerMode: 'video' },
     ],
     addEventListener(name, fn) { (windowListeners[name] ||= []).push(fn); },
-    openMaterial: async () => { fallback += 1; }, closeSlideViewer() {}, closeMediaViewer() {}, goToSlidePage() {},
+    openMaterial: async () => { fallback += 1; },
+    // Like system-learner.js: closing announces the event that smart-learning listens to.
+    closeSlideViewer() { (windowListeners['teacher:reader-changed'] || []).forEach(fn => fn({ detail: { open: false } })); },
+    closeMediaViewer() { (windowListeners['teacher:media-changed'] || []).forEach(fn => fn({ detail: { open: false } })); },
+    goToSlidePage() {},
     console: { warn() {} },
   };
   const document = {
