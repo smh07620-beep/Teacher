@@ -77,6 +77,51 @@ def traffic_light(alerts_this_month: int | None) -> dict[str, str]:
     return _light("traffic", "本月流量", YELLOW, f"本月已有 {alerts_this_month} 則流量警示，請查看流量設定。")
 
 
+DEFAULT_DB_LIMIT_BYTES = 500 * 1024 ** 2  # Supabase free plan database size
+
+
+def database_size() -> dict[str, Any] | None:
+    """Database size and the five largest tables (one cheap catalogue query each)."""
+    from teacher_app.common import db as common_db
+
+    with common_db.read_connection() as (conn, kind):
+        if kind == "postgres":
+            total = int(list(dict(conn.execute("SELECT pg_database_size(current_database()) AS b").fetchone()).values())[0] or 0)
+            rows = conn.execute(
+                "SELECT relname AS name, pg_total_relation_size(relid) AS b FROM pg_catalog.pg_statio_user_tables "
+                "ORDER BY pg_total_relation_size(relid) DESC LIMIT 5"
+            ).fetchall()
+            tables = [{"name": str(dict(r)["name"]), "bytes": int(dict(r)["b"] or 0)} for r in rows]
+        else:
+            pages = int(list(dict(conn.execute("PRAGMA page_count").fetchone()).values())[0] or 0)
+            size = int(list(dict(conn.execute("PRAGMA page_size").fetchone()).values())[0] or 0)
+            total, tables = pages * size, []
+    return {"bytes": total, "tables": tables}
+
+
+def db_size_light(info: dict[str, Any] | None, limit_bytes: int) -> dict[str, str]:
+    if info is None:
+        return _light("db-size", "Supabase 資料庫容量", GRAY, "目前讀不到資料庫容量。")
+    used = int(info.get("bytes") or 0)
+    ratio = used / limit_bytes if limit_bytes else 0
+    state = GREEN if ratio < 0.7 else YELLOW if ratio < 0.9 else RED
+    top = "、".join(f"{t['name']} {t['bytes'] / 1024 ** 2:.1f} MB" for t in (info.get("tables") or [])[:3])
+    detail = f"已用 {used / 1024 ** 2:.0f} MB／上限 {limit_bytes / 1024 ** 2:.0f} MB（{ratio * 100:.0f}%）。"
+    return _light("db-size", "Supabase 資料庫容量", state, detail + (f" 最大的表：{top}。" if top else ""))
+
+
+def render_traffic_light(total_bytes: int | None, thresholds_gb: list[float]) -> dict[str, str]:
+    if total_bytes is None:
+        return _light("render-traffic", "Render 本月流量", GRAY, "目前讀不到流量統計。")
+    gb = total_bytes / 1024 ** 3
+    limit = max(thresholds_gb) if thresholds_gb else 0
+    if not limit:
+        return _light("render-traffic", "Render 本月流量", GRAY, f"本月約 {gb:.2f} GB（尚未設定提醒門檻）。")
+    ratio = gb / limit
+    state = GREEN if ratio < 0.7 else YELLOW if ratio < 1 else RED
+    return _light("render-traffic", "Render 本月流量", state, f"本月約 {gb:.2f} GB，提醒門檻 {limit:g} GB（{ratio * 100:.0f}%）。實際以 Render 後台為準。")
+
+
 def _scalar(sql: str, params: tuple = ()) -> Any:
     from teacher_app.common import db as common_db
 
@@ -111,6 +156,23 @@ def collect(*, health_state: Callable[[], dict[str, Any]], now: dt.datetime | No
     except Exception:
         count = None
     lights.append(traffic_light(count))
+    try:
+        info = database_size()
+    except Exception:
+        info = None
+    try:
+        db_limit = int(os.environ.get("SUPABASE_DB_LIMIT_BYTES", "") or 0) or DEFAULT_DB_LIMIT_BYTES
+    except ValueError:
+        db_limit = DEFAULT_DB_LIMIT_BYTES
+    lights.append(db_size_light(info, db_limit))
+    try:
+        from teacher_app.maintenance import traffic_meter
+
+        month = now.strftime("%Y-%m")
+        total = int(_scalar("SELECT COALESCE(SUM(bytes),0) AS b FROM traffic_usage WHERE day LIKE " + _placeholder(), (month + "-%",)) or 0)
+        lights.append(render_traffic_light(total, traffic_meter.thresholds_gb()))
+    except Exception:
+        lights.append(render_traffic_light(None, []))
     order = {RED: 3, YELLOW: 2, GRAY: 1, GREEN: 0}
     overall = max((light["state"] for light in lights), key=lambda state: order[state])
     return {"overall": overall, "lights": lights, "checkedAt": now.isoformat()}

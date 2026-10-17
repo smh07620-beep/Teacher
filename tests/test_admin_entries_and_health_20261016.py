@@ -52,3 +52,28 @@ class EntryRoutesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UsageLightsTests(unittest.TestCase):
+    def test_db_size_light_thresholds(self):
+        from teacher_app.admin import health_overview as h
+        mb = 1024 ** 2
+        self.assertEqual(h.db_size_light({"bytes": 100 * mb, "tables": [{"name": "materials", "bytes": 40 * mb}]}, 500 * mb)["state"], "green")
+        self.assertIn("materials 40.0 MB", h.db_size_light({"bytes": 100 * mb, "tables": [{"name": "materials", "bytes": 40 * mb}]}, 500 * mb)["detail"])
+        self.assertEqual(h.db_size_light({"bytes": 460 * mb}, 500 * mb)["state"], "red")
+        self.assertEqual(h.db_size_light(None, 500 * mb)["state"], "gray")
+
+    def test_render_traffic_light(self):
+        from teacher_app.admin import health_overview as h
+        gb = 1024 ** 3
+        self.assertEqual(h.render_traffic_light(int(1 * gb), [2.5, 3.5])["state"], "green")
+        self.assertEqual(h.render_traffic_light(int(3 * gb), [2.5, 3.5])["state"], "yellow")
+        self.assertEqual(h.render_traffic_light(int(4 * gb), [2.5, 3.5])["state"], "red")
+
+    def test_sqlite_size_reads(self):
+        from teacher_app.admin import health_overview as h
+        try:
+            info = h.database_size()
+        except Exception:
+            self.skipTest("no database configured in this environment")
+        self.assertGreaterEqual(info["bytes"], 0)
