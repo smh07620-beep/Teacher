@@ -66,7 +66,7 @@ class AssessmentGroupSelectKeepsUserChoiceTests(unittest.TestCase):
             self.skipTest("node is not available")
         source = ROOT.joinpath("static", "teacher-ui-resilience-1014.js").read_text(encoding="utf-8")
         start = source.index("  function assessmentScope() {")
-        end = source.index("  const canonicalQuizRender")
+        end = source.index("  // admin-question-bank.js calls this before rendering")
         script = """
 const options = values => values.map(value => ({ value }));
 const area = { value: 'internal', options: options(['internal', 'pgy']) };

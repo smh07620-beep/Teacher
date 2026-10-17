@@ -163,6 +163,7 @@ function switchLearningModule(module){
         else document.getElementById('progress-summary')?.classList.add('hidden');
     }
     window.scrollTo({top:0,behavior:'smooth'});
+    window.dispatchEvent(new CustomEvent('teacher:module-changed',{detail:{module}}));
 }
 
 // The role-aware header entry is the single management entry for staff.

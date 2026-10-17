@@ -28,32 +28,30 @@ class FrontendJsOwnershipContractTests(unittest.TestCase):
             self.assertIn(name, self.doc)
 
     def test_review_link_wrappers_are_guarded_and_call_the_previous_owner(self):
-        for marker in (
-            "__teacher66ReviewEditWrapped",
-            "__teacher66ReviewRenderWrapped",
-            "__teacher66ReviewSlidesWrapped",
-            "__teacher66ReviewPageWrapped",
-        ):
+        # 2026-10-17: review links listen to owner events and expose helpers; no wrappers remain.
+        self.assertEqual(self.review.count("original.apply("), 0)
+        for marker in ("teacher:exam-rendered", "teacher:learner-rendered", "teacher:reader-changed", "editorBlock(question)"):
             self.assertIn(marker, self.review)
-        self.assertGreaterEqual(self.review.count("original.apply("), 4)
 
     def test_teaching_wrappers_preserve_one_previous_implementation(self):
         for marker in (
             "teacher66OriginalSavePage",
             "teacher66OriginalMarkComplete",
             "teacher66OriginalNextMaterial",
-            "teacher66OriginalSwitchCategory",
         ):
             self.assertIn(marker, self.teaching)
         # 2026-10-17: the exam row is rendered by its owner; no wrapper chain on buildCourseExamRow.
         self.assertNotIn("originalBuildCourseExamRow", self.teaching)
+        self.assertNotIn("teacher66OriginalSwitchCategory", self.teaching)
+        self.assertIn("window.TeachingEmptyExam = Object.freeze", self.teaching)
         self.assertNotIn("fetch('/api/material-progress'", self.teaching)
 
     def test_assessment_resilience_wraps_rendering_not_question_crud(self):
-        self.assertIn("const canonicalQuizRender = window.renderAdminQuizCategories", self.resilience)
-        self.assertIn("const canonicalPaint = window.paintAdminQuizCategories", self.resilience)
-        self.assertIn("__teacher1014ScopeGuard", self.resilience)
-        self.assertIn("__teacher1014EmptyRecovery", self.resilience)
+        # 2026-10-17: the owner calls TeacherAssessmentScope.sync and announces its paint.
+        self.assertIn("window.TeacherAssessmentScope = Object.freeze({ sync: syncAssessmentScope })", self.resilience)
+        self.assertIn("view === 'quiz-categories'", self.resilience)
+        self.assertNotIn("window.renderAdminQuizCategories = guarded", self.resilience)
+        self.assertNotIn("window.paintAdminQuizCategories = painted", self.resilience)
         self.assertNotIn("adminBuildQuestionPayload =", self.resilience)
 
 

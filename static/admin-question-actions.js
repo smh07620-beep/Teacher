@@ -55,7 +55,9 @@
       }
     }
 
-    return {question,questionType:type,difficulty,options,correct,answerConfig,tag,explanation,active};
+    const payload={question,questionType:type,difficulty,options,correct,answerConfig,tag,explanation,active};
+    // Review-source fields (review-links-66.js) are added here, not by wrapping this function.
+    return window.TeacherReviewSource?.apply?.(payload,qId)||payload;
   };
 
   window.setQuestionRowBusy = function(qId,busy,label='處理中…'){

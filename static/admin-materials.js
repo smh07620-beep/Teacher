@@ -53,6 +53,11 @@
     }
   };
 
+  // Decorators (content audience chips, upload notice) listen for this instead of wrapping renderAdminMaterials.
+  function announceAdminRendered(view, detail){
+    window.dispatchEvent(new CustomEvent('teacher:admin-rendered', {detail: Object.assign({view}, detail || {})}));
+  }
+
   function paintAdminMaterials(materials, box){
     if (!box) return;
     box.innerHTML = materials.map(m => `
@@ -82,6 +87,7 @@
             </div>`}
         </div>
       </div>`).join('') || '<p class="text-xs text-slate-400">目前沒有教材。</p>';
+    announceAdminRendered('materials');
   }
 
   window.renderAdminMaterials = async function(force=false){
@@ -90,6 +96,7 @@
       // The full-list panel was removed; the course overview owns the UI. Still
       // refresh the shared cache so every caller keeps seeing fresh data.
       await window.fetchAdminMaterials(force);
+      announceAdminRendered('materials');
       return;
     }
     const cached = Array.isArray(adminMaterialsCache.data) ? adminMaterialsCache.data : null;

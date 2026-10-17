@@ -340,63 +340,33 @@
     (toolbar ? toolbar.after(card) : panel.insertBefore(card, panel.firstChild));
   }
 
-  function wrapSubmit() {
-    const original = g('submitQuiz');
-    if (typeof original !== 'function' || original.__loop1032) return;
-    const wrapped = async function () {
-      const catId = g('currentCatKey');
-      const result = await original.apply(this, arguments);
-      if (catId && (g('isSubmittedMap') || {})[catId]) {
-        saveLastResult(catId);
-        rememberExam(catId);
-        injectAtlasHints();
-        const last = ss.get(RESULT_PREFIX + catId);
-        const summary = document.getElementById('result-remediation-summary');
-        if (summary && last && !last.passed) summary.textContent += ' 重考不會被鎖定，系統會重新抽題並打亂題目順序。';
-        loadExamStatus(true);
-      }
-      return result;
-    };
-    wrapped.__loop1032 = true;
-    window.submitQuiz = wrapped;
-  }
-
-  function wrapRender() {
-    const original = g('renderQuestions');
-    if (typeof original !== 'function' || original.__loop1032) return;
-    const wrapped = function () { const r = original.apply(this, arguments); injectAtlasHints(); return r; };
-    wrapped.__loop1032 = true;
-    window.renderQuestions = wrapped;
-  }
-
-  function wrapModuleSwitch() {
-    const original = g('switchLearningModule');
-    if (typeof original !== 'function' || original.__loop1032) return;
-    const wrapped = function (module) {
-      const r = original.apply(this, arguments);
-      if (module === 'exam') { ensureExamToolbar(); setTimeout(restoreLastResultCard, 0); }
+  // The exam owners announce what happened (system-exam.js / system-core.js); nothing is wrapped.
+  function bindExamEvents() {
+    window.addEventListener('teacher:exam-submitted', event => {
+      const catId = event.detail?.catId;
+      if (!catId || !(g('isSubmittedMap') || {})[catId]) return;
+      saveLastResult(catId);
+      rememberExam(catId);
+      injectAtlasHints();
+      const last = ss.get(RESULT_PREFIX + catId);
+      const summary = document.getElementById('result-remediation-summary');
+      if (summary && last && !last.passed) summary.textContent += ' 重考不會被鎖定，系統會重新抽題並打亂題目順序。';
+      loadExamStatus(true);
+    });
+    window.addEventListener('teacher:exam-rendered', () => injectAtlasHints());
+    window.addEventListener('teacher:module-changed', event => {
+      if (event.detail?.module === 'exam') { ensureExamToolbar(); setTimeout(restoreLastResultCard, 0); }
       setTimeout(paintPill, 0);
-      return r;
-    };
-    wrapped.__loop1032 = true;
-    window.switchLearningModule = wrapped;
+    });
+    window.addEventListener('teacher:exam-opened', () => { ensureExamToolbar(); restoreLastResultCard(); });
   }
 
-  function wrapCategorySwitch() {
-    const original = g('switchDynamicCategory');
-    if (typeof original !== 'function' || original.__loop1032) return;
-    const wrapped = async function () { const r = await original.apply(this, arguments); ensureExamToolbar(); restoreLastResultCard(); return r; };
-    wrapped.__loop1032 = true;
-    window.switchDynamicCategory = wrapped;
-  }
+  // system-exam.js uses this to stay on the page (keeps the just-finished result in memory).
+  window.LearnerBackToStudy = module => backToStudy(module);
 
-  function wrapRemediationButton() {
-    // Stay on the page so the just-finished result is kept in memory.
-    window.openExamRemediationMaterials = function () { backToStudy('materials'); };
-  }
 
   function boot() {
-    wrapSubmit(); wrapRender(); wrapModuleSwitch(); wrapCategorySwitch(); wrapRemediationButton();
+    bindExamEvents();
     ensureExamToolbar();
     loadExamStatus(false);
     paintPill();

@@ -891,71 +891,15 @@ function teachingNextMedia() {
     }
 
 
-    const teacher66OriginalSwitchCategory =
-        switchDynamicCategory;
-
-
-    switchDynamicCategory =
-        async function (catId) {
-            const meta =
-                teacher66ExamMeta(
-                    catId
-                );
-
-            const bank =
-                teacher66ExamBankCount(
-                    meta
-                );
-
-
-            /*
-             * When metadata explicitly says zero,
-             * avoid creating an exam attempt.
-             */
-            if (bank === 0) {
-                return teacher66ShowEmptyExam(
-                    catId,
-                    meta
-                );
-            }
-
-
-            const result =
-                await teacher66OriginalSwitchCategory
-                    .apply(
-                        this,
-                        arguments
-                    );
-
-
-            /*
-             * Defensive fallback:
-             * metadata can be stale, so also verify
-             * the actually loaded question collection.
-             */
-            const loaded =
-                window.allQuizData
-                && window.allQuizData[
-                    catId
-                ];
-
-            if (
-                loaded
-                && Array.isArray(
-                    loaded.questions
-                )
-                && loaded.questions.length
-                    === 0
-            ) {
-                return teacher66ShowEmptyExam(
-                    catId,
-                    meta
-                );
-            }
-
-
-            return result;
-        };
+    // system-exam.js asks this before opening an attempt and after loading questions.
+    window.TeachingEmptyExam = Object.freeze({
+        blocked(catId) {
+            return teacher66ExamBankCount(teacher66ExamMeta(catId)) === 0;
+        },
+        show(catId) {
+            return teacher66ShowEmptyExam(catId, teacher66ExamMeta(catId));
+        },
+    });
 
 
     // Zero-question exams render as "尚待題庫建置" inside buildCourseExamRow (system-learner.js).

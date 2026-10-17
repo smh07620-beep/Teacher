@@ -26,21 +26,26 @@ class Phase3LAdminResultsWorkspaceTests(unittest.TestCase):
         self.assertIn("resultMode: 'results'", self.results)
         self.assertIn("record?.reviewStatus === 'pending'", self.results)
         self.assertIn("answer?.questionType === 'essay'", self.results)
-        self.assertIn("window.fetchAdminRecords = filteredFetchAdminRecords", self.results)
+        # 2026-10-17: the data owner asks for the mode; this file no longer replaces its functions.
+        self.assertIn("window.AdminResultsMode = Object.freeze({ get: () => state.resultMode, filterRecords })", self.results)
+        self.assertNotIn("window.fetchAdminRecords =", self.results)
+        self.assertNotIn("window.renderAdminTable =", self.results)
         self.assertIn("window.switchTeacherMode = switchTeacherMode", self.results)
         self.assertNotIn("window.__teacherAdminResultsWorkspace", self.results)
 
     def test_scoring_mode_hides_analytics_and_preserves_empty_state(self):
+        data = (ROOT / "static" / "admin-results-data.js").read_text(encoding="utf-8")
         self.assertIn("admin-results-analytics", self.results)
-        self.assertIn("目前沒有待人工評分的考核。", self.results)
+        self.assertIn("目前沒有待人工評分的考核。", data)
+        self.assertIn("mode==='scoring'||mode==='documents'", data)
         self.assertIn("🎯 教師評核｜待人工評分", self.results)
         self.assertIn("📊 歷次考核成績", self.results)
 
     def test_teacher_scoring_reuses_raw_records_for_activity_and_keeps_action_indexes_aligned(self):
         self.assertIn("window.renderAdminActivitySummary?.(records)", self.results)
-        self.assertIn("const filtered = records.filter(isScoringRecord)", self.results)
-        self.assertIn("adminRecords = filtered", self.results)
-        self.assertIn("document.getElementById('admin-table-body')", self.results)
+        self.assertIn("return records.filter(isScoringRecord)", self.results)
+        data = (ROOT / "static" / "admin-results-data.js").read_text(encoding="utf-8")
+        self.assertIn("adminRecords=window.AdminResultsMode.filterRecords(adminRecords)", data)
 
     def test_router_and_mode_state_load_before_rbac_wrappers(self):
         ordered = dict(ASSET_MANIFEST["system"]["ordered"])["/system-admin.js"]

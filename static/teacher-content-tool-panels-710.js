@@ -7,7 +7,6 @@
 
   const STUDIO_ID='teacher-content-studio-71';
   const BODY_ID='teacher-content-studio-body-71';
-  const originalToggleQuizPanel=window.toggleQuizQuestionsPanel;
   const mountState={node:null,placeholder:null,catId:'',kind:''};
 
   const esc=value=>(window.escapeHtml?window.escapeHtml(String(value??'')):String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
@@ -18,9 +17,7 @@
     group:document.getElementById('admin-quiz-group')?.value||document.getElementById('admin-material-group')?.value||window.currentGroupKey||'grpBio'
   });
 
-  function removeLegacyCloseControls(root=document){
-    root?.querySelectorAll?.('[data-quiz-panel-close-710]').forEach(node=>node.remove());
-  }
+
 
   function restoreMountedTool(){
     const node=mountState.node;
@@ -109,7 +106,6 @@
     }
     if(!panel)throw new Error('找不到指定考卷，請返回考卷管理重新選擇。');
 
-    removeLegacyCloseControls(panel);
     panel.classList.add('hidden');
     return panel;
   }
@@ -239,15 +235,6 @@
   // The previous RC injected a qpanel-level "收合考卷工具" control. The
   // Studio now owns dedicated child panels, so keep the canonical toggle but
   // remove that obsolete control whenever a legacy path still opens qpanel.
-  if(typeof originalToggleQuizPanel==='function'){
-    window.toggleQuizQuestionsPanel=function(catId){
-      const result=originalToggleQuizPanel(catId);
-      return Promise.resolve(result).finally(()=>{
-        removeLegacyCloseControls(document.getElementById(`qpanel-${catId}`));
-      });
-    };
-  }
-  removeLegacyCloseControls();
 
   window.TeacherContentStudio71?.registerExamActions?.(['question','image','video'],(action,catId)=>openManualTool(catId,action));
   window.TeacherContentStudio71?.registerExamActions?.(['ai'],(_action,catId)=>openAiTool(catId));
@@ -268,7 +255,6 @@
     if(!root)return;
     const observer=new MutationObserver(()=>{
       if(root.classList.contains('hidden'))restoreMountedTool();
-      removeLegacyCloseControls(root);
     });
     observer.observe(root,{attributes:true,attributeFilter:['class'],childList:true,subtree:true});
   }

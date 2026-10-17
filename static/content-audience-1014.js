@@ -249,33 +249,12 @@
     host.appendChild(notice);
   }
 
-  const originalRenderMaterials = window.renderAdminMaterials;
-  if (typeof originalRenderMaterials === 'function') {
-    window.renderAdminMaterials = async function (...args) {
-      const result = await originalRenderMaterials.apply(this, args);
-      decorateMaterials();
-      ensureUploadNotice();
-      return result;
-    };
-  }
-
-  const originalRenderQuestions = window.renderFilteredQuestionList;
-  if (typeof originalRenderQuestions === 'function') {
-    window.renderFilteredQuestionList = function (catId, ...args) {
-      const result = originalRenderQuestions.call(this, catId, ...args);
-      decorateQuestions(catId);
-      return result;
-    };
-  }
-
-  const originalLoadQuestions = window.loadQuizQuestionsIntoPanel;
-  if (typeof originalLoadQuestions === 'function') {
-    window.loadQuizQuestionsIntoPanel = async function (catId, ...args) {
-      const result = await originalLoadQuestions.call(this, catId, ...args);
-      decorateQuestions(catId);
-      return result;
-    };
-  }
+  // Owners announce teacher:admin-rendered after painting; nothing here wraps their functions.
+  window.addEventListener('teacher:admin-rendered', event => {
+    const detail = event.detail || {};
+    if (detail.view === 'materials') { decorateMaterials(); ensureUploadNotice(); }
+    else if (detail.view === 'questions' && detail.catId) decorateQuestions(detail.catId);
+  });
 
   // The course overview menu (更多 → 設定可見範圍) uses the same editor as the
   // full material list.

@@ -114,15 +114,10 @@ class LearningFlow66Tests(
                 source,
             )
 
-        self.assertIn(
-            "if (bank === 0)",
-            source,
-        )
-
-        self.assertIn(
-            "loaded.questions.length",
-            source,
-        )
+        # Owner hooks (2026-10-17): system-exam.js asks TeachingEmptyExam before and after loading.
+        exam = self.source("static/system-exam.js")
+        self.assertIn("window.TeachingEmptyExam?.blocked?.(catId)", exam)
+        self.assertIn("allQuizData[catId].questions.length===0", exam)
 
     def test_m3_teaching_asset_is_cache_busted(self):
         html = self.source(

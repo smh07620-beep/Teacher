@@ -52,6 +52,8 @@
   }
 
   window.renderResultsAnalytics = function(records){
+    const mode=window.AdminResultsMode?.get?.();
+    if(mode==='scoring'||mode==='documents'){document.getElementById('admin-results-analytics')?.classList.add('hidden');return;}
     const wrap=document.getElementById('admin-results-analytics');
     const cards=document.getElementById('admin-analytics-cards');
     const qbox=document.getElementById('admin-question-analytics');
@@ -109,6 +111,8 @@
     const data=await res.json().catch(()=>[]);
     if(!res.ok){const failure=new Error(data.error||'無法取得成績');failure.status=res.status;throw failure;}
     adminRecords=Array.isArray(data)?data:[];
+    // Scoring mode (admin-results-workspace.js) narrows the list to records needing a teacher.
+    if(window.AdminResultsMode)adminRecords=window.AdminResultsMode.filterRecords(adminRecords);
     return adminRecords;
   };
 
@@ -211,7 +215,7 @@
       if(!records) return;
       if(records.length===0){
         window.renderResultsAnalytics([]);
-        tbody.innerHTML='<tr><td colspan="8" class="p-6 text-center text-slate-400">目前尚無任何考核紀錄</td></tr>';
+        tbody.innerHTML=`<tr><td colspan="8" class="p-6 text-center text-slate-400">${window.AdminResultsMode?.get?.()==='scoring'?'目前沒有待人工評分的考核。':'目前尚無任何考核紀錄'}</td></tr>`;
         document.getElementById('admin-results-pagination')?.replaceChildren();
         return;
       }

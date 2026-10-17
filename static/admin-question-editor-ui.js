@@ -48,6 +48,7 @@
       <label class="inline-flex items-center gap-2 px-2.5 py-2 border border-slate-300 rounded-lg bg-white text-xs"><input data-field="active" type="checkbox" ${q.active===false?'':'checked'}> 啟用此題</label>
       <textarea data-field="explanation" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white" placeholder="${type==='essay'?'評分重點 / 參考答案':'詳解 / 答案依據'}">${escapeHtml(q.explanation||'')}</textarea>
       </div></details>
+      ${window.TeacherReviewSource?.editorBlock?.(q)||''}
       <div class="flex gap-2 items-center"><button id="qsave-${q.id}" data-csp-click="adminSaveOneInlineQuestion('${q.id}','${catId}')" class="text-xs bg-indigo-700 hover:bg-indigo-600 disabled:bg-slate-400 disabled:cursor-wait text-white px-3 py-1.5 rounded-lg font-bold">💾 儲存此題</button><button type="button" data-csp-click="adminCancelInlineQuestionEditor('${q.id}','${catId}')" class="text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg font-bold">取消</button></div>
     </div>`;
   };
@@ -217,5 +218,7 @@
     window.adminUpdateQuestionSelection(catId);
     // 清單重畫後編輯區都已關閉，底部提示要同步回到預設。
     if(typeof window.adminRefreshQuestionEditingBar==='function') window.adminRefreshQuestionEditingBar(catId);
+    // Decorators (content audience) listen for this instead of wrapping the list renderer.
+    window.dispatchEvent(new CustomEvent('teacher:admin-rendered',{detail:{view:'questions',catId}}));
   };
 })();

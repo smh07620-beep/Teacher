@@ -106,15 +106,8 @@
     };
   }
 
-  const canonicalQuizRender = window.renderAdminQuizCategories;
-  if (typeof canonicalQuizRender === 'function' && !canonicalQuizRender.__teacher1014ScopeGuard) {
-    const guarded = async function(force = false) {
-      syncAssessmentScope();
-      return canonicalQuizRender(Boolean(force));
-    };
-    guarded.__teacher1014ScopeGuard = true;
-    window.renderAdminQuizCategories = guarded;
-  }
+  // admin-question-bank.js calls this before rendering (no wrapper around its function).
+  window.TeacherAssessmentScope = Object.freeze({ sync: syncAssessmentScope });
 
   function ensureAssessmentRecovery(count = null) {
     const list = document.getElementById('admin-quiz-categories-list');
@@ -140,16 +133,10 @@
     list.parentElement?.appendChild(box);
   }
 
-  const canonicalPaint = window.paintAdminQuizCategories;
-  if (typeof canonicalPaint === 'function' && !canonicalPaint.__teacher1014EmptyRecovery) {
-    const painted = function(items) {
-      const result = canonicalPaint(items);
-      ensureAssessmentRecovery(Array.isArray(items) ? items.length : null);
-      return result;
-    };
-    painted.__teacher1014EmptyRecovery = true;
-    window.paintAdminQuizCategories = painted;
-  }
+  // Empty-scope help appears after the owner paints the exam list.
+  window.addEventListener('teacher:admin-rendered', event => {
+    if (event.detail?.view === 'quiz-categories') ensureAssessmentRecovery(event.detail.count);
+  });
 
   const shell = window.AdminWorkspaceShell;
   shell?.addBeforeWorkspace(({requested, workspace}) => {

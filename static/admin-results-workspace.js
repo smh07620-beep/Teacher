@@ -1,13 +1,9 @@
-/* Phase 3L: teacher/results workspace mode state.
- * Loaded after admin-workspace.js and before RBAC/workspace decorators so the
- * extracted router remains canonical while later guards continue to wrap it.
+/* Teacher/results workspace mode state (scoring / documents / results).
+ * admin-results-data.js owns fetching and rendering and asks this file for the
+ * current mode (window.AdminResultsMode); nothing here wraps its functions.
  */
 (() => {
   'use strict';
-
-  const legacyFetchAdminRecords = window.fetchAdminRecords;
-  const legacyRenderAdminTable = window.renderAdminTable;
-  const legacyRenderResultsAnalytics = window.renderResultsAnalytics;
 
   const state = {
     teacherMode: 'scoring',
@@ -100,15 +96,12 @@
     if (essayNode) essayNode.textContent = String(essayCount);
   }
 
-  async function filteredFetchAdminRecords() {
-    if (typeof legacyFetchAdminRecords !== 'function') return null;
-    const records = await legacyFetchAdminRecords();
+  // Scoring mode keeps only records that need a teacher's hand (pending / essay).
+  function filterRecords(records) {
     if (!Array.isArray(records) || state.resultMode !== 'scoring') return records;
     renderTeacherReviewOverview(records);
     window.renderAdminActivitySummary?.(records);
-    const filtered = records.filter(isScoringRecord);
-    adminRecords = filtered;
-    return filtered;
+    return records.filter(isScoringRecord);
   }
 
   function modeButtonClass(active) {
@@ -159,29 +152,6 @@
     syncTeacherSubnavVisibility();
   }
 
-  async function renderAdminTableWithMode(...args) {
-    if (typeof legacyRenderAdminTable !== 'function') return undefined;
-    const result = await legacyRenderAdminTable(...args);
-    if (state.resultMode === 'scoring') {
-      document.getElementById('admin-results-analytics')?.classList.add('hidden');
-      const body = document.getElementById('admin-table-body');
-      if (body && body.textContent?.includes('目前尚無任何考核紀錄')) {
-        body.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">目前沒有待人工評分的考核。</td></tr>';
-      }
-    }
-    return result;
-  }
-
-  function renderResultsAnalyticsWithMode(records) {
-    if (state.resultMode === 'scoring' || state.resultMode === 'documents') {
-      document.getElementById('admin-results-analytics')?.classList.add('hidden');
-      return;
-    }
-    if (typeof legacyRenderResultsAnalytics === 'function') {
-      return legacyRenderResultsAnalytics(records);
-    }
-  }
-
   async function switchTeacherMode(mode) {
     state.teacherMode = mode === 'pgy' ? 'pgy' : (mode === 'documents' ? 'documents' : 'scoring');
     paintTeacherMode();
@@ -229,9 +199,7 @@
 
   ensureTeacherDocumentsNavigation();
   ensurePaperDocumentWorkspace();
-  window.fetchAdminRecords = filteredFetchAdminRecords;
-  window.renderAdminTable = renderAdminTableWithMode;
-  window.renderResultsAnalytics = renderResultsAnalyticsWithMode;
+  window.AdminResultsMode = Object.freeze({ get: () => state.resultMode, filterRecords });
   window.paintTeacherMode = paintTeacherMode;
   window.updateResultsWorkspacePresentation = updateResultsWorkspacePresentation;
   window.renderTeacherReviewOverview = renderTeacherReviewOverview;

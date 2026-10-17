@@ -206,7 +206,7 @@
   window.teacher78FilterQuizCategories=value=>{quizListView78.query=String(value||'');quizListView78.visible=20;renderQuizList78();};
   window.teacher78SetQuizStatus=value=>{quizListView78.status=String(value||'all');quizListView78.visible=20;renderQuizList78();};
   window.teacher78LoadMoreQuizCategories=()=>{quizListView78.visible+=20;renderQuizList78();};
-  window.paintAdminQuizCategories=function(cats){quizListView78.all=Array.isArray(cats)?cats:[];quizListView78.visible=20;renderQuizOverview78(quizListView78.all);renderQuizList78();window.TeacherContentToolPanels710?.reconcileAfterPaint?.();};
+  window.paintAdminQuizCategories=function(cats){quizListView78.all=Array.isArray(cats)?cats:[];quizListView78.visible=20;renderQuizOverview78(quizListView78.all);renderQuizList78();window.TeacherContentToolPanels710?.reconcileAfterPaint?.();window.dispatchEvent(new CustomEvent('teacher:admin-rendered',{detail:{view:'quiz-categories',count:quizListView78.all.length}}));};
 
   window.optimisticInsertQuizCategory = function(cat, area, group){
     const k=adminScopeKey(area,group);
@@ -229,6 +229,7 @@
   };
 
   window.renderAdminQuizCategories = async function(force=false){
+    window.TeacherAssessmentScope?.sync?.(); // keep the area/group pickers on the teacher's scope
     const box=document.getElementById('admin-quiz-categories-list');
     const group=document.getElementById('admin-quiz-group')?.value;
     const area=document.getElementById('admin-quiz-area')?.value||currentTrainingArea;
