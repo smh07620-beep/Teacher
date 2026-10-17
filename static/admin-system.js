@@ -81,7 +81,7 @@
   };
 
   // Final convergence: canonical owner migrated from system-admin.js.
-  function systemStatusCard(icon,title,state,detail,tone='slate'){const classes={emerald:'is-good',amber:'is-warning',rose:'is-error',slate:'is-neutral'};return `<div class="admin-system-status-card ${classes[tone]||classes.slate}"><div class="admin-system-status-icon">${icon}</div><div class="min-w-0"><div class="text-xs font-black text-slate-600">${escapeHtml(title)}</div><div class="text-base font-black text-slate-950 mt-1">${escapeHtml(state)}</div><div class="text-[11px] text-slate-500 mt-1 break-all">${escapeHtml(detail||'')}</div></div></div>`;}
+  function systemStatusCard(icon,title,state,detail,tone='slate'){const classes={emerald:'is-good',amber:'is-warning',rose:'is-error',slate:'is-neutral'};return `<div class="admin-system-status-card ${classes[tone]||classes.slate}"><div class="admin-system-status-icon">${icon}</div><div class="min-w-0"><div class="text-xs font-black text-slate-600">${escapeHtml(title)}</div><div class="text-base font-black text-slate-950 mt-1">${escapeHtml(state)}</div><div class="text-xs text-slate-500 mt-1 break-all">${escapeHtml(detail||'')}</div></div></div>`;}
 
   async function renderAdminSystemStatus(force=false){
     const cards=document.getElementById('admin-system-health'),storage=document.getElementById('admin-system-storage');

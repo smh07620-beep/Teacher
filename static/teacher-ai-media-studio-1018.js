@@ -219,7 +219,7 @@
     if (!guide) {
       guide = document.createElement('div');
       guide.id = id;
-      guide.className = 'grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-2 text-center text-[11px] font-black text-slate-600 sm:grid-cols-4';
+      guide.className = 'grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-2 text-center text-xs font-black text-slate-600 sm:grid-cols-4';
       panel.prepend(guide);
     }
     guide.innerHTML = steps.map((step,index)=>`<span class="rounded-lg bg-white px-2 py-2">${index+1} ${step}</span>`).join('');
@@ -457,7 +457,7 @@
       flow.innerHTML = `
         <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div><b class="text-sm text-slate-950">${modeLabel}｜簡易製作</b><p class="mt-1 text-xs leading-5 text-slate-600">丟入資料就能先試做，不必先填完所有設定。 ${modeNote}</p></div>
-          <div class="grid grid-cols-2 gap-1.5 text-center text-[11px] font-black text-slate-600 sm:grid-cols-4">
+          <div class="grid grid-cols-2 gap-1.5 text-center text-xs font-black text-slate-600 sm:grid-cols-4">
             <span class="rounded-lg bg-white px-2 py-2">1 丟入資料</span>
             <span class="rounded-lg bg-white px-2 py-2">2 需求（選填）</span>
             <span class="rounded-lg bg-white px-2 py-2">3 試產出／AI 修正</span>

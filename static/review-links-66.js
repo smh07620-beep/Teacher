@@ -202,11 +202,11 @@
                 data-review-source-66="1"
             >
                 <div>
-                    <div class="text-[11px] font-black text-teal-900">
+                    <div class="text-xs font-black text-teal-900">
                         📚 答題後複習來源
                     </div>
 
-                    <div class="text-[10px] text-teal-700 mt-0.5">
+                    <div class="text-xs text-teal-700 mt-0.5">
                         學員提交考卷後會看到這段提示，並可一鍵回到指定教材複習。
                     </div>
                 </div>
@@ -214,7 +214,7 @@
                 <div class="grid sm:grid-cols-2 gap-2">
 
                     <label>
-                        <span class="text-[11px] font-bold text-slate-600">
+                        <span class="text-xs font-bold text-slate-600">
                             複習教材
                         </span>
 
@@ -225,7 +225,7 @@
                     </label>
 
                     <label class="sm:col-span-2">
-                        <span class="text-[11px] font-bold text-slate-600">
+                        <span class="text-xs font-bold text-slate-600">
                             加強閱讀提示
                         </span>
 
@@ -239,14 +239,14 @@
                 </div>
 
                 <details class="rounded-lg border border-teal-100 bg-white/70 px-3 py-2" data-review-source-advanced-66="1">
-                    <summary class="cursor-pointer text-[11px] font-bold text-teal-800">
+                    <summary class="cursor-pointer text-xs font-bold text-teal-800">
                         更多定位設定（選填，AI 出題會自動帶入）
                     </summary>
 
                     <div class="mt-2 grid sm:grid-cols-2 gap-2">
 
                         <label>
-                            <span class="text-[11px] font-bold text-slate-600">
+                            <span class="text-xs font-bold text-slate-600">
                                 定位方式
                             </span>
 
@@ -262,7 +262,7 @@
                         </label>
 
                         <label>
-                            <span class="text-[11px] font-bold text-slate-600">
+                            <span class="text-xs font-bold text-slate-600">
                                 頁碼／投影片
                             </span>
 
@@ -278,7 +278,7 @@
                         </label>
 
                         <label>
-                            <span class="text-[11px] font-bold text-slate-600">
+                            <span class="text-xs font-bold text-slate-600">
                                 影片／音訊秒數
                             </span>
 
@@ -294,7 +294,7 @@
                         </label>
 
                         <label>
-                            <span class="text-[11px] font-bold text-slate-600">
+                            <span class="text-xs font-bold text-slate-600">
                                 圖像重點區域
                             </span>
 
@@ -307,7 +307,7 @@
                         </label>
 
                         <label class="sm:col-span-2">
-                            <span class="text-[11px] font-bold text-slate-600">
+                            <span class="text-xs font-bold text-slate-600">
                                 建議複習區塊
                             </span>
 

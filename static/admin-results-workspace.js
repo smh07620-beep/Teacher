@@ -78,7 +78,7 @@
         <div class="rounded-2xl border border-slate-200 bg-white p-4">
           <h5 class="text-sm font-black text-slate-900">文件可追溯欄位</h5>
           <p class="mt-2 text-xs text-slate-600 leading-5">新版 Word 輸出資料會提供文件識別碼、原始考核時間、輸出時間、輸出人、紙本狀態、簽名欄與歸檔編號等欄位。範本有放入對應佔位字時即可直接顯示。</p>
-          <p class="mt-2 text-[11px] text-slate-500">原本的 Word 範本仍可繼續使用，不會因新增欄位而失效。</p>
+          <p class="mt-2 text-xs text-slate-500">原本的 Word 範本仍可繼續使用，不會因新增欄位而失效。</p>
         </div>
       </div>
       <div class="rounded-xl border border-sky-100 bg-sky-50/60 px-4 py-3 text-xs text-sky-900">下方列表就是正式考核紀錄來源。需要紙本時直接選擇對應紀錄並按「📄 匯出 Word」；不要重新手打姓名、工號、分數或評核者資料，以避免紙本與系統紀錄不一致。</div>`;

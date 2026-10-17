@@ -23,7 +23,7 @@
       box.innerHTML = templateTypes().map(type => {
         const template = list.find(item => item.templateType === type);
         const title = assessmentConfig(type).title || type;
-        return `<div class="border border-indigo-100 rounded-xl p-3 bg-white"><div class="font-black text-sm text-slate-800">${escapeHtml(title)}</div><div class="text-[11px] text-slate-500 mt-1">${template ? '✅ ' + escapeHtml(template.filename) : '尚未上傳 Word/PDF 範本'} · 僅接受有效 DOCX/PDF，大小上限由後端檢查</div><div class="flex flex-wrap gap-2 mt-3"><button data-csp-click="adminTriggerPgyTemplateUpload('${type}')" class="text-xs bg-indigo-700 text-white px-3 py-1.5 rounded-lg">⬆️ ${template ? '重新上傳' : '上傳範本'}</button>${template ? `<a href="/api/pgy-assessment-templates/${type}/download" target="_blank" class="text-xs border border-indigo-200 px-3 py-1.5 rounded-lg">⬇️ 開啟／下載</a><button data-csp-click="adminDeletePgyTemplate('${type}')" class="text-[11px] border border-slate-200 text-slate-500 hover:text-rose-700 px-2 py-1.5 rounded-lg">更多：刪除</button>` : ''}</div></div>`;
+        return `<div class="border border-indigo-100 rounded-xl p-3 bg-white"><div class="font-black text-sm text-slate-800">${escapeHtml(title)}</div><div class="text-xs text-slate-500 mt-1">${template ? '✅ ' + escapeHtml(template.filename) : '尚未上傳 Word/PDF 範本'} · 僅接受有效 DOCX/PDF，大小上限由後端檢查</div><div class="flex flex-wrap gap-2 mt-3"><button data-csp-click="adminTriggerPgyTemplateUpload('${type}')" class="text-xs bg-indigo-700 text-white px-3 py-1.5 rounded-lg">⬆️ ${template ? '重新上傳' : '上傳範本'}</button>${template ? `<a href="/api/pgy-assessment-templates/${type}/download" target="_blank" class="text-xs border border-indigo-200 px-3 py-1.5 rounded-lg">⬇️ 開啟／下載</a><button data-csp-click="adminDeletePgyTemplate('${type}')" class="text-xs border border-slate-200 text-slate-500 hover:text-rose-700 px-2 py-1.5 rounded-lg">更多：刪除</button>` : ''}</div></div>`;
       }).join('');
     } catch (error) {
       box.innerHTML = `<p class="text-xs text-rose-500">${escapeHtml(error.message)}</p>`;
@@ -75,7 +75,7 @@
     box.innerHTML = (list || []).length ? list.slice(0, 100).map(item => {
       const group = GROUPS[item.group] || GROUPS.grpBio;
       const title = assessmentConfig(item.assessmentType).title || item.title;
-      return `<div class="border border-slate-200 rounded-xl p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-2"><div><div class="font-bold text-sm text-slate-800">${escapeHtml(item.name)}｜${escapeHtml(title)}</div><div class="text-[11px] text-slate-500 mt-1">${escapeHtml(item.assessmentDate)}・${escapeHtml(group.name)}・${escapeHtml(item.empId)}・評估者 ${escapeHtml(item.evaluatorName)}</div></div><span class="text-xs font-bold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700">${Number(item.overallScore || 0).toFixed(1)} / 5</span></div>`;
+      return `<div class="border border-slate-200 rounded-xl p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-2"><div><div class="font-bold text-sm text-slate-800">${escapeHtml(item.name)}｜${escapeHtml(title)}</div><div class="text-xs text-slate-500 mt-1">${escapeHtml(item.assessmentDate)}・${escapeHtml(group.name)}・${escapeHtml(item.empId)}・評估者 ${escapeHtml(item.evaluatorName)}</div></div><span class="text-xs font-bold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700">${Number(item.overallScore || 0).toFixed(1)} / 5</span></div>`;
     }).join('') : '<p class="text-xs text-slate-400">尚無 PGY 評量紀錄</p>';
   }
 

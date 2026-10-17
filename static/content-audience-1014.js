@@ -83,12 +83,12 @@
     const host = document.createElement('span');
     host.className = 'inline-flex items-center gap-1.5';
     const badge = document.createElement('span');
-    badge.className = `text-[10px] px-2 py-0.5 rounded-full font-bold ${meta.cls}`;
+    badge.className = `text-xs px-2 py-0.5 rounded-full font-bold ${meta.cls}`;
     badge.textContent = audienceTitle(item);
     badge.title = `內容所有者：${groupLabel(item?.ownerGroup || item?.group || '')}`;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'text-[10px] rounded-lg border border-slate-200 bg-white px-2 py-1 font-bold text-slate-600 hover:bg-slate-50';
+    button.className = 'text-xs rounded-lg border border-slate-200 bg-white px-2 py-1 font-bold text-slate-600 hover:bg-slate-50';
     button.textContent = '設定範圍';
     button.addEventListener('click', onClick);
     host.append(badge, button);
@@ -96,7 +96,7 @@
     // next to the control instead of leaving teachers to discover empty courses.
     if ((item?.audienceScope || 'group_only') === 'group_only') {
       const hint = document.createElement('span');
-      hint.className = 'text-[10px] font-bold text-amber-700';
+      hint.className = 'text-xs font-bold text-amber-700';
       hint.dataset.audienceHint = 'group_only';
       hint.textContent = '其他組別看不到；要開放請按「設定範圍」';
       host.append(hint);
@@ -112,7 +112,7 @@
     if ((item?.audienceScope || 'group_only') !== 'group_only') {
       const badge = document.createElement('button');
       badge.type = 'button';
-      badge.className = `text-[10px] px-2 py-0.5 rounded-full font-bold ${metaFor(item).cls}`;
+      badge.className = `text-xs px-2 py-0.5 rounded-full font-bold ${metaFor(item).cls}`;
       badge.textContent = audienceTitle(item);
       badge.title = '點一下修改共用範圍';
       badge.addEventListener('click', onClick);
@@ -169,7 +169,7 @@
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.contentAudienceSharedImport = catId;
-    button.className = 'mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-black text-emerald-800';
+    button.className = 'mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800';
     button.textContent = '🌐 從跨組共用題庫匯入';
     button.addEventListener('click', () => importSharedQuestion(catId));
     panel.prepend(button);
@@ -194,7 +194,7 @@
         const entry = document.createElement('button');
         entry.type = 'button';
         entry.dataset.questionAudienceMenu = '1';
-        entry.className = 'w-full text-left text-[11px] hover:bg-slate-50 text-slate-700 px-2 py-1.5 rounded-lg';
+        entry.className = 'w-full text-left text-xs hover:bg-slate-50 text-slate-700 px-2 py-1.5 rounded-lg';
         entry.textContent = '🌐 設定共用範圍';
         entry.addEventListener('click', open);
         menu.appendChild(entry);
@@ -244,7 +244,7 @@
     if (!title || !host) return;
     const notice = document.createElement('div');
     notice.id = 'content-audience-upload-notice-1014';
-    notice.className = 'mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600';
+    notice.className = 'mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600';
     notice.innerHTML = '<b>🔒 新教材預設本組限定。</b> 教材建立完成後可在教材清單直接改成「🌐 全科共用」或「👥 指定組別」；教材歸屬組別不會因此改變。';
     host.appendChild(notice);
   }

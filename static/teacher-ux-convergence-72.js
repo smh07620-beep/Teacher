@@ -14,7 +14,7 @@
 
   function stepper(step){
     const labels=['選擇考卷','編輯題目','預覽確認'];
-    return `<div class="grid grid-cols-3 gap-2 mb-5">${labels.map((label,i)=>{const n=i+1,done=n<step,active=n===step;return `<div class="rounded-xl border px-3 py-2 text-center ${active?'border-teal-300 bg-teal-50 text-teal-900':done?'border-emerald-200 bg-emerald-50 text-emerald-800':'border-slate-200 bg-white text-slate-400'}"><div class="text-[10px] font-black">${done?'✓':n}</div><div class="mt-0.5 text-xs font-bold">${label}</div></div>`;}).join('')}</div>`;
+    return `<div class="grid grid-cols-3 gap-2 mb-5">${labels.map((label,i)=>{const n=i+1,done=n<step,active=n===step;return `<div class="rounded-xl border px-3 py-2 text-center ${active?'border-teal-300 bg-teal-50 text-teal-900':done?'border-emerald-200 bg-emerald-50 text-emerald-800':'border-slate-200 bg-white text-slate-400'}"><div class="text-xs font-black">${done?'✓':n}</div><div class="mt-0.5 text-xs font-bold">${label}</div></div>`;}).join('')}</div>`;
   }
 
   function scope(){

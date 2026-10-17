@@ -15,7 +15,7 @@ class FreeLocalTTS1014Tests(unittest.TestCase):
         cls.ui = (ROOT / "static" / "teacher-media-free-tts-1014.js").read_text(encoding="utf-8")
         cls.audio_ui = (ROOT / "static" / "teacher-media-audio-1014.js").read_text(encoding="utf-8")
         cls.video_ui = (ROOT / "static" / "teacher-ai-video-1015.js").read_text(encoding="utf-8")
-        cls.status_ui = (ROOT / "static" / "teacher-media-status-fix-1014.js").read_text(encoding="utf-8")
+        cls.status_ui = (ROOT / "static" / "teacher-media-mvp-status-1014.js").read_text(encoding="utf-8")
         cls.worker = (ROOT / "ai_question_worker.py").read_text(encoding="utf-8")
         cls.routes = (ROOT / "teacher_app" / "materials" / "media_audio_routes.py").read_text(encoding="utf-8")
         cls.video_routes = (ROOT / "teacher_app" / "materials" / "ai_video_routes.py").read_text(encoding="utf-8")

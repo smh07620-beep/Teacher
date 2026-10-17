@@ -166,7 +166,7 @@
     return `<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div class="text-xs font-bold text-slate-500">${icon} ${escapeHtml(title)}</div>
       <div class="text-2xl font-black text-slate-950 mt-1">${Number(value || 0)}</div>
-      <div class="text-[11px] text-slate-400 mt-1">${escapeHtml(note)}</div>
+      <div class="text-xs text-slate-400 mt-1">${escapeHtml(note)}</div>
     </div>`;
   }
 
@@ -186,9 +186,9 @@
 
   function sloMetricCard(icon,title,value,note,target='') {
     return `<div class="rounded-xl border border-slate-200 bg-white p-3">
-      <div class="text-[11px] font-bold text-slate-500">${icon} ${escapeHtml(title)}</div>
+      <div class="text-xs font-bold text-slate-500">${icon} ${escapeHtml(title)}</div>
       <div class="mt-1 text-xl font-black text-slate-950">${escapeHtml(value)}</div>
-      <div class="mt-1 text-[10px] text-slate-500">${escapeHtml(note||'')}${target?` · 目標 ${escapeHtml(target)}`:''}</div>
+      <div class="mt-1 text-xs text-slate-500">${escapeHtml(note||'')}${target?` · 目標 ${escapeHtml(target)}`:''}</div>
     </div>`;
   }
 
@@ -204,7 +204,7 @@
           ? when.toLocaleDateString(undefined,{month:'numeric',day:'numeric'})
           : when.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})
       );
-      return '<div class="grid grid-cols-[58px_minmax(0,1fr)_64px] items-center gap-2 text-[10px]"><span class="text-slate-400">'+escapeHtml(label)+'</span><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-slate-500" style="width:'+width.toFixed(1)+'%"></div></div><span class="text-right font-semibold text-slate-600">'+escapeHtml(formatter(raw))+'</span></div>';
+      return '<div class="grid grid-cols-[58px_minmax(0,1fr)_64px] items-center gap-2 text-xs"><span class="text-slate-400">'+escapeHtml(label)+'</span><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-slate-500" style="width:'+width.toFixed(1)+'%"></div></div><span class="text-right font-semibold text-slate-600">'+escapeHtml(formatter(raw))+'</span></div>';
     }).join('')+'</div>';
   }
 
@@ -235,7 +235,7 @@
     if(!data)return '<section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><h5 class="font-black text-slate-900">✉️ Email 通知健康狀態</h5><p class="mt-2 text-xs text-slate-500">目前無法讀取寄送紀錄；不影響其他維運狀態。</p></section>';
     const today=data.today||{}, schedule=data.schedule||{}, failed=Number(today.failed||0);
     const unhealthy=failed>0||['missing_run','delivery_issue','delivery_gap'].includes(String(schedule.health||''));
-    return '<section id="email-delivery-health-70" class="rounded-2xl border '+(unhealthy?'border-rose-200':'border-slate-200')+' bg-white p-4 shadow-sm"><div class="flex flex-wrap items-start justify-between gap-3"><div><h5 class="font-black text-slate-900">✉️ Email 通知健康狀態</h5><p class="mt-1 text-[11px] text-slate-500">7／3／1 天學習與考核提醒的預計事件與實際寄送結果；失敗寄送會保留重試資格。</p></div><span class="rounded-full px-2 py-1 text-[10px] font-black '+(unhealthy?'bg-rose-50 text-rose-700':'bg-emerald-50 text-emerald-700')+'">'+(unhealthy?'需要檢查':(schedule.ranToday?'今日已執行':'正常'))+'</span></div>'+(schedule.issue?'<div class="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">'+escapeHtml(schedule.issue)+'</div>':'')+'<div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2"><div class="rounded-xl bg-sky-50 p-3"><div class="text-[10px] text-sky-700">今日預計事件</div><div class="text-xl font-black text-sky-900">'+Number(schedule.expectedEvents||0)+'</div><div class="text-[10px] text-sky-600">取得寄送資格 '+Number(schedule.claimedEvents||0)+'</div></div><div class="rounded-xl bg-emerald-50 p-3"><div class="text-[10px] text-emerald-700">成功事件</div><div class="text-xl font-black text-emerald-800">'+Number(today.sent||0)+'</div></div><div class="rounded-xl bg-rose-50 p-3"><div class="text-[10px] text-rose-700">失敗事件</div><div class="text-xl font-black text-rose-800">'+failed+'</div></div><div class="rounded-xl bg-slate-50 p-3"><div class="text-[10px] text-slate-500">最近寄送</div><div class="mt-1 text-xs font-bold">'+formatWhen(data.lastDeliveryAt)+'</div></div></div>'+(data.lastErrorType?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">最近失敗：'+escapeHtml(data.lastErrorType)+'</div>':'')+'</section>';
+    return '<section id="email-delivery-health-70" class="rounded-2xl border '+(unhealthy?'border-rose-200':'border-slate-200')+' bg-white p-4 shadow-sm"><div class="flex flex-wrap items-start justify-between gap-3"><div><h5 class="font-black text-slate-900">✉️ Email 通知健康狀態</h5><p class="mt-1 text-xs text-slate-500">7／3／1 天學習與考核提醒的預計事件與實際寄送結果；失敗寄送會保留重試資格。</p></div><span class="rounded-full px-2 py-1 text-xs font-black '+(unhealthy?'bg-rose-50 text-rose-700':'bg-emerald-50 text-emerald-700')+'">'+(unhealthy?'需要檢查':(schedule.ranToday?'今日已執行':'正常'))+'</span></div>'+(schedule.issue?'<div class="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">'+escapeHtml(schedule.issue)+'</div>':'')+'<div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2"><div class="rounded-xl bg-sky-50 p-3"><div class="text-xs text-sky-700">今日預計事件</div><div class="text-xl font-black text-sky-900">'+Number(schedule.expectedEvents||0)+'</div><div class="text-xs text-sky-600">取得寄送資格 '+Number(schedule.claimedEvents||0)+'</div></div><div class="rounded-xl bg-emerald-50 p-3"><div class="text-xs text-emerald-700">成功事件</div><div class="text-xl font-black text-emerald-800">'+Number(today.sent||0)+'</div></div><div class="rounded-xl bg-rose-50 p-3"><div class="text-xs text-rose-700">失敗事件</div><div class="text-xl font-black text-rose-800">'+failed+'</div></div><div class="rounded-xl bg-slate-50 p-3"><div class="text-xs text-slate-500">最近寄送</div><div class="mt-1 text-xs font-bold">'+formatWhen(data.lastDeliveryAt)+'</div></div></div>'+(data.lastErrorType?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">最近失敗：'+escapeHtml(data.lastErrorType)+'</div>':'')+'</section>';
   }
 
   async function loadOperationalMetrics(windowValue=sloWindow,force=false) {
@@ -301,7 +301,7 @@
         : 'border-emerald-200 bg-emerald-50 text-emerald-800';
     const capacityIcon=capacityState==='pressure'?'🔴':capacityState==='watch'?'🟠':'🟢';
     const trendHtml=trendSignals.length
-      ? trendSignals.map(signal=>'<article class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><div class="flex flex-wrap items-center justify-between gap-2"><b>'+escapeHtml(signal.title||signal.code||'趨勢異常')+'</b><span class="font-mono text-[10px]">'+escapeHtml(signal.code||'')+'</span></div><div class="mt-1">'+escapeHtml(signal.detail||'')+'</div>'+(signal.action?'<div class="mt-1 font-semibold">建議：'+escapeHtml(signal.action)+'</div>':'')+'</article>').join('')
+      ? trendSignals.map(signal=>'<article class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><div class="flex flex-wrap items-center justify-between gap-2"><b>'+escapeHtml(signal.title||signal.code||'趨勢異常')+'</b><span class="font-mono text-xs">'+escapeHtml(signal.code||'')+'</span></div><div class="mt-1">'+escapeHtml(signal.detail||'')+'</div>'+(signal.action?'<div class="mt-1 font-semibold">建議：'+escapeHtml(signal.action)+'</div>':'')+'</article>').join('')
       : '<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">目前沒有符合「持續惡化」條件的趨勢異常；單次尖峰不會被升級。</div>';
     const forecastConfidence=String(forecast.confidence||'unavailable');
     const rawForecastConfidence=String(forecast.rawConfidence||forecastConfidence||'unavailable');
@@ -351,16 +351,16 @@
       : whatIfResult
         ? '<div class="space-y-3">'
           +'<div class="rounded-xl border '+(whatIfResult.available?'border-slate-200 bg-white':'border-amber-200 bg-amber-50')+' p-3">'
-          +'<div class="flex flex-wrap items-start justify-between gap-2"><div><b class="text-sm text-slate-900">'+escapeHtml(whatIfDecision.label||'高峰試算結果')+'</b><div class="mt-1 text-[11px] text-slate-500">'+escapeHtml(whatIfDecision.detail||'')+'</div></div><span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold">峰值 backlog '+Number(whatIfResult.peakBacklogJobs||0)+' 筆</span></div>'
-          +(whatIfBottleneck?'<div class="mt-2 text-[11px] text-slate-600"><b>主要瓶頸：</b>'+escapeHtml(whatIfBottleneck.label||whatIfBottleneck.kind||'')+' · 約占這批 P95 workload '+(Number(whatIfBottleneck.share||0)*100).toFixed(1)+'%</div>':'')
+          +'<div class="flex flex-wrap items-start justify-between gap-2"><div><b class="text-sm text-slate-900">'+escapeHtml(whatIfDecision.label||'高峰試算結果')+'</b><div class="mt-1 text-xs text-slate-500">'+escapeHtml(whatIfDecision.detail||'')+'</div></div><span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold">峰值 backlog '+Number(whatIfResult.peakBacklogJobs||0)+' 筆</span></div>'
+          +(whatIfBottleneck?'<div class="mt-2 text-xs text-slate-600"><b>主要瓶頸：</b>'+escapeHtml(whatIfBottleneck.label||whatIfBottleneck.kind||'')+' · 約占這批 P95 workload '+(Number(whatIfBottleneck.share||0)*100).toFixed(1)+'%</div>':'')
           +'</div>'
           +'<div class="grid lg:grid-cols-2 gap-3">'
-          +'<div class="rounded-xl border border-slate-200 bg-white p-3 text-xs"><b>1 台 Worker</b><div class="mt-2 grid grid-cols-2 gap-2"><div><span class="text-slate-400">Nominal ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfOne.nominal))+'</div><div class="text-[10px] text-slate-400">背景利用率 '+(whatIfOne.nominal?.baselineUtilization==null?'—':(Number(whatIfOne.nominal.baselineUtilization)*100).toFixed(1)+'%')+'</div></div><div><span class="text-slate-400">P95 ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfOne.conservative))+'</div><div class="text-[10px] text-slate-400">背景利用率 '+(whatIfOne.conservative?.baselineUtilization==null?'—':(Number(whatIfOne.conservative.baselineUtilization)*100).toFixed(1)+'%')+'</div></div></div></div>'
-          +'<div class="rounded-xl border border-slate-200 bg-white p-3 text-xs"><b>2 台 Worker</b><div class="mt-2 grid grid-cols-2 gap-2"><div><span class="text-slate-400">Nominal ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfTwo.nominal))+'</div><div class="text-[10px] text-slate-400">背景利用率 '+(whatIfTwo.nominal?.baselineUtilization==null?'—':(Number(whatIfTwo.nominal.baselineUtilization)*100).toFixed(1)+'%')+'</div></div><div><span class="text-slate-400">P95 ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfTwo.conservative))+'</div><div class="text-[10px] text-slate-400">背景利用率 '+(whatIfTwo.conservative?.baselineUtilization==null?'—':(Number(whatIfTwo.conservative.baselineUtilization)*100).toFixed(1)+'%')+'</div></div></div></div>'
+          +'<div class="rounded-xl border border-slate-200 bg-white p-3 text-xs"><b>1 台 Worker</b><div class="mt-2 grid grid-cols-2 gap-2"><div><span class="text-slate-400">Nominal ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfOne.nominal))+'</div><div class="text-xs text-slate-400">背景利用率 '+(whatIfOne.nominal?.baselineUtilization==null?'—':(Number(whatIfOne.nominal.baselineUtilization)*100).toFixed(1)+'%')+'</div></div><div><span class="text-slate-400">P95 ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfOne.conservative))+'</div><div class="text-xs text-slate-400">背景利用率 '+(whatIfOne.conservative?.baselineUtilization==null?'—':(Number(whatIfOne.conservative.baselineUtilization)*100).toFixed(1)+'%')+'</div></div></div></div>'
+          +'<div class="rounded-xl border border-slate-200 bg-white p-3 text-xs"><b>2 台 Worker</b><div class="mt-2 grid grid-cols-2 gap-2"><div><span class="text-slate-400">Nominal ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfTwo.nominal))+'</div><div class="text-xs text-slate-400">背景利用率 '+(whatIfTwo.nominal?.baselineUtilization==null?'—':(Number(whatIfTwo.nominal.baselineUtilization)*100).toFixed(1)+'%')+'</div></div><div><span class="text-slate-400">P95 ETA</span><div class="font-black text-slate-900">'+escapeHtml(whatIfEta(whatIfTwo.conservative))+'</div><div class="text-xs text-slate-400">背景利用率 '+(whatIfTwo.conservative?.baselineUtilization==null?'—':(Number(whatIfTwo.conservative.baselineUtilization)*100).toFixed(1)+'%')+'</div></div></div></div>'
           +'</div>'
-          +(whatIfComponents.length?'<div class="flex flex-wrap gap-2">'+whatIfComponents.map(item=>'<span class="rounded-full border px-2 py-1 text-[10px] font-semibold '+(item.calibrated?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-amber-200 bg-amber-50 text-amber-700')+'">'+escapeHtml(item.label||item.kind||'')+' × '+Number(item.count||0)+' · '+(item.method==='pages'?'頁數校準':item.method==='media_duration'?'影音時長校準':item.method==='class_duration'?'類型中位/P95':'不可估')+'</span>').join('')+'</div>':'')
-          +(whatIfLimitations.length?'<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800"><b>限制：</b> '+whatIfLimitations.map(item=>escapeHtml(item)).join(' · ')+'</div>':'')
-          +'<div class="text-[10px] text-slate-400">試算時間：'+escapeHtml(formatWhen(whatIfResult.generatedAt))+'。這是唯讀容量情境，不會建立 Job、啟動 Worker 或修改排程。</div>'
+          +(whatIfComponents.length?'<div class="flex flex-wrap gap-2">'+whatIfComponents.map(item=>'<span class="rounded-full border px-2 py-1 text-xs font-semibold '+(item.calibrated?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-amber-200 bg-amber-50 text-amber-700')+'">'+escapeHtml(item.label||item.kind||'')+' × '+Number(item.count||0)+' · '+(item.method==='pages'?'頁數校準':item.method==='media_duration'?'影音時長校準':item.method==='class_duration'?'類型中位/P95':'不可估')+'</span>').join('')+'</div>':'')
+          +(whatIfLimitations.length?'<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"><b>限制：</b> '+whatIfLimitations.map(item=>escapeHtml(item)).join(' · ')+'</div>':'')
+          +'<div class="text-xs text-slate-400">試算時間：'+escapeHtml(formatWhen(whatIfResult.generatedAt))+'。這是唯讀容量情境，不會建立 Job、啟動 Worker 或修改排程。</div>'
           +'</div>'
         : '<div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">輸入高峰批次後按「試算高峰」，系統會用目前實測 workload 模型比較 1 台與 2 台 Worker。</div>';
 
@@ -390,8 +390,8 @@
       ? '—'
       : ((Number(signedBias)>=0?'+':'')+(Number(signedBias)*100).toFixed(1)+'%');
     const predictionWorkloadHtml=predictionWorkloads.length
-      ? predictionWorkloads.map(item=>'<div class="rounded-lg border border-slate-200 bg-white p-2.5 text-[11px]"><div class="flex items-center justify-between gap-2"><b>'+escapeHtml(item.label||item.kind||'workload')+'</b><span class="text-[10px] text-slate-400">'+Number(item.evaluated||0)+' 筆</span></div><div class="mt-1 text-slate-600">中位誤差 '+escapeHtml(item.medianAbsolutePercentageError==null?'—':formatPercent(item.medianAbsolutePercentageError))+' · P95涵蓋 '+escapeHtml(item.p95Coverage==null?'—':formatPercent(item.p95Coverage))+'</div><div class="mt-1 text-[10px] text-slate-400">'+escapeHtml(item.bias==='optimistic'?'偏樂觀':item.bias==='conservative'?'偏保守':item.bias==='balanced'?'平衡':'資料不足')+'</div></div>').join('')
-      : '<div class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400">尚無已完成且可回測的事前預測。</div>';
+      ? predictionWorkloads.map(item=>'<div class="rounded-lg border border-slate-200 bg-white p-2.5 text-xs"><div class="flex items-center justify-between gap-2"><b>'+escapeHtml(item.label||item.kind||'workload')+'</b><span class="text-xs text-slate-400">'+Number(item.evaluated||0)+' 筆</span></div><div class="mt-1 text-slate-600">中位誤差 '+escapeHtml(item.medianAbsolutePercentageError==null?'—':formatPercent(item.medianAbsolutePercentageError))+' · P95涵蓋 '+escapeHtml(item.p95Coverage==null?'—':formatPercent(item.p95Coverage))+'</div><div class="mt-1 text-xs text-slate-400">'+escapeHtml(item.bias==='optimistic'?'偏樂觀':item.bias==='conservative'?'偏保守':item.bias==='balanced'?'平衡':'資料不足')+'</div></div>').join('')
+      : '<div class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-400">尚無已完成且可回測的事前預測。</div>';
 
     const workloadProfileHtml=workloadProfiles.length
       ? workloadProfiles.map(profile=>{
@@ -404,16 +404,16 @@
               ? '中位 '+Number(profile.medianPageCount||0).toFixed(1)+' 頁 · '+Number(profile.medianSecondsPerPage||0).toFixed(1)+' 秒/頁'
               : '檔案中位 '+formatBytes(profile.medianSourceBytes||0);
           return '<article class="rounded-xl border border-slate-200 bg-white p-3 text-xs">'
-            +'<div class="flex flex-wrap items-center justify-between gap-2"><b>'+escapeHtml(profile.label||profile.kind||'workload')+'</b><span class="rounded-full border px-2 py-0.5 text-[10px] font-bold '+(calibrated?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-amber-200 bg-amber-50 text-amber-700')+'">'+(calibrated?'已校準':'樣本不足')+'</span></div>'
-            +'<div class="mt-2 grid grid-cols-2 gap-2 text-[11px]"><div><span class="text-slate-400">完成樣本</span><div class="font-bold">'+Number(profile.completedSamples||0)+'</div></div><div><span class="text-slate-400">近期到達率</span><div class="font-bold">'+Number(profile.arrivalPerHour||0).toFixed(2)+'/h</div></div><div><span class="text-slate-400">中位處理</span><div class="font-bold">'+escapeHtml(formatDuration(profile.medianDurationSeconds||0))+'</div></div><div><span class="text-slate-400">P95</span><div class="font-bold">'+escapeHtml(formatDuration(profile.p95DurationSeconds||0))+'</div></div></div>'
-            +'<div class="mt-2 text-[10px] text-slate-500">'+escapeHtml(specific)+' · backlog '+Number(profile.backlogJobs||0)+' 筆 / '+escapeHtml(formatBytes(profile.backlogBytes||0))+'</div>'
+            +'<div class="flex flex-wrap items-center justify-between gap-2"><b>'+escapeHtml(profile.label||profile.kind||'workload')+'</b><span class="rounded-full border px-2 py-0.5 text-xs font-bold '+(calibrated?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-amber-200 bg-amber-50 text-amber-700')+'">'+(calibrated?'已校準':'樣本不足')+'</span></div>'
+            +'<div class="mt-2 grid grid-cols-2 gap-2 text-xs"><div><span class="text-slate-400">完成樣本</span><div class="font-bold">'+Number(profile.completedSamples||0)+'</div></div><div><span class="text-slate-400">近期到達率</span><div class="font-bold">'+Number(profile.arrivalPerHour||0).toFixed(2)+'/h</div></div><div><span class="text-slate-400">中位處理</span><div class="font-bold">'+escapeHtml(formatDuration(profile.medianDurationSeconds||0))+'</div></div><div><span class="text-slate-400">P95</span><div class="font-bold">'+escapeHtml(formatDuration(profile.p95DurationSeconds||0))+'</div></div></div>'
+            +'<div class="mt-2 text-xs text-slate-500">'+escapeHtml(specific)+' · backlog '+Number(profile.backlogJobs||0)+' 筆 / '+escapeHtml(formatBytes(profile.backlogBytes||0))+'</div>'
             +'</article>';
         }).join('')
       : '<div class="rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-400">尚無可用 workload 完成樣本。</div>';
     return `<section id="worker-slo-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4 scroll-mt-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
-        <div><h5 class="font-black text-slate-900">📈 維運趨勢 / SLO</h5><p class="mt-1 text-[11px] text-slate-500">${escapeHtml(baseline)}</p></div>
-        <div class="flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-[11px]">
+        <div><h5 class="font-black text-slate-900">📈 維運趨勢 / SLO</h5><p class="mt-1 text-xs text-slate-500">${escapeHtml(baseline)}</p></div>
+        <div class="flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs">
           <button type="button" data-slo-window="24h" class="rounded-lg px-3 py-1.5 font-bold ${sloWindow==='24h'?'bg-white text-slate-900 shadow-sm':'text-slate-500'}">24 小時</button>
           <button type="button" data-slo-window="7d" class="rounded-lg px-3 py-1.5 font-bold ${sloWindow==='7d'?'bg-white text-slate-900 shadow-sm':'text-slate-500'}">7 天</button>
         </div>
@@ -425,17 +425,17 @@
         ${sloMetricCard('🧯','Incident 平均 MTTR',mttr,'新開 '+Number(incident.opened||0)+' · 恢復 '+Number(incident.resolved||0)+' · 目前 '+Number(incident.currentlyOpen||0))}
       </div>
       <div class="rounded-xl border p-3 ${capacityClasses}">
-        <div class="flex flex-wrap items-center justify-between gap-2"><b class="text-sm">${capacityIcon} 容量判讀：${escapeHtml(capacity.label||'目前沒有持續容量壓力訊號')}</b><span class="text-[10px]">判讀窗 ${Number(trend.sampleWindowMinutes||0)} 分鐘</span></div>
-        <div class="mt-1 text-[11px]">此判讀會先排除單一尖峰；只有 queue、Worker 數與處理時間等證據持續惡化才升級。</div>
+        <div class="flex flex-wrap items-center justify-between gap-2"><b class="text-sm">${capacityIcon} 容量判讀：${escapeHtml(capacity.label||'目前沒有持續容量壓力訊號')}</b><span class="text-xs">判讀窗 ${Number(trend.sampleWindowMinutes||0)} 分鐘</span></div>
+        <div class="mt-1 text-xs">此判讀會先排除單一尖峰；只有 queue、Worker 數與處理時間等證據持續惡化才升級。</div>
       </div>
       <div class="space-y-2">
-        <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-700">趨勢異常判讀</b><span class="text-[10px] text-slate-400">${trendSignals.length} 個持續性訊號</span></div>
+        <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-700">趨勢異常判讀</b><span class="text-xs text-slate-400">${trendSignals.length} 個持續性訊號</span></div>
         ${trendHtml}
       </div>
       <div class="rounded-xl border p-3 ${forecastClasses}">
         <div class="flex flex-wrap items-start justify-between gap-3">
-          <div><b class="text-sm text-slate-900">🧮 容量規劃 / Forecast</b><div class="mt-1 text-[11px] text-slate-500">最近 ${Number(forecast.windowHours||0)} 小時 · 模型信心 ${escapeHtml(forecastConfidenceLabel)} · 完成樣本 ${Number(forecast.sample?.completedJobs||0)} 筆</div></div>
-          <span class="rounded-full border border-slate-300 bg-white px-2 py-1 text-[10px] font-bold text-slate-700">${escapeHtml(forecastDecision.label||'資料累積中')}</span>
+          <div><b class="text-sm text-slate-900">🧮 容量規劃 / Forecast</b><div class="mt-1 text-xs text-slate-500">最近 ${Number(forecast.windowHours||0)} 小時 · 模型信心 ${escapeHtml(forecastConfidenceLabel)} · 完成樣本 ${Number(forecast.sample?.completedJobs||0)} 筆</div></div>
+          <span class="rounded-full border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-700">${escapeHtml(forecastDecision.label||'資料累積中')}</span>
         </div>
         <div class="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
           ${sloMetricCard('📥','近期到達率',arrivalRate,'新工作進入 queue 的速度')}
@@ -447,22 +447,22 @@
           <div class="rounded-xl border border-slate-200 bg-white p-3 text-xs">
             <b class="text-slate-800">目前 ${Number(forecastQueue.currentActiveWorkers||0)} 台 Worker</b>
             <div class="mt-2 grid grid-cols-2 gap-2">
-              <div><span class="text-slate-400">Nominal ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(currentNominal))}</div><div class="text-[10px] text-slate-400">淨消化 ${currentNominal.netDrainPerHour==null?'—':Number(currentNominal.netDrainPerHour).toFixed(2)+'/h'}</div></div>
-              <div><span class="text-slate-400">P95 保守 ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(currentConservative))}</div><div class="text-[10px] text-slate-400">淨消化 ${currentConservative.netDrainPerHour==null?'—':Number(currentConservative.netDrainPerHour).toFixed(2)+'/h'}</div></div>
+              <div><span class="text-slate-400">Nominal ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(currentNominal))}</div><div class="text-xs text-slate-400">淨消化 ${currentNominal.netDrainPerHour==null?'—':Number(currentNominal.netDrainPerHour).toFixed(2)+'/h'}</div></div>
+              <div><span class="text-slate-400">P95 保守 ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(currentConservative))}</div><div class="text-xs text-slate-400">淨消化 ${currentConservative.netDrainPerHour==null?'—':Number(currentConservative.netDrainPerHour).toFixed(2)+'/h'}</div></div>
             </div>
           </div>
           <div class="rounded-xl border border-slate-200 bg-white p-3 text-xs">
             <b class="text-slate-800">模擬多 1 台 Worker</b>
             <div class="mt-2 grid grid-cols-2 gap-2">
-              <div><span class="text-slate-400">Nominal ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(plusOneNominal))}</div><div class="text-[10px] text-slate-400">淨消化 ${plusOneNominal.netDrainPerHour==null?'—':Number(plusOneNominal.netDrainPerHour).toFixed(2)+'/h'}</div></div>
-              <div><span class="text-slate-400">P95 保守 ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(plusOneConservative))}</div><div class="text-[10px] text-slate-400">淨消化 ${plusOneConservative.netDrainPerHour==null?'—':Number(plusOneConservative.netDrainPerHour).toFixed(2)+'/h'}</div></div>
+              <div><span class="text-slate-400">Nominal ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(plusOneNominal))}</div><div class="text-xs text-slate-400">淨消化 ${plusOneNominal.netDrainPerHour==null?'—':Number(plusOneNominal.netDrainPerHour).toFixed(2)+'/h'}</div></div>
+              <div><span class="text-slate-400">P95 保守 ETA</span><div class="font-bold text-slate-800">${escapeHtml(etaText(plusOneConservative))}</div><div class="text-xs text-slate-400">淨消化 ${plusOneConservative.netDrainPerHour==null?'—':Number(plusOneConservative.netDrainPerHour).toFixed(2)+'/h'}</div></div>
             </div>
           </div>
         </div>
         <div class="mt-3 rounded-xl border p-3 ${predictionClasses}">
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div><b class="text-sm text-slate-900">🎯 Prediction Calibration / Forecast 回測</b><div class="mt-1 text-[10px] text-slate-500">只比較 Job 完成前已固定的 service-time prediction 與真實 finished_at − started_at；未實際提交的 What-if 不列入評分。</div></div>
-            <span class="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700">${escapeHtml(predictionAccuracy.label||'尚未開始回測')}</span>
+            <div><b class="text-sm text-slate-900">🎯 Prediction Calibration / Forecast 回測</b><div class="mt-1 text-xs text-slate-500">只比較 Job 完成前已固定的 service-time prediction 與真實 finished_at − started_at；未實際提交的 What-if 不列入評分。</div></div>
+            <span class="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-700">${escapeHtml(predictionAccuracy.label||'尚未開始回測')}</span>
           </div>
           <div class="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
             ${sloMetricCard('🧪','已回測預測',String(Number(predictionAccuracy.evaluated||0))+' 筆','待完成 '+Number(predictionAccuracy.pending||0)+' 筆')}
@@ -470,54 +470,54 @@
             ${sloMetricCard('🛡️','P95 涵蓋率',predictionP95Coverage,'實際處理時間落在 P95 預估內的比例')}
             ${sloMetricCard('↔️','預測偏差',predictionBiasValue,predictionBiasLabel)}
           </div>
-          <div class="mt-3 rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-[11px] text-slate-600"><b>Forecast 信心：</b>原始 ${escapeHtml(rawForecastConfidenceLabel)} → 回測後 ${escapeHtml(forecastConfidenceLabel)}${rawForecastConfidence!==forecastConfidence?'（已依真實誤差下調）':''}</div>
+          <div class="mt-3 rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-600"><b>Forecast 信心：</b>原始 ${escapeHtml(rawForecastConfidenceLabel)} → 回測後 ${escapeHtml(forecastConfidenceLabel)}${rawForecastConfidence!==forecastConfidence?'（已依真實誤差下調）':''}</div>
           <div class="mt-3 grid md:grid-cols-2 xl:grid-cols-4 gap-2">${predictionWorkloadHtml}</div>
-          <div class="mt-2 text-[10px] text-slate-400">${escapeHtml(predictionAccuracy.note||'0111 上線後開始累積回測；舊 Job 不會事後補造預測。')}</div>
+          <div class="mt-2 text-xs text-slate-400">${escapeHtml(predictionAccuracy.note||'0111 上線後開始累積回測；舊 Job 不會事後補造預測。')}</div>
         </div>
         <div class="mt-3 rounded-xl border border-slate-200 bg-white/80 p-3">
-          <div class="flex flex-wrap items-center justify-between gap-2"><b class="text-xs text-slate-800">🧩 Workload 校準</b><span class="text-[10px] font-bold ${workload.fullyCalibrated?'text-emerald-700':'text-amber-700'}">${workload.fullyCalibrated?'混合 workload 已完整校準':'部分校準 / 保留全體 Forecast'}</span></div>
-          <div class="mt-1 text-[10px] text-slate-500">文件、影音、圖片等分開學習處理成本；每類至少 ${Number(workload.minimumCompletedPerKind||0)} 筆完成樣本才納入混合容量估算。</div>
+          <div class="flex flex-wrap items-center justify-between gap-2"><b class="text-xs text-slate-800">🧩 Workload 校準</b><span class="text-xs font-bold ${workload.fullyCalibrated?'text-emerald-700':'text-amber-700'}">${workload.fullyCalibrated?'混合 workload 已完整校準':'部分校準 / 保留全體 Forecast'}</span></div>
+          <div class="mt-1 text-xs text-slate-500">文件、影音、圖片等分開學習處理成本；每類至少 ${Number(workload.minimumCompletedPerKind||0)} 筆完成樣本才納入混合容量估算。</div>
           <div class="mt-3 grid md:grid-cols-2 xl:grid-cols-3 gap-2">${workloadProfileHtml}</div>
           <div class="mt-3 grid lg:grid-cols-2 gap-3 text-xs">
             <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5"><b>目前 Worker · workload-adjusted</b><div class="mt-1">Nominal ETA：<b>${escapeHtml(workloadEta(workloadCurrent.nominal))}</b> · 利用率 ${workloadCurrent.nominal?.utilization==null?'—':(Number(workloadCurrent.nominal.utilization)*100).toFixed(1)+'%'}</div><div>P95 ETA：<b>${escapeHtml(workloadEta(workloadCurrent.conservative))}</b> · 利用率 ${workloadCurrent.conservative?.utilization==null?'—':(Number(workloadCurrent.conservative.utilization)*100).toFixed(1)+'%'}</div></div>
             <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5"><b>多 1 台 Worker · workload-adjusted</b><div class="mt-1">Nominal ETA：<b>${escapeHtml(workloadEta(workloadPlusOne.nominal))}</b> · 利用率 ${workloadPlusOne.nominal?.utilization==null?'—':(Number(workloadPlusOne.nominal.utilization)*100).toFixed(1)+'%'}</div><div>P95 ETA：<b>${escapeHtml(workloadEta(workloadPlusOne.conservative))}</b> · 利用率 ${workloadPlusOne.conservative?.utilization==null?'—':(Number(workloadPlusOne.conservative.utilization)*100).toFixed(1)+'%'}</div></div>
           </div>
-          ${Array.isArray(workload.limitations)&&workload.limitations.length?'<div class="mt-2 text-[10px] text-amber-700">'+workload.limitations.map(item=>escapeHtml(item)).join(' · ')+'</div>':''}
+          ${Array.isArray(workload.limitations)&&workload.limitations.length?'<div class="mt-2 text-xs text-amber-700">'+workload.limitations.map(item=>escapeHtml(item)).join(' · ')+'</div>':''}
         </div>
         <div class="mt-3 rounded-xl border border-slate-300 bg-slate-50/80 p-3">
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div><b class="text-sm text-slate-900">🧪 高峰情境 / Capacity What-if</b><div class="mt-1 text-[10px] text-slate-500">把一批教材瞬間加入目前 Queue，再假設近期背景到達率持續存在，比較 1 台與 2 台 Worker。</div></div>
-            <div class="flex flex-wrap gap-1.5"><button type="button" data-capacity-preset="docs" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600">10 份文件</button><button type="button" data-capacity-preset="mixed" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600">10 文件 + 3×30分影音</button></div>
+            <div><b class="text-sm text-slate-900">🧪 高峰情境 / Capacity What-if</b><div class="mt-1 text-xs text-slate-500">把一批教材瞬間加入目前 Queue，再假設近期背景到達率持續存在，比較 1 台與 2 台 Worker。</div></div>
+            <div class="flex flex-wrap gap-1.5"><button type="button" data-capacity-preset="docs" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600">10 份文件</button><button type="button" data-capacity-preset="mixed" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600">10 文件 + 3×30分影音</button></div>
           </div>
           <div class="mt-3 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2 text-xs">
-            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">文件數</span><input data-capacity-field="documentCount" type="number" min="0" max="100" value="${Number(whatIfScenario.documentCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
-            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">平均頁數</span><input data-capacity-field="documentPages" type="number" min="1" max="500" value="${Number(whatIfScenario.documentPages||20)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
-            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">影音數</span><input data-capacity-field="mediaCount" type="number" min="0" max="50" value="${Number(whatIfScenario.mediaCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
-            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">平均影音分鐘</span><input data-capacity-field="mediaMinutes" type="number" min="1" max="240" value="${Number(whatIfScenario.mediaMinutes||30)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
-            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">圖片數</span><input data-capacity-field="imageCount" type="number" min="0" max="100" value="${Number(whatIfScenario.imageCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
-            <label class="space-y-1"><span class="text-[10px] font-bold text-slate-500">ZIP 數</span><input data-capacity-field="archiveCount" type="number" min="0" max="50" value="${Number(whatIfScenario.archiveCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-xs font-bold text-slate-500">文件數</span><input data-capacity-field="documentCount" type="number" min="0" max="100" value="${Number(whatIfScenario.documentCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-xs font-bold text-slate-500">平均頁數</span><input data-capacity-field="documentPages" type="number" min="1" max="500" value="${Number(whatIfScenario.documentPages||20)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-xs font-bold text-slate-500">影音數</span><input data-capacity-field="mediaCount" type="number" min="0" max="50" value="${Number(whatIfScenario.mediaCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-xs font-bold text-slate-500">平均影音分鐘</span><input data-capacity-field="mediaMinutes" type="number" min="1" max="240" value="${Number(whatIfScenario.mediaMinutes||30)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-xs font-bold text-slate-500">圖片數</span><input data-capacity-field="imageCount" type="number" min="0" max="100" value="${Number(whatIfScenario.imageCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
+            <label class="space-y-1"><span class="text-xs font-bold text-slate-500">ZIP 數</span><input data-capacity-field="archiveCount" type="number" min="0" max="50" value="${Number(whatIfScenario.archiveCount||0)}" class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5"></label>
           </div>
-          <div class="mt-3 flex flex-wrap items-center gap-2"><button type="button" data-capacity-whatif-run class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50" ${whatIfLoading?'disabled':''}>${whatIfLoading?'試算中…':'試算高峰'}</button><span class="text-[10px] text-slate-400">文件優先用秒/頁；影音優先用處理/影音倍率；樣本不足時不硬算。</span></div>
+          <div class="mt-3 flex flex-wrap items-center gap-2"><button type="button" data-capacity-whatif-run class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50" ${whatIfLoading?'disabled':''}>${whatIfLoading?'試算中…':'試算高峰'}</button><span class="text-xs text-slate-400">文件優先用秒/頁；影音優先用處理/影音倍率；樣本不足時不硬算。</span></div>
           <div class="mt-3">${whatIfResultHtml}</div>
         </div>
         <div class="mt-3 rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-700"><b>判讀：</b>${escapeHtml(forecastDecision.detail||'樣本仍在累積。')}</div>
-        ${blockers.length?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800"><b>先排除 Incident：</b> '+blockers.map(item=>escapeHtml(item.code||item.title||'')).join('、')+'</div>':''}
-        ${forecastLimitations.length?'<details class="mt-2 text-[10px] text-slate-500"><summary class="cursor-pointer font-bold">模型限制 / 為什麼目前信心不足</summary><ul class="mt-1 list-disc space-y-1 pl-5">'+forecastLimitations.map(item=>'<li>'+escapeHtml(item)+'</li>').join('')+'</ul></details>':''}
-        <div class="mt-2 text-[10px] text-slate-400">Forecast 是容量情境模型，不是正式 SLO，也不會自動啟動第二台 Worker。nominal 使用中位處理時間；保守情境使用 P95。</div>
+        ${blockers.length?'<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"><b>先排除 Incident：</b> '+blockers.map(item=>escapeHtml(item.code||item.title||'')).join('、')+'</div>':''}
+        ${forecastLimitations.length?'<details class="mt-2 text-xs text-slate-500"><summary class="cursor-pointer font-bold">模型限制 / 為什麼目前信心不足</summary><ul class="mt-1 list-disc space-y-1 pl-5">'+forecastLimitations.map(item=>'<li>'+escapeHtml(item)+'</li>').join('')+'</ul></details>':''}
+        <div class="mt-2 text-xs text-slate-400">Forecast 是容量情境模型，不是正式 SLO，也不會自動啟動第二台 Worker。nominal 使用中位處理時間；保守情境使用 P95。</div>
       </div>
       <div class="grid lg:grid-cols-2 gap-3">
         <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-          <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-700">Queue depth 趨勢</b><span class="text-[10px] text-slate-400">最高 ${Number(queue.maxPendingJobs||0)} · 最久等待 ${escapeHtml(formatDuration(queue.maxOldestPendingAgeSeconds||0))}</span></div>
+          <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-700">Queue depth 趨勢</b><span class="text-xs text-slate-400">最高 ${Number(queue.maxPendingJobs||0)} · 最久等待 ${escapeHtml(formatDuration(queue.maxOldestPendingAgeSeconds||0))}</span></div>
           <div class="mt-3">${sloBarRows(series,'pendingJobsAverage',maxPending,value=>Number(value).toFixed(1))}</div>
         </div>
         <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-          <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-700">完成處理時間趨勢</b><span class="text-[10px] text-slate-400">目前平均 ${escapeHtml(formatDuration(material.averageDurationSeconds||0))}</span></div>
+          <div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-700">完成處理時間趨勢</b><span class="text-xs text-slate-400">目前平均 ${escapeHtml(formatDuration(material.averageDurationSeconds||0))}</span></div>
           <div class="mt-3">${sloBarRows(series,'completedDurationAverageSeconds',maxDuration,value=>formatDuration(value))}</div>
         </div>
       </div>
       <div class="grid lg:grid-cols-2 gap-3">
-        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-xs text-slate-700">最常觸發 Incident 的元件</b><div class="mt-2 flex flex-wrap gap-2">${top.length?top.map(item=>'<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600">'+escapeHtml(item.code||'UNKNOWN')+' · '+Number(item.count||0)+'</span>').join(''):'<span class="text-[11px] text-slate-400">0110 Incident 歷史資料累積中。</span>'}</div></div>
-        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-xs text-slate-700">資料覆蓋</b><div class="mt-2 text-[11px] text-slate-600">10 分鐘採樣 ${Number(coverage.windowSampleCount||0)} / ${Number(coverage.expectedSampleCount||0)}，覆蓋約 ${coveragePct}%${coverage.firstSampleAt?'；首次 '+escapeHtml(formatWhen(coverage.firstSampleAt)):''}。</div><div class="mt-1 text-[10px] text-slate-400">${escapeHtml(coverage.note||'')}</div></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-xs text-slate-700">最常觸發 Incident 的元件</b><div class="mt-2 flex flex-wrap gap-2">${top.length?top.map(item=>'<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-600">'+escapeHtml(item.code||'UNKNOWN')+' · '+Number(item.count||0)+'</span>').join(''):'<span class="text-xs text-slate-400">0110 Incident 歷史資料累積中。</span>'}</div></div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3"><b class="text-xs text-slate-700">資料覆蓋</b><div class="mt-2 text-xs text-slate-600">10 分鐘採樣 ${Number(coverage.windowSampleCount||0)} / ${Number(coverage.expectedSampleCount||0)}，覆蓋約 ${coveragePct}%${coverage.firstSampleAt?'；首次 '+escapeHtml(formatWhen(coverage.firstSampleAt)):''}。</div><div class="mt-1 text-xs text-slate-400">${escapeHtml(coverage.note||'')}</div></div>
       </div>
     </section>`;
   }
@@ -581,7 +581,7 @@
       ? ['🔴', '儲存未就緒', 'text-rose-700 bg-rose-50 border-rose-200']
       : statusMeta(worker.status);
     const preflightText = storageBlocked
-      ? '<div class="rounded-xl border border-rose-200 bg-rose-50 p-2 text-[11px] font-bold text-rose-800">儲存尚未就緒，Worker 已暫停領取新教材。'+(worker.storagePreflightBackend?'<div class="mt-1">Provider：'+escapeHtml(worker.storagePreflightBackend)+'</div>':'')+(worker.storagePreflightError?'<div class="mt-1 font-normal">'+escapeHtml(worker.storagePreflightError)+'</div>':'')+'</div>'
+      ? '<div class="rounded-xl border border-rose-200 bg-rose-50 p-2 text-xs font-bold text-rose-800">儲存尚未就緒，Worker 已暫停領取新教材。'+(worker.storagePreflightBackend?'<div class="mt-1">Provider：'+escapeHtml(worker.storagePreflightBackend)+'</div>':'')+(worker.storagePreflightError?'<div class="mt-1 font-normal">'+escapeHtml(worker.storagePreflightError)+'</div>':'')+'</div>'
       : '';
     const updateText = worker.updateAvailable
       ? '<span class="inline-flex px-2 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-700 font-bold">⚠ 最近安全更新檢查有版本變更</span>'
@@ -590,7 +590,7 @@
       <div class="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div class="font-black text-slate-950">${escapeHtml(worker.workerId || '未命名 Worker')}</div>
-          <div class="text-[11px] text-slate-500 mt-1">最後 heartbeat：${formatWhen(worker.lastSeen)}</div>
+          <div class="text-xs text-slate-500 mt-1">最後 heartbeat：${formatWhen(worker.lastSeen)}</div>
         </div>
         <span class="text-xs px-2.5 py-1 rounded-full border font-bold ${classes}">${icon} ${label}</span>
       </div>
@@ -600,7 +600,7 @@
         <div class="rounded-xl bg-slate-50 p-2.5"><div class="text-slate-400">Branch</div><div class="font-bold mt-1">${escapeHtml(worker.workerBranch || '—')}</div></div>
         <div class="rounded-xl bg-slate-50 p-2.5"><div class="text-slate-400">目前工作</div><div class="font-mono font-bold mt-1 break-all">${escapeHtml(worker.currentJobId || '閒置')}</div></div>
       </div>
-      <div class="flex flex-wrap gap-2 text-[11px]">
+      <div class="flex flex-wrap gap-2 text-xs">
         <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">FFmpeg ${worker.ffmpeg ? '✓' : '✕'}</span>
         <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">LibreOffice ${worker.libreOffice ? '✓' : '✕'}</span>
         <span class="px-2 py-1 rounded-full ${worker.videoAccelerationAvailable?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700'}">Video ${worker.videoAccelerationAvailable?escapeHtml(worker.videoAccelerationEncoder||'HW')+' ✓':worker.videoAccelerationEnabled===true?'CPU fallback':worker.videoAccelerationEnabled===false?'HW off':'—'}</span>
@@ -609,7 +609,7 @@
         ${updateText}
       </div>
       ${preflightText}
-      <div class="text-[11px] text-slate-500">最近自動更新檢查：${formatWhen(worker.lastUpdateCheckAt)}。更新只會在 Worker 閒置時於本機執行，Web 端不能遠端下令 pull。</div>
+      <div class="text-xs text-slate-500">最近自動更新檢查：${formatWhen(worker.lastUpdateCheckAt)}。更新只會在 Worker 閒置時於本機執行，Web 端不能遠端下令 pull。</div>
     </article>`;
   }
 
@@ -630,11 +630,11 @@
           ? formatDuration(Math.max(0,(new Date(job.finishedAt)-new Date(timerBase))/1000))
           : elapsedFrom(timerBase));
       return `<tr class="align-top">
-        <td class="p-3 font-mono text-[11px] break-all">${escapeHtml(job.id || '')}</td>
-        <td class="p-3"><div class="font-semibold text-slate-800">${escapeHtml(job.title || job.originalName || '未命名教材')}</div><div class="text-[10px] text-slate-400">${escapeHtml(job.originalName || '')}</div>${job.workerId?`<div class="text-[10px] text-slate-400 mt-1">Worker：${escapeHtml(job.workerId)}</div>`:''}</td>
-        <td class="p-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-[10px] font-bold ${classes}">${icon} ${label}</span><div class="mt-1"><span class="inline-flex rounded-full border px-2 py-1 text-[10px] font-bold ${healthClasses}">${healthIcon} ${escapeHtml(healthLabel)}</span></div><div class="mt-1 text-[10px] text-slate-400">第 ${Number(job.attempts||0)}/${Number(job.maxAttempts||3)} 次</div></td>
-        <td class="p-3 text-slate-600"><div class="font-semibold">${escapeHtml(job.stage || '—')} · ${progress}%</div><div class="mt-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-sky-500" style="width:${progress}%"></div></div>${detail?`<div class="mt-1 text-[11px]">${escapeHtml(detail)}</div>`:''}<div class="mt-1 text-[10px] ${job.stalled?'text-rose-700 font-bold':job.heartbeatDelayed?'text-amber-700':'text-slate-400'}">${escapeHtml(job.observabilityDetail||'')}${heartbeat?` · ${escapeHtml(heartbeat)}`:''}</div>${error?`<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] font-semibold text-rose-700">失敗原因：${escapeHtml(error)}</div>`:''}</td>
-        <td class="p-3 whitespace-nowrap text-slate-500"><div>${escapeHtml(duration)}</div><div class="mt-1 text-[10px] text-slate-400">開始：${formatWhen(job.startedAt||job.createdAt)}</div>${job.retryInSeconds?`<div class="mt-1 text-[10px] text-amber-700">約 ${formatDuration(job.retryInSeconds)} 後重試</div>`:''}</td>
+        <td class="p-3 font-mono text-xs break-all">${escapeHtml(job.id || '')}</td>
+        <td class="p-3"><div class="font-semibold text-slate-800">${escapeHtml(job.title || job.originalName || '未命名教材')}</div><div class="text-xs text-slate-400">${escapeHtml(job.originalName || '')}</div>${job.workerId?`<div class="text-xs text-slate-400 mt-1">Worker：${escapeHtml(job.workerId)}</div>`:''}</td>
+        <td class="p-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-xs font-bold ${classes}">${icon} ${label}</span><div class="mt-1"><span class="inline-flex rounded-full border px-2 py-1 text-xs font-bold ${healthClasses}">${healthIcon} ${escapeHtml(healthLabel)}</span></div><div class="mt-1 text-xs text-slate-400">第 ${Number(job.attempts||0)}/${Number(job.maxAttempts||3)} 次</div></td>
+        <td class="p-3 text-slate-600"><div class="font-semibold">${escapeHtml(job.stage || '—')} · ${progress}%</div><div class="mt-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-sky-500" style="width:${progress}%"></div></div>${detail?`<div class="mt-1 text-xs">${escapeHtml(detail)}</div>`:''}<div class="mt-1 text-xs ${job.stalled?'text-rose-700 font-bold':job.heartbeatDelayed?'text-amber-700':'text-slate-400'}">${escapeHtml(job.observabilityDetail||'')}${heartbeat?` · ${escapeHtml(heartbeat)}`:''}</div>${error?`<div class="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-700">失敗原因：${escapeHtml(error)}</div>`:''}</td>
+        <td class="p-3 whitespace-nowrap text-slate-500"><div>${escapeHtml(duration)}</div><div class="mt-1 text-xs text-slate-400">開始：${formatWhen(job.startedAt||job.createdAt)}</div>${job.retryInSeconds?`<div class="mt-1 text-xs text-amber-700">約 ${formatDuration(job.retryInSeconds)} 後重試</div>`:''}</td>
         <td class="p-3 whitespace-nowrap text-slate-500">${formatWhen(job.updatedAt || job.createdAt)}</td>
       </tr>`;
     }).join('');
@@ -651,11 +651,11 @@
           : jobMeta(job.status);
       const critical=job.status==='failed'||job.observabilityState==='stalled';
       return `<article class="rounded-xl border ${critical?'border-rose-200 bg-rose-50':'border-amber-200 bg-amber-50'} p-3 text-sm">
-        <div class="flex flex-wrap items-start justify-between gap-2"><div><b>${escapeHtml(job.title||job.originalName||job.id)}</b><div class="mt-1 font-mono text-[10px] text-slate-500">${escapeHtml(job.id||'')}</div></div><span class="rounded-full border px-2 py-1 text-[10px] font-bold ${classes}">${icon} ${label}</span></div>
+        <div class="flex flex-wrap items-start justify-between gap-2"><div><b>${escapeHtml(job.title||job.originalName||job.id)}</b><div class="mt-1 font-mono text-xs text-slate-500">${escapeHtml(job.id||'')}</div></div><span class="rounded-full border px-2 py-1 text-xs font-bold ${classes}">${icon} ${label}</span></div>
         <div class="mt-2 text-xs text-slate-700"><b>階段：</b>${escapeHtml(job.stage||'—')}　<b>嘗試：</b>${Number(job.attempts||0)}/${Number(job.maxAttempts||3)}</div>
-        <div class="mt-2 rounded-lg bg-white/80 px-2 py-2 text-xs ${critical?'text-rose-700':'text-slate-600'}"><b>${job.errorMessage?'判定':'詳細資訊'}：</b>${escapeHtml(job.errorMessage||job.observabilityDetail||job.detail||'Worker 未提供詳細原因')}${job.errorCode?` <span class="font-mono text-[10px]">[${escapeHtml(job.errorCode)}]</span>`:''}${job.errorAction?`<div class="mt-1 font-semibold">建議：${escapeHtml(job.errorAction)}</div>`:''}</div>
-        ${job.technicalDetail?`<details class="mt-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-[10px] text-slate-600"><summary class="cursor-pointer font-bold">技術細節</summary><div class="mt-1">${escapeHtml(job.technicalDetail)}</div></details>`:''}
-        <div class="mt-2 text-[10px] text-slate-500">建立 ${formatWhen(job.createdAt)} · 更新 ${formatWhen(job.updatedAt)} · Worker ${escapeHtml(job.workerId||'—')}${Number.isFinite(Number(job.heartbeatAgeSeconds))?` · heartbeat ${formatDuration(job.heartbeatAgeSeconds)}前`:''}</div>
+        <div class="mt-2 rounded-lg bg-white/80 px-2 py-2 text-xs ${critical?'text-rose-700':'text-slate-600'}"><b>${job.errorMessage?'判定':'詳細資訊'}：</b>${escapeHtml(job.errorMessage||job.observabilityDetail||job.detail||'Worker 未提供詳細原因')}${job.errorCode?` <span class="font-mono text-xs">[${escapeHtml(job.errorCode)}]</span>`:''}${job.errorAction?`<div class="mt-1 font-semibold">建議：${escapeHtml(job.errorAction)}</div>`:''}</div>
+        ${job.technicalDetail?`<details class="mt-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-xs text-slate-600"><summary class="cursor-pointer font-bold">技術細節</summary><div class="mt-1">${escapeHtml(job.technicalDetail)}</div></details>`:''}
+        <div class="mt-2 text-xs text-slate-500">建立 ${formatWhen(job.createdAt)} · 更新 ${formatWhen(job.updatedAt)} · Worker ${escapeHtml(job.workerId||'—')}${Number.isFinite(Number(job.heartbeatAgeSeconds))?` · heartbeat ${formatDuration(job.heartbeatAgeSeconds)}前`:''}</div>
       </article>`;
     }).join('');
   }
@@ -785,34 +785,34 @@
         return '<option value="'+escapeHtml(username)+'"'+selected+'>'+escapeHtml(person.name||username)+' · '+escapeHtml(username)+'</option>';
       })].join('');
       const maintenanceControl=incident.maintenanceActive
-        ? '<button type="button" data-incident-response-action="clear_maintenance" class="rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-800">結束維護</button>'
-        : '<select data-incident-maintenance class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px]"><option value="30">維護 30 分</option><option value="60" selected>維護 1 小時</option><option value="240">維護 4 小時</option><option value="1440">維護 24 小時</option></select><button type="button" data-incident-response-action="maintenance" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold">開始維護</button>';
+        ? '<button type="button" data-incident-response-action="clear_maintenance" class="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs font-bold text-amber-800">結束維護</button>'
+        : '<select data-incident-maintenance class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"><option value="30">維護 30 分</option><option value="60" selected>維護 1 小時</option><option value="240">維護 4 小時</option><option value="1440">維護 24 小時</option></select><button type="button" data-incident-response-action="maintenance" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold">開始維護</button>';
       return `<article class="rounded-xl border ${classes} p-3 text-sm" data-incident-card data-incident-key="${escapeHtml(incident.incidentKey||'')}" data-incident-type="${escapeHtml(incident.incidentType||'')}" data-incident-status="${open?'open':'resolved'}">
         <div class="flex flex-wrap items-start justify-between gap-2">
-          <div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] font-bold text-slate-600">${categoryIcon} ${escapeHtml(categoryLabel)}</span><span class="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] font-bold text-slate-600">發生 ${occurrences} 次</span></div><b class="mt-1.5 block text-slate-900">${escapeHtml(incident.title||'系統維運事件')}</b><div class="mt-1 font-mono text-[10px] text-slate-500">${escapeHtml(incident.errorCode||incident.incidentType||'')} · generation ${Number(incident.generation||1)}</div></div>
-          <span class="rounded-full border px-2 py-1 text-[10px] font-bold ${responseClasses}">${responseIcon} ${escapeHtml(responseLabel)}</span>
+          <div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-xs font-bold text-slate-600">${categoryIcon} ${escapeHtml(categoryLabel)}</span><span class="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-xs font-bold text-slate-600">發生 ${occurrences} 次</span></div><b class="mt-1.5 block text-slate-900">${escapeHtml(incident.title||'系統維運事件')}</b><div class="mt-1 font-mono text-xs text-slate-500">${escapeHtml(incident.errorCode||incident.incidentType||'')} · generation ${Number(incident.generation||1)}</div></div>
+          <span class="rounded-full border px-2 py-1 text-xs font-bold ${responseClasses}">${responseIcon} ${escapeHtml(responseLabel)}</span>
         </div>
         <div class="mt-2 text-xs text-slate-700">${escapeHtml(open?(incident.detail||'需要處理'):'系統已確認此事件恢復正常。')}</div>
         ${open&&incident.action?`<div class="mt-2 rounded-lg bg-white/70 px-2.5 py-2 text-xs font-semibold text-slate-700"><span class="text-slate-500">建議動作：</span>${escapeHtml(incident.action)}</div>`:''}
-        ${(assignee||incident.acknowledgedBy||incident.responseNote||maintenance)?`<div class="mt-2 text-[11px] text-slate-600">${assignee?`負責人：<b>${escapeHtml(assignee)}</b> · `:''}${incident.acknowledgedBy?`確認：${escapeHtml(incident.acknowledgedBy)} · `:''}${incident.responseNote?`備註：${escapeHtml(incident.responseNote)}`:''}${maintenance}</div>`:''}
+        ${(assignee||incident.acknowledgedBy||incident.responseNote||maintenance)?`<div class="mt-2 text-xs text-slate-600">${assignee?`負責人：<b>${escapeHtml(assignee)}</b> · `:''}${incident.acknowledgedBy?`確認：${escapeHtml(incident.acknowledgedBy)} · `:''}${incident.responseNote?`備註：${escapeHtml(incident.responseNote)}`:''}${maintenance}</div>`:''}
         ${open?`<div class="mt-3 rounded-lg border border-slate-200 bg-white/80 p-2 space-y-2">
           <div class="flex flex-wrap gap-2">
-            ${incident.responseState==='unacknowledged'?'<button type="button" data-incident-response-action="acknowledge" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold">✓ 已知悉</button>':''}
-            <select data-incident-assignee class="min-w-40 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px]">${responderOptions}</select>
-            <button type="button" data-incident-response-action="assign" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold">指派處理</button>
-            ${assignee?'<button type="button" data-incident-response-action="unassign" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px]">解除指派</button>':''}
+            ${incident.responseState==='unacknowledged'?'<button type="button" data-incident-response-action="acknowledge" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold">✓ 已知悉</button>':''}
+            <select data-incident-assignee class="min-w-40 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs">${responderOptions}</select>
+            <button type="button" data-incident-response-action="assign" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold">指派處理</button>
+            ${assignee?'<button type="button" data-incident-response-action="unassign" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs">解除指派</button>':''}
             ${maintenanceControl}
           </div>
           <div class="flex gap-2">
-            <input data-incident-note type="text" maxlength="1000" value="${escapeHtml(incident.responseNote||'')}" placeholder="處置備註（例如：已聯絡資訊室）" class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px]">
-            <button type="button" data-incident-response-action="note" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold">儲存備註</button>
+            <input data-incident-note type="text" maxlength="1000" value="${escapeHtml(incident.responseNote||'')}" placeholder="處置備註（例如：已聯絡資訊室）" class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs">
+            <button type="button" data-incident-response-action="note" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold">儲存備註</button>
           </div>
-          <div data-incident-response-status class="text-[10px] text-slate-500"></div>
+          <div data-incident-response-status class="text-xs text-slate-500"></div>
         </div>`:''}
         ${steps.length?`<details class="mt-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-xs text-slate-700"><summary class="cursor-pointer font-bold">📋 ${escapeHtml(runbook.title||'處置步驟')}</summary><ol class="mt-2 list-decimal space-y-1 pl-5">${steps.map(step=>`<li>${escapeHtml(step)}</li>`).join('')}</ol></details>`:''}
         <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <div class="text-[10px] text-slate-500">首次 ${formatWhen(incident.openedAt)} · 最後觀察 ${formatWhen(incident.lastSeenAt)}${incident.resolvedAt?` · 恢復 ${formatWhen(incident.resolvedAt)}`:''}${incident.responseUpdatedBy?` · 最後處置 ${escapeHtml(incident.responseUpdatedBy)} ${formatWhen(incident.responseUpdatedAt)}`:''}</div>
-          <a data-incident-action href="${escapeHtml(action.href)}" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50">${escapeHtml(action.label)} →</a>
+          <div class="text-xs text-slate-500">首次 ${formatWhen(incident.openedAt)} · 最後觀察 ${formatWhen(incident.lastSeenAt)}${incident.resolvedAt?` · 恢復 ${formatWhen(incident.resolvedAt)}`:''}${incident.responseUpdatedBy?` · 最後處置 ${escapeHtml(incident.responseUpdatedBy)} ${formatWhen(incident.responseUpdatedAt)}`:''}</div>
+          <a data-incident-action href="${escapeHtml(action.href)}" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50">${escapeHtml(action.label)} →</a>
         </div>
       </article>`;
     }).join('');
@@ -878,7 +878,7 @@
       const openIncidents = currentIncidents.length;
       const operationalIssues = Array.isArray(data.operationalIssues) ? data.operationalIssues : [];
       const operationalIssueHtml = operationalIssues.length
-        ? '<div class="space-y-2">'+operationalIssues.map(issue=>'<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><b>'+escapeHtml(issue.message||issue.code||'維運提醒')+'</b>'+(issue.code?'<span class="ml-1 font-mono text-[10px]">['+escapeHtml(issue.code)+']</span>':'')+(issue.action?'<div class="mt-1">'+escapeHtml(issue.action)+'</div>':'')+'</div>').join('')+'</div>'
+        ? '<div class="space-y-2">'+operationalIssues.map(issue=>'<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><b>'+escapeHtml(issue.message||issue.code||'維運提醒')+'</b>'+(issue.code?'<span class="ml-1 font-mono text-xs">['+escapeHtml(issue.code)+']</span>':'')+(issue.action?'<div class="mt-1">'+escapeHtml(issue.action)+'</div>':'')+'</div>').join('')+'</div>'
         : '';
       const staging = data.staging || {};
       const r2Budget = data.r2Budget || {};
@@ -939,7 +939,7 @@
                     ? '🔴 AI Worker 連錯正式資料庫'
                     : online ? '🟢 AI Worker 在線' : '🟠 AI Worker 離線';
               const healthy = online && (httpsControl || (worker.databaseReady !== false && worker.databaseIdentityMatch !== false));
-              return `<div class="rounded-2xl border ${healthy ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/60'} p-4 shadow-sm"><div class="flex flex-wrap items-start justify-between gap-2"><div><div class="font-black text-slate-900">${title}</div><div class="mt-1 text-xs text-slate-600">${escapeHtml(worker.workerMachine || worker.workerId || 'AI Worker')} · 最後回報 ${formatWhen(worker.lastSeen)}</div></div><div class="text-xs font-bold text-slate-700">${kokoro} · ${whisper}</div></div><div class="mt-2 text-[11px] text-slate-600">${database}</div><div class="mt-1 text-[11px] text-slate-600">Queues：${escapeHtml(queues.join('、') || '尚未回報 queue capabilities')}</div><div class="mt-1 text-[10px] text-slate-500">${escapeHtml(heartbeat)}${worker.heartbeatTransport ? ' · ' + escapeHtml(worker.heartbeatTransport) : ''}</div></div>`;
+              return `<div class="rounded-2xl border ${healthy ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/60'} p-4 shadow-sm"><div class="flex flex-wrap items-start justify-between gap-2"><div><div class="font-black text-slate-900">${title}</div><div class="mt-1 text-xs text-slate-600">${escapeHtml(worker.workerMachine || worker.workerId || 'AI Worker')} · 最後回報 ${formatWhen(worker.lastSeen)}</div></div><div class="text-xs font-bold text-slate-700">${kokoro} · ${whisper}</div></div><div class="mt-2 text-xs text-slate-600">${database}</div><div class="mt-1 text-xs text-slate-600">Queues：${escapeHtml(queues.join('、') || '尚未回報 queue capabilities')}</div><div class="mt-1 text-xs text-slate-500">${escapeHtml(heartbeat)}${worker.heartbeatTransport ? ' · ' + escapeHtml(worker.heartbeatTransport) : ''}</div></div>`;
             }).join('')
           : `<div class="rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"><b>🟠 AI Worker 尚未回報</b><div class="mt-1 text-xs leading-5">教材 Worker 正常不代表 AI Worker 已啟動。請確認院內電腦已更新到目前 main，並啟動 <code>run_ai_worker_autostart.ps1</code>／Teacher AI Worker。Task Scheduler 顯示 RUNNING 不代表 heartbeat 已成功；新版 AI Worker 預設透過 Render HTTPS 443 control plane 回報，不需要院內網路開放 PostgreSQL 5432／6543。</div></div>`;
       panel.innerHTML = `
@@ -950,11 +950,11 @@
             <button id="worker-refresh-70" type="button" class="text-xs border border-slate-300 bg-white px-3 py-2 rounded-xl">↻ 立即更新</button>
           </div>
           <div id="worker-service-health-70" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-            <div class="text-[11px] font-black text-slate-700">服務執行環境</div>
+            <div class="text-xs font-black text-slate-700">服務執行環境</div>
             <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-slate-700">
               <span>${aiWorkerHealth}</span><span>${kokoroHealth}</span><span>${r2Health}${r2Usage}</span>
             </div>
-            <div class="mt-1 text-[10px] text-slate-500">教師／課程頁只顯示操作是否可用；Worker、Kokoro、R2 與 heartbeat 技術狀態集中在此。</div>
+            <div class="mt-1 text-xs text-slate-500">教師／課程頁只顯示操作是否可用；Worker、Kokoro、R2 與 heartbeat 技術狀態集中在此。</div>
           </div>
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
             ${queueCard('⏳', '待處理', data.pendingJobs, 'queued + retry_wait')}
@@ -969,22 +969,22 @@
             <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-slate-500">近${Number(data.metricsWindowHours||24)}小時平均完成：</span><b>${Number(data.recentTerminalJobs||0) ? formatDuration(data.averageCompletedDurationSeconds) : '—'}</b></div>
           </div>
           <div class="grid sm:grid-cols-3 gap-2 text-xs">
-            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2"><span class="text-emerald-700">🟢 處理中 heartbeat 正常：</span><b>${Number(data.healthyProcessingJobs||0)}</b><div class="mt-1 text-[10px]">在線 Worker ${activeWorkers.length} 台</div></div>
-            <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"><span class="text-amber-700">🟠 回報延遲：</span><b>${Number(data.heartbeatDelayedJobs||0)}</b><div class="mt-1 text-[10px]">警戒 ${formatDuration(data.heartbeatWarningSeconds||120)}</div></div>
-            <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2"><span class="text-rose-700">🔴 可能卡住：</span><b>${Number(data.stalledJobs||0)}</b><div class="mt-1 text-[10px]">stale ${formatDuration(data.staleThresholdSeconds||1800)}</div></div>
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2"><span class="text-emerald-700">🟢 處理中 heartbeat 正常：</span><b>${Number(data.healthyProcessingJobs||0)}</b><div class="mt-1 text-xs">在線 Worker ${activeWorkers.length} 台</div></div>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"><span class="text-amber-700">🟠 回報延遲：</span><b>${Number(data.heartbeatDelayedJobs||0)}</b><div class="mt-1 text-xs">警戒 ${formatDuration(data.heartbeatWarningSeconds||120)}</div></div>
+            <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2"><span class="text-rose-700">🔴 可能卡住：</span><b>${Number(data.stalledJobs||0)}</b><div class="mt-1 text-xs">stale ${formatDuration(data.staleThresholdSeconds||1800)}</div></div>
           </div>
           <div class="text-xs rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">Shared staging：<b>${escapeHtml(staging.backend || '未設定')}</b> · ${staging.available ? '可用' : '不可用'}${staging.shared ? ' · Web/Worker 共用' : ''}</div>
           </div></details>
           ${operationalIssueHtml}
         </section>
         <section id="worker-incidents-70" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4 scroll-mt-4">
-          <div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-slate-900">🚨 維運事件</h5><p class="mt-1 text-[11px] text-slate-500">Worker、AI 與 Storage 的持續性問題集中在這裡；單次可恢復 fallback 不會升級成事件。</p></div><div class="flex gap-2 text-[11px]"><span class="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 font-bold text-rose-700">目前問題 ${currentIncidents.length}</span><span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 font-bold text-emerald-700">已恢復 ${resolvedIncidents.length}</span></div></div>
+          <div class="flex items-start justify-between gap-3 flex-wrap"><div><h5 class="font-black text-slate-900">🚨 維運事件</h5><p class="mt-1 text-xs text-slate-500">Worker、AI 與 Storage 的持續性問題集中在這裡；單次可恢復 fallback 不會升級成事件。</p></div><div class="flex gap-2 text-xs"><span class="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 font-bold text-rose-700">目前問題 ${currentIncidents.length}</span><span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 font-bold text-emerald-700">已恢復 ${resolvedIncidents.length}</span></div></div>
           <div><div class="mb-2 text-xs font-black text-slate-700">目前問題</div><div class="space-y-2">${incidentCards(currentIncidents.slice(0,3),'目前沒有需要處理的維運事件。',incidentResponders)}</div>
           ${currentIncidents.length > 3 ? `<details data-keep="more-incidents" class="mt-2 rounded-xl border border-rose-200 bg-rose-50/40 p-3"><summary class="cursor-pointer text-xs font-black text-rose-800">其餘 ${currentIncidents.length - 3} 筆目前問題</summary><div class="mt-3 space-y-2">${incidentCards(currentIncidents.slice(3),'',incidentResponders)}</div></details>` : ''}</div>
           <details data-keep="resolved-incidents" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><summary class="cursor-pointer text-xs font-black text-slate-700">最近已恢復（24 小時） · ${resolvedIncidents.length} 筆</summary><div class="mt-3 space-y-2">${incidentCards(resolvedIncidents,'最近 24 小時沒有已恢復事件。',incidentResponders)}</div></details>
         </section>
         <section id="worker-problems-70" class="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm space-y-3 scroll-mt-4">
-          <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">⚠ 需要注意的工作</h5><span class="text-[11px] text-slate-400">${problemJobs.length} 筆</span></div>
+          <div class="flex items-center justify-between gap-3"><h5 class="font-black text-slate-900">⚠ 需要注意的工作</h5><span class="text-xs text-slate-400">${problemJobs.length} 筆</span></div>
           <div class="space-y-2">${failureCards(problemJobs.slice(0,5))}</div>
           ${problemJobs.length > 5 ? `<details data-keep="more-problems" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><summary class="cursor-pointer text-xs font-black text-slate-700">其餘 ${problemJobs.length - 5} 筆</summary><div class="mt-3 space-y-2">${failureCards(problemJobs.slice(5))}</div></details>` : ''}
         </section>
@@ -996,7 +996,7 @@
               ${workerBody}
             </section>
             <section id="ai-worker-runtime-70" class="space-y-3 scroll-mt-4">
-              <div class="flex items-center justify-between gap-3"><div><h5 class="font-black text-slate-900">AI Worker</h5><p class="mt-1 text-[11px] text-slate-500">AI 出題、講稿、PowerPoint、Kokoro 配音、字幕與影片共用；與教材轉檔 Worker 分開顯示。</p></div><span class="text-xs text-slate-400">${activeAiWorkers.length ? activeAiWorkers.length + ' 台在線' : '尚無在線回報'}</span></div>
+              <div class="flex items-center justify-between gap-3"><div><h5 class="font-black text-slate-900">AI Worker</h5><p class="mt-1 text-xs text-slate-500">AI 出題、講稿、PowerPoint、Kokoro 配音、字幕與影片共用；與教材轉檔 Worker 分開顯示。</p></div><span class="text-xs text-slate-400">${activeAiWorkers.length ? activeAiWorkers.length + ' 台在線' : '尚無在線回報'}</span></div>
               ${aiWorkerBody}
             </section>
           </div>
@@ -1006,7 +1006,7 @@
           <div class="mt-4 space-y-4">${renderSloDashboard(sloMetrics)}${renderEmailDeliveryHealth(emailHealth)}</div>
         </details>
         <details id="worker-jobs-history-70" data-keep="jobs-history" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm scroll-mt-4">
-          <summary class="cursor-pointer font-black text-slate-900">最近背景工作 <span class="ml-2 text-[11px] font-bold text-slate-400">最近 ${jobs.length} 筆</span></summary>
+          <summary class="cursor-pointer font-black text-slate-900">最近背景工作 <span class="ml-2 text-xs font-bold text-slate-400">最近 ${jobs.length} 筆</span></summary>
           <div class="mt-3 overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-left text-xs"><thead class="bg-slate-50"><tr><th class="p-3">Job ID</th><th class="p-3">教材</th><th class="p-3">狀態</th><th class="p-3">階段／原因</th><th class="p-3">耗時</th><th class="p-3">更新時間</th></tr></thead><tbody class="divide-y divide-slate-100">${jobRows(jobs)}</tbody></table></div>
         </details>
         ${firstRunGuide()}`;

@@ -47,8 +47,8 @@
     button.type = 'button';
     button.textContent = label;
     button.className = active
-      ? 'rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-black text-white shadow-sm'
-      : 'rounded-full px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-white';
+      ? 'rounded-full bg-slate-900 px-3 py-1.5 text-xs font-black text-white shadow-sm'
+      : 'rounded-full px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white';
     button.addEventListener('click', onClick);
     return button;
   }
@@ -151,7 +151,7 @@
     const button = document.createElement('button');
     button.id = id;
     button.type = 'button';
-    button.className = 'rounded-lg border border-slate-700 bg-slate-800/70 px-2.5 py-1.5 text-[11px] font-bold text-slate-100 hover:bg-slate-700';
+    button.className = 'rounded-lg border border-slate-700 bg-slate-800/70 px-2.5 py-1.5 text-xs font-bold text-slate-100 hover:bg-slate-700';
     button.textContent = label;
     button.addEventListener('click', handler);
     return button;
@@ -181,7 +181,7 @@
     if (!host) {
       host = document.createElement('div');
       host.id = 'teacher-inline-support-1014';
-      host.className = 'mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]';
+      host.className = 'mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs';
 
       const guide = document.createElement('button');
       guide.id = 'teacher-guide-open-1014';
@@ -197,7 +197,7 @@
 
   function guideCard(number, title, description) {
     return `<article class="rounded-xl border border-slate-200 bg-white p-3">
-      <div class="flex items-start gap-2"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-[11px] font-black text-teal-700">${number}</span><div class="min-w-0"><b class="text-sm text-slate-900">${title}</b><p class="mt-1 text-xs leading-5 text-slate-500">${description}</p></div></div>
+      <div class="flex items-start gap-2"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-black text-teal-700">${number}</span><div class="min-w-0"><b class="text-sm text-slate-900">${title}</b><p class="mt-1 text-xs leading-5 text-slate-500">${description}</p></div></div>
     </article>`;
   }
 
@@ -609,4 +609,51 @@
   // mutations without changing authorization.
   ensurePersonaSwitcher();
   setTimeout(ensurePersonaSwitcher, 0);
+})();
+
+/* ---- merged from teacher-workspace-nav-fix-1014.js (2026-10-17 slimming; same load position) ---- */
+;/* Teacher 10/14: keep persona switching stable and bind the legacy platform entry. */
+(async function () {
+  'use strict';
+
+  const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));
+  const roles = R.roles instanceof Set ? R.roles : new Set();
+  const canSystem = roles.has('system_admin') && typeof R.hasPermission === 'function' && R.hasPermission('system.manage');
+
+  function systemUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('admin', '1');
+    url.searchParams.set('workspace', 'people');
+    url.searchParams.set('persona', 'system');
+    url.searchParams.delete('teacherMode');
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
+
+  function bindPlatformEntry() {
+    if (!canSystem) return;
+    document.querySelectorAll('.v575-manage-direct').forEach(entry => {
+      entry.textContent = '⚙ 平台管理';
+      entry.title = '帳號、權限、平台設定與高風險維運';
+      entry.dataset.workspaceSurface = 'system';
+      if (entry.dataset.teacher1014PlatformBound === '1') return;
+      entry.dataset.teacher1014PlatformBound = '1';
+      entry.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        window.location.assign(systemUrl());
+      }, true);
+    });
+  }
+
+  function sync() {
+    // teacher-workspace-1014.js is the single owner of the persona switcher.
+    // Do not remove its system button here; doing so caused the third persona
+    // to disappear on first paint and reappear after later workspace updates.
+    bindPlatformEntry();
+  }
+
+  sync();
+  setTimeout(sync, 0);
+  setTimeout(sync, 400);
+  window.TeacherWorkspaceNavFix1014 = Object.freeze({ sync });
 })();

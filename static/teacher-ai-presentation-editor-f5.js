@@ -41,19 +41,19 @@
     dialog.className='w-[min(1100px,96vw)] max-h-[92vh] rounded-2xl border border-slate-200 p-0 shadow-2xl backdrop:bg-slate-900/50';
     dialog.innerHTML=`
       <form method="dialog" class="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white p-4">
-        <div><p class="text-[10px] font-black tracking-wide text-violet-700">F5 · IMMUTABLE SLIDE EDITOR</p><h3 class="text-lg font-black text-slate-950">教師投影片編輯器</h3><p class="mt-1 text-xs text-slate-500">儲存時會建立新 revision；舊版本與既有正式發布版本不會被覆蓋。</p></div>
+        <div><p class="text-xs font-black tracking-wide text-violet-700">F5 · IMMUTABLE SLIDE EDITOR</p><h3 class="text-lg font-black text-slate-950">教師投影片編輯器</h3><p class="mt-1 text-xs text-slate-500">儲存時會建立新 revision；舊版本與既有正式發布版本不會被覆蓋。</p></div>
         <button value="cancel" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700">關閉</button>
       </form>
       <div class="p-4 space-y-4">
         <label class="block text-xs font-bold text-slate-700">簡報標題<input id="teacher-ppt-editor-title-f5" class="learning-input mt-1 w-full" maxlength="255"></label>
         <section class="rounded-xl border border-violet-200 bg-violet-50/50 p-3 space-y-2" aria-label="用講稿填入講者備註">
           <b class="text-sm text-slate-900">🎙️ 用講稿填入講者備註</b>
-          <p class="text-[11px] text-slate-600">系統會自動找出講稿的切點，依內容對應到每一張投影片的「講者備註」，不需要手動標記。AI 影片會照備註逐頁念；有新講稿或改了投影片時可再按一次，微調後按下方儲存。</p>
+          <p class="text-xs text-slate-600">系統會自動找出講稿的切點，依內容對應到每一張投影片的「講者備註」，不需要手動標記。AI 影片會照備註逐頁念；有新講稿或改了投影片時可再按一次，微調後按下方儲存。</p>
           <div class="flex flex-col sm:flex-row sm:items-end gap-2">
-            <label class="flex-1 text-[11px] font-bold text-slate-600">已核准講稿<select id="teacher-ppt-editor-script-f5" class="learning-input mt-1 w-full"><option value="">讀取講稿中…</option></select></label>
+            <label class="flex-1 text-xs font-bold text-slate-600">已核准講稿<select id="teacher-ppt-editor-script-f5" class="learning-input mt-1 w-full"><option value="">讀取講稿中…</option></select></label>
             <button id="teacher-ppt-editor-fill-f5" type="button" class="rounded-lg bg-violet-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40" disabled>依內容自動分段</button>
           </div>
-          <p id="teacher-ppt-editor-fill-status-f5" class="text-[11px] text-slate-500" aria-live="polite"></p>
+          <p id="teacher-ppt-editor-fill-status-f5" class="text-xs text-slate-500" aria-live="polite"></p>
         </section>
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div><b class="text-sm text-slate-900">投影片</b><span id="teacher-ppt-editor-count-f5" class="ml-2 text-xs text-slate-400"></span></div>
@@ -144,7 +144,7 @@
     return `
       <article data-slide-editor-f5 data-slide-id="${esc(slide.id||'')}" class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="flex items-center gap-2"><b class="text-sm text-slate-900">第 ${index+1} 張</b><label class="text-[11px] font-bold text-slate-600"><input data-field="enabled" type="checkbox" ${slide.enabled!==false?'checked':''}> 啟用</label></div>
+          <div class="flex items-center gap-2"><b class="text-sm text-slate-900">第 ${index+1} 張</b><label class="text-xs font-bold text-slate-600"><input data-field="enabled" type="checkbox" ${slide.enabled!==false?'checked':''}> 啟用</label></div>
           <div class="flex gap-1">
             <button type="button" aria-label="上移" data-slide-action="up" class="rounded border border-slate-200 bg-white px-2 py-1 text-xs" ${index===0?'disabled':''}>↑</button>
             <button type="button" aria-label="下移" data-slide-action="down" class="rounded border border-slate-200 bg-white px-2 py-1 text-xs" ${index===total-1?'disabled':''}>↓</button>
@@ -152,13 +152,13 @@
           </div>
         </div>
         <div class="grid md:grid-cols-[180px_1fr] gap-3">
-          <label class="text-[11px] font-bold text-slate-600">版型<select data-field="layout" class="learning-input mt-1 w-full">${layouts.map(item=>`<option value="${item}" ${item===layout?'selected':''}>${item}</option>`).join('')}</select></label>
-          <label class="text-[11px] font-bold text-slate-600">標題<input data-field="title" class="learning-input mt-1 w-full" maxlength="180" value="${esc(slide.title||'')}"></label>
+          <label class="text-xs font-bold text-slate-600">版型<select data-field="layout" class="learning-input mt-1 w-full">${layouts.map(item=>`<option value="${item}" ${item===layout?'selected':''}>${item}</option>`).join('')}</select></label>
+          <label class="text-xs font-bold text-slate-600">標題<input data-field="title" class="learning-input mt-1 w-full" maxlength="180" value="${esc(slide.title||'')}"></label>
         </div>
-        <label class="block text-[11px] font-bold text-slate-600">重點（每行一點）<textarea data-field="bullets" rows="5" class="learning-input mt-1 w-full">${esc((slide.bullets||[]).join('\n'))}</textarea></label>
-        <label class="block text-[11px] font-bold text-slate-600">講者備註<textarea data-field="speakerNotes" rows="4" class="learning-input mt-1 w-full">${esc(slide.speakerNotes||'')}</textarea></label>
-        <p data-notes-duration class="text-[10px] text-slate-400">${esc(notesDurationText(slide.speakerNotes||''))}</p>
-        ${Array.isArray(slide.blocks)&&slide.blocks.length?'<p class="text-[10px] text-slate-400">此頁另有 '+slide.blocks.length+' 個圖表／圖片／表格區塊；本編輯器會原樣保留。</p>':''}
+        <label class="block text-xs font-bold text-slate-600">重點（每行一點）<textarea data-field="bullets" rows="5" class="learning-input mt-1 w-full">${esc((slide.bullets||[]).join('\n'))}</textarea></label>
+        <label class="block text-xs font-bold text-slate-600">講者備註<textarea data-field="speakerNotes" rows="4" class="learning-input mt-1 w-full">${esc(slide.speakerNotes||'')}</textarea></label>
+        <p data-notes-duration class="text-xs text-slate-400">${esc(notesDurationText(slide.speakerNotes||''))}</p>
+        ${Array.isArray(slide.blocks)&&slide.blocks.length?'<p class="text-xs text-slate-400">此頁另有 '+slide.blocks.length+' 個圖表／圖片／表格區塊；本編輯器會原樣保留。</p>':''}
       </article>`;
   }
 

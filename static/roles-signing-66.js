@@ -75,7 +75,7 @@
     box.className = 'sm:col-span-2 lg:col-span-4 rounded-xl border border-teal-100 bg-teal-50/40 p-3';
     box.innerHTML = `
       <div class="text-xs font-black text-teal-900">多重身分</div>
-      <div class="text-[11px] text-slate-500 mt-1">
+      <div class="text-xs text-slate-500 mt-1">
         上方「角色」保留為主要身分；這裡可再加第二或第三身分。
       </div>
       <div class="grid sm:grid-cols-3 lg:grid-cols-6 gap-2 mt-2">
@@ -114,7 +114,7 @@
     box.innerHTML = `
       <div>
         <div class="text-sm font-black text-indigo-950">👥 多重身分管理</div>
-        <div class="text-[11px] text-indigo-700 mt-1">
+        <div class="text-xs text-indigo-700 mt-1">
           同一帳號可同時具備臨床教師、組長或管理身分。主要身分仍供舊版功能相容。
         </div>
       </div>

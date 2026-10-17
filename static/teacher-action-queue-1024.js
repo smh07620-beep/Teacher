@@ -67,7 +67,7 @@
       intro.className = 'teacher-home-intro-1024 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm';
       intro.innerHTML = `
         <div class="teacher-home-intro-copy">
-          <p class="text-[11px] font-black tracking-[.16em] text-teal-700">TEACHER DESK</p>
+          <p class="text-xs font-black tracking-[.16em] text-teal-700">TEACHER DESK</p>
           <h3 class="mt-1 text-xl font-black text-slate-950">今天的教學工作</h3>
           <p class="mt-1 text-sm text-slate-600">先完成待處理事項，再進入主要工作。系統管理與學員功能維持獨立，不混在教師日常流程。</p>
         </div>
@@ -140,12 +140,12 @@
 
   function itemCard(item, index) {
     const [icon, fallbackLabel, classes] = kindMeta(item.kind);
-    const due = item.dueAt ? `<div class="mt-1 text-[11px] ${item.overdue ? 'font-bold text-rose-700' : 'text-slate-500'}">${item.overdue ? '已逾期：' : '截止：'}${escapeHtml(formatWhen(item.dueAt))}</div>` : '';
-    const retained = item.sourceRetained ? '<div class="mt-1 text-[11px] font-bold text-violet-700">☁ 原始檔仍安全保留，不必重新上傳</div>' : '';
+    const due = item.dueAt ? `<div class="mt-1 text-xs ${item.overdue ? 'font-bold text-rose-700' : 'text-slate-500'}">${item.overdue ? '已逾期：' : '截止：'}${escapeHtml(formatWhen(item.dueAt))}</div>` : '';
+    const retained = item.sourceRetained ? '<div class="mt-1 text-xs font-bold text-violet-700">☁ 原始檔仍安全保留，不必重新上傳</div>' : '';
     return `<article class="rounded-xl border border-slate-200 bg-slate-50/40 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div class="min-w-0">
         <div class="flex flex-wrap items-center gap-2">
-          <span class="inline-flex rounded-full border px-2 py-1 text-[10px] font-black ${classes}">${icon} ${escapeHtml(item.statusLabel || fallbackLabel)}</span>
+          <span class="inline-flex rounded-full border px-2 py-1 text-xs font-black ${classes}">${icon} ${escapeHtml(item.statusLabel || fallbackLabel)}</span>
           <b class="text-sm text-slate-900 break-words">${escapeHtml(item.title || '待處理項目')}</b>
         </div>
         ${item.detail ? `<p class="mt-1 text-xs text-slate-600 break-words">${escapeHtml(item.detail)}</p>` : ''}
@@ -363,7 +363,7 @@
     ].filter(([, count]) => count > 0);
     if (!teacherItems.length) {
       section.className = 'rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm';
-      section.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-2"><h4 class="text-base font-black text-slate-950">需要我處理</h4><span class="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white">0</span></div><div class="text-sm font-bold text-emerald-700">✓ 目前沒有需要你處理的項目。</div></div>`;
+      section.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-2"><h4 class="text-base font-black text-slate-950">需要我處理</h4><span class="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-black text-white">0</span></div><div class="text-sm font-bold text-emerald-700">✓ 目前沒有需要你處理的項目。</div></div>`;
       return;
     }
 
@@ -372,12 +372,12 @@
     const remaining = latestItems.slice(1);
     section.innerHTML = `
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="flex items-center gap-2"><h4 class="text-base font-black text-slate-950">需要我處理</h4><span class="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white">${teacherItems.length}</span></div>
-        <div class="flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-600">${countPills.map(([label,count,cls]) => `<span class="rounded-full ${cls} px-2 py-1">${label} ${count}</span>`).join('')}</div>
+        <div class="flex items-center gap-2"><h4 class="text-base font-black text-slate-950">需要我處理</h4><span class="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-black text-white">${teacherItems.length}</span></div>
+        <div class="flex flex-wrap gap-1.5 text-xs font-bold text-slate-600">${countPills.map(([label,count,cls]) => `<span class="rounded-full ${cls} px-2 py-1">${label} ${count}</span>`).join('')}</div>
       </div>
       <div class="mt-3" data-teacher-action-items>${primary ? itemCard(primary, 0) : ''}</div>
       ${remaining.length ? `<details class="mt-2 rounded-xl border border-slate-100 bg-slate-50/50"><summary class="cursor-pointer list-none px-3 py-2 text-xs font-black text-slate-600">查看其餘 ${remaining.length} 項待辦</summary><div class="space-y-2 border-t border-slate-100 p-2">${remaining.map((item,index)=>itemCard(item,index+1)).join('')}</div></details>` : ''}
-      ${teacherItems.length > 12 ? `<div class="mt-2 text-[11px] text-slate-500">另有 ${teacherItems.length - 12} 筆項目；完成目前工作後清單會自動更新。</div>` : ''}`;
+      ${teacherItems.length > 12 ? `<div class="mt-2 text-xs text-slate-500">另有 ${teacherItems.length - 12} 筆項目；完成目前工作後清單會自動更新。</div>` : ''}`;
     bindActions(section);
   }
 

@@ -141,12 +141,12 @@
 
     root.querySelectorAll('button[data-csp-click*="adminDeleteQuizQuestion"]').forEach(btn=>{
       if(btn.textContent.trim()!=='🗑️ 刪除') btn.textContent='🗑️ 刪除';
-      btn.className='text-[11px] bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-2.5 py-1.5 rounded-lg font-bold';
+      btn.className='text-xs bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-2.5 py-1.5 rounded-lg font-bold';
     });
 
     root.querySelectorAll('button[data-csp-click*="adminBulkDeleteQuestions"]').forEach(btn=>{
       if(btn.textContent.trim()!=='🗑️ 刪除已選題目') btn.textContent='🗑️ 刪除已選題目';
-      btn.className='text-[11px] bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg font-bold';
+      btn.className='text-xs bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg font-bold';
     });
 
     root.querySelectorAll('button[data-csp-click*="adminDeleteQuizCategory"]').forEach(btn=>{
@@ -276,7 +276,7 @@
   function setAdminQuizSyncStatus(text, tone='slate'){
       const el=document.getElementById('admin-quiz-sync-status'); if(!el)return;
       const tones={slate:'bg-slate-100 text-slate-500',indigo:'bg-indigo-50 text-indigo-700',emerald:'bg-emerald-50 text-emerald-700',rose:'bg-rose-50 text-rose-700',amber:'bg-amber-50 text-amber-700'};
-      el.className=`text-[11px] px-2.5 py-1 rounded-full font-bold ${tones[tone]||tones.slate}`; el.textContent=text;
+      el.className=`text-xs px-2.5 py-1 rounded-full font-bold ${tones[tone]||tones.slate}`; el.textContent=text;
   }
 
   function adminHasExpandedQuestionEditor(box){
@@ -307,8 +307,8 @@
     return ['出題','審核','發布'].map((name,i)=>{
       const finished=i<done,current=i===done&&done<3;
       const tone=finished?'bg-emerald-100 text-emerald-800':(current?'bg-indigo-600 text-white':'bg-slate-100 text-slate-400');
-      return `<span class="text-[10px] px-1.5 py-0.5 rounded ${tone} font-bold">${finished?'✓ ':''}${name}</span>`;
-    }).join('<span class="text-[10px] text-slate-300">›</span>');
+      return `<span class="text-xs px-1.5 py-0.5 rounded ${tone} font-bold">${finished?'✓ ':''}${name}</span>`;
+    }).join('<span class="text-xs text-slate-300">›</span>');
   }
 
   function quizCategoryCardHTML(c) {
@@ -319,10 +319,10 @@
                   <div class="min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
                           <span class="font-black text-sm text-slate-900 break-all">${escapeHtml(c.title)}</span>
-                          <span class="text-[11px] px-2 py-0.5 rounded-full ${teacherStatus.tone} font-bold">${teacherStatus.label}</span>${c.blindMode?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-slate-900 text-white font-bold">導師設定：盲測</span>':''}
-                          ${quizStepperHTML(c)}<span class="text-[10px] font-bold text-indigo-700">下一步：${escapeHtml(teacherStatus.next)}</span>
+                          <span class="text-xs px-2 py-0.5 rounded-full ${teacherStatus.tone} font-bold">${teacherStatus.label}</span>${c.blindMode?'<span class="text-xs px-2 py-0.5 rounded-full bg-slate-900 text-white font-bold">導師設定：盲測</span>':''}
+                          ${quizStepperHTML(c)}<span class="text-xs font-bold text-indigo-700">下一步：${escapeHtml(teacherStatus.next)}</span>
                       </div>
-                      <div class="flex flex-wrap gap-1.5 mt-1.5" title="${escapeHtml(c.desc || '尚未填寫考卷說明')}"><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">👤 ${escapeHtml(examAudienceLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-700">🧠 題庫 ${Number(c.questionCount||0)} 題</span><span class="text-[10px] px-2 py-1 rounded-full bg-teal-50 text-teal-700">📋 ${escapeHtml(examDrawLabel(c))}</span><span class="text-[10px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">🎯 及格 ${Number(c.passingScore||80)} 分</span>${c.publicationHash?`<span class="text-[10px] px-2 py-1 rounded-full bg-violet-50 text-violet-700" title="發布快照 SHA-256：${escapeHtml(c.publicationHash)}">🔒 快照 ${escapeHtml(c.publicationHash.slice(0,10))}</span>`:''}</div>
+                      <div class="flex flex-wrap gap-1.5 mt-1.5" title="${escapeHtml(c.desc || '尚未填寫考卷說明')}"><span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700">👤 ${escapeHtml(examAudienceLabel(c))}</span><span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700">🧠 題庫 ${Number(c.questionCount||0)} 題</span><span class="text-xs px-2 py-1 rounded-full bg-teal-50 text-teal-700">📋 ${escapeHtml(examDrawLabel(c))}</span><span class="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">🎯 及格 ${Number(c.passingScore||80)} 分</span>${c.publicationHash?`<span class="text-xs px-2 py-1 rounded-full bg-violet-50 text-violet-700" title="發布快照 SHA-256：${escapeHtml(c.publicationHash)}">🔒 快照 ${escapeHtml(c.publicationHash.slice(0,10))}</span>`:''}</div>
                   </div>
                   <div class="flex gap-2 shrink-0 items-center whitespace-nowrap">
                        <button data-admin-role="questions-action" data-quiz-primary-1030 data-csp-click="window.openTeacherContentExam?.('${c.id}') || adminEditQuizCategory('${c.id}')" title="${escapeHtml(teacherStatus.primary)}：題目與設定都在同一頁" class="whitespace-nowrap shrink-0 text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-black">進入</button>
@@ -331,35 +331,35 @@
               </div>
               <div id="qpanel-${c.id}" class="hidden border-t border-slate-200 p-4 space-y-4 rounded-b-2xl bg-slate-50/60">
                   <section id="qmaterial-link-${c.id}" class="hidden bg-cyan-50/60 rounded-xl border border-cyan-200 p-3 space-y-3">
-                      <div class="flex items-start justify-between gap-3 flex-wrap"><div><p class="text-sm font-black text-cyan-950">🔗 重新關聯教材</p><p class="text-[11px] text-cyan-700 mt-1">勾選要綁定此考卷的教材。若教材原本綁定其他考卷，儲存後會改綁到目前考卷。</p></div><button data-csp-click="closeQuizMaterialLinker('${c.id}')" class="text-[11px] text-slate-500 hover:text-slate-800">收合</button></div>
+                      <div class="flex items-start justify-between gap-3 flex-wrap"><div><p class="text-sm font-black text-cyan-950">🔗 重新關聯教材</p><p class="text-xs text-cyan-700 mt-1">勾選要綁定此考卷的教材。若教材原本綁定其他考卷，儲存後會改綁到目前考卷。</p></div><button data-csp-click="closeQuizMaterialLinker('${c.id}')" class="text-xs text-slate-500 hover:text-slate-800">收合</button></div>
                       <div class="flex gap-2"><input id="qmaterial-search-${c.id}" data-csp-input="filterQuizMaterialLinker('${c.id}')" placeholder="搜尋教材名稱…" class="flex-1 px-3 py-2 border border-cyan-200 rounded-xl text-xs bg-white"><button data-csp-click="saveQuizMaterialLinks('${c.id}')" class="bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold px-4 py-2 rounded-xl">💾 儲存關聯</button></div>
-                      <div id="qmaterial-list-${c.id}" class="max-h-72 overflow-auto space-y-1.5"><p class="text-xs text-slate-400">讀取教材中…</p></div><div id="qmaterial-status-${c.id}" class="text-[11px] text-cyan-700"></div>
+                      <div id="qmaterial-list-${c.id}" class="max-h-72 overflow-auto space-y-1.5"><p class="text-xs text-slate-400">讀取教材中…</p></div><div id="qmaterial-status-${c.id}" class="text-xs text-cyan-700"></div>
                   </section>
                   <section class="bg-white rounded-xl border border-slate-200 p-3">
-                      <div class="flex items-start justify-between gap-3 mb-3 flex-wrap"><div><p class="text-sm font-black text-slate-900">目前正式題庫</p><p class="text-[11px] text-slate-500">可單題快速編輯，也可全選後一次展開、批次套用分類或啟用狀態。</p></div><span id="qselected-${c.id}" class="text-[11px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-bold">已選 0 題</span></div>
+                      <div class="flex items-start justify-between gap-3 mb-3 flex-wrap"><div><p class="text-sm font-black text-slate-900">目前正式題庫</p><p class="text-xs text-slate-500">可單題快速編輯，也可全選後一次展開、批次套用分類或啟用狀態。</p></div><span id="qselected-${c.id}" class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-bold">已選 0 題</span></div>
                       <div class="mb-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-2.5 grid sm:grid-cols-[1fr_auto_auto_auto] gap-2"><input id="qfilter-text-${c.id}" data-csp-input="renderFilteredQuestionList('${c.id}')" placeholder="🔎 搜尋題目 / 分類 / 解析" class="px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white"><select id="qfilter-type-${c.id}" data-csp-change="renderFilteredQuestionList('${c.id}')" class="px-2 py-2 border border-slate-300 rounded-lg text-xs bg-white"><option value="">全部題型</option><option value="choice">單選</option><option value="multi">複選</option><option value="true_false">是非</option><option value="fill">填空</option><option value="essay">問答</option><option value="image">圖片</option><option value="video">影片</option></select><select id="qfilter-difficulty-${c.id}" data-csp-change="renderFilteredQuestionList('${c.id}')" class="px-2 py-2 border border-slate-300 rounded-lg text-xs bg-white"><option value="">全部難度</option><option value="basic">基礎</option><option value="standard">一般</option><option value="advanced">進階</option></select><select id="qfilter-active-${c.id}" data-csp-change="renderFilteredQuestionList('${c.id}')" class="px-2 py-2 border border-slate-300 rounded-lg text-xs bg-white"><option value="">全部狀態</option><option value="active">啟用</option><option value="inactive">停用</option></select></div>
                       <div id="qtoolbar-${c.id}" class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 flex items-center gap-2 flex-wrap">
                           <label class="text-xs font-bold text-slate-700 inline-flex items-center gap-1.5"><input id="qselect-all-${c.id}" type="checkbox" data-csp-change="adminSelectAllQuestions('${c.id}',this.checked)" class="rounded"> 全選</label>
-                          <span class="text-[11px] text-slate-400">勾選題目後顯示批次操作</span>
+                          <span class="text-xs text-slate-400">勾選題目後顯示批次操作</span>
                           <div id="qbulk-actions-${c.id}" class="hidden flex items-center gap-2 flex-wrap">
-                              <button data-csp-click="adminEditSelectedQuestions('${c.id}',false)" class="text-[11px] bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold">✏️ 編輯已選</button>
-                              <button data-csp-click="adminSaveExpandedQuestionEdits('${c.id}')" class="text-[11px] bg-teal-700 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg font-bold">💾 儲存修改</button>
-                              <details class="relative"><summary class="list-none cursor-pointer text-[11px] bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg font-bold">⋯ 批次操作</summary><div class="absolute right-0 z-40 mt-1 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-xl space-y-1"><button data-csp-click="adminBulkSetQuestionTag('${c.id}')" class="w-full text-left text-[11px] hover:bg-slate-50 px-2 py-1.5 rounded-lg">🏷️ 分類</button><button data-csp-click="adminBulkSetQuestionActive('${c.id}',true)" class="w-full text-left text-[11px] hover:bg-emerald-50 text-emerald-700 px-2 py-1.5 rounded-lg">▶ 啟用</button><button data-csp-click="adminBulkSetQuestionActive('${c.id}',false)" class="w-full text-left text-[11px] hover:bg-amber-50 text-amber-700 px-2 py-1.5 rounded-lg">⏸ 停用</button><button data-csp-click="adminBulkDeleteQuestions('${c.id}')" class="w-full text-left text-[11px] hover:bg-rose-50 text-rose-700 px-2 py-1.5 rounded-lg">🗑️ 刪除</button></div></details>
+                              <button data-csp-click="adminEditSelectedQuestions('${c.id}',false)" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold">✏️ 編輯已選</button>
+                              <button data-csp-click="adminSaveExpandedQuestionEdits('${c.id}')" class="text-xs bg-teal-700 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg font-bold">💾 儲存修改</button>
+                              <details class="relative"><summary class="list-none cursor-pointer text-xs bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg font-bold">⋯ 批次操作</summary><div class="absolute right-0 z-40 mt-1 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-xl space-y-1"><button data-csp-click="adminBulkSetQuestionTag('${c.id}')" class="w-full text-left text-xs hover:bg-slate-50 px-2 py-1.5 rounded-lg">🏷️ 分類</button><button data-csp-click="adminBulkSetQuestionActive('${c.id}',true)" class="w-full text-left text-xs hover:bg-emerald-50 text-emerald-700 px-2 py-1.5 rounded-lg">▶ 啟用</button><button data-csp-click="adminBulkSetQuestionActive('${c.id}',false)" class="w-full text-left text-xs hover:bg-amber-50 text-amber-700 px-2 py-1.5 rounded-lg">⏸ 停用</button><button data-csp-click="adminBulkDeleteQuestions('${c.id}')" class="w-full text-left text-xs hover:bg-rose-50 text-rose-700 px-2 py-1.5 rounded-lg">🗑️ 刪除</button></div></details>
                           </div>
-                          <span id="qbulk-progress-${c.id}" class="text-[11px] text-slate-500"></span>
+                          <span id="qbulk-progress-${c.id}" class="text-xs text-slate-500"></span>
                       </div>
-                      <div id="qlist-${c.id}" class="space-y-2"></div><div id="qsticky-save-${c.id}" class="sticky bottom-2 z-20 mt-3 rounded-xl border border-teal-200 bg-white/95 backdrop-blur shadow-lg p-2.5 flex items-center justify-between gap-3"><span id="qsticky-msg-${c.id}" class="text-[11px] text-slate-500">先按題目右邊的「編輯」修改內容，再按這裡一次儲存。</span><details class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2"><summary class="cursor-pointer text-xs font-bold text-slate-600">AI 匯入題目時要分享給其他組嗎？（預設只給本組；誰能考試在下方「誰能使用這份考卷」設定）</summary><select id="ai-audience-${c.id}" class="mt-2 w-full max-w-xs px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"><option value="group_only" selected>🔒 本組限定（預設）</option><option value="all_staff">🌐 全科共用</option></select></details><button data-csp-click="adminSaveExpandedQuestionEdits('${c.id}')" class="text-xs bg-teal-700 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold">💾 儲存全部修改</button></div>
+                      <div id="qlist-${c.id}" class="space-y-2"></div><div id="qsticky-save-${c.id}" class="sticky bottom-2 z-20 mt-3 rounded-xl border border-teal-200 bg-white/95 backdrop-blur shadow-lg p-2.5 flex items-center justify-between gap-3"><span id="qsticky-msg-${c.id}" class="text-xs text-slate-500">先按題目右邊的「編輯」修改內容，再按這裡一次儲存。</span><details class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2"><summary class="cursor-pointer text-xs font-bold text-slate-600">AI 匯入題目時要分享給其他組嗎？（預設只給本組；誰能考試在下方「誰能使用這份考卷」設定）</summary><select id="ai-audience-${c.id}" class="mt-2 w-full max-w-xs px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"><option value="group_only" selected>🔒 本組限定（預設）</option><option value="all_staff">🌐 全科共用</option></select></details><button data-csp-click="adminSaveExpandedQuestionEdits('${c.id}')" class="text-xs bg-teal-700 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold">💾 儲存全部修改</button></div>
                   </section>
 
                   <section data-ai-question-studio="${c.id}" class="rounded-2xl border border-violet-200 bg-white overflow-hidden">
                       <div class="bg-gradient-to-r from-violet-800 to-indigo-800 text-white px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                          <div><p class="font-black">✨ AI 教材出題工作室</p><p class="text-[11px] text-violet-100 mt-0.5">選教材 → 設定題型與難度 → 產生候選題 → 人工審核 → 匯入正式題庫</p></div>
-                          <span id="ai-status-${c.id}" class="text-[11px] px-2.5 py-1 rounded-full bg-white/10 ring-1 ring-white/20">檢查 AI 設定中…</span>
+                          <div><p class="font-black">✨ AI 教材出題工作室</p><p class="text-xs text-violet-100 mt-0.5">選教材 → 設定題型與難度 → 產生候選題 → 人工審核 → 匯入正式題庫</p></div>
+                          <span id="ai-status-${c.id}" class="text-xs px-2.5 py-1 rounded-full bg-white/10 ring-1 ring-white/20">檢查 AI 設定中…</span>
                       </div>
                       <div class="p-4 space-y-4">
                           <div class="grid lg:grid-cols-3 gap-3">
                               <div class="lg:col-span-3">
-                                  <div class="flex items-center justify-between gap-3 mb-2"><label class="block text-xs font-black text-violet-900">① 選擇 AI 要閱讀的教材（可複選）</label><span class="text-[11px] text-slate-500">最多 4 份；影片一次最多 1 支</span></div>
+                                  <div class="flex items-center justify-between gap-3 mb-2"><label class="block text-xs font-black text-violet-900">① 選擇 AI 要閱讀的教材（可複選）</label><span class="text-xs text-slate-500">最多 4 份；影片一次最多 1 支</span></div>
                                   <div class="rounded-xl border border-violet-100 bg-violet-50/40 p-3 space-y-2.5">
                                       <div class="flex flex-col lg:flex-row gap-2 lg:items-center">
                                           <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔎</span><input id="ai-material-search-${c.id}" data-csp-input="filterAiMaterials('${c.id}')" placeholder="搜尋教材名稱、檔名…" class="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-xl text-xs bg-white"></div>
@@ -367,11 +367,11 @@
                                           <select id="ai-material-kind-${c.id}" data-csp-change="filterAiMaterials('${c.id}',true)" class="px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white"><option value="all">全部類型</option><option value="text">📄 文件</option><option value="image">🖼️ 圖片 / Atlas</option><option value="video">🎬 影片</option><option value="audio">🎧 音訊</option><option value="subtitle">💬 字幕</option></select>
                                           <button type="button" data-csp-click="recommendAiMaterials('${c.id}')" class="px-3 py-2 rounded-xl bg-white border border-violet-200 text-violet-700 text-xs font-bold hover:bg-violet-50">✨ 建議教材</button>
                                       </div>
-                                      <div id="ai-selected-${c.id}" class="min-h-[34px] rounded-lg bg-white border border-violet-100 px-2.5 py-2 text-[11px] text-slate-500">尚未選擇教材</div>
+                                      <div id="ai-selected-${c.id}" class="min-h-[34px] rounded-lg bg-white border border-violet-100 px-2.5 py-2 text-xs text-slate-500">尚未選擇教材</div>
                                       <div id="ai-materials-${c.id}" data-group="${c.group}" data-area="${c.area}" data-course-id="${escapeHtml(c.courseId||'')}" data-title="${escapeHtml(c.title||'')}" class="space-y-1.5"><div class="text-xs text-slate-400">讀取本組教材中…</div></div>
-                                      <div class="flex items-center justify-between gap-2"><span id="ai-material-count-${c.id}" class="text-[11px] text-slate-400"></span><button id="ai-material-more-${c.id}" type="button" data-csp-click="loadMoreAiMaterials('${c.id}')" class="hidden text-[11px] text-violet-700 font-bold hover:underline">顯示更多教材</button></div>
+                                      <div class="flex items-center justify-between gap-2"><span id="ai-material-count-${c.id}" class="text-xs text-slate-400"></span><button id="ai-material-more-${c.id}" type="button" data-csp-click="loadMoreAiMaterials('${c.id}')" class="hidden text-xs text-violet-700 font-bold hover:underline">顯示更多教材</button></div>
                                   </div>
-                                  <div class="mt-2 text-[11px] text-slate-500">💡 圖片 / Atlas 會直接做視覺分析；影片會擷取代表畫面並結合語音逐字稿。也可把「影片＋字幕＋SOP/PDF」一起選做交叉出題。</div>
+                                  <div class="mt-2 text-xs text-slate-500">💡 圖片 / Atlas 會直接做視覺分析；影片會擷取代表畫面並結合語音逐字稿。也可把「影片＋字幕＋SOP/PDF」一起選做交叉出題。</div>
                               </div>
                               <div><label class="block text-xs font-bold text-slate-600 mb-1">② 題型</label><select id="ai-type-${c.id}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"><optgroup label="綜合出題（多種題型一起出）"><option value="mixed_all">綜合：單選＋多選＋是非＋填空＋問答</option><option value="mixed_choice_multi">選擇題：單選＋多選</option><option value="mixed">選擇＋問答：單選＋問答</option></optgroup><optgroup label="單一題型"><option value="choice">單選題</option><option value="multi">多選題</option><option value="true_false">是非題</option><option value="fill">填空題</option><option value="essay">問答題</option></optgroup><optgroup label="影片互動（需先勾選一支影片）"><option value="video_mixed">🎬 影片互動題（選擇＋填空＋問答混合）</option></optgroup></select></div>
                               <div><label class="block text-xs font-bold text-slate-600 mb-1">③ 難度</label><select id="ai-difficulty-${c.id}" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"><option value="basic">基礎</option><option value="standard" selected>標準</option><option value="advanced">進階</option></select></div>
@@ -382,9 +382,9 @@
                           </div>
                           <div class="flex items-center gap-3 flex-wrap"><button id="ai-generate-${c.id}" data-csp-click="adminGenerateAiQuestions('${c.id}')" class="bg-violet-700 hover:bg-violet-600 text-white px-4 py-2.5 rounded-xl text-sm font-black">✨ 產生候選題</button><span id="ai-progress-${c.id}" class="text-xs text-violet-700"></span></div>
                           <div id="ai-progress-wrap-${c.id}" class="hidden rounded-xl border border-violet-100 bg-violet-50/70 p-3">
-                              <div class="flex items-center justify-between gap-3 text-[11px]"><span id="ai-progress-label-${c.id}" class="font-bold text-violet-800">準備 AI 出題…</span><span id="ai-progress-percent-${c.id}" class="font-black text-violet-700">0%</span></div>
+                              <div class="flex items-center justify-between gap-3 text-xs"><span id="ai-progress-label-${c.id}" class="font-bold text-violet-800">準備 AI 出題…</span><span id="ai-progress-percent-${c.id}" class="font-black text-violet-700">0%</span></div>
                               <div class="mt-2 h-2.5 rounded-full bg-violet-100 overflow-hidden"><div id="ai-progress-bar-${c.id}" class="h-full w-0 rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-500 transition-[width] duration-500"></div></div>
-                              <div id="ai-progress-detail-${c.id}" class="mt-2 text-[11px] text-violet-600">正在準備教材來源。</div>
+                              <div id="ai-progress-detail-${c.id}" class="mt-2 text-xs text-violet-600">正在準備教材來源。</div>
                           </div>
                           <div id="ai-candidates-${c.id}" class="space-y-3"></div>
                       </div>
@@ -403,7 +403,7 @@
                               <textarea id="qform-${c.id}-explain" rows="2" placeholder="詳解 / 問答題評分參考" class="w-full px-2.5 py-1.5 border rounded-lg text-xs"></textarea>
                               <button data-csp-click="adminAddQuizQuestion('${c.id}')" class="text-xs bg-teal-700 hover:bg-teal-600 text-white px-3 py-2 rounded-lg font-bold">＋ 新增此題</button>
                           </div>
-                          <div class="rounded-xl bg-indigo-50 p-3 space-y-2 self-start"><p class="text-xs font-black text-indigo-900">由公開 JSON / CSV 連結批次匯入</p><p class="text-[11px] text-indigo-700">適合 Google Sheet 發布 CSV 或既有題庫檔案。匯入後仍可逐題修改與停用。</p><input id="qimport-${c.id}" type="url" placeholder="貼上公開 JSON / CSV 網址" class="w-full px-3 py-2 border border-indigo-200 rounded-lg text-xs bg-white"><button data-csp-click="adminImportQuizUrl('${c.id}')" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold">🔗 批次匯入</button></div>
+                          <div class="rounded-xl bg-indigo-50 p-3 space-y-2 self-start"><p class="text-xs font-black text-indigo-900">由公開 JSON / CSV 連結批次匯入</p><p class="text-xs text-indigo-700">適合 Google Sheet 發布 CSV 或既有題庫檔案。匯入後仍可逐題修改與停用。</p><input id="qimport-${c.id}" type="url" placeholder="貼上公開 JSON / CSV 網址" class="w-full px-3 py-2 border border-indigo-200 rounded-lg text-xs bg-white"><button data-csp-click="adminImportQuizUrl('${c.id}')" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold">🔗 批次匯入</button></div>
                       </div>
                   </details>
               </div>

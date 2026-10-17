@@ -84,9 +84,9 @@
         <div class="flex gap-2"><button type="button" data-announcement-refresh class="admin-toolbar-button">↻ 更新</button><button type="button" data-announcement-new class="rounded-xl bg-sky-700 px-4 py-2 text-xs font-black text-white">＋ 發布公告</button></div>
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><span class="text-[11px] text-slate-500">目前有效</span><strong data-announcement-active class="block mt-1 text-xl text-slate-950">—</strong></div>
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><span class="text-[11px] text-slate-500">即將到期</span><strong data-announcement-expiring class="block mt-1 text-xl text-slate-950">—</strong></div>
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 col-span-2 sm:col-span-1"><span class="text-[11px] text-slate-500">全部紀錄</span><strong data-announcement-total class="block mt-1 text-xl text-slate-950">—</strong></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><span class="text-xs text-slate-500">目前有效</span><strong data-announcement-active class="block mt-1 text-xl text-slate-950">—</strong></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><span class="text-xs text-slate-500">即將到期</span><strong data-announcement-expiring class="block mt-1 text-xl text-slate-950">—</strong></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 col-span-2 sm:col-span-1"><span class="text-xs text-slate-500">全部紀錄</span><strong data-announcement-total class="block mt-1 text-xl text-slate-950">—</strong></div>
       </div>
       <div data-announcement-editor class="hidden rounded-2xl border border-sky-100 bg-sky-50/40 p-4 space-y-3">
         <div class="flex items-center justify-between gap-3"><b data-announcement-editor-title class="text-sm text-slate-900">發布公告</b><button type="button" data-announcement-cancel class="text-xs text-slate-500">取消</button></div>
@@ -99,7 +99,7 @@
           <label class="text-xs font-bold text-slate-600">截止時間（可留空）<input data-field="endsAt" type="datetime-local" class="learning-input mt-1"></label>
         </div>
         <div class="flex flex-wrap gap-4 text-xs text-slate-700"><label class="flex items-center gap-2"><input data-field="pinned" type="checkbox"> 置頂顯示</label><label class="flex items-center gap-2"><input data-field="requireRead" type="checkbox"> 要求在通知中心標記已讀</label></div>
-        <div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">Email 通知仍由既有課程／考核提醒排程負責；公告目前只做站內首頁與通知中心訊息，不會假裝寄出 Email。</div>
+        <div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">Email 通知仍由既有課程／考核提醒排程負責；公告目前只做站內首頁與通知中心訊息，不會假裝寄出 Email。</div>
         <div class="flex items-center gap-3"><button type="button" data-announcement-save class="rounded-xl bg-sky-700 px-4 py-2 text-xs font-black text-white">發布公告</button><span data-announcement-form-status class="text-xs text-slate-500"></span></div>
       </div>
       <div data-announcement-status class="text-xs text-slate-500">尚未讀取公告。</div>
@@ -269,8 +269,8 @@
     const time=windowLabel(item);
     return `<article data-announcement-id="${esc(item.id)}" class="rounded-xl border border-slate-200 bg-slate-50 p-3">
       <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div class="min-w-0"><div class="font-bold text-sm text-slate-900">${esc(item.title||'')}</div><div class="mt-1 text-xs text-slate-500 whitespace-pre-wrap">${esc(item.body||'')}</div><div class="mt-2 flex flex-wrap gap-1.5">${badges.map(text=>`<span class="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600">${esc(text)}</span>`).join('')}</div>${time?`<div class="mt-1 text-[10px] text-slate-400">${esc(time)}</div>`:''}</div>
-        <div class="flex gap-1.5 shrink-0"><button type="button" data-edit class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px]">編輯</button><button type="button" data-toggle class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px]">${item.active?'停用':'發布'}</button><button type="button" data-delete class="px-2 py-1.5 text-[11px] text-rose-600">刪除</button></div>
+        <div class="min-w-0"><div class="font-bold text-sm text-slate-900">${esc(item.title||'')}</div><div class="mt-1 text-xs text-slate-500 whitespace-pre-wrap">${esc(item.body||'')}</div><div class="mt-2 flex flex-wrap gap-1.5">${badges.map(text=>`<span class="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-600">${esc(text)}</span>`).join('')}</div>${time?`<div class="mt-1 text-xs text-slate-400">${esc(time)}</div>`:''}</div>
+        <div class="flex gap-1.5 shrink-0"><button type="button" data-edit class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs">編輯</button><button type="button" data-toggle class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs">${item.active?'停用':'發布'}</button><button type="button" data-delete class="px-2 py-1.5 text-xs text-rose-600">刪除</button></div>
       </div></article>`;
   }
 

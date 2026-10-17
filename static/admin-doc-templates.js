@@ -46,12 +46,12 @@
           <div class="min-w-0">
             <span class="font-bold text-sm text-slate-800">${escapeHtml(group.label)}</span>
             ${group.exists
-              ? `<span class="text-xs text-emerald-700 ml-2">✅ 已設定：${escapeHtml(group.filename)}（${escapeHtml(group.uploadedAt)}）</span><span class="text-[10px] text-slate-400 ml-2">${group.storageBackend === 'mega' ? '🟣 MEGA' : (group.storageBackend === 'oci' ? '🔴 Oracle' : (group.storageBackend === 'gdrive' ? '🟢 Google Drive' : (group.storageBackend === 'r2' ? '☁️ R2' : '💾 本機')))}</span>`
+              ? `<span class="text-xs text-emerald-700 ml-2">✅ 已設定：${escapeHtml(group.filename)}（${escapeHtml(group.uploadedAt)}）</span><span class="text-xs text-slate-400 ml-2">${group.storageBackend === 'mega' ? '🟣 MEGA' : (group.storageBackend === 'oci' ? '🔴 Oracle' : (group.storageBackend === 'gdrive' ? '🟢 Google Drive' : (group.storageBackend === 'r2' ? '☁️ R2' : '💾 本機')))}</span>`
               : '<span class="text-xs text-slate-400 ml-2">尚未上傳範本</span>'}
           </div>
           <div class="flex gap-2 shrink-0">
             <button data-csp-click="adminTriggerDocTemplateUpload('${group.group}')" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg">⬆️ ${group.exists ? '重新上傳' : '上傳範本'}</button>
-            ${group.exists ? `<a href="/api/doc-templates/${group.group}/download" target="_blank" class="text-xs bg-white border border-amber-300 hover:bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg">⬇️ 下載目前範本</a><button data-csp-click="adminDeleteDocTemplate('${group.group}')" class="text-[11px] bg-white border border-slate-200 hover:border-rose-200 text-slate-500 hover:text-rose-700 px-2.5 py-1.5 rounded-lg">更多：刪除</button>` : ''}
+            ${group.exists ? `<a href="/api/doc-templates/${group.group}/download" target="_blank" class="text-xs bg-white border border-amber-300 hover:bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg">⬇️ 下載目前範本</a><button data-csp-click="adminDeleteDocTemplate('${group.group}')" class="text-xs bg-white border border-slate-200 hover:border-rose-200 text-slate-500 hover:text-rose-700 px-2.5 py-1.5 rounded-lg">更多：刪除</button>` : ''}
           </div>
         </div>`).join('');
     } catch (error) {

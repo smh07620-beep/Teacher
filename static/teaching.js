@@ -156,7 +156,7 @@ function teachingMaterialRow(m, index) {
         `<span class="teaching-step-number">${done ? '✓' : index + 1}</span><span class="course-type-icon">`
     );
     return withStep.replace(
-        /(<p class="text-\[11px\] text-slate-400 mt-1">)([\s\S]*?)(<\/p>)/,
+        /(<p [^>]*data-row-detail[^>]*>)([\s\S]*?)(<\/p>)/,
         (_, open, detail, close) =>
             `${open}${detail ? `${detail} · ` : ''}${escapeHtml(readingState)}${close}`
     );

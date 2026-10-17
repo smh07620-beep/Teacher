@@ -127,7 +127,7 @@
               <option value="off" selected>關閉（維持原選題）</option>
               <option value="balanced">平衡模式（難度／鑑別度／誘答／曝光）</option>
             </select>
-            <span class="mt-1 block text-[10px] font-normal text-slate-500">資料不足的題目保持中性權重；不會繞過配額或直接淘汰題目。</span>
+            <span class="mt-1 block text-xs font-normal text-slate-500">資料不足的題目保持中性權重；不會繞過配額或直接淘汰題目。</span>
           </label>
         </div>
         <div class="mt-3 flex items-center gap-2 flex-wrap">

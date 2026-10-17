@@ -93,7 +93,7 @@
     if (intro) {
       const flow = document.createElement('div');
       flow.id = 'teacher-ai-material-flow-1014';
-      flow.className = 'mt-3 grid grid-cols-2 gap-2 text-center text-[11px] font-black text-slate-600 sm:grid-cols-4';
+      flow.className = 'mt-3 grid grid-cols-2 gap-2 text-center text-xs font-black text-slate-600 sm:grid-cols-4';
       flow.innerHTML = '<span class="rounded-lg bg-violet-50 px-2 py-2">1 加入來源</span><span class="rounded-lg bg-violet-50 px-2 py-2">2 產生草稿</span><span class="rounded-lg bg-violet-50 px-2 py-2">3 教師修正</span><span class="rounded-lg bg-violet-50 px-2 py-2">4 產生／發布</span>';
       intro.insertAdjacentElement('afterend', flow);
     }
@@ -837,4 +837,47 @@
 
   window.addEventListener('teacher-ai-material-request-publication', () => void publishDraft());
   window.TeacherAIMaterial1014 = Object.freeze({resetFlow, cleanupAuthoringSources, discardDraft, importAndGenerateDraft, paintMaterialOptions, loadDrafts, publishCurrentDraft: publishDraft, ensureMounted, configureContext});
+})();
+
+/* ---- merged from teacher-ai-material-convergence-1014.js (2026-10-17 slimming; same load position) ---- */
+;/* Keep the legacy standalone script studio hidden after AI 教材助手 convergence. */
+(function () {
+  'use strict';
+
+  function converge() {
+    const assistant = document.getElementById('teacher-ai-material-1014');
+    const legacy = document.getElementById('teacher-media-script-1014');
+    if (!assistant || !legacy) return false;
+    const narrationFlow = legacy.closest('#teacher-media-panel-narration-1018');
+    if (narrationFlow) {
+      legacy.classList.remove('hidden');
+      legacy.removeAttribute('aria-hidden');
+      return true;
+    }
+    if (!legacy.classList.contains('hidden')) legacy.classList.add('hidden');
+    if (legacy.getAttribute('aria-hidden') !== 'true') legacy.setAttribute('aria-hidden', 'true');
+    return true;
+  }
+
+  const TARGET_SELECTOR='#teacher-ai-material-1014,#teacher-media-script-1014';
+  let observer = null;
+
+  function nodeTouchesTarget(node) {
+    if (!(node instanceof Element)) return false;
+    return node.matches?.(TARGET_SELECTOR) || Boolean(node.querySelector?.(TARGET_SELECTOR));
+  }
+
+  function tryConverge() {
+    if (!converge()) return false;
+    observer?.disconnect();
+    return true;
+  }
+
+  if (!tryConverge()) {
+    observer = new MutationObserver(records => {
+      if (records.some(record => [...(record.addedNodes || [])].some(nodeTouchesTarget))) tryConverge();
+    });
+    observer.observe(document.body, {childList:true, subtree:true});
+  }
+  [250, 900, 2200].forEach(delay => setTimeout(tryConverge, delay));
 })();

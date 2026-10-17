@@ -35,7 +35,7 @@
     section.className = 'rounded-xl border border-teal-100 bg-teal-50/20 px-3 py-3';
     section.innerHTML = `
       <div class="flex items-center justify-between gap-3">
-        <span class="flex items-center gap-2 min-w-0"><b id="training-progress-title-71" class="text-sm text-slate-900">📈 訓練進度</b><span id="training-progress-summary-71" class="text-[11px] text-slate-500 truncate">讀取中…</span></span>
+        <span class="flex items-center gap-2 min-w-0"><b id="training-progress-title-71" class="text-sm text-slate-900">📈 訓練進度</b><span id="training-progress-summary-71" class="text-xs text-slate-500 truncate">讀取中…</span></span>
       </div>
       <div id="pgy-matrix-status-71" class="text-xs text-slate-500 mt-3">讀取訓練進度中…</div>
       <div id="pgy-matrix-stats-71" class="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-3"></div>
@@ -52,7 +52,7 @@
   }
 
   function card(label, value, suffix = '') {
-    return `<div class="rounded-xl border border-slate-200 bg-white px-3 py-2"><div class="text-[9px] text-slate-400">${escapeHtml(label)}</div><div class="text-sm font-black text-slate-800 mt-0.5">${escapeHtml(value)}${suffix ? `<span class="text-[9px] text-slate-400 ml-1">${escapeHtml(suffix)}</span>` : ''}</div></div>`;
+    return `<div class="rounded-xl border border-slate-200 bg-white px-3 py-2"><div class="text-xs text-slate-400">${escapeHtml(label)}</div><div class="text-sm font-black text-slate-800 mt-0.5">${escapeHtml(value)}${suffix ? `<span class="text-xs text-slate-400 ml-1">${escapeHtml(suffix)}</span>` : ''}</div></div>`;
   }
 
   function numberOrDash(value, digits = 1) {
@@ -110,7 +110,7 @@
       table.innerHTML = '<div class="rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-400 text-center">尚無 PGY 能力矩陣資料。</div>';
       return;
     }
-    table.innerHTML = `<table class="min-w-max w-full text-left text-xs border-separate border-spacing-0"><thead><tr><th class="bg-slate-50 border-y border-l border-slate-200 p-2 min-w-[160px]">學員</th><th class="bg-slate-50 border-y border-slate-200 p-2">訓練進度</th>${types.map(type=>`<th class="bg-slate-50 border-y border-slate-200 p-2 text-center">${escapeHtml(type.label)}</th>`).join('')}</tr></thead><tbody>${learners.map(learner=>`<tr><td class="border-b border-l border-slate-100 bg-white p-2"><b>${escapeHtml(learner.name || learner.empId)}</b><div class="text-[9px] text-slate-400">${escapeHtml(learner.empId)}</div></td><td class="border-b border-slate-100 bg-white p-2"><b>${Number(learner.progress?.percent || 0).toFixed(0)}%</b><div class="text-[9px] text-slate-400">${Number(learner.progress?.assignmentsCompleted || 0)}/${Number(learner.progress?.assignmentsTotal || 0)} 完成</div></td>${types.map(type=>{const cell=learner.competencies?.[type.key]||{};return `<td class="border-b border-slate-100 bg-white p-2 text-center"><b>${cell.count?numberOrDash(cell.averageScore):'—'}</b><div class="text-[9px] text-slate-400">${Number(cell.count||0)} 次</div></td>`;}).join('')}</tr>`).join('')}</tbody></table>`;
+    table.innerHTML = `<table class="min-w-max w-full text-left text-xs border-separate border-spacing-0"><thead><tr><th class="bg-slate-50 border-y border-l border-slate-200 p-2 min-w-[160px]">學員</th><th class="bg-slate-50 border-y border-slate-200 p-2">訓練進度</th>${types.map(type=>`<th class="bg-slate-50 border-y border-slate-200 p-2 text-center">${escapeHtml(type.label)}</th>`).join('')}</tr></thead><tbody>${learners.map(learner=>`<tr><td class="border-b border-l border-slate-100 bg-white p-2"><b>${escapeHtml(learner.name || learner.empId)}</b><div class="text-xs text-slate-400">${escapeHtml(learner.empId)}</div></td><td class="border-b border-slate-100 bg-white p-2"><b>${Number(learner.progress?.percent || 0).toFixed(0)}%</b><div class="text-xs text-slate-400">${Number(learner.progress?.assignmentsCompleted || 0)}/${Number(learner.progress?.assignmentsTotal || 0)} 完成</div></td>${types.map(type=>{const cell=learner.competencies?.[type.key]||{};return `<td class="border-b border-slate-100 bg-white p-2 text-center"><b>${cell.count?numberOrDash(cell.averageScore):'—'}</b><div class="text-xs text-slate-400">${Number(cell.count||0)} 次</div></td>`;}).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
   async function load(force = false) {

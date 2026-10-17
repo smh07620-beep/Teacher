@@ -133,7 +133,7 @@
     select.dataset.mediaSourceFix = '1';
 
     const help = document.createElement('div');
-    help.className = 'mt-1 flex flex-wrap items-center gap-2 text-[10px] text-slate-500';
+    help.className = 'mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500';
     const note = document.createElement('span');
     note.textContent = '可使用已上傳的 PDF／Word／PPT 教材；草稿也可先做講稿。內建舊教材因沒有原始文字來源不列入。';
     const refresh = document.createElement('button');

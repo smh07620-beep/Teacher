@@ -8,10 +8,10 @@ sys.path.insert(0, str(ROOT / "tools"))
 import ui_debt_report  # noqa: E402
 
 BUDGET = {
-    "patchFiles": 11,
-    "mutationObserverFiles": 35,
-    "importantDeclarations": 544,
-    "tinyTextClasses": 726,
+    "patchFiles": 8,
+    "mutationObserverFiles": 33,
+    "importantDeclarations": 543,
+    "tinyTextClasses": 0,
 }
 
 

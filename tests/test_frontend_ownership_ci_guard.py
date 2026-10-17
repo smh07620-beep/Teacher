@@ -23,20 +23,18 @@ BROAD_OBSERVER_CONTRACT = {
     "teacher-ux-convergence-72.js": ("mutationNeedsReconcile",),
     "teacher-authoring-source-fix-1017.js": ("mutationNeedsInstall", "scheduleInstallAll"),
     "teacher-assignment-experience-1014.js": ("mutationNeedsConverge",),
-    "teacher-ai-material-convergence-1014.js": ("nodeTouchesTarget", "observer?.disconnect()"),
     "teacher-ai-media-controls-1023.js": ("teacher-media-source-1018", "if (!shared) return"),
     "teacher-media-help-1014.js": ("observer.disconnect()",),
     "teacher-media-free-tts-1014.js": ("observer.disconnect()",),
     "teacher-media-mvp-status-1014.js": ("observer.disconnect()",),
     "teacher-media-source-fix-1014.js": ("observer.disconnect()",),
-    "teacher-media-status-fix-1014.js": ("observer.disconnect()",),
     "teacher-paper-template-manager-1014.js": ("observer.disconnect()",),
     "teacher-ai-video-1015.js": ("observer.disconnect()",),
     "teacher-ai-presentation-1016.js": ("observer.disconnect()", "if (!install())"),
     "teacher-media-audio-1014.js": ("observer.disconnect()",),
     "teacher-media-recorder-1014.js": ("observer.disconnect()",),
     "teacher-media-script-1014.js": ("observer.disconnect()",),
-    "teacher-ai-material-1014.js": ("observer.disconnect()",),
+    "teacher-ai-material-1014.js": ("observer.disconnect()", "nodeTouchesTarget", "observer?.disconnect()"),
 }
 
 BROAD_OBSERVER_RE = re.compile(

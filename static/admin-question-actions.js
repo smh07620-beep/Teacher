@@ -151,7 +151,7 @@
   };
 
   window.adminSaveExpandedQuestionEdits = async function(catId){
-    const say=(text,bad)=>{const m=(window.pickQuestionEl?window.pickQuestionEl('qsticky-msg',catId):null)||document.getElementById(`qsticky-msg-${catId}`);if(m){m.textContent=text;m.className=`text-[11px] ${bad?'text-rose-600 font-bold':'text-slate-500'}`;}};
+    const say=(text,bad)=>{const m=(window.pickQuestionEl?window.pickQuestionEl('qsticky-msg',catId):null)||document.getElementById(`qsticky-msg-${catId}`);if(m){m.textContent=text;m.className=`text-xs ${bad?'text-rose-600 font-bold':'text-slate-500'}`;}};
     const open=[...document.querySelectorAll('[id^="qedit-"]')].filter(el=>el.getClientRects().length).map(el=>el.id.slice(6));
     const ids=[...new Set(open)].filter(id=>document.querySelector(`.qselect-${catId}[data-qid="${id}"]`));
     if(!ids.length){say('目前沒有正在編輯的題目：請先按某題右邊的「✏️ 編輯」，修改後再按儲存。',true);return;}

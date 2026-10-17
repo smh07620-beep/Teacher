@@ -13,7 +13,7 @@ class TeacherPersonaIsolation1014Tests(unittest.TestCase):
         cls.system_focus = (ROOT / "static" / "system-admin-focus-1014.js").read_text(encoding="utf-8")
         cls.product_convergence = (ROOT / "static" / "product-convergence-101.js").read_text(encoding="utf-8")
         cls.teacher_workspace = (ROOT / "static" / "teacher-workspace-1014.js").read_text(encoding="utf-8")
-        cls.nav_fix = (ROOT / "static" / "teacher-workspace-nav-fix-1014.js").read_text(encoding="utf-8")
+        cls.nav_fix = (ROOT / "static" / "teacher-workspace-1014.js").read_text(encoding="utf-8")
         cls.admin_router = (ROOT / "static" / "admin-workspace.js").read_text(encoding="utf-8")
         cls.body = ASSET_MANIFEST["system"]["body"]
 

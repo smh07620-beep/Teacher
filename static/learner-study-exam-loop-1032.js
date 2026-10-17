@@ -133,17 +133,17 @@
   }
   function statusBadge(examId) {
     const s = examStatus.get(String(examId || ''));
-    if (!s) return '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">尚未考核</span>';
-    if (s.passed) return `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✅ 已通過 ${esc(s.best?.score ?? '')} 分</span>`;
-    if (s.pending) return '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">⏳ 待人工批改</span>';
-    return `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">❌ 未通過（最近 ${esc(s.latest?.score ?? 0)} 分）</span>`;
+    if (!s) return '<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">尚未考核</span>';
+    if (s.passed) return `<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✅ 已通過 ${esc(s.best?.score ?? '')} 分</span>`;
+    if (s.pending) return '<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">⏳ 待人工批改</span>';
+    return `<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">❌ 未通過（最近 ${esc(s.latest?.score ?? 0)} 分）</span>`;
   }
   // Read-only view of the learner's per-exam result for course status badges (teaching.js).
   window.LearnerExamStatus = Object.freeze({get: examId => examStatus.get(String(examId || '')) || null});
   function failHint(examId) {
     const s = examStatus.get(String(examId || ''));
     if (!s || s.passed || s.pending) return '';
-    return '<p class="mt-1 text-[11px] font-bold text-rose-700">⚠️ 尚未通過：請先回上方教材重新閱覽，再重新考核（不會鎖定，重考時題目順序會重新打亂）。</p>';
+    return '<p class="mt-1 text-xs font-bold text-rose-700">⚠️ 尚未通過：請先回上方教材重新閱覽，再重新考核（不會鎖定，重考時題目順序會重新打亂）。</p>';
   }
 
   function wrapExamRow() {

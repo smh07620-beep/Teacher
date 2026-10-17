@@ -360,7 +360,7 @@
       details = document.createElement('details');
       details.id = 'teacher-course-advanced-tools-1014';
       details.className = 'mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2';
-      details.innerHTML = `<summary class="cursor-pointer text-xs font-bold text-slate-500 hover:text-slate-700">進階管理</summary><div class="mt-3 flex flex-wrap items-center justify-between gap-3" data-teacher-course-advanced-actions-1014><p class="text-[11px] text-slate-500">需要一次替多門既有課程設定相同學習要求時再使用。</p></div>`;
+      details.innerHTML = `<summary class="cursor-pointer text-xs font-bold text-slate-500 hover:text-slate-700">進階管理</summary><div class="mt-3 flex flex-wrap items-center justify-between gap-3" data-teacher-course-advanced-actions-1014><p class="text-xs text-slate-500">需要一次替多門既有課程設定相同學習要求時再使用。</p></div>`;
       box.appendChild(details);
     }
     const actions = details.querySelector('[data-teacher-course-advanced-actions-1014]');

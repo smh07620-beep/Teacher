@@ -300,7 +300,7 @@
           保守還原
         </button>
 
-        <span class="text-[11px] text-slate-500">
+        <span class="text-xs text-slate-500">
           只補入缺少資料，不覆蓋現有紀錄；敏感操作會要求 15 分鐘有效的再次驗證。
         </span>
       </div>
@@ -308,7 +308,7 @@
       ${purgeControl
         ?`<div class="mt-4 pt-4 border-t border-rose-100 flex flex-wrap items-center gap-3">
             ${purgeControl}
-            <span class="text-[11px] text-rose-600">僅 system_admin；只刪除設定的 Teacher MEGA root，並要求再次驗證。</span>
+            <span class="text-xs text-rose-600">僅 system_admin；只刪除設定的 Teacher MEGA root，並要求再次驗證。</span>
           </div>`
         :''}
     `;

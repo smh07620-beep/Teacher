@@ -180,7 +180,7 @@ window.TeacherRBAC681Ready = (async function () {
     badge.id = 'rbac-profile-badge';
     const group = (groupCatalog[user.preferredGroup] || {}).name || user.preferredGroup || '';
     const title = user.professionalTitle || roleSummary();
-    badge.className = 'text-[11px] font-bold px-2 py-1 rounded-full bg-slate-100 text-slate-700';
+    badge.className = 'text-xs font-bold px-2 py-1 rounded-full bg-slate-100 text-slate-700';
     badge.textContent = [group, title].filter(Boolean).join(' · ');
     entry.parentNode?.insertBefore(badge, entry);
   }
@@ -211,9 +211,9 @@ window.TeacherRBAC681Ready = (async function () {
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex flex-wrap items-center gap-2">
             <span class="text-xs font-black text-slate-800">${surface.entryIcon} ${surface.entryLabel}</span>
-            <span class="text-[11px] text-slate-400">從左側選擇工作項目</span>
+            <span class="text-xs text-slate-400">從左側選擇工作項目</span>
           </div>
-          ${scopeText ? `<span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">${scopeText}</span>` : ''}
+          ${scopeText ? `<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">${scopeText}</span>` : ''}
         </div>`;
       return;
     }
@@ -223,7 +223,7 @@ window.TeacherRBAC681Ready = (async function () {
           <div class="text-sm font-black text-slate-900">${surface.entryIcon} ${surface.heading}</div>
           <div class="text-xs text-slate-500 mt-1">${surface.summary}</div>
         </div>
-        ${scopeText ? `<span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">${scopeText}</span>` : ''}
+        ${scopeText ? `<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">${scopeText}</span>` : ''}
       </div>`;
   }
 

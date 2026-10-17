@@ -9,7 +9,7 @@
   function badge(item) {
     if (!item?.sharedFromGroup) return '';
     const audience = item.audienceScope === 'all_staff' ? '全科共用' : '跨組共用';
-    return `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">🌐 ${audience}｜來源：${esc(label(item.ownerGroup || item.sharedFromGroup))}</span>`;
+    return `<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">🌐 ${audience}｜來源：${esc(label(item.ownerGroup || item.sharedFromGroup))}</span>`;
   }
 
   if (typeof buildSlideCardHTML === 'function') {

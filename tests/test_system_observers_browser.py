@@ -152,7 +152,7 @@ class SystemObserverBrowserRegressionTests(unittest.TestCase):
         self.assertNotIn('MutationObserver', source)
 
     def test_ai_material_legacy_observer_disconnects_after_convergence(self):
-        source = ROOT.joinpath('static', 'teacher-ai-material-convergence-1014.js').read_text(encoding='utf-8')
+        source = ROOT.joinpath('static', 'teacher-ai-material-1014.js').read_text(encoding='utf-8')
         self.assertIn('observer?.disconnect();', source)
         self.assertIn('nodeTouchesTarget', source)
         self.assertIn('if (!tryConverge())', source)

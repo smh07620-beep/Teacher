@@ -243,7 +243,7 @@
     section.innerHTML = `
       <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
         <div><p class="admin-page-eyebrow text-cyan-700">AI CAPTIONS</p><h4 class="text-lg font-black text-slate-950">💬 影音 → AI 字幕（教師核准後發布）</h4><p class="mt-1 text-xs text-slate-500">上傳影音與允許的 hospital CDN direct video 可由 AI Worker 轉錄成 WebVTT/SRT。YouTube/Vimeo 不下載原始影音，僅使用平台本身提供的字幕。</p></div>
-        <span class="rounded-full bg-cyan-50 px-3 py-1.5 text-[11px] font-bold text-cyan-800">本機 Whisper 優先符合院方隱私設定</span>
+        <span class="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-800">本機 Whisper 優先符合院方隱私設定</span>
       </div>
       <div class="grid md:grid-cols-3 gap-3">
         <label class="text-xs font-bold text-slate-600">語言代碼<input id="teacher-subtitle-language-1014" value="zh-TW" maxlength="32" class="learning-input mt-1"></label>
@@ -251,10 +251,10 @@
       </div>
       <div class="flex flex-col sm:flex-row sm:items-center gap-3"><button id="teacher-subtitle-generate-1014" type="button" class="rounded-xl bg-cyan-700 px-5 py-2.5 text-xs font-black text-white">💬 產生 AI 字幕草稿</button><span id="teacher-subtitle-status-1014" class="text-xs text-slate-600">選擇影音教材後即可開始。</span></div>
       <label class="block text-xs font-bold text-slate-600">字幕版本<select id="teacher-subtitle-draft-1014" class="learning-input mt-1"><option value="">請先選擇影音教材</option></select></label>
-      <div id="teacher-subtitle-meta-1014" class="text-[11px] text-slate-500">尚未選擇字幕草稿。</div>
-      <label class="block text-xs font-bold text-slate-600">WebVTT 字幕內容<textarea id="teacher-subtitle-vtt-1014" disabled rows="14" spellcheck="false" class="learning-input mt-1 font-mono text-[11px]" placeholder="WEBVTT"></textarea></label>
+      <div id="teacher-subtitle-meta-1014" class="text-xs text-slate-500">尚未選擇字幕草稿。</div>
+      <label class="block text-xs font-bold text-slate-600">WebVTT 字幕內容<textarea id="teacher-subtitle-vtt-1014" disabled rows="14" spellcheck="false" class="learning-input mt-1 font-mono text-xs" placeholder="WEBVTT"></textarea></label>
       <div class="flex flex-wrap items-center gap-2"><button id="teacher-subtitle-save-1014" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700">儲存草稿</button><button id="teacher-subtitle-approve-1014" type="button" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white">✅ 教師核准字幕</button><a id="teacher-subtitle-srt-1014" class="hidden rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-2 text-xs font-black text-cyan-800" href="#">下載 SRT</a></div>
-      <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] leading-5 text-amber-900"><b>安全規則：</b>AI 只產生草稿；教材更新版本後舊字幕不會繼續發布。當 AI_EXTERNAL_MEDIA_ALLOWED=false 時，影音不送外部 AI，改由本機 faster-whisper 轉錄。</div>`;
+      <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><b>安全規則：</b>AI 只產生草稿；教材更新版本後舊字幕不會繼續發布。當 AI_EXTERNAL_MEDIA_ALLOWED=false 時，影音不送外部 AI，改由本機 faster-whisper 轉錄。</div>`;
     const audio = document.getElementById('teacher-media-audio-1014');
     if (audio) audio.insertAdjacentElement('afterend', section); else media.appendChild(section);
     // The script source remains a backwards-compatible fallback.  The
