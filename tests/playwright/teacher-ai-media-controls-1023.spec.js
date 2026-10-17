@@ -373,7 +373,6 @@ test('F5 hydration and observers issue one PowerPoint request per selected sourc
     };
   });
 
-  await page.addScriptTag({ path: asset('teacher-media-source-fix-1014.js') });
   await page.addScriptTag({ path: asset('teacher-ai-media-studio-1018.js') });
   await page.addScriptTag({ path: asset('teacher-ai-media-controls-1023.js') });
   const source = page.locator('#teacher-media-source-1018');
