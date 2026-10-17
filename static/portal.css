@@ -1392,3 +1392,14 @@ body.platform-v580{background:var(--platform-bg);color:var(--platform-ink)}
 
 /* 2026-10-17 3D icons (static/assets/v1017/icon3d-*.webp) fill their tile. */
 .phase3-stat-icon .icon3d,.v681-feature-icon .icon3d{width:100%;height:100%;display:block;border-radius:inherit}
+
+/* 2026-10-17 group colour tags: each 專業組 keeps its own colour as a top strip + dot before the name. */
+[data-phase3-group],[data-group-tone]{position:relative;overflow:hidden}
+[data-phase3-group]::before,[data-group-tone]::before{content:"";position:absolute;left:0;right:0;top:0;z-index:2;height:5px;background:var(--group-tone,#2f6b4f)}
+[data-phase3-group] h3::before,[data-group-tone] h3::before{content:"";display:inline-block;width:9px;height:9px;margin-right:7px;border-radius:50%;vertical-align:.12em;background:var(--group-tone,#2f6b4f)}
+[data-phase3-group="grpBio"],[data-group-tone="grpBio"]{--group-tone:#2463c9}
+[data-phase3-group="grpMicro"],[data-group-tone="grpMicro"]{--group-tone:#7c3aed}
+[data-phase3-group="grpSero"],[data-group-tone="grpSero"]{--group-tone:#0891b2}
+[data-phase3-group="grpBB"],[data-group-tone="grpBB"]{--group-tone:#c8283b}
+[data-phase3-group="grpBact"],[data-group-tone="grpBact"]{--group-tone:#d97706}
+[data-phase3-group="grpHema"],[data-group-tone="grpHema"]{--group-tone:#be185d}
