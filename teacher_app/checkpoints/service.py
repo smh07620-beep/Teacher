@@ -25,6 +25,8 @@ MIN_OPTIONS = 2
 MAX_OPTIONS = 6
 MAX_PAGE = 5000
 SLIDE_VIEWER_MODES = {"slides", "preview_pdf"}
+MEDIA_VIEWER_MODES = {"video", "audio"}  # checkpoint "page" = the second it pauses at
+MAX_MEDIA_SECOND = 6 * 3600
 
 MaterialGetter = Callable[[str], Mapping[str, Any] | None]
 
@@ -77,15 +79,24 @@ def _readable_material(user, get_material, material_id):
 
 
 def _clean(body: Mapping[str, Any], material: Mapping[str, Any]) -> dict:
-    if str(material.get("viewerMode") or "") not in SLIDE_VIEWER_MODES:
-        raise _fail("CHECKPOINT_NOT_SLIDES", "只有投影片／PDF 教材可以設定小測驗。")
-    try:
-        page = int(body.get("page"))
-    except (TypeError, ValueError):
-        raise _fail("CHECKPOINT_PAGE", "請填寫要在第幾頁出現。") from None
-    total = int(material.get("pageCount") or 0)
-    if page < 1 or page > (total or MAX_PAGE):
-        raise _fail("CHECKPOINT_PAGE", f"頁碼必須介於 1 到 {total or MAX_PAGE}。")
+    mode = str(material.get("viewerMode") or "")
+    if mode not in SLIDE_VIEWER_MODES | MEDIA_VIEWER_MODES:
+        raise _fail("CHECKPOINT_NOT_SLIDES", "只有投影片／PDF 或影音教材可以設定小測驗。")
+    if mode in MEDIA_VIEWER_MODES:
+        try:
+            page = int(body.get("second", body.get("page")))
+        except (TypeError, ValueError):
+            raise _fail("CHECKPOINT_PAGE", "請填寫影片播放到第幾秒時出題。") from None
+        if page < 1 or page > MAX_MEDIA_SECOND:
+            raise _fail("CHECKPOINT_PAGE", "秒數必須介於 1 到 21600（6 小時）。")
+    else:
+        try:
+            page = int(body.get("page"))
+        except (TypeError, ValueError):
+            raise _fail("CHECKPOINT_PAGE", "請填寫要在第幾頁出現。") from None
+        total = int(material.get("pageCount") or 0)
+        if page < 1 or page > (total or MAX_PAGE):
+            raise _fail("CHECKPOINT_PAGE", f"頁碼必須介於 1 到 {total or MAX_PAGE}。")
     question = str(body.get("question") or "").strip()[:MAX_QUESTION]
     if not question:
         raise _fail("CHECKPOINT_QUESTION", "請填寫小測驗題目。")

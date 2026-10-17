@@ -369,6 +369,9 @@ function openMediaViewer(entry){
 
     modal.classList.remove('hidden'); modal.classList.add('flex'); document.body.style.overflow='hidden';
 
+    // Checkpoint owner (learner-slide-checkpoints-1011.js) listens; it never wraps this function.
+    if(['video','audio'].includes(entry.viewerMode)) window.dispatchEvent(new CustomEvent('teacher:media-changed',{detail:{open:true,materialId:String(entry.id||''),kind:entry.viewerMode}}));
+
 }
 
 function setMediaSize(size){const f=document.getElementById('media-frame');f.classList.remove('size-sm','size-lg');if(size==='sm')f.classList.add('size-sm');if(size==='lg')f.classList.add('size-lg');}
@@ -379,7 +382,7 @@ function setMediaRate(value){const r=Math.max(.5,Math.min(2,Number(value)||1));d
 
 async function toggleMediaFullscreen(){const shell=document.getElementById('media-viewer-shell');try{if(!document.fullscreenElement)await shell.requestFullscreen?.();else await document.exitFullscreen?.();}catch(_){}}
 
-function closeMediaViewer(){const modal=document.getElementById('media-viewer-modal');document.getElementById('media-video').pause();document.getElementById('media-audio').pause();modal.classList.add('hidden');modal.classList.remove('flex');document.body.style.overflow='';if(document.fullscreenElement)document.exitFullscreen?.();}
+function closeMediaViewer(){const modal=document.getElementById('media-viewer-modal');document.getElementById('media-video').pause();document.getElementById('media-audio').pause();modal.classList.add('hidden');modal.classList.remove('flex');document.body.style.overflow='';if(document.fullscreenElement)document.exitFullscreen?.();window.dispatchEvent(new CustomEvent('teacher:media-changed',{detail:{open:false}}));}
 
 
 

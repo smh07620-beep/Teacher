@@ -116,10 +116,19 @@ class SlideCheckpointTests(unittest.TestCase):
                 self.assertTrue(r.get_json()["error"])
 
     def test_non_slide_material_is_rejected(self):
-        self.material["viewerMode"] = "video"
+        self.material["viewerMode"] = "image"
         self.login("clinical-teacher")
         r = self.client.post("/api/materials/mat-1/checkpoints", json=self.body(), headers=ORIGIN)
         self.assertEqual(r.status_code, 400)
+
+    def test_video_checkpoint_uses_seconds(self):
+        self.material["viewerMode"] = "video"
+        self.login("clinical-teacher")
+        r = self.client.post("/api/materials/mat-1/checkpoints", json=self.body(page=None, second=95), headers=ORIGIN)
+        self.assertEqual(r.status_code, 201, r.get_data(as_text=True))
+        self.assertEqual(r.get_json()["item"]["page"], 95)  # page 10 limit does not apply to seconds
+        bad = self.client.post("/api/materials/mat-1/checkpoints", json=self.body(page=None, second=0), headers=ORIGIN)
+        self.assertEqual(bad.status_code, 400)
 
     # --- per-material reading rules (2026-10-17)
     def test_teacher_sets_reading_rules_and_others_cannot(self):

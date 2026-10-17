@@ -43,7 +43,7 @@ const open = page => { globalThis.slideViewerState.index = page - 1; api._onRead
 const card = () => dom.byId['aa-checkpoint-card'];
 const tick = () => new Promise(r => setImmediate(r));
 
-(async () => {
+const slidesFlow = (async () => {
   // Not on the checkpoint's own page: it appears after the section, on page 3.
   open(2);
   assert.strictEqual(card(), undefined, 'no card on the question page itself');
@@ -92,4 +92,46 @@ const tick = () => new Promise(r => setImmediate(r));
   assert.ok(byLabel(summary, '第 2 頁'));
   assert.ok(posted.every(p => !p.url.includes('/checkpoints') || p.body), 'bundle used: no list request');
   console.log('learner checkpoint flow: ok');
-})().catch(err => { console.error(err); process.exit(1); });
+})();
+
+/* ---- video: pause at the second, review the segment, come back for the retry ---- */
+slidesFlow.then(async () => {
+  const dom2 = makeDom();
+  const mediaModal = dom2.document.createElement('div'); mediaModal.id = 'media-viewer-modal';
+  const video = dom2.document.createElement('video'); video.id = 'media-video';
+  let playing = true;
+  video.currentTime = 0;
+  video.pause = () => { playing = false; };
+  video.play = () => { playing = true; return Promise.resolve(); };
+  video.removeEventListener = () => {};
+  globalThis.document = dom2.document;
+  globalThis.LearnerBundleCheckpoints.v1 = [
+    { id: 'v-a', page: 60, question: 'Q1', options: ['A', 'B'], answered: false },
+    { id: 'v-b', page: 120, question: 'Q2', options: ['A', 'B'], answered: false },
+  ];
+  api._onMediaChanged({ detail: { open: true, materialId: 'v1', kind: 'video' } });
+  const m = api._media();
+  assert.strictEqual(m.el, video, 'attached to the uploaded video');
+  video.currentTime = 30; api._onTimeUpdate();
+  assert.strictEqual(dom2.byId['aa-checkpoint-card'], undefined);
+  video.currentTime = 121; api._onTimeUpdate();
+  const c = dom2.byId['aa-checkpoint-card'];
+  assert.ok(c && c.textContent.includes('Q2') && !playing, 'paused with the question at 120s');
+  answerReply = { id: 'v-b', page: 120, question: 'Q2', options: ['A', 'B'], answered: true, firstCorrect: false, attempts: 1, canRetry: true, isCorrect: false, chosenIndex: 0, explanation: 'E' };
+  byLabel(c, 'A. A').click();
+  await tick(); await tick();
+  const review = byLabel(dom2.byId['aa-checkpoint-card'], '回看 1 分 0 秒 起的片段');
+  assert.ok(review, 'reviews the segment since the previous checkpoint');
+  review.click();
+  assert.strictEqual(video.currentTime, 60);
+  assert.ok(playing);
+  const bar = dom2.byId['aa-checkpoint-return'];
+  assert.ok(bar && bar.textContent.includes('回到 2 分 1 秒'));
+  byLabel(bar, '回到 2 分 1 秒').click();
+  assert.strictEqual(video.currentTime, 121);
+  assert.ok(byLabel(dom2.byId['aa-checkpoint-card'], '再答一次'), 'second try offered after review');
+  assert.ok(!playing);
+  byLabel(dom2.byId['aa-checkpoint-card'], '繼續往下').click();
+  assert.ok(playing, 'continue resumes playback');
+  console.log('learner media checkpoint flow: ok');
+}).catch(err => { console.error(err); process.exit(1); });

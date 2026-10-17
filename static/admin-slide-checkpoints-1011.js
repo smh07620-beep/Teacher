@@ -59,6 +59,8 @@
       seconds.placeholder = '留白＝自動（依每頁字數 5～30 秒）';
       if (rules.minSecondsPerPage != null) seconds.value = String(rules.minSecondsPerPage);
       box.appendChild(labelled('每頁最短閱讀秒數', seconds));
+    }
+    if (rules.pagedMaterial || rules.mediaMaterial) {
       cpToggle = el('select', 'field');
       [['on', '開啟：學員會看到下方設定的小測驗'], ['off', '關閉：這份教材不出小測驗']].forEach(function (pair) {
         var o = el('option', null, pair[1]); o.value = pair[0]; cpToggle.appendChild(o);
@@ -100,7 +102,8 @@
         panel.appendChild(el('p', 'text-sm text-rose-700', (rulesRes.d && rulesRes.d.error) || '讀取失敗'));
         return;
       }
-      if (!rulesRes.d.pagedMaterial) {
+      var isMedia = !!rulesRes.d.mediaMaterial;
+      if (!rulesRes.d.pagedMaterial && !isMedia) {
         panel.textContent = '';
         header(panel, '閱讀規則');
         panel.appendChild(rulesSection(materialId, rulesRes.d));
@@ -110,16 +113,17 @@
         panel.textContent = '';
         header(panel, '閱讀規則與小測驗');
         panel.appendChild(rulesSection(materialId, rulesRes.d));
-        panel.appendChild(el('b', 'block text-sm', '投影片小測驗'));
-        panel.appendChild(el('p', 'text-sm text-slate-600',
-          '選填功能。學員讀完你指定的那一頁、翻到下一頁時，會跳出一題小測驗（若是最後一頁，就在最後一頁出現）。答錯第一次會先看說明、可以再答一次；第二次才顯示正確答案。答不答都能繼續閱讀，不影響完成與考試。'));
+        panel.appendChild(el('b', 'block text-sm', isMedia ? '影音小測驗' : '投影片小測驗'));
+        panel.appendChild(el('p', 'text-sm text-slate-600', isMedia
+          ? '選填功能。影片播放到你指定的秒數時會暫停並跳出一題小測驗。答錯可以回看這一段（從上一題的位置開始）再答一次；第二次才顯示正確答案。答不答都能繼續播放，不影響完成與考試。小技巧：先播放到想出題的地方，看播放器上的時間再填秒數。'
+          : '選填功能。學員讀完你指定的那一頁、翻到下一頁時，會跳出一題小測驗（若是最後一頁，就在最後一頁出現）。答錯第一次會先看說明、可以再答一次；第二次才顯示正確答案。答不答都能繼續閱讀，不影響完成與考試。'));
         if (!res.ok) { panel.appendChild(el('p', 'text-sm text-rose-700', (res.d && res.d.error) || '讀取失敗')); return; }
         var pages = res.d.pageCount || 0;
         var items = res.d.items || [];
         if (!items.length) panel.appendChild(el('p', 'rounded-lg bg-slate-50 p-3 text-sm text-slate-500', '目前沒有小測驗。'));
         items.forEach(function (item) {
           var row = el('div', 'space-y-1 rounded-lg border p-2 text-sm' + (item.active && !item.stale ? '' : ' opacity-70'));
-          row.appendChild(el('div', 'font-bold', '考第 ' + item.page + ' 頁｜' + item.question));
+          row.appendChild(el('div', 'font-bold', (isMedia ? '第 ' + item.page + ' 秒暫停' : '考第 ' + item.page + ' 頁') + '｜' + item.question));
           var answerLetter = String.fromCharCode(65 + item.correctIndex);
           row.appendChild(el('div', 'text-sm text-slate-600', '正確答案：' + answerLetter + '｜已作答 ' + item.stats.answered + ' 人、第一次就答對 ' + item.stats.correct + ' 人'));
           if (item.stale) row.appendChild(el('div', 'text-sm font-bold text-amber-700', '教材已更新版本，這題暫時不會顯示給學員。請確認頁碼後按「重新套用」。'));
@@ -135,7 +139,7 @@
           row.appendChild(actions);
           panel.appendChild(row);
         });
-        panel.appendChild(form(panel, materialId, pages));
+        panel.appendChild(form(panel, materialId, pages, isMedia));
       });
     });
   }
@@ -151,12 +155,13 @@
     });
   }
 
-  function form(panel, materialId, pages) {
+  function form(panel, materialId, pages, isMedia) {
     var f = el('form', 'space-y-2 rounded-xl border border-teal-200 bg-teal-50/50 p-3');
     f.appendChild(el('b', 'text-sm', '新增一題'));
     var page = el('input', 'w-full rounded-lg border p-2 text-sm'); page.type = 'number'; page.min = '1';
     if (pages) page.max = String(pages);
-    page.placeholder = '考第幾頁的內容' + (pages ? '（1～' + pages + '）' : '') + '：學員讀完這頁後出現';
+    if (isMedia) { page.removeAttribute('max'); page.placeholder = '播放到第幾秒時暫停出題（例如 1 分 30 秒填 90）'; }
+    else page.placeholder = '考第幾頁的內容' + (pages ? '（1～' + pages + '）' : '') + '：學員讀完這頁後出現';
     var q = el('textarea', 'w-full rounded-lg border p-2 text-sm'); q.rows = 2; q.placeholder = '題目';
     f.appendChild(page); f.appendChild(q);
     var opts = [];
@@ -176,7 +181,7 @@
       e.preventDefault();
       var values = opts.map(function (i) { return i.value.trim(); });
       while (values.length && !values[values.length - 1]) values.pop();
-      var body = { page: Number(page.value), question: q.value.trim(), options: values, correctIndex: Number(correct.value), explanation: why.value.trim() };
+      var body = { page: Number(page.value), second: isMedia ? Number(page.value) : undefined, question: q.value.trim(), options: values, correctIndex: Number(correct.value), explanation: why.value.trim() };
       submit.disabled = true;
       request('/api/materials/' + encodeURIComponent(materialId) + '/checkpoints', { method: 'POST', body: JSON.stringify(body) }).then(function (r) {
         submit.disabled = false;

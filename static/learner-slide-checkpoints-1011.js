@@ -12,12 +12,20 @@
  *   2nd wrong -> right answer shown, 回看第 N 頁 becomes the main button, 繼續往下 stays
  *   回看 jumps to page N and shows a bar that returns to where the learner was.
  *
- * Driven by the reader's own 'teacher:reader-changed' event (no polling, no wrapping).
+ * Video/audio materials: a checkpoint's "page" is a second.  Playback pauses there and
+ * the same card appears; 回看 replays the segment since the previous checkpoint, and
+ * the bar returns to where the learner was.  (Uploaded media only; YouTube/Vimeo
+ * links play in the provider's frame and are not paused.)
+ *
+ * Driven by the reader's own 'teacher:reader-changed' and 'teacher:media-changed'
+ * events plus the media element's timeupdate (no polling, no wrapping).
  */
 (function (root) {
   'use strict';
 
   var state = { materialId: '', items: [], loading: '', dismissed: {}, returnIndex: -1, summaryShown: false, lastPage: 0 };
+  var media = { el: null, materialId: '', items: [], shown: {}, returnAt: -1, paused: false };
+  var mode = 'slides';
 
   function el(tag, cls, text) {
     var n = root.document.createElement(tag);
@@ -36,6 +44,18 @@
   function host() {
     var modal = root.document.getElementById('slide-viewer-modal');
     return modal && !modal.classList.contains('hidden') ? modal : null;
+  }
+
+  function mediaHost() {
+    var modal = root.document.getElementById('media-viewer-modal');
+    return modal && !modal.classList.contains('hidden') ? modal : null;
+  }
+
+  function activeHost() { return mode === 'media' ? mediaHost() : host(); }
+
+  function clock(seconds) {
+    var t = Math.max(0, Math.floor(Number(seconds) || 0));
+    return Math.floor(t / 60) + ' 分 ' + (t % 60) + ' 秒';
   }
 
   function viewer() { return root.slideViewerState || {}; }
@@ -96,6 +116,7 @@
   /* ---------- 回看中 bar ---------- */
   function showReturnBar() {
     removeById('aa-checkpoint-return');
+    if (mode === 'media') { showMediaReturnBar(); return; }
     var modal = host();
     if (!modal || state.returnIndex < 0) return;
     var bar = el('div', 'checkpoint-return-bar');
@@ -136,10 +157,13 @@
     if (item.explanation) box.appendChild(el('p', 'checkpoint-explain', '說明：' + item.explanation));
     var actions = el('div', 'checkpoint-actions');
     if (!item.isCorrect) {
-      actions.appendChild(button('回看第 ' + item.page + ' 頁', item.attempts >= 2 ? 'btn-primary' : 'btn-secondary', function () { reviewPage(item.page); }));
+      var label = mode === 'media' ? '回看 ' + clock(segmentStart(item)) + ' 起的片段' : '回看第 ' + item.page + ' 頁';
+      actions.appendChild(button(label, item.attempts >= 2 ? 'btn-primary' : 'btn-secondary', function () {
+        if (mode === 'media') reviewMedia(item); else reviewPage(item.page);
+      }));
       if (item.canRetry) actions.appendChild(button('再答一次', 'btn-primary', function () { paintQuestion(box, item, done); }));
     }
-    actions.appendChild(button(item.isCorrect ? '繼續閱讀' : '繼續往下', item.isCorrect ? 'btn-primary' : 'btn-ghost', done));
+    actions.appendChild(button(item.isCorrect ? (mode === 'media' ? '繼續播放' : '繼續閱讀') : '繼續往下', item.isCorrect ? 'btn-primary' : 'btn-ghost', done));
     box.appendChild(actions);
   }
 
@@ -165,9 +189,9 @@
     });
   }
 
-  function paintCard(items) {
+  function paintCard(items, onClosed) {
     removeById('aa-checkpoint-card');
-    var modal = host();
+    var modal = activeHost();
     if (!modal || !items.length) return;
     var card = el('div', 'card checkpoint-card');
     card.id = 'aa-checkpoint-card';
@@ -178,6 +202,7 @@
     head.appendChild(button('稍後再說', 'btn-ghost', function () {
       items.forEach(function (it) { state.dismissed[it.id] = true; });
       removeById('aa-checkpoint-card');
+      if (onClosed) onClosed();
     }));
     card.appendChild(head);
     var remaining = items.length;
@@ -187,7 +212,7 @@
         state.dismissed[item.id] = true;
         box.remove();
         remaining -= 1;
-        if (!remaining) removeById('aa-checkpoint-card');
+        if (!remaining) { removeById('aa-checkpoint-card'); if (onClosed) onClosed(); }
       };
       if (item.answered) paintResult(box, item, done); else paintQuestion(box, item, done);
       card.appendChild(box);
@@ -219,6 +244,99 @@
     modal.appendChild(card);
   }
 
+  /* ---------- video / audio ---------- */
+  function segmentStart(item) {
+    var start = 0;
+    media.items.forEach(function (it) { if (it.page < item.page && it.page > start) start = it.page; });
+    return start;
+  }
+
+  function resume() {
+    media.paused = false;
+    if (media.el && typeof media.el.play === 'function') {
+      var p = media.el.play();
+      if (p && typeof p.catch === 'function') p.catch(function () {});
+    }
+  }
+
+  function showMediaReturnBar() {
+    var modal = mediaHost();
+    if (!modal || media.returnAt < 0) return;
+    var bar = el('div', 'checkpoint-return-bar');
+    bar.id = 'aa-checkpoint-return';
+    bar.setAttribute('role', 'status');
+    bar.appendChild(el('span', '', '回看中'));
+    bar.appendChild(button('看完按這裡回到 ' + clock(media.returnAt), 'btn-primary', function () {
+      var back = media.returnAt;
+      var again = media.reviewing;
+      media.returnAt = -1;
+      media.reviewing = null;
+      removeById('aa-checkpoint-return');
+      if (media.el) media.el.currentTime = back;
+      if (again && !finished(again) && !state.dismissed[again.id]) {
+        media.paused = true; // back at the question: offer the second try
+        if (media.el && typeof media.el.pause === 'function') media.el.pause();
+        paintCard([again], resume);
+        return;
+      }
+      resume();
+    }));
+    modal.appendChild(bar);
+  }
+
+  function reviewMedia(item) {
+    if (!media.el) return;
+    if (media.returnAt < 0) media.returnAt = Number(media.el.currentTime || item.page);
+    media.reviewing = item;
+    removeById('aa-checkpoint-card');
+    media.el.currentTime = segmentStart(item);
+    showReturnBar();
+    resume();
+  }
+
+  function onTimeUpdate() {
+    if (mode !== 'media' || !media.el || media.paused) return;
+    var now = Number(media.el.currentTime || 0);
+    if (media.returnAt >= 0 && now >= media.returnAt) {
+      media.returnAt = -1; // reached the point again by itself
+      removeById('aa-checkpoint-return');
+    }
+    if (media.returnAt >= 0) return; // reviewing: no new questions until back
+    var due = media.items.filter(function (it) {
+      return !finished(it) && !state.dismissed[it.id] && !media.shown[it.id] && now >= it.page && now < it.page + 5;
+    });
+    if (!due.length) return;
+    due.forEach(function (it) { media.shown[it.id] = true; });
+    media.paused = true;
+    if (typeof media.el.pause === 'function') media.el.pause();
+    paintCard(due, resume);
+  }
+
+  function onMediaChanged(event) {
+    var detail = (event && event.detail) || {};
+    if (media.el) media.el.removeEventListener('timeupdate', onTimeUpdate);
+    removeById('aa-checkpoint-card');
+    removeById('aa-checkpoint-return');
+    media = { el: null, materialId: '', items: [], shown: {}, returnAt: -1, paused: false };
+    if (!detail.open || !detail.materialId) { if (mode === 'media') mode = 'slides'; return; }
+    mode = 'media';
+    var target = root.document.getElementById(detail.kind === 'audio' ? 'media-audio' : 'media-video');
+    if (!target) return;
+    var id = String(detail.materialId);
+    var attach = function (items) {
+      if (mode !== 'media') return;
+      media.el = target;
+      media.materialId = id;
+      media.items = Array.isArray(items) ? items : [];
+      if (media.items.length) target.addEventListener('timeupdate', onTimeUpdate);
+    };
+    var bundled = root.LearnerBundleCheckpoints && root.LearnerBundleCheckpoints[id];
+    if (Array.isArray(bundled)) { attach(bundled); return; }
+    request('/api/materials/' + encodeURIComponent(id) + '/checkpoints').then(function (res) {
+      attach(res.ok && Array.isArray(res.d.items) ? res.d.items : []);
+    });
+  }
+
   /* ---------- reader events ---------- */
   function onPage(page) {
     state.lastPage = page;
@@ -234,6 +352,7 @@
 
   function onReaderChanged(event) {
     var detail = (event && event.detail) || {};
+    mode = 'slides';
     if (!detail.open || !host()) {
       removeById('aa-checkpoint-card');
       removeById('aa-checkpoint-return');
@@ -253,10 +372,11 @@
     onPage(page);
   }
 
-  var api = { _state: state, _onReaderChanged: onReaderChanged, _dueOn: dueOn, _weakPages: weakPages };
+  var api = { _state: state, _media: function () { return media; }, _onReaderChanged: onReaderChanged, _onMediaChanged: onMediaChanged, _onTimeUpdate: onTimeUpdate, _dueOn: dueOn, _weakPages: weakPages };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else {
     root.SlideCheckpoints = api;
     root.addEventListener('teacher:reader-changed', onReaderChanged);
+    root.addEventListener('teacher:media-changed', onMediaChanged);
   }
 })(typeof window !== 'undefined' ? window : globalThis);

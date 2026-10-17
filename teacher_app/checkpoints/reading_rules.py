@@ -28,6 +28,7 @@ def read(material: Mapping[str, Any]) -> dict:
         "minSecondsPerPage": int(seconds) if isinstance(seconds, (int, float)) and not isinstance(seconds, bool) else None,
         "checkpointsEnabled": meta.get("checkpointsEnabled") is not False,
         "pagedMaterial": str(material.get("viewerMode") or "") in {"slides", "preview_pdf"},
+        "mediaMaterial": str(material.get("viewerMode") or "") in {"video", "audio"},
     }
 
 
