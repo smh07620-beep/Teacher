@@ -126,6 +126,8 @@
     if (summary) summary.textContent = area ? `${area}｜${meta.summary}` : meta.summary;
     const modal = document.getElementById('admin-modal');
     if (modal) modal.dataset.area = area ? ROUTES.areaOf(key) : '';
+    // Persona owners (e.g. teacher-workspace-1014.js) repaint their own header after this.
+    window.dispatchEvent(new CustomEvent('teacher:workspace-header-painted', {detail: {workspace: key}}));
   }
 
   function syncSectionChrome(name) {

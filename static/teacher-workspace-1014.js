@@ -566,6 +566,9 @@
   ensureMediaWorkspace();
   ensureAssessmentWorkflow();
   syncTeacherHeader();
+  // The shell paints its generic header on every workspace switch, sometimes after this
+  // script has started; repaint the teacher header whenever that happens (no race).
+  window.addEventListener('teacher:workspace-header-painted', syncTeacherHeader);
 
   window.AdminWorkspaceShell?.addAfterWorkspace?.(({workspace}) => {
     ensurePersonaSwitcher();
