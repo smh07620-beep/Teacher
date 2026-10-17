@@ -46,7 +46,8 @@
   }
 
   function goTo(page) {
-    if (typeof root.goToSlidePage === 'function') root.goToSlidePage(Number(page) - 1);
+    var nav = root['goToSlidePage']; // the reader's own navigation, called not replaced
+    if (typeof nav === 'function') nav(Number(page) - 1);
   }
 
   function removeById(id) {

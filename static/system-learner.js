@@ -1358,6 +1358,32 @@ async function loadMyProgress(){
 
 }
 
+/* Desktop reader chrome: after 3s without mouse/keyboard the page arrows fade out, and in
+ * full screen the header and footer bars step aside so the slide gets the whole screen.
+ * Mouse or key brings them back.  Phones/tablets (coarse pointer) are left alone. */
+(function bindReaderIdleChrome() {
+    const IDLE_MS = 3000;
+    let timer = 0;
+    const shell = () => document.getElementById('slide-viewer-shell');
+    const desktop = () => !window.matchMedia || window.matchMedia('(pointer:fine)').matches;
+    const wake = () => {
+        const el = shell();
+        if (!el) return;
+        el.classList.remove('reader-idle');
+        clearTimeout(timer);
+        if (!desktop() || document.getElementById('slide-viewer-modal')?.classList.contains('hidden')) return;
+        timer = setTimeout(() => {
+            if (document.getElementById('aa-checkpoint-card') || document.getElementById('reader-more-btn')?.getAttribute('aria-expanded') === 'true') return;
+            el.classList.add('reader-idle');
+        }, IDLE_MS);
+    };
+    ['mousemove', 'keydown', 'pointerdown', 'wheel'].forEach(type => document.addEventListener(type, wake, {passive: true}));
+    window.addEventListener('teacher:reader-changed', event => {
+        if (event.detail && event.detail.open) wake();
+        else { clearTimeout(timer); shell()?.classList.remove('reader-idle'); }
+    });
+})();
+
 /* Reader as a page: #read/<materialId>/<page>.  The URL follows the reader through an event
  * (teacher:reader-changed); browser Back closes the reader, a reload or shared link reopens it. */
 function announceReader(open) {

@@ -550,6 +550,33 @@ body{
 .exam-unanswered-list{display:flex;flex-wrap:wrap;gap:.5rem;margin:.75rem 0;max-height:40vh;overflow:auto}
 .exam-unanswered-actions{display:flex;justify-content:flex-end;gap:.5rem}
 
+/* ---- Reader checkpoint card, review bar, summary (learner-slide-checkpoints-1011.js) ---- */
+.checkpoint-card{position:fixed;left:50%;bottom:var(--sp-4);transform:translateX(-50%);z-index:120;width:min(92vw,34rem);max-height:70vh;overflow:auto;padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3);border:1px solid var(--color-primary);box-shadow:var(--shadow-2)}
+.checkpoint-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2)}
+.checkpoint-title{font-size:var(--fs-sm);font-weight:700;color:var(--color-primary-dark)}
+.checkpoint-box{display:flex;flex-direction:column;gap:var(--sp-2)}
+.checkpoint-question{font-size:var(--fs-base);font-weight:700;margin:0}
+.checkpoint-choice{justify-content:flex-start;text-align:left;width:100%}
+.checkpoint-option{font-size:var(--fs-sm);margin:0;color:var(--color-text-muted)}
+.checkpoint-option.is-correct{color:var(--color-success);font-weight:700}
+.checkpoint-option.is-wrong{color:var(--color-danger)}
+.checkpoint-verdict{font-size:var(--fs-base);font-weight:700;margin:0}
+.checkpoint-verdict.is-correct{color:var(--color-success)}
+.checkpoint-verdict.is-wrong{color:var(--color-danger)}
+.checkpoint-explain{font-size:var(--fs-sm);margin:0;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);background:var(--platform-canvas)}
+.checkpoint-error{font-size:var(--fs-sm);color:var(--color-danger);margin:0}
+.checkpoint-actions{display:flex;flex-wrap:wrap;gap:var(--sp-2)}
+.checkpoint-return-bar{position:fixed;top:var(--sp-3);left:50%;transform:translateX(-50%);z-index:125;display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-lg);background:var(--platform-surface);box-shadow:var(--shadow-2);font-size:var(--fs-sm);font-weight:700}
+@media (max-width:640px){.checkpoint-card{bottom:0;width:100vw;max-height:85vh;border-radius:var(--r-lg) var(--r-lg) 0 0}.checkpoint-actions .btn{flex:1 1 auto}}
+@media (prefers-color-scheme:dark){.checkpoint-card,.checkpoint-return-bar{background:#0f2430;color:#e2edf2}.checkpoint-explain{background:#16313f}.checkpoint-title{color:#7fd6cf}}
+
+/* Desktop reader idle chrome (system-learner.js bindReaderIdleChrome) */
+#slide-prev-btn,#slide-next-btn{transition:opacity .3s}
+.reader-idle #slide-prev-btn,.reader-idle #slide-next-btn{opacity:0;pointer-events:none}
+.reader-idle{cursor:none}
+#slide-viewer-shell:fullscreen.reader-idle #reader-head,#slide-viewer-shell:fullscreen.reader-idle #reader-foot{display:none}
+
+
 /* Reader dark theme: chrome only. The slide image keeps its original colours. */
 @media (prefers-color-scheme: dark){
   #slide-viewer-shell{background:#0f1a20;color:#e6eef2}
@@ -572,23 +599,3 @@ body{
   #slide-viewer-shell #slide-prev-btn,#slide-viewer-shell #slide-next-btn{background:rgba(22,36,44,.92);color:#e6eef2;border-color:#32495a}
   #slide-viewer-shell #slide-viewer-image{background:#fff}
 }
-
-/* ---- Reader checkpoint card, review bar, summary (learner-slide-checkpoints-1011.js) ---- */
-.checkpoint-card{position:fixed;left:50%;bottom:var(--sp-4);transform:translateX(-50%);z-index:120;width:min(92vw,34rem);max-height:70vh;overflow:auto;padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3);border:1px solid var(--color-primary);box-shadow:var(--shadow-2)}
-.checkpoint-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2)}
-.checkpoint-title{font-size:var(--fs-sm);font-weight:700;color:var(--color-primary-dark)}
-.checkpoint-box{display:flex;flex-direction:column;gap:var(--sp-2)}
-.checkpoint-question{font-size:var(--fs-base);font-weight:700;margin:0}
-.checkpoint-choice{justify-content:flex-start;text-align:left;width:100%}
-.checkpoint-option{font-size:var(--fs-sm);margin:0;color:var(--color-text-muted)}
-.checkpoint-option.is-correct{color:var(--color-success);font-weight:700}
-.checkpoint-option.is-wrong{color:var(--color-danger)}
-.checkpoint-verdict{font-size:var(--fs-base);font-weight:700;margin:0}
-.checkpoint-verdict.is-correct{color:var(--color-success)}
-.checkpoint-verdict.is-wrong{color:var(--color-danger)}
-.checkpoint-explain{font-size:var(--fs-sm);margin:0;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);background:var(--platform-canvas)}
-.checkpoint-error{font-size:var(--fs-sm);color:var(--color-danger);margin:0}
-.checkpoint-actions{display:flex;flex-wrap:wrap;gap:var(--sp-2)}
-.checkpoint-return-bar{position:fixed;top:var(--sp-3);left:50%;transform:translateX(-50%);z-index:125;display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-lg);background:var(--platform-surface);box-shadow:var(--shadow-2);font-size:var(--fs-sm);font-weight:700}
-@media (max-width:640px){.checkpoint-card{bottom:0;width:100vw;max-height:85vh;border-radius:var(--r-lg) var(--r-lg) 0 0}.checkpoint-actions .btn{flex:1 1 auto}}
-@media (prefers-color-scheme:dark){.checkpoint-card,.checkpoint-return-bar{background:#0f2430;color:#e2edf2}.checkpoint-explain{background:#16313f}.checkpoint-title{color:#7fd6cf}}
