@@ -270,5 +270,3 @@ def answer(user, get_material: MaterialGetter, checkpoint_id: str, body: Mapping
             pass
     second = retry.retries_for(username, item["materialId"]).get(item["id"])
     return _learner_view(item, repository.get_answer(item["id"], username), second)
-
-
