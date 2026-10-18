@@ -202,7 +202,10 @@
     const voice = $('teacher-ai-video-voice-1015')?.value || '';
     const button = $('teacher-ai-video-voice-preview-1015');
     const player = $('teacher-ai-video-voice-player-1015');
-    if (!voice) return note('請先選擇要試聽的旁白聲音。', true);
+    if (!voice) {
+      const loaded = $('teacher-ai-video-voice-1015')?.options?.length > 1 || !!$('teacher-ai-video-voice-1015')?.options?.[0]?.value;
+      return note(loaded ? '請先選擇要試聽的旁白聲音。' : '目前讀不到可用的旁白聲音（AI 旁白服務可能還沒啟動）；建立影片時會使用預設中文旁白。', true);
+    }
 
     // A prepared preview must be started by a real click. Browsers can block
     // delayed autoplay after the Worker/R2 round-trip, so do not hide that error.

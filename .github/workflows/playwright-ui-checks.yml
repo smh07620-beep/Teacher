@@ -96,6 +96,11 @@ jobs:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
         run: npx playwright test tests/playwright/reader-checkpoints-1017.spec.js --reporter=line --workers=1
 
+      - name: AI video voice preview (narration picker in the optional section)
+        env:
+          TEACHER_UI_BASE_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/playwright/teacher-ai-video-voice-preview-1023.spec.js --reporter=line --workers=1
+
       - name: Run P2 teacher learner browser regression
         env:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
