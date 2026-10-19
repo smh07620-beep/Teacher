@@ -494,6 +494,7 @@ body{
 .course-state-fail{background:#ffe4e6;color:#9f1239;border-color:#fbb6c2}
 .course-due{display:inline-flex;align-items:center;font-weight:800;color:#92400e}
 .course-due-overdue{color:#9f1239}
+.course-due-done{color:var(--color-text-muted);font-weight:700}
 /* Header counts are reference information, not actions: keep them quiet. */
 #course-overview>.edu-card .course-stat-chip{background:transparent;border-color:transparent;color:#64748b;font-weight:600;padding-inline:.25rem}
 @media(max-width:640px){#course-overview .course-learning-toggle .when-closed,#course-overview .course-learning-toggle .when-open{font-size:.75rem}}

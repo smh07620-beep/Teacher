@@ -252,6 +252,10 @@ function renderTeachingCourseOverview() {
     // The unit highlighted here is the same one the "我的待辦" next step points to.
     const recommendedId = courses.some(course => course.id === nextCourseId) ? nextCourseId : (firstTodo ? firstTodo.id : '');
     const dueByCourse = new Map();
+    // Every assigned course keeps its due date on the card; finished ones show it in grey (2026-10-19).
+    (learnerTasks?.courseDeadlines || []).forEach(row => {
+        if (row.courseId && row.dueAt) dueByCourse.set(String(row.courseId), row);
+    });
     (learnerTasks?.items || []).forEach(task => {
         if (task.kind === 'course' && task.courseId && task.dueAt) dueByCourse.set(String(task.courseId), task);
     });
@@ -279,7 +283,7 @@ function renderTeachingCourseOverview() {
         const primaryAction = teachingPrimaryAction(course, mats, exams, done, complete, next, pct);
         const dueTask = dueByCourse.get(String(course.id));
         const dueChip = dueTask
-            ? `<span class="course-due${dueTask.overdue ? ' course-due-overdue' : ''}">${dueTask.overdue ? '已逾期' : '截止'} ${escapeHtml(String(dueTask.dueAt).slice(0, 10).replace(/-/g, '/'))}</span>`
+            ? `<span class="course-due${dueTask.overdue ? ' course-due-overdue' : ''}${dueTask.completed ? ' course-due-done' : ''}">${dueTask.overdue ? '已逾期' : '截止'} ${escapeHtml(String(dueTask.dueAt).slice(0, 10).replace(/-/g, '/'))}${dueTask.completed ? '（已完成）' : ''}</span>`
             : '';
         return `<details class="course-learning-card" data-course="${escapeHtml(course.id)}" ${isOpen(course.id, shown) ? 'open' : ''}><summary class="course-learning-summary"><div class="min-w-0 flex-1"><div class="teaching-course-header"><span class="teaching-course-number">${general ? '+' : String(index + 1).padStart(2,'0')}</span><h3 class="text-lg font-black">${escapeHtml(course.title)}</h3>${stateBadge}</div><div class="teaching-meta"><span>教材完成 ${done}／${mats.length}</span>${dueChip}${course.estimatedMinutes ? `<span>建議 ${course.estimatedMinutes} 分鐘</span>` : ''}${course.startDate || course.endDate ? `<span>建議學習期間：${escapeHtml(course.startDate || '不限')} ～ ${escapeHtml(course.endDate || '不限')}</span>` : ''}<span>課後評量 ${exams.length} 份</span></div>${mats.length ? `<div class="course-progress-mini mt-3" role="progressbar" aria-label="教材完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>` : ''}</div><span class="course-learning-toggle" aria-hidden="true"><span class="when-closed">展開</span><span class="when-open">收合</span><span class="course-learning-chevron"><svg viewBox="0 0 20 20" width="16" height="16" focusable="false"><path d="M5 7.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span></summary><div class="teaching-plan"><div>${course.desc ? `<p>${escapeHtml(course.desc)}</p>` : ''}${objectives.length ? `<h4 class="mt-3">學完這堂課，你將能夠</h4><ul>${objectives.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : '<p class="teaching-help">依下方順序閱讀教材，再進行課後評量。</p>'}</div><div>${primaryAction}</div></div><div class="course-material-group"><h4 class="teaching-section-title">${general ? '選讀教材' : '學習路徑 · 請依序閱讀'}</h4>${mats.map((m, i) => teachingStepWrap(course.id, m.id, `<span class="course-step-title">${i + 1}. ${escapeHtml(m.title || m.filename || '教材')}</span><span class="course-step-state">${myCompletedMaterials[m.id] ? '✓ 已完成' : (next && next.id === m.id ? '目前步驟' : '待進行')}</span>`, teachingMaterialRow(m, i), Boolean(next && next.id === m.id))).join('') || '<p class="teaching-help">尚無教材。</p>'}${exams.length ? teachingExamStep(course, mats, exams, next) : ''}</div></details>`;
     }).join('') || '<div class="course-empty-row">沒有符合條件的課程。請更換關鍵字或閱讀狀態；尚無課程時請聯絡教師。</div>';
