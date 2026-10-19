@@ -19,4 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      # The script imports teacher_app (which needs Flask), so install the app deps first.
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
       - run: python tools/check_kokoro_voices.py

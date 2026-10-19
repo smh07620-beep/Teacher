@@ -41,6 +41,32 @@
         '<span class="text-xs font-bold text-slate-400">'+(item.required===false?'警告':'必要')+'</span></div>'+
         (item.detail?'<div class="mt-1 text-xs text-slate-500">'+esc(item.detail)+'</div>':'')+'</div>';
     }).join('');
+    // Which integrity checks actually found something (the card above only shows totals).
+    // One line per orphaned material: title, versions, who/when published, last audit action.
+    const itemRows=items=>{
+      if(!Array.isArray(items)||!items.length)return '';
+      return '<ul class="mt-1.5 space-y-1">'+items.map(row=>{
+        const versions=Array.isArray(row.versions)?row.versions.join(', '):'';
+        const when=String(row.lastPublishedAt||row.firstPublishedAt||'').slice(0,16).replace('T',' ');
+        return '<li class="rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-600">'+
+          '<b class="text-slate-800">'+esc(row.title||'（無標題）')+'</b>'+
+          '<div>版本 '+esc(versions||'—')+(when?' · 發布 '+esc(when):'')+(row.publishedBy?' · '+esc(row.publishedBy):'')+(row.group?' · '+esc(row.group):'')+'</div>'+
+          '<div class="text-slate-400">'+esc(row.materialId||'')+(row.lastAuditAction?' · 最後紀錄 '+esc(row.lastAuditAction)+' '+esc(String(row.lastAuditAt||'').slice(0,16).replace('T',' ')):' · 無任何稽核紀錄')+'</div></li>';
+      }).join('')+'</ul>';
+    };
+    const sevText={error:'錯誤',warning:'警告',info:'說明'};
+    const sevClass={error:'text-rose-700',warning:'text-amber-700',info:'text-slate-500'};
+    const recoveryRows=(Array.isArray(recovery.checks)?recovery.checks:[]).filter(item=>Number(item.count||0)>0).map(item=>{
+      const sev=String(item.severity||'error');
+      return '<li class="rounded-lg bg-white border border-slate-200 px-2.5 py-1.5">'+
+        '<div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-800">'+esc(item.label||item.key||'檢查')+'</b>'+
+        '<span class="text-xs font-black '+(sevClass[sev]||sevClass.error)+'">'+esc(sevText[sev]||sev)+' · '+Number(item.count||0)+' 筆</span></div>'+
+        (item.detail?'<div class="mt-0.5 text-xs text-slate-500">'+esc(item.detail)+'</div>':'')+
+        itemRows(item.items)+'</li>';
+    }).join('');
+    const recoveryDetail=recoveryRows
+      ?'<div class="rounded-xl bg-slate-50 p-2.5"><div class="text-xs font-black text-slate-700">斷鏈明細（哪一類有問題）</div><ul class="mt-1.5 space-y-1.5">'+recoveryRows+'</ul></div>'
+      :'';
     host.className='rounded-2xl border '+(gate?'border-emerald-200':'border-rose-200')+' bg-white p-4 shadow-sm space-y-3';
     host.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><h5 class="font-black text-slate-900">✅ F6 Production Readiness</h5>'+
       '<p class="mt-1 text-xs text-slate-500">CI 全綠是預部署 gate；此處另外驗證正式 Render、Supabase、shared storage、院內 Worker、備份演練與斷鏈。</p></div>'+
@@ -51,7 +77,7 @@
         '<div class="rounded-xl bg-slate-50 p-2.5">Backup：<b>'+(backup.ok?'可建立':'失敗')+'</b><div class="text-xs text-slate-400">Restore rehearsal '+(backup.restoreRehearsalOk?'✓':'✕')+'</div></div>'+
         '<div class="rounded-xl bg-slate-50 p-2.5">斷鏈：<b>'+Number(recovery.errorCount||0)+'</b><div class="text-xs text-slate-400">warnings '+Number(recovery.warningCount||0)+'</div></div>'+
         '<div class="rounded-xl bg-slate-50 p-2.5">Worker：<b>'+Number((data.worker||{}).active||0)+' 台在線</b><div class="text-xs text-slate-400">shared '+esc((data.storage||{}).backend||'—')+'</div></div>'+
-      '</div>';
+      '</div>'+recoveryDetail;
     host.querySelector('[data-production-readiness-refresh]')?.addEventListener('click',()=>void refresh(true));
   }
 

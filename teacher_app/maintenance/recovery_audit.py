@@ -1,9 +1,13 @@
 """F6 read-only recovery integrity audit for DB references and R2 ledger."""
 from __future__ import annotations
 
+import json
 from typing import Any, Callable
 
 from teacher_app.common import db as common_db
+
+# Cap on how many unexplained orphan materials are described in the report.
+ORPHAN_SAMPLE_LIMIT = 50
 
 
 def _tables(conn, kind: str) -> set[str]:
@@ -25,6 +29,106 @@ def _count(conn, sql: str, params=()) -> int:
         return 0
 
 
+def _rollback_quietly(conn) -> None:
+    # PostgreSQL aborts the transaction after a failed statement; clear it so the
+    # remaining audit checks still run.
+    try:
+        conn.rollback()
+    except Exception:
+        pass
+
+
+def _is_authoring_source(snapshot: dict) -> bool:
+    """True for the private AI-authoring source materials that retention removes.
+
+    Uses the same rule as ``retention`` (24 h purge of "authoring only" sources),
+    which deletes the catalog row but, by design, writes only one summary audit
+    event, not one ``material.delete`` event per material.
+    """
+    try:
+        from teacher_app.maintenance import retention
+
+        return bool(retention._is_authoring_source(snapshot))  # noqa: SLF001 - shared rule
+    except Exception:
+        return False
+
+
+def _orphan_version_samples(conn, kind: str, present: set[str]) -> list[dict[str, Any]]:
+    """Describe material versions whose material row is gone, grouped per material.
+
+    Read-only and best effort: any failure returns an empty list so the audit
+    itself never breaks.  Only unexplained orphans (no ``material.delete`` audit
+    event) are listed, i.e. exactly what the error count covers.
+    """
+    ph = common_db.placeholder(kind)
+    sql = (
+        "SELECT v.* FROM material_versions v "
+        "LEFT JOIN materials m ON m.id=v.material_id WHERE m.id IS NULL"
+    )
+    if "audit_events" in present:
+        sql += (
+            " AND NOT EXISTS (SELECT 1 FROM audit_events a "
+            "WHERE a.action='material.delete' AND a.target_type='material' "
+            "AND a.target_id=v.material_id)"
+        )
+    sql += " ORDER BY v.material_id, v.version"
+    try:
+        rows = [dict(row) for row in conn.execute(sql).fetchall()]
+    except Exception:
+        _rollback_quietly(conn)
+        return []
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        material_id = str(row.get("material_id") or "")
+        entry = grouped.setdefault(
+            material_id,
+            {"materialId": material_id, "versions": [], "authoringSource": False, "title": "", "group": "",
+             "firstPublishedAt": "", "lastPublishedAt": "", "publishedBy": "",
+             "changeReason": "", "lastAuditAction": "", "lastAuditAt": ""},
+        )
+        entry["versions"].append(row.get("version"))
+        published_at = str(row.get("published_at") or "")
+        if published_at:
+            entry["firstPublishedAt"] = min(filter(None, [entry["firstPublishedAt"], published_at]))
+            entry["lastPublishedAt"] = max(entry["lastPublishedAt"], published_at)
+        entry["publishedBy"] = str(row.get("published_by") or entry["publishedBy"])
+        entry["changeReason"] = str(row.get("change_reason") or entry["changeReason"])[:120]
+        snapshot = row.get("snapshot")
+        if not isinstance(snapshot, dict):  # TEXT on SQLite, already a dict on PostgreSQL JSONB
+            try:
+                snapshot = json.loads(str(snapshot or "{}"))
+            except Exception:
+                snapshot = {}
+        if isinstance(snapshot, dict):
+            if _is_authoring_source(snapshot):
+                entry["authoringSource"] = True
+            entry["title"] = str(snapshot.get("title") or entry["title"])[:120]
+            entry["group"] = str(snapshot.get("group") or snapshot.get("group_key") or entry["group"])
+    return list(grouped.values())
+
+
+def _attach_last_audit(conn, kind: str, present: set[str], items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ph = common_db.placeholder(kind)
+    items = items[:ORPHAN_SAMPLE_LIMIT]
+    if "audit_events" in present:
+        for entry in items:
+            try:
+                last = conn.execute(
+                    "SELECT action, created_at FROM audit_events "
+                    f"WHERE target_type='material' AND target_id={ph} "
+                    "ORDER BY created_at DESC LIMIT 1",
+                    (entry["materialId"],),
+                ).fetchone()
+            except Exception:
+                _rollback_quietly(conn)
+                last = None
+            if last:
+                data = dict(last)
+                entry["lastAuditAction"] = str(data.get("action") or "")
+                entry["lastAuditAt"] = str(data.get("created_at") or "")
+    return items
+
+
 def build_recovery_audit(connection_factory: Callable | None = None) -> dict[str, Any]:
     factory=connection_factory or common_db.get_connection
     conn,kind=factory()
@@ -33,11 +137,14 @@ def build_recovery_audit(connection_factory: Callable | None = None) -> dict[str
         present=_tables(conn,kind)
         checks=[]
 
-        def add(key,label,count,severity="error",detail=""):
-            checks.append({
+        def add(key,label,count,severity="error",detail="",items=None):
+            check={
                 "key":key,"label":label,"count":int(count or 0),
                 "ok":int(count or 0)==0 or severity=="info","severity":severity,"detail":detail,
-            })
+            }
+            if items:
+                check["items"]=items
+            checks.append(check)
 
         if {"material_versions","materials"} <= present:
             orphan_sql=(
@@ -57,10 +164,28 @@ def build_recovery_audit(connection_factory: Callable | None = None) -> dict[str
                     "WHERE a.action='material.delete' AND a.target_type='material' "
                     "AND a.target_id=v.material_id)",
                 )
+            unexplained=total_orphans-retained
+            groups=_orphan_version_samples(conn,kind,present) if unexplained else []
+            authoring_groups=[g for g in groups if g["authoringSource"]]
+            other_groups=[g for g in groups if not g["authoringSource"]]
+            authoring_rows=sum(len(g["versions"]) for g in authoring_groups)
+            real_orphans=max(0,unexplained-authoring_rows)
             add(
                 "orphan_material_versions","教材版本找不到主教材",
-                total_orphans-retained,
+                real_orphans,
+                detail=(
+                    "這些教材已不在教材清單，且找不到「刪除教材」的稽核紀錄；"
+                    "請對照下方明細確認是否為以前刪除的舊教材。"
+                ) if real_orphans else "",
+                items=_attach_last_audit(conn,kind,present,other_groups) if real_orphans else None,
             )
+            if authoring_rows:
+                add(
+                    "purged_authoring_sources","AI 講稿私人來源（已依 24 小時規則自動清除）",
+                    authoring_rows,severity="info",
+                    detail="AI 講稿用的私人來源教材沒有加入課程，系統依 24 小時保留規則自動清除，只留下版本歷史；這是設計行為，不是損壞。",
+                    items=_attach_last_audit(conn,kind,present,authoring_groups),
+                )
             if retained:
                 add(
                     "retained_material_versions","已刪除教材保留的版本歷史",
