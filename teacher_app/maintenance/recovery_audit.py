@@ -38,6 +38,21 @@ def _rollback_quietly(conn) -> None:
         pass
 
 
+def _is_authoring_source(snapshot: dict) -> bool:
+    """True for the private AI-authoring source materials that retention removes.
+
+    Uses the same rule as ``retention`` (24 h purge of "authoring only" sources),
+    which deletes the catalog row but, by design, writes only one summary audit
+    event, not one ``material.delete`` event per material.
+    """
+    try:
+        from teacher_app.maintenance import retention
+
+        return bool(retention._is_authoring_source(snapshot))  # noqa: SLF001 - shared rule
+    except Exception:
+        return False
+
+
 def _orphan_version_samples(conn, kind: str, present: set[str]) -> list[dict[str, Any]]:
     """Describe material versions whose material row is gone, grouped per material.
 
@@ -67,7 +82,7 @@ def _orphan_version_samples(conn, kind: str, present: set[str]) -> list[dict[str
         material_id = str(row.get("material_id") or "")
         entry = grouped.setdefault(
             material_id,
-            {"materialId": material_id, "versions": [], "title": "", "group": "",
+            {"materialId": material_id, "versions": [], "authoringSource": False, "title": "", "group": "",
              "firstPublishedAt": "", "lastPublishedAt": "", "publishedBy": "",
              "changeReason": "", "lastAuditAction": "", "lastAuditAt": ""},
         )
@@ -78,14 +93,23 @@ def _orphan_version_samples(conn, kind: str, present: set[str]) -> list[dict[str
             entry["lastPublishedAt"] = max(entry["lastPublishedAt"], published_at)
         entry["publishedBy"] = str(row.get("published_by") or entry["publishedBy"])
         entry["changeReason"] = str(row.get("change_reason") or entry["changeReason"])[:120]
-        try:
-            snapshot = json.loads(str(row.get("snapshot") or "{}"))
-        except Exception:
-            snapshot = {}
+        snapshot = row.get("snapshot")
+        if not isinstance(snapshot, dict):  # TEXT on SQLite, already a dict on PostgreSQL JSONB
+            try:
+                snapshot = json.loads(str(snapshot or "{}"))
+            except Exception:
+                snapshot = {}
         if isinstance(snapshot, dict):
+            if _is_authoring_source(snapshot):
+                entry["authoringSource"] = True
             entry["title"] = str(snapshot.get("title") or entry["title"])[:120]
             entry["group"] = str(snapshot.get("group") or snapshot.get("group_key") or entry["group"])
-    items = list(grouped.values())[:ORPHAN_SAMPLE_LIMIT]
+    return list(grouped.values())
+
+
+def _attach_last_audit(conn, kind: str, present: set[str], items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ph = common_db.placeholder(kind)
+    items = items[:ORPHAN_SAMPLE_LIMIT]
     if "audit_events" in present:
         for entry in items:
             try:
@@ -141,15 +165,27 @@ def build_recovery_audit(connection_factory: Callable | None = None) -> dict[str
                     "AND a.target_id=v.material_id)",
                 )
             unexplained=total_orphans-retained
+            groups=_orphan_version_samples(conn,kind,present) if unexplained else []
+            authoring_groups=[g for g in groups if g["authoringSource"]]
+            other_groups=[g for g in groups if not g["authoringSource"]]
+            authoring_rows=sum(len(g["versions"]) for g in authoring_groups)
+            real_orphans=max(0,unexplained-authoring_rows)
             add(
                 "orphan_material_versions","教材版本找不到主教材",
-                unexplained,
+                real_orphans,
                 detail=(
                     "這些教材已不在教材清單，且找不到「刪除教材」的稽核紀錄；"
                     "請對照下方明細確認是否為以前刪除的舊教材。"
-                ) if unexplained else "",
-                items=_orphan_version_samples(conn,kind,present) if unexplained else None,
+                ) if real_orphans else "",
+                items=_attach_last_audit(conn,kind,present,other_groups) if real_orphans else None,
             )
+            if authoring_rows:
+                add(
+                    "purged_authoring_sources","AI 講稿私人來源（已依 24 小時規則自動清除）",
+                    authoring_rows,severity="info",
+                    detail="AI 講稿用的私人來源教材沒有加入課程，系統依 24 小時保留規則自動清除，只留下版本歷史；這是設計行為，不是損壞。",
+                    items=_attach_last_audit(conn,kind,present,authoring_groups),
+                )
             if retained:
                 add(
                     "retained_material_versions","已刪除教材保留的版本歷史",

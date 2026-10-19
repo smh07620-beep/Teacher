@@ -128,6 +128,49 @@ class F6RecoveryTests(unittest.TestCase):
         self.assertEqual(items["orphan_material_versions"]["count"],2)
         self.assertEqual(report["errorCount"],2)
 
+    def test_purged_authoring_sources_are_retained_history_not_errors(self):
+        conn,_=self.connect()
+        conn.execute("CREATE TABLE materials(id TEXT PRIMARY KEY)")
+        conn.execute(
+            "CREATE TABLE material_versions(material_id TEXT,version INTEGER,"
+            "published_at TEXT,published_by TEXT,change_reason TEXT,snapshot TEXT)"
+        )
+        conn.execute("CREATE TABLE audit_events(action TEXT,target_type TEXT,target_id TEXT,created_at TEXT)")
+        authoring=(
+            '{"title":"研究用","description":"x","group_key":"grpBB",'
+            '"storage_meta":"{\\"authoringOnly\\": true}"}'
+        )
+        prefixed='{"title":"講稿來源","description":"AI 講稿私人來源：abc","group_key":"grpBB","storage_meta":"{}"}'
+        normal='{"title":"真的不見了","description":"補充教材","group_key":"grpBB","storage_meta":"{}"}'
+        for material_id,snap in (("a1",authoring),("a2",prefixed),("n1",normal)):
+            conn.execute(
+                "INSERT INTO material_versions VALUES(?,1,'2026-10-16T08:00:00','system:create','initial publication',?)",
+                (material_id,snap),
+            )
+        conn.close()
+        report=recovery_audit.build_recovery_audit(self.connect)
+        items={row["key"]:row for row in report["checks"]}
+        self.assertEqual(items["orphan_material_versions"]["count"],1)
+        self.assertEqual([r["materialId"] for r in items["orphan_material_versions"]["items"]],["n1"])
+        purged=items["purged_authoring_sources"]
+        self.assertEqual(purged["count"],2)
+        self.assertEqual(purged["severity"],"info")
+        self.assertTrue(purged["ok"])
+        self.assertEqual(sorted(r["materialId"] for r in purged["items"]),["a1","a2"])
+        self.assertEqual(report["errorCount"],1)
+
+    def test_only_authoring_sources_leave_audit_healthy(self):
+        conn,_=self.connect()
+        conn.execute("CREATE TABLE materials(id TEXT PRIMARY KEY)")
+        conn.execute("CREATE TABLE material_versions(material_id TEXT,version INTEGER,snapshot TEXT)")
+        conn.execute(
+            "INSERT INTO material_versions VALUES('a1',1,'{\"description\":\"AI authoring source: x\"}')"
+        )
+        conn.close()
+        report=recovery_audit.build_recovery_audit(self.connect)
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["errorCount"],0)
+
 
 if __name__=="__main__":
     unittest.main()
