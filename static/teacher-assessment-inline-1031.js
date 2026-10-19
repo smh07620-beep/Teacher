@@ -315,14 +315,14 @@
   async function show(tab) {
     const host = panel();
     if (!host) return false;
-    state.tab = ['pending', 'history', 'analytics'].includes(tab) ? tab : 'exams';
+    state.tab = ['pending', 'history', 'analytics', 'overdue'].includes(tab) ? tab : 'exams';
     host.dataset.assessTab = state.tab;
     document.getElementById('teacher-assessment-flow-1014')?.querySelectorAll('[data-assessment-tab-1030]').forEach(button => {
       const active = button.getAttribute('data-assessment-tab-1030') === state.tab;
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-selected', active ? 'true' : 'false');
     });
-    if (state.tab === 'exams') return true;
+    if (state.tab === 'exams' || state.tab === 'overdue') return true;
     ensurePane('pending', '待批改'); ensurePane('history', '歷史紀錄'); ensurePane('analytics', '教學分析');
     render(state.tab);
     await load(true);

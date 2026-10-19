@@ -8,31 +8,32 @@
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
   let rows = [];
 
-  // Any back-office page that has the 評量與追蹤 results panel (/teach, /admin, ?admin=1).
-  // The server scopes the list to the teacher's own courses; learners never get this panel.
+  // Lives as the 「逾期名單」 tab of 評量與追蹤 (#admin-section-quiz). The server scopes the
+  // list to the teacher's own courses; learners never get this panel.
   function teacherPage() {
-    return !!document.getElementById('admin-section-results');
+    return !!document.getElementById('admin-section-quiz');
   }
 
   function ensure() {
     if (!teacherPage()) return null;
-    const host = document.getElementById('admin-section-results');
+    const host = document.getElementById('admin-section-quiz');
     if (!host) return null;
     let section = document.getElementById('teacher-overdue-1017');
     if (section) return section;
     section = document.createElement('section');
     section.id = 'teacher-overdue-1017';
-    section.className = 'card';
+    section.className = 'card teacher-overdue-pane-1019';
     section.innerHTML = `
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div><h3 class="font-black text-slate-900">⏰ 逾期未完成名單</h3>
           <p class="text-sm text-slate-500 mt-1">你負責的課程中，已過完成期限但還沒完成的學員。</p></div>
-        <span class="flex gap-2"><button type="button" class="btn btn-secondary" data-overdue-load>載入名單</button>
+        <span class="flex gap-2"><button type="button" class="btn btn-secondary" data-overdue-load>重新整理</button>
           <button type="button" class="btn btn-secondary hidden" data-overdue-csv>下載 CSV</button></span>
       </div>
       <p class="text-sm text-slate-500 mt-2" role="status" data-overdue-status></p>
       <div class="overflow-x-auto" data-overdue-table></div>`;
-    host.insertBefore(section, host.firstChild);
+    const flow = document.getElementById('teacher-assessment-flow-1014');
+    host.insertBefore(section, flow && flow.parentElement === host ? flow.nextSibling : host.firstChild);
     section.querySelector('[data-overdue-load]').addEventListener('click', load);
     section.querySelector('[data-overdue-csv]').addEventListener('click', downloadCsv);
     return section;
@@ -48,6 +49,7 @@
     try {
       const response = await fetch('/api/training-command-center/course-tracking', {credentials: 'same-origin', cache: 'no-store'});
       const data = await response.json().catch(() => ({}));
+      if (response.status === 403) { status.textContent = '這份名單需要「指派課程」權限（組長、教學管理者、系統管理者）才看得到。'; return; }
       if (!response.ok) throw new Error(data.error || '名單讀取失敗');
       rows = [];
       (data.courses || []).forEach(course => (course.learners || []).forEach(learner => {
@@ -77,5 +79,11 @@
   window.addEventListener('teacher:admin-rendered', ensure);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensure, {once: true});
   else ensure();
-  window.TeacherOverdue1017 = Object.freeze({load});
+  // Opening the tab loads the list once; 「重新整理」 reloads it.
+  let loadedOnce = false;
+  async function open() {
+    ensure();
+    if (!loadedOnce) { loadedOnce = true; await load(); }
+  }
+  window.TeacherOverdue1017 = Object.freeze({load, open});
 })();
