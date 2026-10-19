@@ -386,7 +386,7 @@
     section.id = 'teacher-recorder-1014';
     section.className = 'bg-white border border-teal-200 rounded-2xl p-5 shadow-sm space-y-4';
     section.innerHTML = `
-      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-teal-700">DIRECT RECORDING</p><h4 class="text-lg font-black text-slate-950">🎙️ 老師直接錄音／錄影</h4><p class="mt-1 text-xs text-slate-500">錄製在瀏覽器完成；確認預覽後才上傳。上傳沿用既有 Browser → R2 → Worker 流程，不讓大型影音經過 Render Web。</p></div><span class="rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700">第一階段可用</span></div>
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3"><div><p class="admin-page-eyebrow text-teal-700">DIRECT RECORDING</p><h4 class="text-lg font-black text-slate-950">🎙️ 老師直接錄音／錄影</h4><p class="mt-1 text-xs text-slate-500">錄製在瀏覽器完成；確認預覽後才上傳。上傳沿用既有 Browser → R2 → Worker 流程，不讓大型影音經過 Render Web。</p></div><span class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">第一階段可用</span></div>
       <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"><b>隱私提醒：</b>教學錄音／錄影請勿包含病人姓名、病歷號、身分證字號、可辨識影像或其他不必要個資。</div>
       <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
         <label class="text-xs font-bold text-slate-600 xl:col-span-2">教材名稱<input id="teacher-recorder-title-1014" class="learning-input mt-1" maxlength="120" placeholder="例如：血庫抗體鑑定操作說明"></label>

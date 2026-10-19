@@ -157,6 +157,18 @@ def list_uploaded_materials(legacy_base=None, include_inactive: bool = False, *,
     return result
 
 
+def list_materials_by_ids(material_ids) -> list[dict]:
+    """Fetch several materials in one query (active or not) instead of listing them all."""
+    ids = [str(item) for item in dict.fromkeys(material_ids or []) if item]
+    if not ids:
+        return []
+    with common_db.read_connection() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        marks = ",".join([ph] * len(ids))
+        rows = conn.execute(f"SELECT * FROM materials WHERE id IN ({marks})", tuple(ids)).fetchall()
+    return [material_row_to_dict(row) for row in rows]
+
+
 def get_material(material_or_legacy_base, legacy_material_id: str | None = None) -> dict | None:
     """Read one material; old (base, id) calls remain format-only compatibility."""
     material_id = legacy_material_id if legacy_material_id is not None else str(material_or_legacy_base or "")
@@ -294,6 +306,25 @@ def update_material_storage(material_id: str, *, backend: str, storage_key: str,
             conn.execute(f"UPDATE materials SET storage_backend={ph}, storage_key={ph}, slides_prefix={ph} WHERE id={ph}", (backend, storage_key, slides_prefix, material_id))
         else:
             conn.execute(f"UPDATE materials SET storage_backend={ph}, storage_key={ph}, slides_prefix={ph}, storage_meta={ph} WHERE id={ph}", (backend, storage_key, slides_prefix, storage_meta_json, material_id))
+
+
+@_clears_list_cache
+def merge_storage_meta(material_id: str, updates: dict) -> None:
+    """Merge keys into the material's storage_meta JSON without touching other columns."""
+    with common_db.transaction() as (conn, kind):
+        ph = common_db.placeholder(kind)
+        row = conn.execute(f"SELECT storage_meta FROM materials WHERE id={ph}", (material_id,)).fetchone()
+        if not row:
+            return
+        raw = dict(row).get("storage_meta") or "{}"
+        try:
+            meta = json.loads(raw) if isinstance(raw, str) else dict(raw)
+        except (TypeError, ValueError):
+            meta = {}
+        if not isinstance(meta, dict):
+            meta = {}
+        meta.update(updates)
+        conn.execute(f"UPDATE materials SET storage_meta={ph} WHERE id={ph}", (json.dumps(meta, ensure_ascii=False), material_id))
 
 
 @_clears_list_cache

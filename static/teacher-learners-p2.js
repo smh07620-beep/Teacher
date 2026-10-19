@@ -52,7 +52,7 @@
 
   function learnerRow(item,index){
     const reviewButton=has('evaluation.review')
-      ? `<button type="button" data-p2-results="${index}" class="rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-indigo-700">查看考核紀錄</button>`
+      ? `<button type="button" data-p2-results="${index}" class="rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs font-bold text-indigo-700">查看考核紀錄</button>`
       : '';
     const flags=[
       Number(item.awaitingTeacher||0)>0?`待教師 ${Number(item.awaitingTeacher)}`:'',
@@ -65,19 +65,19 @@
         <div class="min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             <b class="text-sm text-slate-900">${escapeHtml(item.name||item.username)}</b>
-            ${item.empId?`<span class="text-[10px] text-slate-500">${escapeHtml(item.empId)}</span>`:''}
-            <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">${escapeHtml(item.group||'')}</span>
-            ${item.active===false?'<span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] text-slate-600">停用帳號</span>':''}
+            ${item.empId?`<span class="text-xs text-slate-500">${escapeHtml(item.empId)}</span>`:''}
+            <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">${escapeHtml(item.group||'')}</span>
+            ${item.active===false?'<span class="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">停用帳號</span>':''}
           </div>
-          <p class="mt-1 text-[11px] text-slate-500">PGY 指派 ${Number(item.assignmentCount||0)} · 已完成 ${Number(item.completedAssignments||0)} · 最新狀態 ${escapeHtml(item.latestStatusLabel||'—')}</p>
-          ${flags.length?`<div class="mt-2 flex flex-wrap gap-1.5">${flags.map(flag=>`<span class="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">${escapeHtml(flag)}</span>`).join('')}</div>`:''}
+          <p class="mt-1 text-xs text-slate-500">PGY 指派 ${Number(item.assignmentCount||0)} · 已完成 ${Number(item.completedAssignments||0)} · 最新狀態 ${escapeHtml(item.latestStatusLabel||'—')}</p>
+          ${flags.length?`<div class="mt-2 flex flex-wrap gap-1.5">${flags.map(flag=>`<span class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">${escapeHtml(flag)}</span>`).join('')}</div>`:''}
         </div>
         <div class="flex flex-wrap gap-2 shrink-0">
           ${reviewButton}
-          <button type="button" data-p2-competency="${index}" class="rounded-lg border border-teal-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-teal-700">能力追蹤</button>
+          <button type="button" data-p2-competency="${index}" class="rounded-lg border border-teal-200 bg-white px-2.5 py-1.5 text-xs font-bold text-teal-700">能力追蹤</button>
           ${has('evaluation.sign')
-            ? `<button type="button" data-p2-clinical="${index}" class="rounded-lg bg-indigo-700 px-2.5 py-1.5 text-[11px] font-bold text-white">開始臨床技能評核</button>`
-            : `<button type="button" data-p2-pgy="${index}" class="rounded-lg bg-indigo-700 px-2.5 py-1.5 text-[11px] font-bold text-white">進入 PGY 工作流程</button>`}
+            ? `<button type="button" data-p2-clinical="${index}" class="rounded-lg bg-indigo-700 px-2.5 py-1.5 text-xs font-bold text-white">開始臨床技能評核</button>`
+            : `<button type="button" data-p2-pgy="${index}" class="rounded-lg bg-indigo-700 px-2.5 py-1.5 text-xs font-bold text-white">進入 PGY 工作流程</button>`}
         </div>
       </div>
     </article>`;
@@ -89,9 +89,9 @@
     const summary=latest.summary||{};
     // 這一塊只讀「PGY 指派」：內部教育訓練的學員不會出現在這裡，標題直接寫清楚。
     // 沒有學員時整塊縮成一行；有學員時只顯示不是 0 的統計。
-    const actions='<div class="flex items-center gap-3 shrink-0"><button id="teacher-analytics-open-p2" type="button" class="text-[11px] font-bold text-teal-700">📊 教學分析</button><button id="teacher-learners-refresh-p2" type="button" class="text-[11px] font-bold text-indigo-700">↻ 更新</button></div>';
+    const actions='<div class="flex items-center gap-3 shrink-0"><button id="teacher-analytics-open-p2" type="button" class="text-xs font-bold text-teal-700">📊 教學分析</button><button id="teacher-learners-refresh-p2" type="button" class="text-xs font-bold text-indigo-700">↻ 更新</button></div>';
     const details='<section id="teacher-competency-detail-p2" class="hidden mt-4 rounded-xl border border-teal-100 bg-teal-50/30 p-4"></section><section id="teacher-teaching-analytics-p2" class="hidden mt-4 rounded-xl border border-sky-100 bg-sky-50/30 p-4"></section>';
-    const title=`<h4 class="text-sm font-black text-slate-950">👥 我的學員<span class="ml-1 text-xs font-bold text-indigo-700">（PGY 指派）</span></h4><span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">${escapeHtml(scopeLabel(latest.scope))}</span>`;
+    const title=`<h4 class="text-sm font-black text-slate-950">👥 我的學員<span class="ml-1 text-xs font-bold text-indigo-700">（PGY 指派）</span></h4><span class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">${escapeHtml(scopeLabel(latest.scope))}</span>`;
     if(!rows.length){
       section.dataset.p2Empty='1';
       section.innerHTML=`<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"><div class="flex items-center gap-2 flex-wrap">${title}<span class="text-xs text-slate-500">目前沒有 PGY 指派給你的學員。內部教育訓練的學員請到「教材與課程」看各課程的指派。</span></div>${actions}</div>${details}`;
@@ -103,12 +103,12 @@
         ['awaitingLeader','待複核','bg-amber-50','text-amber-900','text-amber-700'],
         ['overdueAssignments','逾期','bg-rose-50','text-rose-900','text-rose-700'],
       ].filter(([key,,,,,always])=>always||Number(summary[key]||0)>0)
-        .map(([key,label,bg,strong,small])=>`<div class="rounded-xl ${bg} px-3 py-1.5 text-center"><b class="block text-base ${strong}">${Number(summary[key]||0)}</b><span class="text-[10px] ${small}">${label}</span></div>`).join('');
+        .map(([key,label,bg,strong,small])=>`<div class="rounded-xl ${bg} px-3 py-1.5 text-center"><b class="block text-base ${strong}">${Number(summary[key]||0)}</b><span class="text-xs ${small}">${label}</span></div>`).join('');
       section.innerHTML=`
       <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <div class="flex items-center gap-2 flex-wrap">${title}</div>
-          <p class="mt-1 text-[11px] text-slate-500">只列 PGY 指派給你的學員；內部教育訓練學員不在這裡。</p>
+          <p class="mt-1 text-xs text-slate-500">只列 PGY 指派給你的學員；內部教育訓練學員不在這裡。</p>
         </div>
         ${actions}
       </div>
@@ -181,18 +181,18 @@
       const cells=Object.entries(row.competencies||{}).map(([key,cell])=>{
         const count=Number(cell?.count||0);
         const latest=competencyScore(cell?.latestScore);
-        return `<div class="rounded-xl border border-slate-200 bg-white p-3"><div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-900">${escapeHtml(typeLabels.get(key)||key)}</b><span class="text-[10px] text-slate-400">${count} 次</span></div><div class="mt-1 text-sm font-black text-teal-800">${latest}${latest==='—'?'':' / 5'}</div><div class="mt-1 text-[10px] text-slate-400">最近 ${escapeHtml(cell?.latestDate||'—')}</div></div>`;
+        return `<div class="rounded-xl border border-slate-200 bg-white p-3"><div class="flex items-center justify-between gap-2"><b class="text-xs text-slate-900">${escapeHtml(typeLabels.get(key)||key)}</b><span class="text-xs text-slate-400">${count} 次</span></div><div class="mt-1 text-sm font-black text-teal-800">${latest}${latest==='—'?'':' / 5'}</div><div class="mt-1 text-xs text-slate-400">最近 ${escapeHtml(cell?.latestDate||'—')}</div></div>`;
       }).join('');
       panel.innerHTML=`
         <div class="flex items-start justify-between gap-3">
-          <div><h5 class="text-sm font-black text-slate-950">📈 能力追蹤 · ${escapeHtml(row.name||learner.name||learner.username)}</h5><p class="mt-1 text-[11px] text-slate-500">依正式 DOPS、MINI-CEX、CBD、CHECKLIST 等紀錄與 PGY 指派完成度呈現；不合併成 AI 能力總分。</p></div>
-          <button id="teacher-competency-close-p2" type="button" class="text-[11px] font-bold text-slate-600">關閉</button>
+          <div><h5 class="text-sm font-black text-slate-950">📈 能力追蹤 · ${escapeHtml(row.name||learner.name||learner.username)}</h5><p class="mt-1 text-xs text-slate-500">依正式 DOPS、MINI-CEX、CBD、CHECKLIST 等紀錄與 PGY 指派完成度呈現；不合併成 AI 能力總分。</p></div>
+          <button id="teacher-competency-close-p2" type="button" class="text-xs font-bold text-slate-600">關閉</button>
         </div>
         <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-          <div class="rounded-xl bg-white p-2"><b class="block text-base text-slate-950">${Number(row.progress?.assignmentsCompleted||0)} / ${Number(row.progress?.assignmentsTotal||0)}</b><span class="text-[10px] text-slate-500">PGY 指派完成</span></div>
-          <div class="rounded-xl bg-white p-2"><b class="block text-base text-rose-800">${Number(row.progress?.assignmentsOverdue||0)}</b><span class="text-[10px] text-slate-500">逾期指派</span></div>
-          <div class="rounded-xl bg-white p-2"><b class="block text-base text-indigo-900">${Number(row.assessmentSummary?.count||0)}</b><span class="text-[10px] text-slate-500">正式評量</span></div>
-          <div class="rounded-xl bg-white p-2"><b class="block text-base text-teal-900">${competencyScore(row.assessmentSummary?.averageScore)}</b><span class="text-[10px] text-slate-500">正式評量平均</span></div>
+          <div class="rounded-xl bg-white p-2"><b class="block text-base text-slate-950">${Number(row.progress?.assignmentsCompleted||0)} / ${Number(row.progress?.assignmentsTotal||0)}</b><span class="text-xs text-slate-500">PGY 指派完成</span></div>
+          <div class="rounded-xl bg-white p-2"><b class="block text-base text-rose-800">${Number(row.progress?.assignmentsOverdue||0)}</b><span class="text-xs text-slate-500">逾期指派</span></div>
+          <div class="rounded-xl bg-white p-2"><b class="block text-base text-indigo-900">${Number(row.assessmentSummary?.count||0)}</b><span class="text-xs text-slate-500">正式評量</span></div>
+          <div class="rounded-xl bg-white p-2"><b class="block text-base text-teal-900">${competencyScore(row.assessmentSummary?.averageScore)}</b><span class="text-xs text-slate-500">正式評量平均</span></div>
         </div>
         <div class="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2">${cells}</div>`;
       panel.querySelector('#teacher-competency-close-p2')?.addEventListener('click',()=>panel.classList.add('hidden'));
@@ -212,11 +212,11 @@
     panel.classList.remove('hidden');panel.innerHTML='<div class="text-xs text-slate-500">讀取目前教學範圍分析中…</div>';
     try{
       const data=await loadAnalytics(false),summary=data?.summary||{},rows=Array.isArray(data?.learners)?data.learners:[],timeline=(Array.isArray(data?.timeline)?data.timeline:[]).slice(-6);
-      const rowHtml=rows.map(row=>{const materials=row.materials||{},exams=row.exams||{},pgy=row.pgy||{};return `<article class="rounded-xl border border-slate-200 bg-white p-3"><div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"><div><b class="text-xs text-slate-900">${escapeHtml(row.name||row.empId||row.username)}</b><div class="text-[10px] text-slate-400">${escapeHtml(row.empId||'')} · ${escapeHtml(row.group||'')}</div></div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]"><span>教材 <b>${analyticNumber(materials.averageProgress)}%</b><br><i class="not-italic text-slate-400">${Number(materials.completed||0)}/${Number(materials.tracked||0)} 完成</i></span><span>考試 <b>${analyticNumber(exams.averageScore)}</b><br><i class="not-italic text-slate-400">${Number(exams.pendingReview||0)} 待批改</i></span><span>PGY <b>${analyticNumber(pgy.completionRate)}%</b><br><i class="not-italic text-slate-400">${Number(pgy.completedAssignments||0)}/${Number(pgy.assignments||0)} 完成</i></span><span>正式評量 <b>${analyticNumber(pgy.assessmentAverage)}</b><br><i class="not-italic text-slate-400">${Number(pgy.assessments||0)} 筆</i></span></div></div></article>`}).join('');
-      const timelineHtml=timeline.map(month=>`<div class="rounded-lg border border-slate-100 bg-white p-2"><b class="text-[10px] text-slate-700">${escapeHtml(month.month||'')}</b><div class="mt-1 text-[9px] text-slate-400">教材 ${Number(month.materials||0)} · 考試 ${Number(month.exams||0)} · PGY ${Number(month.pgy||0)} · 評量 ${Number(month.assessments||0)}</div></div>`).join('');
-      panel.innerHTML=`<div class="flex items-start justify-between gap-3"><div><h5 class="text-sm font-black text-slate-950">📊 教學分析</h5><p class="mt-1 text-[11px] text-slate-500">依目前伺服器 scope 的教材、考試、PGY 指派與正式評量紀錄呈現；只描述既有資料，不產生 AI 能力總分或預測。</p></div><button id="teacher-analytics-close-p2" type="button" class="text-[11px] font-bold text-slate-600">關閉</button></div>
-        <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center"><div class="rounded-xl bg-white p-2"><b class="block text-base text-slate-950">${Number(summary.learners||0)}</b><span class="text-[10px] text-slate-500">學員</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-teal-900">${analyticNumber(summary.materialCompletionRate)}%</b><span class="text-[10px] text-slate-500">教材完成率</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-indigo-900">${analyticNumber(summary.averageExamScore)}</b><span class="text-[10px] text-slate-500">考試平均</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-amber-800">${Number(summary.examPendingReview||0)}</b><span class="text-[10px] text-slate-500">待批改考試</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-sky-900">${analyticNumber(summary.pgyCompletionRate)}%</b><span class="text-[10px] text-slate-500">PGY 完成率</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-emerald-900">${analyticNumber(summary.averagePgyAssessmentScore)}</b><span class="text-[10px] text-slate-500">正式評量平均</span></div></div>
-        <div class="mt-3 space-y-2">${rowHtml||'<div class="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-xs text-slate-500">目前沒有可分析的學員紀錄。</div>'}</div><div class="mt-3"><div class="mb-2 text-[10px] font-black text-slate-500">近 6 個月活動</div><div class="grid sm:grid-cols-3 lg:grid-cols-6 gap-2">${timelineHtml||'<span class="text-xs text-slate-400">尚無近期活動。</span>'}</div></div>`;
+      const rowHtml=rows.map(row=>{const materials=row.materials||{},exams=row.exams||{},pgy=row.pgy||{};return `<article class="rounded-xl border border-slate-200 bg-white p-3"><div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"><div><b class="text-xs text-slate-900">${escapeHtml(row.name||row.empId||row.username)}</b><div class="text-xs text-slate-400">${escapeHtml(row.empId||'')} · ${escapeHtml(row.group||'')}</div></div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs"><span>教材 <b>${analyticNumber(materials.averageProgress)}%</b><br><i class="not-italic text-slate-400">${Number(materials.completed||0)}/${Number(materials.tracked||0)} 完成</i></span><span>考試 <b>${analyticNumber(exams.averageScore)}</b><br><i class="not-italic text-slate-400">${Number(exams.pendingReview||0)} 待批改</i></span><span>PGY <b>${analyticNumber(pgy.completionRate)}%</b><br><i class="not-italic text-slate-400">${Number(pgy.completedAssignments||0)}/${Number(pgy.assignments||0)} 完成</i></span><span>正式評量 <b>${analyticNumber(pgy.assessmentAverage)}</b><br><i class="not-italic text-slate-400">${Number(pgy.assessments||0)} 筆</i></span></div></div></article>`}).join('');
+      const timelineHtml=timeline.map(month=>`<div class="rounded-lg border border-slate-100 bg-white p-2"><b class="text-xs text-slate-700">${escapeHtml(month.month||'')}</b><div class="mt-1 text-xs text-slate-400">教材 ${Number(month.materials||0)} · 考試 ${Number(month.exams||0)} · PGY ${Number(month.pgy||0)} · 評量 ${Number(month.assessments||0)}</div></div>`).join('');
+      panel.innerHTML=`<div class="flex items-start justify-between gap-3"><div><h5 class="text-sm font-black text-slate-950">📊 教學分析</h5><p class="mt-1 text-xs text-slate-500">依目前伺服器 scope 的教材、考試、PGY 指派與正式評量紀錄呈現；只描述既有資料，不產生 AI 能力總分或預測。</p></div><button id="teacher-analytics-close-p2" type="button" class="text-xs font-bold text-slate-600">關閉</button></div>
+        <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center"><div class="rounded-xl bg-white p-2"><b class="block text-base text-slate-950">${Number(summary.learners||0)}</b><span class="text-xs text-slate-500">學員</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-teal-900">${analyticNumber(summary.materialCompletionRate)}%</b><span class="text-xs text-slate-500">教材完成率</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-indigo-900">${analyticNumber(summary.averageExamScore)}</b><span class="text-xs text-slate-500">考試平均</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-amber-800">${Number(summary.examPendingReview||0)}</b><span class="text-xs text-slate-500">待批改考試</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-sky-900">${analyticNumber(summary.pgyCompletionRate)}%</b><span class="text-xs text-slate-500">PGY 完成率</span></div><div class="rounded-xl bg-white p-2"><b class="block text-base text-emerald-900">${analyticNumber(summary.averagePgyAssessmentScore)}</b><span class="text-xs text-slate-500">正式評量平均</span></div></div>
+        <div class="mt-3 space-y-2">${rowHtml||'<div class="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-xs text-slate-500">目前沒有可分析的學員紀錄。</div>'}</div><div class="mt-3"><div class="mb-2 text-xs font-black text-slate-500">近 6 個月活動</div><div class="grid sm:grid-cols-3 lg:grid-cols-6 gap-2">${timelineHtml||'<span class="text-xs text-slate-400">尚無近期活動。</span>'}</div></div>`;
       panel.querySelector('#teacher-analytics-close-p2')?.addEventListener('click',()=>panel.classList.add('hidden'));panel.scrollIntoView({behavior:'smooth',block:'nearest'});
     }catch(error){panel.innerHTML=`<div class="text-xs text-rose-700">❌ ${escapeHtml(error.message||'教學分析讀取失敗')}</div>`}
   }

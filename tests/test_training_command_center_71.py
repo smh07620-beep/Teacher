@@ -190,7 +190,7 @@ class TrainingCommandCenterFrontendTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.ui = ROOT.joinpath("static", "training-command-center-71.js").read_text(encoding="utf-8")
-        cls.portal_todo = ROOT.joinpath("static", "learner-todo-convergence-1025.js").read_text(encoding="utf-8")
+        cls.portal_todo = ROOT.joinpath("static", "learner-todo.js").read_text(encoding="utf-8")
         cls.frontend = ROOT.joinpath("teacher_app", "frontend", "assets.py").read_text(encoding="utf-8")
         cls.entrypoint = ROOT.joinpath("teacher_app", "factory.py").read_text(encoding="utf-8")
         cls.matrix = ROOT.joinpath("RC_FEATURE_UI_COVERAGE_MATRIX.md").read_text(encoding="utf-8")
@@ -219,7 +219,7 @@ class TrainingCommandCenterFrontendTests(unittest.TestCase):
         self.assertIn("register_training_command_center", self.entrypoint)
         self.assertIn("register_training_audience_71", self.entrypoint)
         self.assertIn('"/training-command-center-71.js"', self.frontend)
-        self.assertIn('"/learner-todo-convergence-1025.js"', self.frontend)
+        self.assertIn('"/learner-todo.js"', self.frontend)
         self.assertLess(
             self.frontend.index('"/workspace-shell-70.js"'),
             self.frontend.index('"/training-command-center-71.js"'),

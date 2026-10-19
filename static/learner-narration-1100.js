@@ -295,29 +295,26 @@
     if(segMode){ startSegments(btn); paint(btn); }
     else audio.play().catch(function(){ paint(btn); });
     // 檢視視窗關閉後自動停止並移除控制列
-    timer=setInterval(function(){ if(!viewerOpen()) stop(); }, 800);
-    setTimeout(function(){ if(bar && !viewerOpen()) stop(); }, 4000);
     if(narration.kind==='teacher'){
       syncTimer=setInterval(function(){ syncPages(); paintCaption(); }, 250);
       loadCaptions(narration);
     }
   }
-  function wrap(){
-    var original=window.openMaterial;
-    if(typeof original!=='function' || original.__narrationWrapped) return;
-    var wrapped=function(id){
-      var result=original.apply(this, arguments);
-      try{
-        var list=window.cachedSlidesList||[];
-        var m=list.find(function(x){ return x && x.id===id; });
-        if(m && m.narration) start(m.narration, id); else stop();
-      }catch(e){}
-      return result;
-    };
-    wrapped.__narrationWrapped=true;
-    window.openMaterial=wrapped;
+  // Driven by the reader's own events (system-learner.js): no openMaterial wrapper, no polling.
+  function narrationFor(id){
+    var list=window.cachedSlidesList||[];
+    var m=list.find(function(x){ return x && x.id===id; });
+    return m && m.narration ? m.narration : null;
   }
+  function onViewer(event){
+    var d=(event && event.detail) || {};
+    if(!d.open){ stop(); return; }
+    var id=String(d.materialId||'');
+    if(!id) return;
+    if(audio && sourceId===id) return; // page turn inside the same material
+    try{ var n=narrationFor(id); if(n) start(n, id); else stop(); }catch(e){}
+  }
+  window.addEventListener('teacher:reader-changed', onViewer);
+  window.addEventListener('teacher:media-changed', onViewer);
   window.LearnerNarration1100={stop:stop, parseVtt:parseVtt, isSegmented:isSegmented, segmentForPage:segmentForPage, reachedEnd:reachedEnd};
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', wrap); else wrap();
-  window.addEventListener('load', wrap);
 })();

@@ -12,6 +12,7 @@ from teacher_app.assessments import repository as assessment_repository
 from teacher_app.common.auth import normalize_role
 from teacher_app.common.errors import ApiError
 from teacher_app.exams import grading
+from teacher_app.exams import option_order
 from teacher_app.exams import remediation
 from teacher_app.exams import repository as repo
 from teacher_app.exams.windows import assert_exam_not_closed, assert_exam_open
@@ -93,7 +94,8 @@ def _expired(started_at: str) -> bool:
 
 
 def attempt_response(attempt: Mapping[str, Any]) -> dict[str, Any]:
-    questions = repo.json_load(attempt.get("questions_json"), [])
+    # Each learner sees their own option order (see option_order); the snapshot keeps the original.
+    questions = [option_order.present(q) for q in repo.json_load(attempt.get("questions_json"), []) if isinstance(q, dict)]
     return {
         "attemptId": str(attempt.get("id", "")), "status": str(attempt.get("status", "started")),
         "quizCategoryId": str(attempt.get("quiz_category_id", "")), "quizTitle": str(attempt.get("quiz_title", "")),
@@ -131,7 +133,12 @@ def start_attempt(base_or_user, user_or_data, data: Mapping[str, Any] | None = N
     # remembered exam id cannot bypass the course assignment.
     if not learning_access.student_may_see_course(actor, _text(category.get("courseId"), 100)):
         raise ApiError("EXAM_NOT_ASSIGNED", "這份考卷所屬的課程沒有指派給你。", 403)
-    questions = _draw_questions(category)
+    from teacher_app.learning import gate as learning_gate
+
+    unlock = learning_gate.exam_unlock_state(actor, _text(category.get("courseId"), 100))
+    if not unlock["unlocked"]:
+        raise ApiError("MATERIALS_NOT_COMPLETE", unlock["reason"], 403, {"gate": unlock})
+    questions = option_order.assign(_draw_questions(category), enabled=(category.get("drawRules") or {}).get("shuffleOptions") is not False)
     if not questions:
         raise ApiError("NO_ACTIVE_QUESTIONS", "此考卷目前沒有可作答的啟用題目。", 409)
     try:
@@ -216,6 +223,10 @@ def submit_attempt(base_or_user, user_or_attempt_id, attempt_id_or_data, data: M
             if len(answers) != len(questions):
                 raise ApiError("ANSWER_COUNT_MISMATCH", "作答題數與伺服器考卷不一致，請重新整理。", 409)
             passing_score = max(1, min(100, int(attempt.get("passing_score", 80) or 80)))
+            shown_answers = list(answers)
+            # Learners answered against their own shuffled option order; grade, record and
+            # analyse in the teacher's original order.
+            answers = [option_order.to_original(q, a) for q, a in zip(questions, answers)]
             result = grading.grade_attempt(questions, answers, passing_score)
             submitted_at = utcnow()
             record_id = f"attempt-{attempt['id']}"[:100]
@@ -268,13 +279,27 @@ def submit_attempt(base_or_user, user_or_attempt_id, attempt_id_or_data, data: M
             "reviewSource": reviewed_question.get("reviewSource") or {},
             "questionType": str(question.get("questionType") or "choice"),
         })
+    review_pages = {}
+    if remediation_plan.get("required"):
+        from teacher_app.learning import review_pages as learning_review_pages
+
+        review_pages = learning_review_pages.pages_by_material(review_questions)
+        try:
+            learning_review_pages.plant(_username(actor), review_pages)
+        except Exception:
+            review_pages = {}  # best effort: the exam result itself must not fail
+    remediation_plan["reviewPages"] = review_pages
     return {
         "ok": True, "attemptId": str(attempt["id"]), "recordId": record_id, "score": result["score"],
         "status": result["status"], "correctCount": result["correctCount"], "wrongCount": result["wrongCount"],
         "essayCount": result["essayCount"], "passingScore": passing_score, "categoryStats": result["categoryStats"],
-        "answerDetails": result["answersDetail"],
+        "answerDetails": [
+            {**detail, "userAnswer": grading.display_answer(option_order.present(questions[i]), shown_answers[i])}
+            if i < len(questions) and questions[i].get("optionOrder") else detail
+            for i, detail in enumerate(result["answersDetail"])
+        ],
         "questions": [
-            grading.review_question(question)
+            grading.review_question(option_order.present(question))
             for question in questions
             if isinstance(question, dict)
         ],

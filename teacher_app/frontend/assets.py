@@ -24,8 +24,8 @@ ASSET_MANIFEST = {
         "body": (
             "/home-profile-title-71.js",
             "/portal-navigation-73.js",
-            "/learner-todo-convergence-1025.js",
-            "/learning-progress-convergence-1025.js",
+            "/learner-todo.js",
+            "/learner-progress.js",
         ),
     },
     "system": {
@@ -70,9 +70,7 @@ ASSET_MANIFEST = {
             "/maintenance-64.js",
             "/workspace-shell-70.js",
             "/teacher-workspace-1014.js",
-            "/teacher-workspace-nav-fix-1014.js",
             "/teacher-media-script-1014.js",
-            "/teacher-media-source-fix-1014.js",
             "/teacher-voice-catalog-1026.js",
             "/teacher-media-audio-1014.js",
             "/teacher-media-subtitle-1014.js",
@@ -81,20 +79,21 @@ ASSET_MANIFEST = {
             "/teacher-ai-presentation-video-handoff-f5.js",
             "/teacher-ai-video-1015.js",
             "/teacher-media-mvp-status-1014.js",
-            "/teacher-media-status-fix-1014.js",
             "/teacher-media-help-1014.js",
             "/teacher-media-free-tts-1014.js",
             "/teacher-paper-template-manager-1014.js",
             "/training-command-center-71.js",
             "/pgy-competency-matrix-71.js",
             "/learning-analytics-71.js",
-            "/learning-progress-convergence-1025.js",
+            "/learner-progress.js",
+            "/learner-wrong-book-1017.js",
             "/notification-center-71.js",
             "/worker-status-70.js",
             "/production-readiness-f6.js",
             "/worker-status-convergence-101.js",
             "/system-admin-focus-1014.js",
             "/admin-results.js",
+            "/teacher-overdue-1017.js",
             "/admin-course-material.js",
             "/admin-compliance-91.js",
             "/admin-people.js",
@@ -104,7 +103,6 @@ ASSET_MANIFEST = {
             "/training-intervention-f3.js",
             "/admin-materials.js",
             "/admin-question-bank.js",
-            "/course-wizard-group-fix-1014.js",
             "/admin-quiz-materials.js",
             "/admin-question-editor-ui.js",
             "/admin-question-actions.js",
@@ -113,12 +111,10 @@ ASSET_MANIFEST = {
             "/admin-material-upload.js",
             "/material-upload-client.js",
             "/teacher-ai-material-1014.js",
-            "/teacher-ai-material-convergence-1014.js",
             "/teacher-media-recorder-1014.js",
             "/admin-ai-questions.js",
             "/admin-question-panel.js",
             "/content-audience-1014.js",
-            "/learner-content-audience-1014.js",
             "/admin-external-media.js",
             "/admin-results-export.js",
             "/learner-exam-controls.js",
@@ -135,12 +131,9 @@ ASSET_MANIFEST = {
             "/teacher-content-latency-712.js",
             "/teacher-content-composer-72.js",
             "/teacher-ux-convergence-72.js",
-            "/learner-ui-cleanup-71.js",
             "/portal-navigation-73.js",
             "/teacher-ui-resilience-1014.js",
-            "/course-wizard-runtime-fix-1014.js",
             "/teacher-interface-convergence-1014.js",
-            "/teacher-authoring-source-fix-1017.js",
             "/teacher-ai-media-studio-1018.js",
             "/teacher-ai-media-controls-1023.js",
             "/teacher-assignment-experience-1014.js",
@@ -158,6 +151,74 @@ ASSET_MANIFEST = {
         ),
     },
 }
+
+
+# Teacher/admin-only scripts a student-only account never needs on /system.
+# Each one was checked by tools/student_asset_inventory.py: it defines no global that
+# a remaining script references and touches no learner-screen element.  Withholding
+# is on by default since 2026-10-19 (STUDENT_LEAN_ASSETS=0 turns it off); see docs/STUDENT_LEAN_ASSETS_PLAN.md.
+STUDENT_LEAN_EXCLUDE = frozenset({
+    "/system-admin.js",
+    "/worker-status-70.js",
+    "/worker-status-convergence-101.js",
+    "/admin-scenario-question-1011.js",
+    "/teacher-media-mvp-status-1014.js",
+    "/teacher-media-help-1014.js",
+    "/teacher-media-free-tts-1014.js",
+    "/teacher-voice-catalog-1026.js",
+    "/teacher-paper-template-manager-1014.js",
+    "/teacher-ai-presentation-video-handoff-f5.js",
+    "/teacher-assessment-inline-1031.js",
+}) | frozenset(f"/{name}.js" for name in (
+    # batch 2: admin-* back-office scripts (only reachable from admin/teacher screens)
+    "admin-workspace", "admin-results-data", "admin-results-workspace",
+    "admin-exam-settings", "admin-doc-templates", "admin-pgy-assessments",
+    "admin-results", "admin-course-material", "admin-compliance-91",
+    "admin-people", "admin-announcements", "admin-system",
+    "admin-competency-matrix-92", "admin-materials", "admin-question-bank",
+    "admin-quiz-materials", "admin-question-editor-ui", "admin-question-actions",
+    "admin-jobs", "admin-material-upload", "admin-ai-questions",
+    "admin-question-panel", "admin-external-media", "admin-results-export",
+    "admin-hotspot-question-1010", "admin-slide-checkpoints-1011",
+    # batch 3: teacher-* authoring / back-office scripts
+    "teacher-workspace-1014", "teacher-media-script-1014", "teacher-media-recorder-1014",
+    "teacher-ai-presentation-1016", "teacher-ai-presentation-editor-f5", "teacher-ai-video-1015",
+    "production-readiness-f6", "system-admin-focus-1014", "training-intervention-f3",
+    "material-upload-client", "teacher-ai-material-1014", "teacher-content-studio-71",
+    "teacher-content-tool-panels-710", "teacher-content-latency-712", "teacher-content-composer-72",
+    "teacher-ux-convergence-72", "teacher-ui-resilience-1014",
+    "teacher-interface-convergence-1014", "teacher-ai-media-studio-1018",
+    "teacher-ai-media-controls-1023", "teacher-assignment-experience-1014", "teacher-action-queue-1024",
+    "teacher-learners-p2", "teacher-course-tracking-f2", "maintenance-64",
+    "roles-signing-66", "content-audience-1014", "course-wizard-681",
+))
+
+
+def student_lean_enabled() -> bool:
+    return os.environ.get("STUDENT_LEAN_ASSETS", "1").strip().lower() not in {"0", "false", "off", "no"}
+
+
+def _strip_scripts(html: str, paths) -> str:
+    for path in paths:
+        pattern = (
+            r"""<script[^>]*src=["']""" + re.escape(path)
+            + r"""(?:\?[^"']*)?["'][^>]*></script>\s*"""
+        )
+        html = re.sub(pattern, "", html)
+    return html
+
+
+def _is_student_only_request() -> bool:
+    try:
+        from flask import g
+
+        from teacher_app.learning import access as learning_access
+
+        user = getattr(g, "teacher_user", None)
+        # Only a plain learner account is trimmed; anyone with another role keeps everything.
+        return bool(user) and learning_access.is_assignment_gated(user, learner_view=False)
+    except Exception:
+        return False
 
 
 def _asset_tag(path: str) -> str:
@@ -262,11 +323,22 @@ def register_pgy_frontend(app):
                 response.content_length = len(response.get_data())
                 return response
 
+            if path in {"/login", "/login.html", "/account.html", "/reset-password", "/reset-password.html"}:
+                # Plain pages: only the commit-sha cache-busting version, no manifest.
+                html = _rewrite_local_asset_versions(response.get_data(as_text=True))
+                response.set_data(html)
+                response.content_length = len(response.get_data())
+                return response
+
             if path not in {"/system", "/system.html"}:
                 return response
 
             html = response.get_data(as_text=True)
             html = _apply_asset_manifest(html, "system")
+            if student_lean_enabled():
+                response.headers.add("Vary", "Cookie")
+                if _is_student_only_request():
+                    html = _strip_scripts(html, STUDENT_LEAN_EXCLUDE)
             html = _rewrite_local_asset_versions(html)
             response.set_data(html)
             response.content_length = len(response.get_data())

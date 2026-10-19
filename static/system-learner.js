@@ -55,6 +55,16 @@ async function deleteUploadedSlide(id) {
 window.deleteUploadedSlide = deleteUploadedSlide;
 
 
+// Shared-content badge (cross-group / all-staff material), formerly added by learner-content-audience-1014.js.
+function sharedContentBadge(item){
+    if(!item?.sharedFromGroup)return '';
+    const catalog=typeof GROUPS!=='undefined'?GROUPS:(window.GROUPS||{});
+    const key=item.ownerGroup||item.sharedFromGroup;
+    const name=catalog[key]?.label||catalog[key]?.name||key||'其他組別';
+    const audience=item.audienceScope==='all_staff'?'全科共用':'跨組共用';
+    return `<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">🌐 ${audience}｜來源：${escapeHtml(name)}</span>`;
+}
+
 function buildSlideCardHTML(s) {
 
     const catLabel = s.categoryLabel || slideCategoryLabels[s.category] || slideCategoryLabels[''];
@@ -67,7 +77,7 @@ function buildSlideCardHTML(s) {
 
         : `<span class="flex-1 text-xs text-slate-400 flex items-center justify-center">未連結考題模組</span>`;
 
-    const openBtn = `<button data-csp-click="openMaterial('${s.id}')" class="flex-1 text-xs font-bold bg-[#006b64] hover:bg-[#005a54] text-white py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1">📖 開始閱讀</button>`;
+    const openBtn = `<button data-csp-click="openMaterial('${s.id}')" class="flex-1 text-xs font-bold bg-[#245a41] hover:bg-[#1d4835] text-white py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1">📖 開始閱讀</button>`;
 
     const deleteBtn = s.isBuiltin
 
@@ -85,13 +95,13 @@ function buildSlideCardHTML(s) {
 
     const done = !!myCompletedMaterials[s.id];
 
-    const completeBtn = s.isBuiltin ? '' : `<button data-csp-click="markMaterialComplete('${s.id}')" class="w-full mt-2 text-xs font-semibold ${done?'bg-emerald-100 text-emerald-800 border-emerald-200':'bg-white text-emerald-700 border-emerald-300'} border py-2 rounded-lg">${done?'✅ 已完成教材':'☑️ 標記教材完成'}</button>`;
+    const completeBtn = (s.isBuiltin || materialAutoTracked(s)) ? '' : `<button data-csp-click="markMaterialComplete('${s.id}')" class="w-full mt-2 text-xs font-semibold ${done?'bg-emerald-100 text-emerald-800 border-emerald-200':'bg-white text-emerald-700 border-emerald-300'} border py-2 rounded-lg">${done?'✅ 已完成教材':'☑️ 標記教材完成'}</button>`;
 
 
 
     return `
 
-        <div class="slide-card lesson-card micro-card p-5 sm:p-6 ${s.materialType==='infographic'?'infographic-card':s.materialType==='sop'?'sop-card':s.materialType==='troubleshooting'?'troubleshoot-card':s.materialType==='case'?'case-card':''}">
+        <div class="slide-card lesson-card micro-card p-5 sm:p-6 ${s.materialType==='infographic'?'infographic-card':s.materialType==='sop'?'sop-card':s.materialType==='troubleshooting'?'troubleshoot-card':s.materialType==='case'?'case-card':''}">${sharedContentBadge(s)?`<div class="mb-2 flex flex-wrap gap-1">${sharedContentBadge(s)}</div>`:''}
 
             <div class="flex items-start justify-between gap-2">
 
@@ -141,7 +151,7 @@ function buildSlideCardHTML(s) {
 
 function isAtlasMaterial(m){return m.materialType==='atlas'||(m.materialType!=='infographic'&&m.viewerMode==='image'&&currentGroupKey==='grpMicro');}
 
-function buildAtlasCardHTML(m){const src=m.viewUrl||`/view/${encodeURIComponent(m.id)}`;const meta=m.atlasMeta||{};const chips=[meta.category,meta.magnification,meta.normality].filter(Boolean).map(x=>`<span class="atlas-chip">${escapeHtml(x)}</span>`).join('');const tagchips=(meta.tags||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,5).map(x=>`<span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">#${escapeHtml(x)}</span>`).join('');return `<article class="atlas-card micro-card"><button data-csp-click="openAtlas('${m.id}')" class="atlas-preview w-full text-left"><img src="${src}" loading="lazy" decoding="async" alt="${escapeHtml(m.title||'Atlas 圖譜')}"><span class="absolute right-2 bottom-2 px-2 py-1 rounded-lg bg-black/65 text-white text-[11px] font-bold">🔍 點擊放大</span></button><div class="p-4"><div class="flex items-center gap-2 flex-wrap"><span class="atlas-chip">Atlas</span>${chips}${tagchips}<span class="text-[11px] text-slate-400">高解析原圖</span></div><h4 class="font-black text-slate-900 mt-2">${escapeHtml(m.title||m.filename)}</h4><p class="text-xs text-slate-500 mt-1 leading-5">${escapeHtml(meta.interpretation||m.desc||'適合鏡檢照片、結晶、細胞型態與微生物圖像判讀。')}</p><button data-csp-click="openAtlas('${m.id}')" class="micro-btn mt-3 w-full bg-[#006b64] text-white rounded-lg py-2 text-xs font-bold">🔬 檢視細節</button></div></article>`;}
+function buildAtlasCardHTML(m){const src=m.viewUrl||`/view/${encodeURIComponent(m.id)}`;const meta=m.atlasMeta||{};const chips=[meta.category,meta.magnification,meta.normality].filter(Boolean).map(x=>`<span class="atlas-chip">${escapeHtml(x)}</span>`).join('');const tagchips=(meta.tags||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,5).map(x=>`<span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">#${escapeHtml(x)}</span>`).join('');return `<article class="atlas-card micro-card"><button data-csp-click="openAtlas('${m.id}')" class="atlas-preview w-full text-left"><img src="${src}" loading="lazy" decoding="async" alt="${escapeHtml(m.title||'Atlas 圖譜')}"><span class="absolute right-2 bottom-2 px-2 py-1 rounded-lg bg-black/65 text-white text-xs font-bold">🔍 點擊放大</span></button><div class="p-4"><div class="flex items-center gap-2 flex-wrap"><span class="atlas-chip">Atlas</span>${chips}${tagchips}<span class="text-xs text-slate-400">高解析原圖</span></div><h4 class="font-black text-slate-900 mt-2">${escapeHtml(m.title||m.filename)}</h4><p class="text-xs text-slate-500 mt-1 leading-5">${escapeHtml(meta.interpretation||m.desc||'適合鏡檢照片、結晶、細胞型態與微生物圖像判讀。')}</p><button data-csp-click="openAtlas('${m.id}')" class="micro-btn mt-3 w-full bg-[#245a41] text-white rounded-lg py-2 text-xs font-bold">🔬 檢視細節</button></div></article>`;}
 
 let atlasState={entry:null,zoom:1};
 
@@ -167,7 +177,9 @@ async function renderSlidesGrid() {
 
     if (!grid) return;
 
-    grid.innerHTML = `<p class="text-xs text-slate-400 col-span-full text-center py-6">載入教材清單中…</p>`;
+    grid.innerHTML = window.AppApiClient?.skeletonBlocks?.(3, 96) || `<p class="text-xs text-slate-400 col-span-full text-center py-6">載入教材清單中…</p>`;
+    const courseGrid = document.getElementById('course-overview-grid');
+    if (courseGrid && !courseGrid.children.length) courseGrid.innerHTML = window.AppApiClient?.skeletonBlocks?.(3, 120) || '';
 
     try {
 
@@ -251,18 +263,15 @@ async function renderSlidesGrid() {
         console.error(err);
         const status = Number(err?.status || 0);
         const loginRequired = Boolean(err?.loginRequired);
-        let message = '❌ 無法連線至伺服器';
+        let message = `❌ ${window.AppApiClient?.humanError?.(err, '教材清單') || '無法連線至伺服器'}`;
         if (status === 401 || loginRequired) {
             const next = `${location.pathname}${location.search}`;
             const loginUrl = `/login?next=${encodeURIComponent(next)}`;
             message = `❌ 登入已逾時，請<a class="underline font-semibold" href="${loginUrl}">重新登入</a>`;
-        } else if (status === 403) {
-            message = '❌ 沒有教材瀏覽權限';
-        } else if (status >= 500) {
-            message = '❌ 教材服務暫時發生錯誤';
         }
-        grid.innerHTML = `<p class="text-xs text-rose-500 col-span-full text-center py-6">${message}</p>`;
+        grid.innerHTML = `<div class="col-span-full text-center py-6"><p class="text-sm text-rose-600">${message}</p><button type="button" class="btn btn-secondary mt-3" data-csp-click="renderSlidesGrid()">重新載入</button></div>`;
     }
+    announceLearnerRendered('slides');
 }
 
 
@@ -309,7 +318,13 @@ function inferPdfReaderMode(entry = {}) {
 
 
 
+// Smart-learning (resume position, progress, external links) receives the open from here.
 function openMaterial(id) {
+    const handler=window.SmartLearning67?.openWith;
+    return typeof handler==='function'?handler(id,openMaterialBase):openMaterialBase(id);
+}
+
+function openMaterialBase(id) {
 
     const e = cachedSlidesList.find(s => s.id === id);
 
@@ -371,6 +386,9 @@ function openMediaViewer(entry){
 
     modal.classList.remove('hidden'); modal.classList.add('flex'); document.body.style.overflow='hidden';
 
+    // Checkpoint owner (learner-slide-checkpoints-1011.js) listens; it never wraps this function.
+    if(['video','audio'].includes(entry.viewerMode)) window.dispatchEvent(new CustomEvent('teacher:media-changed',{detail:{open:true,materialId:String(entry.id||''),kind:entry.viewerMode}}));
+
 }
 
 function setMediaSize(size){const f=document.getElementById('media-frame');f.classList.remove('size-sm','size-lg');if(size==='sm')f.classList.add('size-sm');if(size==='lg')f.classList.add('size-lg');}
@@ -381,7 +399,7 @@ function setMediaRate(value){const r=Math.max(.5,Math.min(2,Number(value)||1));d
 
 async function toggleMediaFullscreen(){const shell=document.getElementById('media-viewer-shell');try{if(!document.fullscreenElement)await shell.requestFullscreen?.();else await document.exitFullscreen?.();}catch(_){}}
 
-function closeMediaViewer(){const modal=document.getElementById('media-viewer-modal');document.getElementById('media-video').pause();document.getElementById('media-audio').pause();modal.classList.add('hidden');modal.classList.remove('flex');document.body.style.overflow='';if(document.fullscreenElement)document.exitFullscreen?.();}
+function closeMediaViewer(){const modal=document.getElementById('media-viewer-modal');document.getElementById('media-video').pause();document.getElementById('media-audio').pause();modal.classList.add('hidden');modal.classList.remove('flex');document.body.style.overflow='';if(document.fullscreenElement)document.exitFullscreen?.();window.dispatchEvent(new CustomEvent('teacher:media-changed',{detail:{open:false}}));}
 
 
 
@@ -391,18 +409,21 @@ function openSlide(id) {
 
     if (!entry) { alert('找不到該份簡報，可能已被刪除，請重新整理頁面。'); return; }
 
-    const images = [];
+    const images = [], fullImages = [], mediumImages = [];
 
     for (let i = 1; i <= entry.pageCount; i++) {
 
-        const fmt=(entry.slideFormat||entry.storageMeta?.slideFormat||'png').toLowerCase(); images.push(`${entry.imageFolder}/slide-${String(i).padStart(2, '0')}.${fmt}`);
+        const fmt=(entry.slideFormat||entry.storageMeta?.slideFormat||'png').toLowerCase(); images.push(`${entry.imageFolder}/slide-${String(i).padStart(2, '0')}.${fmt}`); fullImages.push(images[images.length-1]); if (entry.storageMeta?.slideMedium) mediumImages.push(`${entry.imageFolder}/slide-${String(i).padStart(2, '0')}.m.${entry.storageMeta.slideMedium}`);
 
     }
 
     if (!images.length) { alert("此教材尚無可閱讀頁面，請聯絡教師確認轉檔狀態。"); return; }
 
+    // 1280px copy by default; the original only for full screen or very dense screens.
+    const wantFull = (window.innerWidth * (window.devicePixelRatio || 1)) > 1600 || mediumImages.length !== images.length;
     openSlideViewer({
-        images,
+        images: wantFull ? images : mediumImages,
+        fullImages,
         title: entry.title,
         materialId: id,
         readerMode: inferPdfReaderMode(entry)
@@ -426,7 +447,7 @@ function openPdfPreview(entry) {
 
 
 
-function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, materialId = "", readerMode = 'presentation' }) {
+function openSlideViewer({ images = [], fullImages = null, previewUrl = '', pageCount = 0, title, materialId = "", readerMode = 'presentation' }) {
 
     const mode = previewUrl ? 'pdf' : 'images';
 
@@ -438,9 +459,14 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
             ? 'paged_document'
             : (mode === 'pdf' ? 'document' : 'paged_document');
 
-    slideViewerState = { images, previewUrl, pageCount: total, mode, readerMode: normalizedReaderMode, index: teachingReadPage(materialId, total), title, zoom: 1, materialId };
+    slideViewerState = { images, fullImages: fullImages || images, previewUrl, pageCount: total, mode, readerMode: normalizedReaderMode, index: teachingReadPage(materialId, total), title, zoom: 1, materialId };
     window.slideViewerState = slideViewerState;
     slidePrefetched.clear();
+    {
+        const readerShell = document.getElementById('slide-viewer-shell');
+        readerShell?.classList.remove('reader-fill', 'reader-more-open', 'reader-pages-open');
+        showReaderPortraitHint();
+    }
 
     document.getElementById('slide-viewer-title').textContent = title;
 
@@ -488,6 +514,7 @@ function openSlideViewer({ images = [], previewUrl = '', pageCount = 0, title, m
     if(mode==='pdf') updateSlideViewerPdf(); else updateSlideViewerImage();
 
     document.getElementById('slide-viewer-modal').classList.remove('hidden');
+    announceReader(true);
 
     document.body.style.overflow = 'hidden';
 
@@ -605,18 +632,132 @@ function initPdfPresentationWheel(){
     },{passive:false});
 }
 
+// iPhone Safari has no element Fullscreen API: fall back to a CSS "fill the window" mode.
 async function toggleSlideFullscreen() {
-
     const shell = document.getElementById('slide-viewer-shell');
-
+    if (!shell) return;
+    if (shell.classList.contains('reader-fill')) { toggleReaderFill(false); return; }
+    const enter = shell.requestFullscreen || shell.webkitRequestFullscreen;
+    const leave = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!enter) { toggleReaderFill(true); return; }
     try {
+        if (!(document.fullscreenElement || document.webkitFullscreenElement)) await enter.call(shell);
+        else await leave?.call(document);
+    } catch (_) { toggleReaderFill(true); }
+}
+window.toggleSlideFullscreen = toggleSlideFullscreen;
 
-        if (!document.fullscreenElement) await shell.requestFullscreen?.();
+function toggleReaderFill(force) {
+    const shell = document.getElementById('slide-viewer-shell');
+    if (!shell) return;
+    const on = typeof force === 'boolean' ? force : !shell.classList.contains('reader-fill');
+    shell.classList.toggle('reader-fill', on);
+    if (on) useFullSlideImages();
+    const button = document.getElementById('reader-fullscreen-btn');
+    if (button) { button.title = on ? '退出撐滿畫面' : '全螢幕'; button.setAttribute('aria-label', button.title); }
+    setTimeout(() => { if (typeof applySlideZoom === 'function') applySlideZoom(); }, 60);
+}
+window.toggleReaderFill = toggleReaderFill;
 
-        else await document.exitFullscreen?.();
+// Full screen / fill mode wants the original resolution; swap once, keep the page.
+function useFullSlideImages() {
+    const state = slideViewerState;
+    if (!state.fullImages || state.images === state.fullImages || state.mode === 'pdf') return;
+    state.images = state.fullImages;
+    window.slideViewerState = state;
+    updateSlideViewerImage();
+}
+document.addEventListener('fullscreenchange', () => { if (document.fullscreenElement) useFullSlideImages(); });
+document.addEventListener('webkitfullscreenchange', () => { if (document.webkitFullscreenElement) useFullSlideImages(); });
 
-    } catch (_) {}
+// 課程 › 教材 › 第幾頁: the course link closes the reader and opens that course's card.
+function paintReaderBreadcrumb(total) {
+    const nav = document.getElementById('reader-breadcrumb');
+    if (!nav) return;
+    const material = (cachedSlidesList || []).find(m => String(m.id) === String(slideViewerState.materialId || ''));
+    const course = material?.courseId ? (cachedCourses || []).find(c => String(c.id) === String(material.courseId)) : null;
+    const count = Number(total || slideViewerState.pageCount || slideViewerState.images?.length || 0);
+    const parts = [];
+    if (course) parts.push(`<button type="button" class="reader-crumb-link" data-course-id="${escapeHtml(String(course.id))}" data-csp-click="readerGoToCourse(this.dataset.courseId)">${escapeHtml(course.title || '課程')}</button>`);
+    parts.push(`<span class="reader-crumb-text">${escapeHtml(slideViewerState.title || material?.title || '教材')}</span>`);
+    if (count) parts.push(`<span class="reader-crumb-current" aria-current="page">第 ${Number(slideViewerState.index || 0) + 1} / ${count} 頁</span>`);
+    nav.innerHTML = parts.join('<span class="reader-crumb-sep" aria-hidden="true">›</span>');
+}
 
+function readerGoToCourse(courseId) {
+    closeSlideViewer();
+    setTimeout(() => {
+        const card = document.querySelector(`.course-learning-card[data-course="${CSS.escape(String(courseId || ''))}"]`);
+        if (!card) return;
+        card.open = true;
+        card.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }, 150);
+}
+window.readerGoToCourse = readerGoToCourse;
+
+function toggleReaderMore() {
+    const shell = document.getElementById('slide-viewer-shell');
+    const open = shell.classList.toggle('reader-more-open');
+    document.getElementById('reader-more-btn')?.setAttribute('aria-expanded', String(open));
+    setTimeout(() => applySlideZoom(), 60);
+}
+window.toggleReaderMore = toggleReaderMore;
+
+function toggleReaderPages() {
+    const shell = document.getElementById('slide-viewer-shell');
+    const open = shell.classList.toggle('reader-pages-open');
+    document.getElementById('reader-pages-btn')?.setAttribute('aria-label', open ? '關閉頁碼清單' : '開啟頁碼清單');
+}
+window.toggleReaderPages = toggleReaderPages;
+
+// Swipe left/right to turn pages; portrait phones get a one-time "rotate" hint.
+(function bindReaderGestures() {
+    let startX = 0, startY = 0, tracking = false;
+    document.addEventListener('touchstart', (event) => {
+        const stage = document.getElementById('slide-viewer-stage');
+        tracking = Boolean(stage && stage.contains(event.target) && event.touches.length === 1 && (slideViewerState.zoom || 1) < 1.01);
+        if (tracking) { startX = event.touches[0].clientX; startY = event.touches[0].clientY; }
+    }, { passive: true });
+    document.addEventListener('touchend', (event) => {
+        if (!tracking) return;
+        tracking = false;
+        const touch = event.changedTouches[0];
+        const dx = touch.clientX - startX, dy = touch.clientY - startY;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) { if (dx < 0) slideViewerNext(); else slideViewerPrev(); }
+    }, { passive: true });
+    // Two-finger pinch zooms the slide itself (0.7x–2.5x) instead of the whole page.
+    let pinchStart = 0, zoomStart = 1;
+    const spread = touches => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    document.addEventListener('touchstart', (event) => {
+        const stage = document.getElementById('slide-viewer-stage');
+        if (stage && stage.contains(event.target) && event.touches.length === 2) {
+            tracking = false;
+            pinchStart = spread(event.touches);
+            zoomStart = slideViewerState.zoom || 1;
+        }
+    }, { passive: true });
+    document.addEventListener('touchmove', (event) => {
+        if (!pinchStart || event.touches.length !== 2) return;
+        if (slideViewerState.mode === 'pdf' && slideViewerState.readerMode === 'document') return;
+        event.preventDefault();
+        slideViewerState.zoom = Math.max(0.7, Math.min(2.5, zoomStart * spread(event.touches) / pinchStart));
+        applySlideZoom();
+    }, { passive: false });
+    document.addEventListener('touchend', (event) => {
+        if (pinchStart && event.touches.length < 2) { pinchStart = 0; updateSlidePanState(); }
+    }, { passive: true });
+})();
+
+function showReaderPortraitHint() {
+    try {
+        if (sessionStorage.getItem('readerPortraitHint')) return;
+        if (!window.matchMedia('(orientation: portrait)').matches || window.innerWidth >= 768) return;
+        sessionStorage.setItem('readerPortraitHint', '1');
+    } catch (_) { return; }
+    const hint = document.getElementById('reader-portrait-hint');
+    if (!hint) return;
+    hint.classList.remove('hidden');
+    setTimeout(() => hint.classList.add('hidden'), 4000);
 }
 
 
@@ -624,6 +765,8 @@ async function toggleSlideFullscreen() {
 function updateViewerNav(total){
 
     const index=slideViewerState.index;
+
+    paintReaderBreadcrumb(total);
 
     document.getElementById('slide-viewer-page-info').textContent = `第 ${index + 1} / ${total} 頁`;
 
@@ -697,11 +840,9 @@ function prefetchPresentationPage(page){
     prefetchImageUrl(presentationPreviewPageUrl(page));
 }
 
-// 翻頁前先把前一頁、後兩頁備好，連續翻頁不用每頁都等伺服器轉圖。
+// 只預載下一頁，節省外送流量。
 function prefetchAroundPresentationPage(page){
     prefetchPresentationPage(page+1);
-    prefetchPresentationPage(page+2);
-    prefetchPresentationPage(page-1);
 }
 
 function updateSlideViewerPresentationPage(page,total,attempt=0){
@@ -837,26 +978,9 @@ function renderSlideThumbs() {
 
     const container = document.getElementById('slide-viewer-thumbs');
 
-    if(slideViewerState.mode==='pdf'){
-
-        const total=Math.max(1,Number(slideViewerState.pageCount||1));
-
-        container.innerHTML=Array.from({length:total},(_,i)=>`<button class="slide-page-btn ${i===slideViewerState.index?'active':''}" data-csp-click="goToSlidePage(${i})" aria-label="跳到第 ${i+1} 頁">${i+1}</button>`).join('');
-
-        return;
-
-    }
-
-    container.innerHTML = slideViewerState.images.map((src, i) => `
-
-        <button class="slide-thumb-card ${i===slideViewerState.index?'active':''}" data-csp-click="goToSlidePage(${i})" aria-label="跳到第 ${i + 1} 頁">
-
-            <img src="${src}" class="w-full aspect-video object-contain bg-white" alt="第 ${i + 1} 頁縮圖" loading="lazy">
-
-            <span class="hidden md:block text-[10px] text-slate-500 text-center py-1 bg-white">第 ${i + 1} 頁</span>
-
-        </button>`).join('');
-
+    // 純數字頁碼列（不載入縮圖原圖，節省流量）。
+    const total=Math.max(1,slideViewerState.mode==='pdf'?Number(slideViewerState.pageCount||1):slideViewerState.images.length);
+    container.innerHTML=Array.from({length:total},(_,i)=>`<button class="slide-page-btn ${i===slideViewerState.index?'active':''}" data-csp-click="goToSlidePage(${i})" aria-label="跳到第 ${i+1} 頁">${i+1}</button>`).join('');
 }
 
 
@@ -873,6 +997,7 @@ function goToSlidePage(i) {
     // 縮圖／頁碼列只在開啟時建立一次；翻頁只切換 active（updateViewerNav 負責），
     // 否則每翻一頁都要重建並重新載入所有縮圖，會卡。
     if(slideViewerState.mode==='pdf')updateSlideViewerPdf();else updateSlideViewerImage();
+    announceReader(true);
 }
 
 function slideViewerPrev() { goToSlidePage(slideViewerState.index - 1); }
@@ -885,7 +1010,7 @@ window.goToSlidePage = goToSlidePage;
 window.slideViewerPrev = slideViewerPrev;
 window.slideViewerNext = slideViewerNext;
 
-function closeSlideViewer() { ++slidePdfSwapSerial; ++slidePresentationImageSerial; slidePageRetryNonce=0; hideSlidePageError(); document.getElementById('slide-viewer-pdf-pending')?.remove(); const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';pdf.dataset.pendingSrc='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); }
+function closeSlideViewer() { ++slidePdfSwapSerial; ++slidePresentationImageSerial; slidePageRetryNonce=0; hideSlidePageError(); document.getElementById('slide-viewer-pdf-pending')?.remove(); const pdf=document.getElementById('slide-viewer-pdf'); if(pdf){pdf.removeAttribute('src');pdf.dataset.src='';pdf.dataset.pendingSrc='';} document.getElementById('slide-viewer-modal').classList.add('hidden'); document.body.style.overflow = ''; if (document.fullscreenElement) document.exitFullscreen?.(); announceReader(false); }
 
 
 
@@ -900,6 +1025,11 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') slideViewerPrev();
 
     else if (e.key === 'ArrowRight') slideViewerNext();
+
+    else if (e.key === ' ' && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target?.tagName || '')) {
+        const narration = document.querySelector('#slide-viewer-modal audio, #slide-viewer-modal video');
+        if (narration) { e.preventDefault(); if (narration.paused) narration.play?.(); else narration.pause?.(); }
+    }
 
     else if (e.key === 'Escape') closeSlideViewer();
 
@@ -968,7 +1098,7 @@ function renderCompletionCertificateShelf(){
     if(!section||!list)return;
     const items=completionCertificates.filter(item=>(item.area||currentTrainingArea)===currentTrainingArea&&(item.group||currentGroupKey)===currentGroupKey);
     section.classList.toggle('hidden',!items.length);if(count)count.textContent=`${items.length} 張`;
-    list.innerHTML=items.map(item=>{const label=item.currentStatus==='current'?'目前有效':item.currentStatus==='retraining_required'?'需重新訓練':'歷史紀錄';const tone=item.currentStatus==='current'?'bg-emerald-50 text-emerald-700 border-emerald-200':item.currentStatus==='retraining_required'?'bg-rose-50 text-rose-700 border-rose-200':'bg-slate-50 text-slate-600 border-slate-200';return `<div class="rounded-xl border border-emerald-100 bg-white px-3 py-3"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><div class="truncate text-xs font-black text-slate-900">🎓 ${escapeHtml(item.courseTitle||'課程完訓證明')}</div><div class="mt-1 text-[10px] text-slate-400">證明編號 ${escapeHtml(item.id||'')}</div></div><span class="shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold ${tone}">${label}</span></div></div>`;}).join('');
+    list.innerHTML=items.map(item=>{const label=item.currentStatus==='current'?'目前有效':item.currentStatus==='retraining_required'?'需重新訓練':'歷史紀錄';const tone=item.currentStatus==='current'?'bg-emerald-50 text-emerald-700 border-emerald-200':item.currentStatus==='retraining_required'?'bg-rose-50 text-rose-700 border-rose-200':'bg-slate-50 text-slate-600 border-slate-200';return `<div class="rounded-xl border border-emerald-100 bg-white px-3 py-3"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><div class="truncate text-xs font-black text-slate-900">🎓 ${escapeHtml(item.courseTitle||'課程完訓證明')}</div><div class="mt-1 text-xs text-slate-400">證明編號 ${escapeHtml(item.id||'')}</div></div><span class="shrink-0 rounded-full border px-2 py-1 text-xs font-bold ${tone}">${label}</span></div></div>`;}).join('');
 }
 
 async function issueCompletionCertificate(courseId){
@@ -1035,7 +1165,7 @@ function renderSavedLearningShelf(){
     if(!section||!list)return;
     const items=Array.from(savedLearningItems.values()).filter(item=>(item.area||currentTrainingArea)===currentTrainingArea&&(item.group||currentGroupKey)===currentGroupKey);
     section.classList.toggle('hidden',!items.length);if(count)count.textContent=`${items.length} 項`;
-    list.innerHTML=items.map(item=>`<div class="flex items-center justify-between gap-2 rounded-xl border border-amber-100 bg-white px-3 py-2"><div class="min-w-0"><div class="truncate text-xs font-bold text-slate-800">${item.itemType==='course'?'📘':'📚'} ${escapeHtml(item.title||'學習項目')}</div><div class="mt-0.5 text-[10px] text-slate-400">${item.itemType==='course'?'課程':'教材'} · 已同步收藏</div></div><div class="flex shrink-0 gap-1"><button type="button" data-saved-learning-open="${escapeHtml(item.itemType)}" data-saved-learning-id="${escapeHtml(item.itemId)}" class="rounded-lg bg-amber-500 px-2.5 py-1.5 text-[10px] font-bold text-white">前往</button><button type="button" data-saved-learning-remove="${escapeHtml(item.itemType)}" data-saved-learning-id="${escapeHtml(item.itemId)}" class="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] text-slate-500">移除</button></div></div>`).join('');
+    list.innerHTML=items.map(item=>`<div class="flex items-center justify-between gap-2 rounded-xl border border-amber-100 bg-white px-3 py-2"><div class="min-w-0"><div class="truncate text-xs font-bold text-slate-800">${item.itemType==='course'?'📘':'📚'} ${escapeHtml(item.title||'學習項目')}</div><div class="mt-0.5 text-xs text-slate-400">${item.itemType==='course'?'課程':'教材'} · 已同步收藏</div></div><div class="flex shrink-0 gap-1"><button type="button" data-saved-learning-open="${escapeHtml(item.itemType)}" data-saved-learning-id="${escapeHtml(item.itemId)}" class="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-bold text-white">前往</button><button type="button" data-saved-learning-remove="${escapeHtml(item.itemType)}" data-saved-learning-id="${escapeHtml(item.itemId)}" class="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-500">移除</button></div></div>`).join('');
     bindSavedLearningButtons(section);
 }
 
@@ -1044,6 +1174,9 @@ function bindSavedLearningButtons(root=document){
     root.querySelectorAll?.('[data-saved-learning-open]').forEach(button=>{if(button.dataset.savedBound==='1')return;button.dataset.savedBound='1';button.addEventListener('click',()=>openSavedLearningItem(button.dataset.savedLearningOpen||'',button.dataset.savedLearningId||''));});
     root.querySelectorAll?.('[data-saved-learning-remove]').forEach(button=>{if(button.dataset.savedBound==='1')return;button.dataset.savedBound='1';button.addEventListener('click',()=>toggleSavedLearningItem(button.dataset.savedLearningRemove||'',button.dataset.savedLearningId||''));});
 }
+
+// Reader-measured materials (pages / media) complete by the server's rule, never by a button.
+function materialAutoTracked(m){ return ['slides','preview_pdf','video','audio'].includes(String((m&&m.viewerMode)||'')); }
 
 function courseMaterialMeta(m){
 
@@ -1063,22 +1196,41 @@ function courseMaterialMeta(m){
 
 }
 
+// Emoji -> sprite icon (static/icons.svg); unknown emoji are shown as before.
+const UI_ICON_BY_EMOJI = {'🎬':'video','🎧':'audio','🧰':'tools','🩸':'drop','📑':'sop','📊':'infographic','📚':'book','📝':'exam'};
+function uiIcon(emoji){
+    const name = UI_ICON_BY_EMOJI[emoji];
+    return name ? `<svg class="icon" aria-hidden="true" focusable="false"><use href="/icons.svg#${name}"/></svg>` : emoji;
+}
+
 function buildCourseMaterialRow(m){
 
     const meta=courseMaterialMeta(m), done=!!myCompletedMaterials[m.id];
 
     const detail=[m.pageCount?`${m.pageCount} 頁`:'',m.dateAdded?`上傳 ${m.dateAdded}`:''].filter(Boolean).join(' · ');
 
-    return `<div class="course-material-row"><span class="course-type-icon">${meta.icon}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="course-material-title font-bold text-sm text-slate-800 break-words">${escapeHtml(m.title||m.filename||'未命名教材')}</span><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.tone}">${escapeHtml(meta.label)}</span>${done?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✓ 已完成</span>':''}</div><p class="text-[11px] text-slate-400 mt-1">${escapeHtml(detail||m.description||'')}</p></div><div class="course-row-actions flex items-center gap-2"><button data-csp-click="openMaterial('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg bg-[#006b64] hover:bg-[#005a54] text-white text-xs font-bold">${meta.key==='media'?'▶ 播放':'📖 閱讀'}</button>${m.isBuiltin?'':`<button data-csp-click="markMaterialComplete('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg border ${done?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'} text-xs font-bold">${done?'✓ 已完成':'完成標記'}</button><button type="button" data-save-learning-item="material" data-save-learning-id="${escapeHtml(m.id)}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">${savedLearningItems.has(savedLearningKey('material',m.id))?'★ 已收藏':'☆ 稍後閱讀'}</button>`}</div></div>`;
+    return `<div class="course-material-row"><span class="course-type-icon">${uiIcon(meta.icon)}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap">${sharedContentBadge(m)}<span class="course-material-title font-bold text-sm text-slate-800 break-words">${escapeHtml(m.title||m.filename||'未命名教材')}</span><span class="text-xs font-bold px-2 py-0.5 rounded-full ${meta.tone}">${escapeHtml(meta.label)}</span>${done?'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✓ 已完成</span>':''}</div><p class="text-xs text-slate-400 mt-1" data-row-detail>${escapeHtml(detail||m.description||'')}</p></div><div class="course-row-actions flex items-center gap-2"><button data-csp-click="openMaterial('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg bg-[#245a41] hover:bg-[#1d4835] text-white text-xs font-bold">${meta.key==='media'?'▶ 播放':'📖 閱讀'}</button>${m.isBuiltin?'':`${materialAutoTracked(m)?'':`<button data-csp-click="markMaterialComplete('${escapeHtml(m.id)}')" class="px-3 py-2 rounded-lg border ${done?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'} text-xs font-bold">${done?'✓ 已完成':'完成標記'}</button>`}<button type="button" data-save-learning-item="material" data-save-learning-id="${escapeHtml(m.id)}" class="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">${savedLearningItems.has(savedLearningKey('material',m.id))?'★ 已收藏':'☆ 稍後閱讀'}</button>`}</div></div>`;
 
 }
 
 function buildCourseExamRow(q){
 
     const bank=examBankCount(q),actual=examActualCount(q),draft=hasExamDraft(q.id);
+    if(Number(bank)===0)return buildCourseExamNotReadyRow(q);
+    // Status badge, fail hint and the locked card come from the study/exam loop (if loaded).
+    const parts=window.LearnerExamRow?.parts?.(q)||{badge:'',hint:'',locked:false,lockedHtml:'',label:''};
+    const label=draft?'繼續作答 →':(parts.label||'開始考核 →');
+    const action=parts.locked
+        ?`<button type="button" disabled class="px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold opacity-60 cursor-not-allowed">🔒 尚未解鎖</button>`
+        :`<button data-csp-click="openCourseExam('${escapeHtml(q.id)}')" class="px-3 py-2 rounded-lg ${draft?'bg-amber-600 hover:bg-amber-500':'bg-indigo-600 hover:bg-indigo-500'} text-white text-xs font-bold">${label}</button>`;
 
-    return `<div class="course-material-row"><span class="course-type-icon">📝</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-sm text-slate-800">${escapeHtml(q.title||'課後評量')}</span>${q.blindMode?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white">導師盲測</span>':''}${draft?'<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">進行中</span>':''}</div><div class="flex flex-wrap gap-1.5 mt-1.5 text-[10px]"><span class="course-stat-chip">👤 ${escapeHtml(examAudienceLabel(q))}</span><span class="course-stat-chip">🧠 題庫 ${bank} 題</span><span class="course-stat-chip">📋 ${escapeHtml(examDrawLabel(q))}</span><span class="course-stat-chip">🎯 及格 ${Number(q.passingScore||80)} 分</span></div>${q.desc?`<p class="text-[11px] text-slate-400 mt-1">${escapeHtml(q.desc)}</p>`:''}</div><div class="course-row-actions"><button data-csp-click="openCourseExam('${escapeHtml(q.id)}')" class="px-3 py-2 rounded-lg ${draft?'bg-amber-600 hover:bg-amber-500':'bg-indigo-600 hover:bg-indigo-500'} text-white text-xs font-bold">${draft?'繼續作答 →':'開始考核 →'}</button></div></div>`;
+    return `<div class="course-material-row"><span class="course-type-icon">${uiIcon('📝')}</span><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="font-bold text-sm text-slate-800">${escapeHtml(q.title||'課後評量')}</span>${q.blindMode?'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white">導師盲測</span>':''}${draft?'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">進行中</span>':''}${parts.badge}</div><div class="flex flex-wrap gap-1.5 mt-1.5 text-xs"><span class="course-stat-chip">👤 ${escapeHtml(examAudienceLabel(q))}</span><span class="course-stat-chip">🧠 題庫 ${bank} 題</span><span class="course-stat-chip">📋 ${escapeHtml(examDrawLabel(q))}</span><span class="course-stat-chip">🎯 及格 ${Number(q.passingScore||80)} 分</span></div>${q.desc?`<p class="text-xs text-slate-400 mt-1">${escapeHtml(q.desc)}</p>`:''}${parts.hint}${parts.lockedHtml}</div><div class="course-row-actions">${action}</div></div>`;
 
+}
+
+// An exam with no questions yet cannot be taken: show it as not ready (was a teaching.js wrapper).
+function buildCourseExamNotReadyRow(q){
+    return `<div class="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 flex items-center justify-between gap-3" data-exam-not-ready="${escapeHtml(q?.id||'')}"><div><div class="font-bold text-sm text-slate-800">📝 ${escapeHtml(q?.title||'未命名考卷')}</div><div class="text-xs text-amber-700 mt-1">尚待題庫建置・目前 0 題</div></div><button type="button" disabled class="px-3 py-2 rounded-lg bg-slate-100 text-slate-400 text-xs font-bold cursor-not-allowed">尚未開放</button></div>`;
 }
 
 async function openCourseExam(catId){
@@ -1112,7 +1264,7 @@ function finalizeCourseOverview(grid,courses){
         if(!group)return;
         const row=document.createElement('div');
         row.className='flex items-center justify-between gap-3 border-t border-slate-100 pt-3';
-        row.innerHTML='<div><div class="text-xs font-black text-slate-700">💬 課程回饋與收藏</div><div class="text-[11px] text-slate-400 mt-0.5">分享學習體驗，或把課程加入跨裝置收藏。</div></div>';
+        row.innerHTML='<div><div class="text-xs font-black text-slate-700">💬 課程回饋與收藏</div><div class="text-xs text-slate-400 mt-0.5">分享學習體驗，或把課程加入跨裝置收藏。</div></div>';
         const actions=document.createElement('div');
         actions.className='flex flex-wrap justify-end gap-2';
         const save=document.createElement('button');
@@ -1147,7 +1299,7 @@ function renderCourseOverviewBase() {
 
     const cc=document.getElementById('course-overview-course-count'),mc=document.getElementById('course-overview-material-count'),ec=document.getElementById('course-overview-exam-count');if(cc)cc.textContent=`課程 ${courses.length}`;if(mc)mc.textContent=`教材 ${groupMaterials.length}`;if(ec)ec.textContent=`考卷 ${quizzes.length}`;
 
-    const renderCard=(c,index,isOrphan=false)=>{const mats=isOrphan?orphanMaterials:groupMaterials.filter(m=>m.courseId===c.id),exams=isOrphan?orphanQuizzes:quizzes.filter(q=>q.courseId===c.id),done=mats.filter(m=>myCompletedMaterials[m.id]).length,pct=mats.length?Math.round(done/mats.length*100):0,activeQuestions=exams.reduce((sum,q)=>sum+examBankCount(q),0);const desc=(!isOrphan&&c.desc&&c.desc.trim()!==c.title?.trim())?c.desc:(isOrphan?'未綁定課程的教材與考卷集中於此，管理者可於後台重新歸類。':'教材、題庫與考核集中在同一門課程中。');return `<details class="course-learning-card" ${index===0&&!isOrphan?'open':''}><summary class="course-learning-summary"><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="text-lg font-black text-slate-900">${isOrphan?'📁 通用／未歸類資源':`📘 ${escapeHtml(c.title||'未命名課程')}`}</span>${isOrphan?'<span class="text-[10px] font-bold rounded-full px-2 py-0.5 bg-amber-50 text-amber-700">待整理</span>':'<span class="text-[10px] font-bold rounded-full px-2 py-0.5 bg-emerald-50 text-emerald-700">● 啟用中</span>'}</div><p class="text-xs text-slate-500 mt-1 leading-5">${escapeHtml(desc)}</p><div class="flex flex-wrap gap-1.5 mt-2"><span class="course-stat-chip">📚 教材 ${mats.length} 份</span><span class="course-stat-chip">📝 題庫 ${activeQuestions} 題</span><span class="course-stat-chip">📋 考卷 ${exams.length} 份</span><span class="course-stat-chip">✅ 教材完成 ${done}/${mats.length}</span></div>${mats.length?`<div class="flex items-center gap-2 mt-2 max-w-lg"><div class="course-progress-mini flex-1"><span style="width:${pct}%"></span></div><span class="text-[10px] font-bold text-slate-500">${pct}%</span></div>`:''}</div><span class="course-learning-chevron">⌄</span></summary><div class="course-material-group space-y-4"><div><div class="flex items-center justify-between gap-2 mb-2"><h4 class="text-xs font-black tracking-wide text-slate-600">📚 學習教材</h4><span class="text-[11px] text-slate-400">教材 ${mats.length} 份</span></div><div class="space-y-2">${mats.length?mats.map(buildCourseMaterialRow).join(''):'<div class="course-empty-row">此課程尚未放置教材。</div>'}</div></div><div><div class="flex items-center justify-between gap-2 mb-2"><h4 class="text-xs font-black tracking-wide text-slate-600">📋 課後考核</h4><span class="text-[11px] text-slate-400">考卷 ${exams.length} 份</span></div><div class="space-y-2">${exams.length?exams.map(buildCourseExamRow).join(''):'<div class="course-empty-row">此課程尚未建立考卷。</div>'}</div></div></div></details>`;};
+    const renderCard=(c,index,isOrphan=false)=>{const mats=isOrphan?orphanMaterials:groupMaterials.filter(m=>m.courseId===c.id),exams=isOrphan?orphanQuizzes:quizzes.filter(q=>q.courseId===c.id),done=mats.filter(m=>myCompletedMaterials[m.id]).length,pct=mats.length?Math.round(done/mats.length*100):0,activeQuestions=exams.reduce((sum,q)=>sum+examBankCount(q),0);const desc=(!isOrphan&&c.desc&&c.desc.trim()!==c.title?.trim())?c.desc:(isOrphan?'未綁定課程的教材與考卷集中於此，管理者可於後台重新歸類。':'教材、題庫與考核集中在同一門課程中。');return `<details class="course-learning-card" ${index===0&&!isOrphan?'open':''}><summary class="course-learning-summary"><div class="min-w-0 flex-1"><div class="flex items-center gap-2 flex-wrap"><span class="text-lg font-black text-slate-900">${isOrphan?'📁 通用／未歸類資源':`📘 ${escapeHtml(c.title||'未命名課程')}`}</span>${isOrphan?'<span class="text-xs font-bold rounded-full px-2 py-0.5 bg-amber-50 text-amber-700">待整理</span>':'<span class="text-xs font-bold rounded-full px-2 py-0.5 bg-emerald-50 text-emerald-700">● 啟用中</span>'}</div><p class="text-xs text-slate-500 mt-1 leading-5">${escapeHtml(desc)}</p><div class="flex flex-wrap gap-1.5 mt-2"><span class="course-stat-chip">📚 教材 ${mats.length} 份</span><span class="course-stat-chip">📝 題庫 ${activeQuestions} 題</span><span class="course-stat-chip">📋 考卷 ${exams.length} 份</span><span class="course-stat-chip">✅ 教材完成 ${done}/${mats.length}</span></div>${mats.length?`<div class="flex items-center gap-2 mt-2 max-w-lg"><div class="course-progress-mini flex-1"><span style="width:${pct}%"></span></div><span class="text-xs font-bold text-slate-500">${pct}%</span></div>`:''}</div><span class="course-learning-chevron">⌄</span></summary><div class="course-material-group space-y-4"><div><div class="flex items-center justify-between gap-2 mb-2"><h4 class="text-xs font-black tracking-wide text-slate-600">📚 學習教材</h4><span class="text-xs text-slate-400">教材 ${mats.length} 份</span></div><div class="space-y-2">${mats.length?mats.map(buildCourseMaterialRow).join(''):'<div class="course-empty-row">此課程尚未放置教材。</div>'}</div></div><div><div class="flex items-center justify-between gap-2 mb-2"><h4 class="text-xs font-black tracking-wide text-slate-600">📋 課後考核</h4><span class="text-xs text-slate-400">考卷 ${exams.length} 份</span></div><div class="space-y-2">${exams.length?exams.map(buildCourseExamRow).join(''):'<div class="course-empty-row">此課程尚未建立考卷。</div>'}</div></div></div></details>`;};
 
     let html=courses.map((c,i)=>renderCard(c,i,false)).join('');if(orphanMaterials.length||orphanQuizzes.length)html+=renderCard({id:'',title:'通用／未歸類資源',desc:''},courses.length,true);grid.innerHTML=html;
     finalizeCourseOverview(grid,courses);
@@ -1156,8 +1308,14 @@ function renderCourseOverviewBase() {
 
 function renderCourseOverview(){
     const presenter=window.TeachingCourseOverview66?.render;
-    if(typeof presenter==='function')return presenter();
-    return renderCourseOverviewBase();
+    const result=typeof presenter==='function'?presenter():renderCourseOverviewBase();
+    announceLearnerRendered('course-overview');
+    return result;
+}
+
+// Listeners (reading progress labels, etc.) repaint on this instead of wrapping the renderers.
+function announceLearnerRendered(view){
+    window.dispatchEvent(new CustomEvent('teacher:learner-rendered',{detail:{view}}));
 }
 
 window.LearnerCourseOverview = Object.freeze({
@@ -1185,6 +1343,13 @@ function bindCourseFeedbackUI(){
 
 
 async function markMaterialComplete(materialId){
+    // Slides, PDFs and media complete by being read in the reader: open it instead.
+    const tracked=(window.cachedSlidesList||[]).find(m=>String(m.id)===String(materialId));
+    if(tracked&&materialAutoTracked(tracked)){
+        if(typeof window.openMaterial==='function')await window.openMaterial(materialId);
+        return false;
+    }
+    if(window.TeachingIdentity&&!window.TeachingIdentity.ensure())return false;
 
     const name=(document.getElementById('examinee-name')?.value || document.getElementById('progress-name')?.value || '').trim();
 
@@ -1203,6 +1368,7 @@ async function markMaterialComplete(materialId){
     if(currentName!==identitySnapshot.name || currentEmpId!==identitySnapshot.empId) return false;
 
     myCompletedMaterials[materialId]=data.completedAt||true;
+    window.dispatchEvent(new CustomEvent('teacher66:material-complete',{detail:{materialId}}));
 
     if(currentMaterialView==='materials') renderCourseOverview(); else await renderSlidesGrid();
 
@@ -1258,3 +1424,125 @@ async function loadMyProgress(){
     hist.innerHTML=(data.records||[]).length ? data.records.map(r=>`<div class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><div class="font-semibold text-slate-800">${escapeHtml(r.quizTitle||'')}</div><div class="text-xs text-slate-400">${escapeHtml(r.timestamp||'')}</div></div><div class="text-right"><div class="font-bold ${r.reviewStatus==='pending'?'text-amber-600':(Number(r.score)>=80?'text-emerald-600':'text-rose-600')}">${r.reviewStatus==='pending'?'待人工批改':`${Number(r.score)||0} 分`}</div><div class="text-xs text-slate-500">${escapeHtml(r.status||'')}</div></div></div>`).join('') : '<div class="p-5 text-sm text-slate-400">尚無考試紀錄。</div>';
 
 }
+
+/* Desktop reader chrome: after 3s without mouse/keyboard the page arrows fade out, and in
+ * full screen the header and footer bars step aside so the slide gets the whole screen.
+ * Mouse or key brings them back.  Phones/tablets (coarse pointer) are left alone. */
+(function bindReaderIdleChrome() {
+    const IDLE_MS = 3000;
+    let timer = 0;
+    const shell = () => document.getElementById('slide-viewer-shell');
+    const desktop = () => !window.matchMedia || window.matchMedia('(pointer:fine)').matches;
+    const wake = () => {
+        const el = shell();
+        if (!el) return;
+        el.classList.remove('reader-idle');
+        clearTimeout(timer);
+        if (!desktop() || document.getElementById('slide-viewer-modal')?.classList.contains('hidden')) return;
+        timer = setTimeout(() => {
+            if (document.getElementById('aa-checkpoint-card') || document.getElementById('reader-more-btn')?.getAttribute('aria-expanded') === 'true') return;
+            el.classList.add('reader-idle');
+        }, IDLE_MS);
+    };
+    ['mousemove', 'keydown', 'pointerdown', 'wheel'].forEach(type => document.addEventListener(type, wake, {passive: true}));
+    window.addEventListener('teacher:reader-changed', event => {
+        if (event.detail && event.detail.open) wake();
+        else { clearTimeout(timer); shell()?.classList.remove('reader-idle'); }
+    });
+})();
+
+/* Reader as a page: #read/<materialId>/<page>.  The URL follows the reader through an event
+ * (teacher:reader-changed); browser Back closes the reader, a reload or shared link reopens it. */
+function announceReader(open) {
+    const state = window.slideViewerState || {};
+    window.dispatchEvent(new CustomEvent('teacher:reader-changed', {detail: {open, materialId: state.materialId || '', page: Number(state.index || 0) + 1}}));
+}
+(function bindReaderRoute() {
+    const parse = () => { const m = /^#read\/([^/]+)\/(\d+)$/.exec(location.hash || ''); return m ? {id: decodeURIComponent(m[1]), page: Number(m[2])} : null; };
+    let pushed = false;
+    window.addEventListener('teacher:reader-changed', event => {
+        const {open, materialId, page} = event.detail || {};
+        const modalOpen = !document.getElementById('slide-viewer-modal')?.classList.contains('hidden');
+        if (open && modalOpen && materialId) {
+            const next = `#read/${encodeURIComponent(materialId)}/${page}`;
+            if (location.hash === next) return;
+            if (parse() || pushed) history.replaceState(null, '', next);
+            else { history.pushState({reader: true}, '', next); pushed = true; }
+        } else if (!open && parse()) {
+            if (pushed) { pushed = false; history.back(); } else history.replaceState(null, '', location.pathname + location.search);
+        }
+    });
+    window.addEventListener('hashchange', () => {
+        const route = parse();
+        const modalOpen = !document.getElementById('slide-viewer-modal')?.classList.contains('hidden');
+        if (!route && modalOpen) { pushed = false; closeSlideViewer(); }
+        else if (route && !modalOpen) openRouteMaterial(route);
+    });
+    async function openRouteMaterial(route) {
+        for (let tries = 0; tries < 40; tries += 1) {
+            if (typeof cachedSlidesList !== 'undefined' && (cachedSlidesList || []).some(m => String(m.id) === route.id)) break;
+            await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        if (!(cachedSlidesList || []).some(m => String(m.id) === route.id)) return;
+        await window.openMaterial(route.id);
+        goToSlidePage(Math.max(0, route.page - 1));
+    }
+    window.addEventListener('load', () => { const route = parse(); if (route) { pushed = true; openRouteMaterial(route); } });
+})();
+
+/* Learner page focus (was learner-ui-cleanup-71.js): run once, never observes the DOM; first-paint hiding is in learner.css. */
+(function () {
+  'use strict';
+
+  function hide(el) {
+    if (!el) return;
+    el.classList.add('hidden');
+    el.setAttribute('aria-hidden', 'true');
+  }
+
+  function show(el) {
+    if (!el) return;
+    el.classList.remove('hidden');
+    el.removeAttribute('aria-hidden');
+  }
+
+  function apply() {
+    const slidesPanel = document.getElementById('panel-slides');
+    if (slidesPanel) {
+      const intro = slidesPanel.querySelector(':scope > section.edu-card');
+      hide(intro);
+    }
+
+    const learningStart = document.getElementById('learning-start');
+    if (learningStart) {
+      learningStart.replaceChildren();
+      learningStart.dataset.ready = '1';
+      hide(learningStart);
+    }
+
+    const overview = document.getElementById('course-overview');
+    if (overview) {
+      const header = overview.querySelector(':scope > .edu-card');
+      header?.querySelector('.edu-kicker')?.remove();
+      const heading = header?.querySelector('h3');
+      const desc = heading?.nextElementSibling;
+      if (desc?.tagName === 'P') hide(desc);
+      if (header) {
+        header.classList.remove('p-5', 'sm:p-6');
+        header.classList.add('p-4');
+      }
+    }
+
+    const resultCount = document.getElementById('learning-result-count');
+    if (resultCount) {
+      if (String(resultCount.textContent || '').trim()) show(resultCount);
+      else hide(resultCount);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', apply, {once: true});
+  } else {
+    apply();
+  }
+})();

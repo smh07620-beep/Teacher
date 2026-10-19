@@ -49,19 +49,18 @@ class LearningFlow66Tests(
         self.assertEqual(learner.count("fetch('/api/material-progress'"), 1)
         self.assertNotIn("fetch('/api/material-progress'", teaching)
         self.assertIn("window.LearnerMaterialProgress = Object.freeze", learner)
-        self.assertIn("window.LearnerMaterialProgress?.complete", teaching)
+        self.assertIn("window.TeachingIdentity&&!window.TeachingIdentity.ensure()", learner)
         self.assertIn("return true;", learner)
         self.assertIn("return false;", learner)
 
     def test_teaching_completion_wrapper_only_adds_identity_and_reader_sync(self):
+        # The identity check is a helper the owner calls; reader sync follows the completion event.
         source = self.source("static/teaching.js")
-        start = source.index("const teacher66OriginalMarkComplete")
-        end = source.index("const teacher66OriginalNextMaterial", start)
-        wrapper = source[start:end]
-        self.assertIn("teachingSetIdentityFields(", wrapper)
-        self.assertIn("teacher66SyncReaderNext", wrapper)
-        self.assertIn("requestAnimationFrame", wrapper)
-        self.assertNotIn("/api/material-progress", wrapper)
+        start = source.index("window.TeachingIdentity = Object.freeze")
+        helper = source[start:start + 900]
+        self.assertIn("teachingSetIdentityFields(", helper)
+        self.assertNotIn("/api/material-progress", helper)
+        self.assertIn("'teacher66:material-complete',\n        teacher66SyncReaderNext", source)
 
     def test_course_overview_has_one_global_owner_and_a_registered_presenter(self):
         learner = self.source("static/system-learner.js")
@@ -93,8 +92,12 @@ class LearningFlow66Tests(
         self.assertIn("(c.area||currentTrainingArea)===currentTrainingArea", base)
 
     def test_empty_exam_has_explicit_not_ready_state(self):
+        # The course-row "not ready" state lives in the row owner (system-learner.js);
+        # the exam-open guard stays in teaching.js.
         source = self.source(
             "static/teaching.js"
+        ) + self.source(
+            "static/system-learner.js"
         )
 
         for marker in (
@@ -110,15 +113,10 @@ class LearningFlow66Tests(
                 source,
             )
 
-        self.assertIn(
-            "if (bank === 0)",
-            source,
-        )
-
-        self.assertIn(
-            "loaded.questions.length",
-            source,
-        )
+        # Owner hooks (2026-10-17): system-exam.js asks TeachingEmptyExam before and after loading.
+        exam = self.source("static/system-exam.js")
+        self.assertIn("window.TeachingEmptyExam?.blocked?.(catId)", exam)
+        self.assertIn("allQuizData[catId].questions.length===0", exam)
 
     def test_m3_teaching_asset_is_cache_busted(self):
         html = self.source(

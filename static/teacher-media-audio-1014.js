@@ -69,6 +69,7 @@
   }
 
   function setBusy(busy) {
+    window.AppApiClient?.aiBusy?.('audio', !!busy);
     const section = document.getElementById('teacher-media-audio-1014');
     const button = document.getElementById('teacher-audio-generate-1014');
     const script = document.getElementById('teacher-audio-script-1014');
@@ -202,12 +203,12 @@
       <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div><b class="text-sm text-emerald-950">✅ AI 語音教材已建立</b>
         <p class="mt-1 text-xs text-slate-700">${escapeHtml(material.title || material.filename || result.materialId || '')}</p>
-        <p class="mt-1 text-[11px] text-slate-500">已使用 ${escapeHtml(voiceLabel(result.voice))} 產生 AI 語音。</p>
-        ${result.segmented ? `<p class="mt-1 text-[11px] font-bold text-emerald-800">已逐張分段（共 ${Number(result.segmentCount || 0)} 張），學員翻到哪一張就聽哪一張。</p>` : ''}
-        ${result.segmentNote ? `<p class="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-900">⚠️ ${escapeHtml(result.segmentNote)}</p>` : ''}</div>
+        <p class="mt-1 text-xs text-slate-500">已使用 ${escapeHtml(voiceLabel(result.voice))} 產生 AI 語音。</p>
+        ${result.segmented ? `<p class="mt-1 text-xs font-bold text-emerald-800">已逐張分段（共 ${Number(result.segmentCount || 0)} 張），學員翻到哪一張就聽哪一張。</p>` : ''}
+        ${result.segmentNote ? `<p class="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">⚠️ ${escapeHtml(result.segmentNote)}</p>` : ''}</div>
         <button id="teacher-audio-back-course-1014" type="button" class="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-700">✅ 完成，帶回課程教材</button>
       </div>
-      <div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-900">${escapeHtml(result.disclosure || statusInfo?.disclosure || '本音訊為 AI 合成語音。')}</div>`;
+      <div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900">${escapeHtml(result.disclosure || statusInfo?.disclosure || '本音訊為 AI 合成語音。')}</div>`;
     host.classList.remove('hidden');
     host.querySelector('#teacher-audio-back-course-1014')?.addEventListener('click', async () => {
       window.invalidateAdminMaterialsCache?.();
@@ -252,6 +253,7 @@
   }
 
   async function pollJob(jobId, token) {
+    const pollWait = AppApiClient.pollBackoff();
     while (token === pollToken && activeJobId === jobId) {
       const response = await fetch(`/api/media-audio/jobs/${encodeURIComponent(jobId)}`, {
         credentials:'same-origin', cache:'no-store'
@@ -289,7 +291,7 @@
         setBusy(false);
         throw new Error(data.error || 'AI 語音產生失敗');
       }
-      await new Promise(resolve => setTimeout(resolve, 1800));
+      await pollWait();
     }
   }
 
@@ -342,7 +344,7 @@
       const badge = card.querySelector('span');
       if (!badge) return;
       badge.textContent = 'AI 語音可使用';
-      badge.className = 'mt-3 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800';
+      badge.className = 'mt-3 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800';
     });
   }
 
@@ -355,7 +357,7 @@
     section.innerHTML = `
       <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
         <div><p class="admin-page-eyebrow text-emerald-700">STEP 2 · NARRATION</p><h4 class="text-lg font-black text-slate-950">🎧 核准講稿 → 選聲音 → AI 配音</h4><p class="mt-1 text-xs text-slate-500">上一步講稿核准後會自動帶入這裡；選聲音、試聽並產生正式配音，不需要重新建立另一份內容。</p></div>
-        <span id="teacher-audio-provider-1014" class="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-600">檢查服務中…</span>
+        <span id="teacher-audio-provider-1014" class="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">檢查服務中…</span>
       </div>
       <div id="teacher-audio-health-1014" hidden class="hidden" role="status" aria-live="polite"></div>
       <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -365,7 +367,7 @@
       <label class="block text-xs font-bold text-slate-600">語音風格指示（選填）<input id="teacher-audio-instructions-1014" maxlength="500" class="learning-input mt-1" placeholder="例如：清楚、沉穩、繁體中文教學語氣；醫療數值與縮寫照稿件念"></label>
       <div class="flex flex-col sm:flex-row sm:items-center gap-3"><button id="teacher-audio-generate-1014" type="button" disabled class="rounded-xl bg-emerald-700 px-5 py-2.5 text-xs font-black text-white disabled:opacity-40">🎙️ 產生 AI 語音</button></div>
       <div id="teacher-audio-result-1014" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4"></div>
-      <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] leading-5 text-amber-900"><b>AI 語音揭露：</b><span id="teacher-audio-disclosure-1014">本音訊為 AI 合成語音。</span><br>正式內容仍以老師已核准講稿為準；講稿一旦修改即回到草稿狀態，需重新核准後才能再次產生語音。</div>`;
+      <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><b>AI 語音揭露：</b><span id="teacher-audio-disclosure-1014">本音訊為 AI 合成語音。</span><br>正式內容仍以老師已核准講稿為準；講稿一旦修改即回到草稿狀態，需重新核准後才能再次產生語音。</div>`;
 
     const scriptStudio = document.getElementById('teacher-media-script-1014');
     if (scriptStudio?.nextSibling) media.insertBefore(section, scriptStudio.nextSibling);

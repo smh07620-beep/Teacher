@@ -57,7 +57,7 @@
       document.querySelectorAll('#pgy-matrix-stats-71 > div').forEach(card=>{
         const label=card.firstElementChild?.textContent?.trim();
         const value=card.children?.[1];
-        if(label==='指派完成率'&&value)value.innerHTML=`${Number(pgy.percent||0).toFixed(1)}<span class="text-[9px] text-slate-400 ml-1">%</span>`;
+        if(label==='指派完成率'&&value)value.innerHTML=`${Number(pgy.percent||0).toFixed(1)}<span class="text-xs text-slate-400 ml-1">%</span>`;
         if(label==='逾期指派'&&value)value.textContent=String(Number(pgy.assignmentsOverdue||0));
       });
     }

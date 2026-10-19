@@ -661,6 +661,26 @@ def register_ai_presentation_routes(owner):
                            after={"status":"approved","approvedBy":(approved or {}).get("approvedBy"),"artifactSha256":current.get("artifactSha256"),"qualityStatus":_effective_quality(current).get("status")})
         return jsonify({"ok":True,"presentation":_public_presentation(approved or {})})
 
+    @app.delete("/api/ai-presentations/<presentation_id>")
+    def presentation_discard(presentation_id):
+        user = _actor(owner)
+        if not user: return jsonify({"error":"請先登入。","loginRequired":True}), 401
+        denied = _teacher_approval(user)
+        if denied: return denied
+        current = repository.get_presentation(str(presentation_id))
+        if not current: return jsonify({"error":"找不到 PowerPoint。"}), 404
+        denied = _scope(owner, str(current.get("group") or ""))
+        if denied: return denied
+        from teacher_app.maintenance import retention
+
+        try:
+            retention.discard_presentation(str(presentation_id))
+        except retention.DiscardBlocked as exc:
+            return jsonify({"error": exc.message}), 404 if exc.code == "not_found" else 409
+        audit.record_event(actor=user, action="presentation.discard", target_type="ai_presentation", target_id=str(presentation_id),
+                           group=str(current.get("group") or ""), before={"status":current.get("status"),"title":current.get("title")})
+        return jsonify({"ok":True,"deleted":str(presentation_id)})
+
     @app.post("/api/ai-presentations/<presentation_id>/publish-link")
     def presentation_publish(presentation_id):
         user = _actor(owner)

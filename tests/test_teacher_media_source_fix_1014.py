@@ -12,36 +12,23 @@ ROOT = Path(__file__).resolve().parents[1]
 class TeacherMediaSourceFix1014Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.source = (ROOT / "static" / "teacher-media-source-fix-1014.js").read_text(encoding="utf-8")
         cls.routes = (ROOT / "teacher_app" / "materials" / "media_script_routes.py").read_text(encoding="utf-8")
         cls.jobs = (ROOT / "teacher_app" / "materials" / "media_script_jobs.py").read_text(encoding="utf-8")
         cls.studio = (ROOT / "static" / "teacher-ai-media-studio-1018.js").read_text(encoding="utf-8")
         cls.controls = (ROOT / "static" / "teacher-ai-media-controls-1023.js").read_text(encoding="utf-8")
         cls.script = (ROOT / "static" / "teacher-media-script-1014.js").read_text(encoding="utf-8")
 
-    def test_fix_loads_after_script_studio(self):
+    def test_superseded_fix_file_is_removed(self):
+        # 2026-10-17: teacher-ai-media-controls-1023.js is the only source-picker owner.
         body = ASSET_MANIFEST["system"]["body"]
-        self.assertIn("/teacher-media-source-fix-1014.js", body)
-        self.assertLess(body.index("/teacher-media-script-1014.js"), body.index("/teacher-media-source-fix-1014.js"))
+        self.assertNotIn("/teacher-media-source-fix-1014.js", body)
+        self.assertFalse((ROOT / "static" / "teacher-media-source-fix-1014.js").exists())
 
-    def test_picker_uses_uploaded_materials_and_explains_builtin_limitation(self):
-        for marker in (
-            "/api/slides/admin",
-            "!item.isBuiltin",
-            "草稿也可先做講稿",
-            "內建舊教材因沒有原始文字來源不列入",
-            "↻ 重新整理教材",
-        ):
-            self.assertIn(marker, self.source)
-
-    def test_scoped_teacher_picker_stays_in_preferred_group(self):
-        self.assertIn("R.scopedTeacher", self.source)
-        self.assertIn("preferredGroup", self.source)
-        self.assertIn("String(item.group || '') === preferredGroup", self.source)
+    def test_canonical_picker_uses_uploaded_materials_in_teacher_scope(self):
+        for marker in ("/api/slides/admin", "!item?.isBuiltin", "R.user?.preferredGroup", "R.crossGroup"):
+            self.assertIn(marker, self.controls)
 
     def test_source_picker_has_one_canonical_runtime_owner(self):
-        self.assertIn("TeacherAIMediaControls1023", self.source)
-        self.assertNotIn("setTimeout(() => void refreshMaterials()", self.source)
         self.assertNotIn("TeacherMediaSourceFix1014?.refreshMaterials?.()", self.studio)
         self.assertIn("teacher-media-source-options-1014", self.controls)
         self.assertIn("teacher-media-source-options-1014", self.script)
@@ -50,7 +37,7 @@ class TeacherMediaSourceFix1014Tests(unittest.TestCase):
         self.assertNotIn("item.active !== false", self.script)
 
     def test_draft_material_is_valid_media_authoring_source(self):
-        draft = {"id": "mat-draft", "group": "grpBio", "area": "internal", "active": False}
+        draft = {"id": "mat-draft", "group": "grpBio", "area": "internal", "active": False, "filename": "a.pptx"}
         actor = {"username": "teacher1"}
         with patch.object(media_script_jobs.material_repository, "get_material", return_value=draft):
             request = media_script_jobs.prepare_request({"materialId": "mat-draft"}, actor)
@@ -58,7 +45,7 @@ class TeacherMediaSourceFix1014Tests(unittest.TestCase):
         self.assertEqual(request["group_key"], "grpBio")
 
     def test_worker_can_generate_from_draft_but_not_missing_material(self):
-        draft = {"id": "mat-draft", "group": "grpBio", "area": "internal", "active": False}
+        draft = {"id": "mat-draft", "group": "grpBio", "area": "internal", "active": False, "filename": "a.pptx"}
         with patch.object(media_script_jobs.material_repository, "get_material", return_value=draft), \
              patch.object(media_script_jobs.media_script_runtime, "generate_script", return_value={"title": "ok"}) as generate:
             result = media_script_jobs.run_generation_sync({"materialId": "mat-draft"})
@@ -71,7 +58,7 @@ class TeacherMediaSourceFix1014Tests(unittest.TestCase):
     def test_publication_is_not_bypassed_by_media_authoring(self):
         self.assertIn("Publication remains a separate explicit step", self.routes)
         self.assertNotIn("material.publish", self.jobs)
-        self.assertNotIn("/api/media-scripts/publish", self.source)
+        self.assertNotIn("/api/media-scripts/publish", self.controls)
 
 
 if __name__ == "__main__":

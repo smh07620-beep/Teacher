@@ -78,9 +78,9 @@
     if (banner) {
       const group = String(R.user?.preferredGroup || '').trim();
       const scope = R.scopedTeacher && group
-        ? `<span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">目前管理範圍：${group.replace(/[<>&"']/g, '')}</span>`
+        ? `<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">目前管理範圍：${group.replace(/[<>&"']/g, '')}</span>`
         : '';
-      banner.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-2"><div class="flex flex-wrap items-center gap-2"><span class="text-xs font-black text-slate-800">👨‍🏫 教師工作區</span><span class="text-[11px] text-slate-400">從左側選擇主要教學工作</span></div>${scope}</div>`;
+      banner.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-2"><div class="flex flex-wrap items-center gap-2"><span class="text-xs font-black text-slate-800">👨‍🏫 教師工作區</span><span class="text-xs text-slate-400">從左側選擇主要教學工作</span></div>${scope}</div>`;
     }
   }
 

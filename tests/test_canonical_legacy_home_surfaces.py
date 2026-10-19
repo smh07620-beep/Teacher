@@ -354,7 +354,18 @@ class CanonicalLegacyHomeSurfaceTests(unittest.TestCase):
         )
 
         self.base.user = {"username": "student1", "empId": "S001", "name": "Student One"}
-        completed = self.client.post("/api/material-progress", json={"materialId": "mat1"})
+        import os
+        from unittest.mock import patch as _patch
+        from teacher_app.learning import access as _access
+
+        # Exam gate on: a reader-measured material cannot be marked done by a button.
+        with _patch.dict(os.environ, {"EXAM_GATE_ENABLED": "1"}), \
+                _patch("teacher_app.learning.routes.auto_tracked", return_value=True), \
+                _patch.object(_access, "is_assignment_gated", return_value=True):
+            refused = self.client.post("/api/material-progress", json={"materialId": "mat1"})
+        self.assertEqual(refused.status_code, 409)
+        with _patch.dict(os.environ, {"EXAM_GATE_ENABLED": "0"}):
+            completed = self.client.post("/api/material-progress", json={"materialId": "mat1"})
         self.assertEqual(completed.status_code, 200)
         self.assertTrue(completed.get_json()["ok"])
         self.assertTrue(completed.get_json()["completedAt"])

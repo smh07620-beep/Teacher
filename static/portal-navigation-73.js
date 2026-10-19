@@ -65,9 +65,42 @@
     if(areaLink){ areaLink.href=areaHref; text(areaLink,areaLabel); }
   }
 
+  /* 繼續上次: newest unfinished material -> learning center, which opens it on the saved page. */
+  async function resumeCard(){
+    if(location.pathname!=='/') return;
+    const anchor=document.getElementById('today-learning');
+    if(!anchor || document.getElementById('home-resume')) return;
+    try{
+      const res=await fetch('/api/learning-progress',{credentials:'same-origin',cache:'no-store'});
+      if(!res.ok) return; // not signed in: no card
+      const data=await res.json().catch(()=>({}));
+      const item=(data.items||[])
+        .filter(row=>!row.completed && row.lastViewedAt && row.materialTitle && row.area && row.group)
+        .sort((a,b)=>String(b.lastViewedAt).localeCompare(String(a.lastViewedAt)))[0];
+      if(!item) return;
+      const page=Number(item.position?.page||0), total=Number(item.position?.totalPages||0);
+      const where=page&&total?`上次讀到第 ${page} / ${total} 頁`:`已完成 ${Math.round(Number(item.progress||0))}%`;
+      const href=`/system?area=${encodeURIComponent(item.area)}&group=${encodeURIComponent(item.group)}&module=materials&from=home&resume=${encodeURIComponent(item.materialId)}&page=${page>0?page:''}`;
+      const box=document.createElement('section');
+      box.id='home-resume';
+      box.className='card';
+      box.setAttribute('aria-label','繼續上次');
+      const info=document.createElement('div');
+      const label=document.createElement('p');label.textContent='繼續上次';label.style.fontSize='var(--fs-sm)';
+      const title=document.createElement('h2');title.textContent=item.materialTitle;title.style.fontSize='var(--fs-lg)';
+      const sub=document.createElement('p');sub.textContent=where;sub.style.fontSize='var(--fs-sm)';
+      info.append(label,title,sub);
+      const link=document.createElement('a');
+      link.className='btn btn-primary';link.href=href;link.textContent='繼續閱讀 →';
+      box.append(info,link);
+      anchor.insertAdjacentElement('afterend',box);
+    }catch(_){/* convenience only */}
+  }
+
   function install(){
     normalizePublicPortal();
     normalizeSystem();
+    void resumeCard();
   }
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',install,{once:true});

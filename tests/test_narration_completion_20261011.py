@@ -30,6 +30,11 @@ DDL = (
 
 class NarrationCompletionTests(unittest.TestCase):
     def setUp(self):
+        # These cases replay a whole listen in one request, which the v2 anti-skip rate limit
+        # (on by default since 2026-10-19) would rightly cap; they pin the narration rule itself.
+        env = patch.dict("os.environ", {"READER_RULES_V2": "0"})
+        env.start()
+        self.addCleanup(env.stop)
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.db = Path(tmp.name) / "t.db"

@@ -426,10 +426,8 @@ class MaterialNavigationFrontend68Tests(unittest.TestCase):
             "error.loginRequired",
             "登入已逾時，請",
             "重新登入",
-            "沒有教材瀏覽權限",
-            "教材服務暫時發生錯誤",
-            "無法連線至伺服器",
             "encodeURIComponent(next)",
+            "humanError",  # 權限／5xx／斷線文字集中在 api-client.js 的 humanError
         ):
             self.assertIn(marker, source)
         self.assertNotIn("Flask) 是否已啟動", source)

@@ -16,22 +16,28 @@ test('AI teaching video lets the teacher preview the selected narration voice', 
     window.fetch = async (url, options = {}) => {
       window.calls.push({ url: String(url), method: options.method || 'GET' });
       if (String(url) === '/api/ai-videos/status') return { ok: true, json: async () => ({ storage: { available: true }, capabilities: { 'video.create': true } }) };
+      // Voices come from the media-audio status (canonical catalog, teacher-voice-catalog-1026).
+      if (String(url) === '/api/media-audio/status') return { ok: true, json: async () => ({ enabled: true, readyForPreview: true, defaultVoice: 'zf_xiaobei', voiceOptions: [{ id: 'zf_xiaobei', label: '女聲' }, { id: 'zm_yunxi', label: '男聲' }] }) };
       if (String(url) === '/api/media-audio/preview') return { ok: true, json: async () => ({ jobId: 'voice-preview-1' }) };
       if (String(url).includes('/api/media-audio/jobs/voice-preview-1')) return { ok: true, json: async () => ({ status: 'completed', result: { previewUrl: '/preview/voice.wav' } }) };
       return { ok: true, json: async () => ({}) };
     };
   });
 
+  await page.addScriptTag({ path: asset('teacher-voice-catalog-1026.js') });
   await page.addScriptTag({ path: asset('teacher-ai-video-1015.js') });
+  // The voice picker lives in the collapsed 「需求（選填）｜旁白聲音」 section (simple flow 1032).
+  await page.locator('#teacher-ai-video-requirements-1032 summary').click();
   await expect(page.getByRole('button', { name: '▶ 試聽聲音' })).toBeVisible();
   await page.locator('#teacher-ai-video-voice-1015').selectOption('zm_yunxi');
   await page.getByRole('button', { name: '▶ 試聽聲音' }).click();
   await expect(page.locator('#teacher-ai-video-voice-player-1015')).toHaveAttribute('src', '/preview/voice.wav');
   await expect(page.locator('#teacher-ai-video-voice-player-1015')).toBeVisible();
   await expect(page.getByRole('button', { name: '▶ 播放試聽' })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.playCalls)).toBe(0);
-  await page.getByRole('button', { name: '▶ 播放試聽' }).click();
+  // The player now tries to start right away (inside the click); the visible player stays as fallback.
   await expect.poll(() => page.evaluate(() => window.playCalls)).toBe(1);
+  await page.getByRole('button', { name: '▶ 播放試聽' }).click();
+  await expect.poll(() => page.evaluate(() => window.playCalls)).toBe(2);
   await expect.poll(() => page.evaluate(() => window.calls)).toContainEqual({ url: '/api/media-audio/preview', method: 'POST' });
 });
 
@@ -44,15 +50,20 @@ test('AI teaching video plays an already cached WAV without starting a poll loop
     window.previewPolls = 0;
     window.fetch = async (url, options = {}) => {
       if (String(url) === '/api/ai-videos/status') return { ok: true, json: async () => ({ storage: { available: true }, capabilities: { 'video.create': true } }) };
+      // Voices come from the media-audio status (canonical catalog, teacher-voice-catalog-1026).
+      if (String(url) === '/api/media-audio/status') return { ok: true, json: async () => ({ enabled: true, readyForPreview: true, defaultVoice: 'zf_xiaobei', voiceOptions: [{ id: 'zf_xiaobei', label: '女聲' }, { id: 'zm_yunxi', label: '男聲' }] }) };
       if (String(url) === '/api/media-audio/preview') return { ok: true, json: async () => ({ status: 'completed', result: { previewUrl: 'https://r2.example/voice.wav', mimeType: 'audio/wav' } }) };
       if (String(url).includes('/api/media-audio/jobs/')) window.previewPolls += 1;
       return { ok: true, json: async () => ({}) };
     };
   });
 
+  await page.addScriptTag({ path: asset('teacher-voice-catalog-1026.js') });
   await page.addScriptTag({ path: asset('teacher-ai-video-1015.js') });
+  // The voice picker lives in the collapsed 「需求（選填）｜旁白聲音」 section (simple flow 1032).
+  await page.locator('#teacher-ai-video-requirements-1032 summary').click();
   await page.getByRole('button', { name: '▶ 試聽聲音' }).click();
   await expect(page.locator('#teacher-ai-video-voice-player-1015')).toHaveAttribute('src', 'https://r2.example/voice.wav');
   await expect.poll(() => page.evaluate(() => window.previewPolls)).toBe(0);
-  await expect(page.locator('#teacher-ai-video-status-1015')).toContainText('試聽已準備完成');
+  await expect(page.locator('#teacher-ai-video-status-1015')).toContainText(/正在播放旁白聲音試聽|試聽檔案已準備完成/);
 });

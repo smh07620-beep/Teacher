@@ -65,7 +65,7 @@ class LearningProgressConvergence1025Tests(unittest.TestCase):
         self.assertEqual(client.post('/api/training-command-center/progress').status_code,405)
 
     def test_frontend_convergence_is_loaded_on_portal_and_system(self):
-        source=ROOT.joinpath('static','learning-progress-convergence-1025.js').read_text(encoding='utf-8')
+        source=ROOT.joinpath('static','learner-progress.js').read_text(encoding='utf-8')
         for marker in (
             '/api/training-command-center/progress',
             'v561-progress-percent',
@@ -75,8 +75,8 @@ class LearningProgressConvergence1025Tests(unittest.TestCase):
             "dataset.progressSource='training-command-center'",
         ):
             self.assertIn(marker,source)
-        self.assertIn('/learning-progress-convergence-1025.js', ASSET_MANIFEST['portal']['body'])
-        self.assertIn('/learning-progress-convergence-1025.js', ASSET_MANIFEST['system']['body'])
+        self.assertIn('/learner-progress.js', ASSET_MANIFEST['portal']['body'])
+        self.assertIn('/learner-progress.js', ASSET_MANIFEST['system']['body'])
         self.assertNotIn('X-Admin-Key',source)
         self.assertNotIn('getAdminKey',source)
 
@@ -88,7 +88,7 @@ class LearningProgressConvergence1025Tests(unittest.TestCase):
         self.assertIn('online.examsPending', source)
 
     def test_portal_has_no_legacy_progress_writer_or_race_workaround(self):
-        progress_source=ROOT.joinpath('static','learning-progress-convergence-1025.js').read_text(encoding='utf-8')
+        progress_source=ROOT.joinpath('static','learner-progress.js').read_text(encoding='utf-8')
         portal=ROOT.joinpath('static','portal-v56.js').read_text(encoding='utf-8')
         self.assertNotIn("window.setTimeout(()=>load(true).catch(()=>{}),900)", progress_source)
         self.assertNotIn("v561-progress-percent", portal)

@@ -7,7 +7,6 @@
 
   const STUDIO_ID='teacher-content-studio-71';
   const BODY_ID='teacher-content-studio-body-71';
-  const originalToggleQuizPanel=window.toggleQuizQuestionsPanel;
   const mountState={node:null,placeholder:null,catId:'',kind:''};
 
   const esc=value=>(window.escapeHtml?window.escapeHtml(String(value??'')):String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
@@ -18,9 +17,7 @@
     group:document.getElementById('admin-quiz-group')?.value||document.getElementById('admin-material-group')?.value||window.currentGroupKey||'grpBio'
   });
 
-  function removeLegacyCloseControls(root=document){
-    root?.querySelectorAll?.('[data-quiz-panel-close-710]').forEach(node=>node.remove());
-  }
+
 
   function restoreMountedTool(){
     const node=mountState.node;
@@ -109,7 +106,6 @@
     }
     if(!panel)throw new Error('找不到指定考卷，請返回考卷管理重新選擇。');
 
-    removeLegacyCloseControls(panel);
     panel.classList.add('hidden');
     return panel;
   }
@@ -129,7 +125,7 @@
     mountState.kind=kind;
 
     const returnLabel=window.TeacherCourseAuthoringContext?.active?'← 完成並回到建立課程｜評量':'← 回到這份考卷';
-    host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-3 flex items-center justify-between gap-3 border-b border-slate-200 pb-3"><div class="min-w-0"><button type="button" data-tool-return class="text-xs font-black text-indigo-700">${returnLabel}</button><h4 class="mt-1 text-lg font-black text-slate-950">${esc(title)}</h4><p class="mt-1 text-xs text-slate-500">${esc(desc)}</p></div><span data-tool-sync class="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">同步中…</span></div><div data-tool-host></div></div>`;
+    host.innerHTML=`<div class="mx-auto max-w-5xl"><div class="mb-3 flex items-center justify-between gap-3 border-b border-slate-200 pb-3"><div class="min-w-0"><button type="button" data-tool-return class="text-xs font-black text-indigo-700">${returnLabel}</button><h4 class="mt-1 text-lg font-black text-slate-950">${esc(title)}</h4><p class="mt-1 text-xs text-slate-500">${esc(desc)}</p></div><span data-tool-sync class="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">同步中…</span></div><div data-tool-host></div></div>`;
     host.querySelector('[data-tool-host]')?.appendChild(node);
     node.classList.remove('hidden');
     host.querySelector('[data-tool-return]')?.addEventListener('click',()=>returnToExam(catId));
@@ -160,8 +156,8 @@
       const sync=mountDedicatedNode(catId,'questions',section,'🧠 題目管理','只顯示目前考卷的題庫、搜尋、編輯與批次管理。完成後直接返回考卷。');
       panel.classList.add('hidden');
       Promise.resolve(typeof window.loadQuizQuestionsIntoPanel==='function'?window.loadQuizQuestionsIntoPanel(catId):null)
-        .then(()=>{if(sync?.isConnected){sync.className='rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700';sync.textContent='✓ 題庫已同步';}})
-        .catch(error=>{if(sync?.isConnected){sync.className='rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700';sync.textContent=`⚠️ ${error?.message||'同步失敗'}`;}});
+        .then(()=>{if(sync?.isConnected){sync.className='rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700';sync.textContent='✓ 題庫已同步';}})
+        .catch(error=>{if(sync?.isConnected){sync.className='rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700';sync.textContent=`⚠️ ${error?.message||'同步失敗'}`;}});
     }catch(error){
       restoreMountedTool();
       showError(catId,'questions',error);
@@ -203,7 +199,7 @@
       if(type&&[...type.options].some(option=>option.value===wanted))type.value=wanted;
       window.updateManualQuestionType?.(catId);
       panel.classList.add('hidden');
-      if(sync?.isConnected){sync.className='rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700';sync.textContent='✓ 可開始出題';}
+      if(sync?.isConnected){sync.className='rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700';sync.textContent='✓ 可開始出題';}
       setTimeout(()=>question?.focus?.(),80);
     }catch(error){
       restoreMountedTool();
@@ -227,7 +223,7 @@
       ]).then(results=>{
         if(!sync?.isConnected)return;
         const failed=results.some(result=>result.status==='rejected');
-        sync.className=`rounded-full px-2.5 py-1 text-[11px] font-bold ${failed?'bg-amber-50 text-amber-700':'bg-emerald-50 text-emerald-700'}`;
+        sync.className=`rounded-full px-2.5 py-1 text-xs font-bold ${failed?'bg-amber-50 text-amber-700':'bg-emerald-50 text-emerald-700'}`;
         sync.textContent=failed?'⚠️ 部分狀態稍後補齊':'✓ AI 工作區已就緒';
       });
     }catch(error){
@@ -239,15 +235,6 @@
   // The previous RC injected a qpanel-level "收合考卷工具" control. The
   // Studio now owns dedicated child panels, so keep the canonical toggle but
   // remove that obsolete control whenever a legacy path still opens qpanel.
-  if(typeof originalToggleQuizPanel==='function'){
-    window.toggleQuizQuestionsPanel=function(catId){
-      const result=originalToggleQuizPanel(catId);
-      return Promise.resolve(result).finally(()=>{
-        removeLegacyCloseControls(document.getElementById(`qpanel-${catId}`));
-      });
-    };
-  }
-  removeLegacyCloseControls();
 
   window.TeacherContentStudio71?.registerExamActions?.(['question','image','video'],(action,catId)=>openManualTool(catId,action));
   window.TeacherContentStudio71?.registerExamActions?.(['ai'],(_action,catId)=>openAiTool(catId));
@@ -268,7 +255,6 @@
     if(!root)return;
     const observer=new MutationObserver(()=>{
       if(root.classList.contains('hidden'))restoreMountedTool();
-      removeLegacyCloseControls(root);
     });
     observer.observe(root,{attributes:true,attributeFilter:['class'],childList:true,subtree:true});
   }

@@ -150,11 +150,11 @@
                 <input type="checkbox" name="pick" value="${Number(item.index)}" data-relationship="${esc(item.relationshipId||'')}" checked>
                 第 ${Number(item.index)} 張圖片
               </label>
-              ${item.thumbnail?`<img src="${esc(item.thumbnail)}" alt="圖片 ${Number(item.index)} 預覽" loading="lazy" class="mt-2 max-h-52 rounded-lg border border-slate-200 bg-slate-50 object-contain">`:'<p class="mt-1 text-[11px] text-slate-400">（此圖未提供預覽）</p>'}
+              ${item.thumbnail?`<img src="${esc(item.thumbnail)}" alt="圖片 ${Number(item.index)} 預覽" loading="lazy" class="mt-2 max-h-52 rounded-lg border border-slate-200 bg-slate-50 object-contain">`:'<p class="mt-1 text-xs text-slate-400">（此圖未提供預覽）</p>'}
               <p class="mt-1 text-xs text-slate-500">${item.section?'圖片附近的文字：'+esc(item.section):'（這張圖附近沒有文字）'}</p>
               <details class="mt-2">
                 <summary class="cursor-pointer text-xs text-teal-700">修改這張圖的名稱與說明</summary>
-                <p class="mt-2 text-[11px] font-bold text-teal-700">已先把圖片旁邊的文字填進名稱和說明，可以直接修改。</p>
+                <p class="mt-2 text-xs font-bold text-teal-700">已先把圖片旁邊的文字填進名稱和說明，可以直接修改。</p>
                 <div class="mt-2 space-y-2">${fields('item-'+Number(item.index)+'-',{
                   ...common,
                   category:item.suggestedCategory||common.category,
@@ -262,7 +262,7 @@
           <li class="flex flex-wrap items-center gap-2 rounded-lg border p-2" data-atlas-frame-item="${esc(item.id)}">
             <img src="${esc(item.thumbnailUrl||item.imageUrl)}" alt="" class="h-14 w-14 rounded object-cover">
             <span class="min-w-0 flex-1 truncate text-sm font-bold">${esc(item.title)}</span>
-            <span class="text-[11px] text-slate-500" data-frame-status></span>
+            <span class="text-xs text-slate-500" data-frame-status></span>
             <button type="button" data-frame-open class="rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-800">框選細胞</button>
           </li>`).join('')}</ul>
         <div id="atlas-docx-frame-editor"></div>

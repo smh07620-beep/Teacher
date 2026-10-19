@@ -190,8 +190,20 @@ test('G: upload → script → audio → PowerPoint → video → questions/subt
   },await timedVideo.getAttribute('data-question-pause-at'));
   await expect(learner.locator(`#video-answer-${timedIndex}`)).not.toHaveClass(/hidden/);
 
+  // Options are shuffled per learner (2026-10-17), so choose the correct option by its text.
+  const correctText=q=>String((q.options||[])[Number(q.correct??0)]||'').trim();
   for(let i=0;i<2;i++){
-    await learner.locator(`#question-card-${i} input[type=radio]`).first().check();
+    const card=learner.locator(`#question-card-${i}`);
+    const isTimed=await card.locator('video[data-question-pause-at]').count();
+    const want=correctText(isTimed?timed:normal);
+    const options=card.locator('input[type=radio]');
+    const n=await options.count();
+    let picked=false;
+    for(let j=0;j<n&&!picked;j++){
+      const text=await options.nth(j).evaluate(el=>(el.closest('label')||el.parentElement).textContent||'');
+      if(want&&text.includes(want)){await options.nth(j).check();picked=true;}
+    }
+    if(!picked)await options.first().check();
   }
   const submitted=learner.waitForResponse(r=>r.url().includes('/submit')&&r.request().method()==='POST');
   await learner.locator('#submit-btn').click();

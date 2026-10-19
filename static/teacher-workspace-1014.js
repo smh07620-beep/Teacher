@@ -47,8 +47,8 @@
     button.type = 'button';
     button.textContent = label;
     button.className = active
-      ? 'rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-black text-white shadow-sm'
-      : 'rounded-full px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-white';
+      ? 'rounded-full bg-slate-900 px-3 py-1.5 text-xs font-black text-white shadow-sm'
+      : 'rounded-full px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white';
     button.addEventListener('click', onClick);
     return button;
   }
@@ -151,7 +151,7 @@
     const button = document.createElement('button');
     button.id = id;
     button.type = 'button';
-    button.className = 'rounded-lg border border-slate-700 bg-slate-800/70 px-2.5 py-1.5 text-[11px] font-bold text-slate-100 hover:bg-slate-700';
+    button.className = 'rounded-lg border border-slate-700 bg-slate-800/70 px-2.5 py-1.5 text-xs font-bold text-slate-100 hover:bg-slate-700';
     button.textContent = label;
     button.addEventListener('click', handler);
     return button;
@@ -181,7 +181,7 @@
     if (!host) {
       host = document.createElement('div');
       host.id = 'teacher-inline-support-1014';
-      host.className = 'mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]';
+      host.className = 'mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs';
 
       const guide = document.createElement('button');
       guide.id = 'teacher-guide-open-1014';
@@ -197,7 +197,7 @@
 
   function guideCard(number, title, description) {
     return `<article class="rounded-xl border border-slate-200 bg-white p-3">
-      <div class="flex items-start gap-2"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-[11px] font-black text-teal-700">${number}</span><div class="min-w-0"><b class="text-sm text-slate-900">${title}</b><p class="mt-1 text-xs leading-5 text-slate-500">${description}</p></div></div>
+      <div class="flex items-start gap-2"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-black text-teal-700">${number}</span><div class="min-w-0"><b class="text-sm text-slate-900">${title}</b><p class="mt-1 text-xs leading-5 text-slate-500">${description}</p></div></div>
     </article>`;
   }
 
@@ -212,7 +212,7 @@
       panel.className = 'mb-4 rounded-2xl border border-teal-200 bg-teal-50/50 p-4 shadow-sm';
       panel.innerHTML = `
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div><p class="admin-page-eyebrow text-teal-700">TEACHER QUICK START</p><h4 class="text-base font-black text-slate-950">建立一門課，照這四步完成</h4><p class="mt-1 text-xs leading-5 text-slate-600">這裡和「建立課程」精靈使用同一套流程；AI 製作與出題都從課程裡進入，不需要先到其他工作區找功能。</p></div>
+          <div><p class="admin-page-eyebrow text-teal-700">快速上手</p><h4 class="text-base font-black text-slate-950">建立一門課，照這四步完成</h4><p class="mt-1 text-xs leading-5 text-slate-600">這裡和「建立課程」精靈使用同一套流程；AI 製作與出題都從課程裡進入，不需要先到其他工作區找功能。</p></div>
           <button id="teacher-guide-close-1014" type="button" class="shrink-0 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-bold text-teal-800">關閉導覽</button>
         </div>
         <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -230,7 +230,8 @@
         rememberGuideDismissed();
       });
     }
-    panel.classList.toggle('hidden', guideDismissed());
+    // The four-step course guide belongs to 教材與課程; inside the AI 製作室 it is only noise.
+    panel.classList.toggle('hidden', guideDismissed() || String(state.mode || '').startsWith('media'));
     return panel;
   }
 
@@ -280,7 +281,7 @@
     section.className = 'hidden space-y-5';
     section.innerHTML = `
       <section id="teacher-media-studio-shell-1018" class="teacher-media-shell-compact-1018 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 px-1">
-        <div><p class="admin-page-eyebrow text-cyan-700">TEACHER CONTENT STUDIO</p><h4 class="text-xl font-black text-slate-950">🧰 教材媒體製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">同一頁完成 AI PowerPoint、講稿與配音、老師錄影、字幕與 AI 教學影片。</p></div>
+        <div><p class="admin-page-eyebrow text-cyan-700">AI 製作</p><h4 class="text-xl font-black text-slate-950">🧰 AI 製作室</h4><p class="mt-1 max-w-3xl text-xs text-slate-500">同一頁完成 AI PowerPoint、講稿與配音、老師錄影、字幕與 AI 教學影片。</p></div>
         <div class="teacher-media-shell-actions-1014 flex flex-wrap items-center gap-2"><span class="admin-workspace-chip">本機 AI｜隱私模式</span><button id="teacher-media-pick-material-1014" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">📚 回教材與課程</button></div>
       </section>`;
     content.appendChild(section);
@@ -362,7 +363,7 @@
     const summary = document.getElementById('admin-workspace-summary');
     const icon = document.getElementById('admin-workspace-icon');
     if (icon) icon.textContent = '🎙️';
-    if (title) title.textContent = '教材媒體製作 Workspace';
+    if (title) title.textContent = 'AI 製作室';
     if (summary) summary.textContent = '同一製作室完成 AI PowerPoint、講稿與配音、老師錄影與 AI 教學影片；正式發布仍使用原教材權限與範圍。';
   }
 
@@ -566,6 +567,9 @@
   ensureMediaWorkspace();
   ensureAssessmentWorkflow();
   syncTeacherHeader();
+  // The shell paints its generic header on every workspace switch, sometimes after this
+  // script has started; repaint the teacher header whenever that happens (no race).
+  window.addEventListener('teacher:workspace-header-painted', syncTeacherHeader);
 
   window.AdminWorkspaceShell?.addAfterWorkspace?.(({workspace}) => {
     ensurePersonaSwitcher();
@@ -609,4 +613,51 @@
   // mutations without changing authorization.
   ensurePersonaSwitcher();
   setTimeout(ensurePersonaSwitcher, 0);
+})();
+
+/* ---- merged from teacher-workspace-nav-fix-1014.js (2026-10-17 slimming; same load position) ---- */
+;/* Teacher 10/14: keep persona switching stable and bind the legacy platform entry. */
+(async function () {
+  'use strict';
+
+  const R = await (window.TeacherRBAC681Ready || Promise.resolve(window.TeacherRBAC681 || {}));
+  const roles = R.roles instanceof Set ? R.roles : new Set();
+  const canSystem = roles.has('system_admin') && typeof R.hasPermission === 'function' && R.hasPermission('system.manage');
+
+  function systemUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('admin', '1');
+    url.searchParams.set('workspace', 'people');
+    url.searchParams.set('persona', 'system');
+    url.searchParams.delete('teacherMode');
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
+
+  function bindPlatformEntry() {
+    if (!canSystem) return;
+    document.querySelectorAll('.v575-manage-direct').forEach(entry => {
+      entry.textContent = '⚙ 平台管理';
+      entry.title = '帳號、權限、平台設定與高風險維運';
+      entry.dataset.workspaceSurface = 'system';
+      if (entry.dataset.teacher1014PlatformBound === '1') return;
+      entry.dataset.teacher1014PlatformBound = '1';
+      entry.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        window.location.assign(systemUrl());
+      }, true);
+    });
+  }
+
+  function sync() {
+    // teacher-workspace-1014.js is the single owner of the persona switcher.
+    // Do not remove its system button here; doing so caused the third persona
+    // to disappear on first paint and reappear after later workspace updates.
+    bindPlatformEntry();
+  }
+
+  sync();
+  setTimeout(sync, 0);
+  setTimeout(sync, 400);
+  window.TeacherWorkspaceNavFix1014 = Object.freeze({ sync });
 })();

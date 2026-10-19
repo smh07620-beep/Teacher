@@ -66,7 +66,25 @@ window.TeacherRBAC681Ready = (async function () {
   const canOpenWorkspace = name => hasAny(WORKSPACE_RULES[name] || EXTENSION_WORKSPACE_RULES[name] || []);
   const groupCatalog = typeof GROUPS !== 'undefined' ? GROUPS : (window.GROUPS || {});
 
+  // The URL persona decides what this screen is for: an administrator who is also a teacher
+  // and opens the teacher persona sees the teacher surface, not 系統管理.
+  const personaParam = new URLSearchParams(window.location.search).get('persona') || '';
+  const teacherCapable = ['clinical_teacher', 'group_leader', 'education_admin'].some(role => roles.has(role));
+  function teacherSurface() {
+    return {
+      key: 'teacher',
+      entryIcon: '👨‍🏫',
+      entryLabel: '教師工作區',
+      heading: '教師工作區',
+      summary: '課程、教材、AI 製作與評量。',
+      teachingLabel: '課程、教材與評量',
+      evaluationLabel: '學員評核與成績',
+      platformLabel: '教學工具'
+    };
+  }
+
   function workspaceSurface() {
+    if (personaParam === 'teacher' && teacherCapable) return teacherSurface();
     if (systemAdmin) {
       return {
         key: 'system',
@@ -180,7 +198,7 @@ window.TeacherRBAC681Ready = (async function () {
     badge.id = 'rbac-profile-badge';
     const group = (groupCatalog[user.preferredGroup] || {}).name || user.preferredGroup || '';
     const title = user.professionalTitle || roleSummary();
-    badge.className = 'text-[11px] font-bold px-2 py-1 rounded-full bg-slate-100 text-slate-700';
+    badge.className = 'text-xs font-bold px-2 py-1 rounded-full bg-slate-100 text-slate-700';
     badge.textContent = [group, title].filter(Boolean).join(' · ');
     entry.parentNode?.insertBefore(badge, entry);
   }
@@ -211,9 +229,9 @@ window.TeacherRBAC681Ready = (async function () {
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex flex-wrap items-center gap-2">
             <span class="text-xs font-black text-slate-800">${surface.entryIcon} ${surface.entryLabel}</span>
-            <span class="text-[11px] text-slate-400">從左側選擇工作項目</span>
+            <span class="text-xs text-slate-400">從左側選擇工作項目</span>
           </div>
-          ${scopeText ? `<span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">${scopeText}</span>` : ''}
+          ${scopeText ? `<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">${scopeText}</span>` : ''}
         </div>`;
       return;
     }
@@ -223,7 +241,7 @@ window.TeacherRBAC681Ready = (async function () {
           <div class="text-sm font-black text-slate-900">${surface.entryIcon} ${surface.heading}</div>
           <div class="text-xs text-slate-500 mt-1">${surface.summary}</div>
         </div>
-        ${scopeText ? `<span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">${scopeText}</span>` : ''}
+        ${scopeText ? `<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600">${scopeText}</span>` : ''}
       </div>`;
   }
 

@@ -48,11 +48,13 @@ def _compat_actor_label(base) -> str:
 
 def _draw_rules(value: Any) -> dict:
     rules = value if isinstance(value, dict) else {}
+    # Option shuffling is on by default; only the opt-out is stored (no schema change).
+    extra = {"shuffleOptions": False} if rules.get("shuffleOptions") is False else {}
     if rules.get("mode") != "type_quota":
-        return {}
+        return extra
     raw = rules.get("quotas", {}) if isinstance(rules.get("quotas", {}), dict) else {}
     quotas = {key: max(0, min(200, int(raw.get(key, 0) or 0))) for key in QUESTION_TYPES}
-    return {"mode": "type_quota", "quotas": quotas} if sum(quotas.values()) > 0 else {}
+    return {"mode": "type_quota", "quotas": quotas, **extra} if sum(quotas.values()) > 0 else extra
 
 
 def _category_cache_key(base, group: str | None, area: str) -> tuple[int, str, str]:

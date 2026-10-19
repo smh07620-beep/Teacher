@@ -62,7 +62,7 @@
   function makeButton(label,courseId,kind,className){
     const button=document.createElement('button');
     button.type='button';
-    button.className=className||'text-[10px] rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 font-bold text-violet-800';
+    button.className=className||'text-xs rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 font-bold text-violet-800';
     button.textContent=label;
     button.addEventListener('click',event=>{
       event.preventDefault();
@@ -80,7 +80,7 @@
       if(status==='draft'){
         host.appendChild(makeButton('發布檢查',courseId,'check'));
       }else if(status==='ready'){
-        host.appendChild(makeButton('正式發布',courseId,'publish','text-[10px] rounded-lg bg-emerald-700 px-2.5 py-1.5 font-bold text-white'));
+        host.appendChild(makeButton('正式發布',courseId,'publish','text-xs rounded-lg bg-emerald-700 px-2.5 py-1.5 font-bold text-white'));
         host.appendChild(makeButton('回到草稿',courseId,'reopen'));
       }else if(status==='published'){
         host.appendChild(makeButton('結束課程',courseId,'end'));

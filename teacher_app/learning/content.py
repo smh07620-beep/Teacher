@@ -107,3 +107,69 @@ def document_completion(total_pages, visited_pages, threshold: float = 0.9) -> d
 def resolved_completion(duration, watched_buckets, client_completed, is_media, threshold: float = 0.9) -> bool:
     """Ignore client completion flags for media, retain legacy document flow."""
     return media_completion(duration, watched_buckets, threshold) if is_media else bool(client_completed)
+
+
+# ---- Reader rules v2 (minimum dwell per page, anti-skimming) -----------------
+
+def min_dwell_seconds(text_len, override=None) -> int:
+    """Minimum seconds a page must stay open: 5s + 5s per 100 characters, max 30s."""
+    if override is not None:
+        try:
+            return max(0, int(override))
+        except (TypeError, ValueError):
+            pass
+    try:
+        length = max(0, int(text_len or 0))
+    except (TypeError, ValueError):
+        length = 0
+    return int(min(30, 5 + 5 * (length // 100)))
+
+
+def clamp_dwell_delta(delta_by_page, elapsed_seconds, slack: float = 5.0) -> dict:
+    """Scale a client-reported dwell increment so it cannot exceed real elapsed time."""
+    cleaned = {}
+    for key, value in (delta_by_page or {}).items():
+        try:
+            page = int(key)
+            seconds = float(value)
+        except (TypeError, ValueError):
+            continue
+        if page >= 1 and seconds > 0:
+            cleaned[str(page)] = seconds
+    total = sum(cleaned.values())
+    allowed = max(0.0, float(elapsed_seconds)) + slack
+    if total > allowed and total > 0:
+        ratio = allowed / total
+        cleaned = {page: seconds * ratio for page, seconds in cleaned.items()}
+    return cleaned
+
+
+def document_completion_v2(total_pages, page_dwell, required_by_page) -> dict:
+    """A page counts as read once its accumulated dwell reaches its requirement."""
+    try:
+        total = max(0, int(total_pages or 0))
+    except (TypeError, ValueError):
+        total = 0
+    if total <= 0:
+        return {"completed": False, "progress": 0.0, "readPages": []}
+    dwell = page_dwell or {}
+    required = required_by_page or {}
+    read = []
+    for page in range(1, total + 1):
+        need = required.get(str(page), required.get(page, 5))
+        try:
+            have = float(dwell.get(str(page), dwell.get(page, 0)) or 0)
+        except (TypeError, ValueError):
+            have = 0.0
+        if have >= float(need):
+            read.append(page)
+    progress = round(100.0 * len(read) / total, 2)
+    return {"completed": len(read) == total, "progress": progress, "readPages": read}
+
+
+def limit_new_buckets(new_buckets, known_buckets, elapsed_seconds) -> list:
+    """Cap newly credited 10-second buckets to what real elapsed time allows."""
+    known = {int(b) for b in known_buckets or []}
+    fresh = sorted({int(b) for b in new_buckets or []} - known)
+    allowed = int(max(0.0, float(elapsed_seconds)) / 10) + 2
+    return sorted(known | set(fresh[:allowed]))

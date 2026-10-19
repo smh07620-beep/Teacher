@@ -1,13 +1,9 @@
-/* Phase 3L: teacher/results workspace mode state.
- * Loaded after admin-workspace.js and before RBAC/workspace decorators so the
- * extracted router remains canonical while later guards continue to wrap it.
+/* Teacher/results workspace mode state (scoring / documents / results).
+ * admin-results-data.js owns fetching and rendering and asks this file for the
+ * current mode (window.AdminResultsMode); nothing here wraps its functions.
  */
 (() => {
   'use strict';
-
-  const legacyFetchAdminRecords = window.fetchAdminRecords;
-  const legacyRenderAdminTable = window.renderAdminTable;
-  const legacyRenderResultsAnalytics = window.renderResultsAnalytics;
 
   const state = {
     teacherMode: 'scoring',
@@ -78,7 +74,7 @@
         <div class="rounded-2xl border border-slate-200 bg-white p-4">
           <h5 class="text-sm font-black text-slate-900">文件可追溯欄位</h5>
           <p class="mt-2 text-xs text-slate-600 leading-5">新版 Word 輸出資料會提供文件識別碼、原始考核時間、輸出時間、輸出人、紙本狀態、簽名欄與歸檔編號等欄位。範本有放入對應佔位字時即可直接顯示。</p>
-          <p class="mt-2 text-[11px] text-slate-500">原本的 Word 範本仍可繼續使用，不會因新增欄位而失效。</p>
+          <p class="mt-2 text-xs text-slate-500">原本的 Word 範本仍可繼續使用，不會因新增欄位而失效。</p>
         </div>
       </div>
       <div class="rounded-xl border border-sky-100 bg-sky-50/60 px-4 py-3 text-xs text-sky-900">下方列表就是正式考核紀錄來源。需要紙本時直接選擇對應紀錄並按「📄 匯出 Word」；不要重新手打姓名、工號、分數或評核者資料，以避免紙本與系統紀錄不一致。</div>`;
@@ -100,15 +96,12 @@
     if (essayNode) essayNode.textContent = String(essayCount);
   }
 
-  async function filteredFetchAdminRecords() {
-    if (typeof legacyFetchAdminRecords !== 'function') return null;
-    const records = await legacyFetchAdminRecords();
+  // Scoring mode keeps only records that need a teacher's hand (pending / essay).
+  function filterRecords(records) {
     if (!Array.isArray(records) || state.resultMode !== 'scoring') return records;
     renderTeacherReviewOverview(records);
     window.renderAdminActivitySummary?.(records);
-    const filtered = records.filter(isScoringRecord);
-    adminRecords = filtered;
-    return filtered;
+    return records.filter(isScoringRecord);
   }
 
   function modeButtonClass(active) {
@@ -159,29 +152,6 @@
     syncTeacherSubnavVisibility();
   }
 
-  async function renderAdminTableWithMode(...args) {
-    if (typeof legacyRenderAdminTable !== 'function') return undefined;
-    const result = await legacyRenderAdminTable(...args);
-    if (state.resultMode === 'scoring') {
-      document.getElementById('admin-results-analytics')?.classList.add('hidden');
-      const body = document.getElementById('admin-table-body');
-      if (body && body.textContent?.includes('目前尚無任何考核紀錄')) {
-        body.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">目前沒有待人工評分的考核。</td></tr>';
-      }
-    }
-    return result;
-  }
-
-  function renderResultsAnalyticsWithMode(records) {
-    if (state.resultMode === 'scoring' || state.resultMode === 'documents') {
-      document.getElementById('admin-results-analytics')?.classList.add('hidden');
-      return;
-    }
-    if (typeof legacyRenderResultsAnalytics === 'function') {
-      return legacyRenderResultsAnalytics(records);
-    }
-  }
-
   async function switchTeacherMode(mode) {
     state.teacherMode = mode === 'pgy' ? 'pgy' : (mode === 'documents' ? 'documents' : 'scoring');
     paintTeacherMode();
@@ -229,9 +199,7 @@
 
   ensureTeacherDocumentsNavigation();
   ensurePaperDocumentWorkspace();
-  window.fetchAdminRecords = filteredFetchAdminRecords;
-  window.renderAdminTable = renderAdminTableWithMode;
-  window.renderResultsAnalytics = renderResultsAnalyticsWithMode;
+  window.AdminResultsMode = Object.freeze({ get: () => state.resultMode, filterRecords });
   window.paintTeacherMode = paintTeacherMode;
   window.updateResultsWorkspacePresentation = updateResultsWorkspacePresentation;
   window.renderTeacherReviewOverview = renderTeacherReviewOverview;

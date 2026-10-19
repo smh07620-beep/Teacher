@@ -413,7 +413,7 @@
     host.innerHTML = `
       <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p class="text-[11px] font-black tracking-[0.16em] text-violet-700">AI POWERPOINT AUTHORING</p>
+          <p class="text-xs font-black tracking-[0.16em] text-violet-700">AI POWERPOINT AUTHORING</p>
           <h4 class="mt-1 text-xl font-black text-slate-950">🖥️ 多資料 AI PowerPoint</h4>
           <p class="mt-1 text-sm text-slate-600">一次加入多份原始資料 → AI 統整／RAG → 教師修改與核准 → 建立正式 .pptx。</p>
         </div>
@@ -542,7 +542,7 @@
     host.innerHTML = `
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p class="text-[11px] font-black tracking-[0.14em] text-teal-700">MATERIAL UPLOAD</p>
+          <p class="text-xs font-black tracking-[0.14em] text-teal-700">MATERIAL UPLOAD</p>
           <h4 class="mt-1 text-lg font-black text-slate-950">📚 上傳一般教材</h4>
           <p class="mt-1 text-xs leading-5 text-slate-500">檔案直接由瀏覽器傳到 R2，再交給 Worker 處理；不會跳回「教材與課程」。Worker 完成後會自動加入上方來源選單。</p>
         </div>
@@ -690,30 +690,8 @@
     return true;
   }
 
-  function installCourseWizardDirectUploadGuard() {
-    const client = window.MaterialUploadClient;
-    if (!client?.enqueue || client.enqueue.__teacherWizardDirectOnly1024) return;
-    const original = client.enqueue;
-    const wrapped = function(formData, options = {}) {
-      const workflowId = typeof formData?.get === 'function' ? String(formData.get('bundleWorkflowId') || '') : '';
-      if (!workflowId) return original.call(client, formData, options);
-      const directOptions = { ...options, fallbackToSameOriginQueue: false };
-      delete directOptions.onFallback;
-      return original.call(client, formData, directOptions).catch(error => {
-        if (/Web 檔案接收相容路徑已關閉/.test(String(error?.message || ''))) {
-          throw new Error('Browser → R2 直傳未完成。請直接重試；若仍失敗，請檢查 R2 CORS 是否允許目前網站來源並公開 ETag。');
-        }
-        throw error;
-      });
-    };
-    wrapped.__teacherWizardDirectOnly1024 = true;
-    wrapped.__teacherWizardOriginal1024 = original;
-    client.enqueue = wrapped;
-  }
-
   async function enhance(options = {}) {
     const shared = $('teacher-media-source-1018');
-    installCourseWizardDirectUploadGuard();
     if (!shared) return false;
     if (shared.dataset.mediaControls1023 !== '1') {
       shared.dataset.mediaControls1023 = '1';
@@ -770,7 +748,6 @@
       )
     ));
     if (!relevant) return;
-    installCourseWizardDirectUploadGuard();
     const shared = $('teacher-media-source-1018');
     if (!shared) return;
     ensureSourceEmptyState();
@@ -781,7 +758,6 @@
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
-  installCourseWizardDirectUploadGuard();
   scheduleEnhance();
   window.addEventListener('teacher-ai-material-options-rendered-1014', () => syncSelectedSource());
   window.addEventListener('teacher-ai-presentation-rendered-f5', () => {
@@ -804,7 +780,7 @@
       host.className = 'rounded-2xl border border-indigo-200 bg-indigo-50/30 p-4 space-y-3';
       host.innerHTML = `
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div><p class="text-[11px] font-black tracking-[0.14em] text-indigo-700">VIDEO SOURCE</p><h5 class="mt-1 text-base font-black text-slate-950">＋ 加入影片來源資料</h5><p class="mt-1 text-xs leading-5 text-slate-600">在教學影片頁直接加入 PDF、Word、PPTX、Excel、圖片或貼入文字。來源保持私人草稿，完成 AI 統整與教師核准後才會成為可用影片畫面。</p></div>
+          <div><p class="text-xs font-black tracking-[0.14em] text-indigo-700">VIDEO SOURCE</p><h5 class="mt-1 text-base font-black text-slate-950">＋ 加入影片來源資料</h5><p class="mt-1 text-xs leading-5 text-slate-600">在教學影片頁直接加入 PDF、Word、PPTX、Excel、圖片或貼入文字。來源保持私人草稿，完成 AI 統整與教師核准後才會成為可用影片畫面。</p></div>
           <button id="teacher-ai-video-source-close-1028" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600">收起來源區</button>
         </div>
         <div id="teacher-ai-video-source-body-1028"></div>`;

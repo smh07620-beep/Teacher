@@ -81,7 +81,7 @@
   };
 
   // Final convergence: canonical owner migrated from system-admin.js.
-  function systemStatusCard(icon,title,state,detail,tone='slate'){const classes={emerald:'is-good',amber:'is-warning',rose:'is-error',slate:'is-neutral'};return `<div class="admin-system-status-card ${classes[tone]||classes.slate}"><div class="admin-system-status-icon">${icon}</div><div class="min-w-0"><div class="text-xs font-black text-slate-600">${escapeHtml(title)}</div><div class="text-base font-black text-slate-950 mt-1">${escapeHtml(state)}</div><div class="text-[11px] text-slate-500 mt-1 break-all">${escapeHtml(detail||'')}</div></div></div>`;}
+  function systemStatusCard(icon,title,state,detail,tone='slate'){const classes={emerald:'is-good',amber:'is-warning',rose:'is-error',slate:'is-neutral'};return `<div class="admin-system-status-card ${classes[tone]||classes.slate}"><div class="admin-system-status-icon">${icon}</div><div class="min-w-0"><div class="text-xs font-black text-slate-600">${escapeHtml(title)}</div><div class="text-base font-black text-slate-950 mt-1">${escapeHtml(state)}</div><div class="text-xs text-slate-500 mt-1 break-all">${escapeHtml(detail||'')}</div></div></div>`;}
 
   async function renderAdminSystemStatus(force=false){
     const cards=document.getElementById('admin-system-health'),storage=document.getElementById('admin-system-storage');
@@ -209,6 +209,36 @@
     button.addEventListener('click',load);
   }
 
+  const LIGHT_TEXT={green:'正常',yellow:'注意',red:'需要處理',gray:'未知'};
+  function healthRow(state,message){
+    const row=document.createElement('li');row.className='health-light';row.dataset.state=state;
+    const dot=document.createElement('span');dot.className='health-dot';dot.setAttribute('aria-hidden','true');
+    const text=document.createElement('span');text.textContent=message;
+    row.append(dot,text);return row;
+  }
+  async function adminHealthOverview(){
+    const list=document.getElementById('admin-health-lights'),button=document.getElementById('admin-health-run');
+    if(!list)return;
+    if(button)button.disabled=true;
+    list.replaceChildren(healthRow('gray','檢查中…'));
+    try{
+      const response=await fetch('/api/admin/health-overview',{credentials:'same-origin',cache:'no-store'});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'讀取失敗');
+      list.replaceChildren(...(data.lights||[]).map(item=>{
+        const row=document.createElement('li');row.className='health-light';row.dataset.state=item.state;
+        const dot=document.createElement('span');dot.className='health-dot';dot.setAttribute('aria-hidden','true');
+        const text=document.createElement('span');
+        const strong=document.createElement('b');strong.textContent=`${item.label}｜${LIGHT_TEXT[item.state]||''}`;
+        const detail=document.createElement('small');detail.textContent=item.detail;
+        text.append(strong,document.createElement('br'),detail);
+        row.append(dot,text);return row;
+      }));
+    }catch(error){
+      list.replaceChildren(healthRow('red','無法讀取：'+(error.message||'')));
+    }finally{if(button)button.disabled=false;}
+  }
+  window.adminHealthOverview=adminHealthOverview;
   window.systemStatusCard=systemStatusCard;
   window.renderAdminSystemStatus=renderAdminSystemStatus;
 })();

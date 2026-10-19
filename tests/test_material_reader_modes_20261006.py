@@ -47,7 +47,6 @@ class MaterialReaderModes20261006Tests(unittest.TestCase):
         self.assertNotIn("swapPresentationPdfFrame", self.learner)
         self.assertIn("/material-preview/${id}/page/${page}.png", self.learner)
         self.assertIn("prefetchPresentationPage(page+1)", self.learner)
-        self.assertIn("prefetchPresentationPage(page-1)", self.learner)
         self.assertIn("frame.removeAttribute('src')", block)
         self.assertIn("scrollbar=1&view=FitH", block)
         paging = self.learner[self.learner.index("function goToSlidePage"):self.learner.index("function closeSlideViewer")]

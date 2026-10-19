@@ -30,6 +30,14 @@ def _username(actor: Mapping[str, Any] | None) -> str:
     return str((actor or {}).get("username") or "").strip()[:100]
 
 
+def _has_source_file(material: Mapping[str, Any]) -> bool:
+    """A material with no stored file at all is an empty shell (upload not finished)."""
+    return any(
+        str(material.get(key) or "").strip()
+        for key in ("storageKey", "storageFilename", "filename", "slidesPrefix")
+    )
+
+
 def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) -> dict:
     username = _username(actor)
     if not username:
@@ -42,6 +50,8 @@ def prepare_request(data: Mapping[str, Any], actor: Mapping[str, Any] | None) ->
     # only when the reviewed output is later published as a formal material.
     if not material:
         raise LookupError("找不到指定教材")
+    if not _has_source_file(material):
+        raise ValueError("這份教材還沒有上傳完成的來源檔，請等上傳完成後再產生。")
     reference_ids = []
     for value in data.get("referenceMaterialIds") or []:
         candidate = str(value or "").strip()[:120]

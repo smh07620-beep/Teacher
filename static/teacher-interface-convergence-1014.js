@@ -182,7 +182,7 @@
       lifecycleSlot.className = 'flex flex-col gap-1 [&_button]:w-full [&_button]:text-left';
       if (assignment) {
         // 學習指派的主要入口是「編輯課程」第 1 步；舊課程補指派才用這裡。
-        const assignButton = makeCardButton('👥 補指派學員', 'w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border border-teal-200 bg-teal-50 font-bold text-teal-800', () => { more.open = false; invokeOriginal(assignment); });
+        const assignButton = makeCardButton('👥 補指派學員', 'w-full text-left text-xs px-2.5 py-1.5 rounded-lg border border-teal-200 bg-teal-50 font-bold text-teal-800', () => { more.open = false; invokeOriginal(assignment); });
         assignButton.setAttribute('data-teacher-assign-course-1014', '1');
         menu.appendChild(assignButton);
       }
@@ -191,7 +191,7 @@
         const divider = document.createElement('div');
         divider.className = 'my-0.5 border-t border-slate-100';
         menu.appendChild(divider);
-        menu.appendChild(makeCardButton('🗑️ 刪除課程', 'w-full text-left text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 font-bold text-rose-700', () => { more.open = false; invokeOriginal(remove); }));
+        menu.appendChild(makeCardButton('🗑️ 刪除課程', 'w-full text-left text-xs px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 font-bold text-rose-700', () => { more.open = false; invokeOriginal(remove); }));
       }
       more.append(moreSummary, menu);
       group.appendChild(more);

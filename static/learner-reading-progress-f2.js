@@ -1,4 +1,5 @@
-/* Phase F2-1 · learner reader progress convergence. */
+/* Learner reading-progress labels (已讀 x／y 頁, 繼續閱讀…).
+ * Listens to teacher:learner-rendered and smartLearning67:progress; wraps no owner function. */
 (function(){
   'use strict';
   const cache=new Map();
@@ -65,6 +66,7 @@
     }
   }
   async function hydrate(){
+    lastHydrate=Date.now();
     try{
       const response=await fetch('/api/learning-progress',{credentials:'same-origin',cache:'no-store'});
       const data=await response.json().catch(()=>({}));
@@ -78,18 +80,6 @@
       paint();
     }catch(_){}
   }
-  const originalComplete=window.markMaterialComplete;
-  if(typeof originalComplete==='function'){
-    window.markMaterialComplete=async function(materialId){
-      const material=materialById(materialId);
-      if(autoTracked(material)){
-        if(typeof window.openMaterial==='function')await window.openMaterial(materialId);
-        paint();
-        return false;
-      }
-      return originalComplete.apply(this,arguments);
-    };
-  }
   window.addEventListener('smartLearning67:progress',event=>{
     const item=event.detail||{};
     if(item.materialId)cache.set(String(item.materialId),item);
@@ -101,22 +91,14 @@
     }
     paint();
   });
-  const originalCourseOverview=window.renderCourseOverview;
-  if(typeof originalCourseOverview==='function'){
-    window.renderCourseOverview=function(){
-      const result=originalCourseOverview.apply(this,arguments);
-      queueMicrotask(paint);
-      return result;
-    };
-  }
-  const originalSlides=window.renderSlidesGrid;
-  if(typeof originalSlides==='function'){
-    window.renderSlidesGrid=async function(){
-      const result=await originalSlides.apply(this,arguments);
-      await hydrate();
-      return result;
-    };
-  }
+  // Repaint after the owner renders (system-learner.js announces teacher:learner-rendered);
+  // the material list re-reads progress at most every 30s instead of on every render.
+  let lastHydrate=0;
+  window.addEventListener('teacher:learner-rendered',event=>{
+    const view=event.detail&&event.detail.view;
+    if(view==='slides'&&Date.now()-lastHydrate>30000){void hydrate();return;}
+    queueMicrotask(paint);
+  });
   window.LearnerReadingProgressF2=Object.freeze({hydrate:hydrate,paint:paint,state:id=>cache.get(String(id||''))||null});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',hydrate,{once:true});
   else hydrate();

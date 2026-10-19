@@ -213,6 +213,19 @@ def register_question_bank(owner, *, runtime_question_runtime=None):
             return jsonify({"error": "version 格式錯誤"}), 400
         return jsonify(analytics_service.get_question_analytics(question_id, version=version))
 
+    @app.get("/api/quiz-categories/<category_id>/item-report")
+    def item_report(category_id):
+        """Whole-exam question health check (read-only), scoped to the exam's group."""
+        category = repository.get_category_full(category_id)
+        if not category:
+            return jsonify({"error": "找不到此考卷"}), 404
+        _user, denied = scope_filter.scoped_groups(app, "question.manage", {str(category.get("group") or "").strip()})
+        if denied:
+            return denied
+        report = analytics_service.item_report(category_id)
+        report["title"] = str(category.get("title") or "")
+        return jsonify(report)
+
     @app.get("/api/question-bank/<question_id>/versions")
     def question_versions(question_id):
         denied = scope_filter.require_any_permission(app, "question.manage", "audit.read")

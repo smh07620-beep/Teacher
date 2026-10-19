@@ -86,18 +86,18 @@
     section.className = 'rounded-2xl border border-indigo-100 bg-white px-4 py-3 shadow-sm';
     section.innerHTML = `
       <div class="flex items-center justify-between gap-3 flex-wrap">
-        <span class="flex items-center gap-2 min-w-0"><b class="text-sm text-slate-900">📌 我的待辦</b><span id="training-command-summary-71" class="text-[11px] text-slate-500 truncate">讀取中…</span></span>
-        <span id="training-command-status-71" class="text-[10px] text-slate-400">讀取中…</span>
+        <span class="flex items-center gap-2 min-w-0"><b class="text-sm text-slate-900">📌 我的待辦</b><span id="training-command-summary-71" class="text-xs text-slate-500 truncate">讀取中…</span></span>
+        <span id="training-command-status-71" class="text-xs text-slate-400">讀取中…</span>
       </div>
       <section id="training-command-tasks-71" class="mt-3">
         <div id="training-command-next-71"></div>
         <div id="training-command-list-71" class="space-y-2 mt-2"></div>
-        <button id="training-command-toggle-71" type="button" class="mt-2 hidden text-[11px] font-bold text-indigo-700 hover:text-indigo-900"></button>
+        <button id="training-command-toggle-71" type="button" class="mt-2 hidden text-xs font-bold text-indigo-700 hover:text-indigo-900"></button>
       </section>
       <details id="learning-status-more-71" class="mt-3 border-t border-slate-100 pt-2 hidden">
         <summary class="cursor-pointer list-none flex items-center justify-between gap-3">
-          <span class="flex items-center gap-2 min-w-0"><b class="text-xs text-slate-800">📊 學習狀態詳情</b><span class="text-[11px] text-slate-500 truncate">通知、學習摘要、訓練進度</span></span>
-          <span class="text-[11px] font-bold text-indigo-700">展開 ▾</span>
+          <span class="flex items-center gap-2 min-w-0"><b class="text-xs text-slate-800">📊 學習狀態詳情</b><span class="text-xs text-slate-500 truncate">通知、學習摘要、訓練進度</span></span>
+          <span class="text-xs font-bold text-indigo-700">展開 ▾</span>
         </summary>
         <div id="learning-status-detail-71" class="mt-3 space-y-4 border-t border-slate-100 pt-3"></div>
       </details>`;
@@ -133,9 +133,9 @@
     if (nextAction) {
       const nextMeta = [dueLabel(nextAction), nextAction?.detail || ''].filter(Boolean).join(' · ');
       if (nextAction?.target === 'pgy-workflow') {
-        nextBox.innerHTML = `<article class="rounded-xl border-2 border-indigo-200 bg-indigo-50 px-3 py-3"><div class="text-[10px] font-black tracking-wide text-indigo-700">下一步</div><div class="mt-1 flex items-center justify-between gap-3"><div class="min-w-0"><b class="block text-sm text-slate-900 truncate">${escapeHtml(nextAction.title || 'PGY 訓練指派')}</b>${nextMeta ? `<span class="block text-[10px] text-slate-500 mt-1">${escapeHtml(nextMeta)}</span>` : ''}</div><button type="button" data-next-pgy class="shrink-0 rounded-lg bg-indigo-700 px-3 py-2 text-[11px] font-bold text-white">${escapeHtml(nextAction.actionLabel || '開啟')}</button></div></article>`;
+        nextBox.innerHTML = `<article class="rounded-xl border-2 border-indigo-200 bg-indigo-50 px-3 py-3"><div class="text-xs font-black tracking-wide text-indigo-700">下一步</div><div class="mt-1 flex items-center justify-between gap-3"><div class="min-w-0"><b class="block text-sm text-slate-900 truncate">${escapeHtml(nextAction.title || 'PGY 訓練指派')}</b>${nextMeta ? `<span class="block text-xs text-slate-500 mt-1">${escapeHtml(nextMeta)}</span>` : ''}</div><button type="button" data-next-pgy class="shrink-0 rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">${escapeHtml(nextAction.actionLabel || '開啟')}</button></div></article>`;
       } else {
-        nextBox.innerHTML = `<a data-learner-next-action href="${taskHref(nextAction)}" class="block rounded-xl border-2 border-teal-200 bg-teal-50 px-3 py-3"><div class="text-[10px] font-black tracking-wide text-teal-700">下一步</div><div class="mt-1 flex items-center justify-between gap-3"><div class="min-w-0"><b class="block text-sm text-slate-900 truncate">${escapeHtml(nextAction.title || '繼續學習')}</b>${nextMeta ? `<span class="block text-[10px] text-slate-500 mt-1">${escapeHtml(nextMeta)}</span>` : ''}</div><span class="shrink-0 rounded-lg bg-teal-700 px-3 py-2 text-[11px] font-bold text-white">${escapeHtml(nextAction.actionLabel || '繼續')} →</span></div></a>`;
+        nextBox.innerHTML = `<a data-learner-next-action href="${taskHref(nextAction)}" class="block rounded-xl border-2 border-teal-200 bg-teal-50 px-3 py-3"><div class="text-xs font-black tracking-wide text-teal-700">下一步</div><div class="mt-1 flex items-center justify-between gap-3"><div class="min-w-0"><b class="block text-sm text-slate-900 truncate">${escapeHtml(nextAction.title || '繼續學習')}</b>${nextMeta ? `<span class="block text-xs text-slate-500 mt-1">${escapeHtml(nextMeta)}</span>` : ''}</div><span class="shrink-0 rounded-lg bg-teal-700 px-3 py-2 text-xs font-bold text-white">${escapeHtml(nextAction.actionLabel || '繼續')} →</span></div></a>`;
       }
     } else {
       nextBox.innerHTML = '<div class="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">✓ 目前沒有下一個必做項目。</div>';
@@ -147,9 +147,9 @@
       const meta = [dueLabel(item), item?.detail || ''].filter(Boolean).join(' · ');
       const cls = item?.overdue ? 'border-rose-200 bg-rose-50/60' : item?.kind === 'retraining' ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-white';
       if (item?.target === 'pgy-workflow') {
-        return `<article class="rounded-xl border ${cls} px-3 py-2 flex items-center justify-between gap-3"><div class="min-w-0"><div class="flex items-center gap-2"><span class="text-[10px] font-black text-indigo-700">${escapeHtml(badge)}</span><b class="block text-xs text-slate-800 truncate">${escapeHtml(item.title || 'PGY 訓練指派')}</b></div>${meta ? `<span class="block text-[10px] text-slate-500 mt-1">${escapeHtml(meta)}</span>` : ''}</div><button type="button" data-pgy-command class="shrink-0 text-[10px] font-bold rounded-lg bg-indigo-700 text-white px-2.5 py-1.5">${escapeHtml(item.actionLabel || '開啟')}</button></article>`;
+        return `<article class="rounded-xl border ${cls} px-3 py-2 flex items-center justify-between gap-3"><div class="min-w-0"><div class="flex items-center gap-2"><span class="text-xs font-black text-indigo-700">${escapeHtml(badge)}</span><b class="block text-xs text-slate-800 truncate">${escapeHtml(item.title || 'PGY 訓練指派')}</b></div>${meta ? `<span class="block text-xs text-slate-500 mt-1">${escapeHtml(meta)}</span>` : ''}</div><button type="button" data-pgy-command class="shrink-0 text-xs font-bold rounded-lg bg-indigo-700 text-white px-2.5 py-1.5">${escapeHtml(item.actionLabel || '開啟')}</button></article>`;
       }
-      return `<a href="${href}" class="block rounded-xl border ${cls} px-3 py-2 hover:border-teal-300"><div class="flex items-center justify-between gap-2"><span class="min-w-0"><span class="text-[10px] font-black ${item?.overdue ? 'text-rose-700' : item?.kind === 'retraining' ? 'text-amber-700' : 'text-teal-700'}">${escapeHtml(badge)}</span><b class="block text-xs text-slate-800 truncate mt-0.5">${escapeHtml(item.title || '待辦')}</b></span><span class="text-[10px] font-bold text-teal-700 shrink-0">${escapeHtml(item.actionLabel || '前往處理')} →</span></div>${meta ? `<div class="text-[10px] text-slate-500 mt-1">${escapeHtml(meta)}</div>` : ''}</a>`;
+      return `<a href="${href}" class="block rounded-xl border ${cls} px-3 py-2 hover:border-teal-300"><div class="flex items-center justify-between gap-2"><span class="min-w-0"><span class="text-xs font-black ${item?.overdue ? 'text-rose-700' : item?.kind === 'retraining' ? 'text-amber-700' : 'text-teal-700'}">${escapeHtml(badge)}</span><b class="block text-xs text-slate-800 truncate mt-0.5">${escapeHtml(item.title || '待辦')}</b></span><span class="text-xs font-bold text-teal-700 shrink-0">${escapeHtml(item.actionLabel || '前往處理')} →</span></div>${meta ? `<div class="text-xs text-slate-500 mt-1">${escapeHtml(meta)}</div>` : ''}</a>`;
     });
 
     const VISIBLE_ROWS = 3;

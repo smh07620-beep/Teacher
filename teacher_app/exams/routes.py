@@ -51,6 +51,13 @@ def exam_attempt_submit(attempt_id):
     return jsonify(service.submit_attempt(_blueprint_user(), attempt_id, request.get_json(silent=True) or {}))
 
 
+@bp.get("/api/my/wrong-questions")
+def my_wrong_questions():
+    from teacher_app.exams import wrong_book
+
+    return jsonify(wrong_book.build(service.require_user(_blueprint_user())))
+
+
 def register_legacy_exam_routes(base):
     """Mount modular exam behavior on the unchanged ``pgy_app:app`` URLs."""
     app = base.app

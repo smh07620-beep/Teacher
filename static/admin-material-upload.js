@@ -14,13 +14,13 @@
       fallbackToSameOriginQueue:true,
       onFallback:()=>{
         if(status){
-          status.innerHTML=`⬆️ ${escapeHtml(fileName)}｜雲端直傳暫時無法使用，改由安全相容接收<span class="block text-[11px] text-slate-500 mt-1">25MB 以下教材會由網站安全接收後排入同一個背景 Worker；不會改成同步轉檔。</span>`;
+          status.innerHTML=`⬆️ ${escapeHtml(fileName)}｜雲端直傳暫時無法使用，改由安全相容接收<span class="block text-xs text-slate-500 mt-1">25MB 以下教材會由網站安全接收後排入同一個背景 Worker；不會改成同步轉檔。</span>`;
         }
       },
       onProgress:e=>{
         if(status){
           const pct=e.percent;
-          status.innerHTML=`<b>① 上傳至 R2：${escapeHtml(fileName)}｜${pct}%</b><span class="block text-[11px] text-slate-500 mt-1">${(e.loaded/1024/1024).toFixed(1)} / ${(e.total/1024/1024).toFixed(1)} MB；R2 接收完成後會進入「② 等待 Worker」，直到正式發布完成才算完成。</span>`;
+          status.innerHTML=`<b>① 上傳至 R2：${escapeHtml(fileName)}｜${pct}%</b><span class="block text-xs text-slate-500 mt-1">${(e.loaded/1024/1024).toFixed(1)} / ${(e.total/1024/1024).toFixed(1)} MB；R2 接收完成後會進入「② 等待 Worker」，直到正式發布完成才算完成。</span>`;
         }
       }
     });
@@ -124,7 +124,7 @@
       const active=index===current&&job?.status!=='completed';
       const cls=failed&&active?'border-rose-300 bg-rose-50 text-rose-700':done?'border-emerald-200 bg-emerald-50 text-emerald-700':active?'border-sky-300 bg-sky-50 text-sky-800':'border-slate-200 bg-slate-50 text-slate-400';
       const mark=done?'✓':failed&&active?'!':active?'●':String(index+1);
-      return '<div class="rounded-lg border px-2 py-1 text-[10px] font-bold '+cls+'"><span class="mr-1">'+mark+'</span>'+escapeHtml(label)+'</div>';
+      return '<div class="rounded-lg border px-2 py-1 text-xs font-bold '+cls+'"><span class="mr-1">'+mark+'</span>'+escapeHtml(label)+'</div>';
     }).join('')+'</div>';
   }
 
@@ -159,16 +159,16 @@
         ? ' · heartbeat '+materialUploadDurationLabel(job.heartbeatAgeSeconds)+'前'
         : '';
       const detail=(failed||retryWait)?(job.errorMessage||job.error||job.detail||'請查看 Worker / Job 狀態'):(job.detail||job.stage||'');
-      const action=(failed||retryWait)&&job.errorAction?'<div class="mt-1 text-[10px] font-bold text-rose-700">建議：'+escapeHtml(job.errorAction)+'</div>':'';
-      const code=(failed||retryWait)&&job.errorCode?'<span class="ml-1 font-mono text-[9px] text-slate-400">['+escapeHtml(job.errorCode)+']</span>':'';
+      const action=(failed||retryWait)&&job.errorAction?'<div class="mt-1 text-xs font-bold text-rose-700">建議：'+escapeHtml(job.errorAction)+'</div>':'';
+      const code=(failed||retryWait)&&job.errorCode?'<span class="ml-1 font-mono text-xs text-slate-400">['+escapeHtml(job.errorCode)+']</span>':'';
       const barClass=failed?'bg-rose-500':retryWait?'bg-amber-500':job.status==='completed'?'bg-emerald-500':'bg-sky-600';
-      return '<div class="rounded-lg border '+(failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white')+' p-2"><div class="flex flex-wrap items-center justify-between gap-2"><span><b>'+escapeHtml(job.title||job.originalName||job.id||'教材')+'</b> · '+escapeHtml(materialUploadJobLabel(job.status))+code+'</span><span class="text-[11px] text-slate-500">'+escapeHtml(progress.label)+'</span></div><div class="mt-1 text-[11px] '+(failed?'text-rose-700':'text-slate-600')+'">'+escapeHtml(detail)+'</div>'+action+(health?'<div class="mt-1 text-[10px] font-bold '+(job.stalled?'text-rose-700':job.heartbeatDelayed?'text-amber-700':'text-emerald-700')+'">'+escapeHtml(health+heartbeat)+'</div>':'')+renderMaterialUploadTimeline(job)+retained+'<div class="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>處理進度 '+progress.pct+'%</span><span>依 Worker 真實回報階段顯示；頁數／R2 上傳量會即時持久化，剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full '+barClass+' transition-all" style="width:'+progress.pct+'%"></div></div></div>';
+      return '<div class="rounded-lg border '+(failed?'border-rose-200 bg-rose-50':'border-sky-100 bg-white')+' p-2"><div class="flex flex-wrap items-center justify-between gap-2"><span><b>'+escapeHtml(job.title||job.originalName||job.id||'教材')+'</b> · '+escapeHtml(materialUploadJobLabel(job.status))+code+'</span><span class="text-xs text-slate-500">'+escapeHtml(progress.label)+'</span></div><div class="mt-1 text-xs '+(failed?'text-rose-700':'text-slate-600')+'">'+escapeHtml(detail)+'</div>'+action+(health?'<div class="mt-1 text-xs font-bold '+(job.stalled?'text-rose-700':job.heartbeatDelayed?'text-amber-700':'text-emerald-700')+'">'+escapeHtml(health+heartbeat)+'</div>':'')+renderMaterialUploadTimeline(job)+retained+'<div class="mt-2 flex items-center justify-between text-xs text-slate-500"><span>處理進度 '+progress.pct+'%</span><span>依 Worker 真實回報階段顯示；頁數／R2 上傳量會即時持久化，剩餘時間僅為近期平均估算</span></div><div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full '+barClass+' transition-all" style="width:'+progress.pct+'%"></div></div></div>';
     }).join('');
     const allDone=rows.length>0&&rows.every(job=>job.status==='completed');
     const terminal=rows.length>0&&rows.every(job=>['completed','failed','cancelled'].includes(job.status));
     const heading=allDone?'✅ 教材已正式完成':terminal?'⚠ 教材處理需要注意':'⏳ 正在等待教材正式完成';
     const hint=allDone?'現在可以安全返回課程。':terminal?'請先處理失敗工作；已保留的 R2 原始檔不必重傳。':'請等到全部教材顯示「已完成」再離開；系統會自動更新。';
-    status.innerHTML='<div class="rounded-xl border '+(terminal&&!allDone?'border-amber-200 bg-amber-50':'border-sky-200 bg-sky-50')+' p-3 text-left"><div class="flex flex-wrap items-center justify-between gap-2"><b>'+heading+'</b><span class="text-[11px] text-slate-600">'+hint+'</span></div>'+warning+'<div class="mt-2 space-y-2">'+cards+'</div></div>';
+    status.innerHTML='<div class="rounded-xl border '+(terminal&&!allDone?'border-amber-200 bg-amber-50':'border-sky-200 bg-sky-50')+' p-3 text-left"><div class="flex flex-wrap items-center justify-between gap-2"><b>'+heading+'</b><span class="text-xs text-slate-600">'+hint+'</span></div>'+warning+'<div class="mt-2 space-y-2">'+cards+'</div></div>';
   }
 
   async function fetchAdminMaterialUploadMetrics(){
@@ -281,7 +281,7 @@
     const input=document.getElementById('admin-pptx-upload-input');
     if(input)input.value='';
     const status=document.getElementById('admin-upload-status');
-    if(status)status.innerHTML='🧾 準備更新「'+escapeHtml(material.title||material.filename||'教材')+'」：V'+Number(material.currentVersion||1)+' → V'+(Number(material.currentVersion||1)+1)+'<span class="block text-[11px] text-slate-500 mt-1">請只選擇 1 個新版檔案；取消選檔後不會保留這次更新目標。</span>';
+    if(status)status.innerHTML='🧾 準備更新「'+escapeHtml(material.title||material.filename||'教材')+'」：V'+Number(material.currentVersion||1)+' → V'+(Number(material.currentVersion||1)+1)+'<span class="block text-xs text-slate-500 mt-1">請只選擇 1 個新版檔案；取消選檔後不會保留這次更新目標。</span>';
     input?.scrollIntoView?.({behavior:'smooth',block:'center'});
     if(input){
       let pickerResolved=false;
@@ -338,7 +338,7 @@
     for(let n=0;n<files.length;n++){
       const file=files[n];
       const progressId='manual-'+Date.now()+'-'+n+'-'+Math.random().toString(36).slice(2,8);
-      status.innerHTML='⏳ '+(n+1)+'/'+files.length+' 接收「'+escapeHtml(file.name)+'」<span class="block text-[11px] text-slate-500 mt-1">先傳到 R2／安全暫存，再由院內 Worker 轉檔與正式發布；全部正式完成前請先不要離開。</span>';
+      status.innerHTML='⏳ '+(n+1)+'/'+files.length+' 接收「'+escapeHtml(file.name)+'」<span class="block text-xs text-slate-500 mt-1">先傳到 R2／安全暫存，再由院內 Worker 轉檔與正式發布；全部正式完成前請先不要離開。</span>';
       const area=document.getElementById('admin-material-area')?.value||currentTrainingArea;
       const courseId=document.getElementById('admin-material-course')?.value||'';
       const materialType=document.getElementById('admin-material-type')?.value||'standard';
@@ -387,16 +387,16 @@
         const data=await window.uploadAdminMaterialRequest(fd,progressId,file.name,status);
         queued++;
         if(data.jobId)queuedJobs.push(String(data.jobId));
-        status.innerHTML='⏳ ② 等待 Worker｜'+(n+1)+'/'+files.length+'「'+escapeHtml(file.name)+'」已安全接收<span class="block text-[11px] mt-1">'+escapeHtml(data.jobId||'')+'｜R2 接收完成不等於教材已完成；接下來會依序顯示下載／驗證、轉檔／預覽、正式發布與完成。</span>';
+        status.innerHTML='⏳ ② 等待 Worker｜'+(n+1)+'/'+files.length+'「'+escapeHtml(file.name)+'」已安全接收<span class="block text-xs mt-1">'+escapeHtml(data.jobId||'')+'｜R2 接收完成不等於教材已完成；接下來會依序顯示下載／驗證、轉檔／預覽、正式發布與完成。</span>';
       }catch(err){
         failed.push({name:file.name,error:err.message});
-        status.innerHTML='❌ '+escapeHtml(file.name)+'：'+escapeHtml(err.message)+'<span class="block text-[11px] mt-1">其他檔案會繼續接收。</span>';
+        status.innerHTML='❌ '+escapeHtml(file.name)+'：'+escapeHtml(err.message)+'<span class="block text-xs mt-1">其他檔案會繼續接收。</span>';
       }
     }
 
     let outcome={rows:[],metrics:{},allDone:queuedJobs.length===0};
     if(queuedJobs.length){
-      status.innerHTML='⏳ 已安全接收 '+queued+'/'+files.length+' 份教材，正在等待 Worker 正式完成。<span class="block text-[11px] mt-1">請等到全部教材顯示「已完成」再離開；若 Worker 版本過舊或離線，這裡會直接顯示。</span>';
+      status.innerHTML='⏳ 已安全接收 '+queued+'/'+files.length+' 份教材，正在等待 Worker 正式完成。<span class="block text-xs mt-1">請等到全部教材顯示「已完成」再離開；若 Worker 版本過舊或離線，這裡會直接顯示。</span>';
       outcome=await window.waitForAdminMaterialJobs(queuedJobs,status);
     }
 
@@ -412,7 +412,7 @@
     }else{
       const intakeFailureHtml=failed.length?'<details class="mt-2"><summary class="cursor-pointer font-bold">查看 '+failed.length+' 份接收失敗</summary><div class="mt-1 space-y-1">'+failed.map(item=>'<div>• '+escapeHtml(item.name)+'：'+escapeHtml(item.error)+'</div>').join('')+'</div></details>':'';
       const workerFailureHtml=workerFailures.length?'<details class="mt-2"><summary class="cursor-pointer font-bold">查看 '+workerFailures.length+' 份 Worker 需要處理</summary><div class="mt-1 space-y-1">'+workerFailures.map(job=>'<div>• '+escapeHtml(job.title||job.originalName||job.id)+'：'+escapeHtml(job.error||job.detail||materialUploadJobLabel(job.status))+(job.stagingBackend==='r2'?'｜R2 原始檔仍保留，可直接重新處理':'')+'</div>').join('')+'</div></details>':'';
-      status.innerHTML='⚠️ 教材尚未全部正式完成；已完成 '+(outcome.rows||[]).filter(job=>job.status==='completed').length+'/'+queued+' 份。'+intakeFailureHtml+workerFailureHtml+'<div class="mt-2 text-[11px] font-bold">請到 Worker / Job 狀態處理失敗工作；不要直接重複上傳已安全接收的檔案。</div>';
+      status.innerHTML='⚠️ 教材尚未全部正式完成；已完成 '+(outcome.rows||[]).filter(job=>job.status==='completed').length+'/'+queued+' 份。'+intakeFailureHtml+workerFailureHtml+'<div class="mt-2 text-xs font-bold">請到 Worker / Job 狀態處理失敗工作；不要直接重複上傳已安全接收的檔案。</div>';
     }
 
     input.value='';

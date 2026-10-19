@@ -84,12 +84,22 @@ jobs:
       - name: Run mobile learner Golden Path browser regressions
         env:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
-        run: npx playwright test tests/playwright/mobile-learner-golden-path-1025.spec.js --reporter=line --workers=1
+        run: npx playwright test tests/playwright/mobile-learner-golden-path-1025.spec.js --reporter=line,github --workers=1
 
       - name: Run learner reader paging browser regression
         env:
           TEACHER_UI_BASE_URL: http://127.0.0.1:4173
         run: npx playwright test tests/playwright/reader-paging-20261007.spec.js --reporter=line --workers=1
+
+      - name: Run reader checkpoint browser regression
+        env:
+          TEACHER_UI_BASE_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/playwright/reader-checkpoints-1017.spec.js --reporter=line --workers=1
+
+      - name: AI video voice preview (narration picker in the optional section)
+        env:
+          TEACHER_UI_BASE_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/playwright/teacher-ai-video-voice-preview-1023.spec.js --reporter=line --workers=1
 
       - name: Run P2 teacher learner browser regression
         env:

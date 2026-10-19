@@ -11,9 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_internal_area_and_batch_entry_are_not_blocked_by_recovery_click_handler():
-    authoring = (ROOT / "static" / "teacher-authoring-source-fix-1017.js").read_text(encoding="utf-8")
+    # The capturing recovery click handler is gone with teacher-authoring-source-fix-1017.js.
+    assert not (ROOT / "static" / "teacher-authoring-source-fix-1017.js").exists()
     batch = (ROOT / "static" / "teacher-assignment-experience-1014.js").read_text(encoding="utf-8")
-    assert "typeof window.TeacherWorkspace1014?.openMedia === 'function') return" in authoring
     assert "teacher-batch-assignment-dialog-1014" in batch
     assert "wizard-area" in batch
     assert "hub?._adminCourseMaterialRefresh" in batch
@@ -29,10 +29,9 @@ def test_exam_settings_return_uses_the_canonical_assessment_router():
 
 def test_subtitle_picker_owns_its_selected_material():
     subtitle = (ROOT / "static" / "teacher-media-subtitle-1014.js").read_text(encoding="utf-8")
-    authoring = (ROOT / "static" / "teacher-authoring-source-fix-1017.js").read_text(encoding="utf-8")
     assert "teacher-subtitle-material-1017" in subtitle
-    assert "TeacherMediaSubtitle1014?.selectMaterial" in authoring
-    assert "subtitleBridge1017" not in authoring
+    assert "buildSourcePicker" in subtitle
+    assert "subtitleBridge1017" not in subtitle
 
 
 def test_delete_route_checks_persisted_exam_scope_before_cascade():

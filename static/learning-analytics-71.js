@@ -43,12 +43,12 @@
     section.className = 'pt-3 border-t border-slate-100';
     section.innerHTML = `
       <div class="flex items-center justify-between gap-2 flex-wrap">
-        <div><b class="text-xs text-slate-800">📊 學習摘要</b><span id="learning-analytics-status-71" class="ml-2 text-[10px] text-slate-400">讀取中…</span></div>
-        <button id="learning-analytics-refresh-71" type="button" class="text-[10px] font-bold text-sky-700 hover:text-sky-900">↻ 更新</button>
+        <div><b class="text-xs text-slate-800">📊 學習摘要</b><span id="learning-analytics-status-71" class="ml-2 text-xs text-slate-400">讀取中…</span></div>
+        <button id="learning-analytics-refresh-71" type="button" class="text-xs font-bold text-sky-700 hover:text-sky-900">↻ 更新</button>
       </div>
       <div id="learning-analytics-stats-71" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 mt-2"></div>
       <details id="learning-analytics-detail-71" class="mt-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
-        <summary class="cursor-pointer text-[11px] font-bold text-slate-600">查看詳細 Learning Analytics ▾</summary>
+        <summary class="cursor-pointer text-xs font-bold text-slate-600">查看詳細 Learning Analytics ▾</summary>
         <div id="learning-analytics-table-71" class="mt-3 overflow-x-auto"></div>
         <div id="learning-analytics-timeline-71" class="mt-3"></div>
       </details>`;
@@ -58,17 +58,17 @@
   }
 
   function chip(label, value, note = '') {
-    return `<div class="rounded-xl border border-slate-200 bg-white px-3 py-2"><div class="text-[9px] text-slate-400">${escapeHtml(label)}</div><div class="text-sm font-black text-slate-800 mt-0.5">${escapeHtml(value)}</div>${note ? `<div class="text-[9px] text-slate-400 mt-0.5">${escapeHtml(note)}</div>` : ''}</div>`;
+    return `<div class="rounded-xl border border-slate-200 bg-white px-3 py-2"><div class="text-xs text-slate-400">${escapeHtml(label)}</div><div class="text-sm font-black text-slate-800 mt-0.5">${escapeHtml(value)}</div>${note ? `<div class="text-xs text-slate-400 mt-0.5">${escapeHtml(note)}</div>` : ''}</div>`;
   }
 
   function renderTimeline(rows, includePgy) {
     const host = document.getElementById('learning-analytics-timeline-71');
     if (!host) return;
     const timeline = Array.isArray(rows) ? rows.slice(-6) : [];
-    host.innerHTML = `<div class="text-[10px] font-black text-slate-500 mb-2">近 6 個月活動</div><div class="grid sm:grid-cols-3 lg:grid-cols-6 gap-2">${timeline.map(month => {
+    host.innerHTML = `<div class="text-xs font-black text-slate-500 mb-2">近 6 個月活動</div><div class="grid sm:grid-cols-3 lg:grid-cols-6 gap-2">${timeline.map(month => {
       const parts = [`教材 ${Number(month.materials || 0)}`, `考試 ${Number(month.exams || 0)}`];
       if (includePgy) parts.push(`PGY ${Number(month.pgy || 0)}`, `評量 ${Number(month.assessments || 0)}`);
-      return `<div class="rounded-lg border border-slate-100 bg-white px-2 py-2"><b class="block text-[10px] text-slate-700">${escapeHtml(month.month)}</b><span class="text-[9px] text-slate-400">${parts.join(' · ')}</span></div>`;
+      return `<div class="rounded-lg border border-slate-100 bg-white px-2 py-2"><b class="block text-xs text-slate-700">${escapeHtml(month.month)}</b><span class="text-xs text-slate-400">${parts.join(' · ')}</span></div>`;
     }).join('') || '<span class="text-xs text-slate-400">尚無近期活動。</span>'}</div>`;
   }
 
@@ -81,7 +81,7 @@
       return;
     }
     const pgyHead = includePgy ? '<th class="bg-white border-y border-slate-200 p-2">PGY 指派</th><th class="bg-white border-y border-r border-slate-200 p-2">PGY 評量</th>' : '<th class="bg-white border-y border-r border-slate-200 p-2">考試</th>';
-    host.innerHTML = `<table class="min-w-[620px] w-full text-left text-[10px] border-separate border-spacing-0"><thead><tr><th class="bg-white border-y border-l border-slate-200 p-2">學員</th><th class="bg-white border-y border-slate-200 p-2">教材</th>${includePgy ? '<th class="bg-white border-y border-slate-200 p-2">考試</th>' : ''}${pgyHead}</tr></thead><tbody>${learners.map(row => {
+    host.innerHTML = `<table class="min-w-[620px] w-full text-left text-xs border-separate border-spacing-0"><thead><tr><th class="bg-white border-y border-l border-slate-200 p-2">學員</th><th class="bg-white border-y border-slate-200 p-2">教材</th>${includePgy ? '<th class="bg-white border-y border-slate-200 p-2">考試</th>' : ''}${pgyHead}</tr></thead><tbody>${learners.map(row => {
       const pgy = row.pgy || {};
       return `<tr><td class="bg-white border-b border-l border-slate-100 p-2"><b>${escapeHtml(row.name || row.empId)}</b><div class="text-slate-400">${escapeHtml(row.empId || '')}</div></td><td class="bg-white border-b border-slate-100 p-2"><b>${numberOrDash(row.materials?.averageProgress)}%</b><div class="text-slate-400">${Number(row.materials?.completed || 0)}/${Number(row.materials?.tracked || 0)} 完成</div></td><td class="bg-white border-b border-slate-100 p-2"><b>${numberOrDash(row.exams?.averageScore)}</b><div class="text-slate-400">${Number(row.exams?.passed || 0)}/${Number(row.exams?.reviewedAttempts || 0)} 通過</div></td>${includePgy ? `<td class="bg-white border-b border-slate-100 p-2"><b>${numberOrDash(pgy.completionRate)}%</b><div class="text-slate-400">${Number(pgy.completedAssignments || 0)}/${Number(pgy.assignments || 0)} 完成</div></td><td class="bg-white border-b border-r border-slate-100 p-2"><b>${numberOrDash(pgy.assessmentAverage)}</b><div class="text-slate-400">${Number(pgy.assessments || 0)} 筆</div></td>` : ''}</tr>`;
     }).join('')}</tbody></table>`;

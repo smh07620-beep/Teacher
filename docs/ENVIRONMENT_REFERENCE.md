@@ -80,6 +80,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `DB_POOL_MIN_SIZE` | `1` | `teacher_app/common/db.py` |  |  |
 | `DB_POOL_TIMEOUT_SECONDS` | `5.0` | `teacher_app/common/db.py` |  |  |
 | `EMAIL_REMINDER_DAYS` | `7` | `teacher_app/notifications/reminders.py` |  |  |
+| `EXAM_GATE_ENABLED` | `1` | `teacher_app/learning/gate.py` |  |  |
 | `FFMPEG_PATH` |  | `teacher_app/materials/ai_video_runtime.py` |  |  |
 | `FREE_ONLY_MODE` | `True` | `teacher_app/assessments/ai_runtime.py`, `teacher_app/assessments/question_runtime.py`, `teacher_app/legacy_host.py` (+3) | yes | yes |
 | `GDRIVE_CHUNK_MB` | `8` | `teacher_app/storage/providers.py` |  |  |
@@ -226,6 +227,8 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `R2_PRESIGN_SECONDS` | `3600` | `teacher_app/storage/providers.py` |  |  |
 | `R2_REGION` | `auto` | `teacher_app/storage/providers.py` |  |  |
 | `R2_SECRET_ACCESS_KEY` |  | `teacher_app/storage/providers.py` | yes | yes |
+| `R2_STORAGE_LIMIT_BYTES` |  | `teacher_app/admin/health_overview.py` |  |  |
+| `READER_RULES_V2` | `1` | `teacher_app/learning/routes.py` |  |  |
 | `RENDER` | `false` | `teacher_app/common/security.py`, `teacher_app/config.py`, `teacher_app/maintenance/health.py` |  |  |
 | `RENDER_GIT_BRANCH` |  | `teacher_app/maintenance/health.py` |  |  |
 | `RENDER_GIT_COMMIT` |  | `teacher_app/frontend/assets.py`, `teacher_app/maintenance/health.py`, `teacher_app/materials/media_audio_routes.py` |  |  |
@@ -248,6 +251,8 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `STORAGE_FAILOVER_ON_FULL` | `false` | `teacher_app/config.py`, `teacher_app/legacy_host.py`, `teacher_app/materials/staging_runtime.py` (+3) |  | yes |
 | `STORAGE_FALLBACK_BACKEND` |  | `teacher_app/config.py`, `teacher_app/legacy_host.py`, `teacher_app/materials/staging_runtime.py` (+3) |  | yes |
 | `STORAGE_STATUS_CACHE_SECONDS` | `30` | `teacher_app/legacy_host.py`, `teacher_app/storage/admin_service.py` |  |  |
+| `STUDENT_LEAN_ASSETS` | `1` | `teacher_app/frontend/assets.py` |  |  |
+| `SUPABASE_DB_LIMIT_BYTES` |  | `teacher_app/admin/health_overview.py` |  |  |
 | `TEACHER_BASE_URL` |  | `ai_question_worker.py`, `material_worker.py`, `teacher_app/worker/ai_remote.py` (+1) | yes |  |
 | `TEACHER_E2E_DETERMINISTIC_STUBS` |  | `ai_question_worker.py` |  |  |
 | `TEACHER_E2E_TEST_MODE` |  | `teacher_app/testing/deterministic_ai_provider.py` |  |  |

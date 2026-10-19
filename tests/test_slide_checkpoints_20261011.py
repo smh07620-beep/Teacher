@@ -38,6 +38,11 @@ class SlideCheckpointTests(unittest.TestCase):
                 "expires_at TEXT NOT NULL, session_version INTEGER NOT NULL DEFAULT 0)"
             )
             slide_checkpoints_118(conn, kind)
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS learning_progress (material_id TEXT NOT NULL, username TEXT NOT NULL, "
+                "position TEXT NOT NULL DEFAULT '{}', progress REAL NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0, "
+                "last_viewed_at TEXT NOT NULL DEFAULT '', completed_at TEXT NOT NULL DEFAULT '', PRIMARY KEY(material_id,username))"
+            )
             for username, role, group in (
                 ("education-admin", "education_admin", "grpHema"),
                 ("clinical-teacher", "clinical_teacher", "grpHema"),
@@ -111,10 +116,50 @@ class SlideCheckpointTests(unittest.TestCase):
                 self.assertTrue(r.get_json()["error"])
 
     def test_non_slide_material_is_rejected(self):
-        self.material["viewerMode"] = "video"
+        self.material["viewerMode"] = "image"
         self.login("clinical-teacher")
         r = self.client.post("/api/materials/mat-1/checkpoints", json=self.body(), headers=ORIGIN)
         self.assertEqual(r.status_code, 400)
+
+    def test_video_checkpoint_uses_seconds(self):
+        self.material["viewerMode"] = "video"
+        self.login("clinical-teacher")
+        r = self.client.post("/api/materials/mat-1/checkpoints", json=self.body(page=None, second=95), headers=ORIGIN)
+        self.assertEqual(r.status_code, 201, r.get_data(as_text=True))
+        self.assertEqual(r.get_json()["item"]["page"], 95)  # page 10 limit does not apply to seconds
+        bad = self.client.post("/api/materials/mat-1/checkpoints", json=self.body(page=None, second=0), headers=ORIGIN)
+        self.assertEqual(bad.status_code, 400)
+
+    # --- per-material reading rules (2026-10-17)
+    def test_teacher_sets_reading_rules_and_others_cannot(self):
+        saved = {}
+        with patch("teacher_app.materials.repository.merge_storage_meta", side_effect=lambda mid, upd: saved.update(upd)):
+            self.login("clinical-teacher")
+            r = self.client.put("/api/materials/mat-1/reading-rules",
+                                json={"optional": True, "minSecondsPerPage": 12, "checkpointsEnabled": False}, headers=ORIGIN)
+            self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+            self.assertEqual(saved, {"optional": True, "minSecondsPerPage": 12, "checkpointsEnabled": False})
+            self.assertTrue(r.get_json()["optional"])
+            for bad in ({"minSecondsPerPage": 999}, {"minSecondsPerPage": "x"}, {"minSecondsPerPage": True}, {}):
+                self.assertEqual(self.client.put("/api/materials/mat-1/reading-rules", json=bad, headers=ORIGIN).status_code, 400, bad)
+            self.assertEqual(self.client.put("/api/materials/mat-1/reading-rules", json={"minSecondsPerPage": ""}, headers=ORIGIN).get_json()["minSecondsPerPage"], None)
+            for username in ("student-user", "other-teacher", "auditor-user"):
+                self.login(username)
+                self.assertEqual(self.client.put("/api/materials/mat-1/reading-rules", json={"optional": True}, headers=ORIGIN).status_code, 403, username)
+
+    def test_checkpoints_switched_off_are_hidden_from_learners(self):
+        self.create()
+        self.material["storageMeta"] = {"checkpointsEnabled": False}
+        self.login("student-user")
+        self.assertEqual(self.client.get("/api/materials/mat-1/checkpoints").get_json()["items"], [])
+
+    def test_fixed_seconds_override_the_automatic_dwell(self):
+        from teacher_app.learning import routes
+
+        required = routes._required_by_page({"storageMeta": {"minSecondsPerPage": 8, "pageTextLengths": [900, 0]}}, 2)
+        self.assertEqual(required, {"1": 8, "2": 8})
+        auto = routes._required_by_page({"storageMeta": {"pageTextLengths": [900, 0]}}, 2)
+        self.assertEqual(auto, {"1": 30, "2": 5})
 
     # --- learner side: secrecy until answered
     def test_learner_list_hides_answer_until_answered(self):
@@ -129,20 +174,40 @@ class SlideCheckpointTests(unittest.TestCase):
         r = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 0}, headers=ORIGIN)
         self.assertEqual(r.status_code, 200)
         data = r.get_json()
+        # First wrong answer: explanation and one more try, the right option stays hidden.
         self.assertFalse(data["isCorrect"])
-        self.assertEqual(data["correctIndex"], 1)
+        self.assertTrue(data["canRetry"])
+        self.assertNotIn("correctIndex", data)
         self.assertEqual(data["explanation"], "固定細胞形態")
+        again = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 2}, headers=ORIGIN).get_json()
+        self.assertFalse(again["canRetry"])
+        self.assertEqual(again["attempts"], 2)
+        self.assertEqual(again["correctIndex"], 1)
 
-    def test_first_answer_is_the_record_and_repeat_does_not_change_it(self):
+    def test_first_answer_is_the_record_and_only_one_retry(self):
         cid = self.create()
         self.login("student-user")
         first = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 0}, headers=ORIGIN).get_json()
         second = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 1}, headers=ORIGIN).get_json()
+        third = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 0}, headers=ORIGIN).get_json()
         self.assertFalse(first["isCorrect"])
-        self.assertFalse(second["isCorrect"])
-        self.assertEqual(second["chosenIndex"], 0)
+        self.assertTrue(second["isCorrect"])
+        self.assertFalse(second["firstCorrect"])
+        self.assertEqual(third["chosenIndex"], 1)  # the single retry is kept
+        self.assertTrue(third["isCorrect"])
+        from teacher_app.checkpoints import repository
+        self.assertFalse(repository.get_answer(cid, "student-user")["isCorrect"])  # record unchanged
         listing = self.client.get("/api/materials/mat-1/checkpoints").get_json()["items"][0]
         self.assertTrue(listing["answered"])
+        self.assertEqual(listing["attempts"], 2)
+
+    def test_right_first_answer_reveals_and_has_no_retry(self):
+        cid = self.create()
+        self.login("student-user")
+        data = self.client.post(f"/api/slide-checkpoints/{cid}/answer", json={"chosenIndex": 1}, headers=ORIGIN).get_json()
+        self.assertTrue(data["isCorrect"])
+        self.assertFalse(data["canRetry"])
+        self.assertEqual(data["correctIndex"], 1)
 
     def test_bad_choices_are_rejected(self):
         cid = self.create()

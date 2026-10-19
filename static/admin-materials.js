@@ -53,6 +53,11 @@
     }
   };
 
+  // Decorators (content audience chips, upload notice) listen for this instead of wrapping renderAdminMaterials.
+  function announceAdminRendered(view, detail){
+    window.dispatchEvent(new CustomEvent('teacher:admin-rendered', {detail: Object.assign({view}, detail || {})}));
+  }
+
   function paintAdminMaterials(materials, box){
     if (!box) return;
     box.innerHTML = materials.map(m => `
@@ -61,27 +66,29 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="font-bold text-sm text-slate-800 break-all">${escapeHtml(m.title || m.filename)}</span>
-              <span class="text-[11px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">${escapeHtml((GROUPS[m.group] || GROUPS.grpBio).label)}</span>
-              <span class="text-[11px] px-2 py-0.5 rounded-full ${m.isBuiltin ? 'bg-slate-200 text-slate-600' : 'bg-indigo-100 text-indigo-700'}">${m.isBuiltin ? '內建' : '上傳'}</span>
-              ${!m.isBuiltin ? `<span class="text-[11px] px-2 py-0.5 rounded-full ${m.storageBackend==='mega'?'bg-fuchsia-100 text-fuchsia-800':(m.storageBackend==='oci'?'bg-red-100 text-red-800':(m.storageBackend==='gdrive'?'bg-emerald-100 text-emerald-800':(m.storageBackend==='r2'?'bg-cyan-100 text-cyan-800':'bg-orange-100 text-orange-800')))}">${m.storageBackend==='mega'?'🟣 MEGA':(m.storageBackend==='oci'?'🔴 Oracle':(m.storageBackend==='gdrive'?'🟢 Google Drive':(m.storageBackend==='r2'?'☁️ R2':'💾 本機')))}</span>` : ''}
-              ${!m.isBuiltin ? `<span class="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">V${Number(m.currentVersion||1)}</span>` : ''}
-              ${!m.isBuiltin && Number(m.requiredCompletionVersion||1)>1 ? `<span class="text-[11px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">重訓基準 V${Number(m.requiredCompletionVersion||1)}</span>` : ''}
-              ${!m.isBuiltin && !m.active ? '<span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">已停用</span>' : ''}${!m.isBuiltin&&m.materialType==='atlas'?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">🔬 Atlas</span>':''}${!m.isBuiltin&&m.materialType==='infographic'?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">📊 資訊圖表</span>':m.materialType==='sop'?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">📑 SOP</span>':m.materialType==='troubleshooting'?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">🧰 Troubleshooting</span>':m.materialType==='case'?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">🩸 案例分析</span>':''}
+              <span class="text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">${escapeHtml((GROUPS[m.group] || GROUPS.grpBio).label)}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full ${m.isBuiltin ? 'bg-slate-200 text-slate-600' : 'bg-indigo-100 text-indigo-700'}">${m.isBuiltin ? '內建' : '上傳'}</span>
+              ${!m.isBuiltin ? `<span class="text-xs px-2 py-0.5 rounded-full ${m.storageBackend==='mega'?'bg-fuchsia-100 text-fuchsia-800':(m.storageBackend==='oci'?'bg-red-100 text-red-800':(m.storageBackend==='gdrive'?'bg-emerald-100 text-emerald-800':(m.storageBackend==='r2'?'bg-cyan-100 text-cyan-800':'bg-orange-100 text-orange-800')))}">${m.storageBackend==='mega'?'🟣 MEGA':(m.storageBackend==='oci'?'🔴 Oracle':(m.storageBackend==='gdrive'?'🟢 Google Drive':(m.storageBackend==='r2'?'☁️ R2':'💾 本機')))}</span>` : ''}
+              ${!m.isBuiltin ? `<span class="text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">V${Number(m.currentVersion||1)}</span>` : ''}
+              ${!m.isBuiltin && Number(m.requiredCompletionVersion||1)>1 ? `<span class="text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">重訓基準 V${Number(m.requiredCompletionVersion||1)}</span>` : ''}
+              ${!m.isBuiltin && !m.active ? '<span class="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">已停用</span>' : ''}${!m.isBuiltin&&m.materialType==='atlas'?'<span class="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">🔬 Atlas</span>':''}${!m.isBuiltin&&m.materialType==='infographic'?'<span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">📊 資訊圖表</span>':m.materialType==='sop'?'<span class="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">📑 SOP</span>':m.materialType==='troubleshooting'?'<span class="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">🧰 Troubleshooting</span>':m.materialType==='case'?'<span class="text-xs px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">🩸 案例分析</span>':''}
             </div>
-            <div class="text-xs text-slate-500 mt-1">${escapeHtml(m.categoryLabel || '未分類')} · ${m.pageCount || 0} 頁 · ${escapeHtml(m.dateAdded || '')}</div><div id="material-index-${m.id}" class="text-[11px] text-slate-400 mt-1">全文搜尋：背景檢查中…</div>
-            ${!m.isBuiltin && m.storageMeta ? `<div class="text-[11px] text-slate-400 mt-1">☁ ${m.storageMeta.previewMode==='single_pdf'?'單一預覽檔':'閱讀版'} ${escapeHtml((m.slideFormat||m.storageMeta.slideFormat||'png').toUpperCase())}${m.storageMeta.slideBytes?` · ${window.formatFileBytes(m.storageMeta.slideBytes)}`:''}${m.storageMeta.sourceBytes?` ｜ 原始檔 ${window.formatFileBytes(m.storageMeta.sourceBytes)}`:''}${m.storageMeta.cloudObjectCount?` ｜ 雲端檔案 ${m.storageMeta.cloudObjectCount} 個`:''}</div>` : ''}
-            ${!m.isBuiltin && Array.isArray(m.storageMeta?.conversionWarnings) && m.storageMeta.conversionWarnings.length ? `<div class="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] leading-5 text-amber-900" data-conversion-warnings><b>⚠ 轉檔版面可能與原檔不同</b>${m.storageMeta.conversionWarnings.map(w=>`<div>${escapeHtml(w.message||'')}</div>`).join('')}</div>` : ''}
-            ${!m.isBuiltin && m.storageMeta?.materialClassification ? `<div class="text-[11px] text-emerald-700 mt-1">🤖 ${m.storageMeta.materialClassification.requested==='auto'?'自動分類':'教師指定'}：${escapeHtml(m.materialType||m.storageMeta.materialClassification.resolved||'standard')}${m.storageMeta.materialClassification.reason?` ｜ ${escapeHtml(m.storageMeta.materialClassification.reason)}`:''}</div>` : ''}
+            <div class="text-xs text-slate-500 mt-1">${escapeHtml(m.categoryLabel || '未分類')} · ${m.pageCount || 0} 頁 · ${escapeHtml(m.dateAdded || '')}</div><div id="material-index-${m.id}" class="text-xs text-slate-400 mt-1">全文搜尋：背景檢查中…</div>
+            ${!m.isBuiltin && m.storageMeta ? `<div class="text-xs text-slate-400 mt-1">☁ ${m.storageMeta.previewMode==='single_pdf'?'單一預覽檔':'閱讀版'} ${escapeHtml((m.slideFormat||m.storageMeta.slideFormat||'png').toUpperCase())}${m.storageMeta.slideBytes?` · ${window.formatFileBytes(m.storageMeta.slideBytes)}`:''}${m.storageMeta.sourceBytes?` ｜ 原始檔 ${window.formatFileBytes(m.storageMeta.sourceBytes)}`:''}${m.storageMeta.cloudObjectCount?` ｜ 雲端檔案 ${m.storageMeta.cloudObjectCount} 個`:''}</div>` : ''}
+            ${!m.isBuiltin && Array.isArray(m.storageMeta?.conversionWarnings) && m.storageMeta.conversionWarnings.length ? `<div class="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs leading-5 text-amber-900" data-conversion-warnings><b>⚠ 轉檔版面可能與原檔不同</b>${m.storageMeta.conversionWarnings.map(w=>`<div>${escapeHtml(w.message||'')}</div>`).join('')}</div>` : ''}
+            ${!m.isBuiltin && Array.isArray(m.storageMeta?.qualityCheck?.issues) && m.storageMeta.qualityCheck.issues.length ? `<div class="note-warn" data-quality-check><b>⚠ 上傳後自動檢查：請確認</b>${m.storageMeta.qualityCheck.issues.map(i=>`<div><b>${escapeHtml(i.label||'')}</b>　${escapeHtml(i.detail||'')}</div>`).join('')}</div>` : ''}
+            ${!m.isBuiltin && m.storageMeta?.materialClassification ? `<div class="text-xs text-emerald-700 mt-1">🤖 ${m.storageMeta.materialClassification.requested==='auto'?'自動分類':'教師指定'}：${escapeHtml(m.materialType||m.storageMeta.materialClassification.resolved||'standard')}${m.storageMeta.materialClassification.reason?` ｜ ${escapeHtml(m.storageMeta.materialClassification.reason)}`:''}</div>` : ''}
           </div>
           ${m.isBuiltin ? '<span class="text-xs text-slate-400">內建教材不可修改</span>' : `
             <div class="flex flex-wrap gap-2 shrink-0">
               <button data-csp-click="editAdminMaterial('${m.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg">✏️ 編輯</button><button data-csp-click="rebuildMaterialIndex('${m.id}')" class="text-xs border border-teal-200 text-teal-800 px-3 py-1.5 rounded-lg">🔄 重建索引</button>
               <button data-csp-click="toggleAdminMaterial('${m.id}', ${m.active ? 'false' : 'true'})" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg">${m.active ? '⏸️ 停用' : '▶️ 啟用'}</button>
               <button data-csp-click="deleteAdminMaterial('${m.id}')" class="text-xs border border-rose-300 bg-rose-50 hover:bg-rose-100 font-bold text-rose-700 px-3 py-1.5 rounded-lg">🗑️ 刪除教材</button>
-              <details class="relative"><summary class="list-none cursor-pointer text-[11px] bg-white border border-slate-200 text-slate-500 px-2.5 py-1.5 rounded-lg">更多</summary><div class="absolute right-0 z-20 mt-1 w-52 rounded-xl border border-slate-200 bg-white shadow-lg p-2 space-y-1.5"><button data-csp-click="publishMaterialVersion('${m.id}')" class="w-full text-xs bg-sky-50 border border-sky-200 hover:bg-sky-100 text-sky-800 px-3 py-1.5 rounded-lg">📌 發布新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="w-full text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg">🕘 版本紀錄</button></div></details>
+              <details class="relative"><summary class="list-none cursor-pointer text-xs bg-white border border-slate-200 text-slate-500 px-2.5 py-1.5 rounded-lg">更多</summary><div class="absolute right-0 z-20 mt-1 w-52 rounded-xl border border-slate-200 bg-white shadow-lg p-2 space-y-1.5"><button data-csp-click="publishMaterialVersion('${m.id}')" class="w-full text-xs bg-sky-50 border border-sky-200 hover:bg-sky-100 text-sky-800 px-3 py-1.5 rounded-lg">📌 發布新版</button><button data-csp-click="viewMaterialVersions('${m.id}')" class="w-full text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg">🕘 版本紀錄</button></div></details>
             </div>`}
         </div>
       </div>`).join('') || '<p class="text-xs text-slate-400">目前沒有教材。</p>';
+    announceAdminRendered('materials');
   }
 
   window.renderAdminMaterials = async function(force=false){
@@ -90,6 +97,7 @@
       // The full-list panel was removed; the course overview owns the UI. Still
       // refresh the shared cache so every caller keeps seeing fresh data.
       await window.fetchAdminMaterials(force);
+      announceAdminRendered('materials');
       return;
     }
     const cached = Array.isArray(adminMaterialsCache.data) ? adminMaterialsCache.data : null;

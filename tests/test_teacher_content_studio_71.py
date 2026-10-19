@@ -39,7 +39,7 @@ class TeacherContentStudio71Tests(unittest.TestCase):
     def test_studio_routes_to_existing_canonical_ui_owners(self):
         for marker in (
             'openAdminWorkspace', 'renderAdminQuizCategories', 'toggleQuizQuestionsPanel',
-            'updateManualQuestionType', 'openExternalMaterialCreateDrawer', 'switchLearningModule',
+            'updateManualQuestionType', 'switchLearningModule',
             'renderFormalAtlas',
         ):
             self.assertIn(marker, self.source)

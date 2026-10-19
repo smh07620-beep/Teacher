@@ -106,15 +106,8 @@
     };
   }
 
-  const canonicalQuizRender = window.renderAdminQuizCategories;
-  if (typeof canonicalQuizRender === 'function' && !canonicalQuizRender.__teacher1014ScopeGuard) {
-    const guarded = async function(force = false) {
-      syncAssessmentScope();
-      return canonicalQuizRender(Boolean(force));
-    };
-    guarded.__teacher1014ScopeGuard = true;
-    window.renderAdminQuizCategories = guarded;
-  }
+  // admin-question-bank.js calls this before rendering (no wrapper around its function).
+  window.TeacherAssessmentScope = Object.freeze({ sync: syncAssessmentScope });
 
   function ensureAssessmentRecovery(count = null) {
     const list = document.getElementById('admin-quiz-categories-list');
@@ -140,16 +133,10 @@
     list.parentElement?.appendChild(box);
   }
 
-  const canonicalPaint = window.paintAdminQuizCategories;
-  if (typeof canonicalPaint === 'function' && !canonicalPaint.__teacher1014EmptyRecovery) {
-    const painted = function(items) {
-      const result = canonicalPaint(items);
-      ensureAssessmentRecovery(Array.isArray(items) ? items.length : null);
-      return result;
-    };
-    painted.__teacher1014EmptyRecovery = true;
-    window.paintAdminQuizCategories = painted;
-  }
+  // Empty-scope help appears after the owner paints the exam list.
+  window.addEventListener('teacher:admin-rendered', event => {
+    if (event.detail?.view === 'quiz-categories') ensureAssessmentRecovery(event.detail.count);
+  });
 
   const shell = window.AdminWorkspaceShell;
   shell?.addBeforeWorkspace(({requested, workspace}) => {
@@ -167,7 +154,6 @@
   // receives its secrets and remains read-only.
   // ------------------------------------------------------------------
   let workerEnhanceTimer = null;
-  let workerFetchInFlight = false;
 
   function capabilityWarning(article) {
     if (!(article instanceof HTMLElement) || article.querySelector('[data-worker-capability-warning-1014]')) return;
@@ -191,35 +177,6 @@
     return section;
   }
 
-  function buildFailureSection(jobs) {
-    const failures = (Array.isArray(jobs) ? jobs : []).filter(job => ['failed', 'retry_wait'].includes(String(job.status || ''))).slice(0, 8);
-    const section = document.createElement('section');
-    section.id = 'worker-recent-failures-1014';
-    section.className = 'rounded-2xl border border-rose-200 bg-white p-4 shadow-sm space-y-3';
-    const title = document.createElement('div');
-    title.className = 'flex items-center justify-between gap-3';
-    title.innerHTML = `<h5 class="font-black text-slate-900">❌ 最近失敗 / 等待重試</h5><span class="text-sm text-slate-500">${failures.length} 筆</span>`;
-    section.appendChild(title);
-    if (!failures.length) {
-      const empty = document.createElement('div');
-      empty.className = 'rounded-xl bg-emerald-50 px-3 py-3 text-sm font-bold text-emerald-800';
-      empty.textContent = '目前最近工作沒有失敗紀錄。';
-      section.appendChild(empty);
-      return section;
-    }
-    const list = document.createElement('div');
-    list.className = 'space-y-2';
-    failures.forEach(job => {
-      const row = document.createElement('article');
-      row.className = 'rounded-xl border border-rose-100 bg-rose-50/50 p-3';
-      const detail = String(job.error || job.detail || '未提供錯誤細節').slice(0, 800);
-      row.innerHTML = `<div class="flex items-start justify-between gap-2 flex-wrap"><div class="font-bold text-slate-900">${escapeHtml(job.title || job.originalName || '未命名教材')}</div><span class="text-sm font-bold text-rose-700">${escapeHtml(job.status || '')}</span></div><div class="mt-1 text-sm text-slate-700"><b>階段：</b>${escapeHtml(job.stage || '—')}</div><div class="mt-1 text-sm text-rose-800 break-words"><b>原因：</b>${escapeHtml(detail)}</div><div class="mt-1 text-sm text-slate-500"><b>Worker：</b>${escapeHtml(job.workerId || '—')} · ${escapeHtml(job.updatedAt || job.createdAt || '')}</div>`;
-      list.appendChild(row);
-    });
-    section.appendChild(list);
-    return section;
-  }
-
   async function enhanceWorkerPanel() {
     const panel = document.getElementById('admin-section-worker');
     if (!panel || panel.classList.contains('hidden')) return;
@@ -229,19 +186,6 @@
       const localSection = sections.find(node => node.textContent?.includes('本機 Worker'));
       if (localSection) localSection.insertAdjacentElement('afterend', fallbackCard());
       else panel.appendChild(fallbackCard());
-    }
-    if (document.getElementById('worker-recent-failures-1014') || workerFetchInFlight) return;
-    workerFetchInFlight = true;
-    try {
-      const response = await fetch('/api/material-jobs?limit=30', {credentials:'same-origin', cache:'no-store'});
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) return;
-      const recent = [...panel.children].find(node => node.textContent?.includes('最近背景工作'));
-      const failures = buildFailureSection(data.problemJobs || data.jobs || []);
-      if (recent) panel.insertBefore(failures, recent);
-      else panel.appendChild(failures);
-    } finally {
-      workerFetchInFlight = false;
     }
   }
 

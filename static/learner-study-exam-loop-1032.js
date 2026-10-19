@@ -1,7 +1,8 @@
 /* 1032 · Learner study ⇄ exam loop.
  *
- * 1. Material "完成標記" is never a gate: learners may start an exam directly
- *    from the course list or from inside the reader / media viewer.
+ * 1. Exams unlock once the course's required materials are completed. The
+ *    server decides (403 MATERIALS_NOT_COMPLETE); this file only shows the
+ *    locked card with progress, using GET /api/courses/<id>/learner-bundle.
  * 2. While answering (or after submitting) learners can jump back to the
  *    materials / atlas area at any time. In-page switching keeps the current
  *    attempt and result; a floating "回到考核" pill brings them back.
@@ -61,6 +62,43 @@
     return materials().find(m => String(m.id) === String(id)) || null;
   }
 
+  /* ---------------- exam unlock gate (server-decided) ---------------- */
+  const gateByCourse = new Map();
+  const reviewByCourse = new Map();
+  const gateLoading = new Set();
+  function gateFor(courseId) { return gateByCourse.get(String(courseId || '')) || null; }
+  function isLocked(courseId) { const gate = gateFor(courseId); return Boolean(gate && gate.unlocked === false); }
+  async function loadGate(courseId, force) {
+    const key = String(courseId || '');
+    if (!key || gateLoading.has(key) || (!force && gateByCourse.has(key))) return;
+    gateLoading.add(key);
+    try {
+      const res = await fetch(`/api/courses/${encodeURIComponent(key)}/learner-bundle?view=learner`, {credentials: 'same-origin'});
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      if (data && data.gate) {
+        gateByCourse.set(key, data.gate);
+        // Checkpoint questions ride along; the slide checkpoint card reads this instead of its own request.
+        window.LearnerBundleCheckpoints = Object.assign(window.LearnerBundleCheckpoints || {}, data.checkpoints || {});
+        reviewByCourse.set(key, (data.materials || []).filter(m => (m.reviewPages || []).length).map(m => ({materialId: m.id, pages: m.reviewPages})));
+        if (typeof window.renderCourseOverview === 'function') window.renderCourseOverview();
+      }
+    } catch (_) {
+      /* offline: leave the exam row as is; the server still enforces the gate */
+    } finally { gateLoading.delete(key); }
+  }
+  window.LearnerExamGate = Object.freeze({
+    get: gateFor,
+    isLocked,
+    load: courseId => loadGate(courseId, false),
+    reload: courseId => loadGate(courseId, true),
+    reviewPages: courseId => reviewByCourse.get(String(courseId || '')) || []
+  });
+  function lockedCardHtml(gate) {
+    const pct = Math.max(0, Math.min(100, Number(gate.progress || 0)));
+    return `<div class="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700" data-exam-locked="1"><div class="font-bold">🔒 ${esc(gate.reason || '讀完教材後解鎖')}</div><div class="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden"><div class="h-2 bg-teal-700" style="width:${pct}%"></div></div></div>`;
+  }
+
   /* ---------------- exam pass / fail status per quiz ---------------- */
   const examStatus = new Map();
   let statusLoadedFor = '';
@@ -95,43 +133,39 @@
   }
   function statusBadge(examId) {
     const s = examStatus.get(String(examId || ''));
-    if (!s) return '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">尚未考核</span>';
-    if (s.passed) return `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✅ 已通過 ${esc(s.best?.score ?? '')} 分</span>`;
-    if (s.pending) return '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">⏳ 待人工批改</span>';
-    return `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">❌ 未通過（最近 ${esc(s.latest?.score ?? 0)} 分）</span>`;
+    if (!s) return '<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">尚未考核</span>';
+    if (s.passed) return `<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">✅ 已通過 ${esc(s.best?.score ?? '')} 分</span>`;
+    if (s.pending) return '<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">⏳ 待人工批改</span>';
+    return `<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">❌ 未通過（最近 ${esc(s.latest?.score ?? 0)} 分）</span>`;
   }
   // Read-only view of the learner's per-exam result for course status badges (teaching.js).
   window.LearnerExamStatus = Object.freeze({get: examId => examStatus.get(String(examId || '')) || null});
   function failHint(examId) {
     const s = examStatus.get(String(examId || ''));
     if (!s || s.passed || s.pending) return '';
-    return '<p class="mt-1 text-[11px] font-bold text-rose-700">⚠️ 尚未通過：請先回上方教材重新閱覽，再重新考核（不會鎖定，重考時題目順序會重新打亂）。</p>';
+    return '<p class="mt-1 text-xs font-bold text-rose-700">⚠️ 尚未通過：請先回上方教材重新閱覽，再重新考核（不會鎖定，重考時題目順序會重新打亂）。</p>';
   }
 
-  function wrapExamRow() {
-    if (typeof window.buildCourseExamRow !== 'function' || window.buildCourseExamRow.__loop1032) return;
-    const original = window.buildCourseExamRow;
-    const wrapped = function (exam) {
-      const html = original.apply(this, arguments);
-      if (!exam || !exam.id || /data-exam-not-ready/.test(html)) return html;
-      const holder = document.createElement('div');
-      holder.innerHTML = html;
-      const row = holder.firstElementChild;
-      if (!row) return html;
-      row.dataset.loop1032Exam = String(exam.id);
-      const titleLine = row.querySelector('.flex.items-center.gap-2.flex-wrap');
-      if (titleLine) titleLine.insertAdjacentHTML('beforeend', statusBadge(exam.id));
-      const body = row.querySelector('.min-w-0.flex-1');
-      if (body) body.insertAdjacentHTML('beforeend', failHint(exam.id));
-      const s = examStatus.get(String(exam.id));
-      const btn = row.querySelector('[data-csp-click^="openCourseExam("]');
-      if (btn && s && !s.passed && !s.pending && !/繼續作答/.test(btn.textContent)) btn.textContent = '重新考核 →';
-      if (btn && s && s.passed) btn.textContent = '再練習一次 →';
-      return holder.innerHTML;
+  // The owner (buildCourseExamRow in system-learner.js) asks for these pieces while it
+  // renders the row; nothing re-parses its HTML afterwards.
+  function examRowParts(exam) {
+    if (!exam || !exam.id) return null;
+    loadGate(exam.courseId);
+    const s = examStatus.get(String(exam.id));
+    const locked = isLocked(exam.courseId);
+    let label = '';
+    if (s && s.passed) label = '再練習一次 →';
+    else if (s && !s.pending) label = '重新考核 →';
+    return {
+      badge: statusBadge(exam.id),
+      hint: failHint(exam.id),
+      locked,
+      lockedHtml: locked ? lockedCardHtml(gateFor(exam.courseId)) : '',
+      label,
     };
-    wrapped.__loop1032 = true;
-    window.buildCourseExamRow = wrapped;
   }
+  window.LearnerExamRow = Object.freeze({ parts: examRowParts });
+
 
   /* ---------------- reader → exam ---------------- */
   function ensureReaderExamButton(anchorId, closeFn) {
@@ -155,9 +189,13 @@
     }
     const material = currentReaderMaterial();
     const exams = examsForCourse(material?.courseId);
-    button.hidden = !exams.length;
+    loadGate(material?.courseId);
+    button.hidden = !exams.length || isLocked(material?.courseId);
+    // One forward action: the exam once unlocked, otherwise the next material.
+    const anchorEl = document.getElementById(anchorId);
+    if (anchorEl && anchorId === 'reader-next') anchorEl.hidden = !button.hidden;
     const ret = ss.get(RETURN_KEY);
-    button.textContent = ret && exams.some(e => String(e.id) === String(ret.catId)) ? '↩ 回到考核（保留作答）' : '📝 看完了，直接考核 →';
+    button.textContent = ret && exams.some(e => String(e.id) === String(ret.catId)) ? '↩ 回到考核（保留作答）' : '前往考試 →';
   }
   function syncReaderButtons() {
     ensureReaderExamButton('reader-next', () => g('closeSlideViewer')?.());
@@ -168,6 +206,11 @@
 
   /* ---------------- exam ⇄ materials ---------------- */
   async function goToExam(catId) {
+    const meta = categories().find(c => String(c.id) === String(catId)) || {};
+    if (isLocked(meta.courseId)) {
+      alert(gateFor(meta.courseId)?.reason || '讀完教材後解鎖考卷。');
+      return;
+    }
     if (typeof window.openCourseExam === 'function') await window.openCourseExam(catId);
     else { g('switchLearningModule')?.('exam'); await g('switchDynamicCategory')?.(catId); }
     paintPill();
@@ -297,63 +340,33 @@
     (toolbar ? toolbar.after(card) : panel.insertBefore(card, panel.firstChild));
   }
 
-  function wrapSubmit() {
-    const original = g('submitQuiz');
-    if (typeof original !== 'function' || original.__loop1032) return;
-    const wrapped = async function () {
-      const catId = g('currentCatKey');
-      const result = await original.apply(this, arguments);
-      if (catId && (g('isSubmittedMap') || {})[catId]) {
-        saveLastResult(catId);
-        rememberExam(catId);
-        injectAtlasHints();
-        const last = ss.get(RESULT_PREFIX + catId);
-        const summary = document.getElementById('result-remediation-summary');
-        if (summary && last && !last.passed) summary.textContent += ' 重考不會被鎖定，系統會重新抽題並打亂題目順序。';
-        loadExamStatus(true);
-      }
-      return result;
-    };
-    wrapped.__loop1032 = true;
-    window.submitQuiz = wrapped;
-  }
-
-  function wrapRender() {
-    const original = g('renderQuestions');
-    if (typeof original !== 'function' || original.__loop1032) return;
-    const wrapped = function () { const r = original.apply(this, arguments); injectAtlasHints(); return r; };
-    wrapped.__loop1032 = true;
-    window.renderQuestions = wrapped;
-  }
-
-  function wrapModuleSwitch() {
-    const original = g('switchLearningModule');
-    if (typeof original !== 'function' || original.__loop1032) return;
-    const wrapped = function (module) {
-      const r = original.apply(this, arguments);
-      if (module === 'exam') { ensureExamToolbar(); setTimeout(restoreLastResultCard, 0); }
+  // The exam owners announce what happened (system-exam.js / system-core.js); nothing is wrapped.
+  function bindExamEvents() {
+    window.addEventListener('teacher:exam-submitted', event => {
+      const catId = event.detail?.catId;
+      if (!catId || !(g('isSubmittedMap') || {})[catId]) return;
+      saveLastResult(catId);
+      rememberExam(catId);
+      injectAtlasHints();
+      const last = ss.get(RESULT_PREFIX + catId);
+      const summary = document.getElementById('result-remediation-summary');
+      if (summary && last && !last.passed) summary.textContent += ' 重考不會被鎖定，系統會重新抽題並打亂題目順序。';
+      loadExamStatus(true);
+    });
+    window.addEventListener('teacher:exam-rendered', () => injectAtlasHints());
+    window.addEventListener('teacher:module-changed', event => {
+      if (event.detail?.module === 'exam') { ensureExamToolbar(); setTimeout(restoreLastResultCard, 0); }
       setTimeout(paintPill, 0);
-      return r;
-    };
-    wrapped.__loop1032 = true;
-    window.switchLearningModule = wrapped;
+    });
+    window.addEventListener('teacher:exam-opened', () => { ensureExamToolbar(); restoreLastResultCard(); });
   }
 
-  function wrapCategorySwitch() {
-    const original = g('switchDynamicCategory');
-    if (typeof original !== 'function' || original.__loop1032) return;
-    const wrapped = async function () { const r = await original.apply(this, arguments); ensureExamToolbar(); restoreLastResultCard(); return r; };
-    wrapped.__loop1032 = true;
-    window.switchDynamicCategory = wrapped;
-  }
+  // system-exam.js uses this to stay on the page (keeps the just-finished result in memory).
+  window.LearnerBackToStudy = module => backToStudy(module);
 
-  function wrapRemediationButton() {
-    // Stay on the page so the just-finished result is kept in memory.
-    window.openExamRemediationMaterials = function () { backToStudy('materials'); };
-  }
 
   function boot() {
-    wrapExamRow(); wrapSubmit(); wrapRender(); wrapModuleSwitch(); wrapCategorySwitch(); wrapRemediationButton();
+    bindExamEvents();
     ensureExamToolbar();
     loadExamStatus(false);
     paintPill();

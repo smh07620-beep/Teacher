@@ -3,7 +3,7 @@
 Opt-in by construction: a material with no checkpoint behaves exactly as before.
 Teachers add checkpoints per material page; learners may answer or skip (never
 blocks reading or completion).  The right answer and explanation reach a learner
-only after that learner answered (formative practice, not an exam).
+only after a right answer or the second try (formative practice, not an exam).
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import json
 import uuid
 from typing import Any, Callable, Mapping
 
-from teacher_app.checkpoints import repository
+from teacher_app.checkpoints import repository, retry
 from teacher_app.common.auth import has_permission, has_role, is_system_admin
 from teacher_app.common.errors import ApiError
 from teacher_app.learning import access as learning_access
@@ -25,6 +25,8 @@ MIN_OPTIONS = 2
 MAX_OPTIONS = 6
 MAX_PAGE = 5000
 SLIDE_VIEWER_MODES = {"slides", "preview_pdf"}
+MEDIA_VIEWER_MODES = {"video", "audio"}  # checkpoint "page" = the second it pauses at
+MAX_MEDIA_SECOND = 6 * 3600
 
 MaterialGetter = Callable[[str], Mapping[str, Any] | None]
 
@@ -64,6 +66,11 @@ def _manageable_material(user, get_material, material_id):
     return material
 
 
+def manageable_material(user, get_material, material_id):
+    """Public guard for the per-material reading rules (same rule as checkpoints)."""
+    return _manageable_material(user, get_material, material_id)
+
+
 def _readable_material(user, get_material, material_id):
     material = _material(get_material, material_id)
     if not learning_access.can_access_learning_item(user, material):
@@ -72,15 +79,24 @@ def _readable_material(user, get_material, material_id):
 
 
 def _clean(body: Mapping[str, Any], material: Mapping[str, Any]) -> dict:
-    if str(material.get("viewerMode") or "") not in SLIDE_VIEWER_MODES:
-        raise _fail("CHECKPOINT_NOT_SLIDES", "只有投影片／PDF 教材可以設定小測驗。")
-    try:
-        page = int(body.get("page"))
-    except (TypeError, ValueError):
-        raise _fail("CHECKPOINT_PAGE", "請填寫要在第幾頁出現。") from None
-    total = int(material.get("pageCount") or 0)
-    if page < 1 or page > (total or MAX_PAGE):
-        raise _fail("CHECKPOINT_PAGE", f"頁碼必須介於 1 到 {total or MAX_PAGE}。")
+    mode = str(material.get("viewerMode") or "")
+    if mode not in SLIDE_VIEWER_MODES | MEDIA_VIEWER_MODES:
+        raise _fail("CHECKPOINT_NOT_SLIDES", "只有投影片／PDF 或影音教材可以設定小測驗。")
+    if mode in MEDIA_VIEWER_MODES:
+        try:
+            page = int(body.get("second", body.get("page")))
+        except (TypeError, ValueError):
+            raise _fail("CHECKPOINT_PAGE", "請填寫影片播放到第幾秒時出題。") from None
+        if page < 1 or page > MAX_MEDIA_SECOND:
+            raise _fail("CHECKPOINT_PAGE", "秒數必須介於 1 到 21600（6 小時）。")
+    else:
+        try:
+            page = int(body.get("page"))
+        except (TypeError, ValueError):
+            raise _fail("CHECKPOINT_PAGE", "請填寫要在第幾頁出現。") from None
+        total = int(material.get("pageCount") or 0)
+        if page < 1 or page > (total or MAX_PAGE):
+            raise _fail("CHECKPOINT_PAGE", f"頁碼必須介於 1 到 {total or MAX_PAGE}。")
     question = str(body.get("question") or "").strip()[:MAX_QUESTION]
     if not question:
         raise _fail("CHECKPOINT_QUESTION", "請填寫小測驗題目。")
@@ -179,29 +195,47 @@ def list_for_manager(user, get_material: MaterialGetter, material_id: str) -> di
     return {"items": items, "pageCount": int(material.get("pageCount") or 0)}
 
 
-def _learner_view(item: Mapping[str, Any], answer: Mapping[str, Any] | None) -> dict:
+def _learner_view(item: Mapping[str, Any], answer: Mapping[str, Any] | None, second: Mapping[str, Any] | None = None) -> dict:
+    """Two-stage reveal: a first wrong answer gets the explanation and one more try;
+    the right option is shown only after a right answer or the second try."""
     view = {"id": item["id"], "page": item["page"], "question": item["question"], "options": list(item["options"])}
-    if answer:
-        view["answered"] = True
-        view["chosenIndex"] = answer["chosenIndex"]
-        view["isCorrect"] = answer["isCorrect"]
-        view["correctIndex"] = item["correctIndex"]
-        view["explanation"] = item["explanation"]
-    else:
+    if not answer:
         view["answered"] = False
+        return view
+    view["answered"] = True
+    view["firstCorrect"] = bool(answer["isCorrect"])
+    view["explanation"] = item["explanation"]
+    if answer["isCorrect"]:
+        view.update(attempts=1, canRetry=False, isCorrect=True, chosenIndex=answer["chosenIndex"], correctIndex=item["correctIndex"])
+    elif second:
+        view.update(attempts=2, canRetry=False, isCorrect=bool(second.get("isCorrect")),
+                    chosenIndex=int(second.get("chosenIndex", -1)), firstChosenIndex=answer["chosenIndex"],
+                    correctIndex=item["correctIndex"])
+    else:
+        view.update(attempts=1, canRetry=True, isCorrect=False, chosenIndex=answer["chosenIndex"])
     return view
+
+
+def learner_items(user, material: Mapping[str, Any]) -> list[dict]:
+    """Learner-safe checkpoint items for an already-authorised material."""
+    from teacher_app.checkpoints import reading_rules
+
+    if not reading_rules.checkpoints_enabled(material):
+        return []
+    current = int(material.get("currentVersion") or 1)
+    answers = repository.answers_for_user(_username(user), material["id"])
+    seconds = retry.retries_for(_username(user), material["id"]) if answers else {}
+    items = [
+        _learner_view(item, answers.get(item["id"]), seconds.get(item["id"]))
+        for item in repository.list_for_material(material["id"])
+        if item["active"] and item["materialVersion"] == current
+    ]
+    return items
 
 
 def list_for_learner(user, get_material: MaterialGetter, material_id: str) -> dict:
     material = _readable_material(user, get_material, material_id)
-    current = int(material.get("currentVersion") or 1)
-    answers = repository.answers_for_user(_username(user), material["id"])
-    items = [
-        _learner_view(item, answers.get(item["id"]))
-        for item in repository.list_for_material(material["id"])
-        if item["active"] and item["materialVersion"] == current
-    ]
-    return {"items": items}
+    return {"items": learner_items(user, material)}
 
 
 def answer(user, get_material: MaterialGetter, checkpoint_id: str, body: Mapping[str, Any]) -> dict:
@@ -223,6 +257,16 @@ def answer(user, get_material: MaterialGetter, checkpoint_id: str, body: Mapping
     if not 0 <= chosen < len(item["options"]):
         raise _fail("CHECKPOINT_CHOICE", "選項超出範圍。")
     correct = chosen == item["correctIndex"]
-    # First answer is the record; a repeat call returns it unchanged.
-    repository.record_answer(item["id"], _username(user), item["materialId"], chosen, correct, _now())
-    return _learner_view(item, repository.get_answer(item["id"], _username(user)))
+    username = _username(user)
+    first = repository.get_answer(item["id"], username)
+    if not first:
+        # First answer is the learning record.  A wrong checkpoint never locks the
+        # exam: the reader lists its page as 建議再看 instead (plan: 不影響通過).
+        repository.record_answer(item["id"], username, item["materialId"], chosen, correct, _now())
+    elif not first["isCorrect"]:
+        try:
+            retry.record(username, item["materialId"], item["id"], chosen, correct)
+        except Exception:  # practice only: an unsaved retry must not break answering
+            pass
+    second = retry.retries_for(username, item["materialId"]).get(item["id"])
+    return _learner_view(item, repository.get_answer(item["id"], username), second)
