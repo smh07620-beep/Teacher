@@ -294,3 +294,11 @@ body.teacher-help-visible-1014 .teacher-context-help-copy-1014 {
 /* AI 投影片: steps 4–6 wait for an outline (teacher-ai-presentation-1016.js syncDraft) */
 #teacher-ai-presentation-1016[data-stage="waiting"] > :not(.ai-pres-waiting){display:none}
 #teacher-ai-presentation-1016[data-stage="ready"] > .ai-pres-waiting{display:none}
+
+/* Phones: the header row has no room for the 「顯示說明」 pill (it pushed the page 4px wider than a
+   390px screen). The help copy stays reachable on tablets and computers. */
+@media (max-width: 639px) {
+  .teacher-help-toggle-1014 {
+    display: none;
+  }
+}
