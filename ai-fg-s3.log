@@ -1,0 +1,30 @@
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:9002
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [19/Oct/2026 18:10:18] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:18] "PUT /teacher-ai-fg-e2e HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:18] "PUT /teacher-ai-fg-e2e?cors HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:20] "PUT /teacher-ai-fg-e2e/materials/e2e-source/source.txt HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:20] "PUT /teacher-ai-fg-e2e/materials/e2e-video-source/source.mp4 HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:28] "HEAD /teacher-ai-fg-e2e/materials/e2e-video-source/source.mp4 HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:28] "GET /teacher-ai-fg-e2e/materials/e2e-video-source/source.mp4 HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:37] "OPTIONS /teacher-ai-fg-e2e/_staging/material-jobs/matjob-9fa41404e77a496c/source.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ci/20261019/us-east-1/s3/aws4_request&X-Amz-Date=20261019T101037Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=d8ba229a3fc009ecac2fdbce38b4c39f9c2b4db8398a72e9728a9b097f2e5179 HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:37] "PUT /teacher-ai-fg-e2e/_staging/material-jobs/matjob-9fa41404e77a496c/source.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ci/20261019/us-east-1/s3/aws4_request&X-Amz-Date=20261019T101037Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=d8ba229a3fc009ecac2fdbce38b4c39f9c2b4db8398a72e9728a9b097f2e5179 HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:37] "HEAD /teacher-ai-fg-e2e/_staging/material-jobs/matjob-9fa41404e77a496c/source.txt HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:40] "GET /teacher-ai-fg-e2e/_staging/material-jobs/matjob-9fa41404e77a496c/source.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ci/20261019/us-east-1/s3/aws4_request&X-Amz-Date=20261019T101040Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=15e66459d9713959f3011ff02cdb6cfd9b2c1d5c286bc5af02fefda532300f26 HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:41] "PUT /teacher-ai-fg-e2e/materials/upload-a504a5670594/source.txt HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:41] "[35m[1mDELETE /teacher-ai-fg-e2e/_staging/material-jobs/matjob-9fa41404e77a496c/source.txt HTTP/1.1[0m" 204 -
+127.0.0.1 - - [19/Oct/2026 18:10:45] "HEAD /teacher-ai-fg-e2e/materials/upload-a504a5670594/source.txt HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:45] "GET /teacher-ai-fg-e2e/materials/upload-a504a5670594/source.txt HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:47] "[33mHEAD /teacher-ai-fg-e2e/materials/mat-ai-audio-5dad22bb30e23e08cae11682/E2E-TEST-20261006%20核准講稿-AI語音.wav HTTP/1.1[0m" 404 -
+127.0.0.1 - - [19/Oct/2026 18:10:47] "PUT /teacher-ai-fg-e2e/materials/mat-ai-audio-5dad22bb30e23e08cae11682/E2E-TEST-20261006%20核准講稿-AI語音.wav HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:51] "HEAD /teacher-ai-fg-e2e/materials/upload-a504a5670594/source.txt HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:51] "GET /teacher-ai-fg-e2e/materials/upload-a504a5670594/source.txt HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:53] "PUT /teacher-ai-fg-e2e/ai-presentations/artifacts/pptjob-0bb7a2230c77421698d8287f3e96027d/E2E-TEST-20261006%20總驗收教材-投影片大綱.pptx HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:56] "HEAD /teacher-ai-fg-e2e/ai-presentations/artifacts/pptjob-0bb7a2230c77421698d8287f3e96027d/E2E-TEST-20261006%20總驗收教材-投影片大綱.pptx HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:56] "GET /teacher-ai-fg-e2e/ai-presentations/artifacts/pptjob-0bb7a2230c77421698d8287f3e96027d/E2E-TEST-20261006%20總驗收教材-投影片大綱.pptx HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:10:58] "PUT /teacher-ai-fg-e2e/ai-videos/artifacts/vidjob-18ea8cd17a044da297554a11c4cb5c59/E2E-TEST-20261006%20總驗收教材｜投影片大綱-r1.mp4 HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:11:00] "HEAD /teacher-ai-fg-e2e/materials/e2e-video-source/source.mp4 HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:11:00] "GET /teacher-ai-fg-e2e/materials/e2e-video-source/source.mp4 HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:11:03] "HEAD /teacher-ai-fg-e2e/materials/upload-a504a5670594/source.txt HTTP/1.1" 200 -
+127.0.0.1 - - [19/Oct/2026 18:11:03] "GET /teacher-ai-fg-e2e/materials/upload-a504a5670594/source.txt HTTP/1.1" 200 -

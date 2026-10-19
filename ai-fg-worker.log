@@ -1,0 +1,5 @@
+[teacher-ai-worker] started queues=ai_questions,media_scripts,ai_presentations,ai_videos,media_audio,media_subtitles free_fallback=enabled control_transport=https
+[teacher-ai-worker] video_renderers=powerpoint-com:unavailable,libreoffice-headless:candidate,text-fallback:candidate selected_candidate=libreoffice-headless
+[teacher-ai-worker] site version check state=match: Worker 與網站版本號一致（6.8.1）；無法比對 commit。
+[teacher-ai-worker] kokoro preload ready device=deterministic cuda_available=False voices_cached=1 hf_cache=persistent hf_offline=False 
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.

@@ -26,7 +26,19 @@ test('AI questions use real route, durable job, Worker and question-bank import'
   await learner.locator('#login-form button[type="submit"]').click(); await learner.waitForURL(url => !url.pathname.endsWith('/login'));
   await learner.evaluate(() => switchLearningModule('exam'));
   await expect(learner.locator('#question-card-0')).toContainText('E2E deterministic question');
-  await learner.locator('#question-card-0 input[type=radio]').first().check();
+  // Options are shuffled per learner (2026-10-17): choose the correct option by its text.
+  {
+    const card = learner.locator('#question-card-0');
+    const options = card.locator('input[type=radio]');
+    const question = state.body.result.questions[0];
+    const want = String((question.options || [])[Number(question.correct ?? 0)] || '').trim();
+    let picked = false;
+    for (let j = 0; j < await options.count() && !picked; j++) {
+      const text = await options.nth(j).evaluate(el => (el.closest('label') || el.parentElement).textContent || '');
+      if (want && text.includes(want)) { await options.nth(j).check(); picked = true; }
+    }
+    if (!picked) await options.first().check();
+  }
   await expect(learner.locator('#answer-status-0')).toContainText('已作答');
   const submitted = learner.waitForResponse(r=>r.url().includes('/submit') && r.request().method()==='POST');
   await learner.locator('#submit-btn').click();
