@@ -41,7 +41,7 @@ def _user(owner=None):
 
 
 def reader_rules_v2() -> bool:
-    return os.environ.get("READER_RULES_V2", "").strip().lower() in {"1", "true", "on", "yes"}
+    return os.environ.get("READER_RULES_V2", "1").strip().lower() not in {"0", "false", "off", "no"}
 
 
 def _seconds_since(value) -> float | None:
@@ -617,11 +617,14 @@ def register_smart_learning(
                         p for p in prior_position.get("reviewPages") or [] if isinstance(p, int)
                     ] if same_version else []
                     position["reviewDwell"] = dict(prior_position.get("reviewDwell") or {}) if same_version else {}
-                    v2 = content.document_completion_v2(
-                        total_pages, dwell, _required_by_page(material, total_pages)
-                    )
-                    progress = float(v2["progress"])
-                    document = {"completed": v2["completed"]}
+                    # Plan rule (1106): a deck with narration is finished by visiting every page and
+                    # hearing 90% of the narration; per-page reading time applies to decks without it.
+                    if required_narration(user, material) is None:
+                        v2 = content.document_completion_v2(
+                            total_pages, dwell, _required_by_page(material, total_pages)
+                        )
+                        progress = float(v2["progress"])
+                        document = {"completed": v2["completed"]}
                 review_pages_mod.advance(
                     position, page, delta if rules_v2 else {},
                     _required_by_page(material, total_pages), rules_v2,

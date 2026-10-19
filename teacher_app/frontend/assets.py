@@ -156,7 +156,7 @@ ASSET_MANIFEST = {
 # Teacher/admin-only scripts a student-only account never needs on /system.
 # Each one was checked by tools/student_asset_inventory.py: it defines no global that
 # a remaining script references and touches no learner-screen element.  Withholding
-# is opt-in (STUDENT_LEAN_ASSETS=1); see docs/STUDENT_LEAN_ASSETS_PLAN.md.
+# is on by default since 2026-10-19 (STUDENT_LEAN_ASSETS=0 turns it off); see docs/STUDENT_LEAN_ASSETS_PLAN.md.
 STUDENT_LEAN_EXCLUDE = frozenset({
     "/system-admin.js",
     "/worker-status-70.js",
@@ -195,7 +195,7 @@ STUDENT_LEAN_EXCLUDE = frozenset({
 
 
 def student_lean_enabled() -> bool:
-    return os.environ.get("STUDENT_LEAN_ASSETS", "").strip().lower() in {"1", "true", "on", "yes"}
+    return os.environ.get("STUDENT_LEAN_ASSETS", "1").strip().lower() not in {"0", "false", "off", "no"}
 
 
 def _strip_scripts(html: str, paths) -> str:

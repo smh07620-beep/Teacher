@@ -228,7 +228,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `R2_REGION` | `auto` | `teacher_app/storage/providers.py` |  |  |
 | `R2_SECRET_ACCESS_KEY` |  | `teacher_app/storage/providers.py` | yes | yes |
 | `R2_STORAGE_LIMIT_BYTES` |  | `teacher_app/admin/health_overview.py` |  |  |
-| `READER_RULES_V2` |  | `teacher_app/learning/routes.py` |  |  |
+| `READER_RULES_V2` | `1` | `teacher_app/learning/routes.py` |  |  |
 | `RENDER` | `false` | `teacher_app/common/security.py`, `teacher_app/config.py`, `teacher_app/maintenance/health.py` |  |  |
 | `RENDER_GIT_BRANCH` |  | `teacher_app/maintenance/health.py` |  |  |
 | `RENDER_GIT_COMMIT` |  | `teacher_app/frontend/assets.py`, `teacher_app/maintenance/health.py`, `teacher_app/materials/media_audio_routes.py` |  |  |
@@ -251,7 +251,7 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `STORAGE_FAILOVER_ON_FULL` | `false` | `teacher_app/config.py`, `teacher_app/legacy_host.py`, `teacher_app/materials/staging_runtime.py` (+3) |  | yes |
 | `STORAGE_FALLBACK_BACKEND` |  | `teacher_app/config.py`, `teacher_app/legacy_host.py`, `teacher_app/materials/staging_runtime.py` (+3) |  | yes |
 | `STORAGE_STATUS_CACHE_SECONDS` | `30` | `teacher_app/legacy_host.py`, `teacher_app/storage/admin_service.py` |  |  |
-| `STUDENT_LEAN_ASSETS` |  | `teacher_app/frontend/assets.py` |  |  |
+| `STUDENT_LEAN_ASSETS` | `1` | `teacher_app/frontend/assets.py` |  |  |
 | `SUPABASE_DB_LIMIT_BYTES` |  | `teacher_app/admin/health_overview.py` |  |  |
 | `TEACHER_BASE_URL` |  | `ai_question_worker.py`, `material_worker.py`, `teacher_app/worker/ai_remote.py` (+1) | yes |  |
 | `TEACHER_E2E_DETERMINISTIC_STUBS` |  | `ai_question_worker.py` |  |  |

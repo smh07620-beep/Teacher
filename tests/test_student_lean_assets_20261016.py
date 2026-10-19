@@ -10,12 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class StudentLeanAssetsTests(unittest.TestCase):
-    def test_flag_is_off_by_default(self):
+    def test_flag_is_on_by_default_and_can_be_turned_off(self):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("STUDENT_LEAN_ASSETS", None)
-            self.assertFalse(assets.student_lean_enabled())
-        with patch.dict(os.environ, {"STUDENT_LEAN_ASSETS": "1"}):
             self.assertTrue(assets.student_lean_enabled())
+        with patch.dict(os.environ, {"STUDENT_LEAN_ASSETS": "0"}):
+            self.assertFalse(assets.student_lean_enabled())
 
     def test_strip_removes_only_listed_scripts_with_or_without_version(self):
         html = ('<script defer src="/worker-status-70.js?v=7500"></script>\n'
