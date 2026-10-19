@@ -1,4 +1,0 @@
-[teacher-local-worker vm-TeacherWorker] startup ffmpeg=True ffprobe=True libreoffice=True
-[teacher-local-worker vm-TeacherWorker] site version check state=match: Worker 與網站版本號一致（6.8.1）；無法比對 commit。
-[teacher-local-worker vm-TeacherWorker] storage preflight ready backend=r2 libreoffice_warm=False libreoffice_warmed=False libreoffice_warmup_seconds=0.0
-[teacher-local-worker vm-TeacherWorker] completed matjob-9fa41404e77a496c timings_ms={"completeAckMs":41,"downloadMs":6,"mediaNormalizeMs":0,"processingBeforeReceiptMs":228,"publishedAckMs":18,"renderAndProviderMs":135,"sanitizeMs":0,"textIndexMs":0,"totalMs":310,"validateMs":0}

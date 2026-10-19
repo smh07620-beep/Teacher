@@ -34,3 +34,7 @@ test-results/
 ai-media-*.log
 tools/tailwind_build/tokens.json
 tools/tailwind_build/out.css
+
+# local full-stack test logs
+ai-fg-*.log
+ai-fullstack-*.log
