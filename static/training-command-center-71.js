@@ -182,7 +182,7 @@
       });
     }
     // Course rows use the same canonical list for deadlines and the recommended unit.
-    window.Teacher71LearnerTasks = Object.freeze({items: learnerItems, nextAction});
+    window.Teacher71LearnerTasks = Object.freeze({items: learnerItems, nextAction, courseDeadlines: Array.isArray(command?.courseDeadlines) ? command.courseDeadlines : []});
     window.dispatchEvent(new CustomEvent('teacher71:learner-tasks'));
     list.querySelectorAll('[data-pgy-command]').forEach(button => button.addEventListener('click', openPGY));
     nextBox.querySelector('[data-next-pgy]')?.addEventListener('click', openPGY);

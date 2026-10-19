@@ -111,10 +111,23 @@ def _has_learner_persona(user: Mapping[str, Any], role: str) -> bool:
     return any(normalize_role(value) == "student" for value in raw_roles)
 
 
-def _learner_action_items(user: Mapping[str, Any], current: dt.datetime) -> list[dict[str, Any]]:
+def _course_deadlines(dashboard: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Every assigned course's due date, finished or not, for the course cards (2026-10-19)."""
+    rows = []
+    for item in dashboard.get("assignments") or []:
+        course_id = str(item.get("courseId") or "")
+        due = str(item.get("dueAt") or "")
+        if course_id and due:
+            rows.append({"courseId": course_id, "dueAt": due, "completed": bool(item.get("completed")), "overdue": bool(item.get("overdue"))})
+    return rows
+
+
+def _learner_action_items(user: Mapping[str, Any], current: dt.datetime, sink: dict | None = None) -> list[dict[str, Any]]:
     """Project canonical dashboard learning state into one learner task list."""
     try:
         dashboard = dashboard_service.dashboard_summary(user, now=current)
+        if sink is not None:
+            sink["courseDeadlines"] = _course_deadlines(dashboard)
     except Exception as exc:
         LOGGER.warning(
             "command center learner projection failed error_type=%s",
@@ -659,7 +672,8 @@ def build_summary(
 
     persona_mode = str(persona or "").strip().lower()
     learner_mode = persona_mode == "learner"
-    learner_items = _learner_action_items(user, current) if (learner_mode or _has_learner_persona(user, role)) else []
+    learner_extra: dict[str, Any] = {}
+    learner_items = _learner_action_items(user, current, learner_extra) if (learner_mode or _has_learner_persona(user, role)) else []
 
     effective_pgy_role = "student" if learner_mode else role
     actionable = ACTIONABLE_PGY.get(effective_pgy_role, {}) if profile["pgyLearner"] else {}
@@ -728,4 +742,5 @@ def build_summary(
             None,
         ),
         "items": items,
+        "courseDeadlines": learner_extra.get("courseDeadlines", []),
     }

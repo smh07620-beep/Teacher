@@ -8,9 +8,10 @@
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
   let rows = [];
 
+  // Any back-office page that has the 評量與追蹤 results panel (/teach, /admin, ?admin=1).
+  // The server scopes the list to the teacher's own courses; learners never get this panel.
   function teacherPage() {
-    const params = new URLSearchParams(location.search);
-    return params.get('admin') === '1' && params.get('persona') !== 'system';
+    return !!document.getElementById('admin-section-results');
   }
 
   function ensure() {
