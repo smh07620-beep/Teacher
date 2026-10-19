@@ -11,6 +11,16 @@ async function assertNoHorizontalOverflow(page) {
     viewport: window.innerWidth,
     documentWidth: document.documentElement.scrollWidth,
     bodyWidth: document.body.scrollWidth,
+    // Name the elements that stick out so a CI failure says what to fix.
+    offenders: [...document.querySelectorAll('body *')].filter(el => {
+      const r = el.getBoundingClientRect();
+      if (!r.width || r.right <= window.innerWidth + 0.5) return false;
+      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        const o = getComputedStyle(p).overflowX;
+        if (o === 'auto' || o === 'scroll' || o === 'hidden' || o === 'clip') return false;
+      }
+      return true;
+    }).slice(0, 6).map(el => `${el.tagName.toLowerCase()}#${el.id}.${String(el.className).split(' ').slice(0, 4).join('.')} right=${Math.round(el.getBoundingClientRect().right)}`),
   }));
   expect(metrics.documentWidth, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.viewport + 2);
   expect(metrics.bodyWidth, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.viewport + 2);
