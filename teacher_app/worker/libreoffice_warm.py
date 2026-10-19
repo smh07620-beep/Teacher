@@ -40,12 +40,38 @@ def default_profile_root() -> Path:
 
 
 def _remove_stale_lock(profile: Path) -> None:
-    """Drop a lock left by a crashed LibreOffice so the new instance can start."""
-    for name in (".lock", ".~lock"):
+    """Drop a lock left by a crashed LibreOffice so the new instance can start.
+
+    LibreOffice writes its lock as ``<UserInstallation>/.lock`` (measured on
+    26.8); older layouts are kept for safety.
+    """
+    for path in (profile / ".lock", profile / "user" / ".lock", profile / "user" / ".~lock"):
         try:
-            (profile / "user" / name).unlink(missing_ok=True)
+            path.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+_WINDOWS_PIPE_DIR = "\\\\.\\pipe\\"
+
+
+def _accept_pipe_ready(pipe_name: str) -> bool | None:
+    """True once the resident instance's ``--accept`` pipe exists.
+
+    Returns None where the pipe cannot be observed (non-Windows).  On Windows
+    LibreOffice names it ``OSL_PIPE_<user SID>_<pipe name>``; it appears only
+    after the instance has finished starting, while the process itself is alive
+    almost immediately.  A ``--convert-to`` sent before that point starts a
+    second instance on the same profile, which fails with "bootstrap.ini is
+    corrupt" and leaves a modal dialog on the Worker PC.
+    """
+    if os.name != "nt":
+        return None
+    suffix = "_" + pipe_name
+    try:
+        return any(entry.endswith(suffix) for entry in os.listdir(_WINDOWS_PIPE_DIR))
+    except OSError:
+        return None
 
 
 class WarmLibreOfficeConverter:
@@ -54,12 +80,12 @@ class WarmLibreOfficeConverter:
         binary: str,
         *,
         enabled: bool = True,
-        startup_timeout: float = 5.0,
+        startup_timeout: float = 15.0,
         profile_dir: str | Path | None = None,
     ) -> None:
         self.binary = str(binary or "soffice")
         self.enabled = bool(enabled)
-        self.startup_timeout = max(1.0, min(20.0, float(startup_timeout or 5.0)))
+        self.startup_timeout = max(1.0, min(20.0, float(startup_timeout or 15.0)))
         self._process = None
         self._temp = None
         self._profile = None
@@ -152,13 +178,20 @@ class WarmLibreOfficeConverter:
                 self.last_error = f"exit {self._process.returncode}"
                 self._process = None
                 return False
-            # LibreOffice normally stays resident almost immediately.  A short
-            # grace period avoids paying the full timeout on every Worker boot.
-            # Real readiness is verified by warmup(), which converts a document.
-            time.sleep(0.15)
-            if self._process.poll() is None:
+            ready = _accept_pipe_ready(self._pipe_name)
+            if ready:
                 self.last_error = ""
                 return True
+            if ready is None:
+                # Pipe not observable: LibreOffice normally stays resident almost
+                # immediately, so a short grace period stands in for readiness.
+                # Real readiness is verified by warmup(), which converts a document.
+                time.sleep(0.15)
+                if self._process.poll() is None:
+                    self.last_error = ""
+                    return True
+                continue
+            time.sleep(0.1)
         self.last_error = "startup timeout"
         self.close()
         return False

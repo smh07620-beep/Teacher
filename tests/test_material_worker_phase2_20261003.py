@@ -191,7 +191,7 @@ class MaterialWorkerPhase220261003Tests(unittest.TestCase):
 
     def test_warm_libreoffice_reuses_one_profile_for_conversion(self):
         fake_process = FakeProcess()
-        with tempfile.TemporaryDirectory() as temp_name,              patch("teacher_app.worker.libreoffice_warm.subprocess.Popen", return_value=fake_process),              patch("teacher_app.worker.libreoffice_warm.time.sleep"):
+        with tempfile.TemporaryDirectory() as temp_name,              patch("teacher_app.worker.libreoffice_warm.subprocess.Popen", return_value=fake_process),              patch("teacher_app.worker.libreoffice_warm._accept_pipe_ready", return_value=True),              patch("teacher_app.worker.libreoffice_warm.time.sleep"):
             runtime = WarmLibreOfficeConverter("soffice", enabled=True, startup_timeout=1)
 
             def fake_run(command, **_kwargs):

@@ -49,7 +49,7 @@ MATERIAL_VIDEO_HARDWARE_ENCODER=auto
 # Warm LibreOffice is best-effort and remains single-conversion. If the resident
 # instance fails, Worker restarts it once and then uses isolated one-shot soffice.
 MATERIAL_LIBREOFFICE_WARM_ENABLED=true
-MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS=5
+MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS=15
 # 持久 LibreOffice profile（避免每次重啟都重建字型快取）；空白 = LOCALAPPDATA\Teacher\libreoffice-profile
 MATERIAL_LIBREOFFICE_PROFILE_DIR=
 MATERIAL_WEBP_METHOD=4
@@ -151,7 +151,7 @@ Worker 會重啟一次再試，第二次仍失敗才退回原本的隔離 one-sh
 
 ```text
 MATERIAL_LIBREOFFICE_WARM_ENABLED=true
-MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS=5
+MATERIAL_LIBREOFFICE_WARM_STARTUP_SECONDS=15
 # 持久 LibreOffice profile（避免每次重啟都重建字型快取）；空白 = LOCALAPPDATA\Teacher\libreoffice-profile
 MATERIAL_LIBREOFFICE_PROFILE_DIR=
 MATERIAL_WEBP_METHOD=4

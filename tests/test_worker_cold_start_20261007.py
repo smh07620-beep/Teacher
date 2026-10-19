@@ -26,6 +26,13 @@ class FakeProcess:
 
 
 class LibreOfficeColdStartTests(unittest.TestCase):
+    def setUp(self):
+        # The fake process never opens a real pipe; report it ready so these
+        # tests behave the same on Windows and Linux runners.
+        patcher = patch("teacher_app.worker.libreoffice_warm._accept_pipe_ready", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _runtime(self, profile_root):
         return WarmLibreOfficeConverter("soffice", enabled=True, startup_timeout=1, profile_dir=profile_root)
 
@@ -113,12 +120,53 @@ class LibreOfficeColdStartTests(unittest.TestCase):
                 lock = Path(temp_name) / "warm" / "user" / ".lock"
                 lock.parent.mkdir(parents=True, exist_ok=True)
                 lock.write_text("stale", encoding="utf-8")
+                # LibreOffice 26.8 writes its lock at the profile root.
+                root_lock = Path(temp_name) / "warm" / ".lock"
+                root_lock.write_text("stale", encoding="utf-8")
                 self.assertTrue(runtime.ensure_running())
                 second = runtime.profile_arg
             self.assertEqual(first, second)
             self.assertTrue(marker.exists())
             self.assertFalse(lock.exists())
+            self.assertFalse(root_lock.exists())
             runtime.close()
+
+    def test_ensure_running_waits_for_the_accept_pipe(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            runtime = self._runtime(temp_name)
+            with patch("teacher_app.worker.libreoffice_warm.subprocess.Popen", return_value=FakeProcess()), patch(
+                "teacher_app.worker.libreoffice_warm._accept_pipe_ready", side_effect=[False, False, True]
+            ) as ready, patch("teacher_app.worker.libreoffice_warm.time.sleep"):
+                self.assertTrue(runtime.ensure_running())
+            self.assertEqual(ready.call_count, 3)
+            runtime.close()
+
+    def test_ensure_running_gives_up_when_the_pipe_never_appears(self):
+        with tempfile.TemporaryDirectory() as temp_name:
+            runtime = self._runtime(temp_name)
+            clock = iter(range(0, 100))
+            with patch("teacher_app.worker.libreoffice_warm.subprocess.Popen", return_value=FakeProcess()), patch(
+                "teacher_app.worker.libreoffice_warm._accept_pipe_ready", return_value=False
+            ), patch("teacher_app.worker.libreoffice_warm.time.sleep"), patch(
+                "teacher_app.worker.libreoffice_warm.time.monotonic", side_effect=lambda: float(next(clock))
+            ):
+                self.assertFalse(runtime.ensure_running())
+            self.assertEqual(runtime.last_error, "startup timeout")
+            self.assertFalse(runtime.running)
+
+
+class LibreOfficeAcceptPipeTests(unittest.TestCase):
+    def test_accept_pipe_ready_matches_the_windows_pipe_name(self):
+        from teacher_app.worker import libreoffice_warm
+
+        pipes = ["OSL_PIPE_S-1-5-21-1_SingleOfficeIPC_abc", "OSL_PIPE_S-1-5-21-1_TeacherMaterialWorker-42"]
+        with patch.object(libreoffice_warm.os, "name", "nt"), patch.object(
+            libreoffice_warm.os, "listdir", return_value=pipes
+        ):
+            self.assertTrue(libreoffice_warm._accept_pipe_ready("TeacherMaterialWorker-42"))
+            self.assertFalse(libreoffice_warm._accept_pipe_ready("TeacherMaterialWorker-7"))
+        with patch.object(libreoffice_warm.os, "name", "posix"):
+            self.assertIsNone(libreoffice_warm._accept_pipe_ready("TeacherMaterialWorker-42"))
 
 
 class KokoroColdStartTests(unittest.TestCase):
