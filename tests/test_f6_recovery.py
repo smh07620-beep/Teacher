@@ -92,6 +92,42 @@ class F6RecoveryTests(unittest.TestCase):
         self.assertEqual(report["status"],"healthy")
         self.assertEqual((report["errorCount"],report["warningCount"]),(0,0))
 
+    def test_unexplained_orphans_are_described_per_material(self):
+        conn,_=self.connect()
+        conn.execute("CREATE TABLE materials(id TEXT PRIMARY KEY)")
+        conn.execute(
+            "CREATE TABLE material_versions(material_id TEXT,version INTEGER,"
+            "published_at TEXT,published_by TEXT,change_reason TEXT,snapshot TEXT)"
+        )
+        conn.execute("CREATE TABLE audit_events(action TEXT,target_type TEXT,target_id TEXT,created_at TEXT)")
+        for version,at in ((1,"2026-09-01T01:00:00"),(2,"2026-09-02T02:00:00")):
+            conn.execute(
+                "INSERT INTO material_versions VALUES('lost',?,?,'alice','更新','{\"title\":\"舊教材\",\"group\":\"grpBio\"}')",
+                (version,at),
+            )
+        conn.execute("INSERT INTO material_versions VALUES('gone-on-purpose',1,'2026-09-01T01:00:00','bob','','{}')")
+        conn.execute("INSERT INTO audit_events VALUES('material.delete','material','gone-on-purpose','2026-09-03T00:00:00')")
+        conn.execute("INSERT INTO audit_events VALUES('material.update','material','lost','2026-09-02T02:00:00')")
+        conn.close()
+        report=recovery_audit.build_recovery_audit(self.connect)
+        item=next(row for row in report["checks"] if row["key"]=="orphan_material_versions")
+        self.assertEqual(item["count"],2)
+        self.assertEqual(len(item["items"]),1)
+        row=item["items"][0]
+        self.assertEqual(row["materialId"],"lost")
+        self.assertEqual(row["versions"],[1,2])
+        self.assertEqual(row["title"],"舊教材")
+        self.assertEqual(row["group"],"grpBio")
+        self.assertEqual(row["publishedBy"],"alice")
+        self.assertEqual(row["firstPublishedAt"],"2026-09-01T01:00:00")
+        self.assertEqual(row["lastPublishedAt"],"2026-09-02T02:00:00")
+        self.assertEqual(row["lastAuditAction"],"material.update")
+
+    def test_orphan_detail_failure_never_breaks_the_audit(self):
+        report,items=self._orphan_versions_with_audit([])
+        self.assertEqual(items["orphan_material_versions"]["count"],2)
+        self.assertEqual(report["errorCount"],2)
+
 
 if __name__=="__main__":
     unittest.main()

@@ -42,6 +42,18 @@
         (item.detail?'<div class="mt-1 text-[10px] text-slate-500">'+esc(item.detail)+'</div>':'')+'</div>';
     }).join('');
     // Which integrity checks actually found something (the card above only shows totals).
+    // One line per orphaned material: title, versions, who/when published, last audit action.
+    const itemRows=items=>{
+      if(!Array.isArray(items)||!items.length)return '';
+      return '<ul class="mt-1.5 space-y-1">'+items.map(row=>{
+        const versions=Array.isArray(row.versions)?row.versions.join(', '):'';
+        const when=String(row.lastPublishedAt||row.firstPublishedAt||'').slice(0,16).replace('T',' ');
+        return '<li class="rounded-md bg-slate-50 px-2 py-1 text-[10px] text-slate-600">'+
+          '<b class="text-slate-800">'+esc(row.title||'（無標題）')+'</b>'+
+          '<div>版本 '+esc(versions||'—')+(when?' · 發布 '+esc(when):'')+(row.publishedBy?' · '+esc(row.publishedBy):'')+(row.group?' · '+esc(row.group):'')+'</div>'+
+          '<div class="text-slate-400">'+esc(row.materialId||'')+(row.lastAuditAction?' · 最後紀錄 '+esc(row.lastAuditAction)+' '+esc(String(row.lastAuditAt||'').slice(0,16).replace('T',' ')):' · 無任何稽核紀錄')+'</div></li>';
+      }).join('')+'</ul>';
+    };
     const sevText={error:'錯誤',warning:'警告',info:'說明'};
     const sevClass={error:'text-rose-700',warning:'text-amber-700',info:'text-slate-500'};
     const recoveryRows=(Array.isArray(recovery.checks)?recovery.checks:[]).filter(item=>Number(item.count||0)>0).map(item=>{
@@ -49,7 +61,8 @@
       return '<li class="rounded-lg bg-white border border-slate-200 px-2.5 py-1.5">'+
         '<div class="flex items-center justify-between gap-2"><b class="text-[11px] text-slate-800">'+esc(item.label||item.key||'檢查')+'</b>'+
         '<span class="text-[11px] font-black '+(sevClass[sev]||sevClass.error)+'">'+esc(sevText[sev]||sev)+' · '+Number(item.count||0)+' 筆</span></div>'+
-        (item.detail?'<div class="mt-0.5 text-[10px] text-slate-500">'+esc(item.detail)+'</div>':'')+'</li>';
+        (item.detail?'<div class="mt-0.5 text-[10px] text-slate-500">'+esc(item.detail)+'</div>':'')+
+        itemRows(item.items)+'</li>';
     }).join('');
     const recoveryDetail=recoveryRows
       ?'<div class="rounded-xl bg-slate-50 p-2.5"><div class="text-[11px] font-black text-slate-700">斷鏈明細（哪一類有問題）</div><ul class="mt-1.5 space-y-1.5">'+recoveryRows+'</ul></div>'
