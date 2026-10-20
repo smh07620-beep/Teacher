@@ -1,0 +1,23 @@
+const { test, expect } = require('@playwright/test');
+test.use({ viewport: { width: 390, height: 844 } });
+test('Word to atlas: pick images on one page, import, then go to the exam', async ({ page }) => {
+  const errs=[]; page.on('pageerror', e => errs.push(e.message));
+  await page.route('**/api/slides/admin', r => r.fulfill({ json: [{ id: 'w1', title: '尿沉渣圖譜.docx', filename: 'a.docx' }] }));
+  await page.route('**/api/atlas/import-docx/w1/preview', r => r.fulfill({ json: { materialId: 'w1', defaultGroup: 'grpMicro', preview: { images: [1,2,3].map(i => ({ index: i, relationshipId: 'r'+i, suggestedTitle: '上皮細胞 '+i, section: '圖 '+i+'：鱗狀上皮細胞' })) } } }));
+  let body=null;
+  await page.route('**/api/atlas/import-docx/w1/confirm', async r => { body = JSON.parse(r.request().postData()); await r.fulfill({ json: { created: ['a1','a2'] } }); });
+  await page.route('**/api/atlas/a*', r => r.fulfill({ json: { item: { id: r.request().url().split('/').pop(), title: '圖', imageUrl: '' } } }));
+  await page.goto((process.env.TEACHER_UI_BASE_URL || 'http://127.0.0.1:4173') + '/system', { waitUntil: 'domcontentloaded' });
+  await page.addScriptTag({ url: '/atlas-docx-wizard-70.js' });
+  await page.evaluate(() => { const d = document.createElement('div'); d.id = 'atlas-test'; document.body.prepend(d); });
+  await page.evaluate(() => window.openAtlasDocxWizard('atlas-test', 'w1'));
+  await expect(page.locator('#atlas-docx-import')).toHaveText('放進圖譜（3 張）');
+  await page.locator('[name=pick]').nth(1).uncheck();
+  await expect(page.locator('#atlas-docx-import')).toHaveText('放進圖譜（2 張）');
+  await page.selectOption('#atlas-docx-bulk-category', 'urine_sediment');
+  await page.click('#atlas-docx-import');
+  await expect(page.getByText('第 2 步（共 2 步）')).toBeVisible();
+  expect(body.items.length).toBe(2);
+  expect(body.items[0].category).toBe('urine_sediment');
+  expect(errs).toEqual([]);
+});

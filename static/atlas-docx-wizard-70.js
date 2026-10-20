@@ -55,7 +55,7 @@
     box.classList.remove('hidden');
     box.innerHTML=`
       <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
-        <b>Word 圖片轉圖譜｜第 1 步（共 5 步）：選擇 Word 檔</b>
+        <b>Word 圖片轉圖譜｜選擇 Word 檔</b>
         <p class="text-xs text-slate-600">系統會把這份 Word 裡的圖片一張一張取出來，另外放進「圖譜」。原本的 Word 教材不會被改動或刪除。</p>
         <p class="text-xs text-amber-800">請先確認圖片裡沒有病人的姓名、病歷號、條碼、生日等個人資料（去識別化）。</p>
         <select id="atlas-docx-source" class="w-full border rounded-lg p-2 text-sm"><option>正在載入 Word 教材…</option></select>
@@ -118,30 +118,23 @@
       box.querySelector('#atlas-docx-reselect')?.addEventListener('click',()=>window.openAtlasDocxWizard(activeRootId));
       return;
     }
-    const defaults={group:data.defaultGroup||'',category:'microscope',difficulty:'general',sortOrder:0};
-    box.innerHTML=`
-      <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
-        <b>第 2 步（共 5 步）：先填這批圖片共同的資料</b>
-        <p class="text-xs text-slate-500">已在 Word 裡找到 ${images.length} 張圖片。這裡填的資料會先套用到每一張圖，下一步還可以逐張修改。放進圖譜後都是「草稿」，學員暫時看不到，等你確認後才會公開。</p>
-        ${warnings}
-        <form id="atlas-docx-common" class="space-y-2">
-          ${fields('',defaults)}
-          <button class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">下一步：挑選要用的圖片</button>
-        </form>
-      </section>`;
-    box.querySelector('#atlas-docx-common')?.addEventListener('submit',event=>{
-      event.preventDefault();
-      choose(data.materialId,images,read(event.currentTarget));
-    });
+    // 2026-10-20: the shared-details page is folded into the picking page (one page fewer).
+    choose(data.materialId,images,{group:data.defaultGroup||'',category:'microscope',difficulty:'general',sortOrder:0,tags:[],title:'',description:'',differentialPoints:'',teachingNotes:''},warnings);
   }
 
-  function choose(materialId,images,common){
+  function choose(materialId,images,common,warnings=''){
     const box=root();
     if(!box)return;
     box.innerHTML=`
       <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
-        <b>第 3 步（共 5 步）：挑選要放進圖譜的圖片</b>
-        <p class="text-xs text-slate-500">Word 教材會照原樣保留；只有打勾的圖片會另外放進圖譜。系統會依圖片旁邊的文字，先幫你填好名稱和類型，你可以自己修改。</p>
+        <b>第 1 步（共 2 步）：勾選要放進圖譜的圖片（找到 ${images.length} 張）</b>
+        <p class="text-xs text-slate-500">Word 教材會照原樣保留；只有打勾的圖片會另外放進圖譜（草稿，學員暫時看不到）。名稱和說明已依圖片旁邊的文字先填好，要改再點「修改」。</p>
+        ${warnings}
+        <div class="flex flex-wrap items-end gap-3 rounded-lg bg-slate-50 p-2 text-xs">
+          <label class="font-bold text-slate-700">這批圖片的類型<select id="atlas-docx-bulk-category" class="mt-1 block rounded-lg border p-1.5 text-sm">${Object.entries(CATEGORY_LABELS).map(([key,text])=>`<option value="${key}">${text}</option>`).join('')}</select></label>
+          <label class="font-bold text-slate-700">難易度<select id="atlas-docx-bulk-difficulty" class="mt-1 block rounded-lg border p-1.5 text-sm"><option value="general">一般</option><option value="basic">入門</option><option value="advanced">進階</option></select></label>
+          <button type="button" id="atlas-docx-toggle-all" class="rounded-lg border border-slate-300 bg-white px-2 py-1.5 font-bold">全部取消勾選</button>
+        </div>
         <div class="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-600"><span>這份 Word 之前如果匯入過好幾次，可以先清掉重複的草稿。</span><button id="atlas-docx-dedupe" type="button" class="rounded-lg border border-slate-300 bg-white px-2 py-1 font-bold text-slate-700">🧹 移除這份 Word 的重複草稿</button><span id="atlas-docx-dedupe-msg" role="status" class="font-bold"></span></div>
         <form id="atlas-docx-items" class="space-y-3">
           ${images.map(item=>`
@@ -163,9 +156,31 @@
                 })}</div>
               </details>
             </fieldset>`).join('')}
-          <button class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">下一步：確認</button>
+          <button id="atlas-docx-import" class="sticky bottom-2 w-full rounded-lg bg-teal-700 text-white px-3 py-2.5 font-bold shadow-lg">放進圖譜（${images.length} 張）</button>
         </form>
       </section>`;
+    const itemsForm=box.querySelector('#atlas-docx-items');
+    const syncCount=()=>{
+      const n=itemsForm?.querySelectorAll('[name=pick]:checked').length||0;
+      const button=box.querySelector('#atlas-docx-import');
+      if(button){button.textContent=`放進圖譜（${n} 張）`;button.disabled=!n;}
+      const toggle=box.querySelector('#atlas-docx-toggle-all');
+      if(toggle)toggle.textContent=n?'全部取消勾選':'全部勾選';
+    };
+    itemsForm?.addEventListener('change',event=>{if(event.target?.name==='pick')syncCount();});
+    box.querySelector('#atlas-docx-toggle-all')?.addEventListener('click',()=>{
+      const boxes=[...itemsForm.querySelectorAll('[name=pick]')];
+      const any=boxes.some(b=>b.checked);
+      boxes.forEach(b=>{b.checked=!any;});
+      syncCount();
+    });
+    // The bulk type/difficulty fill every image that the teacher has not changed by hand.
+    ['category','difficulty'].forEach(field=>{
+      box.querySelector('#atlas-docx-bulk-'+field)?.addEventListener('change',event=>{
+        itemsForm?.querySelectorAll(`select[name$="-${field}"]`).forEach(select=>{if(!select.dataset.touched)select.value=event.target.value;});
+      });
+    });
+    itemsForm?.addEventListener('input',event=>{if(event.target?.matches?.('select[name^="item-"]'))event.target.dataset.touched='1';});
     box.querySelector('#atlas-docx-dedupe')?.addEventListener('click',async event=>{
       const msg=box.querySelector('#atlas-docx-dedupe-msg');
       if(!confirm('會刪除這份 Word 重複匯入、尚未發布的圖譜草稿，每組只保留最早的一張。已發布的圖譜不會被動到。要繼續嗎？'))return;
@@ -190,53 +205,44 @@
         alert('請至少打勾一張圖片');
         return;
       }
-      confirmStep(materialId,common,items);
+      common={...common,category:box.querySelector('#atlas-docx-bulk-category')?.value||common.category,difficulty:box.querySelector('#atlas-docx-bulk-difficulty')?.value||common.difficulty};
+      importNow(materialId,common,items,event.submitter||box.querySelector('#atlas-docx-import'));
     });
   }
 
-  function confirmStep(materialId,metadata,items){
+  // The separate 「確認」 page is gone: the import button itself shows progress and errors (2026-10-20).
+  async function importNow(materialId,metadata,items,button){
     const box=root();
-    if(!box)return;
-    box.innerHTML=`
-      <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
-        <b>第 4 步（共 5 步）：確認</b>
-        <p class="text-sm">即將把 ${items.length} 張圖片放進圖譜（草稿）。原本的 Word 不會被刪除或改寫；公開給學員之前，你還可以逐張修改。</p>
-        <ul class="text-xs list-disc pl-5">${items.map(item=>`<li>${esc(item.title||('第 '+item.index+' 張圖片'))} · ${esc(CATEGORY_LABELS[item.category]||'顯微鏡照片')}</li>`).join('')}</ul>
-        <button id="atlas-docx-confirm" type="button" class="rounded-lg bg-teal-700 text-white px-3 py-2 font-bold">確認，放進圖譜</button>
-      </section>`;
-    const confirmButton=box.querySelector('#atlas-docx-confirm');
-    const message=document.createElement('p');
-    message.id='atlas-docx-confirm-message';
-    message.setAttribute('role','status');
-    message.className='text-sm font-bold text-slate-600';
-    confirmButton?.after(message);
+    if(!box||!button||button.disabled)return;
+    let message=box.querySelector('#atlas-docx-confirm-message');
+    if(!message){
+      message=document.createElement('p');
+      message.id='atlas-docx-confirm-message';
+      message.setAttribute('role','status');
+      button.after(message);
+    }
     const say=(text,bad)=>{message.textContent=text;message.className='text-sm font-bold '+(bad?'text-rose-700':'text-slate-600');};
-    confirmButton?.addEventListener('click',async()=>{
-      if(confirmButton.disabled)return;
-      confirmButton.disabled=true;
-      confirmButton.textContent='放進圖譜中，請稍候…';
-      say('正在處理，圖片多的時候需要十幾秒，請不要關閉或重新整理頁面。');
-      try{
-        const response=await fetch('/api/atlas/import-docx/'+encodeURIComponent(materialId)+'/confirm',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          credentials:'same-origin',
-          body:JSON.stringify({metadata,items})
-        });
-        const data=await response.json().catch(()=>({}));
-        if(!response.ok){
-          const reason=data.error||('伺服器回應異常（代碼 '+response.status+'）');
-          throw new Error(reason);
-        }
-        const created=Array.isArray(data.created)?data.created:[];
-        if(!created.length)throw new Error('沒有任何圖片被放進圖譜。');
-        framingStep(created);
-      }catch(error){
-        confirmButton.disabled=false;
-        confirmButton.textContent='確認，放進圖譜';
-        say('沒有成功：'+(error&&error.message?error.message:'連線中斷')+'。可以再按一次「確認，放進圖譜」；仍然不行，請把這行字截圖給管理員。',true);
-      }
-    });
+    const label=button.textContent;
+    button.disabled=true;
+    button.textContent='放進圖譜中，請稍候…';
+    say('正在處理，圖片多的時候需要十幾秒，請不要關閉或重新整理頁面。');
+    try{
+      const response=await fetch('/api/atlas/import-docx/'+encodeURIComponent(materialId)+'/confirm',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body:JSON.stringify({metadata,items})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||('伺服器回應異常（代碼 '+response.status+'）'));
+      const created=Array.isArray(data.created)?data.created:[];
+      if(!created.length)throw new Error('沒有任何圖片被放進圖譜。');
+      framingStep(created);
+    }catch(error){
+      button.disabled=false;
+      button.textContent=label;
+      say('沒有成功：'+(error&&error.message?error.message:'連線中斷')+'。可以再按一次；仍然不行，請把這行字截圖給管理員。',true);
+    }
   }
 
   // 5/5: right after the import, the teacher can frame cells on each new draft
@@ -254,9 +260,11 @@
       }catch(_error){}
     }
     const finish=()=>{box.classList.add('hidden');window.renderFormalAtlas?.();};
+    // Inside the course wizard the natural next step is the exam: go straight there.
+    const inCourse=activeRootId==='cw681-atlas-import'&&typeof window.courseWizard681OpenAssessmentAuthoring==='function';
     box.innerHTML=`
       <section class="mt-4 rounded-2xl border border-teal-200 bg-white p-4 space-y-3">
-        <b>第 5 步（共 5 步）：已放進圖譜 ${ids.length} 張，要順便框出細胞的位置嗎？（可以略過）</b>
+        <b>第 2 步（共 2 步）：已放進圖譜 ${ids.length} 張。要框出細胞位置嗎？（可以略過）</b>
         <p class="text-xs text-slate-500">框出來之後，學員點圖就能放大看到你寫的介紹，也能拿來出「點選圖片題」。可以現在做，也可以之後到「圖譜」頁再編輯。公開之前，學員都看不到這些圖。</p>
         <ul class="space-y-2">${items.map(item=>`
           <li class="flex flex-wrap items-center gap-2 rounded-lg border p-2" data-atlas-frame-item="${esc(item.id)}">
@@ -266,9 +274,16 @@
             <button type="button" data-frame-open class="rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-800">框選細胞</button>
           </li>`).join('')}</ul>
         <div id="atlas-docx-frame-editor"></div>
-        <button id="atlas-docx-frame-done" type="button" class="rounded-lg bg-teal-700 px-3 py-2 font-bold text-white">完成</button>
+        <div class="flex flex-wrap gap-2">
+          ${inCourse?'<button id="atlas-docx-to-exam" type="button" class="rounded-lg bg-teal-700 px-3 py-2 font-bold text-white">下一步：用這些圖出題 →</button>':''}
+          <button id="atlas-docx-frame-done" type="button" class="rounded-lg ${inCourse?'border border-slate-300 bg-white text-slate-700':'bg-teal-700 text-white'} px-3 py-2 font-bold">完成</button>
+        </div>
       </section>`;
     box.querySelector('#atlas-docx-frame-done')?.addEventListener('click',finish);
+    box.querySelector('#atlas-docx-to-exam')?.addEventListener('click',async()=>{
+      finish();
+      await window.courseWizard681OpenAssessmentAuthoring();
+    });
     box.querySelectorAll('[data-frame-open]').forEach(button=>{
       button.addEventListener('click',()=>{
         const row=button.closest('[data-atlas-frame-item]');

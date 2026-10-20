@@ -991,7 +991,7 @@ function renderCompletedMaterialInsights(){
     const fix=`<details class="mt-1 text-xs text-slate-500"><summary class="cursor-pointer">更正類型</summary><select data-csp-change="courseWizard681ChangeType('${id}',this.value)" class="mt-1 rounded border p-1" aria-label="更正教材類型">${typeOptions(type)}</select></details>`;
     return `<div class="rounded-lg border ${needsReview?'border-amber-200':'border-emerald-100'} bg-white p-2"><div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(item.title||item.filename||item.id)}</b><span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700">${esc(chip)}</span></div>${review}${docHint}${fix}</div>`;
   }).join('');
-  const atlasRows=atlasEntries.map(([materialId,info])=>`<div class="rounded-lg border border-teal-200 bg-teal-50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><div><b class="text-teal-950">🔬 這份 Word 裡有 ${Number(info.count||0)} 張圖片，可以做成圖譜</b><p class="mt-1 text-xs text-teal-800">${esc(info.title||materialId)}｜原本的 Word 會保留；只有你打勾的圖片會另外做成圖譜草稿。</p></div><button type="button" data-csp-click="courseWizard681OpenAtlasImport('${esc(materialId)}')" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">檢視並建立圖譜草稿</button></div></div>`).join('');
+  const atlasRows=atlasEntries.map(([materialId,info])=>`<div class="rounded-lg border border-teal-200 bg-teal-50 p-3" data-atlas-candidate="${esc(materialId)}"><div class="flex flex-wrap items-center justify-between gap-2"><div><b class="text-teal-950">🔬 這份 Word 裡有 ${Number(info.count||0)} 張圖片，可以做成圖譜</b><p class="mt-1 text-xs text-teal-800">${esc(info.title||materialId)}｜原本的 Word 會保留；只有你打勾的圖片會另外做成圖譜草稿。</p></div><button type="button" data-csp-click="courseWizard681OpenAtlasImport('${esc(materialId)}')" class="rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white">檢視並建立圖譜草稿</button></div></div>`).join('');
   host.innerHTML=`<div class="mt-3 space-y-2"><div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><b class="text-emerald-900">✅ 教材自動歸類結果</b><div class="mt-2 grid gap-2 md:grid-cols-2">${classificationRows}</div></div>${atlasRows}</div>`;
 }
 
@@ -1057,10 +1057,14 @@ async function openCourseAtlasImport(materialId){
   if(!id)return;
   let host=el('cw681-atlas-import');
   if(!host){
-    // 從教材列進來時頁面上還沒有匯入區：就地建立在「本課程的教材」下方。
-    const anchor=document.querySelector('[data-cw681-course-materials]');
-    if(anchor){anchor.insertAdjacentHTML('afterend','<div id="cw681-atlas-import" class="mt-3 hidden"></div>');host=el('cw681-atlas-import');}
+    host=document.createElement('div');
+    host.id='cw681-atlas-import';
+    host.className='mt-3 hidden';
   }
+  // 2026-10-20: open the importer right under the Word it belongs to, not at the bottom of the list.
+  const row=[...document.querySelectorAll('[data-atlas-candidate]')].find(node=>node.dataset.atlasCandidate===id);
+  const anchor=row||document.querySelector('[data-cw681-course-materials]');
+  if(anchor&&host.previousElementSibling!==anchor)anchor.insertAdjacentElement('afterend',host);
   if(!host)return alert('圖譜匯入區還沒載入完成，請重新整理頁面後再試。');
   if(typeof window.openAtlasDocxWizard!=='function')return alert('圖譜工具還沒載入完成，請重新整理頁面後再試。');
   host.classList.remove('hidden');
