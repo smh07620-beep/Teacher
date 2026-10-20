@@ -42,7 +42,9 @@ class PersistentAtlasEntryTests(unittest.TestCase):
         body = SRC[SRC.index("async function openCourseAtlasImport"):]
         body = body[: body.index("async function watchQueuedJobs")]
         self.assertIn("data-cw681-course-materials", body)
-        self.assertIn('insertAdjacentHTML(\'afterend\'', body)
+        # 2026-10-20: placed right after the Word's own candidate row when there is one.
+        self.assertIn("data-atlas-candidate", body)
+        self.assertIn("insertAdjacentElement('afterend',host)", body)
 
 
 if __name__ == "__main__":
