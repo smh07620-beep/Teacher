@@ -87,6 +87,7 @@ ASSET_MANIFEST = {
             "/learning-analytics-71.js",
             "/learner-progress.js",
             "/learner-wrong-book-1017.js",
+            "/reader-dwell-hint-1020.js",
             "/notification-center-71.js",
             "/worker-status-70.js",
             "/production-readiness-f6.js",

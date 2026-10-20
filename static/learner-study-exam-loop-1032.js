@@ -87,6 +87,16 @@
       /* offline: leave the exam row as is; the server still enforces the gate */
     } finally { gateLoading.delete(key); }
   }
+  // A material finished while reading (auto-tracked, no page reload): ask the server again so the
+  // exam row unlocks right away instead of after a refresh (2026-10-20).
+  const gateRefreshedFor = new Set();
+  window.addEventListener('teacher66:material-complete', event => {
+    const id = String(event.detail?.materialId || '');
+    if (!id || gateRefreshedFor.has(id)) return;  // later saves repeat "completed": ask once
+    gateRefreshedFor.add(id);
+    const material = materials().find(m => String(m.id) === id);
+    if (material?.courseId) void loadGate(material.courseId, true);
+  });
   window.LearnerExamGate = Object.freeze({
     get: gateFor,
     isLocked,

@@ -73,6 +73,13 @@ def _required_by_page(material: dict, total_pages: int) -> dict:
     return result
 
 
+def dwell_rule(material: dict, total_pages: int, narrated: bool) -> dict:
+    """What the reader shows learners: seconds each page needs (reader rules v2, decks without narration)."""
+    if not reader_rules_v2() or narrated or total_pages <= 0:
+        return {"applies": False}
+    return {"applies": True, "requiredByPage": _required_by_page(material, total_pages)}
+
+
 AUTO_TRACKED_SUFFIXES = {
     ".pdf", ".ppt", ".pptx", ".doc", ".docx", ".odp", ".odt",
     ".mp4", ".m4v", ".mov", ".webm", ".mp3", ".m4a", ".wav", ".ogg",
@@ -492,11 +499,17 @@ def register_smart_learning(
         material = visible_material(user, material_id)
         if not material:
             return jsonify({"error": "找不到教材"}), 404
-        return jsonify(progress_payload(
+        payload = progress_payload(
             material_id,
             material,
             repository.get_progress(material_id, user["username"]),
-        ))
+        )
+        try:
+            pages = int(material.get("pageCount") or (payload.get("position") or {}).get("totalPages") or 0)
+        except (TypeError, ValueError):
+            pages = 0
+        payload["dwellRule"] = dwell_rule(material, pages, required_narration(user, material) is not None)
+        return jsonify(payload)
 
     @app.put("/api/learning-progress/<material_id>")
     def learning_progress_put(material_id):
@@ -678,7 +691,12 @@ def register_smart_learning(
             )
         source_completed = complete_source_after_narration(user, material) if media_request else None
 
+        try:
+            rule_pages = int(position.get("totalPages") or 0)
+        except (TypeError, ValueError, AttributeError):
+            rule_pages = 0
         return jsonify({
+            "dwellRule": dwell_rule(material, rule_pages, required_narration(user, material) is not None) if not media_request else {"applies": False},
             "narrationPending": narration_pending,
             "sourceCompleted": source_completed or "",
             "ok": True,

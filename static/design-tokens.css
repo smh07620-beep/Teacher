@@ -81,6 +81,9 @@ h1,h2,h3{line-height:1.3;font-weight:700}
 
 /* The submit bar only makes sense once questions are on screen (the exam list shows before that). */
 #panel-exam:not(:has(#quiz-questions-list > *)) .exam-action-bar{display:none}
+/* While a paper is on screen, the list of every other paper is hidden so the learner sees only the
+   one being taken (its title stays in #current-quiz-title). Back on the course page the list returns. */
+#panel-exam:has(#quiz-questions-list > *) #dynamic-exam-tabs{display:none}
 @media (pointer:coarse){#panel-exam button{min-height:44px}#quick-jump-grid button{min-width:44px}}
 
 /* The reader already carries its own "return to exam" button; the floating pill would cover its footer. */
