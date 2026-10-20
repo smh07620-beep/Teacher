@@ -11,9 +11,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.4/pizzip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.37.11/docxtemplater.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <link rel="stylesheet" href="/design-tokens.css?v=20261019">
+    <link rel="stylesheet" href="/design-tokens.css?v=20261020">
     <link rel="stylesheet" href="/portal.css?v=20261017h">
-    <link rel="stylesheet" href="/learner.css?v=20261019">
+    <link rel="stylesheet" href="/learner.css?v=20261020">
     <link rel="stylesheet" href="/admin.css?v=6607">
     <link rel="stylesheet" href="/tailwind.css?v=20261017g">
 </head>
@@ -671,6 +671,7 @@
                 </div>
             </div>
             <div id="reader-foot" class="bg-white px-3 sm:px-5 py-2.5 border-t border-slate-200 shrink-0 flex items-center justify-between gap-3">
+                <p id="reader-dwell-hint" class="reader-dwell-hint" role="status" aria-live="polite" hidden></p>
                 <div><button type="button" id="reader-pages-btn" data-csp-click="toggleReaderPages()" aria-label="開啟頁碼清單" class="text-xs sm:text-sm text-slate-700 font-semibold whitespace-nowrap rounded-lg border border-slate-200 px-3 py-1.5"><span id="slide-viewer-page-info">第 1 / 1 頁</span> ▾</button><span class="hidden sm:inline text-xs text-slate-400 ml-3">← → 可翻頁</span></div>
                 <button id="reader-complete" data-csp-click="teachingFinishReading()" class="teaching-primary">標記完成</button><button id="reader-next" data-csp-click="teachingNextMaterial()" class="teaching-secondary">下一份教材 →</button>
             </div>

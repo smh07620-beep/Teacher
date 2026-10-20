@@ -597,3 +597,10 @@ body{
   #slide-viewer-shell #slide-prev-btn,#slide-viewer-shell #slide-next-btn{background:rgba(43,48,45,.92);color:#e3efe8;border-color:#32495a}
   #slide-viewer-shell #slide-viewer-image{background:#fff}
 }
+
+/* 2026-10-20 reader: 「本頁還要 N 秒」 and the pages still short of time. */
+#slide-viewer-shell .reader-dwell-hint{margin:0;font-size:var(--fs-sm);color:var(--color-warn);flex:1 1 auto;min-width:0}
+#slide-viewer-shell .reader-dwell-hint b{font-weight:800}
+#slide-viewer-shell .reader-dwell-hint button{border:0;background:none;padding:0;color:var(--color-warn);text-decoration:underline;font:inherit;min-height:0;min-width:0}
+#slide-viewer-shell .reader-dwell-hint.is-done{color:var(--color-success)}
+@media (max-width:639px){#slide-viewer-shell #reader-foot{flex-wrap:wrap}#slide-viewer-shell .reader-dwell-hint{order:-1;flex-basis:100%}}
