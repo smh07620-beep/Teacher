@@ -178,7 +178,13 @@ if ($autoUpdateEnabled) {
 }
 
 $crashRestarts = 0
-$maxCrashRestarts = 5
+# Same policy as run_ai_worker_autostart.ps1: a network/DNS blip or Windows update
+# used to burn five 5-second retries and leave the material Worker offline for good
+# (2026-10-21 00:59) while the AI Worker recovered. Retry with growing waits and
+# forget earlier crashes once the Worker has run stably for a while.
+$maxCrashRestarts = 10
+$stableRunSeconds = 300
+$restartDelays = @(5, 15, 30, 60, 120, 180, 300, 300, 300, 300)
 while ($true) {
   try {
     $python = Ensure-WorkerEnvironment
@@ -194,6 +200,7 @@ while ($true) {
   # decides now, and a real launch failure is retried like any other crash.
   $previousErrorPreference = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
+  $runTimer = [System.Diagnostics.Stopwatch]::StartNew()
   try {
     & $python -u -m teacher_app.worker.material_worker_entry
     $workerExit = $LASTEXITCODE
@@ -222,6 +229,7 @@ while ($true) {
   # A scheduled material Worker is a long-lived service. A zero exit is not a
   # successful completion; treating it as terminal silently leaves the site Offline.
   $effectiveExit = if ($workerExit -eq 0) { 33 } else { $workerExit }
+  if ($runTimer.Elapsed.TotalSeconds -ge $stableRunSeconds) { $crashRestarts = 0 }
   $crashRestarts++
   if ($crashRestarts -gt $maxCrashRestarts) {
     Write-TeacherWorkerEvent -EntryType "Error" -EventId 3004 -Message "Worker restart limit exhausted; supervisor stopped to avoid a restart loop."
@@ -229,6 +237,7 @@ while ($true) {
     exit $effectiveExit
   }
   Write-TeacherWorkerEvent -EntryType "Warning" -EventId 2100 -Message "Worker exited and will be restarted by the supervisor."
-  Write-Warning "Worker exited with code $workerExit; restarting in 5 seconds ($crashRestarts/$maxCrashRestarts)."
-  Start-Sleep -Seconds 5
+  $delay = $restartDelays[[Math]::Min($crashRestarts - 1, $restartDelays.Count - 1)]
+  Write-Warning "Worker exited with code $workerExit; restarting in $delay seconds ($crashRestarts/$maxCrashRestarts)."
+  Start-Sleep -Seconds $delay
 }
