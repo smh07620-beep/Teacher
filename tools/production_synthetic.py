@@ -12,7 +12,9 @@ tiny, clearly labelled transaction with a dedicated account:
    reported as ``viaWorker: false`` (previews are cached permanently, so the AI
    Worker queue itself is covered by step 1's heartbeat/queue/Kokoro state).
 3. Material round trip: direct R2 upload -> Material Worker publishes -> the new
-   material is visible in the catalogue -> the test material is deleted.
+   job completes -> the test material is deleted.
+   The test material is uploaded as authoring-only (never shown to learners)
+   and is skipped entirely when the workers are offline.
 
 Everything is prefixed ``E2E-TEST-`` and cleaned up.  No secret is printed.
 Skipped (exit 0) when ``TEACHER_SYNTHETIC_USERNAME``/``PASSWORD`` are absent.
@@ -110,7 +112,7 @@ def material_roundtrip(client: ProductionClient, user: dict[str, Any], *, group:
         status, _h, body = client.request(
             "POST",
             "/api/material-upload/init",
-            json_body={"filename": f"{title}.txt", "size": len(content), "sha256": sha, "title": title, "desc": "Automated synthetic check; safe to delete.", "group": group, "area": "internal", "materialType": "standard"},
+            json_body={"filename": f"{title}.txt", "size": len(content), "sha256": sha, "title": title, "desc": "Automated synthetic check; safe to delete.", "group": group, "area": "internal", "materialType": "standard", "authoringOnly": True},
         )
         init = json.loads(body.decode("utf-8", errors="replace") or "{}")
         if status == 409 and init.get("available") is False:
@@ -128,18 +130,20 @@ def material_roundtrip(client: ProductionClient, user: dict[str, Any], *, group:
         queued_at = time.monotonic()
         if not complete.get("jobId"):
             raise RuntimeError(f"完成上傳後沒有 jobId：{json.dumps(complete, ensure_ascii=False)[:200]}")
+        job_id = str(complete["jobId"])
         deadline = queued_at + timeout_seconds
-        found: dict[str, Any] | None = None
+        job: dict[str, Any] = {}
         while time.monotonic() < deadline:
-            catalogue = client.json("GET", "/api/slides?area=internal")
-            rows = catalogue.get("items") or catalogue.get("materials") or catalogue.get("slides") or []
-            found = next((row for row in rows if isinstance(row, dict) and (row.get("id") == material_id or row.get("title") == title)), None)
-            if found:
+            job = client.json("GET", f"/api/material-jobs/{job_id}", expected=(200,))
+            status_value = str(job.get("status") or "")
+            if status_value == "completed":
                 break
+            if status_value in {"failed", "cancelled"}:
+                raise RuntimeError(f"Material Worker 處理測試教材失敗（{status_value}）。")
             time.sleep(5)
-        if not found:
-            raise RuntimeError(f"教材 {timeout_seconds} 秒內沒有出現在目錄：Material Worker 可能沒有領取或處理失敗。")
-        return {"materialId": material_id, "queuedToVisibleSeconds": round(time.monotonic() - queued_at, 1), "storageBackend": found.get("storageBackend")}
+        else:
+            raise RuntimeError(f"教材 {timeout_seconds} 秒內沒有處理完成：Material Worker 可能沒有領取或處理失敗。")
+        return {"materialId": material_id, "queuedToVisibleSeconds": round(time.monotonic() - queued_at, 1), "authoringOnly": True}
     finally:
         if material_id:
             try:
@@ -160,10 +164,13 @@ def run(base_url: str, username: str, password: str, *, group: str, voice: str, 
 
     if report.step("login", login) is None:
         return report
-    report.step("worker-readiness", lambda: _readiness(client))
+    workers_ready = report.step("worker-readiness", lambda: _readiness(client)) is not None
     if not skip_tts:
         report.step("tts-roundtrip", lambda: tts_roundtrip(client, voice=voice, timeout_seconds=timeout_seconds))
-    if not skip_material:
+    if not skip_material and not workers_ready:
+        # Workers offline: uploading would only leave a stuck/failed E2E-TEST job behind.
+        print("[synthetic] SKIP material-roundtrip：Worker 離線，不上傳測試教材。", flush=True)
+    elif not skip_material:
         report.step("material-roundtrip", lambda: material_roundtrip(client, user_holder, group=group, timeout_seconds=timeout_seconds))
     return report
 
