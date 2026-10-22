@@ -6,6 +6,7 @@ const MODE_META={
   later:{label:'稍後建立',next:'這次先不建立考卷，可直接前往確認與發布。'},
   bank:{label:'自己出題',next:'開啟考卷工作區，可逐題建立，也可從既有題庫加入。'},
   ai:{label:'AI 協助出題',next:'開啟 AI 出題工作區；AI 可協助產生單選、多選、是非、填空、問答與影音互動候選題。'},
+  atlas:{label:'🔬 用圖譜出題',next:'直接開啟「圖片點選題」：從已發布、已框選標記的圖譜挑一張，讓學員在圖上點出指定的細胞。不必先經過「圖片轉圖譜」。'},
   blueprint:{label:'Blueprint（進階）',next:'題型配額與抽題規則保留在考卷進階設定，不放在主要建立流程。'}
 };
 const AI_PLAN_META={
@@ -595,7 +596,7 @@ function examSettingsPanel(){
 // 考卷已經有題目時，「開啟 AI 出題」降為次要按鈕，並明講「可直接按下一步」，避免老師回來後一直重按。
 function examAuthoringBox(){
   const count=Number(state.examQuestionCount||0);
-  const label=state.examMode==='ai'?'✨ 開啟 AI 出題':'✍️ 開啟自己出題';
+  const label=state.examMode==='ai'?'✨ 開啟 AI 出題':state.examMode==='atlas'?'🔬 開啟圖譜出題':'✍️ 開啟自己出題';
   if(state.categoryId&&count>0){
     return `<div class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex flex-wrap items-center justify-between gap-3"><p class="text-xs text-emerald-900">✅ 考卷已有 <b>${count}</b> 題，可以直接按下方「下一步」。要補題再點右邊。</p><button type="button" ${state.openingAuthoring?'disabled':''} data-csp-click="courseWizard681OpenAssessmentAuthoring()" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">${state.examMode==='ai'?'➕ 再用 AI 補題':'➕ 再補幾題'}</button></div>`;
   }
@@ -684,9 +685,9 @@ async function saveWizardExamSettings(id){
 window.courseWizard681SetExamField=(field,value)=>{state.examSettings={...(state.examSettings||{}),[field]:value};state.examSettingsDirty=true;(state.examTouchedFields=state.examTouchedFields||new Set()).add(field);};
 
 function stepThree(){
-  const primary=['later','bank','ai'];
-  return `<h5 class="font-black">3. 評量／考卷</h5><p class="mt-1 text-xs text-slate-500">這一步只處理考卷。可以稍後建立、自己出題，或讓 AI 協助產生候選題；Blueprint 收在進階設定。</p>
-  <div class="mt-3 grid gap-2 md:grid-cols-3">${primary.map(id=>{const meta=MODE_META[id];return `<button type="button" data-csp-click="courseWizard681SetMode('${id}')" class="rounded-xl border p-3 text-left text-sm ${state.examMode===id?'border-violet-500 bg-violet-100':'bg-white'}"><b>${esc(meta.label)}</b><span class="mt-1 block text-xs text-slate-500">${esc(meta.next)}</span></button>`;}).join('')}</div>
+  const primary=['later','bank','ai','atlas'];
+  return `<h5 class="font-black">3. 評量／考卷</h5><p class="mt-1 text-xs text-slate-500">這一步只處理考卷。可以稍後建立、自己出題、讓 AI 協助產生候選題，或用圖譜出「圖片點選題」；Blueprint 收在進階設定。</p>
+  <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">${primary.map(id=>{const meta=MODE_META[id];return `<button type="button" data-csp-click="courseWizard681SetMode('${id}')" class="rounded-xl border p-3 text-left text-sm ${state.examMode===id?'border-violet-500 bg-violet-100':'bg-white'}"><b>${esc(meta.label)}</b><span class="mt-1 block text-xs text-slate-500">${esc(meta.next)}</span></button>`;}).join('')}</div>
   ${state.examMode==='later'?'':`<label class="mt-3 block text-xs font-bold">考卷名稱（必填）<input id="cw681-exam" value="${esc(el('wizard-exam-title')?.value||'')}" class="mt-1 w-full rounded border p-2" placeholder="例如：課後評量"></label>${examSettingsPanel()}${examAuthoringBox()}`}
   <details class="mt-4 rounded-xl border border-slate-200 bg-white p-3"><summary class="cursor-pointer text-xs font-bold text-slate-600">進階：Blueprint／題型配額</summary><p class="mt-2 text-xs text-slate-500">Blueprint 不列在主要流程；需要抽題規則與題型配額時，可在考卷工作區的進階設定中使用。</p></details>`;
 }
@@ -1360,7 +1361,15 @@ async function openAiAuthoring(){
   window.TeacherAIMediaStudio1018?.showMode?.(mode);
 }
 
-async function openAssessmentAuthoring(){
+async function openAssessmentAuthoring(requestedMode){
+  // 從「圖片轉圖譜」的「用這些圖出題」進來時，直接切到圖譜出題；即使原本選「稍後建立」也一樣。
+  if(requestedMode&&MODE_META[requestedMode]&&requestedMode!=='later'){
+    syncExamInput();
+    if(state.examMode!==requestedMode){state.examMode=requestedMode;}
+    // 還沒有考卷、也還沒填考卷名稱時，先帶到第 3 步（已選好「用圖譜出題」），老師填名稱後再開啟。
+    if(!state.categoryId&&!String(el('wizard-exam-title')?.value||'').trim()){state.step=3;render();el('cw681-exam')?.focus?.();return;}
+    render();
+  }
   if(state.examMode==='later'||state.openingAuthoring)return;
   state.openingAuthoring=true;
   try{await openAssessmentAuthoringOnce();}finally{state.openingAuthoring=false;}
@@ -1375,6 +1384,7 @@ async function openAssessmentAuthoringOnce(){
   }
   await window.openTeacherContentExam?.(state.categoryId);
   if(state.examMode==='ai')window.teacherContentStudioExamAction?.('ai',state.categoryId);
+  if(state.examMode==='atlas')window.teacherContentStudioExamAction?.('atlas',state.categoryId);
 }
 
 function clearWizardState(){

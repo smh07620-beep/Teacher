@@ -289,6 +289,7 @@
     if(action==='question')return confirmQuestionPreset('choice',catId);
     if(action==='image')return confirmQuestionPreset('image',catId);
     if(action==='video')return confirmQuestionPreset('video',catId);
+    if(action==='atlas')return confirmQuestionPreset('atlas_hotspot',catId);
     if(action==='ai')return mountAiPanel(catId);
     const selectedScope=scope();
     closeStudio();
@@ -388,7 +389,7 @@
       return true;
     }
     if(window.TeacherContentToolPanels710?.openManual){
-      await window.TeacherContentToolPanels710.openManual(catId,'choice');
+      await window.TeacherContentToolPanels710.openManual(catId,mode==='atlas'?'atlas_hotspot':'choice');
       return true;
     }
     await renderExamContainer(catId);
@@ -566,6 +567,7 @@
     const typeSelect = document.getElementById(`qform-${catId}-type`);
     if(preset === 'image') setSelectByValueOrText(typeSelect, 'image');
     else if(preset === 'video') setSelectByValueOrText(typeSelect, 'video');
+    else if(preset === 'atlas_hotspot') setSelectByValueOrText(typeSelect, 'atlas_hotspot');
     else setSelectByValueOrText(typeSelect, 'choice');
     window.updateManualQuestionType?.(catId);
     const question = document.getElementById(`qform-${catId}-question`);

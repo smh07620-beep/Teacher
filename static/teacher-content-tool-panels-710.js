@@ -195,7 +195,7 @@
       details.open=true;
       const sync=mountDedicatedNode(catId,'manual',details,'✍️ 自己出題','可逐題建立單選、多選、是非、填空、問答、圖片判讀與影片互動題；右側仍保留題庫批次匯入。');
       const type=document.getElementById(`qform-${catId}-type`);
-      const wanted=preset==='image'?'image':preset==='video'?'video_choice':'choice';
+      const wanted=preset==='image'?'image':preset==='video'?'video_choice':(preset==='atlas'||preset==='atlas_hotspot')?'atlas_hotspot':'choice';
       if(type&&[...type.options].some(option=>option.value===wanted))type.value=wanted;
       window.updateManualQuestionType?.(catId);
       panel.classList.add('hidden');
@@ -236,7 +236,7 @@
   // Studio now owns dedicated child panels, so keep the canonical toggle but
   // remove that obsolete control whenever a legacy path still opens qpanel.
 
-  window.TeacherContentStudio71?.registerExamActions?.(['question','image','video'],(action,catId)=>openManualTool(catId,action));
+  window.TeacherContentStudio71?.registerExamActions?.(['question','image','video','atlas'],(action,catId)=>openManualTool(catId,action));
   window.TeacherContentStudio71?.registerExamActions?.(['ai'],(_action,catId)=>openAiTool(catId));
   window.TeacherContentStudio71?.registerExamActions?.(['questions'],(_action,catId)=>openQuestionManager(catId));
 

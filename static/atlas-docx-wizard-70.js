@@ -282,7 +282,7 @@
     box.querySelector('#atlas-docx-frame-done')?.addEventListener('click',finish);
     box.querySelector('#atlas-docx-to-exam')?.addEventListener('click',async()=>{
       finish();
-      await window.courseWizard681OpenAssessmentAuthoring();
+      await window.courseWizard681OpenAssessmentAuthoring('atlas');
     });
     box.querySelectorAll('[data-frame-open]').forEach(button=>{
       button.addEventListener('click',()=>{
