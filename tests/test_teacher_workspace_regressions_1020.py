@@ -22,9 +22,10 @@ def test_internal_area_and_batch_entry_are_not_blocked_by_recovery_click_handler
 
 def test_exam_settings_return_uses_the_canonical_assessment_router():
     html = (ROOT / "static" / "system.html").read_text(encoding="utf-8")
-    router = (ROOT / "static" / "admin-workspace.js").read_text(encoding="utf-8")
+    # The "exams" alias moved from admin-workspace.js into the single route registry.
+    routes = (ROOT / "static" / "workspace-routes-1007.js").read_text(encoding="utf-8")
     assert "switchAdminWorkspace('assessment',true)" in html
-    assert "name === 'exams'" in router
+    assert "exams: 'assessment'" in routes
 
 
 def test_subtitle_picker_owns_its_selected_material():

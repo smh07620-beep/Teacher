@@ -30,7 +30,8 @@ def test_media_studio_uses_hidden_compatibility_source_and_accessible_mode_tabs(
         "panel.hidden = !selected",
         "TeacherMediaSubtitle1014?.selectMaterial",
         "teacher-media-tab-presentation-1018",
-        "teacher-media-tab-recording-1018",
+        # Tab ids for every mode (incl. recording) are built from one template.
+        "teacher-media-tab-${mode}-1018",
         "teacher-media-video-captions-1018",
         "TeacherAIMaterial1014?.ensureMounted",
         "teacher-recorder-1014",
@@ -60,7 +61,10 @@ def test_media_studio_reuses_existing_generate_review_publish_lanes_without_inte
     audio = ROOT.joinpath("static", "teacher-media-audio-1014.js").read_text(encoding="utf-8")
     assignment = ROOT.joinpath("static", "teacher-assignment-experience-1014.js").read_text(encoding="utf-8")
     video = ROOT.joinpath("static", "teacher-ai-video-1015.js").read_text(encoding="utf-8")
-    assert "/api/ai-presentations?materialId=" in source
+    # The per-material presentation lookup now lives in the presentation module.
+    presentation = ROOT.joinpath("static", "teacher-ai-presentation-1016.js").read_text(encoding="utf-8")
+    assert "/api/ai-presentations?group=" in presentation
+    assert "&materialId=" in presentation
     assert "replaceVideoIdInput" in source
     assert "/api/media-audio/preview" not in audio
     assert "teacher-audio-preview-1018" not in audio
