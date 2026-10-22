@@ -493,7 +493,7 @@
         <button type="button" role="tab" data-assessment-tab-1030="exams" class="teacher-assessment-tab-1030 is-active" aria-selected="true">📝 考卷</button>
         <button type="button" role="tab" id="teacher-open-pending-review-1014" data-assessment-tab-1030="pending" class="teacher-assessment-tab-1030" aria-selected="false">待批改<span id="teacher-assessment-pending-badge-1030" class="teacher-assessment-badge-1030 hidden">0</span></button>
         <button type="button" role="tab" id="teacher-open-review-1014" data-assessment-tab-1030="history" class="teacher-assessment-tab-1030" aria-selected="false">歷史紀錄</button>
-        <button type="button" role="tab" id="teacher-open-overdue-1019" data-assessment-tab-1030="overdue" class="teacher-assessment-tab-1030" aria-selected="false">逾期名單</button>
+        <button type="button" role="tab" id="teacher-open-overdue-1019" data-assessment-tab-1030="overdue" class="teacher-assessment-tab-1030" aria-selected="false">未完成名單</button>
         <button type="button" role="tab" id="teacher-open-analytics-1030" data-assessment-tab-1030="analytics" class="teacher-assessment-tab-1030" aria-selected="false">教學分析</button>`;
       flow.addEventListener('click', async event => {
         const button = event.target.closest?.('[data-assessment-tab-1030]');
