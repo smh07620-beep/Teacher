@@ -246,19 +246,45 @@ jobs:
   ai-question-full-stack-browser:
     name: GP-11 AI question + PowerPoint + script + audio + video full-stack Browser paths
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Installs usually take 2-6 min but a stalled mirror/download sometimes hangs.
+    # Each install step has its own time limit and retries, so one slow download
+    # fails fast and retries instead of eating the whole job budget.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
-      - run: |
-          python -m pip install -r requirements.txt 'moto[server]>=5.1,<6.0' python-pptx python-docx
-          sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg fonts-noto-cjk
+      - name: Install Python packages
+        timeout-minutes: 8
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            timeout 150 python -m pip install --retries 5 --timeout 30 -r requirements.txt 'moto[server]>=5.1,<6.0' python-pptx python-docx && exit 0
+            echo "pip install attempt $i failed or stalled; retrying"; sleep 10
+          done
+          exit 1
+      - name: Install LibreOffice, FFmpeg and CJK fonts
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            sudo timeout 300 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && \
+            sudo timeout 300 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y libreoffice ffmpeg fonts-noto-cjk && exit 0
+            echo "apt attempt $i failed or stalled; retrying"; sleep 10
+          done
+          exit 1
+      - name: Install Playwright browsers
+        timeout-minutes: 10
+        shell: bash
+        run: |
           npm install --no-save @playwright/test@1.55.0
-          npx playwright install --with-deps chromium
-          npx playwright install chrome
+          for i in 1 2 3; do
+            timeout 180 npx playwright install --with-deps chromium && timeout 120 npx playwright install chrome && exit 0
+            echo "playwright install attempt $i failed or stalled; retrying"; sleep 10
+          done
+          exit 1
       - name: Audio / video canonical regression
         run: python -m unittest tests.test_deterministic_tts_capability tests.test_teacher_media_audio_1014 tests.test_media_audio_preview_queue_isolation tests.test_media_audio_preview_resilience_20261005 tests.test_ai_video_0101 tests.test_ai_video_phase5_0105 tests.test_ai_video_phase6_renderer tests.test_ai_video_performance_optimization -v
       - name: Canonical AI jobs → inspected PPTX/WAV/MP4 → teacher publication → learner saved answers
