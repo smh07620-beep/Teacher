@@ -36,7 +36,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install test dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r requirements.txt pytest
       - name: Python compile checks
         run: |
           python -m py_compile *.py
@@ -46,7 +46,9 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m unittest discover -s tests -v 2>&1 | tee teacher-regression.log
+          # pytest runs both unittest.TestCase classes and plain pytest-style test
+          # functions; `unittest discover` silently skipped the latter.
+          python -m pytest tests --ignore=tests/playwright -p no:cacheprovider -q -rf 2>&1 | tee teacher-regression.log
       - name: Upload full regression failure log
         if: failure() && steps.full_regression.outcome == 'failure'
         uses: actions/upload-artifact@v4
