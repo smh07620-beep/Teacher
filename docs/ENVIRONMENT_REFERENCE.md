@@ -79,7 +79,9 @@ Narrative documentation: `LOCAL_WORKER_6_7.md`, `docs/WORKER_BOOTSTRAP.md`, `REA
 | `DB_POOL_MAX_SIZE` |  | `teacher_app/common/db.py` |  |  |
 | `DB_POOL_MIN_SIZE` | `1` | `teacher_app/common/db.py` |  |  |
 | `DB_POOL_TIMEOUT_SECONDS` | `5.0` | `teacher_app/common/db.py` |  |  |
+| `EMAIL_REMINDER_CONCURRENCY` | `4` | `teacher_app/notifications/reminders.py` |  |  |
 | `EMAIL_REMINDER_DAYS` | `7` | `teacher_app/notifications/reminders.py` |  |  |
+| `EMAIL_REMINDER_TIME_BUDGET_SECONDS` | `900` | `teacher_app/notifications/reminders.py` |  |  |
 | `EXAM_GATE_ENABLED` | `1` | `teacher_app/learning/gate.py` |  |  |
 | `FFMPEG_PATH` |  | `teacher_app/materials/ai_video_runtime.py` |  |  |
 | `FREE_ONLY_MODE` | `True` | `teacher_app/assessments/ai_runtime.py`, `teacher_app/assessments/question_runtime.py`, `teacher_app/legacy_host.py` (+3) | yes | yes |

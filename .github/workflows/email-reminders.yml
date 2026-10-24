@@ -17,7 +17,9 @@ jobs:
   reminders:
     name: Send due reminders
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The script stops starting new users after its own time budget (15 min)
+    # and records a partial run; the job limit leaves headroom above that.
+    timeout-minutes: 25
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       SMTP_HOST: smtp.gmail.com
@@ -27,6 +29,9 @@ jobs:
       SMTP_FROM: ${{ secrets.SMTP_FROM }}
       SMTP_STARTTLS: "true"
       EMAIL_REMINDER_DAYS: "7"
+      EMAIL_REMINDER_CONCURRENCY: "4"
+      EMAIL_REMINDER_TIME_BUDGET_SECONDS: "900"
+      DB_POOL_MAX_SIZE: "4"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

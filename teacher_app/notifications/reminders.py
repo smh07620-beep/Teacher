@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import logging
 import os
+import time
 import uuid
-from typing import Any, Mapping
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Mapping, Optional
 
 from teacher_app.auth import repository as auth_repository
 from teacher_app.auth.self_service import _send
@@ -97,11 +100,11 @@ def _start_reminder_run(run_id: str, started_at: str) -> None:
         conn.execute(f"INSERT INTO email_reminder_runs(id,started_at,status) VALUES ({ph},{ph},{ph})",(run_id,started_at,"running"))
 
 
-def _finish_reminder_run(run_id: str, *, expected: int, claimed: int, sent_events: int, failed_events: int) -> None:
+def _finish_reminder_run(run_id: str, *, expected: int, claimed: int, sent_events: int, failed_events: int, incomplete: bool = False) -> None:
     try:
         with common_db.transaction() as (conn, dbkind):
             ph = common_db.placeholder(dbkind)
-            status = "partial" if failed_events else "completed"
+            status = "partial" if (failed_events or incomplete) else "completed"
             conn.execute(f"UPDATE email_reminder_runs SET completed_at={ph},expected_events={ph},claimed_events={ph},sent_events={ph},failed_events={ph},status={ph} WHERE id={ph}",(dt.datetime.now(dt.timezone.utc).isoformat(),expected,claimed,sent_events,failed_events,status,run_id))
     except Exception as exc:
         LOGGER.warning("email reminder run observability write failed error_type=%s", type(exc).__name__)
@@ -116,66 +119,137 @@ def _line(event: Mapping[str, Any]) -> str:
     return f"[{label}] {title}{suffix}" + (f" — {detail}" if detail else "")
 
 
+def _env_number(name: str, default: float, lower: float, upper: float) -> float:
+    try:
+        value = float(os.getenv(name, "") or default)
+    except (TypeError, ValueError):
+        value = default
+    return max(lower, min(upper, value))
+
+
+def _daily_order(rows: list[Mapping[str, Any]], day: str) -> list[Mapping[str, Any]]:
+    """Rotate user order every day.
+
+    If a run ever stops early (time budget / runner limit), the same people at
+    the end of an alphabetical list must not be the ones who are skipped day
+    after day. A stable per-day hash spreads any shortfall across users.
+    """
+    return sorted(
+        rows,
+        key=lambda row: hashlib.sha256(f"{day}|{row.get('username') or ''}".encode("utf-8")).hexdigest(),
+    )
+
+
+def _process_user(row: Mapping[str, Any], *, now: dt.datetime, days: int, run_id: str) -> dict[str, int]:
+    """Project, claim and send one user's digest. Returns per-user counters."""
+    result = {"sent": 0, "expected": 0, "claimed": 0, "sent_events": 0, "failed_events": 0}
+    user = _user_from_row(row)
+    try:
+        candidates = events.email_events(user, now=now, days=days)
+        candidates = preferences.filter_email_events(
+            candidates,
+            user,
+            general_enabled=bool(row.get("email_notifications", True)),
+        )
+    except Exception as exc:
+        LOGGER.warning(
+            "email reminder event projection failed username=%s error_type=%s",
+            str(user.get("username") or "")[:80],
+            type(exc).__name__,
+        )
+        return result
+    result["expected"] = len(candidates)
+    claimed = [event for event in candidates if _claim(user["username"], event["key"], event["kind"])]
+    result["claimed"] = len(claimed)
+    if not claimed:
+        return result
+    name = str(row.get("display_name") or row["username"])
+    body = (
+        f"您好 {name}：\n\n"
+        "以下是教學平台目前需要你注意的事項：\n"
+        + "\n".join(_line(event) for event in claimed)
+        + "\n\n請登入教學平台查看或處理。"
+    )
+    try:
+        delivered = bool(_send(row["email"], "醫學檢驗教學平台｜需要處理的學習與教學提醒", body))
+    except Exception as exc:
+        LOGGER.warning(
+            "email reminder send failed username=%s error_type=%s",
+            str(user.get("username") or "")[:80],
+            type(exc).__name__,
+        )
+        delivered = False
+    if delivered:
+        result["sent"] = 1
+        for event in claimed:
+            result["sent_events"] += 1
+            _record_delivery_attempt(run_id, user["username"], event, "sent")
+    else:
+        error_type = "smtp_send_failed"
+        for event in claimed:
+            result["failed_events"] += 1
+            _record_delivery_attempt(run_id, user["username"], event, "failed", error_type)
+            _release_claim(user["username"], event["key"])
+    return result
+
+
 def run_due_reminders() -> int:
-    """Send one digest per eligible user from the same events used in-app."""
+    """Send one digest per eligible user from the same events used in-app.
+
+    Each user needs dozens of database round trips to project their events, so
+    a strictly sequential loop grows linearly with the roster and was being
+    cut off by the runner time limit (later users silently got nothing).
+    Users are now processed concurrently, in a per-day rotated order, and the
+    run stops starting new users once ``EMAIL_REMINDER_TIME_BUDGET_SECONDS``
+    elapses so it always records its outcome instead of being killed.
+    Claims are idempotent, so anyone not reached is picked up by the next run.
+    """
+    started = time.monotonic()
     now = dt.datetime.now(dt.timezone.utc)
     days = max(1, int(os.getenv("EMAIL_REMINDER_DAYS", "7") or 7))
-    sent = 0
+    workers = int(_env_number("EMAIL_REMINDER_CONCURRENCY", 4, 1, 8))
+    budget = _env_number("EMAIL_REMINDER_TIME_BUDGET_SECONDS", 900, 30, 3600)
     run_id = uuid.uuid4().hex
-    expected_events = claimed_events = sent_events = failed_events = 0
+    totals = {"sent": 0, "expected": 0, "claimed": 0, "sent_events": 0, "failed_events": 0}
     _start_reminder_run(run_id, now.isoformat())
-    for row in auth_repository.list_users():
-        if not row.get("active") or not row.get("email"):
-            continue
-        user = _user_from_row(row)
-        try:
-            candidates = events.email_events(user, now=now, days=days)
-            candidates = preferences.filter_email_events(
-                candidates,
-                user,
-                general_enabled=bool(row.get("email_notifications", True)),
-            )
-        except Exception as exc:
-            LOGGER.warning(
-                "email reminder event projection failed username=%s error_type=%s",
-                str(user.get("username") or "")[:80],
-                type(exc).__name__,
-            )
-            continue
-        expected_events += len(candidates)
-        claimed = [event for event in candidates if _claim(user["username"], event["key"], event["kind"])]
-        claimed_events += len(claimed)
-        if not claimed:
-            continue
-        name = str(row.get("display_name") or row["username"])
-        body = (
-            f"您好 {name}：\n\n"
-            "以下是教學平台目前需要你注意的事項：\n"
-            + "\n".join(_line(event) for event in claimed)
-            + "\n\n請登入教學平台查看或處理。"
-        )
-        try:
-            delivered = bool(_send(row["email"], "醫學檢驗教學平台｜需要處理的學習與教學提醒", body))
-        except Exception as exc:
-            LOGGER.warning(
-                "email reminder send failed username=%s error_type=%s",
-                str(user.get("username") or "")[:80],
-                type(exc).__name__,
-            )
-            delivered = False
-        if delivered:
-            sent += 1
-            for event in claimed:
-                sent_events += 1
-                _record_delivery_attempt(run_id, user["username"], event, "sent")
-        else:
-            error_type = "smtp_send_failed"
-            for event in claimed:
-                failed_events += 1
-                _record_delivery_attempt(run_id, user["username"], event, "failed", error_type)
-                _release_claim(user["username"], event["key"])
-    _finish_reminder_run(run_id, expected=expected_events, claimed=claimed_events, sent_events=sent_events, failed_events=failed_events)
-    return sent
+    eligible = [row for row in auth_repository.list_users() if row.get("active") and row.get("email")]
+    ordered = _daily_order(eligible, now.astimezone(TAIPEI).date().isoformat())
+    skipped = 0
+
+    def task(row: Mapping[str, Any]) -> Optional[dict[str, int]]:
+        if time.monotonic() - started >= budget:
+            return None
+        return _process_user(row, now=now, days=days, run_id=run_id)
+
+    processed = 0
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="email-reminder") as pool:
+        for outcome in pool.map(task, ordered):
+            if outcome is None:
+                skipped += 1
+                continue
+            processed += 1
+            for key, value in outcome.items():
+                totals[key] += value
+            if processed % 25 == 0:
+                LOGGER.info(
+                    "email reminder progress processed=%s/%s elapsed=%.0fs",
+                    processed, len(ordered), time.monotonic() - started,
+                )
+    _finish_reminder_run(
+        run_id,
+        expected=totals["expected"],
+        claimed=totals["claimed"],
+        sent_events=totals["sent_events"],
+        failed_events=totals["failed_events"],
+        incomplete=skipped > 0,
+    )
+    print(
+        f"email reminders: users={len(ordered)} processed={processed} skipped_for_time={skipped} "
+        f"emails_sent={totals['sent']} failed_events={totals['failed_events']} "
+        f"elapsed={time.monotonic() - started:.0f}s",
+        flush=True,
+    )
+    return totals["sent"]
 
 
 def _send_operational_alerts(*, now: dt.datetime, sync_incidents: bool, kinds: set[str]) -> int:
