@@ -51,7 +51,7 @@ class ProductPhaseCompletion20261002Tests(unittest.TestCase):
             self.assertIn(marker, self.operations)
         self.assertIn("run_worker_offline_reminders", self.reminders)
         self.assertIn("_release_claim", self.reminders)
-        self.assertIn('cron: "*/10 * * * *"', self.worker_alert_workflow)
+        self.assertIn('cron: "*/30 * * * *"', self.worker_alert_workflow)
         self.assertIn("MATERIAL_WORKER_OFFLINE_ALERT_SECONDS", self.worker_alert_workflow)
         self.assertIn("def record_event(", self.audit)
         self.assertIn("teacher_stage2 endpoint=%s status=%s duration_ms=%.1f", self.security)

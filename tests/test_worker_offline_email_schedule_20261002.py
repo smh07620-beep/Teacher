@@ -152,11 +152,11 @@ class WorkerOfflineEmailSchedule20261002Tests(unittest.TestCase):
         sync.assert_called_once()
         self.assertIn("系統維運事件提醒", send.call_args.args[1])
 
-    def test_workflow_is_ten_minute_critical_lane_and_daily_reminders_stay_daily(self):
+    def test_workflow_is_thirty_minute_critical_lane_and_daily_reminders_stay_daily(self):
         critical = ROOT.joinpath(".github", "workflows", "worker-offline-alerts.yml").read_text(encoding="utf-8")
         daily = ROOT.joinpath(".github", "workflows", "email-reminders.yml").read_text(encoding="utf-8")
         script = ROOT.joinpath("scripts", "send_worker_offline_alerts.py").read_text(encoding="utf-8")
-        self.assertIn('cron: "*/10 * * * *"', critical)
+        self.assertIn('cron: "*/30 * * * *"', critical)
         self.assertIn('MATERIAL_WORKER_OFFLINE_ALERT_SECONDS: "600"', critical)
         self.assertIn("send_worker_offline_alerts.py", critical)
         self.assertIn("run_worker_offline_reminders", script)

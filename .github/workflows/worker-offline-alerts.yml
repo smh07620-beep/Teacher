@@ -2,8 +2,8 @@ name: Operational incident email alerts
 
 on:
   schedule:
-    # Critical operations alert. GitHub schedules may be delayed slightly.
-    - cron: "*/10 * * * *"
+    # Critical operations alert (every 30 min since 2026-10-25 to cut Supabase egress). GitHub schedules may be delayed slightly.
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
