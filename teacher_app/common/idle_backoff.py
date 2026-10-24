@@ -15,15 +15,18 @@ import os
 # 15 seconds the steady traffic was about 3.5 MB/hour (roughly 2 GB/month, 40% of
 # the free 5 GB Render allowance) before any learner used the site.  A job that
 # is queued while the Worker is idle now starts after at most ~45 seconds.
-DEFAULT_IDLE_MAX_SECONDS = 45
+# 2026-10-25: raised from 45 to 90 seconds to halve idle Supabase pooler egress
+# (no learners active, yet ~50-100 MB/day of steady traffic).  90 s keeps a
+# 30 s margin under the 120 s online window below.
+DEFAULT_IDLE_MAX_SECONDS = 90
 # Admin screens treat a Worker as online for 120 seconds after its last
 # heartbeat, so idle polling must stay well below that.
-IDLE_MAX_CEILING_SECONDS = 45
+IDLE_MAX_CEILING_SECONDS = 90
 STEPS_PER_DOUBLING = 5
 
 
 def idle_max_seconds(env_name: str, base_seconds: float) -> float:
-    """Longest idle wait, from ``env_name`` (default 45 s, never below base)."""
+    """Longest idle wait, from ``env_name`` (default 90 s, never below base)."""
     raw = os.environ.get(env_name)
     try:
         value = float(raw) if raw is not None and str(raw).strip() != "" else float(DEFAULT_IDLE_MAX_SECONDS)

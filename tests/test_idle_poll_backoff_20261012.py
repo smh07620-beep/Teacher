@@ -63,10 +63,10 @@ class IdleBackoffTests(unittest.TestCase):
         # Admin screens call a Worker online for 120 s after its last heartbeat.
         self.assertLess(IDLE_MAX_CEILING_SECONDS, 120)
 
-    def test_default_idle_wait_is_45_seconds_and_stays_inside_the_ceiling(self):
+    def test_default_idle_wait_is_90_seconds_and_stays_inside_the_ceiling(self):
         # 2026-10-13: 15 s idle polling cost ~2 GB/month of the free 5 GB Render
         # allowance; the default is now the highest value the ceiling allows.
-        self.assertEqual(DEFAULT_IDLE_MAX_SECONDS, 45)
+        self.assertEqual(DEFAULT_IDLE_MAX_SECONDS, 90)
         self.assertLessEqual(DEFAULT_IDLE_MAX_SECONDS, IDLE_MAX_CEILING_SECONDS)
 
     def test_default_idle_poll_is_at_least_two_and_a_half_times_lighter_than_15_seconds(self):
