@@ -26,7 +26,7 @@ concurrency:
 jobs:
   synthetic:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     env:
       TEACHER_PRODUCTION_URL: ${{ vars.TEACHER_PRODUCTION_URL || 'https://teacher-j3id.onrender.com' }}
     steps:
@@ -37,6 +37,7 @@ jobs:
           python-version: '3.12'
 
       - name: Run production synthetic transaction
+        timeout-minutes: 12
         env:
           TEACHER_SYNTHETIC_USERNAME: ${{ secrets.TEACHER_SYNTHETIC_USERNAME }}
           TEACHER_SYNTHETIC_PASSWORD: ${{ secrets.TEACHER_SYNTHETIC_PASSWORD }}

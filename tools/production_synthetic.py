@@ -140,6 +140,7 @@ def material_roundtrip(client: ProductionClient, user: dict[str, Any], *, group:
                 break
             if status_value in {"failed", "cancelled"}:
                 raise RuntimeError(f"Material Worker 處理測試教材失敗（{status_value}）。")
+            print(f"[synthetic] 等待教材處理中…狀態 {status_value or '未知'}（已等 {round(time.monotonic() - queued_at)} 秒）", flush=True)
             time.sleep(5)
         else:
             raise RuntimeError(f"教材 {timeout_seconds} 秒內沒有處理完成：Material Worker 可能沒有領取或處理失敗。")
@@ -153,8 +154,17 @@ def material_roundtrip(client: ProductionClient, user: dict[str, Any], *, group:
                 print(f"::warning::無法自動刪除測試教材 {material_id}（{type(exc).__name__}）；請在教材管理手動刪除 {PREFIX}*。", flush=True)
 
 
-def run(base_url: str, username: str, password: str, *, group: str, voice: str, skip_tts: bool, skip_material: bool, timeout_seconds: int) -> Report:
+def run(base_url: str, username: str, password: str, *, group: str, voice: str, skip_tts: bool, skip_material: bool, timeout_seconds: int, max_total_seconds: int = 600) -> Report:
     report = Report()
+    run_deadline = time.monotonic() + max_total_seconds
+
+    def budget(name: str) -> int:
+        """Per-step wait, capped by what is left of the whole run's time budget."""
+        remaining = int(run_deadline - time.monotonic())
+        if remaining < 30:
+            raise RuntimeError(f"整體檢查已超過 {max_total_seconds} 秒上限，略過 {name}（避免一直卡住）。")
+        return min(timeout_seconds, remaining)
+
     client = ProductionClient(base_url)
     user_holder: dict[str, Any] = {}
 
@@ -166,12 +176,12 @@ def run(base_url: str, username: str, password: str, *, group: str, voice: str, 
         return report
     workers_ready = report.step("worker-readiness", lambda: _readiness(client)) is not None
     if not skip_tts:
-        report.step("tts-roundtrip", lambda: tts_roundtrip(client, voice=voice, timeout_seconds=timeout_seconds))
+        report.step("tts-roundtrip", lambda: tts_roundtrip(client, voice=voice, timeout_seconds=budget("tts-roundtrip")))
     if not skip_material and not workers_ready:
         # Workers offline: uploading would only leave a stuck/failed E2E-TEST job behind.
         print("[synthetic] SKIP material-roundtrip：Worker 離線，不上傳測試教材。", flush=True)
     elif not skip_material:
-        report.step("material-roundtrip", lambda: material_roundtrip(client, user_holder, group=group, timeout_seconds=timeout_seconds))
+        report.step("material-roundtrip", lambda: material_roundtrip(client, user_holder, group=group, timeout_seconds=budget("material-roundtrip")))
     return report
 
 
@@ -181,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--voice", default=os.environ.get("TEACHER_SYNTHETIC_VOICE", "zf_001"))
     parser.add_argument("--group", default=os.environ.get("TEACHER_SYNTHETIC_GROUP", ""))
     parser.add_argument("--timeout-seconds", type=int, default=300)
+    parser.add_argument("--max-total-seconds", type=int, default=600, help="whole-run time budget so the job never hangs for long")
     parser.add_argument("--skip-tts", action="store_true")
     parser.add_argument("--skip-material", action="store_true")
     args = parser.parse_args(argv)
@@ -193,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        report = run(args.base_url, username, password, group=args.group, voice=args.voice, skip_tts=args.skip_tts, skip_material=args.skip_material, timeout_seconds=args.timeout_seconds)
+        report = run(args.base_url, username, password, group=args.group, voice=args.voice, skip_tts=args.skip_tts, skip_material=args.skip_material, timeout_seconds=args.timeout_seconds, max_total_seconds=args.max_total_seconds)
     except ApiError as exc:
         REPORT_PATH.write_text(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"::error::Synthetic check failed: {exc}")
