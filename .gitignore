@@ -38,3 +38,7 @@ tools/tailwind_build/out.css
 # local full-stack test logs
 ai-fg-*.log
 ai-fullstack-*.log
+
+# AI video runtime cache (defaults to C:\TeacherWorker\.video_cache inside the
+# checkout); must stay ignored or the safe Worker updater sees a dirty tree.
+.video_cache/
