@@ -13,7 +13,8 @@ name: Production synthetic transaction
 # not participate in the checksPass deployment gate (circular gate).
 on:
   schedule:
-    - cron: "17 19 * * *"
+    # 01:17 UTC = 09:17 Taiwan, well outside the 01:00-06:00 Worker quiet window.
+    - cron: "17 1 * * *"
   workflow_dispatch:
 
 permissions:
@@ -29,6 +30,7 @@ jobs:
     timeout-minutes: 15
     env:
       TEACHER_PRODUCTION_URL: ${{ vars.TEACHER_PRODUCTION_URL || 'https://teacher-j3id.onrender.com' }}
+      TEACHER_QUIET_HOURS: "01:00-06:00"
     steps:
       - uses: actions/checkout@v4
 

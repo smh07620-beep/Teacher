@@ -32,9 +32,15 @@ from pathlib import Path
 from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(1, str(Path(__file__).resolve().parents[1]))
 
 from prod_client import ApiError, ProductionClient  # noqa: E402
 from production_worker_check import evaluate  # noqa: E402
+from teacher_app.common import quiet_hours  # noqa: E402
+
+# Workers stop heartbeats during the overnight quiet window; give them a few
+# minutes after it ends to reconnect before calling them offline.
+QUIET_GRACE_MINUTES = 15
 
 REPORT_PATH = Path("production-synthetic-report.json")
 PREFIX = "E2E-TEST-"
@@ -173,6 +179,10 @@ def run(base_url: str, username: str, password: str, *, group: str, voice: str, 
         return {"role": user_holder.get("role"), "group": user_holder.get("preferredGroup")}
 
     if report.step("login", login) is None:
+        return report
+    if quiet_hours.in_quiet_hours(default=quiet_hours.DEFAULT_WORKER_QUIET_HOURS, grace_minutes=QUIET_GRACE_MINUTES):
+        # Workers are paused on purpose overnight; that is not an outage.
+        print("[synthetic] SKIP worker checks：夜間靜音時段（Worker 刻意暫停），不判定為離線。", flush=True)
         return report
     workers_ready = report.step("worker-readiness", lambda: _readiness(client)) is not None
     if not skip_tts:
