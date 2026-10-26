@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import production_synthetic as ps  # noqa: E402
-from teacher_app.common import quiet_hours  # noqa: E402
+quiet_hours = ps.quiet_hours
 
 
 def taipei(hour, minute=0):
@@ -46,6 +46,13 @@ class QuietHoursTests(unittest.TestCase):
         # FakeClient refuses worker calls, so a daytime run must have tried (and failed) them.
         self.assertFalse(report.ok)
         self.assertEqual(report.steps[1]["name"], "worker-readiness")
+
+    def test_script_runs_without_flask(self):
+        """The GitHub runner has only the standard library installed."""
+        import subprocess
+        code = "import sys, runpy; sys.modules['flask'] = None; sys.argv = ['x', '--help']; runpy.run_path(%r, run_name='__main__')" % str(ROOT / "tools" / "production_synthetic.py")
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr[-500:])
 
     def test_workflow_scheduled_outside_quiet_window(self):
         text = (ROOT / ".github/workflows/production-synthetic.yml").read_text(encoding="utf-8")

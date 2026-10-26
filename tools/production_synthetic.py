@@ -32,11 +32,17 @@ from pathlib import Path
 from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(1, str(Path(__file__).resolve().parents[1]))
 
 from prod_client import ApiError, ProductionClient  # noqa: E402
 from production_worker_check import evaluate  # noqa: E402
-from teacher_app.common import quiet_hours  # noqa: E402
+import importlib.util  # noqa: E402
+
+# Load quiet_hours.py by path: importing the teacher_app package would pull in
+# Flask, which the bare GitHub runner (stdlib only) does not have.
+_QH_PATH = Path(__file__).resolve().parents[1] / "teacher_app" / "common" / "quiet_hours.py"
+_qh_spec = importlib.util.spec_from_file_location("_teacher_quiet_hours", _QH_PATH)
+quiet_hours = importlib.util.module_from_spec(_qh_spec)
+_qh_spec.loader.exec_module(quiet_hours)
 
 # Workers stop heartbeats during the overnight quiet window; give them a few
 # minutes after it ends to reconnect before calling them offline.
