@@ -20,7 +20,7 @@ jobs:
   ai-fg-full-stack:
     name: GP-12 subtitles + timed questions + total Teacher-to-Student path
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,13 +29,37 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install runtime, media and browser dependencies
+      # Bounded retries: an unbounded install once stalled until the 25-minute
+      # job limit, cancelling the check and blocking Render's checksPass deploy.
+      - name: Install Python packages
+        timeout-minutes: 8
+        shell: bash
         run: |
-          python -m pip install -r requirements.txt 'moto[server]>=5.1,<6.0' python-pptx python-docx
-          sudo apt-get update
-          sudo apt-get install -y libreoffice ffmpeg fonts-noto-cjk
+          for i in 1 2 3; do
+            timeout 150 python -m pip install --retries 5 --timeout 30 -r requirements.txt 'moto[server]>=5.1,<6.0' python-pptx python-docx && exit 0
+            echo "pip install attempt $i failed or stalled; retrying"; sleep 10
+          done
+          exit 1
+      - name: Install LibreOffice, FFmpeg and CJK fonts
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            sudo timeout 300 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && \
+            sudo timeout 300 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y libreoffice ffmpeg fonts-noto-cjk && exit 0
+            echo "apt attempt $i failed or stalled; retrying"; sleep 10
+          done
+          exit 1
+      - name: Install Playwright browser
+        timeout-minutes: 10
+        shell: bash
+        run: |
           npm install --no-save @playwright/test@1.55.0
-          npx playwright install --with-deps chromium
+          for i in 1 2 3; do
+            timeout 180 npx playwright install --with-deps chromium && exit 0
+            echo "playwright install attempt $i failed or stalled; retrying"; sleep 10
+          done
+          exit 1
       - name: F/G real routes → jobs → Workers → R2 fixture → learner → teacher record
         run: |
           python tests/run_ai_fg_fullstack.py             tests/playwright/ai-subtitle-timed-question-fullstack.spec.js             tests/playwright/ai-total-golden-path.spec.js
