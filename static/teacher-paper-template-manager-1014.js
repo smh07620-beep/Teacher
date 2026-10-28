@@ -57,7 +57,7 @@
       download.removeAttribute('href');
       download.classList.add('hidden');
       status(canManage
-        ? '此組尚未匯入正式 SOP Word 範本；請先匯入 .docx。'
+        ? '此組尚未匯入正式 SOP Word 範本；請先匯入 .docx（舊版 .doc 請先在 Word 另存成 .docx）。'
         : '此組尚未設定正式 SOP Word 範本；請由系統管理者匯入。', canManage ? 'normal' : 'error');
     }
   }
@@ -84,7 +84,11 @@
     if (!file || !canManage) return;
     const row = selectedRow();
     if (!row?.group) return status('請先選擇組別。', 'error');
-    if (!String(file.name || '').toLowerCase().endsWith('.docx')) return status('正式紙本範本僅接受 .docx 檔案。', 'error');
+    const lowerName = String(file.name || '').toLowerCase();
+    if (lowerName.endsWith('.doc')) {
+      return status('這是舊版 Word 檔（.doc），系統無法直接讀取。請用 Word 開啟這個檔案 → 點左上角「檔案」→「另存新檔」→ 存檔類型選「Word 文件 (*.docx)」→ 儲存後，再回來重新匯入新的 .docx 檔。', 'error');
+    }
+    if (!lowerName.endsWith('.docx')) return status('正式紙本範本僅接受 .docx 檔案。', 'error');
     const form = new FormData();
     form.append('file', file);
     status(`正在檢查並匯入「${file.name}」…`);
@@ -114,7 +118,7 @@
           <select id="teacher-paper-template-group-1014" class="rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-slate-700" aria-label="正式 Word 範本組別"></select>
           <button id="teacher-paper-template-upload-1014" type="button" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">⬆️ 匯入／更換 SOP Word 範本</button>
           <a id="teacher-paper-template-download-1014" class="hidden rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700" target="_blank" rel="noopener">⬇️ 下載目前範本</a>
-          <input id="teacher-paper-template-file-1014" class="hidden" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+          <input id="teacher-paper-template-file-1014" class="hidden" type="file" accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword">
         </div>
       </div>
       <p id="teacher-paper-template-status-1014" class="text-xs text-slate-600">讀取正式 SOP Word 範本設定中…</p>`;
