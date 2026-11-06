@@ -202,11 +202,36 @@
     }
   }
 
+  // Every record the on-screen filters show (all pages, not just the current one).
+  function visibleResultRecords(records){
+    records=Array.isArray(records)?records:[];
+    const showEveryAttempt=(document.getElementById('admin-results-attempts')?.value||'best')==='all';
+    const scoped=filterByExam(records);
+    const rows=showEveryAttempt?[...scoped].sort(compareRecords):collapseExamHistory(scoped);
+    const query=(document.getElementById('admin-results-search')?.value||'').trim().toLowerCase();
+    const filter=document.getElementById('admin-results-filter')?.value||'all';
+    return rows.filter(r=>{
+      const text=`${r.name||''} ${r.empId||''} ${r.quizTitle||''} ${r.groupLabel||''}`.toLowerCase();
+      if(query&&!text.includes(query)) return false;
+      if(filter==='pending') return r.reviewStatus==='pending';
+      if(filter==='pass') return r.status==='合格';
+      if(filter==='fail') return r.reviewStatus!=='pending'&&r.status!=='合格';
+      return true;
+    });
+  }
+  window.adminResultsVisibleRecords = async function(){
+    const records=await window.fetchAdminRecords();
+    if(!records) return null;
+    numberAttempts(records);
+    return visibleResultRecords(records);
+  };
+
   window.collapseExamHistory = collapseExamHistory;
   window.examHistoryMeta = record => historyMeta.get(record) || null;
 
   window.renderAdminTable = async function(){
     window.updateResultsWorkspacePresentation?.();
+    window.mountResultsBatchExport?.();
     const tbody=document.getElementById('admin-table-body');
     if(!tbody) return;
     tbody.innerHTML=window.AppApiClient?.skeletonRows?.(8,6)||'<tr><td colspan="8" class="p-6 text-center text-slate-400">讀取伺服器成績中…</td></tr>';
@@ -223,18 +248,7 @@
       window.renderResultsAnalytics(records);
       numberAttempts(records);
       const showEveryAttempt=(document.getElementById('admin-results-attempts')?.value||'best')==='all';
-      const scoped=filterByExam(records);
-      let visibleRecords=showEveryAttempt?[...scoped].sort(compareRecords):collapseExamHistory(scoped);
-      const query=(document.getElementById('admin-results-search')?.value||'').trim().toLowerCase();
-      const filter=document.getElementById('admin-results-filter')?.value||'all';
-      visibleRecords=visibleRecords.filter(r=>{
-        const text=`${r.name||''} ${r.empId||''} ${r.quizTitle||''} ${r.groupLabel||''}`.toLowerCase();
-        if(query&&!text.includes(query)) return false;
-        if(filter==='pending') return r.reviewStatus==='pending';
-        if(filter==='pass') return r.status==='合格';
-        if(filter==='fail') return r.reviewStatus!=='pending'&&r.status!=='合格';
-        return true;
-      });
+      const visibleRecords=visibleResultRecords(records);
       if(!visibleRecords.length){
         tbody.innerHTML='<tr><td colspan="8" class="p-6 text-center text-slate-400">目前尚無任何考核紀錄</td></tr>';
         document.getElementById('admin-results-pagination')?.replaceChildren();

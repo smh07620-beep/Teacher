@@ -118,6 +118,7 @@ ASSET_MANIFEST = {
             "/content-audience-1014.js",
             "/admin-external-media.js",
             "/admin-results-export.js",
+            "/admin-results-batch-export-1106.js",
             "/learner-exam-controls.js",
             "/atlas-annotations-1010.js",
             "/learner-hotspot-question-1010.js",
@@ -180,6 +181,7 @@ STUDENT_LEAN_EXCLUDE = frozenset({
     "admin-quiz-materials", "admin-question-editor-ui", "admin-question-actions",
     "admin-jobs", "admin-material-upload", "admin-ai-questions",
     "admin-question-panel", "admin-external-media", "admin-results-export",
+    "admin-results-batch-export-1106",
     "admin-hotspot-question-1010", "admin-slide-checkpoints-1011",
     # batch 3: teacher-* authoring / back-office scripts
     "teacher-workspace-1014", "teacher-media-script-1014", "teacher-media-recorder-1014",

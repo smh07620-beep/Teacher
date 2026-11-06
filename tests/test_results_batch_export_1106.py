@@ -1,0 +1,43 @@
+import unittest
+import zipfile
+from pathlib import Path
+
+from teacher_app.frontend.assets import ASSET_MANIFEST, STUDENT_LEAN_EXCLUDE
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class ResultsBatchExport1106Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.js = (ROOT / "static" / "admin-results-batch-export-1106.js").read_text(encoding="utf-8")
+        cls.data = (ROOT / "static" / "admin-results-data.js").read_text(encoding="utf-8")
+
+    def test_script_loaded_for_staff_only(self):
+        self.assertIn("/admin-results-batch-export-1106.js", ASSET_MANIFEST["system"]["body"])
+        self.assertIn("/admin-results-batch-export-1106.js", STUDENT_LEAN_EXCLUDE)
+
+    def test_exports_follow_on_screen_filters(self):
+        self.assertIn("window.adminResultsVisibleRecords", self.data)
+        self.assertIn("visibleResultRecords(records)", self.data)
+        self.assertIn("adminResultsVisibleRecords()", self.js)
+
+    def test_word_grouped_per_person(self):
+        self.assertIn("--匯出考卷", self.js)
+        self.assertIn("buildRecordDocPayload", self.js)
+
+    def test_l03_valid_date_is_course_end_plus_one_year_and_note_blank(self):
+        self.assertIn("plusOneYear(endDate)", self.js)
+        self.assertIn("note: ''", self.js)
+        self.assertIn("年${groupName(", self.js)
+
+    def test_l03_template_has_tags(self):
+        path = ROOT / "static" / "templates" / "QP15-L03.docx"
+        xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
+        for tag in ("{#exams}", "{/exams}", "{title}", "{item}", "{examDate}", "{#rows}", "{validUntil}", "{/rows}", "QP15-L03"):
+            self.assertIn(tag, xml)
+        self.assertIn("headerReference", xml)
+
+
+if __name__ == "__main__":
+    unittest.main()
