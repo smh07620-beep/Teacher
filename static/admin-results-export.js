@@ -92,7 +92,7 @@
         role:window.buildRoleCheckboxText(roleInput,currentGroupKey),
         evaluator:evaluatorNameInput,
         evaluatorTitle:window.buildEvaluatorTitleCheckboxText(evaluatorTitleInput),
-        score:evaluationScore, evaluationScore, passingScore, correctCount, wrongCount,
+        score:evaluationScore, evaluationScore, passingScore, passStandard:passingScore, correctCount, wrongCount,
         totalQuestions:quizList.length, status:evaluationStatus, result:evaluationStatus,
         questions:answersDetail,
         ...paperMeta
@@ -116,7 +116,7 @@
         role:window.buildRoleCheckboxText(rec.role,rec.groupKey||'grpBio'),
         evaluator:rec.evaluatorName||'',
         evaluatorTitle:window.buildEvaluatorTitleCheckboxText(rec.evaluatorTitle),
-        score:recordScore, evaluationScore:recordScore, passingScore,
+        score:recordScore, evaluationScore:recordScore, passingScore, passStandard:passingScore,
         correctCount:recordCorrect, wrongCount:recordWrong,
         totalQuestions:recordAnswers.length, status:recordStatus, result:recordStatus,
         questions:recordAnswers,

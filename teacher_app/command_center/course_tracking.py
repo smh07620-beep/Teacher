@@ -30,6 +30,21 @@ def _parse_datetime(value: Any) -> Optional[dt.datetime]:
     return value.astimezone(dt.timezone.utc)
 
 
+_TAIPEI=dt.timezone(dt.timedelta(hours=8))
+
+
+def _due_deadline(value: Any) -> Optional[dt.datetime]:
+    """A date-only deadline (2026-11-06) lasts through that whole day, Taiwan time."""
+    text=str(value or "").strip()
+    if len(text)==10:
+        try:
+            day=dt.date.fromisoformat(text)
+        except ValueError:
+            return None
+        return dt.datetime.combine(day+dt.timedelta(days=1),dt.time(),_TAIPEI).astimezone(dt.timezone.utc)
+    return _parse_datetime(text)
+
+
 def _bool(value: Any) -> bool:
     if isinstance(value,str):
         return value.strip().lower() not in {"","0","false","no","off"}
@@ -232,7 +247,9 @@ def build_course_tracking(
             started=bool(smart_rows or legacy_rows or learner_exams)
             complete=bool(course_completion.get("completed"))
             due=due_by_recipient.get((cid,username),"")
-            overdue=bool((parsed:=_parse_datetime(due)) and parsed<current and not complete)
+            # 已通過考試的學員不算逾期（完成以「考試通過」為準，教材未讀完不列入逾期）。
+            done_for_overdue=complete or bool(course_completion.get("examRequired") and course_completion.get("examPassed"))
+            overdue=bool((parsed:=_due_deadline(due)) and parsed<=current and not done_for_overdue)
             reviewed=[row for row in learner_exams if str(row.get("review_status") or "completed")!="pending"]
             exam_not_passed=bool(course_exams and reviewed and not course_completion.get("examPassed"))
             status="completed" if complete else "inProgress" if started else "notStarted"

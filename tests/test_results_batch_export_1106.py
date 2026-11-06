@@ -68,3 +68,9 @@ class ResultsGroupedByPersonTests(unittest.TestCase):
         self.assertIn("data-person-exam", js)
         self.assertIn("匯出此人考卷", js)
         self.assertNotIn("人員別：", js)
+
+
+class PassStandardTagTests(unittest.TestCase):
+    def test_word_payload_fills_pass_standard_tag(self):
+        js = (ROOT / "static" / "admin-results-export.js").read_text(encoding="utf-8")
+        self.assertEqual(js.count("passStandard:passingScore"), 2)
