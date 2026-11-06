@@ -23,8 +23,10 @@ class LearnerStudyExamLoop1032Tests(unittest.TestCase):
         for marker in ("回教材閱覽", "回圖譜區", "回到考核", "loop1032:lastResult:", "未通過"):
             self.assertIn(marker, self.loop)
 
-    def test_teacher_results_group_by_role_and_keep_passing_attempt(self):
-        self.assertIn("人員別", self.results)
+    def test_teacher_results_group_by_person_and_keep_passing_attempt(self):
+        # 2026-11-06: role banner (人員別：education_admin) removed; rows fold under each person.
+        self.assertNotIn("人員別", self.results)
+        self.assertIn("data-person-toggle", self.results)
         self.assertIn("顯示通過成績", self.results)
 
 

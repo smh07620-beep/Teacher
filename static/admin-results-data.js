@@ -122,10 +122,10 @@
     document.getElementById(`admin-result-detail-${index}`)?.classList.toggle('hidden');
   };
 
-  function paintPagination(visibleRecords,pageSize,pages){
+  function paintPagination(visibleRecords,pageSize,pages,unit='筆'){
     const pager=document.getElementById('admin-results-pagination');
     if(!pager) return;
-    pager.innerHTML=`<span>顯示 ${(page-1)*pageSize+1}–${Math.min(page*pageSize,visibleRecords.length)}／${visibleRecords.length} 筆</span><span class="flex gap-2"><button ${page===1?'disabled':''} data-admin-results-page="prev" class="border rounded px-2 py-1 disabled:opacity-40">上一頁</button><b class="px-1 py-1">${page} / ${pages}</b><button ${page===pages?'disabled':''} data-admin-results-page="next" class="border rounded px-2 py-1 disabled:opacity-40">下一頁</button></span>`;
+    pager.innerHTML=`<span>顯示 ${(page-1)*pageSize+1}–${Math.min(page*pageSize,visibleRecords.length)}／${visibleRecords.length} ${unit}</span><span class="flex gap-2"><button ${page===1?'disabled':''} data-admin-results-page="prev" class="border rounded px-2 py-1 disabled:opacity-40">上一頁</button><b class="px-1 py-1">${page} / ${pages}</b><button ${page===pages?'disabled':''} data-admin-results-page="next" class="border rounded px-2 py-1 disabled:opacity-40">下一頁</button></span>`;
     pager.querySelector('[data-admin-results-page="prev"]')?.addEventListener('click',()=>{page=Math.max(1,page-1);window.renderAdminTable();});
     pager.querySelector('[data-admin-results-page="next"]')?.addEventListener('click',()=>{page=Math.min(pages,page+1);window.renderAdminTable();});
   }
@@ -229,6 +229,7 @@
   window.collapseExamHistory = collapseExamHistory;
   window.examHistoryMeta = record => historyMeta.get(record) || null;
 
+  const expandedPeople=new Set();
   window.renderAdminTable = async function(){
     window.updateResultsWorkspacePresentation?.();
     window.mountResultsBatchExport?.();
@@ -254,25 +255,48 @@
         document.getElementById('admin-results-pagination')?.replaceChildren();
         return;
       }
+      // 依人員收合：一人一列，點開才看到他的各份考卷；分頁以「人」計算。
+      const people=new Map();
+      visibleRecords.forEach(r=>{const k=`${r.empId||''}|${r.name||''}`;if(!people.has(k))people.set(k,[]);people.get(k).push(r);});
+      const personKeys=[...people.keys()];
       const pageSize=Math.max(20,Number(document.getElementById('admin-results-page-size')?.value||20));
-      const pages=Math.max(1,Math.ceil(visibleRecords.length/pageSize));
+      const pages=Math.max(1,Math.ceil(personKeys.length/pageSize));
       page=Math.min(Math.max(1,page),pages);
-      const pageRows=visibleRecords.slice((page-1)*pageSize,page*pageSize);
-      let lastRole=null;
-      const roleCounts=new Map();
-      visibleRecords.forEach(r=>{const k=personRole(r);const set=roleCounts.get(k)||new Set();set.add(r.empId||r.name||'');roleCounts.set(k,set);});
-      tbody.innerHTML=pageRows.map(r=>{
+      const pageKeys=personKeys.slice((page-1)*pageSize,page*pageSize);
+      const personRow=(key,list,pi)=>{
+        const open=expandedPeople.has(key);
+        const passed=list.filter(r=>r.status==='合格').length;
+        const pending=list.filter(r=>r.reviewStatus==='pending').length;
+        const latest=list.map(r=>String(r.timestamp||'')).sort().pop();
+        const first=list[0];
+        return `<tr class="bg-white hover:bg-indigo-50/40 cursor-pointer border-t-2 border-slate-200" data-person-toggle="${pi}"><td class="p-3 text-indigo-700 font-black" data-person-arrow>${open?'▾':'▸'}</td><td class="p-3 font-mono text-slate-500">${escapeHtml(window.formatTaipeiTime(latest))}</td><td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">${escapeHtml(first.groupLabel||'1 生化組')}</span></td><td class="p-3 font-black text-slate-900">${escapeHtml(first.name||'')}</td><td class="p-3 font-mono">${escapeHtml(first.empId||'')}</td><td class="p-3 text-slate-700"><b>${list.length}</b> 份考卷</td><td class="p-3 text-center text-xs font-bold text-green-700">合格 ${passed}/${list.length}${pending?`<div class="text-amber-600">待批改 ${pending}</div>`:''}</td><td class="p-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${passed===list.length?'bg-green-100 text-green-800':'bg-amber-100 text-amber-800'}">${passed===list.length?'全部合格':'未全部合格'}</span></td><td class="p-3 text-center"><button type="button" data-person-word="${pi}" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded shadow-sm">📦 匯出此人考卷</button></td></tr>`;
+      };
+      const pageRows=[];
+      pageKeys.forEach((key,pi)=>{const list=people.get(key);list.forEach((r,j)=>pageRows.push({r,key,pi,head:j===0?personRow(key,list,pi):''}));});
+      tbody.innerHTML=pageRows.map(({r,key,pi,head})=>{
+        const hidden=expandedPeople.has(key)?'':' hidden';
         const index=records.indexOf(r);
-        const role=personRole(r);
         const meta=historyMeta.get(r)||{attempts:1,failedBefore:0,passed:false};
-        const header=role!==lastRole?`<tr class="bg-indigo-50/70"><td colspan="9" class="px-3 py-2 text-xs font-black text-indigo-900">👥 人員別：${escapeHtml(role)}<span class="ml-2 font-bold text-indigo-600">${(roleCounts.get(role)||new Set()).size} 人</span></td></tr>`:'';
-        lastRole=role;
+        const header=head;
         const attemptInfo=attemptNumbers.get(r);
         const attemptsNote=showEveryAttempt?(attemptInfo&&attemptInfo.total>1?`<div class="mt-1 text-xs text-slate-400">第 ${attemptInfo.no} 次作答（共 ${attemptInfo.total} 次）</div>`:''):meta.attempts>1?`<div class="mt-1 text-xs text-slate-400">${meta.passed?`共考 ${meta.attempts} 次，顯示通過成績`:`共考 ${meta.attempts} 次，尚未通過`}</div>`:'';
         const detail=r.answersDetail||[];
-        return `${header}<tr class="hover:bg-slate-50 transition-colors"><td class="p-3"><button data-csp-click="adminResultDetail(${index})" class="text-xs font-bold text-indigo-700">明細</button></td><td class="p-3 font-mono text-slate-500">${escapeHtml(window.formatTaipeiTime(r.timestamp))}</td><td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">${escapeHtml(r.groupLabel||'1 生化組')}</span></td><td class="p-3 font-bold text-slate-800">${escapeHtml(r.name||'')}</td><td class="p-3 font-mono">${escapeHtml(r.empId||'')}</td><td class="p-3">${escapeHtml(r.quizTitle||UNNAMED_EXAM)}</td><td class="p-3 text-center font-bold ${r.reviewStatus==='pending'?'text-amber-600':(Number(r.score)>=Number(r.passingScore||80)?'text-green-600':'text-red-600')}">${r.reviewStatus==='pending'?'待批改':(Number(r.score)||0)}</td><td class="p-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${r.reviewStatus==='pending'?'bg-amber-100 text-amber-800':(r.status==='合格'?'bg-green-100 text-green-800':'bg-red-100 text-red-800')}">${escapeHtml(r.status||'')}</span>${attemptsNote}</td><td class="p-3 text-center space-y-1">${detail.some(a=>a.questionType==='essay')?`<button data-csp-click="openEssayReview(${index})" class="bg-rose-600 hover:bg-rose-500 text-white text-xs px-2.5 py-1 rounded shadow-sm">✍️ ${r.reviewStatus==='pending'?'批改問答題':'重新批改'}</button>`:''}<button data-csp-click="exportRecordToWord(${index})" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded transition-colors shadow-sm">📄 匯出 Word</button></td></tr><tr id="admin-result-detail-${index}" class="hidden bg-slate-50"><td colspan="9" class="p-3"><div class="text-xs text-slate-600"><b>作答明細（預設收合）</b><div class="mt-2 space-y-1">${detail.length?detail.map((a,i)=>`<div>${i+1}. ${escapeHtml(a.questionText||'')}　<span class="text-slate-500">${escapeHtml(String(a.userAnswer??'未作答'))}</span></div>`).join(''):'無逐題明細'}</div></div></td></tr>`;
+        return `${header}<tr class="hover:bg-slate-50 transition-colors bg-slate-50/60${hidden}" data-person-exam="${pi}"><td class="p-3 pl-6"><button data-csp-click="adminResultDetail(${index})" class="text-xs font-bold text-indigo-700">明細</button></td><td class="p-3 font-mono text-slate-500">${escapeHtml(window.formatTaipeiTime(r.timestamp))}</td><td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">${escapeHtml(r.groupLabel||'1 生化組')}</span></td><td class="p-3 font-bold text-slate-800">${escapeHtml(r.name||'')}</td><td class="p-3 font-mono">${escapeHtml(r.empId||'')}</td><td class="p-3">${escapeHtml(r.quizTitle||UNNAMED_EXAM)}</td><td class="p-3 text-center font-bold ${r.reviewStatus==='pending'?'text-amber-600':(Number(r.score)>=Number(r.passingScore||80)?'text-green-600':'text-red-600')}">${r.reviewStatus==='pending'?'待批改':(Number(r.score)||0)}</td><td class="p-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${r.reviewStatus==='pending'?'bg-amber-100 text-amber-800':(r.status==='合格'?'bg-green-100 text-green-800':'bg-red-100 text-red-800')}">${escapeHtml(r.status||'')}</span>${attemptsNote}</td><td class="p-3 text-center space-y-1">${detail.some(a=>a.questionType==='essay')?`<button data-csp-click="openEssayReview(${index})" class="bg-rose-600 hover:bg-rose-500 text-white text-xs px-2.5 py-1 rounded shadow-sm">✍️ ${r.reviewStatus==='pending'?'批改問答題':'重新批改'}</button>`:''}<button data-csp-click="exportRecordToWord(${index})" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded transition-colors shadow-sm">📄 匯出 Word</button></td></tr><tr id="admin-result-detail-${index}" class="hidden bg-slate-50"><td colspan="9" class="p-3"><div class="text-xs text-slate-600"><b>作答明細（預設收合）</b><div class="mt-2 space-y-1">${detail.length?detail.map((a,i)=>`<div>${i+1}. ${escapeHtml(a.questionText||'')}　<span class="text-slate-500">${escapeHtml(String(a.userAnswer??'未作答'))}</span></div>`).join(''):'無逐題明細'}</div></div></td></tr>`;
       }).join('');
-      paintPagination(visibleRecords,pageSize,pages);
+      tbody.querySelectorAll('[data-person-toggle]').forEach(tr=>tr.addEventListener('click',ev=>{
+        if(ev.target.closest('button'))return;
+        const pi=tr.dataset.personToggle,key=pageKeys[Number(pi)];
+        const open=!expandedPeople.has(key);
+        if(open)expandedPeople.add(key);else expandedPeople.delete(key);
+        tr.querySelector('[data-person-arrow]').textContent=open?'▾':'▸';
+        tbody.querySelectorAll(`[data-person-exam="${pi}"]`).forEach(row=>row.classList.toggle('hidden',!open));
+        if(!open)tbody.querySelectorAll(`[data-person-exam="${pi}"]`).forEach(row=>row.nextElementSibling?.id?.startsWith('admin-result-detail-')&&row.nextElementSibling.classList.add('hidden'));
+      }));
+      tbody.querySelectorAll('[data-person-word]').forEach(btn=>btn.addEventListener('click',()=>{
+        const list=people.get(pageKeys[Number(btn.dataset.personWord)])||[];
+        window.exportWordByPerson?.(btn,list);
+      }));
+      paintPagination(personKeys,pageSize,pages,'人');
     }catch(error){
       tbody.innerHTML=`<tr><td colspan="8" class="p-6 text-center text-rose-600">❌ ${escapeHtml(window.AppApiClient?.humanError?.(error,'成績')||error.message)}<div class="mt-2"><button type="button" class="btn btn-secondary" data-csp-click="renderAdminTable()">重新載入</button></div></td></tr>`;
     }

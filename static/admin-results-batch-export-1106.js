@@ -90,12 +90,12 @@
     return doc.getZip().generate({type:'uint8array'});
   }
 
-  window.exportWordByPerson = async function(button){
+  window.exportWordByPerson = async function(button, onlyRows){
     const label = button ? button.textContent : '';
     try {
       if(button){ button.disabled = true; button.textContent = '⏳ 匯出中…'; }
       await ensureWordLibs();
-      const rows = await visibleRecords();
+      const rows = Array.isArray(onlyRows) ? onlyRows.filter(r => r && r.reviewStatus !== 'pending') : await visibleRecords();
       if(!rows.length){ alert('目前篩選條件下沒有可匯出的考卷。'); return; }
       const people = new Map();
       for(const r of rows){
@@ -124,7 +124,7 @@
       const only = people.size === 1 ? [...people.values()][0][0] : null;
       const zipName = only ? `${safeName(only.name)}--匯出考卷.zip` : `考卷依人員_${people.size}人_${new Date().toISOString().slice(0,10)}.zip`;
       saveAs(blob, zipName);
-      alert(`已匯出 ${people.size} 人、共 ${count} 份考卷。\n解壓縮後，每個人一個資料夾（例如「張嘉琴--匯出考卷」）。`);
+      if(!onlyRows) alert(`已匯出 ${people.size} 人、共 ${count} 份考卷。\n解壓縮後，每個人一個資料夾（例如「張嘉琴--匯出考卷」）。`);
     } catch (error) {
       console.error(error);
       alert(`匯出失敗：${error.message}`);

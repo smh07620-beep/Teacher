@@ -59,3 +59,12 @@ class WordLibsFallbackTests(unittest.TestCase):
         for name in ("pizzip-3.1.4.min.js", "docxtemplater-3.37.11.js", "FileSaver-2.0.5.min.js"):
             self.assertTrue((ROOT / "static" / "vendor" / name).exists())
             self.assertIn(f"/vendor/{name}", js)
+
+
+class ResultsGroupedByPersonTests(unittest.TestCase):
+    def test_one_row_per_person_with_folded_exams_and_no_role_banner(self):
+        js = (ROOT / "static" / "admin-results-data.js").read_text(encoding="utf-8")
+        self.assertIn("data-person-toggle", js)
+        self.assertIn("data-person-exam", js)
+        self.assertIn("匯出此人考卷", js)
+        self.assertNotIn("人員別：", js)
