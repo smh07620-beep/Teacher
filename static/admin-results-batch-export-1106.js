@@ -133,6 +133,68 @@
     }
   };
 
+
+  /* ---------- 合併成一份 Word（方便一次列印） ---------- */
+  // 把各組附件1 範本整個包進 {#records}…{/records}，每份考卷從新的一頁開始。
+  function mergedTemplate(buffer){
+    const zip = new window.PizZip(buffer);
+    const doc = new DOMParser().parseFromString(zip.file('word/document.xml').asText(), 'application/xml');
+    const NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const body = doc.getElementsByTagNameNS(NS, 'body')[0];
+    const tagPara = text => {
+      const p = doc.createElementNS(NS, 'w:p'), r = doc.createElementNS(NS, 'w:r'), t = doc.createElementNS(NS, 'w:t');
+      t.textContent = text; r.appendChild(t); p.appendChild(r); return p;
+    };
+    const items = [...body.childNodes].filter(n => n.nodeType === 1 && n.localName !== 'sectPr');
+    let first = items[0];
+    if(!first || first.localName !== 'p'){ first = doc.createElementNS(NS, 'w:p'); body.insertBefore(first, items[0] || null); }
+    let ppr = [...first.childNodes].find(n => n.localName === 'pPr');
+    if(!ppr){ ppr = doc.createElementNS(NS, 'w:pPr'); first.insertBefore(ppr, first.firstChild); }
+    ppr.insertBefore(doc.createElementNS(NS, 'w:pageBreakBefore'), ppr.firstChild);
+    body.insertBefore(tagPara('{#records}'), first);
+    const sect = [...body.childNodes].find(n => n.nodeType === 1 && n.localName === 'sectPr');
+    body.insertBefore(tagPara('{/records}'), sect || null);
+    // 「與下段同頁」串在一起時，舊版 Word 開大檔會一直重排而卡住；每份只有一頁，拿掉不影響版面。
+    ['keepNext', 'keepLines'].forEach(name => [...body.getElementsByTagNameNS(NS, name)].forEach(el => el.parentNode.removeChild(el)));
+    zip.file('word/document.xml', new XMLSerializer().serializeToString(doc));
+    return zip.generate({type:'arraybuffer'});
+  }
+
+  window.exportMergedWord = async function(button, onlyRows){
+    const label = button ? button.textContent : '';
+    try {
+      if(button){ button.disabled = true; button.textContent = '⏳ 合併中…'; }
+      await ensureWordLibs();
+      const rows = Array.isArray(onlyRows) ? onlyRows.filter(r => r && r.reviewStatus !== 'pending') : await visibleRecords();
+      if(!rows.length){ alert('目前篩選條件下沒有可匯出的考卷。'); return; }
+      const sorted = [...rows].sort((a,b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant') || String(a.empId || '').localeCompare(String(b.empId || '')) || String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+      const byGroup = new Map();
+      sorted.forEach(r => { const g = r.groupKey || 'grpBio'; if(!byGroup.has(g)) byGroup.set(g, []); byGroup.get(g).push(r); });
+      const files = [];
+      for(const [groupKey, list] of byGroup){
+        const buffer = await templateFor(groupKey);
+        if(!buffer) throw new Error('沒有可用的 Word 範本，已停止匯出。');
+        const records = list.map(r => window.buildRecordDocPayload(r).payload);
+        const people = new Set(list.map(r => `${r.empId || ''}|${r.name || ''}`)).size;
+        const label2 = groupName(list[0].groupLabel) || '考卷';
+        const prefix = people === 1 ? `${safeName(list[0].name)}--考卷合併` : `${label2}_考卷合併_${people}人${list.length}份`;
+        files.push({name: `${prefix}_${new Date().toISOString().slice(0,10)}.docx`, data: renderDocx(mergedTemplate(buffer), {records})});
+      }
+      if(files.length === 1){
+        saveAs(new Blob([files[0].data], {type: DOCX_MIME}), files[0].name);
+      } else {
+        const zip = new window.PizZip();
+        files.forEach(f => zip.file(f.name, f.data));
+        saveAs(zip.generate({type:'blob', mimeType:'application/zip'}), `考卷合併_各組_${new Date().toISOString().slice(0,10)}.zip`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert(`合併失敗：${error.message}`);
+    } finally {
+      if(button){ button.disabled = false; button.textContent = label; }
+    }
+  };
+
   /* ---------- 2. QP15-L03 人員能力評估考核紀錄表 ---------- */
   function examGroups(rows){
     const map = new Map();
@@ -416,6 +478,9 @@
       const l03 = make('📋 QP15-L03 紀錄表', 'data-qp15-l03-1106', 'bg-white border border-indigo-300 hover:bg-indigo-50 text-indigo-800 text-xs font-bold px-3 py-2 rounded-lg', () => window.openQp15L03Dialog());
       l03.title = '依目前篩選，產生人員能力評估考核紀錄表（每份考卷一張）';
       csv.insertAdjacentElement('afterend', l03);
+      const merged = make('🖨️ 合併成一份 Word', 'data-merged-word-1106', 'bg-white border border-indigo-300 hover:bg-indigo-50 text-indigo-800 text-xs font-bold px-3 py-2 rounded-lg', b => window.exportMergedWord(b));
+      merged.title = '依目前篩選，把所有考卷合成一個 Word，每份一頁，方便一次列印';
+      csv.insertAdjacentElement('afterend', merged);
       csv.insertAdjacentElement('afterend', word);
     });
   }

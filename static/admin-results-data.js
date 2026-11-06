@@ -269,7 +269,7 @@
         const pending=list.filter(r=>r.reviewStatus==='pending').length;
         const latest=list.map(r=>String(r.timestamp||'')).sort().pop();
         const first=list[0];
-        return `<tr class="bg-white hover:bg-indigo-50/40 cursor-pointer border-t-2 border-slate-200" data-person-toggle="${pi}"><td class="p-3 text-indigo-700 font-black" data-person-arrow>${open?'▾':'▸'}</td><td class="p-3 font-mono text-slate-500">${escapeHtml(window.formatTaipeiTime(latest))}</td><td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">${escapeHtml(first.groupLabel||'1 生化組')}</span></td><td class="p-3 font-black text-slate-900">${escapeHtml(first.name||'')}</td><td class="p-3 font-mono">${escapeHtml(first.empId||'')}</td><td class="p-3 text-slate-700"><b>${list.length}</b> 份考卷</td><td class="p-3 text-center text-xs font-bold text-green-700">合格 ${passed}/${list.length}${pending?`<div class="text-amber-600">待批改 ${pending}</div>`:''}</td><td class="p-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${passed===list.length?'bg-green-100 text-green-800':'bg-amber-100 text-amber-800'}">${passed===list.length?'全部合格':'未全部合格'}</span></td><td class="p-3 text-center"><button type="button" data-person-word="${pi}" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded shadow-sm">📦 匯出此人考卷</button></td></tr>`;
+        return `<tr class="bg-white hover:bg-indigo-50/40 cursor-pointer border-t-2 border-slate-200" data-person-toggle="${pi}"><td class="p-3 text-indigo-700 font-black" data-person-arrow>${open?'▾':'▸'}</td><td class="p-3 font-mono text-slate-500">${escapeHtml(window.formatTaipeiTime(latest))}</td><td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">${escapeHtml(first.groupLabel||'1 生化組')}</span></td><td class="p-3 font-black text-slate-900">${escapeHtml(first.name||'')}</td><td class="p-3 font-mono">${escapeHtml(first.empId||'')}</td><td class="p-3 text-slate-700"><b>${list.length}</b> 份考卷</td><td class="p-3 text-center text-xs font-bold text-green-700">合格 ${passed}/${list.length}${pending?`<div class="text-amber-600">待批改 ${pending}</div>`:''}</td><td class="p-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${passed===list.length?'bg-green-100 text-green-800':'bg-amber-100 text-amber-800'}">${passed===list.length?'全部合格':'未全部合格'}</span></td><td class="p-3 text-center"><button type="button" data-person-word="${pi}" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded shadow-sm">📦 匯出此人考卷</button><button type="button" data-person-merge="${pi}" class="ml-1 bg-white border border-indigo-300 text-indigo-800 text-xs px-2.5 py-1 rounded">🖨️ 合併列印</button></td></tr>`;
       };
       const pageRows=[];
       pageKeys.forEach((key,pi)=>{const list=people.get(key);list.forEach((r,j)=>pageRows.push({r,key,pi,head:j===0?personRow(key,list,pi):''}));});
@@ -295,6 +295,10 @@
       tbody.querySelectorAll('[data-person-word]').forEach(btn=>btn.addEventListener('click',()=>{
         const list=people.get(pageKeys[Number(btn.dataset.personWord)])||[];
         window.exportWordByPerson?.(btn,list);
+      }));
+      tbody.querySelectorAll('[data-person-merge]').forEach(btn=>btn.addEventListener('click',()=>{
+        const list=people.get(pageKeys[Number(btn.dataset.personMerge)])||[];
+        window.exportMergedWord?.(btn,list);
       }));
       paintPagination(personKeys,pageSize,pages,'人');
     }catch(error){

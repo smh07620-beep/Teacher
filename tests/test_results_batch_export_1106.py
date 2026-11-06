@@ -85,3 +85,15 @@ class Qp15PageLockTests(unittest.TestCase):
         js = (ROOT / "static" / "admin-results-batch-export-1106.js").read_text(encoding="utf-8")
         self.assertIn("lockPageField", js)
         self.assertIn("saved.pageNo || '21'", js)
+
+
+class MergedWordTests(unittest.TestCase):
+    def test_merged_word_button_and_page_per_record(self):
+        js = (ROOT / "static" / "admin-results-batch-export-1106.js").read_text(encoding="utf-8")
+        self.assertIn("window.exportMergedWord", js)
+        self.assertIn("{#records}", js)
+        self.assertIn("pageBreakBefore", js)
+        self.assertIn("'keepNext', 'keepLines'", js)
+        self.assertIn("合併成一份 Word", js)
+        data = (ROOT / "static" / "admin-results-data.js").read_text(encoding="utf-8")
+        self.assertIn("data-person-merge", data)
