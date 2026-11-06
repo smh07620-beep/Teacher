@@ -41,3 +41,12 @@ class ResultsBatchExport1106Tests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Qp15L03UploadUiTests(unittest.TestCase):
+    def test_upload_converts_in_browser_and_falls_back_to_builtin(self):
+        js = (ROOT / "static" / "admin-results-batch-export-1106.js").read_text(encoding="utf-8")
+        self.assertIn("window.buildQp15L03Template", js)
+        self.assertIn("/api/doc-templates/${L03_KEY}/download", js)
+        self.assertIn("L03_TEMPLATE_URL", js)
+        self.assertIn("改回內建版", js)

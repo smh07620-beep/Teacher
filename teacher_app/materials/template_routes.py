@@ -4,12 +4,34 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
+import zipfile
+
 from flask import g, jsonify, redirect, request, send_file
 
 from teacher_app.common import scope
 from teacher_app.common.auth import has_permission
 from teacher_app.materials import template_runtime as template_runtime_module, templates
 from teacher_app.storage import StorageDeletionError
+
+
+# QP15-L03 人員能力評估考核紀錄表：不屬於任何組別，共用 doc_templates 儲存。
+QP15_L03_KEY = "qp15L03"
+QP15_L03_REQUIRED_TAGS = ("{#exams}", "{/exams}", "{#rows}", "{/rows}", "{validUntil}")
+
+
+def _known_template_key(group_key):
+    return group_key in scope.GROUPS or group_key == QP15_L03_KEY
+
+
+def _check_qp15_l03(path):
+    try:
+        with zipfile.ZipFile(path) as archive:
+            xml = archive.read("word/document.xml").decode("utf-8", "replace")
+    except Exception as exc:
+        raise ValueError("無法讀取 Word 內容") from exc
+    missing = [tag for tag in QP15_L03_REQUIRED_TAGS if tag not in xml]
+    if missing:
+        raise ValueError("不是網站轉換後的 QP15-L03 範本（缺少欄位）")
 
 
 def _app(owner):
@@ -68,7 +90,7 @@ def register_doc_template_routes(
         denied = _require_admin(owner)
         if denied:
             return denied
-        if group_key not in scope.GROUPS:
+        if not _known_template_key(group_key):
             return jsonify({"error": "無效的組別代碼"}), 400
         if "file" not in request.files:
             return jsonify({"error": "缺少檔案"}), 400
@@ -86,6 +108,8 @@ def register_doc_template_routes(
         try:
             upload.save(str(tmp_path))
             validation = runtime.validate(tmp_path, ext)
+            if group_key == QP15_L03_KEY:
+                _check_qp15_l03(tmp_path)
             backend, storage_key = runtime.store(tmp_path, group_key, storage_filename)
             storage_created = True
 
@@ -170,6 +194,19 @@ def register_doc_template_routes(
             return jsonify({"error": "範本檔案遺失，請管理者重新上傳"}), 404
         return send_file(path, as_attachment=False, download_name=row["filename"])
 
+    def api_doc_template_info(group_key):
+        if not _current_user(owner):
+            return jsonify({"error": "請先登入。", "loginRequired": True}), 401
+        if not _known_template_key(group_key):
+            return jsonify({"error": "無效的組別代碼"}), 400
+        row = templates.get_template(group_key) or {}
+        return jsonify({
+            "group": group_key,
+            "exists": bool(row),
+            "filename": row.get("filename", ""),
+            "uploadedAt": row.get("uploaded_at", ""),
+        })
+
     def api_delete_doc_template(group_key):
         denied = _require_admin(owner)
         if denied:
@@ -187,6 +224,7 @@ def register_doc_template_routes(
     app.add_url_rule("/api/doc-templates", endpoint="api_list_doc_templates", view_func=api_list_doc_templates, methods=["GET"])
     app.add_url_rule("/api/doc-templates/<group_key>", endpoint="api_upload_doc_template", view_func=api_upload_doc_template, methods=["POST"])
     app.add_url_rule("/api/doc-templates/<group_key>/download", endpoint="api_download_doc_template", view_func=api_download_doc_template, methods=["GET"])
+    app.add_url_rule("/api/doc-templates/<group_key>/info", endpoint="api_doc_template_info", view_func=api_doc_template_info, methods=["GET"])
     app.add_url_rule("/api/doc-templates/<group_key>", endpoint="api_delete_doc_template", view_func=api_delete_doc_template, methods=["DELETE"])
     app.extensions["teacher_doc_template_routes_registered"] = True
     return app

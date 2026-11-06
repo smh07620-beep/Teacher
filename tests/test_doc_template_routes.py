@@ -340,3 +340,39 @@ class DocTemplateRouteTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Qp15L03TemplateRouteTests(DocTemplateRouteTests):
+    def _upload(self, data, name="QP15-新版.docx"):
+        return self.client.post(
+            "/api/doc-templates/qp15L03",
+            data={"file": (io.BytesIO(data), name)},
+            content_type="multipart/form-data",
+        )
+
+    def test_qp15_l03_slot_roundtrip(self):
+        built = (Path(__file__).resolve().parents[1] / "static" / "templates" / "QP15-L03.docx").read_bytes()
+        self.assertFalse(self.client.get("/api/doc-templates/qp15L03/info").get_json()["exists"])
+        self.assertEqual(self.client.get("/api/doc-templates/qp15L03/download").status_code, 404)
+        response = self._upload(built)
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        info = self.client.get("/api/doc-templates/qp15L03/info").get_json()
+        self.assertTrue(info["exists"])
+        self.assertEqual(info["filename"], "QP15-新版.docx")
+        downloaded = self.client.get("/api/doc-templates/qp15L03/download")
+        self.assertEqual(downloaded.status_code, 200)
+        downloaded.close()
+        # not listed among group templates
+        self.assertNotIn("qp15L03", [item["group"] for item in self.client.get("/api/doc-templates").get_json()])
+        self.assertEqual(self.client.delete("/api/doc-templates/qp15L03").status_code, 200)
+        self.assertFalse(self.client.get("/api/doc-templates/qp15L03/info").get_json()["exists"])
+
+    def test_qp15_l03_rejects_unconverted_word(self):
+        response = self._upload(_docx_bytes())
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("QP15-L03", response.get_json()["error"])
+
+    def test_qp15_l03_upload_needs_manager(self):
+        self.base.admin_allowed = False
+        built = (Path(__file__).resolve().parents[1] / "static" / "templates" / "QP15-L03.docx").read_bytes()
+        self.assertEqual(self._upload(built).status_code, 403)
