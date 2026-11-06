@@ -38,6 +38,51 @@ def set_cell(tc, text):
     set_para(ps[0], text)
 
 
+def lock_page_field(root):
+    """Replace the PAGE field in a footer/header with the {pageNo} tag (fixed SOP page)."""
+    changed = False
+    for p in root.iter(qn('w:p')):
+        runs = list(p.iter(qn('w:r')))
+        i = 0
+        while i < len(runs):
+            fc = runs[i].find(qn('w:fldChar'))
+            if fc is not None and fc.get(qn('w:fldCharType')) == 'begin':
+                j, instr = i, ''
+                while j < len(runs):
+                    instr += ''.join(t.text or '' for t in runs[j].iter(qn('w:instrText')))
+                    f2 = runs[j].find(qn('w:fldChar'))
+                    if f2 is not None and f2.get(qn('w:fldCharType')) == 'end':
+                        break
+                    j += 1
+                if instr.split() and instr.split()[0] == 'PAGE':
+                    first = runs[i]
+                    new = copy.deepcopy(first)
+                    for child in list(new):
+                        if child.tag != qn('w:rPr'):
+                            new.remove(child)
+                    t = new.makeelement(qn('w:t'), {}); t.text = '{pageNo}'
+                    new.append(t)
+                    first.addprevious(new)
+                    for r in runs[i:j + 1]:
+                        r.getparent().remove(r)
+                    changed = True
+                i = j + 1
+            else:
+                i += 1
+    for fs in list(root.iter(qn('w:fldSimple'))):
+        if fs.get(qn('w:instr'), '').split()[:1] == ['PAGE']:
+            r = fs.find(qn('w:r'))
+            new = copy.deepcopy(r) if r is not None else fs.makeelement(qn('w:r'), {})
+            for child in list(new):
+                if child.tag != qn('w:rPr'):
+                    new.remove(child)
+            t = new.makeelement(qn('w:t'), {}); t.text = '{pageNo}'
+            new.append(t)
+            fs.addprevious(new); fs.getparent().remove(fs)
+            changed = True
+    return changed
+
+
 def main(src, dst):
     d = docx.Document(src)
     body = d.element.body
@@ -91,6 +136,9 @@ def main(src, dst):
     for s in body.findall('.//' + qn('w:sectPr')):
         s.getparent().remove(s)
     body.append(sect)
+    for rel in d.part.rels.values():
+        if rel.reltype.endswith('/footer') or rel.reltype.endswith('/header'):
+            lock_page_field(rel.target_part._element)
     d.save(dst)
 
 

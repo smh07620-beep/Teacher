@@ -170,6 +170,44 @@
     run.appendChild(t);
   }
 
+
+  // 頁尾「第 PAGE 頁」換成固定的 {pageNo}（依 QP15 中 L03 的頁碼）。
+  function lockPageField(xml){
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    const makeRun = like => {
+      const r = doc.createElementNS(W, 'w:r');
+      const rpr = like && kids(like, 'rPr')[0];
+      if(rpr) r.appendChild(rpr.cloneNode(true));
+      const t = doc.createElementNS(W, 'w:t'); t.textContent = '{pageNo}';
+      r.appendChild(t);
+      return r;
+    };
+    wq(doc, 'p').forEach(p => {
+      const runs = wq(p, 'r');
+      for(let i = 0; i < runs.length; i++){
+        const fc = kids(runs[i], 'fldChar')[0];
+        if(!fc || fc.getAttributeNS(W, 'fldCharType') !== 'begin') continue;
+        let j = i, instr = '';
+        for(; j < runs.length; j++){
+          instr += kids(runs[j], 'instrText').map(t => t.textContent).join('');
+          const f2 = kids(runs[j], 'fldChar')[0];
+          if(f2 && f2.getAttributeNS(W, 'fldCharType') === 'end') break;
+        }
+        if(instr.trim().split(/\s+/)[0] === 'PAGE'){
+          runs[i].parentNode.insertBefore(makeRun(runs[i]), runs[i]);
+          runs.slice(i, j + 1).forEach(r => r.parentNode && r.parentNode.removeChild(r));
+        }
+        i = j;
+      }
+    });
+    wq(doc, 'fldSimple').forEach(fs => {
+      if((fs.getAttributeNS(W, 'instr') || '').trim().split(/\s+/)[0] !== 'PAGE') return;
+      fs.parentNode.insertBefore(makeRun(kids(fs, 'r')[0]), fs);
+      fs.parentNode.removeChild(fs);
+    });
+    return new XMLSerializer().serializeToString(doc);
+  }
+
   // 從整份 SMH-LAB-QP15 擷取「附件6 QP15-L03」，填入網站欄位，回傳新的 .docx（ArrayBuffer）。
   window.buildQp15L03Template = function(buffer){
     const zip = new window.PizZip(buffer);
@@ -228,6 +266,9 @@
     body.appendChild(close);
     body.appendChild(sect);
     zip.file('word/document.xml', new XMLSerializer().serializeToString(doc));
+    Object.keys(zip.files).filter(n => /^word\/(footer|header)\d*\.xml$/.test(n)).forEach(n => {
+      zip.file(n, lockPageField(zip.file(n).asText()));
+    });
     return zip.generate({type:'arraybuffer'});
   };
 
@@ -305,6 +346,7 @@
         <label class="text-xs font-bold text-slate-700">名稱<input data-qp15-title class="learning-input mt-1 w-full" value="${esc(saved.title || defaultTitle)}"></label>
         <label class="text-xs font-bold text-slate-700">課程結束日（有效日期＝這天＋1年）<input type="date" data-qp15-end class="learning-input mt-1 w-full" value="${esc(saved.endDate || lastDate)}"></label>
       </div>
+      <label class="text-xs font-bold text-slate-700 flex items-center gap-2">頁尾頁碼：第 <input data-qp15-page class="learning-input w-20 text-center" value="${esc(saved.pageNo || '21')}"> 頁<span class="font-normal text-slate-400">（依 QP15 中 L03 所在頁，固定不跳號）</span></label>
       <p class="text-xs text-slate-500">有效日期：<b data-qp15-valid class="text-slate-800"></b>　·　備註欄留空。</p>
       <div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-xs"><thead class="bg-slate-50 text-slate-700"><tr><th class="p-2 text-left">考卷</th><th class="p-2 text-left">評估項目（可修改）</th><th class="p-2 text-left">教育訓練日期</th><th class="p-2 text-left">考核日期</th><th class="p-2 text-center">人數</th></tr></thead>
       <tbody class="divide-y divide-slate-100">${exams.map((g,i) => {
@@ -329,8 +371,9 @@
       const endDate = endInput.value;
       if(!endDate){ alert('請先選「課程結束日」，才能算出有效日期。'); return; }
       const validUntil = plusOneYear(endDate);
+      const pageNo = box.querySelector('[data-qp15-page]').value.trim() || '21';
       const training = {};
-      const payload = {exams: exams.map((g,i) => {
+      const payload = {pageNo, exams: exams.map((g,i) => {
         training[g.key] = box.querySelector(`[data-qp15-train="${i}"]`).value.trim();
         return {
           title,
@@ -343,7 +386,7 @@
           })
         };
       })};
-      saveSettings({title, endDate, training});
+      saveSettings({title, endDate, training, pageNo});
       btn.disabled = true; btn.textContent = '⏳ 產生中…';
       try {
         await ensureWordLibs();

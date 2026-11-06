@@ -74,3 +74,14 @@ class PassStandardTagTests(unittest.TestCase):
     def test_word_payload_fills_pass_standard_tag(self):
         js = (ROOT / "static" / "admin-results-export.js").read_text(encoding="utf-8")
         self.assertEqual(js.count("passStandard:passingScore"), 2)
+
+
+class Qp15PageLockTests(unittest.TestCase):
+    def test_footer_page_is_fixed_tag_not_page_field(self):
+        z = zipfile.ZipFile(ROOT / "static" / "templates" / "QP15-L03.docx")
+        footers = [z.read(n).decode("utf-8") for n in z.namelist() if n.startswith("word/footer")]
+        self.assertTrue(any("{pageNo}" in f for f in footers))
+        self.assertFalse(any("PAGE" in f and "instrText" in f for f in footers))
+        js = (ROOT / "static" / "admin-results-batch-export-1106.js").read_text(encoding="utf-8")
+        self.assertIn("lockPageField", js)
+        self.assertIn("saved.pageNo || '21'", js)
