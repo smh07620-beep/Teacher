@@ -7,6 +7,28 @@
   const L03_TEMPLATE_URL = '/templates/QP15-L03.docx';
   const SETTINGS_KEY = 'teacher.qp15l03.settings.v1';
   const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+  // Word 套件：外部網站（cdnjs）被醫院網路擋住時，改用本站 /vendor 的同版本備份。
+  const VENDOR = [
+    ['PizZip', '/vendor/pizzip-3.1.4.min.js'],
+    ['docxtemplater', '/vendor/docxtemplater-3.37.11.js'],
+    ['saveAs', '/vendor/FileSaver-2.0.5.min.js'],
+  ];
+  function loadScript(src){
+    return new Promise((resolve, reject) => {
+      const el = document.createElement('script');
+      el.src = src; el.async = false;
+      el.onload = resolve; el.onerror = () => reject(new Error(`無法載入 ${src}`));
+      document.head.appendChild(el);
+    });
+  }
+  async function ensureWordLibs(){
+    for(const [name, src] of VENDOR){
+      if(typeof window[name] === 'undefined') await loadScript(src);
+    }
+    if(typeof window.PizZip === 'undefined' || typeof window.docxtemplater === 'undefined') throw new Error('Word 匯出元件載入失敗，請重新整理頁面再試。');
+  }
+
   const safeName = v => String(v || '').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 60) || '未命名';
   const esc = v => (window.escapeHtml ? window.escapeHtml(v) : String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
 
@@ -63,7 +85,7 @@
     return buffer;
   }
   function renderDocx(buffer, payload){
-    const doc = new window.docxtemplater(new PizZip(buffer), {paragraphLoop:true, linebreaks:true});
+    const doc = new window.docxtemplater(new window.PizZip(buffer), {paragraphLoop:true, linebreaks:true});
     doc.render(payload);
     return doc.getZip().generate({type:'uint8array'});
   }
@@ -72,6 +94,7 @@
     const label = button ? button.textContent : '';
     try {
       if(button){ button.disabled = true; button.textContent = '⏳ 匯出中…'; }
+      await ensureWordLibs();
       const rows = await visibleRecords();
       if(!rows.length){ alert('目前篩選條件下沒有可匯出的考卷。'); return; }
       const people = new Map();
@@ -80,7 +103,7 @@
         if(!people.has(key)) people.set(key, []);
         people.get(key).push(r);
       }
-      const zip = new PizZip();
+      const zip = new window.PizZip();
       let count = 0;
       for(const list of people.values()){
         const folder = `${safeName(list[0].name)}--匯出考卷`;
@@ -149,7 +172,7 @@
 
   // 從整份 SMH-LAB-QP15 擷取「附件6 QP15-L03」，填入網站欄位，回傳新的 .docx（ArrayBuffer）。
   window.buildQp15L03Template = function(buffer){
-    const zip = new PizZip(buffer);
+    const zip = new window.PizZip(buffer);
     const file = zip.file('word/document.xml');
     if(!file) throw new Error('這不是 Word（.docx）檔。');
     const doc = new DOMParser().parseFromString(file.asText(), 'application/xml');
@@ -236,6 +259,7 @@
       const f = input.files && input.files[0];
       if(!f) return;
       try {
+        await ensureWordLibs();
         const built = window.buildQp15L03Template(await f.arrayBuffer());
         const form = new FormData();
         form.append('file', new Blob([built], {type: DOCX_MIME}), f.name);
@@ -322,6 +346,7 @@
       saveSettings({title, endDate, training});
       btn.disabled = true; btn.textContent = '⏳ 產生中…';
       try {
+        await ensureWordLibs();
         const data = renderDocx(await l03TemplateBuffer(), payload);
         saveAs(new Blob([data], {type: DOCX_MIME}), `QP15-L03_${safeName(title)}.docx`);
         closeDialog();

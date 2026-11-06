@@ -50,3 +50,12 @@ class Qp15L03UploadUiTests(unittest.TestCase):
         self.assertIn("/api/doc-templates/${L03_KEY}/download", js)
         self.assertIn("L03_TEMPLATE_URL", js)
         self.assertIn("改回內建版", js)
+
+
+class WordLibsFallbackTests(unittest.TestCase):
+    def test_self_hosted_word_libs_loaded_when_cdn_blocked(self):
+        js = (ROOT / "static" / "admin-results-batch-export-1106.js").read_text(encoding="utf-8")
+        self.assertIn("ensureWordLibs", js)
+        for name in ("pizzip-3.1.4.min.js", "docxtemplater-3.37.11.js", "FileSaver-2.0.5.min.js"):
+            self.assertTrue((ROOT / "static" / "vendor" / name).exists())
+            self.assertIn(f"/vendor/{name}", js)
